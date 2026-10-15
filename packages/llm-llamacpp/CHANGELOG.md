@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- File-backed model loads now default both GGML threadpools to `poll=0`, so
+  GPU-offloaded inference no longer keeps CPU workers busy-spinning between
+  graph work. Explicit `poll` and `poll-batch` overrides remain supported, and
+  the addon reuses the threadpools owned by Fabric's common initialization
+  instead of creating duplicates
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
 ## [0.61.0] - 2026-10-14
 
 ### Breaking

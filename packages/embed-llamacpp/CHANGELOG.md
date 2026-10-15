@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Both GGML threadpools now default to `poll=0`, so GPU-offloaded embedding no
+  longer keeps CPU workers busy-spinning between graph work. Explicit `poll`
+  and `poll-batch` overrides remain supported
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
 ## [0.48.0] - 2026-10-14
 
 ### Breaking
