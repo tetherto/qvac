@@ -1,0 +1,27 @@
+name: Select prebuild symbols verifier
+description: >-
+  Names the verify-prebuild-symbols revision that matches an addon's release
+  line. Each revision expects one @qvac/fabric install layout, and a backport
+  built by main's workflows still installs the fabric of its own version, so
+  the choice is read from verifiers.json by the addon's package name and
+  version. The caller runs the pinned verifier whose id matches the output.
+
+inputs:
+  workdir:
+    description: Directory containing the addon's package.json
+    required: true
+
+outputs:
+  verifier:
+    description: Verifier id from verifiers.json (for example current or fabric-0.20)
+    value: ${{ steps.select.outputs.verifier }}
+
+runs:
+  using: composite
+  steps:
+    - id: select
+      name: Select verifier
+      shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+      run: node "$GITHUB_ACTION_PATH/select.mjs"

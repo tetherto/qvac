@@ -36,7 +36,17 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:integration",
-        "cwd": "packages/turbovec-ggml"
+        "cwd": "packages/turbovec-ggml",
+        "ci": {
+          "timeoutMinutes": 30,
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" },
+            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm" },
+            { "os": "macos-15", "platform": "darwin", "arch": "arm64", "runner": "macos-15" },
+            { "os": "macos-15-intel", "platform": "darwin", "arch": "x64", "runner": "macos-15-intel" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
+          ]
+        }
       }
     },
     "lint": {
@@ -50,7 +60,17 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:cpp",
-        "cwd": "packages/turbovec-ggml"
+        "cwd": "packages/turbovec-ggml",
+        "ci": {
+          "mode": "standard",
+          "windowsVsGenerator": true,
+          "platforms": [
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "macos-15", "platform": "darwin", "arch": "arm64", "runner": "macos-15" },
+            { "os": "macos-15-intel", "platform": "darwin", "arch": "x64", "runner": "macos-15-intel" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
+          ]
+        }
       }
     },
     "on-merge": {
@@ -66,5 +86,9 @@
         }
       }
     }
-  }
+  },
+  "implicitDependencies": [
+    "lint-cpp",
+    "qvac-addon-cmake"
+  ]
 }
