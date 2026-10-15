@@ -264,7 +264,7 @@ test('advisory fit: never launches a child for a load with no fitter', async (t)
   const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(
-    { ...COMPLETION_INPUT, modelType: ModelType.ggmlOcr },
+    { ...COMPLETION_INPUT, modelType: ModelType.ggmlClassification },
     { mobile: false, runFit, logger }
   )
 
