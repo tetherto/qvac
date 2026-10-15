@@ -1,7 +1,12 @@
 import { describe, it, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { RequestRejectedByPolicyError, type DecisionResult } from '@qvac/sdk'
+import {
+  RequestRejectedByPolicyError,
+  LAYA_MULTILINGUAL_322M_Q8_0,
+  type DecisionResult
+} from '@qvac/sdk'
 import { buildServer } from '@/serve/index'
+import { buildGenericEntry } from '@/configure/presets'
 import type { DecideFn } from '@/serve/extensions/systemone/state'
 import { writeConfigDir } from '../helpers/config.js'
 
@@ -100,18 +105,26 @@ const httpResult = {
 
 async function server(
   t: TestContext,
-  options: { decideOverride?: DecideFn; apiKey?: string; lazy?: boolean } = {}
+  options: {
+    decideOverride?: DecideFn
+    apiKey?: string
+    lazy?: boolean
+    constantModel?: boolean
+  } = {}
 ) {
   const projectRoot = await writeConfigDir(t, {
     serve: {
       load: { lazy: options.lazy ?? true },
       models: {
-        laya: {
-          src: '/models/laya.gguf',
-          type: 'llamacpp-decision',
-          default: true,
-          config: { device: 'cpu' }
-        },
+        laya: options.constantModel
+          ? buildGenericEntry(LAYA_MULTILINGUAL_322M_Q8_0.name, LAYA_MULTILINGUAL_322M_Q8_0.addon)
+              .entry
+          : {
+              src: '/models/laya.gguf',
+              type: 'llamacpp-decision',
+              default: true,
+              config: { device: 'cpu' }
+            },
         chat: { src: '/models/chat.gguf', type: 'llamacpp-completion' },
         embedding: { src: '/models/embed.gguf', type: 'llamacpp-embedding' }
       }
@@ -138,6 +151,25 @@ async function server(
 }
 
 describe('System One HTTP API', () => {
+  it('loads a search-all decision constant without an explicit type override', async (t) => {
+    const { app, loaded } = await server(t, {
+      constantModel: true,
+      decideOverride: () => Object.assign(Promise.resolve(result), { requestId: 'decision-id' })
+    })
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/systemone',
+      payload: { model: 'laya', state: 'Charged twice', questions }
+    })
+    assert.equal(response.statusCode, 200, response.body)
+    assert.equal(loaded.length, 1)
+    const load = loaded[0] as { modelSrc: unknown; modelType: string }
+    assert.equal(load.modelSrc, LAYA_MULTILINGUAL_322M_Q8_0)
+    assert.equal(load.modelType, 'llamacpp-decision')
+    assert.equal(app.qvac.serveConfig.models.get('laya')?.endpointCategory, 'decision')
+    assert.deepEqual(response.json(), { ...httpResult, model: 'laya' })
+  })
+
   it('lazy-loads once, forwards typed questions, and binds cancellation before awaiting', async (t) => {
     const calls: Parameters<DecideFn>[0][] = []
     const bound: string[] = []

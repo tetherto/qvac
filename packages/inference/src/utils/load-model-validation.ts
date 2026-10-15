@@ -1,12 +1,10 @@
 import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
-import { ModelType, normalizeModelType } from '@/schemas/model-types'
+import { normalizeModelType } from '@/schemas/model-types'
 import { ModelSrcTypeMismatchError } from '@/errors/index'
 
 /**
  * Throws {@link ModelSrcTypeMismatchError} when explicit
  * `modelType` disagrees with the type inferred from `modelSrc`.
- * Embedding descriptors may explicitly select Laya decisions; the native
- * decision loader validates checkpoint compatibility.
  * No-op when nothing can be inferred.
  */
 export function assertModelSrcMatchesModelType(modelSrc: unknown, explicitModelType: string): void {
@@ -14,12 +12,6 @@ export function assertModelSrcMatchesModelType(modelSrc: unknown, explicitModelT
   if (!inferred) return
   const normalizedInferred = normalizeModelType(inferred)
   const normalizedExplicit = normalizeModelType(explicitModelType)
-  if (
-    normalizedInferred === ModelType.llamacppEmbedding &&
-    normalizedExplicit === ModelType.llamacppDecision
-  ) {
-    return
-  }
   if (normalizedInferred !== normalizedExplicit) {
     throw new ModelSrcTypeMismatchError(normalizedInferred, normalizedExplicit)
   }
