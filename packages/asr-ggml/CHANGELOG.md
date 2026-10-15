@@ -14,6 +14,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-15
+
+### Changed
+
+- Raise the `qvac-lib-inference-addon-cpp` minimum from `1.4.0` to `1.5.0`
+  so its public headers include `<uv.h>` directly after libjs stopped including
+  it transitively. No addon API change.
+
 ## [0.7.0] - 2026-09-29
 
 ### Added
