@@ -3,11 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { bundleSdk } from '@/commands/bundle'
-import {
-  BarePackError,
-  HostPrebuildsInstallRefusedError,
-  HostPrebuildsMissingError
-} from '@/utils/errors-client'
+import { HostPrebuildsInstallRefusedError, HostPrebuildsMissingError } from '@/utils/errors-client'
 import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
 import {
   RUNTIME_ADDON_ANDROID_PACKAGE,
@@ -43,9 +39,8 @@ describe('bundleSdk installMissingPrebuilds', () => {
       ),
       (error: unknown) =>
         error instanceof HostPrebuildsMissingError &&
-        error.cause instanceof BarePackError &&
         error.dependencies[SPLIT_ADDON_ANDROID_PACKAGE] === SPLIT_ADDON_VERSION,
-      'without the platform package, #host-addon does not resolve, and the error names the pin'
+      'without the platform package, bundling fails and the error names the pin'
     )
     assert.deepEqual(pm.calls(), [])
   })
@@ -193,5 +188,40 @@ describe('bundleSdk installMissingPrebuilds', () => {
     await withPath(pm.binDir, () => bundleSdk(options))
 
     assert.equal(pm.calls().length, 1)
+  })
+})
+
+describe('published ASR fallback mappings', () => {
+  it(
+    'rejects a bundle that would otherwise silently use addon-unavailable',
+    posixOnly,
+    async (t) => {
+      const { projectRoot, sdkPath, configPath } = splitAddonProject(t, { legacyFallback: true })
+      await assert.rejects(
+        bundleSdk({ projectRoot, sdkPath, configPath, hosts: ['android-arm64'], quiet: true }),
+        (error: unknown) =>
+          error instanceof HostPrebuildsMissingError &&
+          error.dependencies[SPLIT_ADDON_ANDROID_PACKAGE] === SPLIT_ADDON_VERSION
+      )
+    }
+  )
+
+  it('installs a published fallback mapping before bundling', posixOnly, async (t) => {
+    const { projectRoot, sdkPath, configPath } = splitAddonProject(t, { legacyFallback: true })
+    const pm = installFakePackageManager(projectRoot, 'pnpm')
+    const result = await withPath(pm.binDir, () =>
+      bundleSdk({
+        projectRoot,
+        sdkPath,
+        configPath,
+        hosts: ['android-arm64'],
+        quiet: true,
+        installMissingPrebuilds: true
+      })
+    )
+    assert.ok(
+      bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml-android-arm64/index.js'))
+    )
+    assert.equal(result.installedPrebuilds[0]?.name, SPLIT_ADDON_ANDROID_PACKAGE)
   })
 })

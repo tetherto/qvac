@@ -1,4 +1,9 @@
 import test from 'brittle'
+import { toTranscribeSegment } from '@/utils/transcribe-metadata'
+import {
+  parakeetStreamingRunConfigSchema,
+  transcribeStreamResponseSchema
+} from '@/schemas/transcription'
 import {
   buildParakeetEngineConfig,
   buildParakeetReloadConfig,
@@ -242,4 +247,45 @@ test('ASR event adapters preserve the public engine event contract', (t) => {
     }),
     null
   )
+})
+
+test('Nemotron diarization streaming forwards controls and dominant speaker ids', (t) => {
+  const config = {
+    diarizationThreshold: 0.5,
+    diarizationMinSegmentMs: 200,
+    streamingSpeakerVad: true,
+    streamingChunkLeftContextMs: 80
+  }
+  t.alike(buildParakeetEngineConfig(config), { engine: 'parakeet', parakeetConfig: config })
+  const runConfig = {
+    emitSpeakerVad: true,
+    diarizationThreshold: 0.5,
+    diarizationMinSegmentMs: 200,
+    chunkLeftContextMs: 80
+  }
+  t.alike(parakeetStreamingRunConfigSchema.parse(runConfig), runConfig)
+  for (const speakerId of [0, 7]) {
+    const vad = toVadStateEvent({
+      type: 'vad',
+      source: 'sortformer',
+      speaking: true,
+      score: 0.9,
+      speakerId
+    })
+    t.is(
+      transcribeStreamResponseSchema.parse({ type: 'transcribeStream', vad }).vad?.speakerId,
+      speakerId
+    )
+    const segment = toTranscribeSegment({
+      text: 'Speaker activity',
+      speakerId,
+      start: 1.25,
+      end: 2.5
+    })
+    t.is(
+      transcribeStreamResponseSchema.parse({ type: 'transcribeStream', segment }).segment
+        ?.speakerId,
+      speakerId
+    )
+  }
 })

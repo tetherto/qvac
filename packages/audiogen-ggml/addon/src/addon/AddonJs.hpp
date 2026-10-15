@@ -7,6 +7,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -665,46 +666,19 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-/// An engine the addon loads and audiogen-cpp cannot project. The shape
-/// matches a fit so a caller reads the verdict the same way for every engine.
-inline js_value_t*
-unsupportedEngineResult(js_env_t* env, const std::string& engine) {
-  namespace js = qvac_lib_inference_addon_cpp::js;
-
-  auto result = js::Object::create(env);
-  auto setText = [&](const char* name, const std::string& value) {
-    result.setProperty(env, name, js::String::create(env, value));
-  };
-
-  setText("status", "error");
-  setText("reason", "unsupported-engine");
-  setText("modelName", engine);
-  setText("deviceName", "");
-  setText("report", "");
-  for (const char* flag :
-       {"isTurbo", "deviceIsCpu", "deviceSharesHostMemory", "stagesResident"}) {
-    result.setProperty(env, flag, js::Boolean::create(env, false));
-  }
-  for (const char* name :
-       {"deviceFreeBytes",
-        "deviceTotalBytes",
-        "deviceBytes",
-        "hostBytes",
-        "hostFreeBytes",
-        "hostTotalBytes"}) {
-    result.setProperty(env, name, js::Number::create(env, 0));
-  }
-  result.setProperty(env, "stages", js::Array::create(env));
-  return result;
-}
-
 // ── assessFit ────────────────────────────────────────────────────────────
 //
 // Projects one model set against the memory free right now. Args: [request],
 // carrying the engine, its model files and the generation to accommodate.
+// Returns a Promise of the result.
 //
 // Takes no instance and loads nothing: the fitters read GGUF metadata only. A
 // model they cannot read is an "error" status carrying the engine's own reason.
+//
+// The request is read into owned C++ values on the JS thread, the fitter runs
+// on a worker thread with no JS access, and the result object is built back on
+// the JS thread. The work reaches no model instance, so unloading or destroying
+// a model while a fit runs frees nothing it reads.
 
 inline constexpr const char* K_FIT_ENGINE_ACESTEP = "acestep";
 inline constexpr const char* K_FIT_ENGINE_MINIMAX = "minimax";
@@ -918,26 +892,59 @@ inline tts_cpp::minimax::FitWorkload minimaxFitWorkload(FitRequest& request) {
 }
 #endif
 
+using FitWork = std::function<tts_cpp::acestep::FitResult()>;
+
+/// An engine the addon loads and audiogen-cpp cannot project. The shape
+/// matches a fit so a caller reads the verdict the same way for every engine.
+inline tts_cpp::acestep::FitResult
+unsupportedEngineResult(const std::string& engine) {
+  tts_cpp::acestep::FitResult result;
+  result.status = tts_cpp::acestep::FitStatus::Error;
+  result.reason = "unsupported-engine";
+  result.model_name = engine;
+  return result;
+}
+
+/// Reads the request on the JS thread. The returned work owns every value it
+/// needs; an invalid request throws here, before any thread starts.
+inline FitWork fitWork(FitRequest& request) {
+  std::string engine = request.text("engine");
+  if (engine.empty() || engine == K_FIT_ENGINE_ACESTEP) {
+    return [options = acestepFitOptions(request)]() {
+      return tts_cpp::acestep::fit_params(options);
+    };
+  }
+#ifdef AUDIOGEN_HAS_MINIMAX
+  if (engine == K_FIT_ENGINE_MINIMAX) {
+    return [options = minimaxFitOptions(request),
+            workload = minimaxFitWorkload(request)]() {
+      return tts_cpp::minimax::fit_params(options, workload);
+    };
+  }
+#endif
+  return [engine = std::move(engine)]() {
+    return unsupportedEngineResult(engine);
+  };
+}
+
+// The fitters register the ggml backends on first use, process-wide state two
+// concurrent fits would race, so fits run one at a time.
+inline tts_cpp::acestep::FitResult runFit(const FitWork& work) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+  return work();
+}
+
 inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
   FitRequest request(env, args.getJsObject(0, "request"));
 
-  const std::string engine = request.text("engine");
-  if (engine.empty() || engine == K_FIT_ENGINE_ACESTEP) {
-    return fitResultObject(
-        env, tts_cpp::acestep::fit_params(acestepFitOptions(request)));
-  }
-#ifdef AUDIOGEN_HAS_MINIMAX
-  if (engine == K_FIT_ENGINE_MINIMAX) {
-    return fitResultObject(
-        env,
-        tts_cpp::minimax::fit_params(
-            minimaxFitOptions(request), minimaxFitWorkload(request)));
-  }
-#endif
-  return unsupportedEngineResult(env, engine);
+  return js::JsAsyncTask::run(
+      env,
+      [work = fitWork(request)]() { return runFit(work); },
+      fitResultObject);
 }
 JSCATCH
 

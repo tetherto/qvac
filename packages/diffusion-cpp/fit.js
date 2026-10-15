@@ -10,10 +10,12 @@ const file_paths_1 = require("./file-paths");
  * so the projection can run before anything is downloaded. Safetensors
  * checkpoints can also contain only their tensor headers.
  *
- * A model the engine cannot read is `status: "error"`; only a broken request
- * throws.
+ * Concurrent calls run one at a time within this addon.
+ *
+ * A model the engine cannot read resolves to `status: "error"`; only a broken
+ * request rejects.
  */
-function assessFit(request) {
+async function assessFit(request) {
     if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale' && request.mode !== 'world') {
         throw new TypeError(`unsupported fit mode: ${String(request.mode)}`);
     }
@@ -42,7 +44,7 @@ function assessFit(request) {
     const config = Object.fromEntries(Object.entries(merged)
         .filter(([, value]) => value !== undefined)
         .map(([key, value]) => [key, String(value)]));
-    return binding.assessFit({
+    return await binding.assessFit({
         ...(0, file_paths_1.toFilePaths)(files),
         ...(request.mode === 'world' && {
             taehvPath: request.files.taehv,

@@ -127,6 +127,7 @@ moss::MossTranscribeConfig JSAdapter::buildMossTranscribeConfig(
   readString(configurationParams, env, "modelPath", config.modelPath);
   readInt(configurationParams, env, "maxThreads", config.maxThreads);
   readBool(configurationParams, env, "useGPU", config.useGPU);
+  readString(configurationParams, env, "backend", config.backend);
   readString(configurationParams, env, "backendsDir", config.backendsDir);
   return config;
 }

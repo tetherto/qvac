@@ -26,7 +26,7 @@ function assess(modelPath, config = {}, rest = {}) {
 // The figures depend on what the runner has free, so the assertions are the
 // relationships that hold on any machine.
 test('a projection is internally consistent', { timeout: 600_000 }, async (t) => {
-  const fit = assess(await modelPath())
+  const fit = await assess(await modelPath())
 
   t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
   t.ok(fit.devices.length > 0, 'at least the host row')
@@ -39,7 +39,7 @@ test('a projection is internally consistent', { timeout: 600_000 }, async (t) =>
 })
 
 test('the context is pinned to the trained context', { timeout: 600_000 }, async (t) => {
-  const fit = assess(await modelPath())
+  const fit = await assess(await modelPath())
 
   t.comment(`status=${fit.status} ctxSize=${fit.ctxSize} trainCtxSize=${fit.trainCtxSize}`)
   if (fit.status !== 'fits') {
@@ -53,7 +53,7 @@ test('the context is pinned to the trained context', { timeout: 600_000 }, async
 })
 
 test('an oversized context is capped at the trained context', { timeout: 600_000 }, async (t) => {
-  const fit = assess(await modelPath(), { 'ctx-size': '1000000' })
+  const fit = await assess(await modelPath(), { 'ctx-size': '1000000' })
 
   if (fit.status === 'error') {
     t.pass('this runner could not project the model')
@@ -63,13 +63,13 @@ test('an oversized context is capped at the trained context', { timeout: 600_000
 })
 
 test('a pinned layer count survives into the projection', { timeout: 600_000 }, async (t) => {
-  const fit = assess(await modelPath(), { 'gpu-layers': '0' })
+  const fit = await assess(await modelPath(), { 'gpu-layers': '0' })
 
   t.is(fit.gpuLayers, 0, 'the fitter rewrites defaults, not a value the load pinned')
 })
 
-test('a model that cannot be read is an outcome, not a throw', (t) => {
-  const fit = assess('/nonexistent/model.gguf')
+test('a model that cannot be read is an outcome, not a throw', async (t) => {
+  const fit = await assess('/nonexistent/model.gguf')
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'model-unreadable')
@@ -92,7 +92,7 @@ test('every setting a load carries reaches the fitter', { timeout: 600_000 }, as
   const file = await modelPath()
 
   for (const [key, value] of Object.entries(EVERY_SETTING)) {
-    const fit = assess(file, { [key]: value })
+    const fit = await assess(file, { [key]: value })
 
     if (isMobile && MOBILE_REFUSED.includes(key)) {
       t.is(fit.reason, 'unsupported-config', `${key} is refused on mobile`)
@@ -103,7 +103,7 @@ test('every setting a load carries reaches the fitter', { timeout: 600_000 }, as
 })
 
 test('a context floor that is not a count is refused', { timeout: 600_000 }, async (t) => {
-  const fit = assess(await modelPath(), {}, { minCtxSize: -1 })
+  const fit = await assess(await modelPath(), {}, { minCtxSize: -1 })
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'unsupported-config')
@@ -113,7 +113,7 @@ test(
   'a load the engine cannot parse is an outcome, not a throw',
   { timeout: 600_000 },
   async (t) => {
-    const fit = assess(await modelPath(), { 'gpu-layers': 'not-a-number' })
+    const fit = await assess(await modelPath(), { 'gpu-layers': 'not-a-number' })
 
     t.is(fit.status, 'error')
     t.is(fit.reason, 'unsupported-config')
@@ -121,8 +121,68 @@ test(
 )
 
 test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
-  const fit = assess(await modelPath(), { device: 'cpu' })
+  const fit = await assess(await modelPath(), { device: 'cpu' })
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'unsupported-config')
+})
+
+test('fitting keeps the event loop responsive', { timeout: 600_000 }, async (t) => {
+  const file = await modelPath()
+  let pending = true
+  let ticks = 0
+  const timer = setInterval(() => {
+    if (pending) ticks++
+  }, 1)
+  try {
+    const fit = await assess(file)
+    pending = false
+    t.not(fit.status, 'error', 'a real native projection completed')
+    t.ok(ticks > 0, 'timers ran before fitting settled')
+    t.comment(`${ticks} timer ticks before completion`)
+  } finally {
+    pending = false
+    clearInterval(timer)
+  }
+})
+
+test('queued fits retain independent requests and all settle', { timeout: 600_000 }, async (t) => {
+  const request = {
+    modelPath: await modelPath(),
+    config: { ...GPU, 'gpu-layers': '0', 'ctx-size': '512' }
+  }
+  const first = EmbedLlamacpp.assessFit(request)
+  request.config['ctx-size'] = '1024'
+  const second = EmbedLlamacpp.assessFit(request)
+  const missing = EmbedLlamacpp.assessFit({ modelPath: '/nonexistent/model.gguf' })
+  const [a, b, c] = await Promise.all([first, second, missing])
+  t.not(a.status, 'error')
+  t.not(b.status, 'error')
+  t.is(a.ctxSize, 512, 'the first call owns its original config')
+  t.is(b.ctxSize, 1024, 'the second call owns its changed config')
+  t.is(c.reason, 'model-unreadable', 'an error outcome does not strand queued callers')
+})
+
+test('a broken request rejects', async (t) => {
+  const promise = EmbedLlamacpp.assessFit({})
+  t.ok(promise instanceof Promise)
+  await t.exception.all(promise)
+})
+
+test('a fit retains the backend while a loaded model unloads', { timeout: 600_000 }, async (t) => {
+  const file = await modelPath()
+  const model = new EmbedLlamacpp({
+    files: { model: [file] },
+    config: { device: 'cpu', gpu_layers: '0', ctx_size: '512' }
+  })
+  try {
+    await model.load()
+    const fit = assess(file)
+    await model.unload()
+    const result = await fit
+    t.not(result.status, 'error', 'unloading the model did not invalidate the fit backend')
+    t.ok(result.devices.length > 0, 'the copied device breakdown survives backend release')
+  } finally {
+    await model.unload().catch(() => {})
+  }
 })

@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } from '@qvac/sdk/commands'
 import link from 'bare-link'
+import { platformPackageForHost } from './platform-package.mjs'
 
 const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const sdkRoot = path.join(projectRoot, '..', 'sdk')
@@ -30,6 +31,7 @@ const pluginCapabilities = new Map([
   ['@qvac/sdk/llamacpp-embedding/plugin', ['EMBEDDINGS']],
   ['@qvac/sdk/whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/parakeet-transcription/plugin', ['TRANSCRIPTION']],
+  ['@qvac/sdk/moss-transcribe/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/bci-whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/nmtcpp-translation/plugin', ['TRANSLATION']],
   ['@qvac/sdk/tts-ggml/plugin', ['TTS']],
@@ -53,13 +55,17 @@ const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
 const modulesRoot = bundleSdkPath ?? projectRoot
 const classificationWeightsSource = classificationWeightsPath(modulesRoot)
 
-// Split addons ship their native code in per-platform packages, and their
-// `binding.js` is just `require('#host-addon')`: bare-pack cannot resolve it
-// until the android-arm64 package is installed, at each meta's version.
+// Split addons ship their native code in per-platform packages, installed at
+// each meta's version before bundling.
 await ensureHostPrebuilds('android-arm64', modulesRoot)
 
+// Resolve addons, prebuilds and the bundle from the tree the worker is built
+// from: the workspace SDK when present, else the installed @qvac/sdk. These
+// differ in the monorepo, where the worker comes from ../sdk but the Kotlin
+// runtime's own node_modules is a separate tree; for a standalone consumer they
+// are the same. ensureHostPrebuilds installs into this tree too.
 const bundle = await bundleSdk({
-  projectRoot,
+  projectRoot: modulesRoot,
   configPath,
   ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
   hosts: ['android-arm64'],
@@ -68,7 +74,7 @@ const bundle = await bundleSdk({
 })
 
 const verification = await verifyBundle({
-  projectRoot,
+  projectRoot: modulesRoot,
   addonsSource: bundle.bundlePath,
   hosts: ['android-arm64'],
   configPath
@@ -109,24 +115,17 @@ const sdkPackagePath = bundleSdkPath
   : path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json')
 const sdkPackage = JSON.parse(await fs.readFile(sdkPackagePath, 'utf8'))
 const addons = Array.isArray(manifest.addons) ? manifest.addons : []
-const packageFilter =
-  addons.length === 0
-    ? { name: 'qvac-kotlin-no-addons', version: '0.0.0', dependencies: {} }
-    : {
-        name: 'qvac-kotlin-addon-linker',
-        version: '0.0.0',
-        dependencies: Object.fromEntries(addons.map((name) => [name, '*']))
-      }
 
+// bare-link 4 links the addons the worker entry's module graph loads on the
+// host, resolving each meta's per-platform split package (installed above by
+// ensureHostPrebuilds) in one pass. It rewrites existing DT_NEEDED entries
+// rather than adding one per installed addon, so the split @qvac/fabric layout
+// links a single libqvac__fabric-android-arm64.
 const linkedResources = new Set()
-for await (const resource of link(
-  modulesRoot,
-  {
-    hosts: ['android-arm64'],
-    out: addonsDirectory
-  },
-  packageFilter
-)) {
+for await (const resource of link(bundle.entryPaths.worker, {
+  hosts: ['android-arm64'],
+  out: addonsDirectory
+})) {
   linkedResources.add(path.resolve(String(resource)))
   console.log(`Linked ${resource}`)
 }
@@ -233,16 +232,6 @@ function platformPackageForInstalledMeta(metaName, host) {
   } catch {
     return null
   }
-}
-
-/** The platform prebuild package an addon's `#host-addon` map names for a host. */
-function platformPackageForHost(meta, host) {
-  const dash = host.indexOf('-')
-  const platform = host.slice(0, dash)
-  const arch = host.slice(dash + 1)
-  const hostMap = meta.imports?.['#host-addon']?.[platform]
-  const candidate = typeof hostMap === 'string' ? hostMap : hostMap?.[arch]
-  return typeof candidate === 'string' && candidate.startsWith(`${meta.name}-`) ? candidate : null
 }
 
 /**

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0] - 2026-10-14
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.21.1` -> `^0.22.0`, which carries
+  `qvac-fabric` `11018.1.0#1` -> `11018.2.0`. A caret on a `0.x` version
+  locks the minor, so `^0.21.1` would not have resolved `0.22.0` on its own.
+  `GGML_MAX_NAME` is now 128, so the native addon is rebuilt against the
+  0.22.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.22.0` together.
+- The RPC protocol moves 109 -> 111, so a server built against this release
+  only talks to clients on `@qvac/fabric` 0.22.0. On Linux the server loads
+  without libibverbs and uses TCP, and a malformed endpoint port is rejected
+  instead of binding a different port.
+
 ## [0.3.0] - 2026-10-14
 
 ### Breaking
@@ -10,12 +26,12 @@
 
 ### Changed
 
-- `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.21.0`, whose platform
+- `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.21.1`, whose platform
   packages are now ordinary addons. This package declares them itself: the
   desktop ones as `optionalDependencies`, and `@qvac/fabric-android-arm64` and
   `@qvac/fabric-ios` as optional `peerDependencies`.
 - Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
-  `@qvac/fabric-ios` to `0.21.0` together.
+  `@qvac/fabric-ios` to `0.21.1` together.
 
 ## [0.2.0] - 2026-10-06
 

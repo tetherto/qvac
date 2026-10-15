@@ -24,7 +24,7 @@ try {
   const modelId = await loadModel({
     modelSrc: SMOLVLA_LIBERO_VISION_Q8,
     modelType: 'ggml-vla',
-    modelConfig: { backend: 'cpu' }
+    modelConfig: { backend: ['cpu'] }
   })
   console.log(`▸ Model loaded: ${modelId}`)
 

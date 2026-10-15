@@ -1,7 +1,7 @@
 import test from 'brittle'
 
 // nmtPlugin lives inside the bare worker layer so we dynamic-import to avoid
-// loading the N-API addon at module init when running under Bun.
+// loading the N-API addon at module init when running under Node.
 
 test('nmtPlugin.resolveConfig: IndicTrans config passes through without vocab resolution', async (t) => {
   const { nmtPlugin } = await import('@/plugins/builtin/nmtcpp-translation/plugin')
