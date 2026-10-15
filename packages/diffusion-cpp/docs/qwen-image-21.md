@@ -50,19 +50,19 @@ separate PNG under `output/`:
 export CUDA_VISIBLE_DEVICES=0
 
 # Text-to-image: generate a von Neumann portrait from a prompt alone.
-bare examples/generate-image-qwen-21.js --mode text-to-image
+npm run generate:qwen:text-to-image
 
 # Single-reference edit: change the colorized portrait's jacket to burgundy.
-bare examples/generate-image-qwen-21.js --mode edit
+npm run generate:qwen:edit
 
 # Two-reference composition: colorized portrait left, original monochrome right.
-bare examples/generate-image-qwen-21.js --mode compose
+npm run generate:qwen:compose
 
 # Transparent generation: create a new portrait cutout from text alone.
-bare examples/generate-image-qwen-21.js --mode transparent
+npm run generate:qwen:transparent
 
 # Transparent reference edit: remove the colorized portrait's background.
-bare examples/generate-image-qwen-21.js --mode remove-background
+npm run generate:qwen:remove-background
 ```
 
 | Mode | Default references from `assets/` | Output in `output/` |
@@ -78,14 +78,15 @@ not load the asset or reproduce its exact likeness. The editing modes load the
 vision projector automatically. Composition demonstrates two ordered references
 using the two bundled von Neumann portraits; no earlier generation is required.
 
-Pass your own files after a mode to replace its default references (one for
-`edit` or `remove-background`, two for `compose`). The zero-reference modes
+Pass your own files after npm's `--` separator to replace the default references
+(one for `edit` or `remove-background`, two for `compose`). The zero-reference modes
 reject image arguments. `--remove-background [image]` remains an alias for
-`--mode remove-background [image]`. Use `--help` to list the modes.
+`--mode remove-background [image]` when invoking the script directly with Bare.
+Use `bare examples/generate-image-qwen-21.js --help` to list the modes.
 
 ```sh
-CUDA_VISIBLE_DEVICES=0 bare examples/generate-image-qwen-21.js --mode edit /absolute/path/to/portrait.jpg
-CUDA_VISIBLE_DEVICES=0 bare examples/generate-image-qwen-21.js --mode compose first.png second.png
+CUDA_VISIBLE_DEVICES=0 npm run generate:qwen:edit -- /absolute/path/to/portrait.jpg
+CUDA_VISIBLE_DEVICES=0 npm run generate:qwen:compose -- first.png second.png
 ```
 
 `QWEN_PROMPT` and `QWEN_OUTPUT` override any preset's prompt and destination.
@@ -136,18 +137,19 @@ are single smoke-test observations, not benchmark averages.
 | Transparent generation | 6.34 s |
 | Transparent reference edit | 13.03 s |
 
-The five bundled portrait presets were also run individually with the settings
-above and visually inspected:
+The five bundled portrait presets were also run individually through their
+`npm run generate:qwen:*` commands with the settings above:
 
 | Example mode | Request time |
 | --- | ---: |
-| `text-to-image` | 6.85 s |
-| `edit` | 15.16 s |
-| `compose` | 25.62 s |
-| `transparent` | 7.33 s |
-| `remove-background` | 15.55 s |
+| `text-to-image` | 6.48 s |
+| `edit` | 13.13 s |
+| `compose` | 21.22 s |
+| `transparent` | 6.55 s |
+| `remove-background` | 13.28 s |
 
-The edit changed the jacket to burgundy. Composition placed the color portrait
+All five PNG SHA-256 hashes matched the earlier, visually inspected direct-Bare
+outputs exactly. The edit changed the jacket to burgundy. Composition placed the color portrait
 on the left and the monochrome portrait on the right. Both transparency presets
 produced RGBA PNGs with alpha spanning 0–255. Sampled background strips had alpha
 0–7 for transparent generation and 0–2 for background removal, without
