@@ -581,7 +581,7 @@ runs:
         # (scripts/ci/slice-platform-packages.mjs); only the @qvac npmjs release
         # is sliced, so @tetherto -mono dev builds never reach this branch.
         # The slice is named by the meta's `#host-addon` imports map, the same
-        # lookup build-mobile-app/install-platform-packages.mjs uses. Mobile
+        # lookup build-mobile-app/overlay-platform-prebuilds.mjs uses. Mobile
         # slices are cross-built, so they are not in optionalDependencies.
         if [ ! -d "$META_DIR/package/prebuilds" ]; then
           case "$PACKED_NAME" in
