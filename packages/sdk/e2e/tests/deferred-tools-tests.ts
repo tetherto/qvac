@@ -295,8 +295,8 @@ export const deferredToolsLoadThenCallQwen35 = createDeferredToolsTest(
   { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' }
 )
 
-// Qwen 3.5 is hybrid, so the warm pass is not judged on a smaller prompt: the
-// call must survive a named cache and match the same history replayed cold.
+// Qwen 3.5 is hybrid, so its token stats don't show a cache hit: the call on a
+// named cache must match the same history replayed cold.
 export const deferredToolsWarmVsColdQwen35 = createDeferredToolsTest(
   'deferred-tools-warm-vs-cold-qwen35',
   { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' },

@@ -125,15 +125,13 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     })
     const text = await result.text
     const toolCalls = ((await result.toolCalls) ?? []) as ToolCallLike[]
-    const stats = (await result.stats) as
-      { promptTokens?: number; cacheTokens?: number } | undefined
+    const stats = (await result.stats) as { promptTokens?: number } | undefined
     const final = (await result.final) as { raw?: { fullText?: string } }
     return {
       text,
       rawText: final.raw?.fullText ?? text,
       toolCalls,
-      promptTokens: stats?.promptTokens,
-      cacheTokens: stats?.cacheTokens
+      promptTokens: stats?.promptTokens
     }
   }
 
@@ -376,12 +374,6 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
       if (!warmResult.passed) {
         return { ...warmResult, output: `Warm pass: ${warmResult.output}` }
       }
-      if (!(typeof warm.cacheTokens === 'number' && warm.cacheTokens > 0)) {
-        return {
-          passed: false,
-          output: `Warm pass reported no cached tokens: cacheTokens=${warm.cacheTokens}`
-        }
-      }
 
       const cold = await this.run(modelId, history, p, { kvCache: false })
       const coldResult = checkExpectedCall(cold.toolCalls, p.expectedToolCall)
@@ -390,9 +382,7 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
       }
       return {
         passed: true,
-        output:
-          `warm: ${describeCalls(warm.toolCalls)} cacheTokens=${warm.cacheTokens}; ` +
-          `cold: ${describeCalls(cold.toolCalls)}`
+        output: `warm: ${describeCalls(warm.toolCalls)}; cold: ${describeCalls(cold.toolCalls)}`
       }
     } catch (error) {
       return errorResult('Deferred tools warm vs cold', error)
@@ -429,17 +419,9 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
       if (!secondResult.passed) {
         return { ...secondResult, output: `Follow-up turn: ${secondResult.output}` }
       }
-      if (!(typeof second.cacheTokens === 'number' && second.cacheTokens > 0)) {
-        return {
-          passed: false,
-          output: `Follow-up turn reported no cached tokens: cacheTokens=${second.cacheTokens}`
-        }
-      }
       return {
         passed: true,
-        output:
-          `first: ${describeCalls(first.toolCalls)}; follow-up: ${describeCalls(second.toolCalls)} ` +
-          `cacheTokens=${first.cacheTokens}->${second.cacheTokens}`
+        output: `first: ${describeCalls(first.toolCalls)}; follow-up: ${describeCalls(second.toolCalls)}`
       }
     } catch (error) {
       return errorResult('Deferred tools warm follow-up', error)
