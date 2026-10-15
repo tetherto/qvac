@@ -1,4 +1,5 @@
 #include <bare.h>
+#include <qvac-addon/fabric-bind.h>
 
 #include "../addon/AddonJs.hpp"
 
@@ -8,6 +9,10 @@ bool registerBindings(js_env_t* env, js_value_t* exports);
 
 js_value_t*
 qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
