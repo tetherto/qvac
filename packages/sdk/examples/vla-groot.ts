@@ -22,7 +22,7 @@
  * image tokens; we lay it out by hand for the smoke.
  *
  * Usage:
- *   bun examples/vla-groot.ts [path-to-groot.gguf]
+ *   npx tsx examples/vla-groot.ts [path-to-groot.gguf]
  *
  * By default the example pulls the registry-baked GR00T-LIBERO GGUF (~3.76 GB)
  * on first run and caches it locally. Pass an absolute path on the command line
@@ -82,7 +82,7 @@ try {
   const modelId = await loadModel({
     modelSrc,
     modelType: 'ggml-vla',
-    modelConfig: { backend: 'cpu', ...(embodiment !== undefined && { embodiment }) },
+    modelConfig: { backend: ['cpu'], ...(embodiment !== undefined && { embodiment }) },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`

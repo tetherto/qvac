@@ -1,8 +1,9 @@
 import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
-import { ModelType, type CanonicalModelType } from '@/schemas/index'
+import { ModelType, type CanonicalModelType, type TranscriptionFitWorkload } from '@/schemas/index'
 import type { FitProbeRequest } from '@/resources/model-fit/native-probe/engine-fit'
 import {
   createBciFitRequest,
+  createMossTranscribeFitRequest,
   createParakeetFitRequest,
   createWhisperFitRequest
 } from '@/resources/model-fit/native-probe/engines/asr'
@@ -12,6 +13,8 @@ import {
   createLlamaFitRequest,
   llamaLoadKindFor
 } from '@/resources/model-fit/native-probe/engines/llama'
+import { createNmtFitRequest } from '@/resources/model-fit/native-probe/engines/nmt'
+import { createOcrFitRequest } from '@/resources/model-fit/native-probe/engines/ocr'
 import { createTtsFitRequest } from '@/resources/model-fit/native-probe/engines/tts'
 
 export type FitRequestPlan =
@@ -22,6 +25,7 @@ export interface CreateFitRequestParams {
   modelType: CanonicalModelType
   modelPath: string
   modelConfig: unknown
+  transcriptionWorkload?: TranscriptionFitWorkload | undefined
   artifacts?: Record<string, string> | undefined
   isShardedModel: boolean
   /** Free memory that must remain for the projection to count as fitting. */
@@ -40,6 +44,13 @@ export interface CreateFitRequestParams {
 export function createFitRequest(params: CreateFitRequestParams): FitRequestPlan {
   const { modelType, modelPath, modelConfig, artifacts, marginBytes } = params
 
+  if (params.transcriptionWorkload !== undefined && modelType !== ModelType.mossTranscribe) {
+    return {
+      supported: false,
+      detail: 'transcriptionWorkload is supported only for MOSS transcription'
+    }
+  }
+
   // Every engine reads whole files rather than a shard set, so a split model is
   // not a shape any of them can be pointed at.
   if (params.isShardedModel) {
@@ -54,6 +65,11 @@ export function createFitRequest(params: CreateFitRequestParams): FitRequestPlan
   const common = { modelPath, modelConfig, artifacts, marginBytes }
 
   switch (modelType) {
+    case ModelType.mossTranscribe:
+      return createMossTranscribeFitRequest({
+        ...common,
+        transcriptionWorkload: params.transcriptionWorkload
+      })
     case ModelType.whispercppTranscription:
       return createWhisperFitRequest(common)
     case ModelType.parakeetTranscription:
@@ -66,6 +82,10 @@ export function createFitRequest(params: CreateFitRequestParams): FitRequestPlan
       return createAudiogenFitRequest(common)
     case ModelType.sdcppGeneration:
       return createDiffusionFitRequest({ modelPath, modelConfig, artifacts })
+    case ModelType.ggmlOcr:
+      return createOcrFitRequest(common)
+    case ModelType.nmtcppTranslation:
+      return createNmtFitRequest(common)
     default:
       return { supported: false, detail: `no fitter for model type: ${modelType}` }
   }

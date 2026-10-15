@@ -32,8 +32,8 @@ If you manage to solve a problem by removing code, that gives you double points 
 
 ## 🚀 Quickstart (fast lane)
 
-- `nvm use` and `bun install`
-- Run `bun lint` then `bun test` before opening a PR (husky hooks will enforce these on commit)
+- Node.js 22, then `npm run sdk-source:workspace` (installs the SDK against the in-repo engine; see the README's Build section)
+- Run `npm run lint` then `npm run test:unit` before opening a PR (husky hooks will enforce lint, format and typecheck on commit)
 - Keep PRs focused on one change; draft early if work is in progress
 - Follow commit format `prefix[tags]?: subject` (e.g., `fix: tighten cache validation`)
 
@@ -55,7 +55,7 @@ If you manage to solve a problem by removing code, that gives you double points 
 
 ## ✅ Pull request requirements
 
-- Lint and tests pass (`bun lint`, `bun test`).
+- Lint and tests pass (`npm run lint`, `npm run test:unit`).
 - PR covers exactly one problem/feature; related items go to separate PRs.
 - Commit message follows `prefix[tags]?: subject`; PR title follows the ticket format with tags when applicable.
 - Add tests for any behavior change (or explain why not).

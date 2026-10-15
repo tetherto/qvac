@@ -113,4 +113,4 @@ export interface AudiogenFitResult {
   report: string
 }
 
-export function assessFit(request: AudiogenFitRequest): AudiogenFitResult
+export function assessFit(request: AudiogenFitRequest): Promise<AudiogenFitResult>

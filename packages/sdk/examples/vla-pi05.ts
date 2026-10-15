@@ -12,7 +12,7 @@
  *     `Float32Array(0)`. π₀.₅ also requires the `noise` prior.
  *
  * Usage:
- *   bun examples/vla-pi05.ts [path-to-pi05.gguf]
+ *   npx tsx examples/vla-pi05.ts [path-to-pi05.gguf]
  *
  * By default the example pulls the registry-baked π₀.₅ GGUF (~3.9 GB) on
  * first run and caches it locally. Pass an absolute path on the command line
@@ -36,7 +36,7 @@ try {
   const modelId = await loadModel({
     modelSrc,
     modelType: 'ggml-vla',
-    modelConfig: { backend: 'cpu' },
+    modelConfig: { backend: ['cpu'] },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`

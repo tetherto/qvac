@@ -31,6 +31,7 @@ export const ENGINE_TO_ADDON = {
   [ModelType.ttsGgml]: 'tts',
   [ModelType.ggmlOcr]: 'ocr',
   [ModelType.parakeetTranscription]: 'parakeet',
+  [ModelType.mossTranscribe]: 'moss-transcribe',
   [ModelType.sdcppGeneration]: 'diffusion',
   [ModelType.audiogenGgml]: 'audiogen',
   [ModelType.ggmlVla]: 'vla',

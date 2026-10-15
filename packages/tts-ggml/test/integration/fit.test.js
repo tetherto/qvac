@@ -64,7 +64,7 @@ test('a projection is internally consistent', { timeout: TEST_TIMEOUT_MS }, asyn
   const model = await supertonicPath(t)
   if (model === null) return
 
-  const fit = TTSGgml.assessFit({
+  const fit = await TTSGgml.assessFit({
     engineType: 'supertonic',
     supertonicModelPath: model,
     useGPU: true
@@ -84,13 +84,13 @@ test('a weightless copy projects the same', { timeout: TEST_TIMEOUT_MS }, async 
   const model = await supertonicPath(t)
   if (model === null) return
 
-  const full = TTSGgml.assessFit({
+  const full = await TTSGgml.assessFit({
     engineType: 'supertonic',
     supertonicModelPath: model,
     useGPU: true
   })
   if (!projected(t, full)) return
-  const stub = TTSGgml.assessFit({
+  const stub = await TTSGgml.assessFit({
     engineType: 'supertonic',
     supertonicModelPath: weightlessCopy(tempDir(t), model, 1024 * 1024),
     useGPU: true
@@ -106,12 +106,12 @@ test('the load’s offload keys reach the projection', { timeout: TEST_TIMEOUT_M
   const model = await supertonicPath(t)
   if (model === null) return
 
-  const cpu = TTSGgml.assessFit({
+  const cpu = await TTSGgml.assessFit({
     engineType: 'supertonic',
     supertonicModelPath: model,
     useGPU: false
   })
-  const pinned = TTSGgml.assessFit({
+  const pinned = await TTSGgml.assessFit({
     engineType: 'supertonic',
     supertonicModelPath: model,
     nGpuLayers: 0
@@ -129,7 +129,7 @@ test('a LavaSR stage is sized beside the projection', { timeout: TEST_TIMEOUT_MS
   const enhancer = path.join(dir, 'enhancer.gguf')
   fs.writeFileSync(enhancer, Buffer.alloc(4096, 1))
 
-  const fit = TTSGgml.assessFit({
+  const fit = await TTSGgml.assessFit({
     engineType: 'supertonic',
     supertonicModelPath: model,
     useGPU: true,
@@ -141,8 +141,97 @@ test('a LavaSR stage is sized beside the projection', { timeout: TEST_TIMEOUT_MS
   t.ok(fit.lavasrFileBytes < fit.deviceBytes, 'reported beside the projection')
 })
 
-test('MOSS routes to its fitter when a model cannot be read', (t) => {
-  const fit = TTSGgml.assessFit({
+test('fitting keeps the event loop responsive', { timeout: TEST_TIMEOUT_MS }, async (t) => {
+  const model = await supertonicPath(t)
+  if (model === null) return
+
+  const request = { engineType: 'supertonic', supertonicModelPath: model, useGPU: true }
+
+  let pending = true
+  let turns = 0
+  const spin = () => {
+    if (!pending) return
+    turns++
+    setImmediate(spin)
+  }
+  setImmediate(spin)
+
+  const first = TTSGgml.assessFit(request)
+  t.ok(first instanceof Promise, 'the call returns before the projection')
+  const fits = await Promise.all([
+    first,
+    ...Array.from({ length: 15 }, () => TTSGgml.assessFit(request))
+  ])
+  pending = false
+
+  t.comment(`${turns} loop turns before the fits settled`)
+  t.ok(turns > 0, 'the loop turned while the fitter ran')
+  for (const fit of fits) {
+    t.not(fit.reason, 'model-unreadable', 'every queued projection ran')
+  }
+})
+
+test(
+  'concurrent fits keep their own requests and all settle',
+  { timeout: TEST_TIMEOUT_MS },
+  async (t) => {
+    const model = await supertonicPath(t)
+    if (model === null) return
+
+    const dir = tempDir(t)
+    const enhancer = path.join(dir, 'enhancer.gguf')
+    fs.writeFileSync(enhancer, Buffer.alloc(4096, 1))
+
+    const request = {
+      engineType: 'supertonic',
+      supertonicModelPath: model,
+      useGPU: false,
+      lavasrEnhancerPath: enhancer
+    }
+    const first = TTSGgml.assessFit(request)
+    request.lavasrEnhancerPath = ''
+    const second = TTSGgml.assessFit(request)
+    const missing = TTSGgml.assessFit({
+      engineType: 'supertonic',
+      supertonicModelPath: '/nonexistent/model.gguf'
+    })
+    const [a, b, c] = await Promise.all([first, second, missing])
+
+    t.is(a.lavasrFileBytes, 4096, 'the first call owns its original request')
+    t.is(b.lavasrFileBytes, 0, 'the second call owns its changed request')
+    t.is(c.status, 'error', 'an error outcome does not strand queued callers')
+  }
+)
+
+test('a fit settles while a loaded model unloads', { timeout: TEST_TIMEOUT_MS }, async (t) => {
+  const model = await supertonicPath(t)
+  if (model === null) return
+
+  const voice = new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: { supertonicModel: model },
+    voice: 'F1',
+    config: { language: 'en', useGPU: false }
+  })
+  await voice.load()
+  try {
+    const fit = TTSGgml.assessFit({
+      engineType: 'supertonic',
+      supertonicModelPath: model,
+      useGPU: false
+    })
+    await voice.unload()
+    const result = await fit
+    t.ok(result.deviceTotalBytes > 0, 'the projection measured a device')
+  } finally {
+    try {
+      await voice.unload()
+    } catch (_e) {}
+  }
+})
+
+test('MOSS routes to its fitter when a model cannot be read', async (t) => {
+  const fit = await TTSGgml.assessFit({
     engineType: 'moss',
     mossBackbonePath: '/models/moss-tts-delay.gguf',
     mossCodecDecoderPath: '/models/moss-codec-decoder.gguf',
@@ -156,8 +245,8 @@ test('MOSS routes to its fitter when a model cannot be read', (t) => {
   t.is(fit.modelVariant, 'moss')
 })
 
-test('a model that cannot be read is an outcome, not a throw', (t) => {
-  const fit = TTSGgml.assessFit({
+test('a model that cannot be read is an outcome, not a rejection', async (t) => {
+  const fit = await TTSGgml.assessFit({
     engineType: 'supertonic',
     supertonicModelPath: '/nonexistent/model.gguf'
   })
@@ -165,14 +254,22 @@ test('a model that cannot be read is an outcome, not a throw', (t) => {
   t.is(fit.status, 'error')
 })
 
-test('a count that is not a count is refused', (t) => {
-  t.exception(
-    () =>
-      TTSGgml.assessFit({
-        engineType: 'supertonic',
-        supertonicModelPath: '/models/supertonic.gguf',
-        textTokens: -1
-      }),
+test('a count that is not a count is refused', async (t) => {
+  await t.exception(
+    TTSGgml.assessFit({
+      engineType: 'supertonic',
+      supertonicModelPath: '/models/supertonic.gguf',
+      textTokens: -1
+    }),
     /non-negative count/
   )
+})
+
+test('a broken request rejects', async (t) => {
+  let promise
+  t.execution(() => {
+    promise = TTSGgml.assessFit({})
+  }, 'the call itself does not throw')
+  t.ok(promise instanceof Promise)
+  await t.exception(promise, /engineType is required/)
 })

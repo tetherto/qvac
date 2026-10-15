@@ -27,6 +27,8 @@ export interface SplitAddonProjectOptions {
   withRuntime?: boolean
   /** Also install `UNUSED_ADDON` at the project's top-level node_modules. */
   withUnused?: boolean
+  /** Published ASR 0.8 uses fallback arrays and marks its meta as an addon. */
+  legacyFallback?: boolean
 }
 
 function writeFile(filePath: string, content: string) {
@@ -101,6 +103,17 @@ export function createSplitAddonProject(sdkDir: string, options: SplitAddonProje
   )
 
   writeSplitAddon(addonRoot, SPLIT_ADDON, SPLIT_ADDON_VERSION, withRuntime ? RUNTIME_ADDON : null)
+  if (options.legacyFallback) {
+    const manifestPath = path.join(addonRoot, 'package.json')
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+    manifest.addon = true
+    manifest.imports['#host-addon'].android.arm64 = [
+      SPLIT_ADDON_ANDROID_PACKAGE,
+      './addon-unavailable.js'
+    ]
+    manifest.imports['#host-addon'].ios = [SPLIT_ADDON_IOS_PACKAGE, './addon-unavailable.js']
+    writeFile(manifestPath, JSON.stringify(manifest))
+  }
 
   if (withRuntime) {
     const runtimeRoot =

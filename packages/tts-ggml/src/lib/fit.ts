@@ -148,7 +148,7 @@ export interface TtsFitResult {
 }
 
 interface FitBinding {
-  assessFit(request: TtsFitRequest): TtsFitResult
+  assessFit(request: TtsFitRequest): Promise<TtsFitResult>
 }
 
 /**
@@ -162,13 +162,13 @@ interface FitBinding {
  *
  * `engineType` picks the fitter, the same key a load uses, and is required
  * here: a fit request carries none of the file keys a load is inferred from.
- * A model the engine cannot read comes back as `status: "error"`, as does a
+ * A model the engine cannot read resolves to `status: "error"`, as does a
  * voice with no fitter; a broken request, or a host with no native binding,
- * throws.
+ * rejects. Fits run one at a time within this addon.
  */
-export function assessFit(request: TtsFitRequest): TtsFitResult {
+export async function assessFit(request: TtsFitRequest): Promise<TtsFitResult> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
   const binding = require('../binding.js') as FitBinding
 
-  return binding.assessFit(request)
+  return await binding.assessFit(request)
 }

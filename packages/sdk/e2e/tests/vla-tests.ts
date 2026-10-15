@@ -33,7 +33,7 @@ const createVlaTest = (
 
 // hparams shape: chunkSize, actionDim, maxStateDim, etc. must all be
 // positive integers and backendName must be one of the addon's accepted
-// backend strings (CPU when we load with `{ backend: "cpu" }`).
+// backend strings (CPU when we load with `{ backend: ["cpu"] }`).
 export const vlaHparamsShape = createVlaTest(
   'vla-hparams-shape',
   {},

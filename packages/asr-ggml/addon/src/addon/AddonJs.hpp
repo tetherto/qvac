@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <ggml.h>
@@ -453,14 +454,51 @@ JSCATCH
 // ── assessFit ────────────────────────────────────────────────────────────
 //
 // `engine` picks the fitter, the same value createInstance takes. A model the
-// fitter cannot read is an "error" status carrying the engine's own reason,
-// never a throw.
+// fitter cannot read is an "error" status carrying the engine's own reason;
+// only a broken request rejects.
 //
-// Takes no instance and runs on the calling thread: both fitters read model
-// metadata only, never weight data, and return in milliseconds.
+// Takes no instance and returns a Promise. The request is read into plain
+// values on the JS thread, the fitter runs on a worker thread that makes no
+// js_* call, and the result object is built back on the JS thread. The
+// fitters read model metadata only, never weight data.
 
-inline js_value_t*
-whisperFit(js_env_t* env, js::Object request, const std::string& modelPath);
+struct ParakeetFitRequest {
+  ::parakeet::FitOptions options;
+};
+
+struct WhisperFitRequest {
+  std::string modelPath;
+  std::string vadModelPath;
+  std::string backendsDir;
+  whisper_fit_options options = whisper_fit_default_options();
+};
+
+struct MossFitRequest {
+  moss::MossTranscribeConfig config;
+  moss::MossTranscribeRequest call;
+  double audioSeconds = 0;
+  uint64_t marginBytes = 0;
+};
+
+using FitRequest =
+    std::variant<ParakeetFitRequest, WhisperFitRequest, MossFitRequest>;
+using FitResult = std::variant<::parakeet::FitResult, whisper_fit_result>;
+
+inline std::optional<double>
+readFitCount(js_env_t* env, js::Object request, const char* name) {
+  auto value = request.getOptionalProperty<js::Number>(env, name);
+  if (!value.has_value()) {
+    return std::nullopt;
+  }
+  const double raw = value->as<double>(env);
+  // A count cast from a negative or non-finite double is undefined.
+  if (!std::isfinite(raw) || raw < 0) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("assessFit: ") + name + " must be a non-negative count");
+  }
+  return raw;
+}
 
 inline js_value_t*
 asrFitResultToJs(js_env_t* env, const ::parakeet::FitResult& fit) {
@@ -521,7 +559,7 @@ inline double readMossFitNumber(
   return raw;
 }
 
-inline js_value_t* mossTranscribeFit(
+inline MossFitRequest parseMossTranscribeFit(
     js_env_t* env, js::Object request, const std::string& modelPath) {
   constexpr uint64_t DEFAULT_FIT_MARGIN_BYTES = 256ull * 1024 * 1024;
   const double seconds =
@@ -532,76 +570,38 @@ inline js_value_t* mossTranscribeFit(
         "assessFit: modelPath and positive audioSeconds are required for "
         "moss-transcribe");
   }
-  moss::MossTranscribeConfig config;
-  config.modelPath = modelPath;
-  config.maxThreads =
+  MossFitRequest parsed;
+  parsed.config.modelPath = modelPath;
+  parsed.config.maxThreads =
       static_cast<int>(readMossFitNumber(env, request, "threads", 0, true));
-  config.useGPU = readMossFitNumber(env, request, "gpuLayers", 0, true) > 0;
+  parsed.config.useGPU =
+      readMossFitNumber(env, request, "gpuLayers", 0, true) > 0;
   if (auto backend = request.getOptionalProperty<js::String>(env, "backend")) {
-    config.backend = backend->as<std::string>(env);
+    parsed.config.backend = backend->as<std::string>(env);
   }
   if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
-    config.backendsDir = dir->as<std::string>(env);
+    parsed.config.backendsDir = dir->as<std::string>(env);
   }
   readMossFitNumber(env, request, "maxNewTokens", 0, true);
   JSAdapter adapter;
-  const auto call = adapter.readMossTranscribeRequest(request, env);
+  parsed.call = adapter.readMossTranscribeRequest(request, env);
   const double rawMargin = readMossFitNumber(
       env, request, "marginBytes", DEFAULT_FIT_MARGIN_BYTES, false);
-  const uint64_t margin =
+  parsed.marginBytes =
       rawMargin >= static_cast<double>(std::numeric_limits<uint64_t>::max())
           ? std::numeric_limits<uint64_t>::max()
           : static_cast<uint64_t>(rawMargin);
-  const auto fit = ::parakeet::moss::fit_params(
-      moss::MossTranscribeModel::toEngineOptions(config),
-      moss::MossTranscribeModel::toEngineRequest(call),
-      seconds,
-      margin);
-  return asrFitResultToJs(env, fit);
+  parsed.audioSeconds = seconds;
+  return parsed;
 }
 
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  auto request = args.getJsObject(0, "request");
-
-  const std::string modelPath =
-      request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
-  auto engine = request.getOptionalProperty<js::String>(env, "engine");
-  if (engine.has_value()) {
-    const std::string name = engine->as<std::string>(env);
-    if (name == "whisper") {
-      return whisperFit(env, request, modelPath);
-    }
-    if (name == "moss-transcribe") {
-      return mossTranscribeFit(env, request, modelPath);
-    }
-    // An unrecognised name reaches the parakeet fitter with a model it cannot
-    // read, and the caller sees a broken model for what is a broken request.
-    if (name != "parakeet") {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          "Unknown fit engine: " + name);
-    }
-  }
-
+inline ParakeetFitRequest parseParakeetFit(
+    js_env_t* env, js::Object request, const std::string& modelPath) {
   ::parakeet::FitOptions options;
   options.model_gguf_path = modelPath;
 
-  auto number = [&](const char* name) -> std::optional<double> {
-    auto value = request.getOptionalProperty<js::Number>(env, name);
-    if (!value.has_value()) {
-      return std::nullopt;
-    }
-    const double raw = value->as<double>(env);
-    // A count cast from a negative or non-finite double is undefined.
-    if (!std::isfinite(raw) || raw < 0) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          std::string("assessFit: ") + name + " must be a non-negative count");
-    }
-    return raw;
+  auto number = [&](const char* name) {
+    return readFitCount(env, request, name);
   };
 
   if (auto seconds = number("audioSeconds")) {
@@ -632,46 +632,23 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       resolveBackendsDir(dir.has_value() ? dir->as<std::string>(env) : "")
           .string();
 
-  const ::parakeet::FitResult fit = ::parakeet::fit_params(options);
-
-  return asrFitResultToJs(env, fit);
+  return ParakeetFitRequest{std::move(options)};
 }
-JSCATCH
 
-inline js_value_t*
-whisperFit(js_env_t* env, js::Object request, const std::string& modelPath) {
-  // whisper_fit_params reads ggml's global device registry and loads nothing
-  // itself, so whatever is registered here is its whole view of the machine.
-#if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
-  auto backendsDir =
-      request.getOptionalProperty<js::String>(env, "backendsDir");
-  whisper::ensureBackendsLoaded(
-      backendsDir.has_value() ? backendsDir->as<std::string>(env)
-                              : std::string());
-#endif
-
-  whisper_fit_options options = whisper_fit_default_options();
-  options.model_path = modelPath.c_str();
-
-  std::string vadPath;
+inline WhisperFitRequest parseWhisperFit(
+    js_env_t* env, js::Object request, const std::string& modelPath) {
+  WhisperFitRequest parsed;
+  parsed.modelPath = modelPath;
+  if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
+    parsed.backendsDir = dir->as<std::string>(env);
+  }
   if (auto vad = request.getOptionalProperty<js::String>(env, "vadModelPath")) {
-    vadPath = vad->as<std::string>(env);
-    options.vad_model_path = vadPath.empty() ? nullptr : vadPath.c_str();
+    parsed.vadModelPath = vad->as<std::string>(env);
   }
 
-  auto number = [&](const char* name) -> std::optional<double> {
-    auto value = request.getOptionalProperty<js::Number>(env, name);
-    if (!value.has_value()) {
-      return std::nullopt;
-    }
-    const double raw = value->as<double>(env);
-    // A count cast from a negative or non-finite double is undefined.
-    if (!std::isfinite(raw) || raw < 0) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          std::string("assessFit: ") + name + " must be a non-negative count");
-    }
-    return raw;
+  whisper_fit_options& options = parsed.options;
+  auto number = [&](const char* name) {
+    return readFitCount(env, request, name);
   };
   auto boolean = [&](const char* name) -> std::optional<bool> {
     auto value = request.getOptionalProperty<js::Boolean>(env, name);
@@ -702,9 +679,78 @@ whisperFit(js_env_t* env, js::Object request, const std::string& modelPath) {
     options.margin_bytes = static_cast<uint64_t>(*margin);
   }
 
-  whisper_fit_result fit{};
-  whisper_fit_params(&options, &fit);
+  return parsed;
+}
 
+inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+
+  const std::string modelPath =
+      request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+  auto engine = request.getOptionalProperty<js::String>(env, "engine");
+  if (engine.has_value()) {
+    const std::string name = engine->as<std::string>(env);
+    if (name == "whisper") {
+      return parseWhisperFit(env, request, modelPath);
+    }
+    if (name == "moss-transcribe") {
+      return parseMossTranscribeFit(env, request, modelPath);
+    }
+    // An unrecognised name reaches the parakeet fitter with a model it cannot
+    // read, and the caller sees a broken model for what is a broken request.
+    if (name != "parakeet") {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Unknown fit engine: " + name);
+    }
+  }
+  return parseParakeetFit(env, request, modelPath);
+}
+
+inline FitResult runEngineFit(ParakeetFitRequest& request) {
+  return ::parakeet::fit_params(request.options);
+}
+
+inline FitResult runEngineFit(WhisperFitRequest& request) {
+  // whisper_fit_params reads ggml's global device registry and loads nothing
+  // itself, so whatever is registered here is its whole view of the machine.
+#if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
+  whisper::ensureBackendsLoaded(request.backendsDir);
+#endif
+  request.options.model_path = request.modelPath.c_str();
+  request.options.vad_model_path =
+      request.vadModelPath.empty() ? nullptr : request.vadModelPath.c_str();
+  whisper_fit_result fit{};
+  whisper_fit_params(&request.options, &fit);
+  return fit;
+}
+
+inline FitResult runEngineFit(MossFitRequest& request) {
+  return ::parakeet::moss::fit_params(
+      moss::MossTranscribeModel::toEngineOptions(request.config),
+      moss::MossTranscribeModel::toEngineRequest(request.call),
+      request.audioSeconds,
+      request.marginBytes);
+}
+
+// Fits run one at a time: each initialises ggml backends and reads device
+// memory through the process-wide registry, and whisper's backend init
+// re-applies the global ggml log callback. The worker takes the lock, never
+// the JS thread. A fit builds and frees its own metadata-only model, and the
+// backend registries it reads are loaded once per process and never
+// unloaded, so unloading an instance cannot release state a fit is using.
+inline FitResult runFit(FitRequest request) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+  return std::visit(
+      [](auto& engineRequest) { return runEngineFit(engineRequest); }, request);
+}
+
+inline js_value_t*
+whisperFitResultToJs(js_env_t* env, const whisper_fit_result& fit) {
   const char* status = "error";
   if (fit.status == WHISPER_FIT_SUCCESS) {
     status = "fits";
@@ -745,6 +791,23 @@ whisperFit(js_env_t* env, js::Object request, const std::string& modelPath) {
 
   return result;
 }
+
+inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
+  if (const auto* whisperFit = std::get_if<whisper_fit_result>(&fit)) {
+    return whisperFitResultToJs(env, *whisperFit);
+  }
+  return asrFitResultToJs(env, std::get<::parakeet::FitResult>(fit));
+}
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  return js::JsAsyncTask::run(
+      env,
+      [request = parseFitRequest(env, info)]() mutable {
+        return runFit(std::move(request));
+      },
+      fitResultObject);
+}
+JSCATCH
 
 // ── getBackendInfo ───────────────────────────────────────────────────────
 //

@@ -8,6 +8,7 @@ import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemToolCallsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestKvCache
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormat
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatJsonObject
@@ -16,9 +17,6 @@ import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormat
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatText
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolDialect
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItem
-import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItemParameters
-import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItemParametersPropertiesValue
-import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItemParametersPropertiesValueType
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItemCompletionStatsStats
 import kotlinx.coroutines.CompletableDeferred
@@ -42,21 +40,42 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import kotlin.random.Random
 
 data class QvacAttachment(val path: String)
 
+/**
+ * A history entry. An assistant turn can carry the [toolCalls] it made, and a tool
+ * turn the [toolCallId] / [toolName] it answers; the model's chat template renders
+ * them in its own tool-call format.
+ */
 data class QvacMessage(
     val role: String,
     val content: String,
     val attachments: List<QvacAttachment> = emptyList(),
+    val toolCalls: List<QvacToolCall> = emptyList(),
+    val toolCallId: String? = null,
+    val toolName: String? = null,
 ) {
+    init {
+        require(toolCalls.isEmpty() || role == "assistant") {
+            "toolCalls is only valid on an assistant message"
+        }
+        require((toolCallId == null && toolName == null) || role == "tool") {
+            "toolCallId and toolName are only valid on a tool message"
+        }
+    }
+
     companion object {
         fun system(content: String) = QvacMessage("system", content)
         fun user(content: String, attachments: List<QvacAttachment> = emptyList()) =
             QvacMessage("user", content, attachments)
-        fun assistant(content: String) = QvacMessage("assistant", content)
-        fun tool(content: String) = QvacMessage("tool", content)
+        fun assistant(content: String, toolCalls: List<QvacToolCall> = emptyList()) =
+            QvacMessage("assistant", content, toolCalls = toolCalls)
+        fun tool(content: String, toolCallId: String? = null, toolName: String? = null) =
+            QvacMessage("tool", content, toolCallId = toolCallId, toolName = toolName)
     }
 }
 
@@ -111,13 +130,25 @@ data class QvacToolParameter(
 
 typealias QvacToolHandler = suspend (JsonObject) -> JsonElement
 
+/**
+ * A tool the model may call. Describe flat parameters with [parameters] and
+ * [required], or pass a full JSON Schema object as [parametersSchema] for nested
+ * `properties`, `items`, `anyOf` or `$defs`; it is sent as written.
+ */
 data class QvacTool(
     val name: String,
     val description: String,
     val parameters: Map<String, QvacToolParameter> = emptyMap(),
     val required: Set<String> = emptySet(),
+    val parametersSchema: JsonObject? = null,
     val handler: QvacToolHandler? = null,
-)
+) {
+    init {
+        require(parametersSchema == null || (parameters.isEmpty() && required.isEmpty())) {
+            "QvacTool \"$name\": set either parametersSchema or parameters/required, not both"
+        }
+    }
+}
 
 data class QvacCompletionOptions(
     val generation: QvacGenerationOptions = QvacGenerationOptions(predict = -1),
@@ -499,6 +530,11 @@ private fun QvacMessage.toStreamItem() = CompletionStreamRequestHistoryItem(
     content = content,
     attachments = attachments.takeIf { it.isNotEmpty() }
         ?.map { CompletionStreamRequestHistoryItemAttachmentsItem(path = it.path) },
+    toolCalls = toolCalls.takeIf { it.isNotEmpty() }?.map { call ->
+        CompletionStreamRequestHistoryItemToolCallsItem(id = call.id, name = call.name, arguments = call.arguments)
+    },
+    toolCallId = toolCallId,
+    toolName = toolName,
 )
 
 private fun QvacGenerationOptions.toStreamParams() = CompletionStreamRequestGenerationParams(
@@ -537,19 +573,21 @@ private fun QvacResponseFormat.toStreamFormat(): CompletionStreamRequestResponse
 private fun QvacTool.toStreamTool() = CompletionStreamRequestToolsItem(
     name = name,
     description = description,
-    parameters = CompletionStreamRequestToolsItemParameters(
-        properties = parameters.mapValues { (_, parameter) ->
-            CompletionStreamRequestToolsItemParametersPropertiesValue(
-                type = wireEnum<CompletionStreamRequestToolsItemParametersPropertiesValueType>(
-                    "tool parameter type",
-                    parameter.type.wireName,
-                ),
-                description = parameter.description,
-                enum = parameter.enumValues,
-            )
-        },
-        required = required.takeIf { it.isNotEmpty() }?.toList(),
-    ),
+    parameters = parametersSchema ?: buildJsonObject {
+        put("type", "object")
+        putJsonObject("properties") {
+            parameters.forEach { (parameterName, parameter) ->
+                putJsonObject(parameterName) {
+                    put("type", parameter.type.wireName)
+                    parameter.description?.let { put("description", it) }
+                    parameter.enumValues?.let { put("enum", JsonArray(it)) }
+                }
+            }
+        }
+        if (required.isNotEmpty()) {
+            putJsonArray("required") { required.forEach { add(JsonPrimitive(it)) } }
+        }
+    },
 )
 
 /** Maps a wire string onto a generated enum, rejecting values the contract does not list. */
