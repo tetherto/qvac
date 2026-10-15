@@ -26,26 +26,29 @@ switch (mode) {
     write(
       process.stdout,
       `${JSON.stringify({
-        version: 2,
         status: 'completed',
-        result: {
-          status: 0,
-          fits: true,
-          reason: 'fits',
-          maxDevices: 1,
-          nDevices: 1,
-          nGpuDevices: 1,
-          nGpuLayers: 32,
-          nCtx: 4096,
-          nBatch: 512,
-          nUbatch: 512,
-          tensorSplit: [1],
-          buftOverrides: [],
-          splitMode: 1,
-          mainGpu: 0,
-          typeK: 1,
-          typeV: 1,
-          flashAttnType: 1
+        probe: {
+          engine: 'llm-llamacpp',
+          result: {
+            status: 'fits',
+            reason: 'fits',
+            gpuLayers: 32,
+            ctxSize: 4096,
+            devices: [
+              {
+                name: 'Metal',
+                totalBytes: 0,
+                freeBytes: 0,
+                modelBytes: 0,
+                contextBytes: 0,
+                computeBytes: 0
+              }
+            ],
+            deviceBytes: 0,
+            hostBytes: 0,
+            trainCtxSize: 8192,
+            expertCount: 0
+          }
         }
       })}\n`
     )

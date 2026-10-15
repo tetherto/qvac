@@ -78,6 +78,10 @@ MossSoundEffectModel::~MossSoundEffectModel() noexcept = default;
 
 void MossSoundEffectModel::validateConfig(const MossSoundEffectConfig& cfg) {
   requireModelFile(cfg.modelPath);
+  validateFitConfig(cfg);
+}
+
+void MossSoundEffectModel::validateFitConfig(const MossSoundEffectConfig& cfg) {
   validateThreads(cfg);
   validateGpuIntent(cfg);
 }
@@ -88,8 +92,7 @@ MossSoundEffectModel::toEngineOptions(const MossSoundEffectConfig& cfg) {
   opts.model_path = cfg.modelPath;
   if (cfg.threads.value_or(0) > 0)
     opts.n_threads = *cfg.threads;
-  if (!cfg.backendsDir.empty())
-    opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   opts.use_gpu = wantsGpu(cfg);
   return opts;
 }

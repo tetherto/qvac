@@ -81,7 +81,8 @@ qvac doctor [options]
 
 **What it checks:**
 
-- **Runtime** — Node.js version (`>= 18`) and supported CLI host
+- **Runtime** — Node.js version (`^22.21.0 || >=24.9.0`; bundling needs Node
+  22.21+ on the 22 line or 24.9+) and supported CLI host
   (desktop platforms only; Android/iOS are SDK deploy targets reported
   separately below).
 - **Hardware** — total RAM, available RAM (via `os.availableMemory()` on
@@ -90,8 +91,8 @@ qvac doctor [options]
 - **Deploy targets (SDK)** — desktop target matrix, Android (`adb`), and
   iOS (`xcodebuild` on macOS). Missing mobile toolchains produce
   warnings, not failures.
-- **Optional tools** — `ffmpeg` (microphone/transcription), Bare runtime,
-  Bun.
+- **Optional tools** — `ffmpeg` (microphone/transcription) and the Bare
+  runtime.
 - **Project** — whether `@qvac/sdk` is resolvable from the current
   working directory (works for hoisted monorepo installs too), and whether
   every package's `engines.bare` accepts the Bare version each target runs:
@@ -171,7 +172,7 @@ qvac bundle sdk [options]
 2. Resolves enabled plugins from the `plugins` array (defaults to all built-in plugins if omitted)
 3. Generates worker entry files with **static imports only**
 4. Bundles with `bare-pack --linked`
-5. For mobile hosts (`android-arm64`, `ios-*`), adds any addon platform packages the bundle needs (for example `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version, and bundles again. If it cannot install them, it prints the dependencies to add and continues without them. Skip this step with `--no-install`.
+5. Before bundling for mobile hosts (`android-arm64`, `ios-*`), adds any platform packages the installed split addons need (for example `@qvac/fabric-android-arm64` or `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version. A split addon's `binding.js` is `require('#host-addon')`, so bare-pack cannot bundle it for a host whose platform package is missing: if the packages cannot be installed, it prints the dependencies to add and the bundle fails with `HOST_PREBUILDS_MISSING`. Skip the install with `--no-install`.
 6. Generates `addons.manifest.json` from the bundle graph
 7. Checks every bundled package's `engines.bare` against the Bare runtime of each host and prints a warning with fixes on a mismatch (see [`verify bundle`](#verify-bundle))
 
@@ -341,7 +342,7 @@ qvac verify bundle --addons-source qvac/worker.bundle.js \
 
 | Code                       | Level   | Meaning                                                                                                                                                                                                                                                                                                                                 |
 | -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `missing-prebuild`         | error   | No `.bare` for the host: the addon's `<packageRoot>/prebuilds/<host>/` is missing or empty, and no per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) with `addon/prebuilds/<host>/*.bare` resolves from the addon's package root.                                                                           |
+| `missing-prebuild`         | error   | No `.bare` for the host. For an ordinary addon, `<packageRoot>/prebuilds/<host>/` is missing or empty; for a split addon (one with a `#host-addon` map), its per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) is not installed or has no `prebuilds/<host>/*.bare`.                                        |
 | `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the resolved runtime version.                                                                                                                                                                                                                                                |
 | `engines-mismatch`         | error   | A package that is not an addon declares an `engines.bare` range that does not include the resolved runtime version.                                                                                                                                                                                                                     |
 | `unknown-runtime-version`  | warning | At least one package declares `engines.bare`, but no Bare runtime version could be auto-detected. For mobile hosts install `react-native-bare-kit`; for a desktop build install `bare-runtime` or pass `--bare-runtime-version`.                                                                                                        |
@@ -380,9 +381,9 @@ that uses the network:
    `raw.githubusercontent.com` (two requests, 5 s timeout each). Skipped with
    `--offline`.
 
-The table is regenerated with `bun run bare-kit-runtimes:generate` in
+The table is regenerated with `npm run bare-kit-runtimes:generate` in
 `packages/sdk`, which only probes releases newer than its newest entries
-(`bun run bare-kit-runtimes:generate --full` rebuilds it).
+(`npm run bare-kit-runtimes:generate -- --full` rebuilds it).
 
 **Fix suggestions:** on an `abi-mismatch` or `engines-mismatch`, the summary
 names the oldest `react-native-bare-kit` release whose Bare satisfies every
@@ -505,7 +506,7 @@ qvac doctor
 
 **Prerequisites:**
 
-- Node.js >= 18.0.0
+- Node.js `^22.21.0 || >=24.9.0`
 - npm
 
 ### Agent-stack test ownership
@@ -514,7 +515,7 @@ For tests that touch `qvac serve --openai`, `@qvac/ai-sdk-provider`, or agent-to
 [`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
 CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
 
-The CLI depends on the published `@qvac/sdk` (`^0.20.0`), which provides the
+The CLI depends on the published `@qvac/sdk` (`^0.21.0`), which provides the
 `./commands` subpath that `bundle`/`verify` re-export and the server runtime
 the `serve` commands use. A normal `npm install` pulls it from the registry —
 no local SDK build is required.
@@ -525,7 +526,7 @@ separate worktree):
 
 ```bash
 # Build the SDK first (from its packages/sdk directory)
-cd /path/to/qvac/packages/sdk && bun run build
+cd /path/to/qvac/packages/sdk && npm run build
 
 # Point the CLI at the sibling SDK (../sdk) instead of the registry copy
 cd packages/cli
@@ -542,7 +543,7 @@ npm run dev:unlink
 ```
 
 This runs `git checkout HEAD -- package.json` and re-installs, so the
-committed `@qvac/sdk` dependency (`^0.20.0`) is restored regardless of what you
+committed `@qvac/sdk` dependency (`^0.21.0`) is restored regardless of what you
 swapped in locally. `package-lock.json` is gitignored and is regenerated by the
 trailing `npm install`.
 

@@ -1,4 +1,5 @@
 import { describe, it } from 'node:test'
+import { AUDIOGEN_MOSS_SFX_V2_Q8_0 } from '@qvac/sdk/models'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -46,6 +47,13 @@ describe('configure: presets / buildEntry', () => {
     const cfg = b.entry.config as Record<string, unknown>
     assert.equal(cfg['referenceAudioSrc'], TTS_VOICE_PLACEHOLDER)
     assert.ok(cfg['s3genModelSrc'])
+  })
+
+  it('routes MOSS-SoundEffect through a source URL rather than the audiogen descriptor', () => {
+    const b = buildEntry('speech', 'moss-sfx')
+    assert.equal(b.entry.src, AUDIOGEN_MOSS_SFX_V2_Q8_0.src)
+    assert.equal(b.entry.type, 'tts')
+    assert.equal(b.entry.config?.['ttsEngine'], 'moss-sfx')
   })
 
   it('buildGenericEntry is a bare model entry', () => {

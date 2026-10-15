@@ -6,12 +6,9 @@
 // Device Farm legs on main, not one. Post-merge phone runs are not part of how
 // mobile is tested here — the on-demand dispatch lane is — so a Device Farm run
 // firing on every merge is spend with no reader, which the device-minute
-// programme exists to remove. decoder-audio via
-// mobile-gate-decoder-audio, and asr-ggml, bci-whispercpp and tts-ggml because
-// post-build-gate opens on a GPR publish too, not only npm, and publish-gpr
-// accepted publish_main. Those three set postIntegrationOnGpr in their
-// project.json, so the gate handed them post-publish-integration and a
-// mobile-post-publish-* Device Farm run on every main push.
+// programme exists to remove. decoder-audio, asr-ggml, bci-whispercpp and
+// tts-ggml set postIntegrationOnGpr in project.json, so post-build-gate
+// hands them desktop and mobile integration tests after a GPR publish too.
 //
 // Restoring them would mean a Device Farm run per main push across four
 // addons. The PR-time lane keeps the coverage.
@@ -37,7 +34,11 @@ const ALLOWED = ['release-*']
 // a fork, so a push to one is a merge, which is the publish trigger this policy
 // exists to permit. Comparing the glob literally rejected the narrower spelling
 // and would reject every future `release-<pkg>-*` pipeline the same way.
-const isAllowed = (branch) => ALLOWED.includes(branch) || branch.startsWith('release-')
+// A `!` pattern only removes branches an earlier pattern matched, so it can
+// never add a trigger; `!release-train-*` hands those branches to
+// release-train.yml.
+const isAllowed = (branch) =>
+  ALLOWED.includes(branch) || branch.startsWith('release-') || branch.startsWith('!')
 
 // Same markers, different family: single-job npm publishes with no prebuild
 // matrix. Listed so they are explicitly exempt rather than silently failing.
@@ -239,6 +240,17 @@ test('the push parser reads comments and any indent width', () => {
     'comment inside the list',
   )
   assert.deepEqual(push('on: # triggers\n  push:\n    branches:\n      - main\n'), main, 'comment on on:')
+  assert.deepEqual(
+    push('on:\n  push:\n    branches:\n      - release-*\n      - "!release-train-*"\n'),
+    { kind: 'list', branches: ['release-*', '!release-train-*'] },
+    'quoted negation',
+  )
+})
+
+test('a negation is allowed, a positive non-release pattern is not', () => {
+  assert.ok(isAllowed('!release-train-*'))
+  assert.ok(!isAllowed('main'))
+  assert.ok(!isAllowed('feature-*'))
 })
 
 test('the manual entry point survives', () => {

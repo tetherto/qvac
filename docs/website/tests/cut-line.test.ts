@@ -6,6 +6,7 @@ import {
   cutLine,
   cutManifest,
   cutRedirects,
+  emptyReleaseNotes,
   relabelTitle,
 } from '../scripts/cut-line';
 import { DOCUMENTED_SOFTWARE } from '../src/lib/versions';
@@ -77,33 +78,47 @@ describe('the manifest edit', () => {
   });
 });
 
-describe('the redirect pair', () => {
+describe('the line rules', () => {
   const redirects = [
     '# a comment',
     '/sdk/v0.19/        /sdk/v0.19/index.html        200',
     '/sdk/v0.19         /sdk/v0.19/                  301',
+    '/sdk/v0.19/*       /sdk/v0.19/:splat/index.html 200',
     '/cli/v0.13/        /cli/v0.13/index.html        200',
     '/cli/v0.13         /cli/v0.13/                  301',
+    '/cli/v0.13/*       /cli/v0.13/:splat/index.html 200',
     '',
   ].join('\n');
 
-  it('goes at the head of its own collection, in the block format', () => {
+  it('go at the head of their own collection, in the block format', () => {
     expect(cutRedirects(redirects, 'sdk', 'v0.20')).toContain(
       [
         '/sdk/v0.20/        /sdk/v0.20/index.html        200',
         '/sdk/v0.20         /sdk/v0.20/                  301',
+        '/sdk/v0.20/*       /sdk/v0.20/:splat/index.html 200',
         '/sdk/v0.19/        /sdk/v0.19/index.html        200',
       ].join('\n'),
     );
   });
 
-  it('does not disturb another collection', () => {
+  it('do not disturb another collection', () => {
     expect(cutRedirects(redirects, 'sdk', 'v0.20')).toContain(
-      '/cli/v0.13/        /cli/v0.13/index.html        200',
+      [
+        '/cli/v0.13/        /cli/v0.13/index.html        200',
+        '/cli/v0.13         /cli/v0.13/                  301',
+        '/cli/v0.13/*       /cli/v0.13/:splat/index.html 200',
+      ].join('\n'),
     );
   });
 
-  it('refuses to add a pair that is already there', () => {
+  it("sit below every other collection's rules on a collection's first cut", () => {
+    const cut = cutRedirects(redirects, 'ecosystem', 'v1.0').split('\n');
+    expect(cut.indexOf('/ecosystem/v1.0/   /ecosystem/v1.0/index.html   200')).toBe(
+      cut.indexOf('/cli/v0.13/*       /cli/v0.13/:splat/index.html 200') + 1,
+    );
+  });
+
+  it('refuse to add a line that is already there', () => {
     expect(() => cutRedirects(redirects, 'sdk', 'v0.19')).toThrow(
       /already carries/,
     );
@@ -133,6 +148,55 @@ describe('the currency marker', () => {
 
   it('reports a page that claims nothing, rather than rewriting it', () => {
     expect(relabelTitle('---\ntitle: Quickstart\n---\n', 'v0.20', null)).toBeNull();
+  });
+});
+
+describe('the release notes of the line being opened', () => {
+  const page = [
+    '---',
+    'title: SDK Release Notes — v0.21.x (latest)',
+    'sidebarTitle: Release notes',
+    'icon: Tag',
+    'description: Release notes for QVAC SDK v0.20.3.',
+    '---',
+    '',
+    '## v0.20.3',
+    '',
+    'What the previous line shipped.',
+    '',
+  ].join('\n');
+
+  const emptied = emptyReleaseNotes(page, 'v0.21', '@qvac/sdk')!;
+
+  it('drops the previous line\'s notes, which it shares nothing with', () => {
+    expect(emptied).not.toContain('## v0.20.3');
+    expect(emptied).not.toContain('What the previous line shipped.');
+  });
+
+  it('keeps the frontmatter, so the page stays in the sidebar', () => {
+    expect(emptied).toContain('title: SDK Release Notes — v0.21.x (latest)');
+    expect(emptied).toContain('sidebarTitle: Release notes');
+    expect(emptied).toContain('icon: Tag');
+  });
+
+  it('describes the line it opens, not the release it copied', () => {
+    expect(emptied).toContain('description: Release notes for @qvac/sdk v0.21.');
+    expect(emptied).not.toContain('v0.20.3.');
+  });
+
+  it('says the line has not shipped, rather than rendering blank', () => {
+    expect(emptied).toContain('v0.21 has not been released yet.');
+  });
+
+  it('writes a description when the page carried none', () => {
+    const bare = '---\ntitle: SDK Release Notes — v0.21.x\n---\n\n## v0.20.3\n';
+    expect(emptyReleaseNotes(bare, 'v0.21', '@qvac/sdk')).toContain(
+      'description: Release notes for @qvac/sdk v0.21.',
+    );
+  });
+
+  it('reports a page with no frontmatter to keep, rather than emptying it', () => {
+    expect(emptyReleaseNotes('## v0.20.3\n', 'v0.21', '@qvac/sdk')).toBeNull();
   });
 });
 
@@ -186,13 +250,14 @@ describe('a cut against a copy of the tree', () => {
     expect(manifest).toContain(`{ version: '${CURRENT}', folder: '${CURRENT}' }`);
   });
 
-  it("adds the preserved line's index pair", async () => {
+  it("adds the preserved line's rules", async () => {
     const redirects = await fs.readFile(
       path.join(root, 'public', '_redirects'),
       'utf-8',
     );
     expect(redirects).toContain(`/sdk/${CURRENT}/index.html`);
     expect(redirects).toContain(`/sdk/${CURRENT}         /sdk/${CURRENT}/`);
+    expect(redirects).toContain(`/sdk/${CURRENT}/*       /sdk/${CURRENT}/:splat/index.html`);
   });
 
   it('moves the currency marker from the preserved line to the opened one', async () => {
@@ -209,6 +274,43 @@ describe('a cut against a copy of the tree', () => {
     expect(await titleIn(CURRENT)).toBe(`title: API Summary — ${CURRENT}.x`);
     expect(await titleIn(`(${NEXT})`)).toBe(
       `title: API Summary — ${NEXT}.x (latest)`,
+    );
+  });
+
+  it('opens the line with empty release notes and the summary intact', async () => {
+    const pageIn = (folder: string, page: string) =>
+      fs.readFile(
+        path.join(root, 'content', 'docs', 'sdk', folder, 'reference', page),
+        'utf-8',
+      );
+
+    const notes = await pageIn(`(${NEXT})`, 'release-notes.mdx');
+    expect(notes).toContain(`${NEXT} has not been released yet.`);
+    expect(notes).toContain(`description: Release notes for @qvac/sdk ${NEXT}.`);
+    expect(notes).not.toContain(`## ${CURRENT}.0`);
+
+    // The summary is the opposite case: the release renders it over the copy,
+    // and the diff against the previous line is what makes that review work.
+    expect(await pageIn(`(${NEXT})`, 'api.mdx')).toBe(
+      (await pageIn(CURRENT, 'api.mdx')).replace(
+        `${CURRENT}.x`,
+        `${NEXT}.x (latest)`,
+      ),
+    );
+  });
+
+  it('empties the opened line\'s notes only, never the preserved one\'s', async () => {
+    const notes = (from: string, folder: string) =>
+      fs.readFile(
+        path.join(
+          from, 'content', 'docs', 'sdk', folder, 'reference', 'release-notes.mdx',
+        ),
+        'utf-8',
+      );
+    const body = (page: string) => page.slice(page.indexOf('\n---\n') + 5);
+
+    expect(body(await notes(root, CURRENT))).toBe(
+      body(await notes(WEBSITE, `(${CURRENT})`)),
     );
   });
 

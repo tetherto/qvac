@@ -2,11 +2,16 @@ import { z } from 'zod'
 import { logLevelSchema } from '@/schemas/logging-stream'
 import { ModelType } from '@/schemas/model-types'
 import { llmConfigBaseSchema, embedConfigBaseSchema } from '@/schemas/llamacpp-config'
-import { whisperConfigSchema, parakeetConfigSchema } from '@/schemas/transcription-config'
+import {
+  whisperConfigSchema,
+  parakeetConfigSchema,
+  mossTranscribeConfigSchema
+} from '@/schemas/transcription-config'
 import { ocrConfigSchema } from '@/schemas/ocr'
 import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { vlaConfigSchema } from '@/schemas/vla'
 import { runtimeContextSchema } from '@/schemas/runtime-context'
+import { modelFitPolicySchema } from '@/schemas/model-fit-policy'
 
 // Alias keys for user convenience (maps to canonical types)
 const AliasKeys = {
@@ -50,6 +55,7 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.llamacppEmbedding]: embedConfigBaseSchema.optional(),
     [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
     [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
+    [ModelType.mossTranscribe]: mossTranscribeConfigSchema.optional(),
     [ModelType.nmtcppTranslation]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.ttsGgml]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.ggmlOcr]: ocrConfigSchema.partial().optional(),
@@ -172,6 +178,16 @@ export const qvacConfigSchema = z.object({
   requireSecureTransport: z.boolean().optional(),
 
   /**
+   * What the engine fitter's verdict does to a load.
+   * - "log" (default): the outcome is logged and reported on
+   *   `getLoadedModelInfo`, and the load proceeds whatever the verdict.
+   * - "refuse": a load the fitter projects will not fit is rejected.
+   * - "off": the probe does not run.
+   * A load overrides this for itself with `modelFitPolicy`.
+   */
+  modelFitPolicy: modelFitPolicySchema.optional(),
+
+  /**
    * Maximum number of retry attempts for registry (P2P) downloads on timeout.
    * When a download times out due to a P2P connection stall, we
    * automatically retry up to this many times before failing.
@@ -188,6 +204,15 @@ export const qvacConfigSchema = z.object({
    * Defaults to 60000 (60 seconds).
    */
   registryStreamTimeoutMs: z.number().int().positive().optional(),
+
+  /**
+   * Budget in milliseconds for the registry fetch of a model's weightless
+   * description during `assessModelFit`. One budget covers the lookup and the
+   * whole companion set; past it the assessment falls back to the computed
+   * floor. Raise this on slow or high-latency connections.
+   * Defaults to 40000 (40 seconds).
+   */
+  fitStubBudgetMs: z.number().int().positive().optional(),
 
   /**
    * Device-specific config defaults.
@@ -228,6 +253,14 @@ export const qvacConfigSchema = z.object({
    * ending in `/plugin`.
    */
   plugins: z.array(z.string()).optional(),
+
+  /**
+   * SDK bundle-time option; direct Bare callers ignore it. Defaults to true
+   * when bundling. Set false to omit bare-ffmpeg for raw PCM input or
+   * PCM/WAV audiogen output.
+   * Compressed audio input and compressed audiogen output require FFmpeg.
+   */
+  includeAudioDecoder: z.boolean().optional(),
 
   /** Optional provider module selected at SDK bundle time. Direct Bare callers register in code. */
   rpcServerProvider: z.string().min(1).optional(),

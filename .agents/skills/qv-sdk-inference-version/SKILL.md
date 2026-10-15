@@ -31,6 +31,9 @@ A patch on either side is one release on its own. An SDK patch leaves its range
 alone; an engine patch is picked up by the existing range with no SDK release at
 all.
 
+**On a release train** (`qv-release-train`) skip Step 2: `nx release version`
+writes the range. Step 3 (`packages/sdk-python`) still applies.
+
 ## When to use this skill
 
 **Applies to the SDK pod** (not the agent-stack cascade: cli / ai-sdk-provider /
@@ -122,7 +125,7 @@ the `package.json` repin and any updates under
 
 ```bash
 cd packages/sdk
-bun run enforce-inference-versions
+npm run enforce-inference-versions
 ```
 
 This is the same check CI runs inside `lint`.
@@ -161,7 +164,7 @@ range, the parent skill prompts to run this skill first. Opt out with
 - [ ] Range operator is `^` below 1.0.0, `~` from 1.0.0 onwards
 - [ ] `packages/sdk-python` `generate.py --check` passes
 - [ ] `packages/sdk-kotlin` `generate-contract.py --check` passes and `./gradlew checkVersionAlignment` is green
-- [ ] `bun run enforce-inference-versions` passes in `packages/sdk`
+- [ ] `npm run enforce-inference-versions` passes in `packages/sdk`
 - [ ] Staged changes are only the version edits (+ the originating edit)
 - [ ] No CI auto-commits of this skill
 

@@ -391,3 +391,24 @@ test('cpp-lint overlay steps are guarded on the artifact input being set', () =>
     `expected both cpp-lint overlay steps guarded on ${OVERLAY_INPUT} != '', found ${guards.length}`
   )
 })
+
+const CONSUMERS_PARSE = /fromJSON\(inputs\.fabric-consumers([^)]*)\)/g
+const CONSUMERS_FALLBACK = "|| '[]'"
+
+function fabricConsumersParses() {
+  return readdirSync(WORKFLOW_DIR)
+    .filter((name) => /\.ya?ml$/.test(name))
+    .flatMap((name) => [...read(`.github/workflows/${name}`).matchAll(CONSUMERS_PARSE)]
+      .map((match) => ({ workflow: name, fallback: match[1].trim() })))
+}
+
+test('fabric-consumers is parsed with an empty-list fallback, so a standalone workflow_dispatch run evaluates', () => {
+  const parses = fabricConsumersParses()
+  assert.ok(parses.length > 0, 'found no fromJSON(inputs.fabric-consumers); the discovery regex has stopped matching')
+  const unguarded = parses.filter(({ fallback }) => fallback !== CONSUMERS_FALLBACK).map(({ workflow }) => workflow)
+  assert.deepEqual(
+    unguarded,
+    [],
+    `fabric-consumers is a workflow_call-only input, so it is empty on workflow_dispatch and fromJSON('') fails; add ${CONSUMERS_FALLBACK} in: ${unguarded.join(', ')}`,
+  )
+})

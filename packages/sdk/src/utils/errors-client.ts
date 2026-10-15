@@ -220,6 +220,18 @@ export class BarePackError extends QvacErrorBase {
   }
 }
 
+export class BarePackNodeUnsupportedError extends QvacErrorBase {
+  constructor(nodeVersion: string, requiredRange: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED,
+        [nodeVersion, requiredRange],
+        cause
+      )
+    )
+  }
+}
+
 export class InvalidPluginSpecifierError extends QvacErrorBase {
   constructor(specifiers: string[], cause?: unknown) {
     const list = specifiers.map((s) => `  - ${s}`).join('\n')
@@ -281,6 +293,34 @@ export class HostPrebuildsInstallFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_INSTALL_FAILED,
         [details, formatDependencyPins(dependencies)],
+        cause
+      )
+    )
+    this.dependencies = dependencies
+  }
+}
+
+export class AddonLinkFailedError extends QvacErrorBase {
+  constructor(hosts: string[], cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.ADDON_LINK_FAILED,
+        [hosts.join(', '), reason],
+        cause
+      )
+    )
+  }
+}
+
+export class HostPrebuildsMissingError extends QvacErrorBase {
+  public readonly dependencies: Record<string, string>
+
+  constructor(dependencies: Record<string, string>, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_MISSING,
+        [formatDependencyPins(dependencies)],
         cause
       )
     )

@@ -3,7 +3,6 @@
 const fs = require("bare-fs");
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
-const fabricBackends = require("@qvac/fabric/backends");
 // `./addon` and `./lib/error` are imported as whole-module aliases rather than
 // named imports so the `VlaModel` namespace at the bottom of this file can
 // re-export their members with `export import`. That is what makes the
@@ -15,24 +14,6 @@ const errorModule = require("./lib/error");
 const infer_base_1 = require("@qvac/infer-base");
 const { DEFAULT_IMAGE_SIZE } = addonModule;
 const { QvacErrorAddonVla, ERR_CODES } = errorModule;
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
-// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
-// copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
-// package holds the runtime. On mobile the package tree isn't resolvable at
-// runtime (the worklet runs from a packed bundle), so fall back to this addon's
-// own prebuilds. The mobile packager flattens the fabric runtime's native
-// prebuilds into that load path (same dependency-flattening as ONNX Runtime .so
-// files). The native side appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to
-// whichever root we return.
-function resolveBackendsDir() {
-    // fabric's resolver only checks that the platform package resolves, not that
-    // its prebuilds are on disk.
-    const fabricRoot = fabricBackends.resolveBackendsDir();
-    if (fabricRoot !== null && fs.existsSync(fabricRoot))
-        return fabricRoot;
-    return path.join(__dirname, "prebuilds");
-}
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
 const binding = require("./binding");
 // Maps the C++ Priority enum (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) to the
@@ -68,20 +49,24 @@ const NATIVE_ERR_MARKERS = Object.freeze({
     archMismatch: "config.embodiment is GR00T-only",
     // setEmbodiment refused because an inference job is dispatched but unawaited.
     inFlight: "an inference job is in flight",
+    // parseBackendOverride rejected a `backend` family name. Raised by
+    // createInstance before any weight I/O, so it is a config error, not a
+    // weights failure. QVAC-23763.
+    badBackend: "backend: ",
 });
-// Map a native throw out of the embodiment paths onto a public error code.
-// Only the resolver's rejections are configuration errors; a switch can also
-// fail because the GGUF moved, a read came up short, or an allocation failed,
-// and reporting those as INVALID_CONFIG points the caller at the wrong problem
-// (and invites an SDK to retry a "bad config" forever). Those are the same
-// weight-read failures the load path reports, so they get the same code.
-function classifyEmbodimentError(err) {
+// Map a native throw on the load and setEmbodiment paths onto a public error
+// code. Only rejections of the request itself are configuration errors; a load
+// can also fail because the GGUF moved, a read came up short, or an allocation
+// failed, and reporting those as INVALID_CONFIG points the caller at the wrong
+// problem and invites an SDK to retry a bad config forever.
+function classifyNativeLoadError(err) {
     const message = typeof err.message === "string" ? err.message : "";
     if (message.includes(NATIVE_ERR_MARKERS.inFlight)) {
         return ERR_CODES.JOB_ALREADY_RUNNING;
     }
     if (message.includes(NATIVE_ERR_MARKERS.resolve) ||
-        message.includes(NATIVE_ERR_MARKERS.archMismatch)) {
+        message.includes(NATIVE_ERR_MARKERS.archMismatch) ||
+        message.includes(NATIVE_ERR_MARKERS.badBackend)) {
         return ERR_CODES.INVALID_CONFIG;
     }
     return ERR_CODES.FAILED_TO_LOAD_WEIGHTS;
@@ -486,11 +471,14 @@ class VlaModel {
         catch { }
         this._nativeLoggerActive = false;
     }
-    async load({ backend = "auto" } = {}) {
-        if (backend !== "auto" && backend !== "cpu") {
+    // `backend` is 'auto', 'cpu', or a comma-separated GPU priority list such as
+    // 'cuda,vulkan'. Family names are validated natively; this only rejects
+    // shapes that never reach the addon.
+    async load({ backend = "auto", } = {}) {
+        if (typeof backend !== "string" || backend.trim() === "") {
             throw new QvacErrorAddonVla({
                 code: ERR_CODES.INVALID_CONFIG,
-                adds: `backend must be 'auto' or 'cpu' (got: ${String(backend)})`,
+                adds: `backend must be 'auto', 'cpu', or a comma-separated GPU backend list such as 'cuda,vulkan' (got: ${String(backend)})`,
             });
         }
         return this._run(async () => {
@@ -526,9 +514,7 @@ class VlaModel {
             // Canonical instance lifecycle (mirrors LLM/embed/NMT):
             // createInstance(jsHandle, params, outputCb) — the framework's
             // JobRunner thread consumes runJob() and feeds the outputCb.
-            const backendsDir = this._config.backendsDir
-                ? this._config.backendsDir
-                : resolveBackendsDir();
+            const backendsDir = this._config.backendsDir ?? "";
             this._handle = binding.createInstance(this, {
                 ggufPath,
                 backend,
@@ -558,14 +544,12 @@ class VlaModel {
             }
             // Same logger-leak guard as the missing-file path above.
             this._releaseNativeLogger();
-            // An unresolvable embodiment is a bad config, not a bad weights file — it
-            // is rejected before any weight I/O happens. Without this, the SAME root
-            // cause reported INVALID_CONFIG through setEmbodiment() and
-            // FAILED_TO_LOAD_WEIGHTS through the constructor. Everything else on this
-            // path is already FAILED_TO_LOAD_WEIGHTS, which is what the shared
-            // classifier falls back to.
+            // An unresolvable embodiment or a bad `backend` family is a config
+            // error, not a bad weights file: both are rejected before any weight I/O.
+            // Everything else here is FAILED_TO_LOAD_WEIGHTS, the classifier's
+            // fallback.
             throw new QvacErrorAddonVla({
-                code: classifyEmbodimentError(loadError),
+                code: classifyNativeLoadError(loadError),
                 adds: loadError.message,
                 cause: loadError,
             });
@@ -638,7 +622,7 @@ class VlaModel {
             // which bumps the native count and no JS flag. Same cause as the check
             // above, so report the same code rather than blaming the config.
             throw new QvacErrorAddonVla({
-                code: classifyEmbodimentError(err),
+                code: classifyNativeLoadError(err),
                 adds: err.message,
                 cause: err,
             });

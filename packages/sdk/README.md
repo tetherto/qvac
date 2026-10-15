@@ -20,6 +20,8 @@ For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.q
 
 ## Supported environments and installation
 
+For mobile apps that use only raw PCM streaming transcription, list the required audio plugins and set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. You can also use `qvac bundle sdk --defer bare-ffmpeg`. Both options leave `bare-ffmpeg` out of the native addon manifest. Bundle FFmpeg when the app decodes compressed audio files or asks `audiogen-ggml` for a compressed output format; PCM and WAV output need no FFmpeg.
+
 See https://docs.qvac.tether.io/sdk/getting-started/installation
 
 On Node.js, the SDK installs and launches its own Bare worker through `bare-runtime`.
@@ -28,6 +30,53 @@ When upgrading the SDK, reinstall dependencies with the existing lockfile so the
 package manager can replace an older, incompatible runtime. Remove any override
 or resolution that forces the worker below that requirement; installing a newer
 global `bare` executable does not change the SDK's worker dependency.
+
+## TTS 0.11 engines and memory fit
+
+`@qvac/tts-ggml` 0.11 adds two desktop batch engines to `textToSpeech`.
+Load MOSS-SoundEffect with `modelType: 'tts-ggml'` and
+`modelConfig: { ttsEngine: 'moss-sfx' }`; the primary source is its single
+GGUF. With an `AUDIOGEN_MOSS_SFX_V2_*` constant, pass its `.src` URL as
+`modelSrc`, because the full descriptor selects the audiogen plugin. This also applies to fit assessment: use explicit `modelType` and `ttsEngine`, and a downloaded local file for metadata-only TTS fit. The bare `.src` URL lacks checksum/registry coordinates for a weightless stub; the audiogen descriptor/resource profile does not identify the TTS engine. Use
+a text description, with optional `seconds`
+(up to 30), `negativePrompt`, `steps`, `guidance` and `shift`. These controls
+can also be load defaults. The output is 48 kHz.
+
+Load MOSS-Speech with `modelConfig: { ttsEngine: 'moss-speech',
+mossSpeechCodecModelSrc: <codec source> }` and the language-model GGUF as
+`modelSrc`. Use either `text`, or `audio` plus
+`sampleRate`. Audio is a JSON array of normalized mono samples in [-1, 1].
+Earlier turns go in `messages`; each turn has a `role` and either `text` or
+`audio` plus `sampleRate`. Per-call controls include `systemPrompt`,
+`replyVoice` plus `replyVoiceSampleRate`, `maxReplySeconds`, `maxNewTokens`,
+`textReply`, `greedy`, `temperature`, `topP` and `topK`. Consume `bufferStream` in the default streaming mode, or await `buffer` with
+`stream: false`, then await `result.text` for any reply text.
+Spoken mode can return an audio-only reply; use `textReply: true` when text is required.
+Spoken replies are 24 kHz; `textReply: true` returns text with an empty audio
+buffer. Omitting `maxNewTokens` preserves the addon's remaining-context budget.
+Both engines run one native batch job. The default `stream: true` emits the completed audio as one chunk; `stream: false` collects it in `buffer`. Neither supports sentence streaming or duplex text input.
+
+Standalone examples: [basic sound effects](examples/tts/moss-sound-effect.ts),
+[sound-effect controls](examples/tts/moss-sound-effect-controls.ts),
+[typed question to text reply](examples/tts/moss-speech.ts), and
+[spoken question to spoken reply](examples/tts/moss-speech-audio.ts).
+Run them from this package with `node --import tsx examples/tts/<file>.ts`;
+the spoken-question example also takes a WAV file path. Each example downloads
+its model, returns text or writes a WAV reply, unloads the model, and closes the SDK worker.
+
+`assessModelFit` supports metadata-only MOSS-TTS/TTSD and MOSS-SoundEffect
+projections. Add `ttsWorkload` beside `modelConfig` on the assessment candidate:
+`{ promptRows, referenceSamples, streaming }` for MOSS, or
+`{ prompt, seconds }` for sound effects. MOSS needs its backbone and codec
+decoder; reference encoding also needs the codec encoder. Prompt rows must
+cover the complete native prompt, including dialogue and reference rows.
+Missing workloads return an unknown assessment rather than guessing.
+MOSS-Speech has no native fitter in this release and remains unknown. Workloads are fit-only; loading a MOSS model does not accept them and its automatic fit preflight remains unknown.
+
+The CLI configuration picker includes both engines. Their conversation and
+sound-effect request controls are library-only because the OpenAI speech
+endpoint cannot represent those requests. Native performance and backend fixes
+in the addon release are inherited without additional SDK controls.
 
 ## Quickstart
 
@@ -81,6 +130,12 @@ try {
 ```bash
 node quickstart.js
 ```
+
+A first `loadModel()` call also starts the SDK's worker. If that startup ever
+exceeds its budget (cold disk cache, antivirus scanning the native addon), the
+call fails with `RPC_INIT_TIMEOUT`. Re-running usually succeeds; to give every
+start more room, raise `rpcInitTimeoutMs` in `qvac.config.*` or set the
+`QVAC_RPC_INIT_TIMEOUT_MS` environment variable.
 
 ## System resource diagnostics
 
@@ -171,9 +226,12 @@ The result is advisory: it does not block `loadModel`, reserve memory, or make a
 performance claim. `unknown` is a real answer meaning the evidence does not
 support a call either way — show it as "can't say", not as "no".
 
+The assessment holds back a reserve of its own, beyond the headroom the engine's
+fitter leaves, so a model the engine calls a fit can still come back
+`likely-too-large` on a host with little room.
+
 See [pre-download model fit assessment](./docs/assess-model-fit.md) for the
-budget arithmetic, why estimates are ranges, the supported engine and workload
-matrix, and the current calibration status.
+budget arithmetic, the reserve, and the supported engine and workload matrix.
 
 ## Streaming transcription statistics
 
@@ -226,17 +284,14 @@ for a local check of a Unified GGUF and its encoder bundle.
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:
 
 1. Build the SDK from source (see [Build](#build) section).
-2. Run using Bare, Node.js, or Bun as the runtime:
+2. Run with Node.js:
 
 ```bash
-# With Bare
-bun run bare:example dist/examples/path/to/example.js
-
-# With Node
+# Compiled output
 node dist/examples/path/to/example.js
 
-# With bun, straight from source
-bun run examples/path/to/example.ts
+# Straight from source, with the tsx dev dependency
+npx tsx examples/path/to/example.ts
 ```
 
 `examples/abot-world.ts` has a companion guide covering the hardware
@@ -246,40 +301,38 @@ of an interactive world session: see
 
 ## Build
 
-Use the [Bun](https://bun.sh/) package manager:
+Node.js 22 and npm are the only tools needed. No lockfile is committed; `package-lock.json` is gitignored.
+
+Build and test against the in-repo engine at the same commit (this is what CI does):
 
 ```bash
-bun i
+npm run sdk-source:workspace
 ```
 
-`@qvac/inference` resolves to its published release by default. To build and test against the in-repo engine at the same commit, link it first:
+This installs and builds `../inference`, points `@qvac/inference` at it, and installs the SDK's dependencies. A plain `npm install` resolves `@qvac/inference` to its published release instead, which fails with `ERESOLVE` whenever the SDK on `main` already depends on addon versions the published engine has not been released against.
 
 ```bash
-bun run sdk-source:workspace
+npm run build  # or `watch` for hotreload
 ```
 
 ```bash
-bun run build  # or `watch` for hotreload
+npm run build:pack
 ```
 
-```bash
-bun run build:pack
-```
-
-This outputs a tarball under `dist/sdk-{version}.tgz` that you can install in your project, e.g.:
+This outputs a tarball under `dist/qvac-sdk-{version}.tgz` that you can install in your project, e.g.:
 
 ```bash
-npm i path/to/sdk-0.3.0.tgz
+npm i path/to/qvac-sdk-0.21.0.tgz
 ```
 
 ## Testing
 
 The SDK test suite is organized into two buckets by runtime:
 
-| Bucket            | Runtime    | Location | Command                                |
-| ----------------- | ---------- | -------- | -------------------------------------- |
-| Unit              | Bun / Node | `test/`  | `bun run test:unit`                    |
-| Client (consumer) | Node / RN  | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
+| Bucket            | Runtime   | Location | Command                                |
+| ----------------- | --------- | -------- | -------------------------------------- |
+| Unit              | Node      | `test/`  | `npm run test:unit`                    |
+| Client (consumer) | Node / RN | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
 
 See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 
@@ -422,3 +475,93 @@ This will:
 4. Generate `changelog/<version>/CHANGELOG.md`
 5. Generate `changelog/<version>/breaking.md` for BC changes (with code examples)
 6. Generate `changelog/<version>/api.md` for API changes (with code examples)
+
+## Speaker-aware transcription
+
+ASR 0.8 adds `MODEL_TYPES.mossTranscribe` and the
+`@qvac/sdk/moss-transcribe/plugin` entry point. MOSS processes a whole recording;
+use `transcribe`, since it has no duplex streaming or configuration reload.
+
+```ts
+import { loadModel, transcribe, MOSS_TRANSCRIBE_DIARIZE_Q8_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0,
+  modelConfig: { useGPU: true, maxThreads: 4 }
+})
+const segments = await transcribe({
+  modelId,
+  audioChunk: '/recordings/meeting.wav',
+  metadata: true,
+  hotwords: ['QVAC'],
+  maxNewTokens: 2048
+})
+```
+
+For a runnable example with download progress and resource cleanup, see
+[the MOSS file transcription example](examples/asr/moss-transcribe-filesystem.ts).
+From `packages/sdk`, run:
+
+```bash
+npx tsx examples/asr/moss-transcribe-filesystem.ts examples/audio/diarization-sample-16k.wav
+# Use local weights and per-request hotwords:
+npx tsx examples/asr/moss-transcribe-filesystem.ts meeting.wav ./moss.gguf QVAC OpenMOSS
+```
+
+Segments retain `speaker` labels such as `S01`, zero-based `speakerId`, and
+`startMs`/`endMs`. Hotwords apply to each request: at most 64 nonempty terms of
+64 UTF-8 bytes each. A MOSS `prompt` replaces the default instruction and cannot
+be combined with hotwords. `maxNewTokens: 0` uses the model default. These two
+MOSS-specific options are rejected for Whisper and Parakeet models.
+
+The published addon contains Whisper v1.9.4, so existing Whisper calls keep
+their API and use the updated backend. MOSS memory-fit assessment projects the
+declared recording and decoding options without loading weights:
+
+```typescript
+const fit = await assessModelFit({
+  models: [
+    {
+      modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0,
+      modelConfig: { useGPU: false },
+      transcriptionWorkload: { audioSeconds: 300, hotwords: ['Erin'], maxNewTokens: 0 }
+    }
+  ]
+})
+```
+
+Import `assessModelFit` from `@qvac/sdk`. Use the longest recording you intend
+to transcribe, with the same prompt/hotwords and token limit as the request.
+Without `transcriptionWorkload`, MOSS has no native fit evidence, its recording
+window is omitted, and the result can remain `unknown`. Assessment uses a registry description when available,
+or a local model path; it downloads no full weights. MOSS CoreML requires an
+addon revision newer than the published 0.8.0 release.
+
+The SDK and inference use the published `@qvac/asr-ggml` package at `^0.8.0`.
+
+## Nemotron 3 Diarization
+
+Load a local Nemotron 3 Diarization GGUF with `modelType: 'parakeet-transcription'`.
+The addon detects the variant from the GGUF and supports up to eight speakers,
+including overlapping activity. This model reports speaker turns rather than words.
+
+Use `transcribe({ modelId, audioChunk, metadata: true })` for offline diarization.
+Each result can include `speakerSegments` with zero-based `speakerId`, `startMs`,
+and `endMs`. Load with `modelConfig.streaming: true` before using `transcribeStream`.
+Streaming metadata carries `speakerId` on each diarization segment.
+For streaming speaker-activity events, enable `streamingSpeakerVad` at load or
+`emitSpeakerVad` under `parakeetStreamingConfig` per `transcribeStream` call;
+conversation VAD events retain their dominant `speakerId`.
+
+`diarizationThreshold` (0–1) and `diarizationMinSegmentMs` (nonnegative integer)
+are supported in `modelConfig` and per-call `parakeetStreamingConfig`. Omit them
+to preserve model defaults. Nemotron defaults to a 0.5 threshold and 200 ms minimum
+turn; its default left context is 0 ms, while an explicitly configured 80 ms is
+preserved. CLI `verbose_json` exposes offline turns as `speaker_segments` with
+`speaker_id` and start/end timestamps in seconds.
+
+See [the local Nemotron diarization example](examples/asr/nemotron-diarization-filesystem.ts):
+
+```bash
+npx tsx examples/asr/nemotron-diarization-filesystem.ts ./nemotron-diarization.gguf meeting.wav
+```

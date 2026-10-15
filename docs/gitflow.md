@@ -88,6 +88,11 @@ This repo assumes a **fork-first** workflow:
      `tmp-*`, because a push to a `feature-*`/`tmp-*` branch would start a 9-platform
      matrix off an open PR's branch. Every non-release addon build is started with
      `workflow_dispatch` on the branch.
+   - **An addon release branch cut from `main` also needs a dispatch.** When the version
+     bump already merged to `main` and `release-<package>-<x.y.z>` is created from that
+     commit, the push carries no new commits, so the `paths` filter never matches and
+     nothing publishes. Start it with
+     `gh workflow run on-merge-nx.yml --ref release-<package>-<x.y.z> -f package=<package>`.
 
 ### One-time fork setup (recommended)
 
@@ -144,7 +149,7 @@ Use `release-llm-llamacpp-0.53.1`, not the short `release-llm-0.53.1` some older
 branches used. Same for `vla-ggml`, `ocr-ggml`, `embed-llamacpp`, `diffusion-cpp`,
 `classification-ggml` and `translation-nmtcpp`.
 
-The 13 native addons publish from one workflow rather than one file each, so the
+The 14 native addons publish from one workflow rather than one file each, so the
 branch name is what selects which package reaches NPM. `on-merge-nx.yml` checks it
 twice, both against the directory name: `packages/<package>/project.json` must
 exist, and the package the run selected must be exactly that one. A name it cannot
@@ -261,6 +266,14 @@ the existing range with no SDK release at all.
 
 `packages/sdk` `lint` fails when its own version and its `@qvac/inference` range
 differ in major or minor, so the two cannot drift unnoticed.
+
+### 6) Releasing the chain together: the release train
+
+The flow above is one release branch per package, each waiting for the one
+below it to reach NPM. A **release train** releases `@qvac/inference`,
+`@qvac/sdk`, `@qvac/cli`, `@qvac/ai-sdk-provider` and the two plugins from one
+`release-train-<train>-<x.y.z>` branch: one release PR, one backmerge, one npm
+approval. See `docs/ci/RELEASE-TRAIN.md`.
 
 ---
 

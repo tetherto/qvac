@@ -3,8 +3,9 @@ name: qv-sdk-update-models
 description: >-
   Regenerates SDK model constants from the live QVAC registry and opens a [mod]
   PR. Use when registry models landed and packages/sdk models.ts needs syncing,
-  or when invoking /qv-sdk-update-models. Optional cascade refreshes
-  ai-sdk-provider and sdk-python generated catalogs.
+  or when invoking /qv-sdk-update-models. The SDK regen also refreshes the
+  sdk-kotlin generated contract so the mandatory Kotlin merge gate stays green;
+  optional cascade refreshes ai-sdk-provider and sdk-python generated catalogs.
 disable-model-invocation: true
 ---
 
@@ -27,7 +28,7 @@ skill is the deliberate regen + PR path.
 
 - Changing naming rules / companion detection / codegen logic (those are code
   changes; regen may be a follow-up, not the whole PR).
-- Only needing a dry-run drift check — run `bun run check-models` directly.
+- Only needing a dry-run drift check — run `npm run check-models` directly.
 - Releasing / changelog work — use `qv-sdk-changelog` after the `[mod]` PR merges.
 
 ## Flags
@@ -44,12 +45,20 @@ skill is the deliberate regen + PR path.
 
 Combine as needed: `/qv-sdk-update-models --cascade`, `/qv-sdk-update-models --check-only`.
 
+The SDK regen always refreshes the `packages/sdk-kotlin` generated contract — its
+`checkContract` is a required merge gate on `packages/sdk/contract`, so a model
+sync that skipped it would be born stale and fail the gate. `--cascade` adds the
+provider and python catalogs on top of that.
+
 ## Prerequisites
 
 - Working directory is the `qvac` monorepo root (or resolve paths from it).
 - Network access to the live registry (Hyperswarm / Hyperdrive).
-- `packages/sdk` dependencies installed (`bun install` in that package if needed).
+- `packages/sdk` dependencies installed (`npm install` in that package if needed).
 - Optional: `QVAC_REGISTRY_CORE_KEY` to target a non-default registry core.
+- `python3` on PATH for the always-run Kotlin contract regen. The generator at
+  `packages/sdk-kotlin/scripts/generate-contract.py` uses only the standard
+  library — no venv, no pip install.
 - For `--with-python` / `--cascade`: `packages/sdk-python/.venv` with gen extras
   (`python3 -m venv .venv && .venv/bin/pip install -e ".[gen,dev]"`).
 - `gh` CLI for PR creation (same expectations as `qv-sdk-pr-create`).
@@ -74,13 +83,16 @@ Combine as needed: `/qv-sdk-update-models --cascade`, `/qv-sdk-update-models --c
 
 ### SDK (always)
 
-After a successful `bun run update-models` in `packages/sdk/`:
+After a successful `npm run update-models` in `packages/sdk/`:
 
 - `packages/sdk/models/registry/models.ts`
 - `packages/sdk/models/history/<short-sha>.txt` (only when add/update/remove)
 - `packages/sdk/contract/models.json` (via chained `contract:export`)
 - Possibly other `packages/sdk/contract/*` if export rewrites them — include if
   `git status` shows them; do not invent diffs.
+- `packages/sdk-kotlin/src/commonMain/kotlin/io/tether/qvac/sdk/generated/Models.kt`
+  (via the always-run Kotlin regen). Other `generated/**` files only if the
+  export also changed schema inputs — include if `git status` shows them.
 
 ### Provider (`--with-provider` / `--cascade`)
 
@@ -116,8 +128,8 @@ From monorepo root:
 
 ```text
 Plan:
-  1. bun run check-models   (packages/sdk)
-  2. bun run update-models  (packages/sdk)   [needs confirm]
+  1. npm run check-models   (packages/sdk)
+  2. npm run update-models  (packages/sdk)   [needs confirm]
   3. [optional] provider / python cascade
   4. commit feat[mod] …
   5. open PR via qv-sdk-pr-create
@@ -132,7 +144,7 @@ Cascade: none | provider | python | both
 
 ```bash
 cd packages/sdk
-bun run check-models
+npm run check-models
 ```
 
 | Exit | Meaning | Action |
@@ -150,17 +162,30 @@ After user confirmation:
 
 ```bash
 cd packages/sdk
-bun run update-models
+npm run update-models
 ```
 
 Then:
 
 ```bash
 cd packages/sdk
-bun run contract:check
+npm run contract:check
 ```
 
 `contract:check` must pass (update-models already ran export; this verifies).
+
+Then refresh the Kotlin generated contract from the same `packages/sdk/contract`
+artifacts and verify it (from monorepo root):
+
+```bash
+python3 packages/sdk-kotlin/scripts/generate-contract.py
+python3 packages/sdk-kotlin/scripts/generate-contract.py --check
+```
+
+This is not optional: `checkContract` is a required merge gate, so the Kotlin
+`Models.kt` must track `contract/models.json` in the same PR. A pure model sync
+touches only `Models.kt`; if `git status` shows other `generated/**` files, the
+export also changed schema inputs — include them, do not revert.
 
 Inspect `git status`. Confirm only the SDK expected file set is dirty.
 
@@ -172,7 +197,7 @@ If `--cascade` or `--with-provider`:
 
 ```bash
 cd packages/ai-sdk-provider
-bun run update-models
+npm run update-models
 ```
 
 Note: provider filters engines without OpenAI-shaped endpoints (e.g. VAD). A
@@ -250,9 +275,10 @@ overrides already decided:
 - **What problem:** registry has newer models than the committed SDK catalog;
   consumers need updated compile-time constants
 - **How it solves:** regenerated `models.ts` (+ contract / cascade artifacts)
-  via `bun run update-models`
-- **Testing:** `bun run check-models` (exit 0 after regen); `bun run contract:check`;
-  note cascade checks if run
+  via `npm run update-models`
+- **Testing:** `npm run check-models` (exit 0 after regen); `npm run contract:check`;
+  `python3 packages/sdk-kotlin/scripts/generate-contract.py --check`; note cascade
+  checks if run
 
 Still ask before `git push` / `gh pr create` (pr-create’s confirmation step).
 
@@ -285,8 +311,9 @@ node scripts/sdk/validator.cjs --type=commit --msg="feat[mod]: sync model consta
 Before reporting done:
 
 - [ ] User confirmed regen (and commit / PR when applicable)
-- [ ] `bun run check-models` exits 0 after regen (re-run once to confirm)
-- [ ] `bun run contract:check` exits 0
+- [ ] `npm run check-models` exits 0 after regen (re-run once to confirm)
+- [ ] `npm run contract:check` exits 0
+- [ ] `python3 packages/sdk-kotlin/scripts/generate-contract.py --check` exits 0
 - [ ] Dirty files ⊆ expected file set for the flags used
 - [ ] History/Models section is incremental — not a bogus full-catalog dump
 - [ ] Cascade checks passed when flags requested
@@ -311,4 +338,6 @@ Before reporting done:
 - PR create: `.agents/skills/qv-sdk-pr-create/SKILL.md`
 - Provider codegen: `packages/ai-sdk-provider/models/update-models/README.md`
 - Python codegen: `packages/sdk-python/scripts/generate.py`
+- Kotlin codegen: `packages/sdk-kotlin/scripts/generate-contract.py` (`checkContract`
+  in `packages/sdk-kotlin/build.gradle.kts` runs it with `--check` as a merge gate)
 - Remote-mutation policy: `AGENTS.md`

@@ -76,6 +76,11 @@ export {
   type ProfilerResourceGauge
 } from '@/schemas/profiling'
 export { runtimeContextSchema, type RuntimeContext } from '@/schemas/runtime-context'
+export {
+  modelFitPolicySchema,
+  DEFAULT_MODEL_FIT_POLICY,
+  type ModelFitPolicy
+} from '@/schemas/model-fit-policy'
 export * from '@/schemas/model-info'
 export * from '@/schemas/system-resources'
 export * from '@/schemas/model-src-utils'

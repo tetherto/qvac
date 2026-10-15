@@ -40,6 +40,52 @@ test('runners.yaml parses with unique keys and labels', () => {
   )
 })
 
+test('decoder-audio Linux x64 integration uses the CPU runner for each Ubuntu version', () => {
+  const project = JSON.parse(readRepoFile('packages/decoder-audio/project.json'))
+  const platforms = project.targets['test:integration'].options.ci.platforms
+    .filter((row) => row.platform === 'linux' && row.arch === 'x64')
+  const runners = loadRunners()
+  const expected = [
+    ['ubuntu-22.04', 'linux_ubuntu2204_x64'],
+    ['ubuntu-24.04', 'linux_ubuntu2404_x64'],
+  ].map(([os, key]) => ({ os, runner: runners.find((entry) => entry.key === key).label }))
+  assert.deepEqual(platforms.map(({ os, runner }) => ({ os, runner })), expected)
+})
+
+test('speech C++ test targets and standalone coverage workflows use the same CPU runner', () => {
+  const cpuRunner = loadRunners().find((entry) => entry.key === 'linux_ubuntu2204_x64').label
+  for (const name of ['asr-ggml', 'tts-ggml', 'bci-whispercpp']) {
+    const project = JSON.parse(readRepoFile(`packages/${name}/project.json`))
+    const config = project.targets['test:cpp'].options.ci
+    assert.notEqual(config.carveOut, true, name)
+    assert.deepEqual(config.platforms.map(({ os, platform, arch, runner }) => ({ os, platform, arch, runner })), [
+      { os: 'ubuntu-22.04', platform: 'linux', arch: 'x64', runner: cpuRunner },
+    ], name)
+
+    const standalone = readRepoFile(`.github/workflows/cpp-test-coverage-${name}.yml`)
+    assert.match(standalone, /runner: \$\{\{ needs.runner_names.outputs.linux_ubuntu2204_x64 \}\}/, name)
+    assert.doesNotMatch(standalone, /linux_ubuntu2204_x64_gpu/, name)
+  }
+})
+
+test('audiogen C++ build carve-out uses the CPU runner', () => {
+  const project = JSON.parse(readRepoFile('packages/audiogen-ggml/project.json'))
+  assert.equal(project.targets['test:cpp'].options.ci.carveOut, true)
+  const source = readRepoFile('.github/workflows/cpp-test-coverage-audiogen-ggml.yml')
+  assert.match(source, /runner: \$\{\{ needs.runner_names.outputs.linux_ubuntu2204_x64 \}\}/)
+  assert.doesNotMatch(source, /runs-on:.*gpu/)
+})
+
+test('PR C++ tests consume the package target runner and shared cpp-lint uses CPU', () => {
+  const source = readRepoFile('.github/workflows/cpp-tests-nx.yml')
+  assert.match(source, /target: test:cpp/)
+  assert.ok(source.includes('runs-on: ${{ matrix.runner || matrix.os }}'))
+  assert.match(readRepoFile('.github/workflows/on-pr-nx.yml'), /uses: .\/\.github\/workflows\/cpp-tests-nx.yml/)
+  const cpuRunner = loadRunners().find((entry) => entry.key === 'linux_ubuntu2204_x64').label
+  assert.ok(readRepoFile('.github/workflows/cpp-lint.yaml').includes(`runs-on: ${cpuRunner}\n`))
+  assert.ok(readRepoFile('.github/workflows/security-baseline.yml').includes('.github/scripts/test/runner-names.test.mjs'))
+})
+
 test('parseRunnersYaml rejects duplicates and junk', () => {
   assert.throws(
     () => parseRunnersYaml('macos_ios: macos-14\nmacos_ios: macos-15\n'),

@@ -90,6 +90,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("MODEL_FILE_NOT_FOUND", reportedCode, message, payload)
     class ServerModelFileNotFoundInDir(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("MODEL_FILE_NOT_FOUND_IN_DIR", reportedCode, message, payload)
+    class ServerModelFitRefused(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("MODEL_FIT_REFUSED", reportedCode, message, payload)
     class ServerModelLoadFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("MODEL_LOAD_FAILED", reportedCode, message, payload)
     class ServerModelNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -204,10 +206,14 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("VECTOR_INDEX_NOT_FOUND", reportedCode, message, payload)
     class ServerVectorIndexProviderUnavailable(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("VECTOR_INDEX_PROVIDER_UNAVAILABLE", reportedCode, message, payload)
+    class ClientAddonLinkFailed(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("ADDON_LINK_FAILED", reportedCode, message, payload)
     class ClientBareImportsMapNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BARE_IMPORTS_MAP_NOT_FOUND", reportedCode, message, payload)
     class ClientBarePackError(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BARE_PACK_ERROR", reportedCode, message, payload)
+    class ClientBarePackNodeUnsupported(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("BARE_PACK_NODE_UNSUPPORTED", reportedCode, message, payload)
     class ClientBarePackNotInstalled(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BARE_PACK_NOT_INSTALLED", reportedCode, message, payload)
     class ClientBareRuntimeBinaryNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -226,6 +232,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("HOST_PREBUILDS_INSTALL_FAILED", reportedCode, message, payload)
     class ClientHostPrebuildsInstallRefused(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("HOST_PREBUILDS_INSTALL_REFUSED", reportedCode, message, payload)
+    class ClientHostPrebuildsMissing(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("HOST_PREBUILDS_MISSING", reportedCode, message, payload)
     class ClientInvalidAudioChunkType(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("INVALID_AUDIO_CHUNK_TYPE", reportedCode, message, payload)
     class ClientInvalidOperationInResponse(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -327,6 +335,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "MODEL_FILE_LOCATE_FAILED" && (code == null || code == 52203) -> QvacKnownException.ServerModelFileLocateFailed(message, payload, code)
     name == "MODEL_FILE_NOT_FOUND" && (code == null || code == 52201) -> QvacKnownException.ServerModelFileNotFound(message, payload, code)
     name == "MODEL_FILE_NOT_FOUND_IN_DIR" && (code == null || code == 52202) -> QvacKnownException.ServerModelFileNotFoundInDir(message, payload, code)
+    name == "MODEL_FIT_REFUSED" && (code == null || code == 52212) -> QvacKnownException.ServerModelFitRefused(message, payload, code)
     name == "MODEL_LOAD_FAILED" && (code == null || code == 52200) -> QvacKnownException.ServerModelLoadFailed(message, payload, code)
     name == "MODEL_NOT_FOUND" && code == 52002 -> QvacKnownException.ServerModelNotFound(message, payload, code)
     name == "MODEL_NOT_LOADED" && (code == null || code == 52003) -> QvacKnownException.ServerModelNotLoaded(message, payload, code)
@@ -384,8 +393,10 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "VECTOR_INDEX_INVALID_VECTORS" && (code == null || code == 52852) -> QvacKnownException.ServerVectorIndexInvalidVectors(message, payload, code)
     name == "VECTOR_INDEX_NOT_FOUND" && (code == null || code == 52851) -> QvacKnownException.ServerVectorIndexNotFound(message, payload, code)
     name == "VECTOR_INDEX_PROVIDER_UNAVAILABLE" && (code == null || code == 52850) -> QvacKnownException.ServerVectorIndexProviderUnavailable(message, payload, code)
+    name == "ADDON_LINK_FAILED" && (code == null || code == 50617) -> QvacKnownException.ClientAddonLinkFailed(message, payload, code)
     name == "BARE_IMPORTS_MAP_NOT_FOUND" && (code == null || code == 50613) -> QvacKnownException.ClientBareImportsMapNotFound(message, payload, code)
     name == "BARE_PACK_ERROR" && (code == null || code == 50611) -> QvacKnownException.ClientBarePackError(message, payload, code)
+    name == "BARE_PACK_NODE_UNSUPPORTED" && (code == null || code == 50618) -> QvacKnownException.ClientBarePackNodeUnsupported(message, payload, code)
     name == "BARE_PACK_NOT_INSTALLED" && (code == null || code == 50610) -> QvacKnownException.ClientBarePackNotInstalled(message, payload, code)
     name == "BARE_RUNTIME_BINARY_NOT_FOUND" && (code == null || code == 50614) -> QvacKnownException.ClientBareRuntimeBinaryNotFound(message, payload, code)
     name == "BUNDLE_VERIFICATION_FAILED" && (code == null || code == 50609) -> QvacKnownException.ClientBundleVerificationFailed(message, payload, code)
@@ -395,6 +406,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "CONFIG_VALIDATION_FAILED" && (code == null || code == 50605) -> QvacKnownException.ClientConfigValidationFailed(message, payload, code)
     name == "HOST_PREBUILDS_INSTALL_FAILED" && (code == null || code == 50616) -> QvacKnownException.ClientHostPrebuildsInstallFailed(message, payload, code)
     name == "HOST_PREBUILDS_INSTALL_REFUSED" && (code == null || code == 50615) -> QvacKnownException.ClientHostPrebuildsInstallRefused(message, payload, code)
+    name == "HOST_PREBUILDS_MISSING" && (code == null || code == 50619) -> QvacKnownException.ClientHostPrebuildsMissing(message, payload, code)
     name == "INVALID_AUDIO_CHUNK_TYPE" && code == 50004 -> QvacKnownException.ClientInvalidAudioChunkType(message, payload, code)
     name == "INVALID_OPERATION_IN_RESPONSE" && (code == null || code == 50002) -> QvacKnownException.ClientInvalidOperationInResponse(message, payload, code)
     name == "INVALID_PLUGIN_SPECIFIER" && (code == null || code == 50612) -> QvacKnownException.ClientInvalidPluginSpecifier(message, payload, code)

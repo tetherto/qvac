@@ -7,20 +7,24 @@ import {
   resolveConfigForProject
 } from '@/client/config-loader/resolve-config.node'
 import { createCommandLogger } from '@/commands/command-logger'
-import {
-  BareImportsMapNotFoundError,
-  HostPrebuildsInstallRefusedError
-} from '@/utils/errors-client'
+import { BareImportsMapNotFoundError, HostPrebuildsMissingError } from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
 import { runBarePack } from '@/commands/bundle/bare-pack'
-import { generateAddonsManifest } from '@/commands/bundle/manifest'
+import {
+  AUDIO_DECODER_ADDON,
+  extractBarePackHeader,
+  extractPackedString,
+  generateAddonsManifest
+} from '@/commands/bundle/manifest'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import {
+  findMissingHostPrebuilds,
   installMissingHostPrebuilds,
+  resolveAddons,
   type HostPrebuildPackage
 } from '@/commands/host-prebuilds/index'
-import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
+import type { NativeAddon } from '@/commands/verify/addon-source'
 import { verifyBundle } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
@@ -37,12 +41,13 @@ export interface BundleSdkOptions {
   quiet?: boolean | undefined
   verbose?: boolean | undefined
   /**
-   * Install the addon platform packages the bundle needs for its mobile hosts
-   * with the project's package manager (see `ensureHostPrebuilds`), then
-   * bundle again. Off by default: without it, bundling never changes
-   * package.json or node_modules. When the install is refused, the bundle and
-   * its manifest are still written before `HostPrebuildsInstallRefusedError`
-   * is thrown.
+   * Install the addon platform packages that the split addons the bundle
+   * reaches need for its mobile hosts, with the project's package manager
+   * (see `ensureHostPrebuilds`), before bundling. Off by default: without it,
+   * bundling never changes package.json or node_modules, and a mobile host
+   * whose platform package is missing fails with `HostPrebuildsMissingError`,
+   * naming the exact pins. A refused install
+   * throws `HostPrebuildsInstallRefusedError` before anything is written.
    */
   installMissingPrebuilds?: boolean | undefined
   /**
@@ -118,6 +123,20 @@ interface CheckBundleEnginesOptions {
 }
 
 const ENGINES_ISSUE_CODES = new Set(['abi-mismatch', 'engines-mismatch'])
+const AUDIO_PLUGINS = new Set([
+  'whispercpp-transcription',
+  'bci-whispercpp-transcription',
+  'parakeet-transcription',
+  'moss-transcribe',
+  'audiogen-ggml'
+])
+
+function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
+  return pluginSpecifiers.filter((specifier) => {
+    const builtin = parseBuiltinSpecifier(specifier, sdkName)
+    return builtin !== null && AUDIO_PLUGINS.has(builtin.suffix)
+  })
+}
 
 async function checkBundleEngines(options: CheckBundleEnginesOptions) {
   const { projectRoot, bundlePath, hosts, configPath, network, logger } = options
@@ -205,7 +224,21 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : DEFAULT_HOSTS
 
-  const deferModules = options.defer ?? []
+  const explicitDefer = options.defer ?? []
+  const includeAudioDecoder =
+    config.includeAudioDecoder !== false && !explicitDefer.includes(AUDIO_DECODER_ADDON)
+  const deferModules = includeAudioDecoder
+    ? explicitDefer
+    : [...new Set([...explicitDefer, AUDIO_DECODER_ADDON])]
+
+  if (!includeAudioDecoder) {
+    const affected = audioPluginsIn(pluginSpecifiers, sdkName)
+    if (affected.length > 0) {
+      logger.warn(
+        `${AUDIO_DECODER_ADDON} is not bundled: ${affected.join(', ')} cannot decode compressed audio files; compressed audiogen output formats also require FFmpeg.`
+      )
+    }
+  }
 
   await fsp.mkdir(outputDir, { recursive: true })
 
@@ -227,45 +260,50 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
+  // Missing mobile platform packages are installed, or reported, before bundling.
   let installedPrebuilds: HostPrebuildPackage[] = []
-  let installRefused: HostPrebuildsInstallRefusedError | undefined
+  const barePackOptions = {
+    entryPath: bundleEntryPath,
+    hosts,
+    importsMapPath,
+    quiet: options.quiet === true,
+    logger
+  }
+  const addonsMissingPlatformPackages = () =>
+    reachedAddonsMissingPlatformPackages({
+      addons: async () =>
+        (await resolveAddons(projectRoot, undefined, logger)).filter(
+          (addon) => !deferModules.includes(addon.name)
+        ),
+      hosts,
+      scan: (extraDefer, outputPath) =>
+        runBarePack({
+          ...barePackOptions,
+          outputPath,
+          deferModules: [...deferModules, ...extraDefer],
+          quiet: true
+        }),
+      scanPath: path.join(outputDir, 'worker.scan.bundle.js'),
+      logger
+    })
+
   try {
     await fsp.writeFile(bundleEntryPath, bundleEntry, 'utf8')
-    const barePackOptions = {
-      entryPath: bundleEntryPath,
-      outputPath: bundlePath,
-      hosts,
-      importsMapPath,
-      deferModules,
-      quiet: options.quiet === true,
-      logger
-    }
-    await runBarePack(barePackOptions)
-
+    const addons = await addonsMissingPlatformPackages()
     if (options.installMissingPrebuilds === true) {
-      try {
-        const { installed } = await installMissingHostPrebuilds({
-          projectRoot,
-          hosts,
-          addons: await collectAddonsFromBundle({ bundlePath, projectRoot, hosts }),
-          quiet: options.quiet === true,
-          logger
-        })
-        installedPrebuilds = installed
-        // Where a platform package was missing, bare-pack resolved the addon's
-        // `#host-addon` import to its fallback module; bundle again to pick up
-        // the installed package.
-        if (installed.length > 0) {
-          logger.info('\n🔨 Bundling again with the installed platform packages...')
-          await runBarePack(barePackOptions)
-        }
-      } catch (error: unknown) {
-        if (!(error instanceof HostPrebuildsInstallRefusedError)) throw error
-        // A refusal happens before anything is installed, so the bundle
-        // already written is final and only its manifest is left to write.
-        installRefused = error
-      }
+      const { installed } = await installMissingHostPrebuilds({
+        projectRoot,
+        hosts,
+        addons,
+        quiet: options.quiet === true,
+        logger
+      })
+      installedPrebuilds = installed
+    } else {
+      await throwIfPlatformPackagesMissing(addons, hosts)
     }
+
+    await runBarePack({ ...barePackOptions, outputPath: bundlePath, deferModules })
   } finally {
     await fsp.rm(bundleEntryPath, { force: true })
   }
@@ -279,7 +317,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     bundlePath,
     outputDir,
     projectRoot,
-    logger
+    logger,
+    includeAudioDecoder
   })
 
   if (options.checkEngines !== false) {
@@ -292,8 +331,6 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
       logger
     })
   }
-
-  if (installRefused !== undefined) throw installRefused
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   logger.info(`\n🎉 Done in ${elapsed}s!\n`)
@@ -314,4 +351,83 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     manifestPath: manifestResult.manifestPath,
     installedPrebuilds
   }
+}
+
+interface ReachedAddonsOptions {
+  addons: () => Promise<NativeAddon[]>
+  hosts: string[]
+  /** Runs bare-pack with these extra modules deferred, writing `outputPath`. */
+  scan: (extraDefer: string[], outputPath: string) => Promise<void>
+  scanPath: string
+  logger: Logger
+}
+
+/**
+ * The installed split addons that the bundle reaches and that are missing a
+ * mobile platform package. Every installed addon is a candidate (`@qvac/sdk`
+ * depends on all of them), so a first bare-pack pass defers each missing
+ * platform package: bare-pack then records the reached ones as
+ * `deferred:<package>` and never visits the rest. Empty when nothing is
+ * missing, or when that pass fails, which leaves the real bundle to report
+ * the failure.
+ */
+async function reachedAddonsMissingPlatformPackages(
+  options: ReachedAddonsOptions
+): Promise<NativeAddon[]> {
+  const { hosts, scan, scanPath, logger } = options
+  const addons = await options.addons()
+  const missing = await findMissingHostPrebuilds(addons, hosts)
+  if (missing.length === 0) return []
+
+  logger.debug(
+    `\n🔎 Checking which of ${missing.length} missing platform packages the bundle reaches...`
+  )
+  try {
+    await scan(
+      missing.map((pkg) => pkg.name),
+      scanPath
+    )
+    const reached = deferredSpecifiers(await fsp.readFile(scanPath, 'utf8'))
+    const owners = new Set(missing.filter((pkg) => reached.has(pkg.name)).map((pkg) => pkg.addon))
+    return addons.filter((addon) => owners.has(addon.name))
+  } catch (error: unknown) {
+    logger.debug(`   Scan failed: ${error instanceof Error ? error.message : String(error)}`)
+    return []
+  } finally {
+    await fsp.rm(scanPath, { force: true })
+  }
+}
+
+const DEFERRED_PROTOCOL = 'deferred:'
+
+/** Every specifier a bare-pack bundle leaves as `deferred:<specifier>`. */
+function deferredSpecifiers(bundleText: string): Set<string> {
+  const { resolutions = {} } = extractBarePackHeader(extractPackedString(bundleText))
+  const found = new Set<string>()
+  const visit = (value: unknown) => {
+    if (typeof value === 'string') {
+      if (value.startsWith(DEFERRED_PROTOCOL)) found.add(value.slice(DEFERRED_PROTOCOL.length))
+    } else if (value !== null && typeof value === 'object') {
+      for (const nested of Object.values(value)) visit(nested)
+    }
+  }
+  visit(resolutions)
+  return found
+}
+
+/**
+ * Throws `HostPrebuildsMissingError` when split addons are missing mobile
+ * platform packages, naming the exact pins.
+ */
+async function throwIfPlatformPackagesMissing(addons: NativeAddon[], hosts: string[]) {
+  let missing: HostPrebuildPackage[]
+  try {
+    missing = await findMissingHostPrebuilds(addons, hosts)
+  } catch {
+    return
+  }
+  if (missing.length === 0) return
+  throw new HostPrebuildsMissingError(
+    Object.fromEntries(missing.map((pkg) => [pkg.name, pkg.version]))
+  )
 }

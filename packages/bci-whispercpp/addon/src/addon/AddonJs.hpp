@@ -2,11 +2,13 @@
 
 #include <any>
 #include <cmath>
-#include <filesystem>
+#include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <inference-addon-cpp/JsInterface.hpp>
@@ -21,6 +23,7 @@
 
 #include "model-interface/BCITypes.hpp"
 #include "model-interface/bci/BCIModel.hpp"
+#include "model-interface/bci/EmbedderFit.hpp"
 #include "src/js-interface/JSAdapter.hpp"
 
 namespace qvac_lib_inference_addon_bci {
@@ -99,120 +102,223 @@ struct JsTranscriptArrayOutputHandler
 
 // ── assessFit ────────────────────────────────────────────────────────────
 //
-// Projects one BCI model against the memory free right now. Args: [request],
-// carrying the model path and the workload.
+// Projects one BCI load against the memory free right now. Args: [request],
+// carrying the model and embedder paths and the workload. Either path may be
+// the file itself or the registry's weightless description of it; with no
+// embedder path the embedder is read beside the model, as a load reads it.
 //
-// Takes no instance and loads nothing: the fitter reads model metadata only. A
-// model it cannot read is an "error" status carrying whisper's own reason.
-//
-// Covers the whisper half of a BCI load. The embedder has no fitter, so its
-// file size is reported separately and is not part of the projection.
+// Takes no instance and loads nothing. Returns a Promise: the request is read
+// on the JS thread, the projection runs on a worker thread, and the result is
+// built back on the JS thread. A model or embedder that cannot be read
+// resolves to an "error" status carrying the reason.
 
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+constexpr const char* K_FIT_STATUS_FITS = "fits";
+constexpr const char* K_FIT_STATUS_DOES_NOT_FIT = "does-not-fit";
+constexpr const char* K_FIT_STATUS_ERROR = "error";
+constexpr const char* K_EMBEDDER_UNREADABLE = "embedder-unreadable";
+constexpr double K_BYTES_PER_MIB = 1024.0 * 1024.0;
+constexpr size_t K_REPORT_LINE_BYTES = 128;
+
+inline uint64_t saturatingAdd(uint64_t a, uint64_t b) {
+  return a > UINT64_MAX - b ? UINT64_MAX : a + b;
+}
+
+struct BciFit {
+  whisper_fit_result whisper{};
+  uint64_t marginBytes = 0;
+  bool embedderReadable = true;
+  uint64_t embedderBytes = 0;
+
+  [[nodiscard]] uint64_t hostBytes() const {
+    return saturatingAdd(whisper.host_bytes, embedderBytes);
+  }
+
+  [[nodiscard]] bool embedderFitsBesideModel() const {
+    if (!whisper.device_shares_host_memory) {
+      return true;
+    }
+    const uint64_t required = saturatingAdd(
+        saturatingAdd(whisper.device.total_bytes, marginBytes), hostBytes());
+    return required <= whisper.device_free_bytes;
+  }
+
+  [[nodiscard]] const char* status() const {
+    if (whisper.status == WHISPER_FIT_ERROR || !embedderReadable) {
+      return K_FIT_STATUS_ERROR;
+    }
+    return whisper.status == WHISPER_FIT_SUCCESS && embedderFitsBesideModel()
+               ? K_FIT_STATUS_FITS
+               : K_FIT_STATUS_DOES_NOT_FIT;
+  }
+
+  [[nodiscard]] const char* reason() const {
+    if (whisper.status == WHISPER_FIT_ERROR) {
+      return whisper.reason;
+    }
+    if (!embedderReadable) {
+      return K_EMBEDDER_UNREADABLE;
+    }
+    return status();
+  }
+
+  [[nodiscard]] std::string report() const {
+    char line[K_REPORT_LINE_BYTES];
+    std::snprintf(
+        line,
+        sizeof(line),
+        "bci embedder: %.1f MiB host%s\nverdict with embedder: %s\n",
+        static_cast<double>(embedderBytes) / K_BYTES_PER_MIB,
+        whisper.device_shares_host_memory ? " (same RAM pool)" : "",
+        status());
+    return std::string(whisper.report) + line;
+  }
+};
+
+struct FitRequest {
+  std::string modelPath;
+  std::string embedderPath;
+  std::string backendsDir;
+  std::optional<double> gpuLayers;
+  std::optional<double> gpuDevice;
+  std::optional<double> decoders;
+  std::optional<double> audioSeconds;
+  std::optional<double> marginBytes;
+};
+
+inline std::optional<double>
+fitCount(js_env_t* env, js::Object request, const char* name) {
+  auto value = request.getOptionalProperty<js::Number>(env, name);
+  if (!value.has_value()) {
+    return std::nullopt;
+  }
+  const double raw = value->as<double>(env);
+  // A count cast from a negative or non-finite double is undefined.
+  if (!std::isfinite(raw) || raw < 0) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("assessFit: ") + name + " must be a non-negative count");
+  }
+  return raw;
+}
+
+inline std::string
+fitOptionalString(js_env_t* env, js::Object request, const char* name) {
+  auto value = request.getOptionalProperty<js::String>(env, name);
+  return value.has_value() ? value->as<std::string>(env) : std::string();
+}
+
+inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
   auto request = args.getJsObject(0, "request");
 
-  const std::string modelPath =
+  FitRequest parsed;
+  parsed.modelPath =
       request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+  parsed.embedderPath = fitOptionalString(env, request, "embedderPath");
+  parsed.backendsDir = fitOptionalString(env, request, "backendsDir");
+  parsed.gpuLayers = fitCount(env, request, "gpuLayers");
+  parsed.gpuDevice = fitCount(env, request, "gpuDevice");
+  parsed.decoders = fitCount(env, request, "decoders");
+  parsed.audioSeconds = fitCount(env, request, "audioSeconds");
+  parsed.marginBytes = fitCount(env, request, "marginBytes");
+  return parsed;
+}
 
-  // whisper_fit_params reads ggml's global device registry and loads nothing
-  // itself, so whatever is registered here is its whole view of the machine.
-#if defined(__ANDROID__) || defined(__linux__)
-  auto backendsDir =
-      request.getOptionalProperty<js::String>(env, "backendsDir");
-  ensureBackendsLoaded(
-      backendsDir.has_value() ? backendsDir->as<std::string>(env)
-                              : std::string());
-#endif
-
-  whisper_fit_options options = whisper_fit_default_options();
-  options.model_path = modelPath.c_str();
-
-  auto number = [&](const char* name) -> std::optional<double> {
-    auto value = request.getOptionalProperty<js::Number>(env, name);
-    if (!value.has_value()) {
-      return std::nullopt;
-    }
-    const double raw = value->as<double>(env);
-    // A count cast from a negative or non-finite double is undefined.
-    if (!std::isfinite(raw) || raw < 0) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          std::string("assessFit: ") + name + " must be a non-negative count");
-    }
-    return raw;
-  };
-
-  if (auto layers = number("gpuLayers")) {
-    options.use_gpu = *layers > 0;
+inline void
+applyFitWorkload(const FitRequest& request, whisper_fit_options& options) {
+  if (request.gpuLayers.has_value()) {
+    options.use_gpu = *request.gpuLayers > 0;
   }
-  if (auto device = number("gpuDevice")) {
-    options.gpu_device = static_cast<int>(*device);
+  if (request.gpuDevice.has_value()) {
+    options.gpu_device = static_cast<int>(*request.gpuDevice);
   }
-  if (auto decoders = number("decoders")) {
-    options.n_decoders = static_cast<int>(*decoders);
+  if (request.decoders.has_value()) {
+    options.n_decoders = static_cast<int>(*request.decoders);
   }
-  if (auto seconds = number("audioSeconds")) {
-    options.audio_seconds = static_cast<float>(*seconds);
+  if (request.audioSeconds.has_value()) {
+    options.audio_seconds = static_cast<float>(*request.audioSeconds);
   }
-  if (auto margin = number("marginBytes")) {
-    options.margin_bytes = static_cast<uint64_t>(*margin);
+  if (request.marginBytes.has_value()) {
+    options.margin_bytes = static_cast<uint64_t>(*request.marginBytes);
   }
+}
 
-  whisper_fit_result fit{};
-  whisper_fit_params(&options, &fit);
+inline void measureFitEmbedder(const std::string& embedderPath, BciFit& fit) {
+  const auto footprint = measureEmbedder(embedderPath);
+  fit.embedderReadable = footprint.has_value();
+  fit.embedderBytes = footprint.has_value() ? footprint->hostBytes() : 0;
+}
 
-  const char* status = "error";
-  if (fit.status == WHISPER_FIT_SUCCESS) {
-    status = "fits";
-  } else if (fit.status == WHISPER_FIT_FAILURE) {
-    status = "does-not-fit";
-  }
-
-  uint64_t embedderFileBytes = 0;
-  if (auto embedder =
-          request.getOptionalProperty<js::String>(env, "embedderPath")) {
-    std::error_code error;
-    const auto size =
-        std::filesystem::file_size(embedder->as<std::string>(env), error);
-    if (!error) {
-      embedderFileBytes = size;
-    }
-  }
-
+inline js_value_t* fitResultObject(js_env_t* env, const BciFit& fit) {
   auto result = js::Object::create(env);
-  auto text = [&](const char* name, const char* value) {
-    result.setProperty(env, name, js::String::create(env, std::string(value)));
+  auto text = [&](const char* name, const std::string& value) {
+    result.setProperty(env, name, js::String::create(env, value));
   };
   auto bytes = [&](const char* name, uint64_t value) {
     result.setProperty(
         env, name, js::Number::create(env, static_cast<double>(value)));
   };
+  const whisper_fit_result& whisper = fit.whisper;
 
-  text("status", status);
-  text("reason", fit.reason);
-  text("modelType", fit.model_type);
-  text("deviceName", fit.device_name);
-  text("report", fit.report);
+  text("status", fit.status());
+  text("reason", fit.reason());
+  text("modelType", whisper.model_type);
+  text("deviceName", whisper.device_name);
+  text("report", fit.report());
   result.setProperty(
-      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
+      env, "deviceIsCpu", js::Boolean::create(env, whisper.device_is_cpu));
   result.setProperty(
       env,
       "deviceSharesHostMemory",
-      js::Boolean::create(env, fit.device_shares_host_memory));
-  bytes("deviceFreeBytes", fit.device_free_bytes);
-  bytes("deviceTotalBytes", fit.device_total_bytes);
-  bytes("deviceBytes", fit.device.total_bytes);
-  bytes("weightsBytes", fit.device.weights_bytes);
-  bytes("kvBytes", fit.device.kv_bytes);
-  bytes("computeBytes", fit.device.compute_bytes);
-  bytes("hostOverflowBytes", fit.device.host_overflow_bytes);
-  bytes("hostBytes", fit.host_bytes);
-  bytes("embedderFileBytes", embedderFileBytes);
-
+      js::Boolean::create(env, whisper.device_shares_host_memory));
+  bytes("deviceFreeBytes", whisper.device_free_bytes);
+  bytes("deviceTotalBytes", whisper.device_total_bytes);
+  bytes("deviceBytes", whisper.device.total_bytes);
+  bytes("weightsBytes", whisper.device.weights_bytes);
+  bytes("kvBytes", whisper.device.kv_bytes);
+  bytes("computeBytes", whisper.device.compute_bytes);
+  bytes("hostOverflowBytes", whisper.device.host_overflow_bytes);
+  bytes("hostBytes", fit.hostBytes());
+  bytes("embedderBytes", fit.embedderBytes);
   return result;
+}
+
+// Runs on the fit worker thread, so it makes no js_* call. It reads only the
+// owned request and ggml's device registry, which lives for the whole process,
+// so no instance unload can free state underneath it. Fits run one at a time:
+// each initializes the resolved device's backends and ggml's global timer.
+inline BciFit runFit(const FitRequest& request) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+
+  // whisper_fit_params reads ggml's global device registry and loads nothing
+  // itself, so whatever is registered here is its whole view of the machine.
+#if defined(__ANDROID__) || defined(__linux__)
+  ensureBackendsLoaded(request.backendsDir);
+#endif
+
+  whisper_fit_options options = whisper_fit_default_options();
+  options.model_path = request.modelPath.c_str();
+  applyFitWorkload(request, options);
+
+  BciFit fit;
+  fit.marginBytes = options.margin_bytes;
+  whisper_fit_params(&options, &fit.whisper);
+  measureFitEmbedder(
+      request.embedderPath.empty() ? colocatedEmbedderPath(request.modelPath)
+                                   : request.embedderPath,
+      fit);
+  return fit;
+}
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  FitRequest request = parseFitRequest(env, info);
+  return js::JsAsyncTask::run(
+      env,
+      [request = std::move(request)]() { return runFit(request); },
+      fitResultObject);
 }
 JSCATCH
 

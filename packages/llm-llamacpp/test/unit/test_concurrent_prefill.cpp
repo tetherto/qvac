@@ -1,11 +1,11 @@
 // Async prefill jobs on the multi-job path (process(input, id)). A prefill
-// whose product can outlive its slot (saveCacheToDisk + cacheKey) must run on
-// a scheduler lane like any generation job — truly parallel with its peers.
-// A prefill whose only product is live single-context state cannot run
-// concurrently (lanes wipe their state, and the single context is shared), so
-// on a parallel model it must be rejected instead of racing peers on the
-// shared context. Two in-flight jobs saving the same cacheKey would race on
-// the file, so the second must be refused.
+// whose product can outlive its slot (a cacheKey: the conversation stays in
+// its sequence) must run on a scheduler lane like any generation job — truly
+// parallel with its peers. A keyless prefill's only product is live
+// single-context state, which cannot run concurrently (lanes wipe their
+// state, and the single context is shared), so on a parallel model it must be
+// rejected instead of racing peers on the shared context. Two jobs on the
+// same cacheKey run one after the other.
 
 #include <any>
 #include <chrono>
@@ -83,7 +83,6 @@ protected:
     LlamaModel::Prompt prompt = makePrompt(text);
     prompt.prefill = true;
     prompt.cacheKey = cacheKey;
-    prompt.saveCacheToDisk = true;
     return prompt;
   }
 
@@ -105,54 +104,46 @@ fs::path tempCachePath(const std::string& tag) {
 } // namespace
 
 /// The routing predicate: a prefill earns a lane exactly when its product
-/// survives the slot teardown (saveCacheToDisk with a cacheKey). Generation
-/// stays eligible, finetune and non-persistable prefill stay single-path.
-TEST(ConcurrentPrefillEligibility, PrefillWithPersistedCacheEarnsALane) {
+/// survives the slot teardown (a cacheKey). Generation stays eligible,
+/// finetune and keyless prefill stay single-path.
+TEST(ConcurrentPrefillEligibility, KeyedPrefillEarnsALane) {
   LlamaModel::Prompt generation;
   generation.input = R"([{"role":"user","content":"hi"}])";
   EXPECT_TRUE(LlamaModelTestPeer::isConcurrentEligible(generation));
 
-  LlamaModel::Prompt persistedPrefill = generation;
-  persistedPrefill.prefill = true;
-  persistedPrefill.cacheKey = "/tmp/some-cache.bin";
-  persistedPrefill.saveCacheToDisk = true;
-  EXPECT_TRUE(LlamaModelTestPeer::isConcurrentEligible(persistedPrefill))
-      << "a prefill that persists its cache has a lane-compatible product";
+  LlamaModel::Prompt keyedPrefill = generation;
+  keyedPrefill.prefill = true;
+  keyedPrefill.cacheKey = "some-cache.bin";
+  EXPECT_TRUE(LlamaModelTestPeer::isConcurrentEligible(keyedPrefill))
+      << "a keyed prefill's conversation stays in its sequence";
 
-  LlamaModel::Prompt liveOnlyPrefill = generation;
-  liveOnlyPrefill.prefill = true;
-  EXPECT_FALSE(LlamaModelTestPeer::isConcurrentEligible(liveOnlyPrefill))
-      << "a prefill without a persisted cache only warms the single context";
+  LlamaModel::Prompt ephemeralPrefill = keyedPrefill;
+  ephemeralPrefill.ephemeral = true;
+  EXPECT_TRUE(LlamaModelTestPeer::isConcurrentEligible(ephemeralPrefill))
+      << "an ephemeral keyed prefill also stays in its sequence";
 
-  LlamaModel::Prompt keylessSave = generation;
-  keylessSave.prefill = true;
-  keylessSave.saveCacheToDisk = true;
-  EXPECT_FALSE(LlamaModelTestPeer::isConcurrentEligible(keylessSave))
-      << "saveCacheToDisk without a cacheKey cannot persist anything";
+  LlamaModel::Prompt keylessPrefill = generation;
+  keylessPrefill.prefill = true;
+  EXPECT_FALSE(LlamaModelTestPeer::isConcurrentEligible(keylessPrefill))
+      << "a keyless prefill only warms the single context";
 }
 
-/// A tagged prefill job that cannot persist its cache must be rejected on a
-/// parallel model: its only product (warm state in the shared single context)
-/// is unreachable by lane-based followups, and running it would race peers on
-/// that shared context.
-TEST_F(ConcurrentPrefillTest, RejectsLiveOnlyPrefillJobOnParallelModel) {
+/// A keyless tagged prefill job must be rejected on a parallel model: its only
+/// product (warm state in the shared single context) is unreachable by
+/// lane-based followups, and running it would race peers on that shared
+/// context.
+TEST_F(ConcurrentPrefillTest, RejectsKeylessPrefillJobOnParallelModel) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
-  auto liveOnly = makePrompt("Warm the context with this text.");
-  liveOnly.prefill = true;
-  EXPECT_THROW(runJob(*model, liveOnly, JobId{11}), qvac_errors::StatusError);
-
-  auto keylessSave = makePrompt("Warm the context with this text too.");
-  keylessSave.prefill = true;
-  keylessSave.saveCacheToDisk = true;
-  EXPECT_THROW(
-      runJob(*model, keylessSave, JobId{12}), qvac_errors::StatusError);
+  auto keyless = makePrompt("Warm the context with this text.");
+  keyless.prefill = true;
+  EXPECT_THROW(runJob(*model, keyless, JobId{11}), qvac_errors::StatusError);
 }
 
-/// Two in-flight prefill jobs saving the same cacheKey would race on the same
-/// file; the later admission must be refused while the first still runs.
-TEST_F(ConcurrentPrefillTest, RejectsDuplicateInFlightCacheKey) {
+/// Two in-flight prefill jobs on the same cacheKey are served one after the
+/// other, so the conversation never forks and neither job is refused.
+TEST_F(ConcurrentPrefillTest, SameKeyPrefillJobsRunInOrder) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
   const fs::path cachePath = tempCachePath("dup");
@@ -165,20 +156,11 @@ TEST_F(ConcurrentPrefillTest, RejectsDuplicateInFlightCacheKey) {
   auto futureB = std::async(
       std::launch::async, [&] { return runJob(*model, promptB, JobId{22}); });
 
-  int rejected = 0;
   for (auto* future : {&futureA, &futureB}) {
-    try {
-      EXPECT_TRUE(future->get().empty()) << "prefill jobs produce no text";
-    } catch (const qvac_errors::StatusError& e) {
-      // Only the dedicated duplicate-key refusal counts: a job that dies for
-      // any other reason (e.g. shared-context corruption) must fail the test.
-      EXPECT_NE(std::string(e.what()).find("cacheKey"), std::string::npos)
-          << "unexpected rejection: " << e.what();
-      ++rejected;
-    }
+    EXPECT_NO_THROW(EXPECT_TRUE(future->get().empty()))
+        << "same-key prefill jobs must both run";
   }
-  EXPECT_EQ(rejected, 1)
-      << "exactly one of two same-key in-flight prefill saves must be refused";
+  EXPECT_FALSE(fs::exists(cachePath)) << "nothing asked for the file";
   fs::remove(cachePath);
 }
 
@@ -217,6 +199,8 @@ TEST_F(ConcurrentPrefillTest, TwoAsyncPrefillJobsOverlapOnScheduler) {
       std::launch::async, [&] { return runJob(*model, promptB, JobId{42}); });
   EXPECT_TRUE(futureA.get().empty());
   EXPECT_TRUE(futureB.get().empty());
+  model->saveCache(cachePathA.string());
+  model->saveCache(cachePathB.string());
   EXPECT_TRUE(fs::exists(cachePathA));
   EXPECT_TRUE(fs::exists(cachePathB));
 
@@ -229,8 +213,31 @@ TEST_F(ConcurrentPrefillTest, TwoAsyncPrefillJobsOverlapOnScheduler) {
   fs::remove(cachePathB);
 }
 
-/// Round-trip parity: the cache file a tagged prefill job writes must be
-/// loadable by a later tagged generation job under the same key.
+/// A second prefill of a prompt the cache already holds has nothing left to
+/// decode. It must still complete (and keep the cache loadable) instead of
+/// being refused by the batcher as an empty request.
+TEST_F(ConcurrentPrefillTest, RepeatedPrefillOfResidentPromptCompletes) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  const fs::path cachePath = tempCachePath("repeat");
+
+  const auto prefill = makeLongPrefillPrompt(cachePath.string(), "harbor");
+  EXPECT_TRUE(runJob(*model, prefill, JobId{61}).empty());
+  model->saveCache(cachePath.string());
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  EXPECT_NO_THROW(EXPECT_TRUE(runJob(*model, prefill, JobId{62}).empty()));
+
+  auto followup = makePrompt("Say cached follow up.");
+  followup.cacheKey = cachePath.string();
+  EXPECT_FALSE(runJob(*model, followup, JobId{63}).empty());
+
+  fs::remove(cachePath);
+}
+
+/// Round-trip parity: the cache file written for a tagged prefill job's
+/// conversation must be loadable by a tagged generation job under the same
+/// key on another model.
 TEST_F(ConcurrentPrefillTest, PrefillJobCacheRoundTripsToGenerationJob) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
@@ -238,12 +245,14 @@ TEST_F(ConcurrentPrefillTest, PrefillJobCacheRoundTripsToGenerationJob) {
 
   const auto prefill = makeLongPrefillPrompt(cachePath.string(), "lighthouse");
   EXPECT_TRUE(runJob(*model, prefill, JobId{51}).empty());
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath));
   EXPECT_GT(fs::file_size(cachePath), 0u);
 
+  auto other = loadModel();
   auto followup = makePrompt("Say cached follow up.");
   followup.cacheKey = cachePath.string();
-  const std::string output = runJob(*model, followup, JobId{52});
+  const std::string output = runJob(*other, followup, JobId{52});
   EXPECT_FALSE(output.empty())
       << "generation under the prefill's cacheKey must produce output";
 

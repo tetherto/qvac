@@ -2,6 +2,8 @@ import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { OcrGgmlInterface, type BackendInfo, type OcrGgmlRunOptions } from "./ocr-ggml";
 import { QvacErrorAddonOcrGgml, ERR_CODES } from "./lib/error";
+export type { OcrFitRequest, OcrFitResult } from "./fit";
+export { assessFit } from "./fit";
 /**
  * OCR pipeline backing the addon.
  *   - `easyocr` (default): CRAFT detector + CRNN gen-2 recognizer.
@@ -59,9 +61,8 @@ export interface OcrGgmlParams {
      */
     nThreads?: number;
     /**
-     * Directory holding ggml backend shared libraries. Default: the root
-     * `@qvac/fabric/backends` resolves (desktop), falling back to this package's `prebuilds/` on
-     * mobile where the package tree isn't resolvable from the packed worklet.
+     * Directory holding ggml backend shared libraries. Default: the ones
+     * @qvac/fabric ships, which it locates itself next to its runtime.
      */
     backendsDir?: string;
     /**

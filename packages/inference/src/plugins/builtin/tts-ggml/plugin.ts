@@ -19,6 +19,9 @@ import {
   type TtsChatterboxLoadConfig,
   type TtsCosyvoice3LoadConfig,
   type TtsMossLoadConfig,
+  type TtsMossSpeechLoadConfig,
+  type TtsMossSoundEffectRuntimeConfig,
+  type TtsMossSpeechRuntimeConfig,
   type TtsParlerLoadConfig,
   type TtsSupertonicLoadConfig,
   type TtsRuntimeConfig,
@@ -41,6 +44,7 @@ import type { TtsOpYield } from '@/utils/tts-stats'
 // shapes cannot drift apart.
 function ttsFrameMetadata(value: TtsOpYield) {
   return {
+    ...(value.text !== undefined ? { text: value.text } : {}),
     ...(value.sampleRate !== undefined ? { sampleRate: value.sampleRate } : {}),
     ...(value.chunkIndex !== undefined ? { chunkIndex: value.chunkIndex } : {}),
     ...(typeof value.sentenceChunk === 'string' && value.sentenceChunk.length > 0
@@ -633,16 +637,52 @@ function createMossModel(
   return { model }
 }
 
+function createMossBatchModel(
+  params: CreateModelParams,
+  config: TtsMossSoundEffectRuntimeConfig | TtsMossSpeechRuntimeConfig
+): PluginModelResult {
+  if (!params.modelPath) throw new TtsArtifactsRequiredError()
+  const codec = params.artifacts?.['mossSpeechCodecPath']
+  if (config.ttsEngine === 'moss-speech' && !codec) throw new TtsArtifactsRequiredError()
+  const logger = createStreamLogger(params.modelId, ModelType.ttsGgml)
+  const model = new TTSGgml({
+    engine: config.ttsEngine,
+    files:
+      config.ttsEngine === 'moss-sfx'
+        ? { mossSoundEffect: params.modelPath }
+        : { mossSpeechModel: params.modelPath, mossSpeechCodec: codec! },
+    ...(config.threads !== undefined ? { threads: config.threads } : {}),
+    ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
+    ...(config.seed !== undefined ? { seed: config.seed } : {}),
+    config: {
+      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...ggmlBackendConfig(config)
+    },
+    logger,
+    opts: { stats: true },
+    exclusiveRun: true
+  })
+  registerAddonLogger(params.modelId, ModelType.ttsGgml, logger)
+  return { model }
+}
+
 export const ttsPlugin = definePlugin({
   modelType: ModelType.ttsGgml,
   displayName: 'TTS (GGML)',
   addonPackage: ADDON_TTS,
   loadConfigSchema: ttsConfigSchema,
+  assessFit: TTSGgml.assessFit,
 
   async resolveConfig(cfg: Record<string, unknown>, ctx: ResolveContext) {
     const { ttsEngine } = cfg as { ttsEngine?: string }
 
     // Same default as the former onnx-tts plugin: omitting `ttsEngine` → Chatterbox.
+    if (ttsEngine === 'moss-sfx') return { config: cfg as TtsMossSoundEffectRuntimeConfig }
+    if (ttsEngine === 'moss-speech') {
+      const { mossSpeechCodecModelSrc, ...runtime } = cfg as TtsMossSpeechLoadConfig
+      const mossSpeechCodecPath = await ctx.resolveModelPath(mossSpeechCodecModelSrc)
+      return { config: runtime, artifacts: { mossSpeechCodecPath } }
+    }
     if (ttsEngine === 'parler') {
       return resolveParlerConfig(cfg as TtsParlerLoadConfig, ctx)
     }
@@ -665,6 +705,9 @@ export const ttsPlugin = definePlugin({
     const config = (params.modelConfig ?? {}) as TtsRuntimeConfig
     const artifacts = params.artifacts ?? {}
 
+    if (config.ttsEngine === 'moss-sfx' || config.ttsEngine === 'moss-speech') {
+      return createMossBatchModel(params, config)
+    }
     if (config.ttsEngine === 'parler') {
       return createParlerModel(params.modelId, config, params, artifacts)
     }

@@ -23,6 +23,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -39,6 +40,7 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "model-interface/OcrFit.hpp"
 #include "model-interface/OcrTypes.hpp"
 #include "model-interface/Pipeline.hpp"
 #include "model-interface/easyocr/pipeline/steps.hpp"
@@ -191,6 +193,15 @@ void applyMainGpu(
       "'integrated'"};
 }
 
+void applyGpuDevice(
+    js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
+    OcrConfig& config) {
+  using namespace qvac_lib_inference_addon_cpp;
+  if (auto value = params.getOptionalProperty<js::Number>(env, "gpuDevice")) {
+    config.gpuDevice = static_cast<int>(value->as<double>(env));
+  }
+}
+
 // Optional `params.backendDevice` ('cpu' | 'vulkan' | 'metal' | 'opencl').
 // Default keeps CPU inference; 'vulkan' (Linux/Windows/Android), 'metal'
 // (Apple) and 'opencl' (Android/Adreno) request a matching GPU with transparent
@@ -202,22 +213,21 @@ void applyBackendDevice(
   using namespace qvac_lib_inference_addon_cpp;
   auto optBackendDevice =
       params.getOptionalProperty<js::String>(env, "backendDevice");
-  if (!optBackendDevice) {
-    return;
-  }
-  const auto backendDevice = optBackendDevice->as<std::string>(env);
-  if (backendDevice == "vulkan") {
-    config.backendDevice = BackendDevice::VULKAN;
-  } else if (backendDevice == "metal") {
-    config.backendDevice = BackendDevice::METAL;
-  } else if (backendDevice == "opencl") {
-    config.backendDevice = BackendDevice::OPENCL;
-  } else if (backendDevice == "cpu") {
-    config.backendDevice = BackendDevice::CPU;
-  } else {
-    throw StatusError{
-        general_error::InvalidArgument,
-        "backendDevice must be 'cpu', 'vulkan', 'metal', or 'opencl'"};
+  if (optBackendDevice) {
+    const auto backendDevice = optBackendDevice->as<std::string>(env);
+    if (backendDevice == "vulkan") {
+      config.backendDevice = BackendDevice::VULKAN;
+    } else if (backendDevice == "metal") {
+      config.backendDevice = BackendDevice::METAL;
+    } else if (backendDevice == "opencl") {
+      config.backendDevice = BackendDevice::OPENCL;
+    } else if (backendDevice == "cpu") {
+      config.backendDevice = BackendDevice::CPU;
+    } else {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "backendDevice must be 'cpu', 'vulkan', 'metal', or 'opencl'"};
+    }
   }
 
   // Optional toggle for the DocTR recognizer CPU-assist worker. When omitted,
@@ -339,11 +349,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       optThreads) {
     config.nThreads = static_cast<int>(optThreads->as<double>(env));
   }
-  if (auto optGpuDevice =
-          args1.getOptionalProperty<js::Number>(env, "gpuDevice");
-      optGpuDevice) {
-    config.gpuDevice = static_cast<int>(optGpuDevice->as<double>(env));
-  }
+  applyGpuDevice(env, args1, config);
   if (auto optBackendsDir =
           args1.getOptionalProperty<js::String>(env, "backendsDir");
       optBackendsDir) {
@@ -441,6 +447,104 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   JsInterface::getInstance(env, args.at(0))
       .addonCpp->runJob(std::any(std::move(modelInput)));
   return nullptr;
+}
+JSCATCH
+
+namespace {
+
+struct FitRequest {
+  std::string detector;
+  std::string recognizer;
+  OcrConfig config;
+  uint64_t marginBytes = 0;
+};
+
+FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
+  using namespace qvac_lib_inference_addon_cpp;
+  JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+  FitRequest parsed;
+  parsed.detector =
+      request.getProperty<js::String>(env, "pathDetector").as<std::string>(env);
+  parsed.recognizer = request.getProperty<js::String>(env, "pathRecognizer")
+                          .as<std::string>(env);
+  applyMainGpu(env, request, parsed.config);
+  applyGpuDevice(env, request, parsed.config);
+  applyBackendDevice(env, request, parsed.config);
+  applyPipelineMode(env, request, parsed.config);
+  if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
+    parsed.config.backendsDir = dir->as<std::string>(env);
+  }
+  if (auto value =
+          request.getOptionalProperty<js::Number>(env, "marginBytes")) {
+    const double n = value->as<double>(env);
+    if (!std::isfinite(n) || n < 0 || std::trunc(n) != n ||
+        n > 9007199254740991.0) {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "marginBytes must be a non-negative safe integer"};
+    }
+    parsed.marginBytes = static_cast<uint64_t>(n);
+  }
+  return parsed;
+}
+
+// Runs on the worker thread with owned values only. Fits are serialised
+// because backend registration, device selection and memory queries go
+// through the process-wide ggml backend registry. The fit holds its own
+// backend handle, and ggml backends stay loaded for the process lifetime, so
+// unloading a model cannot release them underneath it.
+ocr_fit::OcrFitResult runFit(const FitRequest& request) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+  return ocr_fit::assessOcrFit(
+      request.detector,
+      request.recognizer,
+      request.config,
+      request.marginBytes);
+}
+
+js_value_t* fitResultObject(js_env_t* env, const ocr_fit::OcrFitResult& fit) {
+  using namespace qvac_lib_inference_addon_cpp;
+  auto out = js::Object::create(env);
+  out.setProperty(env, "status", js::String::create(env, fit.status));
+  out.setProperty(env, "reason", js::String::create(env, fit.reason));
+  out.setProperty(env, "deviceName", js::String::create(env, fit.deviceName));
+  out.setProperty(env, "report", js::String::create(env, fit.report));
+  out.setProperty(
+      env,
+      "deviceBytes",
+      js::Number::create(env, static_cast<double>(fit.deviceBytes)));
+  out.setProperty(
+      env,
+      "hostBytes",
+      js::Number::create(env, static_cast<double>(fit.hostBytes)));
+  out.setProperty(
+      env,
+      "weightsBytes",
+      js::Number::create(env, static_cast<double>(fit.weightsBytes)));
+  out.setProperty(
+      env,
+      "deviceFreeBytes",
+      js::Number::create(env, static_cast<double>(fit.deviceFreeBytes)));
+  out.setProperty(
+      env,
+      "deviceTotalBytes",
+      js::Number::create(env, static_cast<double>(fit.deviceTotalBytes)));
+  return out;
+}
+
+} // namespace
+
+// Resolves the weight-load fit on a worker thread. The request is parsed and
+// the result marshalled on the JS thread; the worker makes no js_* calls.
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  return js::JsAsyncTask::run(
+      env,
+      [request = parseFitRequest(env, info)]() { return runFit(request); },
+      fitResultObject);
 }
 JSCATCH
 

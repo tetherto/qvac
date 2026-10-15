@@ -16,8 +16,6 @@ exports.allocateFreePort = allocateFreePort;
 exports.startRpcServer = startRpcServer;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and native bindings expose CommonJS export shapes. */
 const net = require("bare-net");
-const path = require("bare-path");
-const fabricBackends = require("@qvac/fabric/backends");
 const binding = require("./binding");
 /* eslint-enable @typescript-eslint/no-require-imports */
 exports.DEFAULT_RPC_SERVER_HOST = "127.0.0.1";
@@ -25,9 +23,6 @@ const TRUSTED_LAN_WARNING_CODE = "QVAC_GGML_RPC_SERVER_TRUSTED_LAN";
 // Keep native handles alive until an explicit stop finishes. Otherwise their
 // finalizer can synchronously stop and join a live server during garbage collection.
 const activeServerHandles = new Set();
-// Fabric never unloads its RPC module, so its RDMA build cannot change within a
-// process. Cache the native check, which reads the module from disk.
-const rdmaSupportByBackendsDir = new Map();
 class RpcServerPortAllocationError extends Error {
   constructor(cause) {
     super("Failed to allocate a free port for ggml-rpc-server", { cause });
@@ -52,8 +47,12 @@ class RpcServerInvalidHostError extends Error {
 }
 exports.RpcServerInvalidHostError = RpcServerInvalidHostError;
 class RpcServerRdmaUnavailableError extends Error {
-  constructor() {
-    super("RDMA is not available in the installed @qvac/fabric RPC backend");
+  constructor(cause) {
+    super(
+      "RDMA is not available: the @qvac/fabric RPC backend lacks it, libibverbs.so.1 " +
+        "could not be loaded, the host has no RDMA device, or GGML_RPC_NO_RDMA is set",
+      { cause },
+    );
     this.name = "RpcServerRdmaUnavailableError";
   }
 }
@@ -117,6 +116,9 @@ const nativeErrorClasses = new Map([
 ]);
 function toTypedError(error) {
   const code = error?.code;
+  if (code === "RpcServerRdmaUnavailableError") {
+    return new RpcServerRdmaUnavailableError(error);
+  }
   const ErrorClass =
     typeof code === "string" ? nativeErrorClasses.get(code) : undefined;
   return ErrorClass === undefined
@@ -194,18 +196,10 @@ function validateThreads(threads) {
     throw new TypeError("threads must be a positive integer");
   }
 }
-function rpcBackendSupportsRdma(backendsDir) {
-  let supported = rdmaSupportByBackendsDir.get(backendsDir);
-  if (supported === undefined) {
-    try {
-      supported = binding.rpcBackendSupportsRdma({ backendsDir });
-    } catch (error) {
-      throw toTypedError(error);
-    }
-    rdmaSupportByBackendsDir.set(backendsDir, supported);
-  }
-  return supported;
-}
+/**
+ * Finds a port that is free now. Another process can take it before you bind
+ * it, so `startRpcServer()` without a `port` lets the server bind one itself.
+ */
 function allocateFreePort(
   host = exports.DEFAULT_RPC_SERVER_HOST,
   options = {},
@@ -234,28 +228,17 @@ async function startRpcServer(options = {}) {
   assertLoopbackHost(host, options.allowNonLoopbackHost);
   warnForTrustedLanHost(host, options.allowNonLoopbackHost);
   validateThreads(options.threads);
-  // Packed mobile bundles do not retain a resolvable node_modules tree. Their
-  // packagers stage Fabric's backends beside this addon instead.
-  const backendsDir =
-    fabricBackends.resolveBackendsDir() ?? path.join(__dirname, "prebuilds");
-  const rdmaCapable = rpcBackendSupportsRdma(backendsDir);
-  if (options.expectRdma === true && !rdmaCapable) {
-    throw new RpcServerRdmaUnavailableError();
-  }
-  const port =
-    options.port ??
-    (await allocateFreePort(host, {
-      allowNonLoopbackHost: options.allowNonLoopbackHost,
-    }));
-  validatePort(port);
+  if (options.port !== undefined) validatePort(options.port);
   const device = normalizeDevice(options.device);
-  const handle = await callNative(() =>
+  // Without a port the server binds port 0 itself and reports the port it got,
+  // so no other process can take the port between choosing and binding it.
+  const { handle, port, rdmaCapable } = await callNative(() =>
     binding.startServer({
-      endpoint: `${host}:${port}`,
+      endpoint: `${host}:${options.port ?? 0}`,
       device,
       cache: options.cache ?? false,
       threads: options.threads,
-      backendsDir,
+      expectRdma: options.expectRdma === true,
     }),
   );
   activeServerHandles.add(handle);

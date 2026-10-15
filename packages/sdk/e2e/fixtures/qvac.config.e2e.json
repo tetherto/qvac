@@ -5,6 +5,7 @@
     "@qvac/sdk/whispercpp-transcription/plugin",
     "@qvac/sdk/bci-whispercpp-transcription/plugin",
     "@qvac/sdk/parakeet-transcription/plugin",
+    "@qvac/sdk/moss-transcribe/plugin",
     "@qvac/sdk/nmtcpp-translation/plugin",
     "@qvac/sdk/tts-ggml/plugin",
     "@qvac/sdk/ggml-ocr/plugin",
@@ -16,5 +17,6 @@
   ],
   "registryDownloadMaxRetries": 10,
   "registryStreamTimeoutMs": 600000,
-  "rpcServerProvider": "@qvac/sdk/ggml-rpc-server/provider"
+  "rpcServerProvider": "@qvac/sdk/ggml-rpc-server/provider",
+  "fitStubBudgetMs": 120000
 }

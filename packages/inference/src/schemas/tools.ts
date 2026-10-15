@@ -2,6 +2,24 @@ import { z } from 'zod'
 
 const jsonSchemaEnumValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()])
 
+const jsonSchemaTypeSchema = z.enum([
+  'string',
+  'number',
+  'integer',
+  'boolean',
+  'object',
+  'array',
+  'null'
+])
+
+// Loose so nested keywords (`items`, `properties`, `anyOf`, `$ref`, ...) reach
+// the chat template and tool grammar instead of being stripped.
+const toolParameterSchema = z.looseObject({
+  type: z.union([jsonSchemaTypeSchema, z.array(jsonSchemaTypeSchema)]).optional(),
+  description: z.string().optional(),
+  enum: z.array(jsonSchemaEnumValueSchema).optional()
+})
+
 export const toolSchema = z.object({
   type: z.literal('function'),
   name: z.string(),
@@ -18,16 +36,9 @@ export const toolSchema = z.object({
     .describe(
       'Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.'
     ),
-  parameters: z.object({
+  parameters: z.looseObject({
     type: z.literal('object'),
-    properties: z.record(
-      z.string(),
-      z.object({
-        type: z.enum(['string', 'number', 'integer', 'boolean', 'object', 'array']),
-        description: z.string().optional(),
-        enum: z.array(jsonSchemaEnumValueSchema).optional()
-      })
-    ),
+    properties: z.record(z.string(), toolParameterSchema),
     required: z.array(z.string()).optional()
   })
 })

@@ -1,11 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <any>
 #include <cmath>
 #include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -14,6 +16,9 @@
 #include <vector>
 
 #include <audiogen-cpp/acestep/fit.h>
+#ifdef AUDIOGEN_HAS_MINIMAX
+#include <audiogen-cpp/minimax/fit.h>
+#endif
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -661,63 +666,43 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-/// An engine the addon loads and audiogen-cpp cannot project. The shape
-/// matches a fit so a caller reads the verdict the same way for every engine.
-inline js_value_t*
-unsupportedEngineResult(js_env_t* env, const std::string& engine) {
-  namespace js = qvac_lib_inference_addon_cpp::js;
-
-  auto result = js::Object::create(env);
-  auto setText = [&](const char* name, const std::string& value) {
-    result.setProperty(env, name, js::String::create(env, value));
-  };
-
-  setText("status", "error");
-  setText("reason", "unsupported-engine");
-  setText("modelName", engine);
-  setText("deviceName", "");
-  setText("report", "");
-  for (const char* flag :
-       {"isTurbo", "deviceIsCpu", "deviceSharesHostMemory", "stagesResident"}) {
-    result.setProperty(env, flag, js::Boolean::create(env, false));
-  }
-  for (const char* name :
-       {"deviceFreeBytes",
-        "deviceTotalBytes",
-        "deviceBytes",
-        "hostBytes",
-        "hostFreeBytes",
-        "hostTotalBytes"}) {
-    result.setProperty(env, name, js::Number::create(env, 0));
-  }
-  result.setProperty(env, "stages", js::Array::create(env));
-  return result;
-}
-
 // ── assessFit ────────────────────────────────────────────────────────────
 //
-// Projects one ACE-Step model set against the memory free right now. Args:
-// [request], carrying the four stage paths and the generation to accommodate.
+// Projects one model set against the memory free right now. Args: [request],
+// carrying the engine, its model files and the generation to accommodate.
+// Returns a Promise of the result.
 //
-// Takes no instance and loads nothing: the fitter reads GGUF metadata only. A
-// model it cannot read is an "error" status carrying the engine's own reason.
+// Takes no instance and loads nothing: the fitters read GGUF metadata only. A
+// model they cannot read is an "error" status carrying the engine's own reason.
+//
+// The request is read into owned C++ values on the JS thread, the fitter runs
+// on a worker thread with no JS access, and the result object is built back on
+// the JS thread. The work reaches no model instance, so unloading or destroying
+// a model while a fit runs frees nothing it reads.
 
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
+inline constexpr const char* K_FIT_ENGINE_ACESTEP = "acestep";
+inline constexpr const char* K_FIT_ENGINE_MINIMAX = "minimax";
+inline constexpr const char* K_MINIMAX_DEVICE_AUTO = "auto";
+inline constexpr const char* K_MINIMAX_DEVICE_CPU = "cpu";
+inline constexpr double K_MINIMAX_FRAMES_PER_SECOND = 25.0;
+inline constexpr int64_t K_MINIMAX_MIN_FRAMES = 1;
 
-  JsArgsParser args(env, info);
-  auto request = args.getJsObject(0, "request");
+class FitRequest {
+public:
+  FitRequest(js_env_t* env, js::Object request)
+      : env_(env), request_(request) {}
 
-  auto text = [&](const char* name) -> std::string {
-    auto value = request.getOptionalProperty<js::String>(env, name);
-    return value.has_value() ? value->as<std::string>(env) : std::string();
-  };
-  auto number = [&](const char* name) -> std::optional<double> {
-    auto value = request.getOptionalProperty<js::Number>(env, name);
+  std::string text(const char* name) {
+    auto value = request_.getOptionalProperty<js::String>(env_, name);
+    return value.has_value() ? value->as<std::string>(env_) : std::string();
+  }
+
+  std::optional<double> count(const char* name) {
+    auto value = request_.getOptionalProperty<js::Number>(env_, name);
     if (!value.has_value()) {
       return std::nullopt;
     }
-    const double raw = value->as<double>(env);
+    const double raw = value->as<double>(env_);
     // A count cast from a negative or non-finite double is undefined.
     if (!std::isfinite(raw) || raw < 0) {
       throw qvac_errors::StatusError(
@@ -725,52 +710,45 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
           std::string("assessFit: ") + name + " must be a non-negative count");
     }
     return raw;
-  };
-  auto integer = [&](const char* name, int& out) {
-    if (auto value = number(name)) {
+  }
+
+  void readInt(const char* name, int& out) {
+    if (auto value = count(name)) {
       out = static_cast<int>(*value);
     }
-  };
-
-  const std::string engine = text("engine");
-  if (!engine.empty() && engine != "acestep") {
-    // audiogen-cpp ships a fitter for ACE-Step only.
-    return unsupportedEngineResult(env, engine);
   }
 
-  tts_cpp::acestep::FitOptions options;
-  options.models_dir = text("modelsDir");
-  options.text_enc_model_path = text("textEncoderPath");
-  options.lm_model_path = text("lmPath");
-  options.dit_model_path = text("ditPath");
-  options.vae_model_path = text("vaePath");
-  options.backends_dir = resolveBackendsDir(text("backendsDir"));
-  integer("gpuLayers", options.n_gpu_layers);
-  integer("threads", options.n_threads);
-  integer("textTokens", options.text_tokens);
-  integer("lyricTokens", options.lyric_tokens);
-  integer("lmPromptTokens", options.lm_prompt_tokens);
-  integer("lmMaxNewTokens", options.lm_max_new_tokens);
-  integer("keepStages", options.keep_stages);
-  if (auto bytes = number("marginBytes")) {
-    options.margin_bytes = static_cast<uint64_t>(*bytes);
-  }
-  if (auto seconds = number("durationSeconds")) {
-    options.duration_seconds = static_cast<float>(*seconds);
-  }
-  if (auto scale = number("lmCfgScale")) {
-    options.lm_cfg_scale = static_cast<float>(*scale);
-  }
-  if (auto scale = number("guidanceScale")) {
-    options.guidance_scale = static_cast<float>(*scale);
-  }
-  if (auto source =
-          request.getOptionalProperty<js::Boolean>(env, "withSourceAudio")) {
-    options.with_source_audio = source->as<bool>(env);
+  void readInt64(const char* name, int64_t& out) {
+    if (auto value = count(name)) {
+      out = checkedSafeInteger(*value, name);
+    }
   }
 
-  const tts_cpp::acestep::FitResult fit = tts_cpp::acestep::fit_params(options);
+  void readFloat(const char* name, float& out) {
+    if (auto value = count(name)) {
+      out = static_cast<float>(*value);
+    }
+  }
 
+  void readBytes(const char* name, uint64_t& out) {
+    if (auto value = count(name)) {
+      out = static_cast<uint64_t>(*value);
+    }
+  }
+
+  void readFlag(const char* name, bool& out) {
+    if (auto value = request_.getOptionalProperty<js::Boolean>(env_, name)) {
+      out = value->as<bool>(env_);
+    }
+  }
+
+private:
+  js_env_t* env_;
+  js::Object request_;
+};
+
+inline js_value_t*
+fitResultObject(js_env_t* env, const tts_cpp::acestep::FitResult& fit) {
   const char* status = "error";
   if (fit.status == tts_cpp::acestep::FitStatus::Success) {
     status = "fits";
@@ -833,6 +811,140 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   }
   result.setProperty(env, "stages", stages);
   return result;
+}
+
+inline tts_cpp::acestep::FitOptions acestepFitOptions(FitRequest& request) {
+  tts_cpp::acestep::FitOptions options;
+  options.models_dir = request.text("modelsDir");
+  options.text_enc_model_path = request.text("textEncoderPath");
+  options.lm_model_path = request.text("lmPath");
+  options.dit_model_path = request.text("ditPath");
+  options.vae_model_path = request.text("vaePath");
+  options.backends_dir =
+      resolveBackendsDir(request.text("backendsDir")).string();
+  request.readInt("gpuLayers", options.n_gpu_layers);
+  request.readInt("threads", options.n_threads);
+  request.readInt("textTokens", options.text_tokens);
+  request.readInt("lyricTokens", options.lyric_tokens);
+  request.readInt("lmPromptTokens", options.lm_prompt_tokens);
+  request.readInt("lmMaxNewTokens", options.lm_max_new_tokens);
+  request.readInt("keepStages", options.keep_stages);
+  request.readBytes("marginBytes", options.margin_bytes);
+  request.readFloat("durationSeconds", options.duration_seconds);
+  request.readFloat("lmCfgScale", options.lm_cfg_scale);
+  request.readFloat("guidanceScale", options.guidance_scale);
+  request.readFlag("withSourceAudio", options.with_source_audio);
+  return options;
+}
+
+#ifdef AUDIOGEN_HAS_MINIMAX
+inline std::string minimaxFitDevice(FitRequest& request) {
+  const std::string device = request.text("device");
+  if (!device.empty()) {
+    return device;
+  }
+  int gpuLayers = 0;
+  request.readInt("gpuLayers", gpuLayers);
+  return gpuLayers > 0 ? K_MINIMAX_DEVICE_AUTO : K_MINIMAX_DEVICE_CPU;
+}
+
+inline tts_cpp::minimax::EngineOptions minimaxFitOptions(FitRequest& request) {
+  tts_cpp::minimax::EngineOptions options;
+  options.model_dir = request.text("modelsDir");
+  options.lm_model_path = request.text("lmPath");
+  options.synth_model_path = request.text("synthPath");
+  options.device = minimaxFitDevice(request);
+  options.backends_dir =
+      resolveBackendsDir(request.text("backendsDir")).string();
+  request.readInt("threads", options.n_threads);
+  return options;
+}
+
+inline int64_t minimaxFramesFromDuration(double seconds) {
+  if (seconds <= 0) {
+    return 0;
+  }
+  const double frames = std::round(seconds * K_MINIMAX_FRAMES_PER_SECOND);
+  return std::max<int64_t>(
+      K_MINIMAX_MIN_FRAMES,
+      checkedSafeInteger(frames, "maxFrames derived from durationSeconds"));
+}
+
+inline tts_cpp::minimax::FitWorkload minimaxFitWorkload(FitRequest& request) {
+  const auto frames = request.count("maxFrames");
+  const auto seconds = request.count("durationSeconds");
+  if (frames && seconds) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "assessFit: MiniMax accepts either maxFrames or durationSeconds, not "
+        "both");
+  }
+  tts_cpp::minimax::FitWorkload workload;
+  if (frames) {
+    workload.max_frames = checkedSafeInteger(*frames, "maxFrames");
+  }
+  if (seconds) {
+    workload.max_frames = minimaxFramesFromDuration(*seconds);
+  }
+  request.readInt64("promptTokens", workload.prompt_tokens);
+  request.readBytes("marginBytes", workload.margin_bytes);
+  return workload;
+}
+#endif
+
+using FitWork = std::function<tts_cpp::acestep::FitResult()>;
+
+/// An engine the addon loads and audiogen-cpp cannot project. The shape
+/// matches a fit so a caller reads the verdict the same way for every engine.
+inline tts_cpp::acestep::FitResult
+unsupportedEngineResult(const std::string& engine) {
+  tts_cpp::acestep::FitResult result;
+  result.status = tts_cpp::acestep::FitStatus::Error;
+  result.reason = "unsupported-engine";
+  result.model_name = engine;
+  return result;
+}
+
+/// Reads the request on the JS thread. The returned work owns every value it
+/// needs; an invalid request throws here, before any thread starts.
+inline FitWork fitWork(FitRequest& request) {
+  std::string engine = request.text("engine");
+  if (engine.empty() || engine == K_FIT_ENGINE_ACESTEP) {
+    return [options = acestepFitOptions(request)]() {
+      return tts_cpp::acestep::fit_params(options);
+    };
+  }
+#ifdef AUDIOGEN_HAS_MINIMAX
+  if (engine == K_FIT_ENGINE_MINIMAX) {
+    return [options = minimaxFitOptions(request),
+            workload = minimaxFitWorkload(request)]() {
+      return tts_cpp::minimax::fit_params(options, workload);
+    };
+  }
+#endif
+  return [engine = std::move(engine)]() {
+    return unsupportedEngineResult(engine);
+  };
+}
+
+// The fitters register the ggml backends on first use, process-wide state two
+// concurrent fits would race, so fits run one at a time.
+inline tts_cpp::acestep::FitResult runFit(const FitWork& work) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+  return work();
+}
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  FitRequest request(env, args.getJsObject(0, "request"));
+
+  return js::JsAsyncTask::run(
+      env,
+      [work = fitWork(request)]() { return runFit(work); },
+      fitResultObject);
 }
 JSCATCH
 

@@ -2,7 +2,7 @@ name: OpenClaw Upstream Compatibility
 
 # Scheduled tripwire for the published OpenClaw integration. This installs the
 # latest public OpenClaw and QVAC plugin packages in a fresh project so upstream
-# localService, config, model-catalog, and agent-run drift is caught early.
+# provider-hook, config, model-catalog, and agent-run drift is caught early.
 
 on:
   pull_request:
@@ -44,7 +44,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  QVAC_SMOKE_MODEL: qwen3.5-0.8b
+  QVAC_SMOKE_MODEL: qwen3.5-2b
   # Must stay under OPENCLAW_AGENT_TIMEOUT_SECONDS: readiness is awaited inside
   # the agent run, so a longer value is unreachable and the agent timeout fires
   # first, reporting an opaque kill instead of "service never became healthy".

@@ -1,14 +1,127 @@
 # Changelog
 
-## [Unreleased]
+## [0.12.1]
 
-### Changed
+📦 **NPM:** https://www.npmjs.com/package/@qvac/test-suite/v/0.12.1
 
-- Mobile consumer manifests no longer declare the per-platform packages of split native
-  addons (`@qvac/<addon>-android-arm64`, `@qvac/<addon>-ios`). Pass `installMissingPrebuilds`
-  to the SDK plugin in `expoPlugins` (`['@qvac/sdk/expo-plugin', { installMissingPrebuilds: true }]`)
-  to install them during `expo prebuild`, or declare them in the config directory's
-  dependencies. The option needs an `@qvac/sdk` whose Expo plugin supports it.
+Two fixes that close blind spots in what a run reports. Per-OS skip rules now reach the desktop and Electron legs they were written for, and a test that stops running is no longer allowed to vanish from a report comparison.
+
+Both make a run stricter rather than quieter, so expect visible changes after upgrading: some tests that ran on Linux and Windows legs will now report as skipped, and a comparison that previously passed can now fail.
+
+---
+
+## Bug Fixes
+
+### Per-OS skip rules apply to desktop and Electron legs
+
+`skip.platforms` matches by segment and widens over the OS only, so a leg that registers the bare family name — `desktop` or `electron` — never reached a per-OS rule. Every JavaScript consumer did exactly that: `--platform` defaulted to `desktop`, and the Electron command passed `electron`. Mobile, Snap and Python legs already named their OS.
+
+The per-OS rules were therefore inert on five legs. A test recorded as skipped for `desktop-linux`, `desktop-windows`, `electron-linux` and `electron-windows` ran on all four anyway.
+
+Each JavaScript consumer now registers as `<family>-<os>` — for example `desktop-linux` or `electron-windows` — through one shared helper. The `--platform` CLI default is gone, so the runner's own fallback decides. The desktop runner also publishes the label it registered with in `QVAC_TEST_PLATFORM`, as the Electron path already did, so a consumer entry can apply its resource table against the same string the leg registered with instead of deriving a second one that may disagree.
+
+macOS legs behave the same either way. The change lands on Linux and Windows, where tests covered by a per-OS skip rule now report as skipped instead of running.
+
+### A test that stops running fails the comparison
+
+`report:compare` classified every test as passed or failed, but a run records four outcomes. A test that passed in the baseline and now reported `incomplete` or `skipped` fell into neither list — it disappeared from the comparison and the check stayed green. Removing a step binding, or no longer wiring an SDK method into a client, silently shrank coverage on every affected test with nothing reacting to it.
+
+The two ways a test stops running are now kept apart, because only one of them is the client's doing:
+
+- **Passed, now `incomplete`** is a coverage regression and **fails** the comparison. Incomplete means the client has no body or binding for the test, which no property of the machine can cause.
+- **Passed, now `skipped`** is reported on its own line and stays non-fatal. Skips also come from the runner's own limits — the number of eligible GPUs, a reachable LAN server, an opt-in environment flag — which legitimately differ between the baseline machine and the one running the change.
+
+A test that was already incomplete or skipped in the baseline is the status quo and stays quiet, so adopting this release does not fail a comparison on its own. Both lists reach the PR comment through `report:format`, and the summary now states how many tests the success rate left out.
+
+The HTML report had the same gap: its summary listed passed, failed and skipped, so a run with incomplete tests did not add up. It now has an Incomplete card, and the per-consumer strip reports all four states and computes its rate over the tests that ran.
+
+## [0.12.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/test-suite/v/0.12.0
+
+The headline is that a test body can now be data instead of JavaScript, so a client written in another language runs the same catalog rather than a translated copy of it. Alongside that, mobile consumers stop hand-pinning addon platform packages, and one dead config field is gone.
+
+---
+
+## Breaking Changes
+
+### The `runIdStrategy` config field is removed
+
+`defineConfig` required `runIdStrategy`, and it selected nothing at runtime — the field was inert. It is gone, and a config that still sets it no longer compiles.
+
+**Before:**
+
+```typescript
+export default defineConfig({
+  testDir: './dist/tests',
+  runIdStrategy: 'auto',
+  consumers: { desktop: { entry: './consumer.js' } }
+})
+```
+
+**After:**
+
+```typescript
+export default defineConfig({
+  testDir: './dist/tests',
+  consumers: { desktop: { entry: './consumer.js' } }
+})
+```
+
+Delete the line; nothing replaces it. A run that needs a specific id passes `--runId`, which is what CI already does.
+
+## New APIs
+
+### A test body can be described as data
+
+Until now every test body was a JavaScript function, so a generated client in another language could not run any of it. Equivalence between clients was argued by reading code rather than demonstrated by running the same tests.
+
+A test can now be written as a sequence of steps — `useModel`, `modelSource`, `asset`, `call`, `callError`, `start`, `settle`, `repeat`, `project`, `assert`, `compare`. Each step names data rather than holding an object, so a client whose session or handle type differs still runs the same body. `settle.withinMs` puts a deadline on a started call, so a wedged call fails with its own message instead of the consumer's generic test timeout.
+
+A client becomes drivable by implementing one interface, `StepBindings`:
+
+```typescript
+import {
+  StepInterpreter,
+  StepIncompleteError,
+  type StepBindings,
+  type TestDefinition
+} from '@qvac/test-suite'
+
+const bindings: StepBindings = {
+  useModel: async (deps) => [await resources.ensureLoaded(deps[0]!)],
+  call: async (method) => {
+    throw new StepIncompleteError(`${method} has no run handle on this client yet`)
+  }
+  // ...asset, modelSource, assertions, comparisons, evictAllExcept
+}
+
+const result = await new StepInterpreter(bindings).run(definition)
+```
+
+A non-JavaScript client does not have to reimplement the MQTT state machine either. An NDJSON bridge over stdin/stdout plus `BridgeExecutor` reuses the existing registration, queue, heartbeats, retry and reporting.
+
+Two things keep this honest. `schema/test-definition.schema.json` is the language-neutral copy of the vocabulary, and `catalog:validate` fails when the two copies disagree on operation names or fields. And results gained a fourth outcome, `incomplete`, which carries a required reason: `skipped` is a statement about the platform, `incomplete` is a statement about the client, so a gap shows up as visible debt instead of a hidden pass. `report:matrix` renders the testId × client grid and diffs the value each client asserted on — two clients can both return a string and still disagree about what they built from the same stream.
+
+Existing tests are unaffected: a definition without `steps` routes to its executor exactly as before. `docs/conformance.md` describes what a runner must do with a legal definition, which a schema alone cannot say.
+
+## Changes
+
+### Mobile consumer manifests no longer pin addon platform packages
+
+Mobile consumer manifests no longer declare the per-platform packages of split native addons — `@qvac/<addon>-android-arm64`, `@qvac/<addon>-ios`. The SDK owns that now: `ensureHostPrebuilds` adds the packages the addons need for mobile hosts, pinned to each addon's exact version, and `bundleSdk` and the Expo plugin can run it.
+
+Pass `installMissingPrebuilds` to the SDK plugin in `expoPlugins` to install them during `expo prebuild`:
+
+```js
+expoPlugins: [['@qvac/sdk/expo-plugin', { installMissingPrebuilds: true }]]
+```
+
+The alternative is declaring them in the config directory's dependencies. The option needs an `@qvac/sdk` whose Expo plugin supports it.
+
+### Fabric 0.18.0 for npm consumers
+
+Consumers move to addon versions built against `@qvac/fabric` 0.18.0 — for example `@qvac/llm-llamacpp` `^0.55.0` together with `@qvac/fabric-android-arm64` `0.18.0`.
 
 ## [0.11.3]
 

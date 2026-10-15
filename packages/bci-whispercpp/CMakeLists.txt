@@ -32,6 +32,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 # triplets actually differ from vcpkg's defaults today, but exposing the
 # directory uniformly avoids platform-conditional surprises.
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 project(bci-whispercpp CXX C)
 
@@ -134,6 +135,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIConfig.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/EmbedderFit.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/NeuralProcessor.cpp
 )
 
@@ -160,6 +162,7 @@ if(BUILD_TESTING)
   set(CORE_SRCS
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIConfig.cpp
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIModel.cpp
+      ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/EmbedderFit.cpp
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/NeuralProcessor.cpp
   )
 
@@ -179,7 +182,12 @@ if(BUILD_TESTING)
   add_executable(
       test-bci-core
       ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
+      ${PROJECT_SOURCE_DIR}/addon/tests/test_embedder_fit.cpp
       ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
+  )
+
+  target_compile_definitions(test-bci-core PRIVATE
+      BCI_TEST_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/addon/tests/fixtures"
   )
 
   target_include_directories(test-bci-core PRIVATE

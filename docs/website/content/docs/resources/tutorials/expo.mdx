@@ -95,11 +95,10 @@ Add the following peer dependencies to your `package.json`:
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-native": "0.81.5",
-    "react-native-bare-kit": "^0.11.5" // [!code ++]
+    "react-native-bare-kit": "^0.16.0" // [!code ++]
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
-    "bare-pack": "^1.5.1", // [!code ++]
     "typescript": "~5.9.2"
   }
 }
@@ -155,12 +154,13 @@ To add the packages yourself instead, use `"@qvac/sdk/expo-plugin"` without the 
 ```json title="package.json"
 {
   "dependencies": {
-    "@qvac/fabric-android-arm64": "x.y.z"
+    "@qvac/fabric-android-arm64": "x.y.z",
+    "@qvac/fabric-ios": "x.y.z"
   }
 }
 ```
 
-iOS uses `@qvac/fabric-ios` instead. For the version, run `npx expo prebuild` once without these dependencies: it stops and prints each missing package for the platform being prebuilt, with the exact line to add.
+Both are needed even when you prebuild only one platform, because the worker bundle is built once for Android and iOS. For the version, run `npx expo prebuild` once without these dependencies: it stops and prints each missing package, with the exact line to add.
 </Step>
 
 <Step>
@@ -169,6 +169,8 @@ Prebuild your project to generate the native files:
 ```bash
 npx expo prebuild
 ```
+
+Prebuild also links QVAC's native addons into `react-native-bare-kit`. Reinstalling packages clears them, so run `npx expo prebuild` again after an install before building.
 </Step>
 </Steps>
 

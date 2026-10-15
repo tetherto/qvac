@@ -1,3 +1,4 @@
+// Download resilience, and why this file stays on its executors.
 import type { TestDefinition } from '@qvac/test-suite'
 
 export const downloadCancelIsolation: TestDefinition = {
@@ -32,3 +33,6 @@ export const downloadHuggingFaceVerify: TestDefinition = {
 }
 
 export const downloadTests = [downloadCancelIsolation, downloadHuggingFaceVerify]
+
+// The tests without steps drive network faults through local HTTP fixtures, so each client needs
+// its own body.

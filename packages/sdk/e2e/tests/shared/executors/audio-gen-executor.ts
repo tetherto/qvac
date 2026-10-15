@@ -32,7 +32,8 @@ import {
 
 type AudioGenParams = Omit<AudioGenClientParams, 'modelId'>
 type ReferenceAudioParams = AudioGenParams & { referenceAudioFileName: string }
-type SourceTone = { seconds: number; frequency: number }
+/** A tone named the way the catalog names it: `"2s-440hz"`. */
+type SourceTone = string
 type CoverToneParams = AudioGenParams & { sourceTone: SourceTone }
 type EditToneParams = Omit<AudioEditClientParams, 'modelId' | 'sourceAudio'> & {
   sourceTone: SourceTone
@@ -97,7 +98,7 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
         audioEdit({
           modelId,
           ...edit,
-          sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+          sourceAudio: synthesizeStereoTone(sourceTone)
         }),
       'edited',
       expectation
@@ -119,7 +120,7 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
       const run = audioUnderstand({
         modelId,
         ...understandParams,
-        sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+        sourceAudio: synthesizeStereoTone(sourceTone)
       })
       const progressPromise = collectStageTimings(run.progressStream)
       const [description, stats, progressReport] = await Promise.all([
@@ -239,7 +240,7 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
     return this.runGeneration(
       {
         ...generation,
-        sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+        sourceAudio: synthesizeStereoTone(sourceTone)
       },
       expectation
     )
@@ -265,7 +266,7 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
         audioEdit({
           modelId: VALIDATION_MUST_PRECEDE_RPC_MODEL_ID,
           ...edit,
-          sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+          sourceAudio: synthesizeStereoTone(sourceTone)
         }),
       expectation
     )
@@ -301,7 +302,10 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
  * Raw interleaved stereo 48 kHz Float32 LE PCM: the in-memory form
  * `audioGen()` / `audioEdit()` accept for `referenceAudio` / `sourceAudio`.
  */
-function synthesizeStereoTone(seconds: number, frequency: number) {
+function synthesizeStereoTone(spec: string) {
+  const match = /^(\d+(?:\.\d+)?)s-(\d+(?:\.\d+)?)hz$/.exec(spec)
+  if (!match) throw new Error(`tone "${spec}" is not "<seconds>s-<frequency>hz"`)
+  const [seconds, frequency] = [Number(match[1]), Number(match[2])]
   const frames = Math.round(AUDIOGEN_INPUT_SAMPLE_RATE * seconds)
   const pcm = new Float32Array(frames * AUDIOGEN_INPUT_CHANNELS)
   for (let frame = 0; frame < frames; frame++) {

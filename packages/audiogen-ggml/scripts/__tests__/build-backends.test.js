@@ -8,8 +8,10 @@ const test = require('node:test')
 const packageRoot = path.resolve(__dirname, '..', '..')
 const cmakeSource = fs.readFileSync(path.join(packageRoot, 'CMakeLists.txt'), 'utf8')
 const vcpkgManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'vcpkg.json'), 'utf8'))
+const projectJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'project.json'), 'utf8'))
 
 const CUDA_OPTION = 'ENABLE_CUDA'
+const PUBLISHED_CUDA_HOST = 'linux-x64'
 const CUDA_FEATURE = 'cuda'
 const GGML_PORT = 'ggml-speech'
 const SPEECH_PORT = 'speech-cpp'
@@ -19,8 +21,23 @@ function namedDependencies(dependencies, name) {
   return dependencies.filter((dependency) => dependency.name === name)
 }
 
+function publishBuildCi() {
+  return projectJson.targets.build.options.ci
+}
+
+function platformDefines(host) {
+  const entry = (publishBuildCi().platformCmakeDefines ?? '')
+    .split('\n')
+    .find((line) => line.trim().startsWith(`${host}:`))
+  return entry === undefined ? '' : entry.slice(entry.indexOf(':') + 1).trim()
+}
+
 function cudaSpeechDependency() {
   return namedDependencies(vcpkgManifest.features[CUDA_FEATURE].dependencies, SPEECH_PORT)[0]
+}
+
+function overridesOf(port) {
+  return namedDependencies(vcpkgManifest.overrides ?? [], port)
 }
 
 test('the CUDA build remains opt-in', () => {
@@ -42,16 +59,19 @@ test('the CUDA feature targets supported desktop platforms', () => {
   assert.equal(dependency.platform, DESKTOP_PLATFORM)
 })
 
-test('the hybrid backend dependency floors stay in lockstep', () => {
+test('the hybrid backend dependencies take the versions the overrides pin', () => {
   const ggmlDependency = namedDependencies(vcpkgManifest.dependencies, GGML_PORT)[0]
-  const speechDependencies = namedDependencies(vcpkgManifest.dependencies, SPEECH_PORT)
-  const speechFloor = speechDependencies[0]['version>=']
+  const pinnedDependencies = [
+    ggmlDependency,
+    ...namedDependencies(vcpkgManifest.dependencies, SPEECH_PORT),
+    cudaSpeechDependency()
+  ]
 
   assert.equal(ggmlDependency['default-features'], false)
-  assert.ok(speechFloor)
-  assert.equal(cudaSpeechDependency()['version>='], speechFloor)
+  assert.equal(overridesOf(GGML_PORT).length, 1)
+  assert.equal(overridesOf(SPEECH_PORT).length, 1)
   assert.equal(
-    speechDependencies.every((dependency) => dependency['version>='] === speechFloor),
+    pinnedDependencies.every((dependency) => dependency['version>='] === undefined),
     true
   )
 })
@@ -60,4 +80,9 @@ test('the Windows CUDA build stages runtime-loaded backend modules', () => {
   assert.match(cmakeSource, /\(WIN32 AND ENABLE_CUDA\)/)
   assert.match(cmakeSource, /qvac-speech-ggml-\*\.dll/)
   assert.equal(/CUDA::/.test(cmakeSource), false)
+})
+
+test('the published linux-x64 prebuild builds the CUDA backend', () => {
+  assert.equal(publishBuildCi().includeCuda, true)
+  assert.match(platformDefines(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_OPTION}=ON`))
 })

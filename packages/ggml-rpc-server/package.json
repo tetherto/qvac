@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ggml-rpc-server",
-  "version": "0.1.1",
+  "version": "0.5.0",
   "description": "Managed ggml RPC server for QVAC LLM inference",
   "addon": true,
   "scripts": {
@@ -13,11 +13,15 @@
     "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
-    "lint-cpp": "clang-tidy -p build addon/binding.cpp",
+    "lint-cpp": "clang-tidy -p build addon/binding.cpp addon/rpc-server-core.cpp",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "test": "npm run build:ts && npm run test:node",
     "test:node": "node --test test/node/*.test.cjs",
     "test:unit": "npm run test:node",
+    "test:integration": "bare test/integration/rpc-server.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
+    "test:cpp:run": "node scripts/run-cpp-tests.js",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:dts": "npm run test:types"
   },
@@ -41,10 +45,11 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ggml-rpc-server#readme",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.19.0",
-    "@qvac/fabric-ios": "0.19.0",
+    "@qvac/fabric-android-arm64": "0.22.0",
+    "@qvac/fabric-ios": "0.22.0",
     "@types/node": "^24.2.1",
-    "cmake-bare": "^1.7.5",
+    "brittle": "^3.17.0",
+    "cmake-bare": "^1.9.0",
     "cmake-npm": "^1.1.0",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
@@ -57,9 +62,28 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.19.0",
+    "@qvac/fabric": "^0.22.0",
     "bare-net": "^2.3.2",
     "bare-path": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@qvac/fabric-linux-x64": "^0.22.0",
+    "@qvac/fabric-linux-arm64": "^0.22.0",
+    "@qvac/fabric-darwin-arm64": "^0.22.0",
+    "@qvac/fabric-darwin-x64": "^0.22.0",
+    "@qvac/fabric-win32-x64": "^0.22.0"
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.22.0",
+    "@qvac/fabric-ios": "^0.22.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
   },
   "engines": {
     "bare": ">=1.24.0"

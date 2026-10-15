@@ -43,7 +43,7 @@ const ALLOWED = [
   ...[
     ['.github/workflows/test-android-sdk.yml', 2],
     ['.github/workflows/test-ios-sdk.yml', 2],
-    ['.github/workflows/test-node-sdk.yml', 1],
+    ['.github/actions/sdk-e2e-node-prepare/action.yml', 1],
   ].map(([file, count]) => ({
     file,
     match: 'npm install --install-links',
@@ -75,7 +75,7 @@ const ALLOWED = [
     match: '"$PM" install',
     count: 1,
     reason:
-      'Reached only when $PM is bun (inference, ai-sdk-provider); the npm branch above passes the flag explicitly. Kept detectable so a revert to the $PM indirection for npm is caught.',
+      'Reached only when a package entry sets pkg_manager to something other than npm; no entry does today. The npm branch above passes the flag explicitly. Kept detectable so a revert to the $PM indirection for npm is caught.',
   },
   {
     file: 'packages/sdk/e2e/package.json',
@@ -112,11 +112,11 @@ const PENDING = [
   // non-draft PR gets; the cpp-tests and integration legs need the
   // run-cpp-addon-tests and run-desktop-addon-tests labels.
   ...[
-    ['.github/workflows/cpp-lint.yaml', 1],
+    ['.github/workflows/cpp-lint.yaml', 2],
     ['.github/workflows/cpp-test-coverage-asr-ggml.yml', 1],
     ['.github/workflows/cpp-test-coverage-bci-whispercpp.yml', 1],
     ['.github/workflows/cpp-test-coverage-tts-ggml.yml', 1],
-    ['.github/workflows/cpp-tests-llm.yml', 1],
+    ['.github/workflows/cpp-tests-llm.yml', 2],
     ['.github/workflows/cpp-tests-model-fit.yml', 1],
     ['.github/workflows/cpp-tests-nx.yml', 2],
     ['.github/workflows/cpp-tests-vla.yml', 1],
@@ -126,7 +126,7 @@ const PENDING = [
     ['.github/workflows/integration-test-llm-llamacpp.yml', 1],
     ['.github/workflows/integration-test-vla.yml', 1],
     ['.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml', 1],
-    ['.github/workflows/reusable-prebuilds.yml', 1],
+    ['.github/workflows/reusable-prebuilds.yml', 2],
     ['.github/actions/cpp-lint/action.yaml', 1],
   ].map(([file, count]) => ({
     file,
@@ -141,7 +141,6 @@ const PENDING = [
     ['.github/workflows/on-merge-model-cache-audiogen.yml', 1],
     ['.github/workflows/pr-models-validation-registry-server.yml', 7],
     ['.github/workflows/publish-registry-server.yml', 1],
-    ['.github/workflows/test-sdk.yml', 1],
     ['.github/workflows/trigger-reusable-lib.yml', 1],
     ['.github/actions/run-lint-and-integration-tests/action.yaml', 1],
     ['.github/actions/run-lint-and-unit-tests/action.yaml', 1],

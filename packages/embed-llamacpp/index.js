@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GGMLBert = exports.assessFit = exports.BertInterface = void 0;
-exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+exports.GGMLBert = exports.assessFit = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.pickPrimaryGgufPath = exports.BertInterface = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
@@ -10,23 +9,20 @@ const fit_1 = require("./fit");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const addon_1 = require("./addon");
+const laya_1 = require("./laya");
 var addon_2 = require("./addon");
 Object.defineProperty(exports, "BertInterface", { enumerable: true, get: function () { return addon_2.BertInterface; } });
+Object.defineProperty(exports, "pickPrimaryGgufPath", { enumerable: true, get: function () { return addon_2.pickPrimaryGgufPath; } });
+var laya_2 = require("./laya");
+Object.defineProperty(exports, "LayaDecisions", { enumerable: true, get: function () { return laya_2.LayaDecisions; } });
+Object.defineProperty(exports, "LayaInterface", { enumerable: true, get: function () { return laya_2.LayaInterface; } });
+Object.defineProperty(exports, "mapLayaEvent", { enumerable: true, get: function () { return laya_2.mapLayaEvent; } });
 var fit_2 = require("./fit");
 Object.defineProperty(exports, "assessFit", { enumerable: true, get: function () { return fit_2.assessFit; } });
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
 function loadIdMapIndex() {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
     return require("./idMapIndex");
-}
-/**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
- */
-function pickPrimaryGgufPath(files) {
-    const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
-    return files.find((p) => SHARD_REGEX.test(p)) || files[0];
 }
 /** BERT client wrapping the native BertInterface for embedding generation. */
 class GGMLBert {
@@ -72,7 +68,7 @@ class GGMLBert {
     }
     async _load() {
         this.logger.info("Starting model load");
-        const primaryGgufPath = pickPrimaryGgufPath(this._files);
+        const primaryGgufPath = (0, addon_1.pickPrimaryGgufPath)(this._files);
         const configurationParams = {
             path: primaryGgufPath,
             config: this._config,
@@ -214,9 +210,12 @@ exports.GGMLBert = GGMLBert;
 exports.default = GGMLBert;
 const cjsExports = GGMLBert;
 cjsExports.default = GGMLBert;
-cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+cjsExports.pickPrimaryGgufPath = addon_1.pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = addon_1.BertInterface;
+cjsExports.LayaDecisions = laya_1.LayaDecisions;
+cjsExports.LayaInterface = laya_1.LayaInterface;
+cjsExports.mapLayaEvent = laya_1.mapLayaEvent;
 cjsExports.assessFit = fit_1.assessFit;
 Object.defineProperties(cjsExports, {
     IdMapIndex: {

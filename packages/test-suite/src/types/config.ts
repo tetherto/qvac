@@ -154,6 +154,49 @@ const mobileConsumerSchema = baseConsumerSchema.extend({
 })
 
 /**
+ * Deliberately NOT built on `baseConsumerSchema`: the framework neither bundles nor packages an
+ * external client, so `entry`, `include` and `dependencies` have no answer for it and would be
+ * silently ignored.
+ */
+const externalConsumerSchema = z.object({
+  name: z.string().describe('Identifier used by run:consumer:external --name'),
+
+  platform: z
+    .string()
+    .describe('Platform label this client registers with (e.g., "desktop-python")'),
+
+  mode: z
+    .enum(['bridge', 'mqtt'])
+    .optional()
+    .default('bridge')
+    .describe(
+      'bridge: the framework drives the client over stdin/stdout and owns MQTT. ' +
+        'mqtt: not implemented — a config that sets it is rejected at startup'
+    ),
+
+  interpreter: z.string().describe('Executable that runs the client (e.g., ".venv/bin/python")'),
+
+  args: z
+    .array(z.string())
+    .optional()
+    .default([])
+    .describe('Arguments passed to the interpreter (e.g., ["-m", "qvac_e2e.runner"])'),
+
+  cwd: z
+    .string()
+    .optional()
+    .default('.')
+    .describe('Working directory for the client process, relative to the config directory'),
+
+  env: z
+    .record(z.string())
+    .optional()
+    .describe('Extra environment variables for the client process')
+})
+
+export type ExternalConsumerConfig = z.infer<typeof externalConsumerSchema>
+
+/**
  * MQTT broker configuration schema (separate host/port)
  */
 const mqttBrokerSchema = z.object({
@@ -278,6 +321,14 @@ export const qvacTestConfigSchema = z.object({
         .optional()
         .describe('Snap consumer configuration for strict-confined Linux packages'),
 
+      external: z
+        .array(externalConsumerSchema)
+        .optional()
+        .describe(
+          'Non-JS clients that interpret the shared catalog (e.g., the Python runner). ' +
+            'Each entry is one CI leg of its own; runs stay single-consumer'
+        ),
+
       shared: z
         .object({
           include: z
@@ -289,9 +340,13 @@ export const qvacTestConfigSchema = z.object({
         .optional()
         .describe('Shared code configuration included in both desktop and mobile consumer builds')
     })
-    .refine((data) => data.desktop || data.mobile || data.electron || data.snap, {
-      message: 'At least one consumer type (desktop, mobile, electron, or snap) must be configured'
-    })
+    .refine(
+      (data) => data.desktop || data.mobile || data.electron || data.snap || data.external?.length,
+      {
+        message:
+          'At least one consumer (desktop, mobile, electron, snap, or external) must be configured'
+      }
+    )
     .describe('Consumer configuration per platform type'),
 
   comparison: z

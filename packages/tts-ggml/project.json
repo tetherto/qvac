@@ -23,7 +23,9 @@
           "artifactNamePrefix": "tts-ggml-",
           "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev",
           "includeVulkanSdk": true,
-          "setupPythonOnWindows": true
+          "setupPythonOnWindows": true,
+          "includeCuda": true,
+          "platformCmakeDefines": "linux-x64: -D ENABLE_CUDA=ON"
         }
       },
       "inputs": [
@@ -1005,8 +1007,9 @@
         "ci": {
           "mode": "coverage",
           "continueOnError": true,
+          "cppBuildJobs": 2,
           "platforms": [
-            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" }
           ],
           "hasCcache": true,
           "needsTtsVenvModels": true,

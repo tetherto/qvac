@@ -1,9 +1,9 @@
 # @qvac/openclaw-plugin
 
-Run [OpenClaw](https://openclaw.ai) against a **local, on-device** QVAC model
-using OpenClaw's native `localService` lifecycle support. The plugin registers a
-`qvac` provider, exposes the shared QVAC model catalog, and asks OpenClaw to
-start `qvac serve --openai --no-default` when the provider is used.
+Run [OpenClaw](https://openclaw.ai) against a **local, on-device** QVAC model.
+The plugin registers a `qvac` provider, exposes the shared QVAC model catalog,
+and starts `qvac serve --openai --no-default` itself when the provider is used.
+Requires `@qvac/cli` 0.16.0 or newer.
 
 ## Install
 
@@ -52,10 +52,6 @@ openclaw --version
 qvac --version
 ```
 
-If another process is already using port `11434`, stop it before running the
-smoke test. The OpenClaw `localService` should own the `qvac serve` process for
-this test.
-
 ### 2. Build, pack, and install the plugin
 
 From the repository root:
@@ -83,14 +79,13 @@ plugins and explicitly trusts the local `qvac` plugin.
 ### 3. Let the plugin configure OpenClaw's provider entry
 
 Run OpenClaw's provider setup path. The plugin writes `models.providers.qvac`
-for you with its bundled `local-service.js` launcher, which runs the `@qvac/cli`
-installed alongside the plugin. You do not need to supply a binary path, create
+for you and runs the `@qvac/cli` installed alongside it. You do not need to supply a binary path, create
 `qvac.config.json`, or paste a `models.providers.qvac` JSON block by hand. Set
 `qvacCommand` only to point at a different `qvac` (see below).
 
 ```bash
 openclaw config set plugins.entries.qvac.config \
-  '{"model":"qwen3.5-9b","port":11434}' \
+  '{"model":"qwen3.5-9b"}' \
   --strict-json
 
 openclaw onboard \
@@ -142,33 +137,32 @@ openclaw agent --local \
 
 Expected result:
 
-- OpenClaw logs `starting qvac local service`.
-- OpenClaw logs `qvac local service ready`.
 - The JSON response contains `finalAssistantVisibleText: "pong"`.
 - The execution trace uses `provider: "qvac"` and `model: "qwen3.5-9b"`.
 - `fallbackUsed` is `false`.
 
 The managed `qvac serve` requires bearer authentication. After the onboarding
-step above, OpenClaw resolves the same private key file for client requests and
-readiness probes.
+step above, the plugin reads the same private key file for every request.
 
 ## Configure
 
-The plugin defaults to `qwen3.5-9b` on `127.0.0.1:11434`. It generates the
-temporary QVAC serve config internally when OpenClaw starts its `localService`.
-On first setup it generates a random 32-byte base64url bearer key and stores it
-at `~/.openclaw/plugins/qvac/api-key` (or under `OPENCLAW_STATE_DIR`). The key is
-reused across restarts. Its directory is kept at mode `0700` and the file at
-mode `0600`.
+The plugin defaults to `qwen3.5-9b`. On first use it writes a temporary QVAC
+serve config and starts `qvac serve` on `127.0.0.1` with `--port 0 --ready-fd 3`:
+the serve binds a free port and reports it on a pipe only the plugin can read.
+The key is sent only to that port. OpenClaw's configured base URL for the
+provider is `http://qvac.invalid/v1`, which cannot resolve, so a request that
+does not go through the plugin fails instead of reaching another listener. The
+serve stops when OpenClaw exits.
 
-OpenClaw's provider config uses a file SecretRef, and the local-service arguments
-contain only the key-file path. The launcher validates that file and points
-`qvac serve --openai --api-key-file` at it. A missing, invalid, or unsafe key prevents the
-server from starting. The generated QVAC serve config does not contain the key.
-The SecretRef provider id is namespaced as `qvac_key_file` so setup does not
-replace an unrelated `secrets.providers.qvac` entry.
+On first setup the plugin generates a random 32-byte base64url bearer key and
+stores it at `~/.openclaw/plugins/qvac/api-key` (or under `OPENCLAW_STATE_DIR`).
+The key is reused across restarts. Its directory is kept at mode `0700` and the
+file at mode `0600`. OpenClaw's provider config refers to it through a file
+SecretRef, namespaced as `qvac_key_file` so setup does not replace an unrelated
+`secrets.providers.qvac` entry. The generated QVAC serve config does not contain
+the key.
 
-Plugin config can override the local service launcher:
+Plugin config can override how the serve is started:
 
 ```json5
 {
@@ -179,7 +173,6 @@ Plugin config can override the local service launcher:
         config: {
           model: 'qwen3.5-9b',
           qvacCommand: '/absolute/path/to/qvac',
-          port: 11434,
           ctxSize: 32768,
           tools: true
         }
@@ -206,20 +199,14 @@ generated provider configuration pointing at the private key file. `apiKey`
 changes take effect only after re-running
 `openclaw onboard --auth-choice provider-plugin:qvac`.
 
-Other clients connecting to the managed server must send the same bearer key:
+Setting `port` pins the serve to that port instead. If another process already
+holds it, the serve fails to start and no key is sent.
 
-```bash
-QVAC_API_KEY="$(tr -d '\r\n' < "${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/plugins/qvac/api-key")"
-curl -H "Authorization: Bearer $QVAC_API_KEY" http://127.0.0.1:11434/v1/models
-unset QVAC_API_KEY
-```
-
-Neither the launcher nor the `qvac serve` grandchild is handed the key in its
-process arguments: the serve is started with `--api-key-file`, pointing at the
+The `qvac serve` child is not handed the key in its process arguments: the serve is started with `--api-key-file`, pointing at the
 same owner-only file, so the key cannot be recovered from `ps` or
 `/proc/<pid>/cmdline`.
 
-Whether that is possible depends on the CLI version, so the launcher runs the
+Whether that is possible depends on the CLI version, so the plugin runs the
 `@qvac/cli` installed with the plugin — the same install it reads the version
 from — through the current Node executable. A `qvacCommand` set to an explicit
 path is spawned verbatim instead, and its version cannot be determined; that
@@ -228,22 +215,29 @@ case, and a resolved `@qvac/cli` older than 0.11.0, fall back to `--api-key
 
 The key file is re-checked on every launch, not just at onboarding: a path that
 is no longer a regular file, or that has become readable beyond its owner, stops
-the launcher rather than being used.
+the launch rather than being used.
 
 ## Upgrading
 
-### OpenClaw 2026.9.6
+### Plugin-owned serve
 
-OpenClaw runs plugin code from a temporary copy and, from 2026.9.6, deletes that
-copy when the process exits. Earlier plugin releases wrote the copy's launcher
-path into `localService.args`, so the next agent run fails with
-`qvac local service exited before readiness` and `Cannot find module`. The
-plugin now writes its install path instead. After upgrading the plugin,
-re-onboard once so `openclaw.json` picks up the new path:
+Earlier plugin releases asked OpenClaw's `localService` to start `qvac serve` on
+port `11434`. OpenClaw probes that port with the bearer key before it starts
+anything, so another local process holding the port received the key and the
+prompts. The plugin now starts the serve itself and only talks to the port the
+serve reports. Upgrade `@qvac/cli` to 0.16.0 or newer alongside the plugin.
+
+**Re-onboard once after upgrading:**
 
 ```bash
 openclaw onboard --auth-choice provider-plugin:qvac
 ```
+
+Until you do, the provider entry in `openclaw.json` still declares
+`localService`, and every QVAC request fails with
+`This QVAC provider entry was created by an older plugin version …`. Disabling
+or removing the plugin does not remove that entry, so re-onboard or delete
+`models.providers.qvac` rather than leaving it behind.
 
 ### OpenClaw 2026.8.1
 
@@ -261,27 +255,6 @@ onboarding rejects `qvac` and lists only OpenClaw's built-in choices. The plugin
 still registers `choiceId: "qvac"` — OpenClaw namespaces plugin-contributed
 choices now, so it is the invocation that moves, not the plugin.
 
-### Bearer authentication
-
-The managed `qvac serve` now requires bearer authentication, and the key reaches
-the launcher as a `--api-key-file` path in `localService.args`. That argument list
-is written into `openclaw.json` by onboarding, so an install configured **before**
-this change has a persisted arg list without it.
-
-**A plugin upgrade alone is not enough — re-onboard once:**
-
-```bash
-openclaw onboard --auth-choice provider-plugin:qvac
-```
-
-Until you do, every attempt to start the local QVAC service fails with
-`--api-key-file requires a value …` and names this same remedy. The launcher fails
-closed on purpose: it will not fall back to an unauthenticated serve, and it will
-not guess a key-file path that onboarding never wrote.
-
-Re-onboarding is idempotent for already-migrated installs: it reuses the existing
-key file, refreshes the provider entry, and leaves your model choice alone.
-
 ## Troubleshooting
 
 If the QVAC key file is missing, unreadable as a key, or its permissions have
@@ -292,8 +265,9 @@ its directory to mode `0700` and the file to mode `0600`. A key path that is not
 a regular file — a symlink or directory — is rejected instead of overwritten;
 remove it yourself and rerun onboarding.
 
-If the local service fails with `--api-key-file requires a value`, or exits
-with `Cannot find module` before readiness, see [Upgrading](#upgrading).
+If requests fail with `created by an older plugin version`, see
+[Upgrading](#upgrading). If they fail with `cannot report the port it bound`,
+upgrade `@qvac/cli` to 0.16.0 or newer.
 
 ## What It Registers
 
@@ -301,18 +275,17 @@ with `Cannot find module` before readiness, see [Upgrading](#upgrading).
 - API adapter: `openai-completions`
 - Bearer authentication: the configured provider `apiKey` is required by the
   managed `qvac serve --openai` process through a file SecretRef
-- Base URL: `http://127.0.0.1:11434/v1` by default
-- Local service command: `node <plugin>/dist/local-service.js`, which writes a
-  temporary QVAC serve config and starts `qvac serve --openai --no-default`
+- Base URL: `http://qvac.invalid/v1` in config; each run uses the port reported
+  by the plugin's own `qvac serve --openai --no-default`
 - Model catalog: the shared `@qvac/ai-sdk-provider` catalog ids, including
   `qwen3.5-0.8b`, `qwen3.5-2b`, `qwen3.5-4b`, `qwen3.5-9b`,
   `qwen3.6-27b`, `qwen3.6-35b-a3b`, `gpt-oss-20b`, and `gemma4-31b`
 
 ## Current Scope
 
-This first package is the native OpenClaw provider/catalog layer. It relies on
-OpenClaw's own `localService` process manager rather than reimplementing the
-managed-serve host used by `@qvac/opencode-plugin`.
+This package is the native OpenClaw provider/catalog layer. It starts and stops
+its own `qvac serve` from OpenClaw's `prepareRuntimeAuth` hook rather than
+reusing the managed-serve host from `@qvac/opencode-plugin`.
 
 The package also exports `createQvacServeModels()` for tools that want to create
 the same QVAC serve model block programmatically.

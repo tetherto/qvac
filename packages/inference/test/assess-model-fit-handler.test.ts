@@ -1,6 +1,6 @@
 import test from 'brittle'
 
-import { estimateTargetFor } from '@/handlers/assess-model-fit'
+import { estimateTargetFor, noStubDetail } from '@/handlers/assess-model-fit'
 import { ModelType } from '@/schemas/index'
 
 const CONSTANT = {
@@ -101,4 +101,195 @@ test('handler: an audio window is capped at what the engine holds whole', (t) =>
   })
 
   t.alike(target.workload, { kind: 'audio', windowMs: 30_000, streaming: false })
+})
+
+test('handler: an engine that names a device reports it verbatim', (t) => {
+  const gpu = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.llamacppCompletion,
+    modelConfig: { device: 'gpu' }
+  })
+  const cpu = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.llamacppEmbedding,
+    modelConfig: { device: 'CPU' }
+  })
+
+  t.is(gpu.device, 'gpu')
+  t.is(cpu.device, 'cpu', 'spelling is normalised, the value is not')
+})
+
+test('handler: a GPU switch resolves to a device, and defaults to the CPU', (t) => {
+  const on = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.audiogenGgml,
+    modelConfig: { useGPU: true }
+  })
+  const off = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.whispercppTranscription,
+    modelConfig: {}
+  })
+
+  t.is(on.device, 'gpu')
+  t.is(off.device, 'cpu')
+})
+
+test('handler: a switch is read where its own engine spells it', (t) => {
+  const parakeet = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.parakeetTranscription,
+    modelConfig: { useGPU: true }
+  })
+  const whisper = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.whispercppTranscription,
+    modelConfig: { contextParams: { use_gpu: true } }
+  })
+
+  t.is(parakeet.device, 'gpu')
+  t.is(whisper.device, 'gpu')
+})
+
+test('handler: bci holds the GPU unless its config turns it off', (t) => {
+  const silent = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.bciWhispercppTranscription,
+    modelConfig: {}
+  })
+  const off = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.bciWhispercppTranscription,
+    modelConfig: { contextParams: { use_gpu: false } }
+  })
+
+  t.is(silent.device, 'gpu')
+  t.is(off.device, 'cpu')
+})
+
+// MiniMax names a device instead of switching the GPU on; `auto` is what the
+// switch means, and the fitter projects it on the GPU.
+test('handler: a minimax device is read in place of the switch', (t) => {
+  const devices = { gpu: 'gpu', auto: 'gpu', cpu: 'cpu' }
+
+  for (const [device, expected] of Object.entries(devices)) {
+    const target = estimateTargetFor({
+      modelType: ModelType.audiogenGgml,
+      modelConfig: { engine: 'minimax', device }
+    })
+    t.is(target.device, expected, device)
+  }
+})
+
+test('handler: an ocr backend device other than the CPU is the GPU', (t) => {
+  const devices = { cpu: 'cpu', vulkan: 'gpu', metal: 'gpu', opencl: 'gpu' }
+
+  for (const [backendDevice, expected] of Object.entries(devices)) {
+    const target = estimateTargetFor({
+      modelSrc: CONSTANT,
+      modelType: ModelType.ggmlOcr,
+      modelConfig: { backendDevice }
+    })
+    t.is(target.device, expected, backendDevice)
+  }
+
+  const unset = estimateTargetFor({ modelSrc: CONSTANT, modelType: ModelType.ggmlOcr })
+  t.is(unset.device, 'cpu', 'the addon defaults to the CPU')
+})
+
+// `nGpuLayers` takes effect on its own and the config schema rejects it
+// disagreeing with `useGPU`, so it is read first.
+test('handler: tts reads its layer count ahead of its switch', (t) => {
+  const layers = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.ttsGgml,
+    modelConfig: { nGpuLayers: 99 }
+  })
+  const none = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.ttsGgml,
+    modelConfig: { nGpuLayers: 0 }
+  })
+
+  t.is(layers.device, 'gpu')
+  t.is(none.device, 'cpu')
+})
+
+test('handler: the engine is read off the source when the caller omits it', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: { ...CONSTANT, engine: 'llamacpp-completion' },
+    modelConfig: { ctx_size: 8192 }
+  })
+
+  t.alike(target.workload, { kind: 'llm', contextTokens: 8192 })
+  t.is(target.device, 'gpu', 'the inferred engine decides how the config is read')
+})
+
+test('handler: a source naming its addon resolves the engine too', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: { ...CONSTANT, addon: 'whisper' },
+    modelConfig: { duration_ms: 15_000 }
+  })
+
+  t.alike(target.workload, { kind: 'audio', windowMs: 15_000, streaming: false })
+})
+
+test('handler: an explicit engine wins over the source', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: { ...CONSTANT, engine: 'llamacpp-completion' },
+    modelType: ModelType.llamacppEmbedding,
+    modelConfig: {}
+  })
+
+  t.is(target.device, 'gpu')
+  t.alike(target.workload, { kind: 'llm' }, 'the embedding arm sizes no context')
+})
+
+test('handler: a source naming no engine is refused', (t) => {
+  t.exception(() => estimateTargetFor({ modelSrc: CONSTANT, modelConfig: {} }))
+})
+
+test('handler: an engine with no placement reports none', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.nmtcppTranslation,
+    modelConfig: {}
+  })
+
+  t.is(target.device, undefined)
+})
+
+test('handler: MOSS uses the whole recording and the load device', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.mossTranscribe,
+    modelConfig: { useGPU: true },
+    transcriptionWorkload: { audioSeconds: 90 }
+  })
+  t.alike(target.workload, { kind: 'audio', windowMs: 90_000, streaming: false })
+  t.is(target.device, 'gpu')
+})
+
+test('handler: MOSS omits the recording window when the workload is undeclared', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.mossTranscribe
+  })
+  t.alike(target.workload, { kind: 'audio', streaming: false })
+  t.absent('windowMs' in target.workload)
+})
+
+test('handler: a files-only engine names the download as what is missing', (t) => {
+  t.is(
+    noStubDetail('files-only-engine'),
+    'the engine measures downloaded files only, and this model is not downloaded'
+  )
+})
+
+test('handler: a missing description names its reason and detail', (t) => {
+  t.is(noStubDetail('timed-out'), 'no registry description (timed-out)')
+  t.is(
+    noStubDetail('no-fit-blob', 'models/model.gguf'),
+    'no registry description (no-fit-blob): models/model.gguf'
+  )
 })

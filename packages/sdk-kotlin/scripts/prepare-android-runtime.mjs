@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises'
 import fsSync from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } from '@qvac/sdk/commands'
 import link from 'bare-link'
+import { platformPackageForHost } from './platform-package.mjs'
 
 const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const sdkRoot = path.join(projectRoot, '..', 'sdk')
@@ -17,14 +19,6 @@ const generatedRoot = process.env.QVAC_KOTLIN_GENERATED_ROOT
   : path.join(projectRoot, 'android-barekit', 'build', 'generated', 'qvac', 'aio')
 const assetsDirectory = path.join(generatedRoot, 'assets', 'qvac')
 const addonsDirectory = path.join(generatedRoot, 'addons')
-const classificationWeightsSource = path.join(
-  projectRoot,
-  'node_modules',
-  '@qvac',
-  'classification-ggml',
-  'weights',
-  'mobilenetv3_3class_v3_fp16.gguf'
-)
 const classificationAssetsDirectory = path.join(assetsDirectory, 'classification')
 const qvacConfig = JSON.parse(await fs.readFile(configPath, 'utf8'))
 const profileName = process.env.QVAC_KOTLIN_PROFILE ?? path.basename(configPath, '.json')
@@ -37,6 +31,7 @@ const pluginCapabilities = new Map([
   ['@qvac/sdk/llamacpp-embedding/plugin', ['EMBEDDINGS']],
   ['@qvac/sdk/whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/parakeet-transcription/plugin', ['TRANSCRIPTION']],
+  ['@qvac/sdk/moss-transcribe/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/bci-whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/nmtcpp-translation/plugin', ['TRANSLATION']],
   ['@qvac/sdk/tts-ggml/plugin', ['TTS']],
@@ -55,21 +50,31 @@ await fs.mkdir(assetsDirectory, { recursive: true })
 await fs.mkdir(addonsDirectory, { recursive: true })
 if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recursive: true })
 
+// Bundle the checkout's packages/sdk. The worker build owns compiling it.
+const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
+const modulesRoot = bundleSdkPath ?? projectRoot
+const classificationWeightsSource = classificationWeightsPath(modulesRoot)
+
+// Split addons ship their native code in per-platform packages, installed at
+// each meta's version before bundling.
+await ensureHostPrebuilds('android-arm64', modulesRoot)
+
+// Resolve addons, prebuilds and the bundle from the tree the worker is built
+// from: the workspace SDK when present, else the installed @qvac/sdk. These
+// differ in the monorepo, where the worker comes from ../sdk but the Kotlin
+// runtime's own node_modules is a separate tree; for a standalone consumer they
+// are the same. ensureHostPrebuilds installs into this tree too.
 const bundle = await bundleSdk({
-  projectRoot,
+  projectRoot: modulesRoot,
   configPath,
+  ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
   hosts: ['android-arm64'],
   defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
   quiet: true
 })
 
-// Addon native prebuilds ship in per-platform packages that are not
-// dependencies of the meta, so install the ones this bundle's addons name for
-// android-arm64, at each meta's installed version.
-await ensureHostPrebuilds(bundle.manifestPath, 'android-arm64')
-
 const verification = await verifyBundle({
-  projectRoot,
+  projectRoot: modulesRoot,
   addonsSource: bundle.bundlePath,
   hosts: ['android-arm64'],
   configPath
@@ -105,47 +110,24 @@ if (includesClassification) {
 await Promise.all(runtimeAssets)
 
 const manifest = JSON.parse(await fs.readFile(bundle.manifestPath, 'utf8'))
-const sdkPackage = JSON.parse(
-  await fs.readFile(path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json'), 'utf8')
-)
+const sdkPackagePath = bundleSdkPath
+  ? path.join(bundleSdkPath, 'package.json')
+  : path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json')
+const sdkPackage = JSON.parse(await fs.readFile(sdkPackagePath, 'utf8'))
 const addons = Array.isArray(manifest.addons) ? manifest.addons : []
-const packageFilter =
-  addons.length === 0
-    ? { name: 'qvac-kotlin-no-addons', version: '0.0.0', dependencies: {} }
-    : {
-        name: 'qvac-kotlin-addon-linker',
-        version: '0.0.0',
-        dependencies: Object.fromEntries(addons.map((name) => [name, '*']))
-      }
 
+// bare-link 4 links the addons the worker entry's module graph loads on the
+// host, resolving each meta's per-platform split package (installed above by
+// ensureHostPrebuilds) in one pass. It rewrites existing DT_NEEDED entries
+// rather than adding one per installed addon, so the split @qvac/fabric layout
+// links a single libqvac__fabric-android-arm64.
 const linkedResources = new Set()
-for await (const resource of link(
-  projectRoot,
-  {
-    hosts: ['android-arm64'],
-    out: addonsDirectory
-  },
-  packageFilter
-)) {
+for await (const resource of link(bundle.entryPaths.worker, {
+  hosts: ['android-arm64'],
+  out: addonsDirectory
+})) {
   linkedResources.add(path.resolve(String(resource)))
   console.log(`Linked ${resource}`)
-}
-
-// bare-link from the project root reaches only the meta packages. Split addons
-// keep their binaries in a per-platform package, so link each installed one
-// from its own `addon` directory or its .so never reaches the AAR.
-for (const platformAddon of platformAddonRoots(addons, 'android-arm64')) {
-  for await (const resource of link(
-    platformAddon.dir,
-    {
-      hosts: ['android-arm64'],
-      out: addonsDirectory
-    },
-    platformAddon.pkg
-  )) {
-    linkedResources.add(path.resolve(String(resource)))
-    console.log(`Linked ${resource}`)
-  }
 }
 
 async function sha256(filePath) {
@@ -164,7 +146,8 @@ for (const resource of [...linkedResources].sort()) {
 // diffable: the addon hashes alone don't reveal an npm range that drifted.
 const resolvedDependencies = {}
 for (const name of ['@qvac/sdk', '@qvac/inference', ...addons].sort()) {
-  const version = await readInstalledVersion(name)
+  const version =
+    name === '@qvac/sdk' && sdkPackage.version ? sdkPackage.version : await readInstalledVersion(name)
   if (version !== null) resolvedDependencies[name] = version
   const platformPackage = platformPackageForInstalledMeta(name, 'android-arm64')
   if (platformPackage !== null) {
@@ -200,50 +183,33 @@ await fs.writeFile(
 
 console.log(`Prepared QVAC Android runtime with ${addons.length} addon(s)`)
 
-async function pathExists(target) {
-  try {
-    await fs.access(target)
-    return true
-  } catch {
-    return false
+function ensureWorkspaceSdk(sdkDir) {
+  if (!fsSync.existsSync(path.join(sdkDir, 'package.json'))) return undefined
+  const worker = path.join(sdkDir, 'dist', 'src', 'worker', 'index.js')
+  if (!fsSync.existsSync(worker)) {
+    execFileSync('python3', [path.join(sdkDir, '..', 'sdk-python', 'scripts', 'build_worker.py')], {
+      stdio: 'inherit'
+    })
   }
+  return sdkDir
 }
 
-/**
- * The installed platform-package `addon` directories for the given metas, ready
- * for a bare-link pass. Mirrors `resolvePlatformAddonRoots` in the Expo linker.
- */
-function platformAddonRoots(addonNames, host) {
-  const roots = []
-  for (const name of addonNames) {
-    const metaPath = path.join(projectRoot, 'node_modules', ...name.split('/'), 'package.json')
-    let meta
-    try {
-      meta = JSON.parse(fsSync.readFileSync(metaPath, 'utf8'))
-    } catch {
-      continue
-    }
-    const platformPackage = platformPackageForHost(meta, host)
-    if (platformPackage === null) continue
-    const addonDir = path.join(projectRoot, 'node_modules', ...platformPackage.split('/'), 'addon')
-    let addonManifest
-    try {
-      addonManifest = JSON.parse(fsSync.readFileSync(path.join(addonDir, 'package.json'), 'utf8'))
-    } catch {
-      continue
-    }
-    if (addonManifest.addon !== true) continue
-    if (!fsSync.existsSync(path.join(addonDir, 'prebuilds'))) continue
-    roots.push({ dir: addonDir, pkg: addonManifest })
-  }
-  return roots
+function packageDir(modulesRoot, name) {
+  return path.join(modulesRoot, 'node_modules', ...name.split('/'))
 }
 
-async function readInstalledVersion(packageName) {
+function classificationWeightsPath(modulesRoot) {
+  const weights = path.join('weights', 'mobilenetv3_3class_v3_fp16.gguf')
+  const bundled = path.join(packageDir(modulesRoot, '@qvac/classification-ggml'), weights)
+  if (fsSync.existsSync(bundled)) return bundled
+  return path.join(packageDir(projectRoot, '@qvac/classification-ggml'), weights)
+}
+
+async function readInstalledVersion(packageName, root = projectRoot) {
   try {
     const meta = JSON.parse(
       await fs.readFile(
-        path.join(projectRoot, 'node_modules', ...packageName.split('/'), 'package.json'),
+        path.join(root, 'node_modules', ...packageName.split('/'), 'package.json'),
         'utf8'
       )
     )
@@ -268,48 +234,86 @@ function platformPackageForInstalledMeta(metaName, host) {
   }
 }
 
-/** The platform prebuild package an addon's `#host-addon` map names for a host. */
-function platformPackageForHost(meta, host) {
-  const dash = host.indexOf('-')
-  const platform = host.slice(0, dash)
-  const arch = host.slice(dash + 1)
-  const hostMap = meta.imports?.['#host-addon']?.[platform]
-  if (hostMap === undefined) return null
-  const entry = Array.isArray(hostMap) ? hostMap : hostMap[arch]
-  const candidate = Array.isArray(entry) ? entry[0] : entry
-  return typeof candidate === 'string' && candidate.startsWith('@') ? candidate : null
+/**
+ * Install the per-platform packages every split addon under `modulesRoot`
+ * names for `host` in its `#host-addon` map, at the meta's installed version.
+ * Consumers declare the mobile ones as optional peers, which npm does not
+ * install. Installed into `modulesRoot`, which bare-pack's lookup from any
+ * package under it reaches, and not recorded in package.json.
+ */
+async function ensureHostPrebuilds(host, modulesRoot) {
+  const specs = new Set()
+  for (const meta of await installedQvacPackages(modulesRoot)) {
+    const platformPackage = platformPackageForHost(meta, host)
+    if (platformPackage === null || typeof meta.version !== 'string') continue
+    if ((await readInstalledVersion(platformPackage, modulesRoot)) === meta.version) continue
+    specs.add(`${platformPackage}@${meta.version}`)
+  }
+  if (specs.size === 0) return
+  console.log(`Installing ${host} platform packages: ${[...specs].join(', ')}`)
+  await installPrebuilds(modulesRoot, [...specs])
 }
 
 /**
- * Install the per-platform prebuild packages the bundled addons need for `host`,
- * derived from each addon's own `#host-addon` map at the meta's installed
- * version. `--no-save` keeps package.json free of hand-maintained pins.
+ * The @qvac packages reachable from `modulesRoot`'s dependencies, found the way
+ * bare-pack resolves them: up the (unresolved) symlinked path, so a pnpm
+ * layout's transitive addons (fabric under its consumers) are included.
  */
-async function ensureHostPrebuilds(manifestPath, host) {
-  const manifestJson = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
-  const manifestAddons = Array.isArray(manifestJson.addons) ? manifestJson.addons : []
-  const specs = []
-  for (const addon of manifestAddons) {
-    const addonRoot = path.join(projectRoot, 'node_modules', addon)
-    // A local fat `prebuilds/<host>` already resolves; only a meta without one
-    // needs its per-platform package installed.
-    if (await pathExists(path.join(addonRoot, 'prebuilds', host))) continue
-    let meta
+async function installedQvacPackages(modulesRoot) {
+  const found = new Map()
+  const queue = [modulesRoot]
+  while (queue.length > 0) {
+    const dir = queue.shift()
+    let pkg
     try {
-      meta = JSON.parse(await fs.readFile(path.join(addonRoot, 'package.json'), 'utf8'))
+      pkg = JSON.parse(await fs.readFile(path.join(dir, 'package.json'), 'utf8'))
     } catch {
       continue
     }
-    const platformPackage = platformPackageForHost(meta, host)
-    if (platformPackage !== null && typeof meta.version === 'string') {
-      specs.push(`${platformPackage}@${meta.version}`)
+    const names = Object.keys({
+      ...pkg.dependencies,
+      ...pkg.optionalDependencies,
+      ...pkg.peerDependencies
+    }).filter((name) => name.startsWith('@qvac/'))
+    for (const name of names) {
+      const depDir = lookupPackageDir(dir, name)
+      if (depDir === null || found.has(depDir)) continue
+      try {
+        found.set(depDir, JSON.parse(await fs.readFile(path.join(depDir, 'package.json'), 'utf8')))
+      } catch {
+        continue
+      }
+      queue.push(depDir)
     }
   }
-  if (specs.length === 0) return
-  console.log(`Installing ${host} prebuild packages: ${specs.join(', ')}`)
-  execFileSync(
-    'npm',
-    ['install', '--no-save', '--no-package-lock', '--ignore-scripts', '--legacy-peer-deps', ...specs],
-    { cwd: projectRoot, stdio: 'inherit' }
-  )
+  return [...found.values()]
+}
+
+function lookupPackageDir(fromDir, name) {
+  for (let dir = fromDir; ; dir = path.dirname(dir)) {
+    const candidate = path.join(dir, 'node_modules', ...name.split('/'))
+    if (fsSync.existsSync(path.join(candidate, 'package.json'))) return candidate
+    if (path.dirname(dir) === dir) return null
+  }
+}
+
+async function installPrebuilds(modulesRoot, specs) {
+  const staging = await fs.mkdtemp(path.join(os.tmpdir(), 'qvac-android-prebuilds-'))
+  try {
+    await fs.writeFile(path.join(staging, 'package.json'), '{"private":true}\n')
+    execFileSync(
+      'npm',
+      ['install', '--ignore-scripts', '--no-package-lock', '--legacy-peer-deps', ...specs],
+      { cwd: staging, stdio: 'inherit' }
+    )
+    for (const spec of specs) {
+      const name = spec.slice(0, spec.lastIndexOf('@'))
+      await fs.cp(packageDir(staging, name), packageDir(modulesRoot, name), {
+        recursive: true,
+        force: true
+      })
+    }
+  } finally {
+    await fs.rm(staging, { recursive: true, force: true })
+  }
 }

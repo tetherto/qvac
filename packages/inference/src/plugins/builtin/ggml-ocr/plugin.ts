@@ -4,7 +4,7 @@ import {
   ocrStreamRequestSchema,
   ocrStreamResponseSchema,
   ModelType,
-  ocrConfigSchema,
+  ocrLoadConfigSchema,
   ADDON_OCR,
   type CreateModelParams,
   type PluginModelResult,
@@ -13,11 +13,14 @@ import {
   type ResolveResult
 } from '@/schemas/index'
 import { ModelLoadFailedError } from '@/errors/index'
-import { createStreamLogger, registerAddonLogger } from '@/logging/index'
-import { OcrGgml } from '@qvac/ocr-ggml'
+import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
+import { OcrGgml, assessFit as ocrAssessFit } from '@qvac/ocr-ggml'
 import { ocr } from '@/plugins/builtin/ggml-ocr/ops/ocr-stream'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { ocrParamsFor } from '@/plugins/builtin/ggml-ocr/params'
 import { resolveOcrConfig } from '@/plugins/builtin/ggml-ocr/resolve-config'
+import { isMobile } from '@/runtime/state'
+import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 
 function createOCRModel(
   modelId: string,
@@ -28,38 +31,15 @@ function createOCRModel(
   const logger = createStreamLogger(modelId, ModelType.ggmlOcr)
   registerAddonLogger(modelId, ModelType.ggmlOcr, logger)
 
-  const params = {
-    pathDetector: detectorPath,
-    pathRecognizer: recognizerPath,
-    ...(ocrConfig.langList !== undefined
-      ? { langList: ocrConfig.langList }
-      : ocrConfig.pipelineType !== 'doctr' && { langList: ['en'] }),
-    ...(ocrConfig.pipelineType !== undefined && {
-      pipelineType: ocrConfig.pipelineType
-    }),
-    ...(ocrConfig.magRatio !== undefined && { magRatio: ocrConfig.magRatio }),
-    ...(ocrConfig.canvasSize !== undefined && {
-      canvasSize: ocrConfig.canvasSize
-    }),
-    ...(ocrConfig.defaultRotationAngles !== undefined && {
-      defaultRotationAngles: ocrConfig.defaultRotationAngles
-    }),
-    ...(ocrConfig.contrastRetry !== undefined && {
-      contrastRetry: ocrConfig.contrastRetry
-    }),
-    ...(ocrConfig.lowConfidenceThreshold !== undefined && {
-      lowConfidenceThreshold: ocrConfig.lowConfidenceThreshold
-    }),
-    ...(ocrConfig.recognizerBatchSize !== undefined && {
-      recognizerBatchSize: ocrConfig.recognizerBatchSize
-    }),
-    ...(ocrConfig.nThreads !== undefined && { nThreads: ocrConfig.nThreads }),
-    ...(ocrConfig.backendDevice !== undefined && {
-      backendDevice: ocrConfig.backendDevice
-    }),
-    ...(ocrConfig.gpuDevice !== undefined && {
-      gpuDevice: ocrConfig.gpuDevice
-    })
+  const params = ocrParamsFor(detectorPath, recognizerPath, ocrConfig)
+
+  if (isMobile()) {
+    const stripped = stripMultiGpuKeys(params)
+    if (stripped.length > 0) {
+      getEngineLogger().warn(
+        `[${ModelType.ggmlOcr}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
+      )
+    }
   }
 
   const args = {
@@ -77,7 +57,8 @@ export const ocrPlugin = definePlugin({
   modelType: ModelType.ggmlOcr,
   displayName: 'OCR (GGML)',
   addonPackage: ADDON_OCR,
-  loadConfigSchema: ocrConfigSchema,
+  loadConfigSchema: ocrLoadConfigSchema,
+  assessFit: ocrAssessFit,
 
   async resolveConfig(
     cfg: OCRConfig,

@@ -8,6 +8,15 @@ on desktop CPUs and GPUs and returns stereo 44.1 kHz audio.
 
 ## How it works
 
+The C++ CI carve-out builds the native addon on the Ubuntu 22.04 CPU runner,
+reusing vcpkg and compiler caches with two build workers. Addon-level C++ tests
+remain a stub. Only trusted default-branch builds save shared caches; pushes
+affecting AudioGen or its cache configuration, a schedule every 2 days, and
+manual dispatches warm them.
+Non-PR runs build the triggering commit and reject inputs selecting another
+repository or revision. PR events retain caller-selected PR-head checkouts.
+See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet).
+
 Under the hood the model runs a small pipeline, and the addon just drives it and
 hands you the audio:
 
@@ -57,11 +66,12 @@ platform package selected at install time through `os`/`cpu` filtered
 
 Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
-the platform package and fail at require time with an error naming the missing
-package; a locally built `prebuilds/` directory in the package root always
-takes precedence. Use `require('@qvac/audiogen-ggml').resolveBackendsDir()`
-to locate the directory holding the host's prebuilt binaries and dynamically
-loaded ggml backends.
+the platform package and fail at require time, and at `bare-pack` time, naming
+the missing package. Each platform package is an ordinary Bare addon whose
+`prebuilds/<host>/` holds the native module and, next to it, the dynamically
+loaded ggml backends the module finds on its own. A source build becomes
+loadable once `npm run link:platform` (run by `npm run build:native`) stages it
+as the host's platform package in `node_modules/`.
 
 Mobile targets are cross-built, so no install host ever matches their `os`,
 and `optionalDependencies` filtering can never select them. Mobile
@@ -613,7 +623,7 @@ runnable end-to-end script (`npm run example`).
 | `cfgScale` | Default MiniMax flow guidance scale; `0` uses the model default. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |
-| `backendsDir` | Advanced; override the prebuilds root scanned for dlopen'd ggml backend modules. Defaults to `resolveBackendsDir()`: the package's own `prebuilds/` when present, otherwise the installed platform package. Needed on arm64, where the CPU backend is a set of per-microarch module `.so`s. |
+| `backendsDir` | Advanced; directory scanned, as given, for dlopen'd ggml backend modules. Unset scans the addon's own, next to its native module, which is where the platform package and `bare-link` put them. |
 
 `logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
 wrapped by a level-gated `QvacLogger`.
@@ -699,10 +709,12 @@ answers the same as the file itself and the projection can run before anything
 is downloaded. It is a module export, not an instance method — nothing is
 loaded to call it.
 
+`assessFit` returns a Promise. Fits run one at a time within the addon.
+
 ```js
 const { assessFit } = require('@qvac/audiogen-ggml')
 
-const fit = assessFit({
+const fit = await assessFit({
   modelsDir: '/models/ace-step',
   durationSeconds: 30,
   textTokens: 256,
@@ -740,8 +752,37 @@ and `vaePath` name them individually and win over it.
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host
 bytes compete with device bytes.
 
+### MiniMax-Music3
+
+`engine: 'minimax'` projects a MiniMax-Music3 pair on desktop builds, with the
+same result shape. `modelsDir` holds the pair; `lmPath` and `synthPath` name the
+two GGUFs and win over it. The weights and the synthesis graphs stay resident
+between runs and the LM's cache is rebuilt by each run, so `deviceBytes` is the
+peak of repeated generations, and the `stages` rows are `lm`, `depth`, `cond`,
+`dit` and `vocoder`.
+
+```js
+const fit = await assessFit({
+  engine: 'minimax',
+  modelsDir: '/models/minimax-music3',
+  device: 'gpu',
+  durationSeconds: 120,
+  promptTokens: 900
+})
+```
+
+| Option | Description |
+| --- | --- |
+| `device` | `'cpu'`, `'gpu'` or `'auto'`, as `config.device` takes it. Without it, `gpuLayers` greater than 0 projects `'auto'` and anything else `'cpu'`. |
+| `durationSeconds`, `maxFrames` | The generation length, as `run()` takes it (25 frames per second); one or the other. Defaults to 300 frames. |
+| `promptTokens` | Tokenized prompt length: caption, lyrics and template. Defaults to 1024. A prompt above the checkpoint's limit, or one that leaves too little context for the frames, is `workload-too-large`. |
+| `threads`, `backendsDir`, `marginBytes` | As for ACE-Step. |
+
+On Android and iOS, where MiniMax-Music3 is unavailable, `engine: 'minimax'`
+comes back as `status: "error"` with `reason: "unsupported-engine"`.
+
 A model the engine cannot read is `status: "error"`; a broken request, or a
-host with no native binding, throws.
+host with no native binding, rejects.
 
 ## Lifecycle
 
@@ -786,6 +827,13 @@ dispatches to the corresponding `audiogen-cpp` engine.
 - `addon/src/model-interface/minimax/` — desktop-only `MinimaxModel`.
 - Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on the
   `speech-cpp[audiogen]` port.
+- `ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
+  versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
+  `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
+  `ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their
+  ggml backends under the same file names, so an app that bundles several of
+  them keeps one copy of each: use releases that record the same
+  `ggml-speech`.
 
 ## Benchmarking
 

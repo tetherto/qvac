@@ -60,6 +60,11 @@ interface TranslationNmtcpp {
 interface TranslationNmtcppConstructor {
     new (args: TranslationNmtcppArgs): TranslationNmtcpp;
     /**
+     * Assess a model before loading it, using current device memory. Concurrent
+     * calls run one at a time. A malformed request rejects.
+     */
+    assessFit(request: TranslationNmtcpp.FitRequest): Promise<TranslationNmtcpp.FitResult>;
+    /**
      * Available model types for translation
      */
     readonly ModelTypes: TranslationNmtcppModelTypes;
@@ -74,6 +79,22 @@ declare const TranslationNmtcpp: TranslationNmtcppConstructor;
  * `module.exports` remains the bare class.
  */
 declare namespace TranslationNmtcpp {
+    interface FitRequest {
+        files: TranslationNmtcppFiles;
+        config: TranslationNmtcppConfig;
+        /** Additional free memory to reserve, in bytes. */
+        marginBytes?: number;
+    }
+    interface FitResult {
+        status: "fits" | "does-not-fit" | "error";
+        reason: string;
+        /** CPU or selected GGML device name. */
+        backend: string;
+        modelBytes: number;
+        requiredBytes: number;
+        freeBytes: number;
+        report: string;
+    }
     interface TranslationNmtcppFiles {
         model: string;
         srcVocab?: string;
@@ -147,9 +168,8 @@ declare namespace TranslationNmtcpp {
         gpuDevice?: number;
         /**
          * Path to the directory containing backend shared libraries
-         * (libqvac-ggml-vulkan.so, etc.). Defaults to the root `@qvac/fabric/backends`
-         * resolves on desktop, falling back to this package's `prebuilds/` on mobile where
-         * the package tree isn't resolvable from the packed worklet.
+         * (libqvac-ggml-vulkan.so, etc.). Defaults to the ones @qvac/fabric ships,
+         * which it locates itself next to its runtime.
          */
         backendsDir?: string;
         /**

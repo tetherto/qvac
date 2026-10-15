@@ -15,12 +15,9 @@
 #include <llama/common/common.h>
 #include <llama/common/log.h>
 
-#include "AsyncWeightsLoader.hpp"
-#include "BackendSelection.hpp"
-#include "LlamaLazyInitializeBackend.hpp"
+#include "LlamaModelLoader.hpp"
 #include "ModelMetadata.hpp"
 #include "inference-addon-cpp/GGUFShards.hpp"
-#include "inference-addon-cpp/InitLoader.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "utils.hpp"
@@ -56,34 +53,9 @@ public:
   [[nodiscard]] std::size_t embeddingSize() const;
 };
 
-struct BertCommonInitResult {
-  common_params params;
-  common_init_result_ptr result;
-};
-
-/// @brief Bundle of parameters required to initialize a BertModel: the parsed
-/// llama.cpp common_params, plus addon-specific flags resolved during setup
-/// (whether the caller explicitly configured ctx_size, and which backend
-/// device was selected).
-struct BertModelSetup {
-  common_params params;
-  bool ctxSizeConfigured = false;
-  int64_t resolvedBackendDevice = 0;
-};
-
-/// Apply the final split-device handles and remap positional tensor shares.
-void applySplitDeviceSelection(
-    common_params& params, std::unordered_map<std::string, std::string>& config,
-    const backend_selection::SplitDeviceSelection& selection);
-
-/// Traits of the whole split set; requires a non-empty set.
-struct SplitBackendTraits {
-  std::string backendName;
-  bool isOpenCl = false;
-};
-
-SplitBackendTraits
-splitBackendTraits(const backend_selection::SplitDeviceSelection& selection);
+/// @brief Parameters required to initialize a BertModel, see
+/// @ref LlamaModelSetup.
+using BertModelSetup = LlamaModelSetup;
 
 /// @brief Instantiates a BERT language model. An open source architecture
 /// designed to help machines understand context in sentences and used for
@@ -103,23 +75,11 @@ class BertModel : public qvac_lib_inference_addon_cpp::model::IModel,
                   public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad,
                   public qvac_lib_inference_addon_cpp::model::IModelCancel {
 private:
-  BertCommonInitResult init_;
   llama_model* model_;
   llama_context* ctx_;
   const llama_vocab* vocab_;
   mutable struct llama_batch batch_;
-  bool is_loaded_;
-
-  const std::string loadingContext_;
-  GGUFShards shards_;
-  friend class InitLoader;
-  InitLoader initLoader_;
-  std::optional<LlamaBackendsHandle> backendsHandle_;
   mutable std::atomic<bool> stopCancelled_{false};
-  int64_t runtimeBackendDevice_ = 0;
-  bool ctxSizeConfigured_ = false;
-  ModelMetaData metadata_;
-  AsyncWeightsLoader asyncWeightsLoader_;
 
 public:
   // These using definitions are accessed by the Addon<BertModel> template.
@@ -150,15 +110,6 @@ public:
   /// @brief Construct with already parsed parameters bundled in a
   /// @ref BertModelSetup.
   explicit BertModel(BertModelSetup& setup);
-
-  /// @see BertModel::BertModel(BertModelSetup&)
-  void init(BertModelSetup& setup);
-
-  /// @see BertModel::BertModel(string, unordered_map)
-  void init(
-      const std::string& modelGgufPath,
-      const std::unordered_map<std::string, std::string>& config,
-      const std::string& backendsDir);
 
   /// @brief Deletes model implementation.
   ~BertModel() override;
@@ -236,7 +187,7 @@ public:
 
   /// @brief Ensure model is initialized
   void waitForLoadInitialization() final {
-    initLoader_.waitForLoadInitialization();
+    loader_.waitForLoadInitialization();
   }
 
 private:
@@ -248,6 +199,18 @@ private:
   BertEmbeddings processBatched(
       const std::vector<std::vector<int32_t>>& inputs,
       std::size_t nPrompts) const;
+
+  LlamaModelLoader::Hooks loadHooks();
+  /// Embedding context settings, applied before the model is created.
+  void configureParams(
+      common_params& params, const ModelMetaData& metadata,
+      bool ctxSizeConfigured);
+  /// Caches the model handles and rejects models that cannot embed.
+  void onLoaded(llama_model* model, llama_context* ctx);
+
+  // Last member: destroyed first, so the llama context goes before the members
+  // its hooks write.
+  LlamaModelLoader loader_;
 };
 // NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes,
 // readability-avoid-const-params-in-decls)

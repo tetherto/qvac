@@ -11,7 +11,7 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
   "inference-addon-cpp/JsInterface.hpp" REQUIRED)
 
 # ggml runtime is the shared @qvac/fabric prebuild (dynamically linked, loaded
-# once per process); sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE.
+# once per process); sets qvac_fabric_target.
 qvac_addon_use_fabric()
 
 add_bare_module(qvac-lib-infer-vla EXPORTS)
@@ -42,7 +42,7 @@ target_include_directories(
 
 qvac_addon_link_fabric(${qvac-lib-infer-vla} ${qvac_fabric_target})
 
-qvac_addon_finalize(${qvac-lib-infer-vla} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+qvac_addon_finalize(${qvac-lib-infer-vla})
 
 if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)

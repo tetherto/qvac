@@ -195,7 +195,7 @@ test(
       const prompt1 = [systemMsg, userTurn1]
       // This cache smoke test uses a short decode budget and only verifies
       // that Qwen3.5 can persist/extend KV state. Dedicated reasoning tests
-      // cover thinking/compaction with a larger budget that reaches </think>.
+      // cover reasoning reconciliation with a larger budget that reaches </think>.
       const noReasoning = {
         generationParams: { reasoning_budget: 0 }
       }
@@ -485,12 +485,7 @@ test(
               'Before answering, reason in detail for at least 20 sentences, then answer: What is the capital of France?'
           }
         ],
-        {
-          cacheKey: sessionName,
-          generationParams: {
-            remove_thinking_from_context: true
-          }
-        }
+        { cacheKey: sessionName }
       )
       const output = await collectResponse(response)
 
@@ -509,10 +504,11 @@ test(
         response.stats?.generatedTokens >= 64,
         `small-budget run should reach n_predict (generatedTokens=${response.stats?.generatedTokens})`
       )
-      t.is(
-        response.stats?.CacheTokens,
-        primerResponse.stats?.CacheTokens,
-        `small-budget run should roll cache back to primer state (${primerResponse.stats?.CacheTokens})`
+      // A cutoff at n_predict commits what the caller received, mid-reasoning
+      // included; the next full-history turn reconciles it away.
+      t.ok(
+        response.stats?.CacheTokens > primerResponse.stats?.CacheTokens,
+        `small-budget run should commit on top of the primer (${primerResponse.stats?.CacheTokens} -> ${response.stats?.CacheTokens})`
       )
 
       const followUpResponse = await addon.run(
@@ -530,7 +526,7 @@ test(
       const followUpOutput = await collectResponse(followUpResponse)
       t.ok(
         /berlin/i.test(followUpOutput),
-        `follow-up after rollback should still answer from clean cache: "${followUpOutput.slice(0, 100)}"`
+        `follow-up after the cutoff should still answer from the cache: "${followUpOutput.slice(0, 100)}"`
       )
       t.ok(
         followUpResponse.stats?.CacheTokens > primerResponse.stats?.CacheTokens,

@@ -65,6 +65,7 @@ public:
   int sampleRate() const { return MOSS_SFX_NATIVE_SAMPLE_RATE; }
 
   static void validateConfig(const MossSoundEffectConfig& cfg);
+  static void validateFitConfig(const MossSoundEffectConfig& cfg);
   static tts_cpp::moss::SoundEffectOptions
   toEngineOptions(const MossSoundEffectConfig& cfg);
   static tts_cpp::moss::SoundEffectRequest

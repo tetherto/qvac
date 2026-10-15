@@ -9,12 +9,12 @@ import {
 } from "@qvac/infer-base";
 
 import { QvacErrorAddonASRGgml, ERR_CODES } from "./lib/error";
-import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
 import {
   assessFit as assessFitImpl,
   type AsrFitRequest,
   type AsrFitResult,
   type AsrFitStatus,
+  type MossTranscribeFitRequest,
   type ParakeetFitRequest,
   type WhisperFitRequest,
 } from "./lib/fit";
@@ -591,6 +591,7 @@ type InferenceClientStateShape = InferenceClientState;
 type AsrFitRequestShape = AsrFitRequest;
 type AsrFitResultShape = AsrFitResult;
 type AsrFitStatusShape = AsrFitStatus;
+type MossTranscribeFitRequestShape = MossTranscribeFitRequest;
 type ParakeetFitRequestShape = ParakeetFitRequest;
 type WhisperFitRequestShape = WhisperFitRequest;
 
@@ -631,12 +632,12 @@ namespace ASRGgml {
   export type AsrFitRequest = AsrFitRequestShape;
   export type AsrFitResult = AsrFitResultShape;
   export type AsrFitStatus = AsrFitStatusShape;
+  export type MossTranscribeFitRequest = MossTranscribeFitRequestShape;
   export type ParakeetFitRequest = ParakeetFitRequestShape;
   export type WhisperFitRequest = WhisperFitRequestShape;
 
   export import BackendId = BackendIdEnum;
 
-  export const resolveBackendsDir = resolveBackendsDirImpl;
   export const assessFit = assessFitImpl;
 }
 

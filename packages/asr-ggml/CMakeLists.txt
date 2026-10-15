@@ -33,6 +33,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 # overlays, e.g. vcpkg/triplets/x64-linux.cmake appends -fPIC -stdlib=libc++),
 # repo-wide overlays second.
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
@@ -80,19 +81,22 @@ if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI )
 endif()
 
-# Bare module subfolder for dynamically-loadable ggml backends. Same
-# shape qvac/packages/llm-llamacpp uses: cmake-bare derives the
-# subdir from `<bare_target>/<module_name>` (e.g.
-# `android-arm64/qvac__asr-ggml`) and installs the .so / .dll / .dylib
-# backend files there. The runtime resolves the directory via the same
-# shape on the JS side (`path.join(__dirname, 'prebuilds')`), then the
-# engine-config backendsDir is forwarded to the model layer which calls
-# `ggml_backend_load_all_from_path()` against it. The C++ define below
-# tells the addon what relative subdir to scan under that root.
+# The module is named after the platform package that ships it,
+# qvac__asr-ggml-<suffix> (every iOS host shares `ios`), so that package is an
+# ordinary addon: require.addon(), bare-pack and bare-link all find
+# prebuilds/<host>/qvac__asr-ggml-<suffix>.bare there. cmake-bare installs the
+# dynamically loadable ggml backends to <host>/<module name>, the directory the
+# addon looks in next to itself (see ModuleBackendsDir.hpp); bare-link
+# flattens them next to the module in a mobile app instead. Keep the suffix in
+# sync with "#host-addon" in package.json and SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
-bare_module_target("." _unused_target NAME module_name VERSION _unused_version)
+if(bare_target_value MATCHES "^ios-")
+  set(module_name "qvac__asr-ggml-ios")
+else()
+  set(module_name "qvac__asr-ggml-${bare_target_value}")
+endif()
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message(STATUS "Building asr-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
 # Collect every dynamically-loadable ggml backend that the `ggml-speech`
 # port produced, as IMPORTED targets. Both whisper-cpp and parakeet-cpp
@@ -143,17 +147,17 @@ if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ASR_CUDA))
   endif()
 endif()
 
-add_bare_module(asr-ggml EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(asr-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
 
 # Stage every loose MODULE backend selected above into the same
 # per-host/per-module subdir cmake-bare's INSTALL TARGET branch uses for
-# IMPORTED targets — keeping destinations identical so
-# `ggml_backend_load_all_from_path(backendsDir / BACKENDS_SUBDIR)`
-# discovers IMPORTED-target CPU + loose-file GPU backends in one scan.
+# IMPORTED targets — keeping destinations identical so one
+# `ggml_backend_load_all_from_path()` scan discovers IMPORTED-target CPU +
+# loose-file GPU backends.
 if(BACKEND_DL_LOOSE_SOS)
   install(
     FILES ${BACKEND_DL_LOOSE_SOS}
-    DESTINATION ${bare_target_value}/${module_name}
+    DESTINATION ${BACKENDS_SUBDIR_VALUE}
   )
 endif()
 
@@ -190,17 +194,10 @@ target_link_libraries(
 )
 
 target_compile_definitions(${asr-ggml} PUBLIC JS_LOGGER)
-# Same value the JS side appends to the host-provided `backendsDir`
-# default (`path.join(__dirname, 'prebuilds', <subdir>)`). The consumers
-# of this define are the `#ifdef BACKENDS_SUBDIR` blocks in
-# WhisperModel.cpp / ParakeetModel.cpp — the define must be present on
-# EVERY target that compiles those translation units (this module target
-# and asr_ggml_tests below), or the #ifdef silently compiles out and the
-# engine scans the prebuilds root instead of
-# `<backendsDir>/<bare-target>/<module-name>` ("no CPU device registered"
-# on desktop-Linux per-arch CPU MODULE variants).
+# Read by ModuleBackendsDir.hpp; every target compiling the model sources
+# (this module and asr_ggml_tests below) needs it.
 target_compile_definitions(${asr-ggml} PRIVATE
-  BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+  QVAC_ADDON_MODULE_NAME="${module_name}")
 
 if(WIN32)
   target_compile_options(${asr-ggml} PRIVATE "/utf-8")
@@ -408,6 +405,7 @@ if(BUILD_TESTING)
   include(GoogleTest)
 
   add_executable(asr_ggml_tests
+    ${PROJECT_SOURCE_DIR}/addon/tests/test_main.cpp
     # whisper suite
     ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
@@ -442,17 +440,15 @@ if(BUILD_TESTING)
   )
 
   target_link_libraries(asr_ggml_tests PRIVATE
-    GTest::gmock_main
+    GTest::gmock
     whisper::whisper
     qvac::parakeet
     ggml::ggml
   )
 
-  # asr_ggml_tests recompiles WhisperModel.cpp / ParakeetModel.cpp, whose
-  # `#ifdef BACKENDS_SUBDIR` blocks must see the same define as the module
-  # target — see the note above the module-target define.
   target_compile_definitions(asr_ggml_tests PRIVATE
-    BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
+    QVAC_ADDON_MODULE_NAME="${module_name}"
+    QVAC_ASR_TEST_BACKENDS_DIR="${VCPKG_INSTALLED_PATH}/lib"
     QVAC_ASR_GGML_TESTING)
 
   set_target_properties(asr_ggml_tests PROPERTIES
