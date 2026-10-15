@@ -15,7 +15,7 @@
 
 ### Changed
 
-- `@qvac/fabric` dependency bumped `^0.18.0` -> `^0.19.0`, which carries
+- `@qvac/fabric` dependency bumped `^0.18.0` -> `0.19.0`, which carries
   `qvac-fabric` `10549.4.0` -> `10549.5.0` (CUDA and Metal fusion fixes, MoE
   expert caching defaulting to CUDA only, GLM-5 Next support). This package
   consumes the shared runtime via npm rather than building the vcpkg port, so
