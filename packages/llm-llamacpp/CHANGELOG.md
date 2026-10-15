@@ -2,14 +2,29 @@
 
 ## [Unreleased]
 
+### Added
+
+- `poll` and `poll-batch` are now documented public JavaScript load options.
+  They control the main and batch GGML threadpool busy-wait levels; both
+  default to `0`, and `poll-batch` inherits an explicit `poll` when omitted
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
 ### Fixed
 
 - File-backed model loads now default both GGML threadpools to `poll=0`, so
   GPU-offloaded inference no longer keeps CPU workers busy-spinning between
-  graph work. Explicit `poll` and `poll-batch` overrides remain supported, and
-  the addon reuses the threadpools owned by Fabric's common initialization
-  instead of creating duplicates
+  graph work. The addon also reuses the threadpools owned by Fabric's common
+  initialization instead of creating duplicates
   ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+## [0.61.1] - 2026-10-15
+
+### Fixed
+
+- On Windows, `assessFit` no longer fails with `0xC06D007E` when it is the
+  first fabric call in the process ([#5121](https://github.com/tetherto/qvac/pull/5121)). The addon now binds the
+  delay-loaded `@qvac/fabric` runtime when it loads, and loading throws an
+  error naming the fabric module if that fails.
 
 ## [0.61.0] - 2026-10-14
 

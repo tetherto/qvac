@@ -5,7 +5,9 @@ import {
   buildContract,
   callShapeByHandlerType,
   contractDir,
-  renderContractFiles
+  renderContractFiles,
+  registryEngineManifestFile,
+  renderRegistryEngineManifest
 } from '../scripts/contract/build-contract'
 import { buildModelsRegistry } from '../scripts/contract/build-models-registry'
 import { constantsRegistry } from '../scripts/contract/constants-registry'
@@ -401,4 +403,11 @@ test('MOSS plugin ID is exported with its name for generated clients', (t) => {
   const index = pluginIds?.['x-enum-varnames']?.indexOf('MOSS_TRANSCRIBE') ?? -1
   t.ok(index >= 0, 'MOSS_TRANSCRIBE is a named contract constant')
   t.is(pluginIds?.enum?.[index], PLUGIN_MOSS_TRANSCRIBE, 'contract value matches the SDK export')
+})
+
+test('registry package engine manifest is deterministic and fresh', async (t) => {
+  const content = await renderRegistryEngineManifest()
+  t.is(content, await renderRegistryEngineManifest())
+  const committed = await readFile(registryEngineManifestFile, 'utf8')
+  t.is(committed, content, 'registry engine manifest matches the canonical definitions')
 })
