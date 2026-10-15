@@ -9,7 +9,11 @@ import type {
 import Buffer from 'bare-buffer'
 import type { QVACModelEntry } from '@qvac/registry-client'
 import { REGISTRY_ERROR_CODES } from '@/schemas/errors'
-import { getAddonFromEngine, resolveCanonicalEngine } from '@/schemas/engine-addon-map'
+import {
+  getAddonFromEngine,
+  resolveCanonicalEngine,
+  resolveRegistryEngine
+} from '@/schemas/engine-addon-map'
 import { getRegistryClient } from '@/runtime/registry-client'
 import { getEngineLogger } from '@/logging/index'
 import { ModelRegistryQueryFailedError } from '@/errors/index'
@@ -30,8 +34,8 @@ function toHexString(value: Buffer | string | { data: number[] } | undefined): s
   return ''
 }
 
-function processRegistryModel(model: QVACModelEntry): ModelRegistryEntry | null {
-  const engine = resolveCanonicalEngine(model.engine || '')
+export function processRegistryModel(model: QVACModelEntry): ModelRegistryEntry | null {
+  const engine = resolveRegistryEngine(model.engine || '', model.tags)
   if (!engine) {
     logger.warn(`Skipping model with unknown engine "${model.engine}": ${model.path}`)
     return null
