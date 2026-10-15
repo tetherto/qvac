@@ -60,7 +60,7 @@ export interface BciFitResult {
 }
 
 interface FitBinding {
-  assessFit(request: BciFitRequest): BciFitResult
+  assessFit(request: BciFitRequest): Promise<BciFitResult>
 }
 
 /**
@@ -69,18 +69,18 @@ interface FitBinding {
  *
  * Covers the whisper model and the embedder, from the files or from the
  * registry's weightless descriptions of them. A model or embedder the fitter
- * cannot read comes back as `status: "error"`; a broken request, or a host
- * with no native binding, throws.
+ * cannot read resolves to `status: "error"`; a broken request, or a host
+ * with no native binding, rejects. Concurrent calls run one at a time.
  *
  * The backend directory defaults to the one a real load uses. The native side
  * registers backends once per process, so a fit that let it fall back to the
  * default search path would fix that path for every later load too.
  */
-export function assessFit(request: BciFitRequest): BciFitResult {
+export async function assessFit(request: BciFitRequest): Promise<BciFitResult> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
   const binding = require('../binding.js') as FitBinding
 
-  return binding.assessFit({
+  return await binding.assessFit({
     ...request,
     backendsDir:
       typeof request.backendsDir === 'string' && request.backendsDir.length > 0

@@ -7,8 +7,10 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 #include <ggml-backend.h>
@@ -104,21 +106,46 @@ getConfigMap( // NOLINT(readability-static-definition-in-anonymous-namespace)
 } // namespace
 namespace qvac_lib_inference_addon_nmt {
 
-/** Metadata-only load estimate. No model instance or weight buffer is made. */
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+/** A fit request copied out of JS, owned by the worker that measures it. */
+struct FitRequest {
+  std::string modelPath;
+  std::string modelType;
+  std::optional<std::string> pivotModel;
+  std::string srcVocab;
+  std::string dstVocab;
+  std::string pivotSrcVocab;
+  std::string pivotDstVocab;
+  double marginBytes = 0;
+  bool useGpu = false;
+  std::string backendsDir;
+  std::string openclCacheDir;
+  std::string gpuBackend;
+  std::optional<double> gpuDevice;
+  bool hasMainGpu = false;
+};
+
+struct FitResult {
+  std::string status = "error";
+  std::string reason = "model-unreadable";
+  std::string backend;
+  std::string report;
+  uint64_t modelBytes = 0;
+  uint64_t requiredBytes = 0;
+  uint64_t freeBytes = 0;
+};
+
+inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
   JsArgsParser args(env, info);
   auto request = args.getJsObject(0, "request");
   auto files = request.getProperty<js::Object>(env, "files");
   auto config = request.getProperty<js::Object>(env, "config");
-  const std::string path =
-      files.getProperty<js::String>(env, "model").as<std::string>(env);
-  const std::string modelType =
-      config.getProperty<js::String>(env, "modelType").as<std::string>(env);
 
-  auto optionString = [&](const char* key) -> std::string {
-    auto value = config.getOptionalProperty<js::String>(env, key);
-    return value ? value->as<std::string>(env) : std::string{};
+  auto optionalString = [&](js::Object& source,
+                            const char* key) -> std::optional<std::string> {
+    auto value = source.getOptionalProperty<js::String>(env, key);
+    return value ? std::optional<std::string>(value->as<std::string>(env))
+                 : std::nullopt;
   };
   auto optionBoolean = [&](const char* key) -> std::optional<bool> {
     auto value = config.getOptionalProperty<js::Boolean>(env, key);
@@ -128,11 +155,21 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     auto value = config.getOptionalProperty<js::Number>(env, key);
     return value ? std::optional<double>(value->as<double>(env)) : std::nullopt;
   };
+  auto optionPresent = [&](const char* key) {
+    js_value_t* value = config.getProperty(env, key);
+    return !js::is<js::Undefined>(env, value) && !js::is<js::Null>(env, value);
+  };
 
-  double margin = 0;
+  FitRequest parsed;
+  parsed.modelPath =
+      files.getProperty<js::String>(env, "model").as<std::string>(env);
+  parsed.modelType =
+      config.getProperty<js::String>(env, "modelType").as<std::string>(env);
+
   if (auto value =
           request.getOptionalProperty<js::Number>(env, "marginBytes")) {
-    margin = value->as<double>(env);
+    parsed.marginBytes = value->as<double>(env);
+    const double margin = parsed.marginBytes;
     if (!std::isfinite(margin) || margin < 0 || std::trunc(margin) != margin ||
         margin > 9007199254740991.0) {
       throw qvac_errors::StatusError(
@@ -141,13 +178,59 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  std::string status = "error";
-  std::string reason = "model-unreadable";
-  std::string backend;
-  std::string report;
-  uint64_t modelBytes = 0;
-  uint64_t requiredBytes = 0;
-  uint64_t freeBytes = 0;
+  parsed.pivotModel = optionalString(files, "pivotModel");
+  if (parsed.modelType == "Bergamot") {
+    parsed.srcVocab = optionalString(files, "srcVocab").value_or("");
+    parsed.dstVocab = optionalString(files, "dstVocab").value_or("");
+    if (parsed.pivotModel) {
+      parsed.pivotSrcVocab =
+          optionalString(files, "pivotSrcVocab").value_or("");
+      parsed.pivotDstVocab =
+          optionalString(files, "pivotDstVocab").value_or("");
+    }
+  }
+
+  parsed.backendsDir = optionalString(config, "backendsDir").value_or("");
+  parsed.openclCacheDir = optionalString(config, "openclCacheDir").value_or("");
+
+  // CPU is the only backend for Bergamot, regardless of GPU settings.
+  if (parsed.modelType == "IndicTrans") {
+    parsed.useGpu = optionBoolean("use_gpu").value_or(
+        optionBoolean("useGPU").value_or(false));
+  }
+  if (parsed.useGpu) {
+    // A present canonical `gpu_backend`, even empty, wins over its alias.
+    auto canonicalBackend = optionalString(config, "gpu_backend");
+    parsed.gpuBackend = canonicalBackend
+                            ? *canonicalBackend
+                            : optionalString(config, "gpuBackend").value_or("");
+    auto canonicalDevice = optionNumber("gpu_device");
+    parsed.gpuDevice =
+        canonicalDevice ? canonicalDevice : optionNumber("gpuDevice");
+    parsed.hasMainGpu = optionPresent("main-gpu") || optionPresent("main_gpu");
+  }
+  return parsed;
+}
+
+/**
+ * Metadata-only load estimate. No model instance or weight buffer is made, and
+ * no JS is touched. Fits are serialised: device memory queries are not
+ * documented as thread safe across ggml backends. The backends handle holds a
+ * reference for the whole device phase, so a model unloading meanwhile cannot
+ * reset the backend state underneath it.
+ */
+inline FitResult runFit(const FitRequest& request) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+
+  FitResult result;
+  const std::string& path = request.modelPath;
+  const std::string& modelType = request.modelType;
+  std::string& report = result.report;
+  std::string& reason = result.reason;
+  uint64_t& modelBytes = result.modelBytes;
+  const double margin = request.marginBytes;
+
   namespace fs = std::filesystem;
   // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
   const fs::path modelPath = fs::u8path(path);
@@ -170,9 +253,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   }
 
   if (report.empty()) {
-    auto pivotValue = files.getOptionalProperty<js::String>(env, "pivotModel");
-    const std::string pivot =
-        pivotValue ? pivotValue->as<std::string>(env) : "";
+    const std::string pivot = request.pivotModel.value_or("");
     if (!pivot.empty()) {
       // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
       const fs::path pivotPath = fs::u8path(pivot);
@@ -196,12 +277,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     report = "Bergamot model path has no .intgemm signature";
   }
   if (report.empty() && modelType == "Bergamot") {
-    auto addVocab = [&](const char* key) {
+    auto addVocab = [&](const char* key, const std::string& vocab) {
       if (!report.empty()) {
         return;
       }
-      auto value = files.getOptionalProperty<js::String>(env, key);
-      const std::string vocab = value ? value->as<std::string>(env) : "";
       // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
       const fs::path vocabPath = fs::u8path(vocab);
       if (vocab.empty() || !fs::is_regular_file(vocabPath, ec)) {
@@ -215,51 +294,35 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       }
       modelBytes += bytes;
     };
-    addVocab("srcVocab");
-    addVocab("dstVocab");
-    if (files.getOptionalProperty<js::String>(env, "pivotModel")) {
-      addVocab("pivotSrcVocab");
-      addVocab("pivotDstVocab");
+    addVocab("srcVocab", request.srcVocab);
+    addVocab("dstVocab", request.dstVocab);
+    if (request.pivotModel) {
+      addVocab("pivotSrcVocab", request.pivotSrcVocab);
+      addVocab("pivotDstVocab", request.pivotDstVocab);
     }
   }
 
   if (report.empty()) {
-    // CPU is the only backend for Bergamot, regardless of GPU settings.
-    const bool useGpu = modelType == "IndicTrans" &&
-                        optionBoolean("use_gpu").value_or(
-                            optionBoolean("useGPU").value_or(false));
-    const std::string backendsDir = optionString("backendsDir");
-    const std::string openclCacheDir = optionString("openclCacheDir");
-    NmtBackendsHandle backends(backendsDir, openclCacheDir);
+    const bool useGpu = request.useGpu;
+    NmtBackendsHandle backends(request.backendsDir, request.openclCacheDir);
     ggml_backend_dev_t device = nullptr;
     if (useGpu) {
-      auto canonicalBackend =
-          config.getOptionalProperty<js::String>(env, "gpu_backend");
-      const std::string gpuBackend =
-          canonicalBackend ? canonicalBackend->as<std::string>(env)
-                           : optionString("gpuBackend");
-      const auto ordinal = optionNumber("gpu_device")
-                               .value_or(optionNumber("gpuDevice").value_or(0));
+      const auto ordinal = request.gpuDevice.value_or(0);
       if (!std::isfinite(ordinal) || std::trunc(ordinal) != ordinal ||
           ordinal < 0 || ordinal > std::numeric_limits<int>::max()) {
         reason = "unsupported-config";
         report = "Invalid GPU device ordinal";
-      } else if (
-          config.getOptionalProperty<js::Number>(env, "main-gpu") ||
-          config.getOptionalProperty<js::Number>(env, "main_gpu") ||
-          config.getOptionalProperty<js::String>(env, "main-gpu") ||
-          config.getOptionalProperty<js::String>(env, "main_gpu")) {
+      } else if (request.hasMainGpu) {
         reason = "unsupported-config";
         report = "Fit with main-gpu selection is unavailable";
       } else {
         device = nmtSelectGpuDevice(
             true,
-            gpuBackend,
+            request.gpuBackend,
             static_cast<int>(ordinal),
             "assessFit",
             {},
-            !gpuBackend.empty() || optionNumber("gpu_device").has_value() ||
-                optionNumber("gpuDevice").has_value());
+            !request.gpuBackend.empty() || request.gpuDevice.has_value());
       }
     } else {
       device = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
@@ -269,11 +332,14 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       report = "Requested compute device is unavailable";
     }
     if (report.empty()) {
-      backend = ggml_backend_dev_name(device);
+      // Device handles are borrowed from the backend; the name is copied
+      // while `backends` still holds its reference.
+      result.backend = ggml_backend_dev_name(device);
       size_t free = 0;
       size_t total = 0;
       ggml_backend_dev_memory(device, &free, &total);
-      freeBytes = free;
+      result.freeBytes = free;
+      const uint64_t freeBytes = result.freeBytes;
       if (freeBytes == 0 || freeBytes > 9007199254740991ULL) {
         reason = "device-memory-unavailable";
         report = "Compute device did not report usable free memory";
@@ -283,7 +349,8 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         // source bytes exceed free memory.
         constexpr uint64_t overhead = 512ULL * 1024ULL * 1024ULL;
         if (modelBytes <= (9007199254740991ULL - overhead) / 4) {
-          requiredBytes = modelBytes * 4 + overhead;
+          result.requiredBytes = modelBytes * 4 + overhead;
+          const uint64_t requiredBytes = result.requiredBytes;
           const uint64_t budget =
               static_cast<uint64_t>(margin) < freeBytes
                   ? freeBytes - static_cast<uint64_t>(margin)
@@ -303,10 +370,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
               requiredBytes <= budget &&
               static_cast<uint64_t>(margin) < hostFree &&
               requiredBytes <= hostFree - static_cast<uint64_t>(margin)) {
-            status = "fits";
+            result.status = "fits";
             reason = "fits";
           } else if (modelBytes > budget && !useGpu) {
-            status = "does-not-fit";
+            result.status = "does-not-fit";
             reason = "does-not-fit";
           } else {
             reason = "insufficient-evidence";
@@ -326,25 +393,38 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       }
     }
   }
+  return result;
+}
 
+inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
+  using namespace qvac_lib_inference_addon_cpp;
   auto result = js::Object::create(env);
-  result.setProperty(env, "status", js::String::create(env, status));
-  result.setProperty(env, "reason", js::String::create(env, reason));
-  result.setProperty(env, "backend", js::String::create(env, backend));
-  result.setProperty(env, "report", js::String::create(env, report));
+  result.setProperty(env, "status", js::String::create(env, fit.status));
+  result.setProperty(env, "reason", js::String::create(env, fit.reason));
+  result.setProperty(env, "backend", js::String::create(env, fit.backend));
+  result.setProperty(env, "report", js::String::create(env, fit.report));
   result.setProperty(
       env,
       "modelBytes",
-      js::Number::create(env, static_cast<double>(modelBytes)));
+      js::Number::create(env, static_cast<double>(fit.modelBytes)));
   result.setProperty(
       env,
       "requiredBytes",
-      js::Number::create(env, static_cast<double>(requiredBytes)));
+      js::Number::create(env, static_cast<double>(fit.requiredBytes)));
   result.setProperty(
       env,
       "freeBytes",
-      js::Number::create(env, static_cast<double>(freeBytes)));
+      js::Number::create(env, static_cast<double>(fit.freeBytes)));
   return result;
+}
+
+/** Resolves the load estimate from a native worker thread. */
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  FitRequest request = parseFitRequest(env, info);
+  return js::JsAsyncTask::run(
+      env,
+      [request = std::move(request)]() { return runFit(request); },
+      fitResultObject);
 }
 JSCATCH
 

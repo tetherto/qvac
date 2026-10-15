@@ -13,6 +13,18 @@ class ContractTypesTest(unittest.TestCase):
         graph = TypeGraph({"$defs": {"A": {"type": "object", "additionalProperties": True}}})
         self.assertEqual("Map<String, JsonElement>", graph.roots["A"])
 
+    def test_open_object_with_properties_keeps_every_key(self):
+        graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"tool": {
+            "type": "object", "properties": {"type": {"type": "string"}}, "additionalProperties": {}
+        }}}}})
+        self.assertIn("val `tool`: JsonObject?", graph.render())
+
+    def test_closed_object_with_properties_stays_a_data_class(self):
+        graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"cfg": {
+            "type": "object", "properties": {"n": {"type": "integer"}}, "additionalProperties": False
+        }}}}})
+        self.assertIn("class ACfg(", graph.render())
+
     def test_unresolved_reference_fails(self):
         with self.assertRaisesRegex(ValueError, "Unresolved"):
             TypeGraph({"$defs": {"A": {"$ref": "#/$defs/missing"}}})
@@ -42,7 +54,29 @@ class ContractTypesTest(unittest.TestCase):
         self.assertGreater(len(graph.types), 400)
         methods = render_schema_methods(graph, json.loads((root / "manifest.json").read_text()))
         self.assertIn('progressType = "modelProgress"', methods)
+        self.assertIn("sealed interface QvacProgressEvent", methods)
         self.assertNotIn('progressType = "loadModel:progress"', methods)
+
+    def test_same_field_under_two_methods_shares_one_type(self):
+        def request(title, method):
+            return {"title": title, "type": "object", "required": ["type", "history"], "properties": {
+                "type": {"type": "string", "const": method},
+                "history": {"type": "array", "items": {"title": title + "HistoryItem", "type": "object",
+                                                       "properties": {"role": {"type": "string"}}}},
+                "image": {"title": title + "Image", "type": "object", "properties": {"role": {"type": "string"}}},
+            }}
+        graph = TypeGraph({"$defs": {
+            "B": request("LongMethodRequest", "long"),
+            "A": request("ShortRequest", "short"),
+        }})
+        text = graph.render()
+        self.assertIn("class ShortRequestHistoryItem(", text)
+        self.assertNotIn("class LongMethodRequestHistoryItem(", text)
+        self.assertIn("val `history`: List<ShortRequestHistoryItem>", text.split("class LongMethodRequest(")[1])
+        # The same shape at another field path keeps its own type.
+        self.assertIn("class ShortRequestImage(", text)
+        self.assertIn("class LongMethodRequest(", text)
+        self.assertIn("class ShortRequest(", text)
 
     def test_forbidden_field_not_exposed(self):
         graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"forbidden": {"not": {}}, "ok": {"type": "string"}}}}})

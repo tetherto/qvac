@@ -59,7 +59,9 @@ export interface DiffusionFitResult {
  * so the projection can run before anything is downloaded. Safetensors
  * checkpoints can also contain only their tensor headers.
  *
- * A model the engine cannot read is `status: "error"`; only a broken request
- * throws.
+ * Concurrent calls run one at a time within this addon.
+ *
+ * A model the engine cannot read resolves to `status: "error"`; only a broken
+ * request rejects.
  */
-export declare function assessFit(request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest): DiffusionFitResult;
+export declare function assessFit(request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest): Promise<DiffusionFitResult>;

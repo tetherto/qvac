@@ -1,5 +1,8 @@
 packages:
   - "packages/*"
+  # ASR consumers need the published native platform packages. Build the local
+  # addon separately with its package-owned tooling instead of workspace linking.
+  - "!packages/asr-ggml"
   # sdk-kotlin is a Gradle package; its package.json only declares the Android
   # BareKit npm deps, installed locally by Gradle. Keeping it out of the pnpm
   # workspace avoids an importer the root lockfile has no entry for, which would
@@ -67,39 +70,13 @@ allowBuilds:
   tree-sitter-bash: false
 
 minimumReleaseAgeExclude:
-  - '@qvac/asr-ggml-darwin-arm64@0.5.3'
-  - '@qvac/asr-ggml-darwin-x64@0.5.3'
-  - '@qvac/asr-ggml-linux-arm64@0.5.3'
-  - '@qvac/asr-ggml-linux-x64@0.5.3'
-  - '@qvac/asr-ggml-win32-x64@0.5.3'
-  - '@qvac/asr-ggml@0.5.3'
   - '@qvac/asr-ggml@0.8.1'
-  - '@qvac/fabric-android-arm64@0.18.0'
-  - '@qvac/fabric-ios@0.18.0'
-  - '@qvac/fabric-android-arm64@0.18.1'
-  - '@qvac/fabric-ios@0.18.1'
-  - '@qvac/fabric-android-arm64@0.19.0'
-  - '@qvac/fabric-ios@0.19.0'
-  - '@qvac/fabric-android-arm64@0.20.0'
-  - '@qvac/fabric-ios@0.20.0'
-  - '@qvac/fabric-android-arm64@0.21.0'
-  - '@qvac/fabric-ios@0.21.0'
-  - '@qvac/classification-ggml@0.29.0'
-  - '@qvac/embed-llamacpp@0.45.0'
-  - '@qvac/fabric-darwin-arm64@0.20.0'
-  - '@qvac/fabric-darwin-x64@0.20.0'
-  - '@qvac/fabric-linux-arm64@0.20.0'
-  - '@qvac/fabric-linux-x64@0.20.0'
-  - '@qvac/fabric-win32-x64@0.20.0'
-  - '@qvac/fabric-darwin-arm64@0.21.0'
-  - '@qvac/fabric-darwin-x64@0.21.0'
-  - '@qvac/fabric-linux-arm64@0.21.0'
-  - '@qvac/fabric-linux-x64@0.21.0'
-  - '@qvac/fabric-win32-x64@0.21.0'
-  - '@qvac/fabric@0.20.0'
-  - '@qvac/ggml-rpc-server@0.2.0'
-  - '@qvac/llm-llamacpp@0.57.0'
-  - '@qvac/llm-llamacpp@0.59.0'
-  - '@qvac/ocr-ggml@0.27.1'
-  - '@qvac/translation-nmtcpp@0.19.0'
-  - '@qvac/vla-ggml@0.30.0'
+  - '@qvac/bci-whispercpp@0.11.2'
+  - '@qvac/fabric-android-arm64@0.21.1 || 0.22.0'
+  - '@qvac/fabric-ios@0.21.1 || 0.22.0'
+  - '@qvac/fabric-darwin-arm64@0.21.1 || 0.22.0'
+  - '@qvac/fabric-darwin-x64@0.21.1 || 0.22.0'
+  - '@qvac/fabric-linux-arm64@0.21.1 || 0.22.0'
+  - '@qvac/fabric-linux-x64@0.21.1 || 0.22.0'
+  - '@qvac/fabric-win32-x64@0.21.1 || 0.22.0'
+  - '@qvac/fabric@0.21.1'

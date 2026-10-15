@@ -763,7 +763,7 @@ During ESRGAN upscale, cancellation is honored between repeat passes.
 ```js
 const { assessFit } = require('@qvac/diffusion-cpp')
 
-const fit = assessFit({
+const fit = await assessFit({
   files: { model: '/models/model.gguf' },
   config: { backendsDir: '/opt/backends' },
   workload: { prompt: 'a lighthouse at dusk', width: 1024, height: 1024 }
@@ -810,7 +810,9 @@ session estimate.
 
 A `changed` of `true` comes with `status: "does-not-fit"` — the configuration as given does not fit, and the engine reached a placement only by moving modules between backends. A `paramsBackend` of `*=cpu` is the exception: the engine replans every module for it, so the plan is compared against the placement that load already uses, and an equal one is `fits`.
 
-A model the engine cannot read is `status: "error"` with `reason: "model-unreadable"`; only a broken request throws.
+A model the engine cannot read resolves to `status: "error"` with `reason: "model-unreadable"`; only a broken request rejects.
+
+`assessFit` returns a Promise. Concurrent calls run one at a time within the addon.
 
 The projection runs in the calling process and shares its engine state: the GPU backend modules load once per process, so the first `config.backendsDir` any call supplies is the one every later load uses, and the native log callback is process-global like everywhere else.
 
