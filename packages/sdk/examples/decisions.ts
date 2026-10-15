@@ -1,14 +1,10 @@
-import { loadModel, decide, unloadModel, close } from '@qvac/sdk'
+import { loadModel, decide, unloadModel, close, LAYA_MULTILINGUAL_322M_Q8_0 } from '@qvac/sdk'
 
-const modelSrc = process.argv[2]
-if (!modelSrc) {
-  console.error('✖ Usage: node dist/examples/decisions.js /models/laya-multilingual-Q8_0.gguf')
-  process.exit(1)
-}
+const modelSrc = process.argv[2] ?? LAYA_MULTILINGUAL_322M_Q8_0
 
 let modelId: string | undefined
 try {
-  console.error('▸ Loading Laya')
+  console.error('▸ Loading decision model')
   modelId = await loadModel({
     modelSrc,
     modelType: 'llamacpp-decision',

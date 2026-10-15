@@ -4,7 +4,7 @@ import { ModelSrcTypeMismatchError } from './errors-client'
 /**
  * Throws {@link ModelSrcTypeMismatchError} when explicit
  * `modelType` disagrees with the type inferred from `modelSrc`.
- * Embedding descriptors may explicitly select Laya decisions; the native
+ * Embedding descriptors may explicitly select decisions; the native
  * decision loader validates checkpoint compatibility.
  * No-op when nothing can be inferred.
  */
