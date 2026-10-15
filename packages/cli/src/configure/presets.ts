@@ -40,7 +40,7 @@ export const MODALITIES: ModalityInfo[] = [
   {
     id: 'decision',
     label: 'Decision (System One)',
-    role: 'embedding',
+    role: 'decision',
     addon: 'llamacpp-decision',
     pick: true
   },

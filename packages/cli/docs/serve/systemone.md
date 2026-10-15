@@ -31,9 +31,8 @@ qvac serve --systemone --no-default
 ```
 
 `configure` selects `LAYA_MULTILINGUAL_322M_Q8_0` and writes the following entry.
-The interactive Decision capability lists the embedding-addon catalog models,
-with this Laya checkpoint marked as recommended. Choose a Laya checkpoint for
-decisions. The SDK defaults to GPU; set `device` to `cpu` in the parameter editor
+The interactive Decision capability lists models with the decision engine,
+with this Laya checkpoint marked as recommended. The SDK defaults to GPU; set `device` to `cpu` in the parameter editor
 or configuration to run on CPU.
 
 ```json
@@ -55,8 +54,9 @@ The first request loads the model. Set `preload: true` or pass
 
 Choose another Laya checkpoint in interactive configuration. To use a local GGUF,
 replace `model` with `src` in the entry above and set it to the file path.
-When adding a Laya checkpoint through "Search all models", set
-`type: 'llamacpp-decision'` in the JSON editor or configuration.
+Named model constants select their plugin from the canonical engine, including
+when added through "Search all models". An explicit `type` is needed for a local
+file path.
 
 ### Request
 

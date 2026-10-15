@@ -16,9 +16,9 @@ under `src/models/registry/`. The SDK re-exports the inference model registry.
 A model descriptor's `engine` identifies its canonical plugin, independently of
 which addon package implements it. Multiple plugins can share an addon without
 making their model descriptors interchangeable. Explicit `modelType` selection
-must match the descriptor's engine, except for the explicit Laya override below.
-Legacy package-valued engines remain supported for compatibility, but package
-identity cannot distinguish capabilities that share an addon.
+must match the descriptor's engine. Legacy package-valued engines remain supported
+for compatibility, but package identity cannot distinguish capabilities that share
+an addon.
 
 Registry submissions, live queries, and the generated catalog must agree on the
 canonical engine. Use `resolveRegistryEngine` for registry metadata; it preserves
@@ -31,11 +31,6 @@ Sync corrected registry metadata before clients rely on registry-returned
 descriptors, and coordinate rollout with clients that recognize the engine.
 Regenerate the catalog and downstream clients from the corrected metadata; do not
 patch generated constants or bypass model-type validation.
-
-An embedding descriptor may explicitly select `modelType: 'llamacpp-decision'`
-when loading a Laya checkpoint. The native decision loader validates checkpoint
-compatibility. This override does not change automatic engine inference or allow
-other engine mismatches, including loading a decision descriptor as embeddings.
 
 On macOS and iOS, a registry GGUF can pair with a compiled Apple Core ML bundle
 that the native addon runs a stage on when it sits next to the GGUF; the pairs
