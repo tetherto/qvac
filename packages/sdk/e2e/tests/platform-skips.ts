@@ -87,6 +87,22 @@ const RULES: Rule[] = [
       platforms: ['electron', 'snap']
     }
   },
+  {
+    match: /^tts-moss-/,
+    skip: {
+      reason:
+        'The packaged Electron pass, Snap included, skips MOSS: its 13.5 GiB model set is desktop-only',
+      platforms: ['electron', 'snap']
+    }
+  },
+  {
+    match: ['tools-simple-function-gemma4'],
+    skip: {
+      reason:
+        'The packaged Electron pass, Snap included, skips the Gemma4 tool dialect: its 3.22 GiB model is desktop-only',
+      platforms: ['electron', 'snap']
+    }
+  },
 
   // ── mobile, both OSes ────────────────────────────────────────────────────
   {

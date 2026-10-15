@@ -77,14 +77,14 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tools-qwen35': {
-    on: ['desktop', 'electron'],
+    on: ['desktop', 'electron', 'snap'],
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: { ctx_size: 4096, tools: true }
   },
 
   'tools-gemma4': {
-    on: ['desktop', 'electron'],
+    on: ['desktop'],
     constant: { $const: 'GEMMA4_2B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: { ctx_size: 4096, tools: true }
@@ -100,7 +100,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   // Index 0 selects a GPU or falls back to CPU, so the text is the same everywhere; only the
   // backend follows the hardware.
   'ocr-main-gpu': {
-    on: ['desktop', 'electron'],
+    on: ['desktop', 'electron', 'snap'],
     constant: { $const: 'OCR_LATIN' },
     type: 'ggml-ocr',
     config: {
@@ -116,7 +116,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   doctr: {
-    on: ['desktop', 'electron'],
+    on: ['desktop', 'electron', 'snap'],
     constant: { $const: 'OCR_DOCTR' },
     type: 'ggml-ocr'
   },
@@ -312,7 +312,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-moss-sfx': {
-    on: ['desktop', 'electron'],
+    on: ['desktop'],
     constant: { $const: 'AUDIOGEN_MOSS_SFX_V2_Q8_0' },
     constantSourceOnly: true,
     type: 'tts-ggml',
@@ -320,7 +320,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-moss-speech': {
-    on: ['desktop', 'electron'],
+    on: ['desktop'],
     constant: { $const: 'TTS_MOSS_SPEECH_Q8_0' },
     type: 'tts-ggml',
     config: {
@@ -408,7 +408,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'parakeet-indic-conformer': {
-    on: ['desktop', 'electron'],
+    on: ['desktop', 'electron', 'snap'],
     constant: { $const: 'PARAKEET_INDIC_CONFORMER_600M_Q4_0' },
     type: 'parakeet-transcription',
     config: { language: 'hi' }

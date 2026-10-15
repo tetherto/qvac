@@ -114,7 +114,8 @@
   "tools-qwen35": {
     "on": [
       "desktop",
-      "electron"
+      "electron",
+      "snap"
     ],
     "constant": {
       "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
@@ -127,8 +128,7 @@
   },
   "tools-gemma4": {
     "on": [
-      "desktop",
-      "electron"
+      "desktop"
     ],
     "constant": {
       "$const": "GEMMA4_2B_MULTIMODAL_Q4_K_M"
@@ -156,7 +156,8 @@
   "ocr-main-gpu": {
     "on": [
       "desktop",
-      "electron"
+      "electron",
+      "snap"
     ],
     "constant": {
       "$const": "OCR_LATIN"
@@ -184,7 +185,8 @@
   "doctr": {
     "on": [
       "desktop",
-      "electron"
+      "electron",
+      "snap"
     ],
     "constant": {
       "$const": "OCR_DOCTR"
@@ -436,8 +438,7 @@
   },
   "tts-moss-sfx": {
     "on": [
-      "desktop",
-      "electron"
+      "desktop"
     ],
     "constant": {
       "$const": "AUDIOGEN_MOSS_SFX_V2_Q8_0"
@@ -452,8 +453,7 @@
   },
   "tts-moss-speech": {
     "on": [
-      "desktop",
-      "electron"
+      "desktop"
     ],
     "constant": {
       "$const": "TTS_MOSS_SPEECH_Q8_0"
@@ -561,7 +561,8 @@
   "parakeet-indic-conformer": {
     "on": [
       "desktop",
-      "electron"
+      "electron",
+      "snap"
     ],
     "constant": {
       "$const": "PARAKEET_INDIC_CONFORMER_600M_Q4_0"
