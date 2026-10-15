@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2] - 2026-10-15
+
+### Changed
+
+- Pin `@qvac/fabric` to exactly `0.19.0` so the SDK 0.21 release line uses the
+  Fabric version it was validated against.
+
 ## [0.1.1] - 2026-09-30
 
 ### Changed
