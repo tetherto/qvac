@@ -13,6 +13,8 @@ import {
   createLlamaFitRequest,
   llamaLoadKindFor
 } from '@/resources/model-fit/native-probe/engines/llama'
+import { createNmtFitRequest } from '@/resources/model-fit/native-probe/engines/nmt'
+import { createOcrFitRequest } from '@/resources/model-fit/native-probe/engines/ocr'
 import { createTtsFitRequest } from '@/resources/model-fit/native-probe/engines/tts'
 
 export type FitRequestPlan =
@@ -80,6 +82,10 @@ export function createFitRequest(params: CreateFitRequestParams): FitRequestPlan
       return createAudiogenFitRequest(common)
     case ModelType.sdcppGeneration:
       return createDiffusionFitRequest({ modelPath, modelConfig, artifacts })
+    case ModelType.ggmlOcr:
+      return createOcrFitRequest(common)
+    case ModelType.nmtcppTranslation:
+      return createNmtFitRequest(common)
     default:
       return { supported: false, detail: `no fitter for model type: ${modelType}` }
   }

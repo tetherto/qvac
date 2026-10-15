@@ -26,8 +26,7 @@
         "cwd": "packages/ggml-rpc-server",
         "ci": {
           "includeVulkanSdk": true,
-          "desktopSmokeCommand": "node scripts/smoke-packaged.cjs",
-          "linuxExtraPackages": "libibverbs1"
+          "desktopSmokeCommand": "node scripts/smoke-packaged.cjs"
         }
       },
       "inputs": [
