@@ -32,26 +32,11 @@ using json = nlohmann::ordered_json;
 // setup, and embedding options (embd_normalize) do not apply.
 const std::unordered_set<std::string>& allowedConfigKeys() {
   static const std::unordered_set<std::string> keys = {
-      "device",
-      "gpu_layers",
-      "gpu-layers",
-      "batch_size",
-      "batch-size",
-      "verbosity",
-      "main-gpu",
-      "main_gpu",
-      "split-mode",
-      "split_mode",
-      "tensor-split",
-      "tensor_split",
-      "flash_attn",
-      "flash-attn",
-      "threads",
-      "threads-batch",
-      "threads_batch",
-      "poll",
-      "poll-batch",
-      "poll_batch",
+      "device",        "gpu_layers", "gpu-layers",   "batch_size",
+      "batch-size",    "verbosity",  "main-gpu",     "main_gpu",
+      "split-mode",    "split_mode", "tensor-split", "tensor_split",
+      "flash_attn",    "flash-attn", "threads",      "threads-batch",
+      "threads_batch", "poll",       "poll-batch",   "poll_batch",
       "openclCacheDir"};
   return keys;
 }
