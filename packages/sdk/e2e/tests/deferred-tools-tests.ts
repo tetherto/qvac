@@ -329,6 +329,26 @@ export const deferredToolsSearchThenCallQwen35 = createDeferredToolsTest(
   { estimatedDurationMs: 60000 }
 )
 
+// Qwen 3.5 renders tools through its own template, which must keep deferred schemas out too.
+export const deferredToolsPromptCostQwen35 = createDeferredToolsTest(
+  'deferred-tools-prompt-cost-qwen35',
+  { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' }
+)
+
+// Qwen 3.5 restores recurrent state from the cache, so a reload must keep the loaded tool.
+export const deferredToolsReopenedChatQwen35 = createDeferredToolsTest(
+  'deferred-tools-reopened-chat-qwen35',
+  { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' },
+  { estimatedDurationMs: 90000 }
+)
+
+// Restored recurrent state must not carry a loaded tool into another cache key.
+export const deferredToolsKvCacheIsolationQwen35 = createDeferredToolsTest(
+  'deferred-tools-kv-cache-isolation-qwen35',
+  { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' },
+  { estimatedDurationMs: 60000 }
+)
+
 export const deferredToolsTests = [
   deferredToolsPromptCost,
   deferredToolsLoadThenCall,
@@ -339,5 +359,8 @@ export const deferredToolsTests = [
   deferredToolsLoadThenCallQwen35,
   deferredToolsWarmVsColdQwen35,
   deferredToolsWarmFollowUpQwen35,
-  deferredToolsSearchThenCallQwen35
+  deferredToolsSearchThenCallQwen35,
+  deferredToolsPromptCostQwen35,
+  deferredToolsReopenedChatQwen35,
+  deferredToolsKvCacheIsolationQwen35
 ]

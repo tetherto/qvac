@@ -92,7 +92,10 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     'deferred-tools-kv-cache-isolation': this.kvCacheIsolation.bind(this),
     'deferred-tools-warm-vs-cold-qwen35': this.warmVsCold.bind(this),
     'deferred-tools-warm-follow-up-qwen35': this.warmFollowUp.bind(this),
-    'deferred-tools-search-then-call-qwen35': this.searchThenCall.bind(this)
+    'deferred-tools-search-then-call-qwen35': this.searchThenCall.bind(this),
+    'deferred-tools-prompt-cost-qwen35': this.promptCost.bind(this),
+    'deferred-tools-reopened-chat-qwen35': this.reopenedChat.bind(this),
+    'deferred-tools-kv-cache-isolation-qwen35': this.kvCacheIsolation.bind(this)
   }
 
   protected handlers = Object.fromEntries(
