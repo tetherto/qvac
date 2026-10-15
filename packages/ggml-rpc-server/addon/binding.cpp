@@ -762,6 +762,9 @@ js_value_t* rpcServerExports(js_env_t* env, js_value_t* target) {
     js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
     return nullptr;
   }
+  // Binding the imports does not initialize ggml's backend registry. Do it
+  // here on the JS thread so the start worker does not hang creating it.
+  static_cast<void>(ggml_backend_reg_count());
 
 // Native export registration is intentionally expressed as the same compact
 // macro used by the neighboring Bare addons.
