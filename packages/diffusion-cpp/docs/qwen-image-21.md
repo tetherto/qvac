@@ -3,7 +3,7 @@
 The integration uses the native QVAC engine through `ImgStableDiffusion`.
 The package's `vcpkg-configuration.json` automatically selects the checked-in
 `vcpkg-overlays/stable-diffusion-cpp` port. That port pins native engine commit
-[`e34802ff987c6cef3773b2b7cff2b58a0ee677e3`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/commit/e34802ff987c6cef3773b2b7cff2b58a0ee677e3)
+[`31ee95cb7c9e46e41b97c25ea7526d7de24fa6d0`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/commit/31ee95cb7c9e46e41b97c25ea7526d7de24fa6d0)
 from [native draft PR #57](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/57),
 with a verified archive SHA-512. It retains ggml
 `9f94f330ac196e0a2e3176e798b36226b22091a5` and the registry port's platform features.
@@ -15,7 +15,7 @@ npm run build:cuda
 ```
 
 No external overlay directory or uncommitted native patch is needed. The local
-port is versioned `2026-08-11#7`; this does not publish that revision to the
+port is versioned `2026-08-11#8`; this does not publish that revision to the
 registry. Keep the overlay until a registry port containing the native changes
 is available, then update the dependency/baseline and remove it together.
 Existing binaries built with native port #6 do not provide the new context
