@@ -5017,7 +5017,9 @@ class DecideSingleRequestQuestionsValueChoice(GeneratedBaseModel):
         | DecideSingleRequestQuestionsValueChoiceInstructions
         | list[Any]
     )
-    option_order: list[OptionOrderItem] | None = None
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
     type: Literal["choice"] = "choice"
     criteria: list[str | float | bool] | DecideSingleRequestQuestionsValueChoiceCriteria
 
@@ -5047,7 +5049,9 @@ class DecideSingleRequestQuestionsValueScore(GeneratedBaseModel):
         | DecideSingleRequestQuestionsValueScoreInstructions
         | list[Any]
     )
-    option_order: list[OptionOrderItem] | None = None
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
     type: Literal["score"] = "score"
     criteria: list[
         str
@@ -5118,7 +5122,9 @@ class DecideSingleRequestQuestionsValueNoul(GeneratedBaseModel):
         | DecideSingleRequestQuestionsValueNoulInstructions
         | list[Any]
     )
-    option_order: list[OptionOrderItem] | None = None
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
     type: Literal["noul"] = "noul"
     criteria: DecideSingleRequestQuestionsValueNoulCriteria | None = None
     labels: Annotated[
@@ -5145,7 +5151,7 @@ class DecideSingleRequestQuestions(
             | DecideSingleRequestQuestionsValueNoul,
         ],
         Field(
-            description="Question ID to Laya question.",
+            description="Question ID to decision question.",
             title="DecideSingleRequestQuestions",
         ),
     ]
@@ -5162,13 +5168,14 @@ class DecideSingleRequest(GeneratedBaseModel):
     questions: Annotated[
         DecideSingleRequestQuestions,
         Field(
-            description="Question ID to Laya question.",
+            description="Question ID to decision question.",
             title="DecideSingleRequestQuestions",
         ),
     ]
     max_len: Annotated[
         int | None,
         Field(
+            alias="maxLen",
             description="Token budget per sequence; unset uses the checkpoint budget.",
             gt=0,
             le=9007199254740991,
@@ -5177,6 +5184,7 @@ class DecideSingleRequest(GeneratedBaseModel):
     head_max_len: Annotated[
         int | None,
         Field(
+            alias="headMaxLen",
             description="Token budget for each question and its options; unset uses the checkpoint budget.",
             gt=0,
             le=9007199254740991,
@@ -5240,7 +5248,9 @@ class DecideBatchRequestQuestionsValueChoice(GeneratedBaseModel):
         | DecideBatchRequestQuestionsValueChoiceInstructions
         | list[Any]
     )
-    option_order: list[OptionOrderItem] | None = None
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
     type: Literal["choice"] = "choice"
     criteria: list[str | float | bool] | DecideBatchRequestQuestionsValueChoiceCriteria
 
@@ -5268,7 +5278,9 @@ class DecideBatchRequestQuestionsValueScore(GeneratedBaseModel):
         | DecideBatchRequestQuestionsValueScoreInstructions
         | list[Any]
     )
-    option_order: list[OptionOrderItem] | None = None
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
     type: Literal["score"] = "score"
     criteria: list[
         str
@@ -5338,7 +5350,9 @@ class DecideBatchRequestQuestionsValueNoul(GeneratedBaseModel):
         | DecideBatchRequestQuestionsValueNoulInstructions
         | list[Any]
     )
-    option_order: list[OptionOrderItem] | None = None
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
     type: Literal["noul"] = "noul"
     criteria: DecideBatchRequestQuestionsValueNoulCriteria | None = None
     labels: Annotated[
@@ -5365,7 +5379,7 @@ class DecideBatchRequestQuestions(
             | DecideBatchRequestQuestionsValueNoul,
         ],
         Field(
-            description="Question ID to Laya question.",
+            description="Question ID to decision question.",
             title="DecideBatchRequestQuestions",
         ),
     ]
@@ -5382,13 +5396,14 @@ class DecideBatchRequest(GeneratedBaseModel):
     questions: Annotated[
         DecideBatchRequestQuestions,
         Field(
-            description="Question ID to Laya question.",
+            description="Question ID to decision question.",
             title="DecideBatchRequestQuestions",
         ),
     ]
     max_len: Annotated[
         int | None,
         Field(
+            alias="maxLen",
             description="Token budget per sequence; unset uses the checkpoint budget.",
             gt=0,
             le=9007199254740991,
@@ -5397,6 +5412,7 @@ class DecideBatchRequest(GeneratedBaseModel):
     head_max_len: Annotated[
         int | None,
         Field(
+            alias="headMaxLen",
             description="Token budget for each question and its options; unset uses the checkpoint budget.",
             gt=0,
             le=9007199254740991,
@@ -5412,7 +5428,13 @@ class DecideResponseResultAnswersValueChoiceAction(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    act_probability: float
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
 
 
 class DecideResponseResultAnswersValueChoiceProbabilities(RootModel[dict[str, float]]):
@@ -5426,7 +5448,7 @@ class DecideResponseResultAnswersValueChoice(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: float
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
     action: Annotated[
         DecideResponseResultAnswersValueChoiceAction,
@@ -5444,7 +5466,13 @@ class DecideResponseResultAnswersValueScoreAction(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    act_probability: float
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
 
 
 class DecideResponseResultAnswersValueScoreLegend(RootModel[dict[str, str]]):
@@ -5464,7 +5492,7 @@ class DecideResponseResultAnswersValueScore(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: float
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
     action: Annotated[
         DecideResponseResultAnswersValueScoreAction,
@@ -5486,14 +5514,20 @@ class DecideResponseResultAnswersValueNoulAction(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    act_probability: float
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
 
 
 class DecideResponseResultAnswersValueNoul(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: float
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
     action: Annotated[
         DecideResponseResultAnswersValueNoulAction,
@@ -5530,7 +5564,7 @@ class DecideResponseResultUsageOptionsValue(GeneratedBaseModel):
     )
     total: float
     distinct: float
-    tokens_per_option: float | None
+    tokens_per_option: Annotated[float | None, Field(alias="tokensPerOption")]
 
 
 class DecideResponseResultUsageOptions(
@@ -5546,12 +5580,12 @@ class DecideResponseResultUsage(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    input_tokens: float
-    output_tokens: float
-    state_tokens: float
-    state_tokens_dropped: float
+    input_tokens: Annotated[float, Field(alias="inputTokens")]
+    output_tokens: Annotated[float, Field(alias="outputTokens")]
+    state_tokens: Annotated[float, Field(alias="stateTokens")]
+    state_tokens_dropped: Annotated[float, Field(alias="stateTokensDropped")]
     truncated: bool
-    truncated_questions: list[str]
+    truncated_questions: Annotated[list[str], Field(alias="truncatedQuestions")]
     options: Annotated[
         DecideResponseResultUsageOptions | None,
         Field(title="DecideResponseResultUsageOptions"),
@@ -5575,7 +5609,13 @@ class DecideResponseResultItemAnswersValueChoiceAction(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    act_probability: float
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
 
 
 class DecideResponseResultItemAnswersValueChoiceProbabilities(
@@ -5591,7 +5631,7 @@ class DecideResponseResultItemAnswersValueChoice(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: float
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
     action: Annotated[
         DecideResponseResultItemAnswersValueChoiceAction,
@@ -5609,7 +5649,13 @@ class DecideResponseResultItemAnswersValueScoreAction(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    act_probability: float
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
 
 
 class DecideResponseResultItemAnswersValueScoreLegend(RootModel[dict[str, str]]):
@@ -5631,7 +5677,7 @@ class DecideResponseResultItemAnswersValueScore(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: float
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
     action: Annotated[
         DecideResponseResultItemAnswersValueScoreAction,
@@ -5653,14 +5699,20 @@ class DecideResponseResultItemAnswersValueNoulAction(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    act_probability: float
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
 
 
 class DecideResponseResultItemAnswersValueNoul(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: float
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
     action: Annotated[
         DecideResponseResultItemAnswersValueNoulAction,
@@ -5697,7 +5749,7 @@ class DecideResponseResultItemUsageOptionsValue(GeneratedBaseModel):
     )
     total: float
     distinct: float
-    tokens_per_option: float | None
+    tokens_per_option: Annotated[float | None, Field(alias="tokensPerOption")]
 
 
 class DecideResponseResultItemUsageOptions(
@@ -5713,12 +5765,12 @@ class DecideResponseResultItemUsage(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    input_tokens: float
-    output_tokens: float
-    state_tokens: float
-    state_tokens_dropped: float
+    input_tokens: Annotated[float, Field(alias="inputTokens")]
+    output_tokens: Annotated[float, Field(alias="outputTokens")]
+    state_tokens: Annotated[float, Field(alias="stateTokens")]
+    state_tokens_dropped: Annotated[float, Field(alias="stateTokensDropped")]
     truncated: bool
-    truncated_questions: list[str]
+    truncated_questions: Annotated[list[str], Field(alias="truncatedQuestions")]
     options: Annotated[
         DecideResponseResultItemUsageOptions | None,
         Field(title="DecideResponseResultItemUsageOptions"),

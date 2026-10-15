@@ -1,5 +1,5 @@
 import { SpeakerAwareExecutor } from '../shared/executors/node/speaker-aware-executor.js'
-import { configureDecisionResource } from '../shared/executors/decision-executor.js'
+import { DecisionExecutor } from '../shared/executors/decision-executor.js'
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { createExecutor, type TestDefinition } from '@qvac/test-suite'
 import { createStepBindings } from '../shared/step-bindings.js'
@@ -134,7 +134,7 @@ const stepBindings = createStepBindings(resources)
 export const executor = createExecutor({
   handlers: [
     new SpeakerAwareExecutor(resources),
-    configureDecisionResource(resources, process.env['QVAC_LAYA_MODEL']),
+    new DecisionExecutor(resources),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath

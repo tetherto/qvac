@@ -5,18 +5,16 @@ import { InferenceCancelledError, InvalidResponseError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import { nowMs } from '@/profiling/index'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { decisionResultSchema, type DecideRequest, type DecisionResponse } from '@/schemas/index'
 import {
-  layaRequestSchema,
-  layaResultSchema,
-  type DecideRequest,
-  type LayaResponse
-} from '@/schemas/index'
-import { transformDecisionRequest } from '@/plugins/builtin/llamacpp-decision/helpers'
+  transformDecisionRequest,
+  transformDecisionResult
+} from '@/plugins/builtin/llamacpp-decision/helpers'
 import type { LayaDecisions } from '@qvac/embed-llamacpp'
 
 export async function decide(request: DecideRequest) {
-  const { modelId, requestId, type: _type, ...input } = request
-  const nativeRequest = transformDecisionRequest(layaRequestSchema.parse(input))
+  const { modelId, requestId } = request
+  const nativeRequest = transformDecisionRequest(request)
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
     kind: 'decision',
@@ -46,11 +44,18 @@ export async function decide(request: DecideRequest) {
     const outputs = await response.await()
     if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
     if (outputs.length !== 1) throw new InvalidResponseError('decide')
-    const parsed = (
-      'states' in nativeRequest ? layaResultSchema.array() : layaResultSchema
-    ).safeParse(outputs[0])
-    if (!parsed.success) throw new InvalidResponseError('decide', parsed.error)
-    const result: LayaResponse = parsed.data
+    let result: DecisionResponse
+    try {
+      const output = outputs[0]!
+      const converted = Array.isArray(output)
+        ? output.map(transformDecisionResult)
+        : transformDecisionResult(output)
+      result = (
+        'states' in nativeRequest ? decisionResultSchema.array() : decisionResultSchema
+      ).parse(converted)
+    } catch (error) {
+      throw new InvalidResponseError('decide', error)
+    }
     if (
       'states' in nativeRequest &&
       (!Array.isArray(result) || result.length !== nativeRequest.states.length)

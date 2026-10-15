@@ -5556,7 +5556,7 @@
                           }
                         ]
                       },
-                      "option_order": {
+                      "optionOrder": {
                         "type": "array",
                         "items": {
                           "type": "integer",
@@ -5660,7 +5660,7 @@
                           }
                         ]
                       },
-                      "option_order": {
+                      "optionOrder": {
                         "type": "array",
                         "items": {
                           "type": "integer",
@@ -5733,7 +5733,7 @@
                           }
                         ]
                       },
-                      "option_order": {
+                      "optionOrder": {
                         "type": "array",
                         "items": {
                           "type": "integer",
@@ -5844,16 +5844,16 @@
                   }
                 ]
               },
-              "description": "Question ID to Laya question.",
+              "description": "Question ID to decision question.",
               "title": "DecideSingleRequestQuestions"
             },
-            "max_len": {
+            "maxLen": {
               "description": "Token budget per sequence; unset uses the checkpoint budget.",
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "head_max_len": {
+            "headMaxLen": {
               "description": "Token budget for each question and its options; unset uses the checkpoint budget.",
               "type": "integer",
               "exclusiveMinimum": 0,
@@ -5939,7 +5939,7 @@
                           }
                         ]
                       },
-                      "option_order": {
+                      "optionOrder": {
                         "type": "array",
                         "items": {
                           "type": "integer",
@@ -6043,7 +6043,7 @@
                           }
                         ]
                       },
-                      "option_order": {
+                      "optionOrder": {
                         "type": "array",
                         "items": {
                           "type": "integer",
@@ -6116,7 +6116,7 @@
                           }
                         ]
                       },
-                      "option_order": {
+                      "optionOrder": {
                         "type": "array",
                         "items": {
                           "type": "integer",
@@ -6227,16 +6227,16 @@
                   }
                 ]
               },
-              "description": "Question ID to Laya question.",
+              "description": "Question ID to decision question.",
               "title": "DecideBatchRequestQuestions"
             },
-            "max_len": {
+            "maxLen": {
               "description": "Token budget per sequence; unset uses the checkpoint budget.",
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "head_max_len": {
+            "headMaxLen": {
               "description": "Token budget for each question and its options; unset uses the checkpoint budget.",
               "type": "integer",
               "exclusiveMinimum": 0,
@@ -6315,7 +6315,7 @@
                       {
                         "type": "object",
                         "properties": {
-                          "answer_confidence": {
+                          "answerConfidence": {
                             "type": "number"
                           },
                           "confidence": {
@@ -6324,11 +6324,12 @@
                           "action": {
                             "type": "object",
                             "properties": {
-                              "act_probability": {
-                                "type": "number"
+                              "actProbability": {
+                                "type": "number",
+                                "description": "Currently unreliable; do not use to trigger actions."
                               }
                             },
-                            "required": ["act_probability"],
+                            "required": ["actProbability"],
                             "additionalProperties": false,
                             "title": "DecideResponseResultAnswersValueChoiceAction"
                           },
@@ -6361,7 +6362,7 @@
                           }
                         },
                         "required": [
-                          "answer_confidence",
+                          "answerConfidence",
                           "confidence",
                           "action",
                           "type",
@@ -6374,7 +6375,7 @@
                       {
                         "type": "object",
                         "properties": {
-                          "answer_confidence": {
+                          "answerConfidence": {
                             "type": "number"
                           },
                           "confidence": {
@@ -6383,11 +6384,12 @@
                           "action": {
                             "type": "object",
                             "properties": {
-                              "act_probability": {
-                                "type": "number"
+                              "actProbability": {
+                                "type": "number",
+                                "description": "Currently unreliable; do not use to trigger actions."
                               }
                             },
-                            "required": ["act_probability"],
+                            "required": ["actProbability"],
                             "additionalProperties": false,
                             "title": "DecideResponseResultAnswersValueScoreAction"
                           },
@@ -6420,7 +6422,7 @@
                           }
                         },
                         "required": [
-                          "answer_confidence",
+                          "answerConfidence",
                           "confidence",
                           "action",
                           "type",
@@ -6434,7 +6436,7 @@
                       {
                         "type": "object",
                         "properties": {
-                          "answer_confidence": {
+                          "answerConfidence": {
                             "type": "number"
                           },
                           "confidence": {
@@ -6443,11 +6445,12 @@
                           "action": {
                             "type": "object",
                             "properties": {
-                              "act_probability": {
-                                "type": "number"
+                              "actProbability": {
+                                "type": "number",
+                                "description": "Currently unreliable; do not use to trigger actions."
                               }
                             },
-                            "required": ["act_probability"],
+                            "required": ["actProbability"],
                             "additionalProperties": false,
                             "title": "DecideResponseResultAnswersValueNoulAction"
                           },
@@ -6459,7 +6462,7 @@
                             "type": "number"
                           }
                         },
-                        "required": ["answer_confidence", "confidence", "action", "type", "noul"],
+                        "required": ["answerConfidence", "confidence", "action", "type", "noul"],
                         "additionalProperties": false,
                         "title": "DecideResponseResultAnswersValueNoul"
                       }
@@ -6470,22 +6473,22 @@
                 "usage": {
                   "type": "object",
                   "properties": {
-                    "input_tokens": {
+                    "inputTokens": {
                       "type": "number"
                     },
-                    "output_tokens": {
+                    "outputTokens": {
                       "type": "number"
                     },
-                    "state_tokens": {
+                    "stateTokens": {
                       "type": "number"
                     },
-                    "state_tokens_dropped": {
+                    "stateTokensDropped": {
                       "type": "number"
                     },
                     "truncated": {
                       "type": "boolean"
                     },
-                    "truncated_questions": {
+                    "truncatedQuestions": {
                       "type": "array",
                       "items": {
                         "type": "string"
@@ -6505,7 +6508,7 @@
                           "distinct": {
                             "type": "number"
                           },
-                          "tokens_per_option": {
+                          "tokensPerOption": {
                             "anyOf": [
                               {
                                 "type": "number"
@@ -6516,7 +6519,7 @@
                             ]
                           }
                         },
-                        "required": ["total", "distinct", "tokens_per_option"],
+                        "required": ["total", "distinct", "tokensPerOption"],
                         "additionalProperties": false,
                         "title": "DecideResponseResultUsageOptionsValue"
                       },
@@ -6524,12 +6527,12 @@
                     }
                   },
                   "required": [
-                    "input_tokens",
-                    "output_tokens",
-                    "state_tokens",
-                    "state_tokens_dropped",
+                    "inputTokens",
+                    "outputTokens",
+                    "stateTokens",
+                    "stateTokensDropped",
                     "truncated",
-                    "truncated_questions"
+                    "truncatedQuestions"
                   ],
                   "additionalProperties": false,
                   "title": "DecideResponseResultUsage"
@@ -6557,7 +6560,7 @@
                         {
                           "type": "object",
                           "properties": {
-                            "answer_confidence": {
+                            "answerConfidence": {
                               "type": "number"
                             },
                             "confidence": {
@@ -6566,11 +6569,12 @@
                             "action": {
                               "type": "object",
                               "properties": {
-                                "act_probability": {
-                                  "type": "number"
+                                "actProbability": {
+                                  "type": "number",
+                                  "description": "Currently unreliable; do not use to trigger actions."
                                 }
                               },
-                              "required": ["act_probability"],
+                              "required": ["actProbability"],
                               "additionalProperties": false,
                               "title": "DecideResponseResultItemAnswersValueChoiceAction"
                             },
@@ -6603,7 +6607,7 @@
                             }
                           },
                           "required": [
-                            "answer_confidence",
+                            "answerConfidence",
                             "confidence",
                             "action",
                             "type",
@@ -6616,7 +6620,7 @@
                         {
                           "type": "object",
                           "properties": {
-                            "answer_confidence": {
+                            "answerConfidence": {
                               "type": "number"
                             },
                             "confidence": {
@@ -6625,11 +6629,12 @@
                             "action": {
                               "type": "object",
                               "properties": {
-                                "act_probability": {
-                                  "type": "number"
+                                "actProbability": {
+                                  "type": "number",
+                                  "description": "Currently unreliable; do not use to trigger actions."
                                 }
                               },
-                              "required": ["act_probability"],
+                              "required": ["actProbability"],
                               "additionalProperties": false,
                               "title": "DecideResponseResultItemAnswersValueScoreAction"
                             },
@@ -6662,7 +6667,7 @@
                             }
                           },
                           "required": [
-                            "answer_confidence",
+                            "answerConfidence",
                             "confidence",
                             "action",
                             "type",
@@ -6676,7 +6681,7 @@
                         {
                           "type": "object",
                           "properties": {
-                            "answer_confidence": {
+                            "answerConfidence": {
                               "type": "number"
                             },
                             "confidence": {
@@ -6685,11 +6690,12 @@
                             "action": {
                               "type": "object",
                               "properties": {
-                                "act_probability": {
-                                  "type": "number"
+                                "actProbability": {
+                                  "type": "number",
+                                  "description": "Currently unreliable; do not use to trigger actions."
                                 }
                               },
-                              "required": ["act_probability"],
+                              "required": ["actProbability"],
                               "additionalProperties": false,
                               "title": "DecideResponseResultItemAnswersValueNoulAction"
                             },
@@ -6701,7 +6707,7 @@
                               "type": "number"
                             }
                           },
-                          "required": ["answer_confidence", "confidence", "action", "type", "noul"],
+                          "required": ["answerConfidence", "confidence", "action", "type", "noul"],
                           "additionalProperties": false,
                           "title": "DecideResponseResultItemAnswersValueNoul"
                         }
@@ -6712,22 +6718,22 @@
                   "usage": {
                     "type": "object",
                     "properties": {
-                      "input_tokens": {
+                      "inputTokens": {
                         "type": "number"
                       },
-                      "output_tokens": {
+                      "outputTokens": {
                         "type": "number"
                       },
-                      "state_tokens": {
+                      "stateTokens": {
                         "type": "number"
                       },
-                      "state_tokens_dropped": {
+                      "stateTokensDropped": {
                         "type": "number"
                       },
                       "truncated": {
                         "type": "boolean"
                       },
-                      "truncated_questions": {
+                      "truncatedQuestions": {
                         "type": "array",
                         "items": {
                           "type": "string"
@@ -6747,7 +6753,7 @@
                             "distinct": {
                               "type": "number"
                             },
-                            "tokens_per_option": {
+                            "tokensPerOption": {
                               "anyOf": [
                                 {
                                   "type": "number"
@@ -6758,7 +6764,7 @@
                               ]
                             }
                           },
-                          "required": ["total", "distinct", "tokens_per_option"],
+                          "required": ["total", "distinct", "tokensPerOption"],
                           "additionalProperties": false,
                           "title": "DecideResponseResultItemUsageOptionsValue"
                         },
@@ -6766,12 +6772,12 @@
                       }
                     },
                     "required": [
-                      "input_tokens",
-                      "output_tokens",
-                      "state_tokens",
-                      "state_tokens_dropped",
+                      "inputTokens",
+                      "outputTokens",
+                      "stateTokens",
+                      "stateTokensDropped",
                       "truncated",
-                      "truncated_questions"
+                      "truncatedQuestions"
                     ],
                     "additionalProperties": false,
                     "title": "DecideResponseResultItemUsage"

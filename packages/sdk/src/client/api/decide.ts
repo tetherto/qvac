@@ -4,8 +4,8 @@ import {
   decideParamsSchema,
   decideResponseSchema,
   type DecideParams,
-  type LayaResult,
-  type LayaResponse,
+  type DecisionResult,
+  type DecisionResponse,
   type RPCOptions
 } from '@qvac/inference/surface'
 import { InvalidResponseError } from '@/utils/errors-client'
@@ -13,7 +13,7 @@ import { decoratePromise } from '@/utils/decorate-promise'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 
 /**
- * Answers typed Laya questions about one state or a batch of states.
+ * Answers typed decision questions about one state or a batch of states.
  *
  * @param params - Model ID, states, questions, and optional token budgets.
  * @param options - RPC transport options.
@@ -27,19 +27,19 @@ import { generateClientRequestId } from '@/client/api/client-request-id'
 export function decide(
   params: Extract<DecideParams, { state: unknown }>,
   options?: RPCOptions
-): Promise<LayaResult> & { requestId: string }
+): Promise<DecisionResult> & { requestId: string }
 export function decide(
   params: Extract<DecideParams, { states: unknown }>,
   options?: RPCOptions
-): Promise<LayaResult[]> & { requestId: string }
+): Promise<DecisionResult[]> & { requestId: string }
 export function decide(
   params: DecideParams,
   options?: RPCOptions
-): Promise<LayaResponse> & { requestId: string }
+): Promise<DecisionResponse> & { requestId: string }
 export function decide(
   params: DecideParams,
   options?: RPCOptions
-): Promise<LayaResponse> & { requestId: string } {
+): Promise<DecisionResponse> & { requestId: string } {
   return createDecisionCall(params, options)
 }
 
@@ -47,7 +47,7 @@ export function createDecisionCall(
   params: DecideParams,
   options?: RPCOptions,
   sendRequest: typeof send = send
-): Promise<LayaResponse> & { requestId: string } {
+): Promise<DecisionResponse> & { requestId: string } {
   const requestId = generateClientRequestId()
   return decoratePromise(runDecide(params, requestId, options, sendRequest), { requestId })
 }
@@ -57,7 +57,7 @@ async function runDecide(
   requestId: string,
   options: RPCOptions | undefined,
   sendRequest: typeof send
-): Promise<LayaResponse> {
+): Promise<DecisionResponse> {
   const input = parseClientInput(decideParamsSchema, params)
   const response = await sendRequest({ ...input, type: 'decide', requestId }, options)
   if (response.type !== 'decide') throw new InvalidResponseError('decide')

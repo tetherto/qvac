@@ -2,14 +2,36 @@ import test from 'brittle'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/request-context'
 import { decide } from '@/plugins/builtin/llamacpp-decision/ops/decide'
-import { ModelType, type LayaResult } from '@/schemas/index'
+import { ModelType, type DecisionResult } from '@/schemas/index'
+import type { LayaResult } from '@qvac/embed-llamacpp'
 import {
   InferenceCancelledError,
   RequestRejectedByPolicyError,
   InvalidResponseError
 } from '@/errors/index'
 
-const result: LayaResult = {
+const result: DecisionResult = {
+  model: 'laya',
+  answers: {
+    refund: {
+      type: 'noul',
+      noul: 0.99,
+      answerConfidence: 0.99,
+      confidence: 0.99,
+      action: { actProbability: 1 }
+    }
+  },
+  usage: {
+    inputTokens: 20,
+    outputTokens: 0,
+    stateTokens: 10,
+    stateTokensDropped: 0,
+    truncated: false,
+    truncatedQuestions: [],
+    options: { refund: { total: 2, distinct: 2, tokensPerOption: null } }
+  }
+}
+const nativeResult: LayaResult = {
   model: 'laya',
   answers: {
     refund: {
@@ -26,7 +48,8 @@ const result: LayaResult = {
     state_tokens: 10,
     state_tokens_dropped: 0,
     truncated: false,
-    truncated_questions: []
+    truncated_questions: [],
+    options: { refund: { total: 2, distinct: 2, tokens_per_option: null } }
   }
 }
 const questions = { refund: { type: 'noul' as const, instructions: 'Refund requested.' } }
@@ -56,7 +79,9 @@ test('decisions unwrap the addon response once and preserve single and batch res
     input = request
     return {
       await: async () => [
-        request && typeof request === 'object' && 'states' in request ? [result, result] : result
+        request && typeof request === 'object' && 'states' in request
+          ? [nativeResult, nativeResult]
+          : nativeResult
       ]
     }
   })
@@ -79,13 +104,32 @@ test('decisions unwrap the addon response once and preserve single and batch res
   t.absent(getRequestRegistry().get('decide-single'))
 })
 
+test('decisions keep profiling metadata out of the native request', async (t) => {
+  let input: unknown
+  fixture(t, 'decision-profiled', async (request) => {
+    input = request
+    return { await: async () => [nativeResult] }
+  })
+  const request = {
+    type: 'decide' as const,
+    modelId: 'decision-profiled',
+    state: 'Refund',
+    questions,
+    __profiling: { enabled: true, id: 'decision-profile' }
+  }
+  t.alike((await decide(request)).result, result)
+  t.alike(input, { state: 'Refund', questions })
+})
+
 test('decisions omit undefined addon options while preserving explicit values', async (t) => {
   let input: unknown
   fixture(t, 'decision-options', async (request) => {
     input = request
     return {
       await: async () => [
-        request && typeof request === 'object' && 'states' in request ? [result, result] : result
+        request && typeof request === 'object' && 'states' in request
+          ? [nativeResult, nativeResult]
+          : nativeResult
       ]
     }
   })
@@ -94,18 +138,18 @@ test('decisions omit undefined addon options while preserving explicit values', 
       type: 'choice' as const,
       instructions: 'Which?',
       criteria: { a: null, b: false },
-      option_order: undefined
+      optionOrder: undefined
     },
     score: {
       type: 'score' as const,
       instructions: 'How much?',
       criteria: [false, 0, ''],
-      option_order: []
+      optionOrder: []
     },
     omitted: {
       type: 'noul' as const,
       instructions: 'Omitted?',
-      option_order: undefined,
+      optionOrder: undefined,
       criteria: undefined,
       labels: undefined
     },
@@ -119,7 +163,7 @@ test('decisions omit undefined addon options while preserving explicit values', 
       type: 'noul' as const,
       instructions: 'Partial?',
       criteria: { true: undefined, false: null },
-      option_order: [1, 0]
+      optionOrder: [1, 0]
     },
     empty: {
       type: 'noul' as const,
@@ -159,8 +203,8 @@ test('decisions omit undefined addon options while preserving explicit values', 
       modelId: 'decision-options',
       ...state,
       questions: requestQuestions,
-      max_len: undefined,
-      head_max_len: 128
+      maxLen: undefined,
+      headMaxLen: 128
     })
     t.alike(input, { ...state, questions: expectedQuestions, head_max_len: 128 })
     await decide({
@@ -168,8 +212,8 @@ test('decisions omit undefined addon options while preserving explicit values', 
       modelId: 'decision-options',
       ...state,
       questions: requestQuestions,
-      max_len: 512,
-      head_max_len: undefined
+      maxLen: 512,
+      headMaxLen: undefined
     })
     t.alike(input, { ...state, questions: expectedQuestions, max_len: 512 })
   }
@@ -185,9 +229,9 @@ test('decisions reject malformed addon responses and release the model slot afte
     questions
   }
   await t.exception(() => decide(request), InvalidResponseError as unknown as new () => Error)
-  output = [[result]]
+  output = [[nativeResult]]
   await t.exception(() => decide(request), InvalidResponseError as unknown as new () => Error)
-  output = [result]
+  output = [nativeResult]
   t.alike((await decide(request)).result, result)
 })
 
@@ -207,7 +251,7 @@ function gatedFixture(t: TestContext, id: string) {
       return {
         await: () =>
           new Promise<LayaResult[]>((resolve) => {
-            finish = () => resolve([result])
+            finish = () => resolve([nativeResult])
           })
       }
     },
@@ -221,7 +265,7 @@ function gatedFixture(t: TestContext, id: string) {
 
 test('decisions queue FIFO per model and let another model run independently', async (t) => {
   const model = gatedFixture(t, 'decision-fifo')
-  fixture(t, 'decision-independent', async () => ({ await: async () => [result] }))
+  fixture(t, 'decision-independent', async () => ({ await: async () => [nativeResult] }))
   const request = { type: 'decide' as const, modelId: 'decision-fifo', questions }
   const first = decide({ ...request, state: 'first' })
   await settle()
@@ -287,9 +331,9 @@ test('decisions bound the waiting queue without interrupting admitted requests',
         await: () =>
           starts === 1
             ? new Promise<LayaResult[]>((resolve) => {
-                finish = () => resolve([result])
+                finish = () => resolve([nativeResult])
               })
-            : Promise.resolve([result])
+            : Promise.resolve([nativeResult])
       }
     },
     async () => {
@@ -342,7 +386,7 @@ test('decisions cancel the owning job, admit the next queued call, and allow rec
     }),
     async () => {
       cancelled++
-      finish([result])
+      finish([nativeResult])
     }
   )
   const request = {
@@ -362,11 +406,11 @@ test('decisions cancel the owning job, admit the next queued call, and allow rec
   t.is(cancelled, 1)
   t.absent(getRequestRegistry().get('decide-cancel'))
   await settle()
-  finish([result])
+  finish([nativeResult])
   t.alike((await queued).result, result)
   const recovered = decide(request)
   await new Promise<void>((resolve) => setTimeout(resolve, 0, undefined))
-  finish([result])
+  finish([nativeResult])
   t.alike((await recovered).result, result)
 })
 
@@ -423,13 +467,13 @@ test('decisions hold the model slot until pending native cancellation settles', 
   t.is(getRequestRegistry().cancel({ requestId: 'decision-pending-cancel-first' }), 1)
   t.is(cancelled, 1)
   // The first job finishes naturally while its cancellation is still pending.
-  finishOutput([result])
+  finishOutput([nativeResult])
   await settle()
   t.is(starts, 1, 'the queued job cannot start while native cancellation is pending')
   finishCancel()
   await failure
   await nextStarted
-  finishOutput([result])
+  finishOutput([nativeResult])
   t.alike(await queued, { result }, 'the delayed cancellation cannot abort the queued job')
   t.absent(getRequestRegistry().get('decision-pending-cancel-first'))
   t.absent(getRequestRegistry().get('decision-pending-cancel-next'))
@@ -439,7 +483,7 @@ test('cancel-before-begin never starts native work', async (t) => {
   let starts = 0
   fixture(t, 'decision-pre-cancel', async () => {
     starts++
-    return { await: async () => [result] }
+    return { await: async () => [nativeResult] }
   })
   getRequestRegistry().cancel({ requestId: 'decide-pre-cancel' })
   await t.exception(

@@ -2,6 +2,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { systemOneBody, systemOneResult } from '@/serve/extensions/systemone/schemas'
 import { systemOneState } from '@/serve/extensions/systemone/state'
+import { toDecideParams, toSystemOneResult } from '@/serve/extensions/systemone/mapping'
 
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
@@ -19,14 +20,13 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       preHandler: requireModel('decision')
     },
     async (req) => {
-      const { model: _model, ...input } = req.body
       const { sdkModelId, alias } = req.qvacModel!
-      const result = systemOneState(app.qvac).decide({ ...input, modelId: sdkModelId })
+      const result = systemOneState(app.qvac).decide(toDecideParams(req.body, sdkModelId))
       req.bindCancel(result.requestId)
       app.qvac.logger.info(
-        `  systemone model=${alias} questions=${Object.keys(input.questions).length}`
+        `  systemone model=${alias} questions=${Object.keys(req.body.questions).length}`
       )
-      return { ...(await result), model: alias }
+      return toSystemOneResult(await result, alias)
     }
   )
 }

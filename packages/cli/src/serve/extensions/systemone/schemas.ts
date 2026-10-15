@@ -65,7 +65,7 @@ export const systemOneBody = z
   .object({
     model: z.string().trim().min(1),
     state: stateSchema,
-    questions: z.record(z.string(), questionSchema).describe('Question ID to Laya question.'),
+    questions: z.record(z.string(), questionSchema).describe('Question ID to decision question.'),
     max_len: z
       .number()
       .int()
@@ -84,7 +84,9 @@ export const systemOneBody = z
 const answerBase = {
   answer_confidence: z.number(),
   confidence: z.number(),
-  action: z.object({ act_probability: z.number() })
+  action: z.object({
+    act_probability: z.number().describe('Currently unreliable; do not use to trigger actions.')
+  })
 }
 const answerSchema = z.discriminatedUnion('type', [
   z.object({
@@ -125,5 +127,6 @@ export const systemOneResult = z.object({
       .optional()
   })
 })
+
 export type SystemOneBody = z.infer<typeof systemOneBody>
 export type SystemOneResult = z.infer<typeof systemOneResult>

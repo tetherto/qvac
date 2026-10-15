@@ -1,12 +1,6 @@
 import { decide, RequestValidationFailedError } from '@qvac/sdk'
-import {
-  SkipExecutor,
-  ValidationHelpers,
-  type TestResult,
-  type Expectation
-} from '@qvac/test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
-import { ResourceManager } from '../resource-manager.js'
 import { decisionTests } from '../../decision-tests.js'
 
 const questions = {
@@ -73,7 +67,7 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
     const modelId = await this.resources.ensureLoaded('decision')
     let rejected = false
     try {
-      await decide({ modelId, state, questions, max_len: -1 })
+      await decide({ modelId, state, questions, maxLen: -1 })
     } catch (error) {
       rejected = error instanceof RequestValidationFailedError
     }
@@ -84,16 +78,4 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
       throw new Error('Decision failed after invalid budget')
     return ValidationHelpers.validate('rejected invalid budget; recovered billing', expectation)
   }
-}
-
-/** Register the local fixture shared by the desktop and Electron decision tests. */
-export function configureDecisionResource(resources: ResourceManager, modelPath?: string) {
-  if (!modelPath) {
-    return new SkipExecutor(/^decision-/, 'Set QVAC_LAYA_MODEL to a local Laya GGUF.')
-  }
-  resources.define('decision', {
-    modelSrc: modelPath,
-    type: 'llamacpp-decision'
-  })
-  return new DecisionExecutor(resources)
 }

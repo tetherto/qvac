@@ -2,18 +2,18 @@ import test from 'brittle'
 import { createDecisionCall } from '@/client/api/decide'
 import { InferenceCancelledError } from '@/utils/errors-server'
 import { InvalidResponseError, RequestValidationFailedError } from '@/utils/errors-client'
-import type { DecideRequest, LayaResult } from '@qvac/inference/surface'
+import type { DecideRequest, DecisionResult } from '@qvac/inference/surface'
 
-const result: LayaResult = {
+const result: DecisionResult = {
   model: 'laya',
   answers: {},
   usage: {
-    input_tokens: 1,
-    output_tokens: 0,
-    state_tokens: 1,
-    state_tokens_dropped: 0,
+    inputTokens: 1,
+    outputTokens: 0,
+    stateTokens: 1,
+    stateTokensDropped: 0,
     truncated: false,
-    truncated_questions: []
+    truncatedQuestions: []
   }
 }
 const params = {
@@ -49,7 +49,7 @@ test('decide client rejects input before RPC and rejects malformed or mismatched
     return { type: 'decide', result }
   }
   await t.exception(
-    createDecisionCall({ ...params, max_len: -1 }, undefined, send as never),
+    createDecisionCall({ ...params, maxLen: -1 }, undefined, send as never),
     RequestValidationFailedError as unknown as new () => Error
   )
   t.is(sends, 0)
@@ -88,7 +88,7 @@ test('decide client preserves cancellation and native failures', async (t) => {
     }
   }
   try {
-    await createDecisionCall({ ...params, max_len: -1 }, undefined, (async () => {}) as never)
+    await createDecisionCall({ ...params, maxLen: -1 }, undefined, (async () => {}) as never)
   } catch (error) {
     t.ok(error instanceof RequestValidationFailedError)
   }

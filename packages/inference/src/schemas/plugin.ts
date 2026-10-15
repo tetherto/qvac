@@ -354,7 +354,7 @@ export const pluginDefinitionRuntimeSchema = z
 export const PLUGIN_LLM = '@qvac/inference/llamacpp-completion/plugin' as const
 
 /**
- * Laya decision plugin (llama.cpp).
+ * Decision plugin (llama.cpp).
  * Provides: typed choice, score, and noul answers about a state.
  */
 export const PLUGIN_DECISION = '@qvac/inference/llamacpp-decision/plugin' as const
