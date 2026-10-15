@@ -10095,7 +10095,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             alias="image-max-megapixels",
             description="Largest image a vision model accepts, in millions of pixels (width × height). Checked against the image header before decoding; larger images are rejected. Vision models only. Default 50.",
             ge=1,
-            le=9007199254740991,
+            le=18446744073709,
         ),
     ] = None
     threads: Annotated[

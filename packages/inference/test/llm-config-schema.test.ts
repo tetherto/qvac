@@ -328,6 +328,11 @@ test('llmConfigBaseSchema: rejects invalid image-max-megapixels', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': '20' }).success, false)
 })
 
+test('llmConfigBaseSchema: bounds image-max-megapixels at the addon maximum', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 18_446_744_073_709 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 18_446_744_073_710 }).success, false)
+})
+
 test('llmConfigSchema: does not inject a default for image-max-megapixels', (t) => {
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
