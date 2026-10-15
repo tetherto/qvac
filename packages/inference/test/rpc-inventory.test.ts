@@ -142,7 +142,7 @@ test('RPC inventory reads native device count and memory over fragmented TCP res
     if (command === 14) {
       t.alike(payload, Buffer.alloc(24), 'TCP-only capabilities')
       const hello = Buffer.alloc(28)
-      hello[0] = 108
+      hello[0] = 111
       return hello
     }
     if (command === 15) {
@@ -166,39 +166,37 @@ test('RPC inventory reads native device count and memory over fragmented TCP res
   t.alike(logs.warnings, [], 'compatible inventory does not warn')
 })
 
-for (const version of [108, 109]) {
-  for (const qpn of [0, 0x123456]) {
-    test(`RPC ${version} inventory reports RDMA availability for QPN ${qpn}`, async (t) => {
-      await using server = await endpoint((command, payload) => {
-        if (command === 14) {
-          t.alike(payload, Buffer.alloc(24), 'probe requests TCP even when server offers RDMA')
-          const hello = Buffer.alloc(28)
-          hello[0] = version
-          hello[2] = 1
-          hello.writeUInt32LE(qpn, 4)
-          hello.fill(255, 8)
-          return hello
-        }
-        if (command === 15) {
-          const count = Buffer.alloc(4)
-          count.writeUInt32LE(1)
-          return count
-        }
-        const memory = Buffer.alloc(16)
-        memory.writeBigUInt64LE(1024n, 0)
-        memory.writeBigUInt64LE(2048n, 8)
-        return memory
-      })
-      t.alike(await server.query(), { devices: [device], rdmaAvailable: qpn !== 0 })
+for (const qpn of [0, 0x123456]) {
+  test(`RPC 111 inventory reports RDMA availability for QPN ${qpn}`, async (t) => {
+    await using server = await endpoint((command, payload) => {
+      if (command === 14) {
+        t.alike(payload, Buffer.alloc(24), 'probe requests TCP even when server offers RDMA')
+        const hello = Buffer.alloc(28)
+        hello[0] = 111
+        hello[2] = 1
+        hello.writeUInt32LE(qpn, 4)
+        hello.fill(255, 8)
+        return hello
+      }
+      if (command === 15) {
+        const count = Buffer.alloc(4)
+        count.writeUInt32LE(1)
+        return count
+      }
+      const memory = Buffer.alloc(16)
+      memory.writeBigUInt64LE(1024n, 0)
+      memory.writeBigUInt64LE(2048n, 8)
+      return memory
     })
-  }
+    t.alike(await server.query(), { devices: [device], rdmaAvailable: qpn !== 0 })
+  })
 }
 
 test('RPC inventory preserves the RDMA offer when the server has no devices', async (t) => {
   await using server = await endpoint((command) => {
     if (command === 14) {
       const hello = Buffer.alloc(28)
-      hello[0] = 109
+      hello[0] = 111
       hello.writeUInt32LE(1, 4)
       return hello
     }
@@ -213,7 +211,7 @@ test('RPC inventory rejects unsupported versions, invalid lengths and excessive 
     await using server = await endpoint((command) => {
       if (command === 14) {
         const hello = Buffer.alloc(kind === 'length' ? 29 : 28)
-        hello[0] = kind === 'version' ? 3 : 109
+        hello[0] = kind === 'version' ? 3 : 111
         return hello
       }
       if (command === 15) {
@@ -244,8 +242,9 @@ test('RPC inventory timeout and cancellation close stalled queries', async (t) =
 test('RPC inventory warns once with the endpoint and received and supported versions', async (t) => {
   for (const [major, minor] of [
     [110, 0],
-    [109, 1],
-    [108, 1]
+    [111, 1],
+    [109, 0],
+    [108, 0]
   ]) {
     using logs = captureWarnings()
     const commands: number[] = []
@@ -266,7 +265,7 @@ test('RPC inventory warns once with the endpoint and received and supported vers
       url: server.url,
       reason: 'unsupported protocol version',
       receivedVersion: `${major}.${minor}.7`,
-      supportedVersions: '108.0.x, 109.0.x',
+      supportedVersions: '111.0.x',
       receivedHelloBytes: '28',
       expectedHelloBytes: 28
     })
@@ -291,7 +290,7 @@ test('RPC inventory warns for short and oversized HELLO frames before parsing in
       t.is(details.url, server.url)
       t.is(details.receivedHelloBytes, String(length))
       t.is(details.expectedHelloBytes, 28)
-      t.is(details.supportedVersions, '108.0.x, 109.0.x')
+      t.is(details.supportedVersions, '111.0.x')
       t.is(details.receivedVersion, splitAt.length === 0 && length >= 3 ? '110.0.0' : 'unavailable')
       t.is(
         details.reason,
@@ -309,7 +308,7 @@ test('RPC inventory bounds diagnostics for a huge declared length and excess tra
     await using server = await endpoint(
       () => {
         const hello = Buffer.alloc(28)
-        hello[0] = 109
+        hello[0] = 111
         return hello
       },
       {
@@ -328,7 +327,7 @@ test('RPC inventory bounds diagnostics for a huge declared length and excess tra
     t.is(logs.warnings.length, 1)
     const details = JSON.parse(logs.warnings[0]!.slice(logs.warnings[0]!.indexOf('{')))
     t.is(details.receivedHelloBytes, kind === 'header-only' ? '18446744073709551615' : '28')
-    t.is(details.receivedVersion, kind === 'header-only' ? 'unavailable' : '109.0.0')
+    t.is(details.receivedVersion, kind === 'header-only' ? 'unavailable' : '111.0.0')
     t.is(
       details.reason,
       kind === 'header-only' ? 'unexpected response size' : 'response exceeds frame limit'
