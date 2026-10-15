@@ -33,6 +33,11 @@ public:
   static void decrementRefCount();
 
 private:
+  friend class LlamaBackendsHandle;
+  static void
+  acquire(const std::string& backendsDir, const std::string& openclCacheDir);
+  static bool initializeLocked(
+      const std::string& backendsDir, const std::string& openclCacheDir);
   static std::mutex g_initMutex;
   static bool g_initialized;
   static std::string g_recordedBackendsDir;

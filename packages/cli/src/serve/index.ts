@@ -1,3 +1,4 @@
+import type { AddressInfo } from 'node:net'
 import type { FastifyInstance } from 'fastify'
 import closeWithGrace from 'close-with-grace'
 
@@ -12,6 +13,7 @@ import { createLoadManager, defaultLoadFn } from '@/serve/core/load-manager'
 import { preloadModels, shouldRefuseStart } from '@/serve/core/lifecycle'
 import type { QvacContext } from '@/serve/core/context'
 import { createCoreServer } from '@/serve/core/server'
+import { writeReadySignal } from '@/serve/core/ready-signal'
 import {
   extensionBanners,
   extensionSummary,
@@ -48,6 +50,8 @@ export interface StartServerOptions {
   /** Per-extension options, keyed by extension name, passed to its `setup`. */
   extensionOptions?: Record<string, unknown> | undefined
   loadModelOverride?: QvacContext['loadModelOverride']
+  /** Inherited descriptor that receives the bound port once the server listens. */
+  readyFd?: number | undefined
 }
 
 export async function buildServer(options: StartServerOptions): Promise<FastifyInstance> {
@@ -149,7 +153,11 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
   })
 
   await app.listen({ port: options.port, host: options.host })
-  app.qvac.logger.info(`QVAC API server listening on http://${options.host}:${options.port}`)
+  const { port } = app.server.address() as AddressInfo
+  app.qvac.logger.info(`QVAC API server listening on http://${options.host}:${port}`)
+  if (options.readyFd !== undefined) {
+    writeReadySignal(options.readyFd, { port, pid: process.pid })
+  }
   app.qvac.logger.info(extensionSummary(extensions))
   logStartupSummary(app, app.qvac.logger)
   return app

@@ -44,6 +44,7 @@ export const modelFitEmbeddings = assessCase('embeddings', 'embeddings', 'native
 export const modelFitParakeet = assessCase('parakeet', 'parakeet-tdt', 'native-fit')
 export const modelFitAudiogen = assessCase('audiogen', 'audiogen-turbo', 'native-fit')
 export const modelFitDiffusion = assessCase('diffusion', 'diffusion', 'native-fit')
+export const modelFitOcr = assessCase('ocr', 'ocr', 'native-fit')
 
 /**
  * One per voice engine: `assessFit` in `@qvac/tts-ggml` takes a different
@@ -55,17 +56,14 @@ export const modelFitTtsCosyvoice = assessCase('tts-cosyvoice3', 'tts-cosyvoice3
 export const modelFitTtsAudio8 = assessCase('tts-audio8', 'tts-audio8', 'native-fit')
 export const modelFitTtsSupertonic = assessCase('tts-supertonic', 'tts-supertonic', 'native-fit')
 
+export const modelFitWhisper = assessCase('whisper', 'whisper', 'native-fit')
+export const modelFitBci = assessCase('bci', 'bci', 'native-fit')
+
 /**
- * Whisper and BCI ship as ggml `.bin`. Their fitters read the registry's
- * weightless descriptions of those files, BCI's with the embedder description
- * staged beside the model, but the registry records of these models carry no
- * description yet. Until they do, the assessment rests on the computed floor,
- * which can refuse a model but never confirm one, and each case becomes
- * `native-fit` once its records are filled. The engine fitters already answer
- * for them at load time — see the probe cases.
+ * The translation fitter reads files on disk and no registry description, so
+ * before download the assessment rests on the computed floor.
  */
-export const modelFitWhisper = assessCase('whisper', 'whisper', 'computed-only')
-export const modelFitBci = assessCase('bci', 'bci', 'computed-only')
+export const modelFitTranslation = assessCase('translation', 'bergamot-en-fr', 'computed-only')
 
 export const modelFitProbeLlm = probeCase('llm', 'llm', 'llm-llamacpp')
 export const modelFitProbeEmbeddings = probeCase('embeddings', 'embeddings', 'embed-llamacpp')
@@ -75,6 +73,12 @@ export const modelFitProbeBci = probeCase('bci', 'bci', 'bci-whispercpp')
 export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', 'tts-ggml')
 export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', 'audiogen-ggml')
 export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', 'diffusion-cpp')
+export const modelFitProbeOcr = probeCase('ocr', 'ocr', 'ocr-ggml')
+export const modelFitProbeTranslation = probeCase(
+  'translation',
+  'bergamot-en-fr',
+  'translation-nmtcpp'
+)
 
 export const modelFitAssessTests = [
   modelFitLlm,
@@ -87,8 +91,10 @@ export const modelFitAssessTests = [
   modelFitTtsSupertonic,
   modelFitAudiogen,
   modelFitDiffusion,
+  modelFitOcr,
   modelFitWhisper,
-  modelFitBci
+  modelFitBci,
+  modelFitTranslation
 ]
 
 export const modelFitProbeTests = [
@@ -99,7 +105,9 @@ export const modelFitProbeTests = [
   modelFitProbeBci,
   modelFitProbeTts,
   modelFitProbeAudiogen,
-  modelFitProbeDiffusion
+  modelFitProbeDiffusion,
+  modelFitProbeOcr,
+  modelFitProbeTranslation
 ]
 
 export const modelFitTests = [...modelFitAssessTests, ...modelFitProbeTests]

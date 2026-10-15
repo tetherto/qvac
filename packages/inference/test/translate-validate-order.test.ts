@@ -1,7 +1,7 @@
 import test from 'brittle'
 
 // Bare-only: importing plugins/ops/translate pulls native bare deps that
-// bun unit tests cannot load. Schema coverage for missing `to` lives in
+// Node unit tests cannot load. Schema coverage for missing `to` lives in
 // translation-schemas.test.ts; this file proves op ordering.
 
 let idCounter = 0

@@ -328,7 +328,7 @@ In streaming `delta` mode each segment is annotated with `windowStartTimestep`. 
 ```js
 const { assessFit } = require('@qvac/bci-whispercpp')
 
-const fit = assessFit({
+const fit = await assessFit({
   modelPath: '/models/bci-whisper.bin',
   embedderPath: '/models/bci-embedder.bin',
   audioSeconds: 300,
@@ -361,7 +361,9 @@ The projection covers the whisper model and the embedder. `embedderBytes` is the
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to whisper's own headroom. |
 | `backendsDir` | Where the dynamically-loaded ggml backends live. Defaults to the directory a real load uses, since the native side registers backends once per process. |
 
-A model or embedder the fitter cannot read is `status: "error"`; a broken request, or a host with no native binding, throws.
+`assessFit` returns a Promise. Concurrent calls run one at a time.
+
+A model or embedder the fitter cannot read resolves to `status: "error"`; a broken request, or a host with no native binding, rejects.
 
 ## Tests
 

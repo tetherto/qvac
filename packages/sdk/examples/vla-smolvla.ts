@@ -6,7 +6,7 @@
  * zero noise), and prints the produced action chunk + per-stage timings.
  *
  * Usage:
- *   bun examples/vla-smolvla.ts [path-to-smolvla.gguf]
+ *   npx tsx examples/vla-smolvla.ts [path-to-smolvla.gguf]
  *
  * By default the example pulls the registry-baked SmolVLA-LIBERO GGUF
  * (~1.9 GB) on first run and caches it locally. Pass an absolute path on
@@ -31,7 +31,7 @@ try {
   const modelId = await loadModel({
     modelSrc,
     modelType: 'ggml-vla',
-    modelConfig: { backend: 'cpu' },
+    modelConfig: { backend: ['cpu'] },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
