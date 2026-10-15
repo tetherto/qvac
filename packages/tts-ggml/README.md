@@ -675,6 +675,8 @@ Notes:
   engine runs its ggml graph on the GPU (falling back to the ggml CPU backend
   when no GPU backend initialises), a CPU engine keeps the scalar core.
   `denoiserBackendDevice` / `denoiserBackendId` in the stats report where it ran.
+- Android ARM Mali devices can use Vulkan for denoising with `config.useGPU: true`.
+  This path is validated on Pixel 9 Pro XL (Mali-G715).
 - The tts-cpp UL-UNAS forward is implemented in
   [qvac-fabric-speech.cpp#78](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/78)
   (scalar CPU port, validated bit-close to the ONNX reference); it requires a
