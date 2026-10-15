@@ -51,7 +51,6 @@ import { DownloadResilienceExecutor } from '../shared/executors/node/download-re
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
-import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
@@ -194,7 +193,6 @@ export const executor = createExecutor({
     new RpcServerExecutor(),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
-    new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
     new PluginExecutor(resources)
   ],

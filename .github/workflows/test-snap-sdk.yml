@@ -198,8 +198,6 @@ jobs:
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
       # GitHub-hosted runners have no LXD, so snapcraft builds on the host there.
       QVAC_TEST_SNAP_BUILD_MODE: ${{ startsWith(matrix.os, 'ubuntu-') && 'destructive' || 'lxd' }}
-      # Only the Windows GPU runner has two GPUs; every Snap runner is Linux.
-      QVAC_HAS_MULTI_GPU: "0"
     steps:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
