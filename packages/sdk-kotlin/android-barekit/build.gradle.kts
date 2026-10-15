@@ -131,7 +131,7 @@ val buildWorkspaceSdk by tasks.registering(Exec::class) {
         runtimeRoot.file("../sdk/package.json"),
         runtimeRoot.file("../sdk/tsconfig.json"),
         runtimeRoot.file("../sdk/tsconfig.alias.json"),
-        runtimeRoot.file("../sdk/scripts/link-workspace-inference.ts"),
+        runtimeRoot.file("../sdk/scripts/link-workspace-inference.mjs"),
         runtimeRoot.file("../inference/package.json"),
         runtimeRoot.file("../inference/tsconfig.build.json"),
         runtimeRoot.file("../inference/tsconfig.alias.json"),

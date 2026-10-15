@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 import { DEFAULT_SERVE_START_TIMEOUT_MS } from '../defaults.js'
+import { verifyServeIdentity } from './serve-identity.js'
 
 // Shared, cross-process registry of managed serves. Each running serve is
 // described by one record keyed by its *fleet key* (model set + config + host),
@@ -248,7 +249,9 @@ export async function liveConsumers(fleetKey: string): Promise<number[]> {
 
 // `apiKey === undefined` probes anonymously, for records written by a provider
 // that predates managed auth. Only ever used on a record whose baseURL has
-// already been checked against its own host/port.
+// already been checked against its own host/port. With a key, the listener must
+// first prove it holds that key: the recorded serve may have died and another
+// local process taken its port.
 export async function healthCheck(
   baseURL: string,
   apiKey: string | undefined,
@@ -258,6 +261,9 @@ export async function healthCheck(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
+    if (apiKey !== undefined) {
+      if (!(await verifyServeIdentity(baseURL, apiKey, fetchImpl, controller.signal))) return false
+    }
     const res = await fetchImpl(`${baseURL}/models`, {
       ...(apiKey === undefined ? {} : { headers: { authorization: `Bearer ${apiKey}` } }),
       signal: controller.signal

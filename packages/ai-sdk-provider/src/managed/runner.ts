@@ -28,7 +28,8 @@ export interface RunnerParams {
   readonly fleetKey: string
   readonly apiKey: string
   readonly configPath: string
-  readonly port: number
+  // A pinned port; otherwise the serve binds any free one and reports it.
+  readonly port?: number
   readonly host: string
   readonly idleTimeoutMs: number
   readonly startTimeoutMs: number
@@ -100,7 +101,7 @@ export async function runRunner(params: RunnerParams): Promise<void> {
     spawned = await spawnServe({
       apiKey,
       configPath,
-      port,
+      ...(port !== undefined ? { port } : {}),
       host,
       startTimeoutMs,
       ...(params.serveBinPath !== undefined ? { serveBinPath: params.serveBinPath } : {})
@@ -124,7 +125,7 @@ export async function runRunner(params: RunnerParams): Promise<void> {
     apiKey,
     servePid,
     runnerPid: process.pid,
-    port,
+    port: spawned.port,
     host,
     baseURL: spawned.baseURL,
     configPath,

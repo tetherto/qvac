@@ -171,8 +171,11 @@ interface TranslationNmtcpp {
  */
 interface TranslationNmtcppConstructor {
   new (args: TranslationNmtcppArgs): TranslationNmtcpp;
-  /** Assess a model before loading it, using current device memory. */
-  assessFit(request: TranslationNmtcpp.FitRequest): TranslationNmtcpp.FitResult;
+  /**
+   * Assess a model before loading it, using current device memory. Concurrent
+   * calls run one at a time. A malformed request rejects.
+   */
+  assessFit(request: TranslationNmtcpp.FitRequest): Promise<TranslationNmtcpp.FitResult>;
   /**
    * Available model types for translation
    */
@@ -191,9 +194,9 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     Bergamot: "Bergamot",
   };
 
-  static assessFit(
+  static async assessFit(
     request: TranslationNmtcpp.FitRequest,
-  ): TranslationNmtcpp.FitResult {
+  ): Promise<TranslationNmtcpp.FitResult> {
     if (
       !request ||
       !request.files ||
@@ -226,14 +229,14 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     }
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily.
     const binding = require("./binding") as {
-      assessFit?: (input: TranslationNmtcpp.FitRequest) => TranslationNmtcpp.FitResult;
+      assessFit?: (input: TranslationNmtcpp.FitRequest) => Promise<TranslationNmtcpp.FitResult>;
     };
     if (typeof binding.assessFit !== "function") {
       throw new Error("the translation-nmtcpp prebuild does not expose assessFit");
     }
     const config = { ...request.config };
     normalizeGpuAliases(config);
-    return binding.assessFit({
+    return await binding.assessFit({
       ...request,
       config,
     });

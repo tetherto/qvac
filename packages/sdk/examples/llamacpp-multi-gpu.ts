@@ -11,8 +11,8 @@ import { completion, loadModel, unloadModel, VERBOSITY, LLAMA_3_2_1B_INST_Q4_0 }
 // "1,1" distributes evenly across two GPUs; "3,1" assigns 75% to GPU 0.
 //
 // Usage:
-//   bun run bare:example dist/examples/llamacpp-multi-gpu.js
-//   bun run bare:example dist/examples/llamacpp-multi-gpu.js '<model-url>'
+//   node dist/examples/llamacpp-multi-gpu.js
+//   node dist/examples/llamacpp-multi-gpu.js '<model-url>'
 
 const modelSrc = process.argv[2] ?? LLAMA_3_2_1B_INST_Q4_0
 

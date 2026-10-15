@@ -100,12 +100,19 @@ export type VlaEmbodimentSelection =
 
 export const vlaConfigSchema = z.object({
   backend: z
-    .enum(['auto', 'cpu'])
+    .array(z.enum(['auto', 'cpu', 'cuda', 'vulkan', 'metal', 'opencl', 'hip', 'rocm', 'sycl']))
+    .min(1)
+    .refine(
+      (value) => !value.includes('cpu') || value.length === 1,
+      'CPU must be selected on its own'
+    )
     .optional()
     .describe(
-      'Backend selection passed to `VlaModel.load({ backend })`. ' +
-        "`'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. " +
-        "`'cpu'` forces CPU regardless of available accelerators."
+      "Ordered backend names, such as ['cuda', 'vulkan']. " +
+        "Omitted or ['auto'] uses the native default order. " +
+        'Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. ' +
+        'Names are tried in order; if none has an accepted device, selection falls back to the native default order. ' +
+        "['cpu'] forces CPU regardless of available accelerators and must be used on its own."
     ),
   verbosity: z
     .number()
@@ -217,7 +224,7 @@ export const vlaStatsSchema = z.object({
   backendDevice: z
     .number()
     .optional()
-    .describe('0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL).')
+    .describe('0 = CPU backend, 1 = GPU backend, including CUDA, ROCm, Vulkan, Metal, or OpenCL.')
 })
 
 export type VlaStats = z.infer<typeof vlaStatsSchema>

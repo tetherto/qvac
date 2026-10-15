@@ -371,7 +371,7 @@ llama-quantize laya-multilingual-f16.gguf laya-multilingual-Q8_0.gguf Q8_0
 ```js
 const EmbedLlamacpp = require('@qvac/embed-llamacpp')
 
-const fit = EmbedLlamacpp.assessFit({
+const fit = await EmbedLlamacpp.assessFit({
   modelPath: '/models/embed.gguf',
   config: { device: 'gpu', 'batch-size': '1024' }
 })
@@ -393,7 +393,9 @@ The projection applies the embedding load's own normalization: the micro-batch f
 
 `minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device, defaulting to llama's `fit-target` of 1 GiB per device. `backendsDir` is where the dynamically-loaded ggml backends live.
 
-A model the fitter cannot read is `status: "error"`; only a broken request throws.
+`assessFit` returns a Promise. Concurrent calls run one at a time within this addon.
+
+A model the fitter cannot read resolves to `status: "error"`; only a broken request rejects.
 
 ## IdMapIndex vector database
 

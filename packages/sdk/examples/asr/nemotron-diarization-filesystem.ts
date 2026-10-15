@@ -3,7 +3,7 @@
  * It reports speaker activity, not recognized words.
  *
  * Run from packages/sdk with a local Nemotron 3 Diarization GGUF:
- *   bun run examples/asr/nemotron-diarization-filesystem.ts <nemotron-diarization.gguf> [audio.wav]
+ *   npx tsx examples/asr/nemotron-diarization-filesystem.ts <nemotron-diarization.gguf> [audio.wav]
  *
  * Defaults to examples/audio/diarization-sample-16k.wav in the source repository.
  * Supply a 16 kHz mono PCM WAV when copying this example elsewhere.
@@ -14,7 +14,7 @@ import { loadModel, unloadModel, transcribe, close } from '@qvac/sdk'
 const [modelPath, audioPath = 'examples/audio/diarization-sample-16k.wav'] = process.argv.slice(2)
 if (!modelPath || modelPath === '--help') {
   console.error(
-    'Usage: bun run examples/asr/nemotron-diarization-filesystem.ts <nemotron-diarization.gguf> [audio.wav]'
+    'Usage: npx tsx examples/asr/nemotron-diarization-filesystem.ts <nemotron-diarization.gguf> [audio.wav]'
   )
   process.exit(modelPath === '--help' ? 0 : 1)
 }

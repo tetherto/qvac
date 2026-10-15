@@ -1,10 +1,8 @@
 #include "rpc-server-core.hpp"
 
 #include <cstdlib>
-#include <fstream>
-#include <ios>
+#include <filesystem>
 #include <stdexcept>
-#include <string_view>
 
 namespace rpc_server {
 
@@ -71,15 +69,7 @@ std::vector<ggml_backend_dev_t> selectDevices(const std::string& requested) {
 RpcServerApi resolveRpcServerApi() {
   ggml_backend_reg_t rpcBackend = ggml_backend_reg_by_name("RPC");
   if (rpcBackend == nullptr) {
-#if defined(__linux__) && !defined(__ANDROID__)
-    throw std::runtime_error(
-        "RPC backend is not available; the RPC module may have failed to load "
-        "because libibverbs.so.1 is missing (install libibverbs1 on "
-        "Debian/Ubuntu). RDMA also requires the provider package for this "
-        "host");
-#else
     throw std::runtime_error("RPC backend is not available");
-#endif
   }
 
   RpcServerApi api{
@@ -100,39 +90,23 @@ RpcServerApi resolveRpcServerApi() {
       .free = reinterpret_cast<RpcServerApi::FreeFn>(
           ggml_backend_reg_get_proc_address(
               rpcBackend, "ggml_backend_rpc_server_free")),
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      .getPort = reinterpret_cast<RpcServerApi::GetPortFn>(
+          ggml_backend_reg_get_proc_address(
+              rpcBackend, "ggml_backend_rpc_server_get_port")),
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      .rdmaSupported = reinterpret_cast<RpcServerApi::RdmaSupportedFn>(
+          ggml_backend_reg_get_proc_address(
+              rpcBackend, "ggml_backend_rpc_rdma_supported")),
   };
   if (api.create == nullptr || api.run == nullptr || api.stop == nullptr ||
-      api.free == nullptr) {
+      api.free == nullptr || api.getPort == nullptr ||
+      api.rdmaSupported == nullptr) {
     throw std::runtime_error(
-        "RPC backend does not provide managed server lifecycle functions");
+        "the installed @qvac/fabric RPC backend is too old: it does not "
+        "provide the managed server, port and RDMA entry points");
   }
   return api;
-}
-
-bool rpcBackendHasRdmaMarker(const std::filesystem::path& moduleDir) {
-#if defined(__linux__) && !defined(__ANDROID__)
-  // Fabric compiles this transport banner into its RPC backend only when
-  // GGML_RPC_RDMA is enabled. Such a backend negotiates RDMA per connection
-  // with no switch to disable it, so the marker is the capability reported.
-  constexpr std::string_view rdmaSupportMarker = "RDMA auto-negotiate enabled";
-  std::ifstream module(
-      moduleDir / "libqvac-ggml-rpc.so", std::ios::binary | std::ios::ate);
-  const std::streamoff size =
-      module ? static_cast<std::streamoff>(module.tellg()) : -1;
-  if (size <= 0) {
-    return false;
-  }
-  std::string contents(static_cast<size_t>(size), '\0');
-  module.seekg(0);
-  if (!module.read(contents.data(), size)) {
-    return false;
-  }
-  return contents.find(rdmaSupportMarker) != std::string::npos;
-#else
-  // RDMA is a Linux-only Fabric feature.
-  (void)moduleDir;
-  return false;
-#endif
 }
 
 std::string defaultCacheDirectory() {

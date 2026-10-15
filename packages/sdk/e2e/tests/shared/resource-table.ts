@@ -125,28 +125,28 @@ export const RESOURCE_TABLE: ResourceTable = {
     on: ['desktop', 'mobile'],
     constant: { $const: 'SMOLVLA_LIBERO_VISION_Q8' },
     type: 'ggml-vla',
-    config: { backend: 'cpu' }
+    config: { backend: ['cpu'] }
   },
 
   'vla-pi05': {
     on: ['desktop'],
     constant: { $const: 'PI05_BASE_Q_AGGRESSIVE' },
     type: 'ggml-vla',
-    config: { backend: 'cpu' }
+    config: { backend: ['cpu'] }
   },
 
   'vla-groot': {
     on: ['desktop'],
     constant: { $const: 'GROOT_Q5_VF16' },
     type: 'ggml-vla',
-    config: { backend: 'cpu' }
+    config: { backend: ['cpu'] }
   },
 
   'vla-groot-multi': {
     on: ['desktop'],
     constant: { $const: 'GROOT_MULTI_Q5_VF16' },
     type: 'ggml-vla',
-    config: { backend: 'cpu' }
+    config: { backend: ['cpu'] }
   },
 
   classification: {
@@ -168,13 +168,6 @@ export const RESOURCE_TABLE: ResourceTable = {
   echo: {
     type: 'echo',
     modelSrc: '',
-    skipPreDownload: true
-  },
-
-  /** The embedding model the multi-GPU split tests load. */
-  'multi-gpu-embeddings': {
-    constant: { $const: 'EMBEDDINGGEMMA_300M_Q8_0' },
-    type: 'llamacpp-embedding',
     skipPreDownload: true
   },
 

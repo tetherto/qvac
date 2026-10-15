@@ -13,7 +13,7 @@ import {
 // caption and the clip's musical metadata.
 //
 // Usage:
-//   bun examples/audiogen/understand-music.ts <source.wav|mp3|...> [language hint]
+//   npx tsx examples/audiogen/understand-music.ts <source.wav|mp3|...> [language hint]
 //
 // The source is a file path: the SDK decodes it (any FFmpeg-decodable format)
 // to the 48 kHz stereo float PCM the engine expects. Pass raw interleaved
@@ -23,7 +23,7 @@ const sourcePath = process.argv[2]
 const vocalLanguage = process.argv[3]
 
 if (!sourcePath) {
-  console.error('Usage: bun examples/audiogen/understand-music.ts <source-audio> [language]')
+  console.error('Usage: npx tsx examples/audiogen/understand-music.ts <source-audio> [language]')
   process.exit(1)
 }
 

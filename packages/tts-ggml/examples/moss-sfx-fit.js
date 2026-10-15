@@ -8,11 +8,18 @@ if (!model || !prompt || seconds === undefined) {
   throw new Error('Usage: bare examples/moss-sfx-fit.js <model.gguf> <prompt> <seconds>')
 }
 
-const fit = TTSGgml.assessFit({
-  engineType: 'moss-sfx',
-  mossSoundEffectPath: model,
-  prompt,
-  seconds: Number(seconds),
-  useGPU: false
+async function main() {
+  const fit = await TTSGgml.assessFit({
+    engineType: 'moss-sfx',
+    mossSoundEffectPath: model,
+    prompt,
+    seconds: Number(seconds),
+    useGPU: false
+  })
+  console.log(fit.report || `${fit.status}: ${fit.reason}`)
+}
+
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
 })
-console.log(fit.report || `${fit.status}: ${fit.reason}`)

@@ -1,5 +1,7 @@
 import {
+  assessFit,
   LayaDecisions,
+  type EmbedFitResult,
   type LayaResult,
   type QvacResponse
 } from '@qvac/embed-llamacpp'
@@ -19,4 +21,11 @@ export function layaRunTypes(laya: LayaDecisions) {
   const batchTyped: Equal<Awaited<typeof batch>, QvacResponse<LayaResult[]>> =
     true
   return { singleTyped, batchTyped }
+}
+
+// assessFit returns a Promise of the projection.
+export function fitTypes() {
+  const fit = assessFit({ modelPath: '/abs/model.gguf' })
+  const fitTyped: Equal<typeof fit, Promise<EmbedFitResult>> = true
+  return fitTyped
 }

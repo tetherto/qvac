@@ -505,10 +505,12 @@ Engine-specific segment fields:
 
 `assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The registry publishes a weightless copy of each model, and passing it answers the same as passing the model itself, so the projection can run before the model is downloaded: for parakeet a GGUF without its data, for whisper and its Silero VAD model a GGUF description of the `.bin` (its settings, vocabulary sizes and tensor list, tens of KB). It is a module export, not an instance method — nothing is loaded to call it.
 
+`assessFit` returns a Promise. Concurrent calls run one at a time. A model the fitter cannot read resolves with `status: 'error'`; only a broken request rejects.
+
 ```js
 const ASRGgml = require('@qvac/asr-ggml')
 
-const fit = ASRGgml.assessFit({
+const fit = await ASRGgml.assessFit({
   engine: 'whisper',
   modelPath: '/models/whisper.bin',
   vadModelPath: '/models/silero-vad.bin',
@@ -544,7 +546,7 @@ fit.report
 MOSS-Transcribe-Diarize uses an explicit duration and the same per-call options as `run`:
 
 ```js
-const fit = ASRGgml.assessFit({
+const fit = await ASRGgml.assessFit({
   engine: 'moss-transcribe',
   modelPath: '/models/moss-transcribe-diarize-q8_0.gguf',
   audioSeconds: 90,
@@ -1072,10 +1074,11 @@ tests and the C++ option-mapping tests do not establish GPU execution.
 
 ### OpenMOSS native dependency validation
 
-The package pins `speech-cpp` 2026-10-12#1 and `ggml-speech` 2026-10-07#1.
-The registry baseline is `e31be272ecdf9f20970302ebf8a2943d47803001`,
-which contains the merged native source `84b02694001cfea863167776dbc185474a816656`
-from [registry PR #423](https://github.com/tetherto/qvac-registry-vcpkg/pull/423).
+The package pins `speech-cpp` 2026-10-14 and `ggml-speech` 2026-10-07#1.
+The registry baseline remains `e31be272ecdf9f20970302ebf8a2943d47803001`.
+The `speech-cpp` override selects the merged native source
+`bd99d1e2233ad0ff8d314c93633cad84ca823e83` published by
+[registry PR #428](https://github.com/tetherto/qvac-registry-vcpkg/pull/428).
 This speech revision provides the explicit MOSS backend selector used by the
 addon; the selector and dependency pin must ship together.
 

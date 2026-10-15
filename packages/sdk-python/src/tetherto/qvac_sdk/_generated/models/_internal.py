@@ -15,7 +15,7 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     root: Annotated[
         Any,
         Field(
-            description="Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
+            description="Generated from the SDK Zod schemas by `npm run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
             title="@qvac/sdk wire contract",
         ),
     ]
@@ -9631,6 +9631,14 @@ class LoadModelSrcRequestLlamacppCompletionModelFitPolicy(Enum):
     off = "off"
 
 
+class LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem(Enum):
+    cuda = "cuda"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
+    auto = "auto"
+
+
 class Predict(RootModel[int]):
     root: Annotated[
         int,
@@ -9844,6 +9852,13 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(Enum):
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
+    backend: Annotated[
+        list[LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem] | None,
+        Field(
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+            min_length=1,
+        ),
+    ] = None
     ctx_size: Annotated[
         float | None,
         Field(
@@ -11564,6 +11579,14 @@ class LoadModelSrcRequestLlamacppEmbeddingModelFitPolicy(Enum):
     off = "off"
 
 
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem(Enum):
+    cuda = "cuda"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
+    auto = "auto"
+
+
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice(Enum):
     gpu = "gpu"
     cpu = "cpu"
@@ -11606,6 +11629,13 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
+    backend: Annotated[
+        list[LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem] | None,
+        Field(
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
+            min_length=1,
+        ),
+    ] = None
     gpu_layers: Annotated[
         int | None,
         Field(
@@ -18607,7 +18637,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
@@ -18782,14 +18812,14 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc | None,
         Field(
             alias="clipVisionModelSrc",
-            description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
+            description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 or MiniMax-H3 (their img2vid paths need no CLIP-vision projection).",
         ),
     ] = None
     audio_vae_model_src: Annotated[
         str | LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc | None,
         Field(
             alias="audioVaeModelSrc",
-            description="Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent LTX-2 video; unsupported by Wan.",
+            description="Audio VAE decoder model — optional for MiniMax-H3 and LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent video; unsupported by Wan.",
         ),
     ] = None
     embeddings_connectors_model_src: Annotated[
@@ -19779,9 +19809,16 @@ class LoadModelSrcRequestGgmlVlaModelFitPolicy(Enum):
     off = "off"
 
 
-class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
+class LoadModelSrcRequestGgmlVlaModelConfigBackendItem(Enum):
     auto = "auto"
     cpu = "cpu"
+    cuda = "cuda"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
+    hip = "hip"
+    rocm = "rocm"
+    sycl = "sycl"
 
 
 class Embodiment(RootModel[str]):
@@ -19833,10 +19870,10 @@ class LoadModelSrcRequestGgmlVlaModelConfigEmbodiment(GeneratedBaseModel):
 
 class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
     backend: Annotated[
-        LoadModelSrcRequestGgmlVlaModelConfigBackend | None,
+        list[LoadModelSrcRequestGgmlVlaModelConfigBackendItem] | None,
         Field(
-            description="Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
-            title="LoadModelSrcRequestGgmlVlaModelConfigBackend",
+            description="Ordered backend names, such as ['cuda', 'vulkan']. Omitted or ['auto'] uses the native default order. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. Names are tried in order; if none has an accepted device, selection falls back to the native default order. ['cpu'] forces CPU regardless of available accelerators and must be used on its own.",
+            min_length=1,
         ),
     ] = None
     verbosity: Annotated[

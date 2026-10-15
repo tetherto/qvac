@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -241,7 +242,15 @@ class QvacCompletionApiTest {
                 name = "lookup",
                 description = "Look up a value",
                 parameters = QvacToolParameterType.entries.associate { type ->
-                    type.name.lowercase() to QvacToolParameter(type, description = "a ${type.name.lowercase()}")
+                    type.name.lowercase() to QvacToolParameter(
+                        type,
+                        description = "a ${type.name.lowercase()}",
+                        enumValues = if (type == QvacToolParameterType.STRING) {
+                            listOf(JsonPrimitive("one"), JsonPrimitive(2.5), JsonPrimitive(true), JsonNull)
+                        } else {
+                            null
+                        },
+                    )
                 },
                 required = setOf("string"),
                 handler = { JsonPrimitive("ok") },
@@ -271,6 +280,15 @@ class QvacCompletionApiTest {
         assertEquals(
             QvacToolParameterType.entries.associate { it.name.lowercase() to it.name.lowercase() },
             properties.mapValues { (_, value) -> value.jsonObject.getValue("type").jsonPrimitive.content },
+        )
+        assertEquals(
+            buildJsonArray {
+                add(JsonPrimitive("one"))
+                add(JsonPrimitive(2.5))
+                add(JsonPrimitive(true))
+                add(JsonNull)
+            },
+            properties.getValue("string").jsonObject.getValue("enum").jsonArray,
         )
     }
 
