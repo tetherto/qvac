@@ -21,7 +21,7 @@ function plugin(overrides: Partial<QvacPlugin>): QvacPlugin {
 }
 
 test('the fitter is taken from the plugin that owns the addon', async (t) => {
-  const registered = plugin({ assessFit: () => result as never })
+  const registered = plugin({ assessFit: async () => result as never })
   registerPlugin(registered)
   t.teardown(() => unregisterPlugin(registered.modelType))
 

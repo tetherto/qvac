@@ -191,6 +191,7 @@ Relevant options are summarized below; run `qvac serve --help` for the exact gen
 | `--cors-origin <origin>` | Add a trusted CORS origin (repeatable; no wildcard) |
 | `--public-base-url <url>` | Externally reachable origin required for image `response_format=url` |
 | `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins (requires a fixed `--port`) |
+| `--ready-fd <fd>` | Write `QVAC_SERVE_READY {"port":…,"pid":…}` to this inherited descriptor once listening |
 | `-v, --verbose` | Detailed output |
 
 ### CORS
@@ -1551,6 +1552,10 @@ curl http://localhost:11434/v1/models \
 Requests without a valid token receive a `401` response.
 
 Bearer authentication does not apply to the introspection routes: `/openapi.json`, `/docs`, and every path under `/docs/` remain public even when `--api-key` is set. `/docs` and `/docs/*` exist only when `--docs` is enabled; `/openapi.json` is always available.
+
+Before sending the key to a local server it did not start itself, a client can check that the listener holds the key. `GET /qvac/identity?nonce=<22–128 base64url chars>` needs no token and returns `{"proof": …}`, where the proof is the base64url HMAC-SHA256 of `qvac-serve-identity-v1\n<port>\n<nonce>` keyed with the API key and `<port>` is the port the request arrived on. The route exists only when a key is configured.
+
+A supervisor that spawns `qvac serve` itself can pass `--port 0 --ready-fd 3` with a pipe on descriptor 3: the server binds a free port and reports it there, so no other process can claim the port between selection and bind.
 
 A non-loopback `--host` requires authentication: without `--api-key` or `--api-key-file` the server refuses to start. Pass `--allow-unauthenticated` to accept the risk and start anyway, which downgrades the refusal to a warning.
 

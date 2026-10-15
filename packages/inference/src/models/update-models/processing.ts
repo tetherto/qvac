@@ -1,5 +1,6 @@
 import type { QVACModelEntry } from '@qvac/registry-client'
-import { ModelType, getAddonFromEngine, resolveCanonicalEngine } from '../../surface'
+import { getAddonFromEngine } from '../../surface'
+import { resolveRegistryEngine } from '../../schemas/engine-addon-map'
 import { detectShardedModel } from './shards'
 import { extractGgufFacts, parseGgufMetadata } from './gguf-facts'
 import type { ProcessedModel } from './types'
@@ -28,11 +29,7 @@ export function extractModelName(registryPath: string): string {
 }
 
 export function processRegistryModel(model: QVACModelEntry): ProcessedModel | null {
-  // The unified addon hosts several engines; its package id alone is ambiguous.
-  const engine =
-    model.engine === '@qvac/asr-ggml' && model.tags?.includes('moss-transcribe')
-      ? ModelType.mossTranscribe
-      : resolveCanonicalEngine(model.engine)
+  const engine = resolveRegistryEngine(model.engine, model.tags)
   if (!engine) {
     console.warn(`⚠️  Skipping model with unknown engine "${model.engine}": ${model.path}`)
     return null

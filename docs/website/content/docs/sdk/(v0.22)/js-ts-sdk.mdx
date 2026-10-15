@@ -146,6 +146,15 @@ Or on [Bare](https://bare.pears.com) with `@qvac/inference` — see [Running on 
 
 </Steps>
 
+## Model engine identity
+
+A registry model's `engine` identifies the plugin that loads it, such as
+`llamacpp-completion` or `moss-transcribe`. Its `addon` is a category used for
+filtering and legacy metadata; it does not uniquely identify a plugin. Several
+plugins can share a native addon package. Use `engine` when selecting a model's
+capability or filtering registry results by plugin. Supported legacy registry
+identifiers remain readable.
+
 ## Running examples
 
 Follow these instructions to run any example in this documentation:

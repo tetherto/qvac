@@ -13,6 +13,9 @@ on:
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
       - ".github/actions/run-mobile-integration-tests/setup/**"
       - ".github/actions/run-mobile-integration-tests/build-mobile-app/**"
+      - ".github/actions/run-mobile-integration-tests/collect-and-upload-logs/**"
+      - ".github/actions/run-mobile-integration-tests/extract-addon-perf/**"
+      - ".github/actions/run-mobile-integration-tests/test/**"
       - ".github/actions/select-prebuild-symbols-verifier/**"
       # Holds one verify step per selector id, which the selector tests check.
       - ".github/workflows/reusable-prebuilds.yml"
@@ -63,6 +66,8 @@ jobs:
       # change runs this parity check too.
       - name: Run mobile platform-package installer unit tests
         run: node --test .github/actions/run-mobile-integration-tests/build-mobile-app/*.test.mjs
+      - name: Run mobile log collection tests
+        run: node --test .github/actions/run-mobile-integration-tests/test/*.test.mjs
       # The selector decides which pinned symbol verifier a prebuild runs, and
       # prebuilds only exercise it for the addons and versions they happen to
       # build, so a wrong cutoff would first show up as a failed backport.
