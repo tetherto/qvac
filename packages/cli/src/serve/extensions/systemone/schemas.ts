@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Nested JSON stays inline in the wire contract. The refinement rejects values
-// that JSON serialization would discard or change before reaching Laya.
+// that JSON serialization would discard or change before reaching the decision model.
 function isJson(value: unknown, ancestors = new Set<object>()): boolean {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return true
   if (typeof value === 'number') return Number.isFinite(value)
