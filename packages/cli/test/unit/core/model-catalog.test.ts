@@ -48,7 +48,7 @@ describe('model-catalog', () => {
     const roles = {
       'llamacpp-completion': 'chat',
       'llamacpp-embedding': 'embedding',
-      'llamacpp-decisions': 'decision',
+      'llamacpp-decision': 'decision',
       'whispercpp-transcription': 'transcription',
       'bci-whispercpp-transcription': 'bci',
       'parakeet-transcription': 'transcription',
