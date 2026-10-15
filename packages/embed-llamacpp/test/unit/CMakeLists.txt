@@ -49,13 +49,6 @@ target_include_directories(
 
 target_compile_features(addon-test PRIVATE cxx_std_20)
 
-if(APPLE AND NOT IOS)
-  set_target_properties(addon-test PROPERTIES
-    XCODE_ATTRIBUTE_MACOSX_DEPLOYMENT_TARGET "14.0"
-    OSX_DEPLOYMENT_TARGET "14.0"
-  )
-endif()
-
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
 target_compile_definitions(addon-test PRIVATE 
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
