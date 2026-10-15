@@ -49,6 +49,7 @@ export const decisionTests = [
   {
     testId: 'decision-ticket',
     params: { state, questions },
+    suites: ['smoke'],
     expectation: {
       validation: 'function',
       fn: (value: unknown) => {
