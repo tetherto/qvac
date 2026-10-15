@@ -3,30 +3,67 @@
 const path = require('bare-path')
 const process = require('bare-process')
 const fs = require('bare-fs')
-const ImgStableDiffusion = require('../index')
 
 async function main () {
   const dir = path.resolve(process.env.QWEN_MODELS_DIR || path.join(__dirname, '../models/qwen-image-21'))
   const args = process.argv.slice(2)
-  const removeBackground = args[0] === '--remove-background'
-  const inputFiles = removeBackground ? args.slice(1) : args
-  if (removeBackground && inputFiles.length > 1) {
-    throw new Error('Usage: generate-image-qwen-21.js --remove-background [image]')
+  const portrait = path.join(__dirname, '../assets/von-neumann-colorized.jpg')
+  const originalPortrait = path.join(__dirname, '../assets/von-neumann.jpg')
+  const modes = {
+    'text-to-image': {
+      inputs: [],
+      output: 'qwen-image-21-portrait.png',
+      prompt: 'A photorealistic studio portrait of mathematician John von Neumann wearing a gray suit, white shirt and patterned tie, soft daylight, neutral background.'
+    },
+    edit: {
+      inputs: [portrait],
+      output: 'qwen-image-21-portrait-edit.png',
+      prompt: 'Change the suit jacket in the reference portrait to dark burgundy. Preserve the person, face, hair, expression, white shirt, tie, background, lighting and framing. Keep the image photorealistic and opaque.'
+    },
+    compose: {
+      inputs: [portrait, originalPortrait],
+      output: 'qwen-image-21-portraits-composed.png',
+      prompt: 'Create a side-by-side diptych of the two reference portraits. Put the color portrait from the first image on the left and the black-and-white portrait from the second image on the right. Preserve each portrait\'s face, clothing, pose and original colors. Show both portraits in separate equally sized panels, with a thin white divider. Keep the complete image opaque.'
+    },
+    transparent: {
+      inputs: [],
+      output: 'qwen-image-21-transparent-portrait.png',
+      prompt: 'A photorealistic bust portrait of mathematician John von Neumann wearing a gray suit, white shirt and patterned tie. Output an RGBA cutout with a fully transparent background and clean natural edges. No backdrop, solid background color, checkerboard or text.'
+    },
+    'remove-background': {
+      inputs: [portrait],
+      output: 'qwen-image-21-no-background.png',
+      prompt: 'Remove the entire background from the reference image. Keep the foreground subject, preserving its appearance, colors, position and framing. Output an RGBA cutout with a fully transparent background and clean natural edges. Do not replace the background with a solid color or checkerboard.'
+    }
   }
-  if (removeBackground && inputFiles.length === 0) {
-    inputFiles.push(path.join(__dirname, '../assets/von-neumann-colorized.jpg'))
+  if (args[0] === '--help') {
+    console.log('Usage: bare examples/generate-image-qwen-21.js [--mode MODE] [reference ...]')
+    console.log('Modes: ' + Object.keys(modes).join(', '))
+    console.log('Each mode has bundled defaults; optional references must match its input count.')
+    console.log('--remove-background [image] is an alias for --mode remove-background.')
+    return
   }
-  const defaultOutput = removeBackground ? 'qwen-image-21-no-background.png' : 'qwen-image-21.png'
+  const modeName = args[0] === '--remove-background' ? 'remove-background' : args[0] === '--mode' ? args[1] : null
+  if (args[0] === '--mode' && !Object.hasOwn(modes, modeName)) {
+    throw new Error('Choose --mode ' + Object.keys(modes).join('|'))
+  }
+  const preset = modeName ? modes[modeName] : null
+  const suppliedFiles = args.slice(args[0] === '--mode' ? 2 : args[0] === '--remove-background' ? 1 : 0)
+  if (suppliedFiles.some(file => file.startsWith('--'))) throw new Error('Unknown option; use --help')
+  if (preset && suppliedFiles.length && suppliedFiles.length !== preset.inputs.length) {
+    throw new Error(`${modeName} expects ${preset.inputs.length} reference image(s); omit them to use its defaults`)
+  }
+  const inputFiles = suppliedFiles.length ? suppliedFiles : preset ? preset.inputs : []
+  const defaultOutput = preset ? preset.output : 'qwen-image-21.png'
   const output = path.resolve(process.env.QWEN_OUTPUT || path.join(__dirname, '../output', defaultOutput))
   const refs = inputFiles.map(file => fs.readFileSync(path.resolve(file)))
-  const defaultPrompt = removeBackground
-    ? 'Remove the entire background from the reference image. Keep the foreground subject, preserving its appearance, colors, position and framing. Output an RGBA cutout with a fully transparent background and clean natural edges. Do not replace the background with a solid color or checkerboard.'
-    : 'A red ceramic teapot on a wooden table, soft daylight, product photograph.'
+  const defaultPrompt = preset ? preset.prompt : 'A red ceramic teapot on a wooden table, soft daylight, product photograph.'
   const width = Number(process.env.QWEN_WIDTH || 512)
   const height = Number(process.env.QWEN_HEIGHT || 512)
   if (![width, height].every(value => Number.isInteger(value) && value > 0 && value % 32 === 0)) {
     throw new Error('Qwen-Image-2.1 width and height must be positive multiples of 32')
   }
+  const ImgStableDiffusion = require('../index')
   const model = new ImgStableDiffusion({
     files: {
       model: path.join(dir, 'qwen_image_2.1-Q4_K.gguf'),
@@ -67,7 +104,7 @@ async function main () {
     if (images.length !== 1) throw new Error(`Expected one PNG, got ${images.length}`)
     fs.mkdirSync(path.dirname(output), { recursive: true })
     fs.writeFileSync(output, images[0])
-    console.log(JSON.stringify({ event: 'generated', output, width, height, elapsedMs: Date.now() - start }))
+    console.log(JSON.stringify({ event: 'generated', mode: modeName || 'custom', output, width, height, elapsedMs: Date.now() - start }))
   } finally {
     await model.unload()
   }

@@ -42,30 +42,60 @@ The projector also participates in `assessFit` through the shared file mapping.
 
 ## Generation and editing
 
-Build with CUDA enabled, then run:
+Build with CUDA enabled and download the model files above. Run these commands
+from `packages/diffusion-cpp`. Each preset works independently and writes a
+separate PNG under `output/`:
 
 ```sh
-CUDA_VISIBLE_DEVICES=0 bare examples/generate-image-qwen-21.js
-QWEN_PROMPT='Make the teapot blue.' CUDA_VISIBLE_DEVICES=0 \
-  bare examples/generate-image-qwen-21.js output/qwen-image-21.png
-QWEN_PROMPT='Put the object in the first image into the scene in the second image.' \
-  CUDA_VISIBLE_DEVICES=0 bare examples/generate-image-qwen-21.js first.png second.png
+export CUDA_VISIBLE_DEVICES=0
+
+# Text-to-image: generate a von Neumann portrait from a prompt alone.
+bare examples/generate-image-qwen-21.js --mode text-to-image
+
+# Single-reference edit: change the colorized portrait's jacket to burgundy.
+bare examples/generate-image-qwen-21.js --mode edit
+
+# Two-reference composition: colorized portrait left, original monochrome right.
+bare examples/generate-image-qwen-21.js --mode compose
+
+# Transparent generation: create a new portrait cutout from text alone.
+bare examples/generate-image-qwen-21.js --mode transparent
+
+# Transparent reference edit: remove the colorized portrait's background.
+bare examples/generate-image-qwen-21.js --mode remove-background
 ```
 
-For the background-removal example, run:
+| Mode | Default references from `assets/` | Output in `output/` |
+| --- | --- | --- |
+| `text-to-image` | None | `qwen-image-21-portrait.png` |
+| `edit` | `von-neumann-colorized.jpg` | `qwen-image-21-portrait-edit.png` |
+| `compose` | `von-neumann-colorized.jpg`, then `von-neumann.jpg` | `qwen-image-21-portraits-composed.png` |
+| `transparent` | None | `qwen-image-21-transparent-portrait.png` |
+| `remove-background` | `von-neumann-colorized.jpg` | `qwen-image-21-no-background.png` |
+
+Text-to-image and transparent generation use only a portrait prompt; they do
+not load the asset or reproduce its exact likeness. The editing modes load the
+vision projector automatically. Composition demonstrates two ordered references
+using the two bundled von Neumann portraits; no earlier generation is required.
+
+Pass your own files after a mode to replace its default references (one for
+`edit` or `remove-background`, two for `compose`). The zero-reference modes
+reject image arguments. `--remove-background [image]` remains an alias for
+`--mode remove-background [image]`. Use `--help` to list the modes.
 
 ```sh
-CUDA_VISIBLE_DEVICES=0 bare examples/generate-image-qwen-21.js --remove-background
+CUDA_VISIBLE_DEVICES=0 bare examples/generate-image-qwen-21.js --mode edit /absolute/path/to/portrait.jpg
+CUDA_VISIBLE_DEVICES=0 bare examples/generate-image-qwen-21.js --mode compose first.png second.png
 ```
 
-This uses `assets/von-neumann-colorized.jpg`, loads the vision projector, and
-writes the RGBA result to `output/qwen-image-21-no-background.png`. To use your
-own image, pass its path after `--remove-background`. The preset accepts one
-reference and uses the same generation settings as below; `QWEN_PROMPT` and
-`QWEN_OUTPUT` can still override its prompt and destination. The result is saved
-directly without alpha thresholding or background-removal postprocessing.
-As a generative edit, it can slightly change subject details and may leave
-near-zero alpha rather than exactly zero across the background.
+`QWEN_PROMPT` and `QWEN_OUTPUT` override any preset's prompt and destination.
+The original interface is also available: no arguments generates a red teapot,
+and positional image paths without a mode use those images as references.
+
+RGBA results are saved directly without alpha thresholding or background-removal
+postprocessing. Generative edits can change subject details, and transparent
+backgrounds may have near-zero alpha rather than exactly zero. Inspect the
+output before using it as a cutout.
 
 The example defaults to `cuda0`, 512×512, 30 Euler steps, CFG 6, and seed 42.
 `QWEN_WIDTH`, `QWEN_HEIGHT`, `QWEN_STEPS`, `QWEN_SEED`, `QWEN_PROMPT`,
@@ -105,6 +135,23 @@ are single smoke-test observations, not benchmark averages.
 | Two-reference composition | 21.04 s |
 | Transparent generation | 6.34 s |
 | Transparent reference edit | 13.03 s |
+
+The five bundled portrait presets were also run individually with the settings
+above and visually inspected:
+
+| Example mode | Request time |
+| --- | ---: |
+| `text-to-image` | 6.85 s |
+| `edit` | 15.16 s |
+| `compose` | 25.62 s |
+| `transparent` | 7.33 s |
+| `remove-background` | 15.55 s |
+
+The edit changed the jacket to burgundy. Composition placed the color portrait
+on the left and the monochrome portrait on the right. Both transparency presets
+produced RGBA PNGs with alpha spanning 0–255. Sampled background strips had alpha
+0–7 for transparent generation and 0–2 for background removal, without
+postprocessing; their backgrounds are not uniformly zero-alpha.
 
 Text-to-image context load took 2.52 s; the edit context took 2.64 s.
 The two-reference output placed the red teapot on the left and the blue teapot
