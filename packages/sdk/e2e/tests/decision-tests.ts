@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Expectation, TestDefinition } from '@qvac/test-suite'
 import type { DecideParams, DecisionResult } from '@qvac/sdk'
 
 export type DecisionSingleParams = Omit<Extract<DecideParams, { state: unknown }>, 'modelId'>
@@ -33,6 +33,87 @@ const questions: DecisionSingleParams['questions'] = {
 }
 const state = 'My payment failed twice and I was charged both times. Please refund the duplicate.'
 
+export type DecisionComparison = { results: DecisionResult[]; reference: DecisionResult[] }
+
+// Check SDK behavior on the same device without assuming a particular classification.
+const tolerance = 1e-3
+const isProbability = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1
+const close = (left: number, right: number) => Math.abs(left - right) <= tolerance
+
+function validDistribution(probabilities: Record<string, number>, keys: string[]): boolean {
+  return (
+    Object.keys(probabilities).length === keys.length &&
+    keys.every((key) => isProbability(probabilities[key])) &&
+    close(
+      Object.values(probabilities).reduce((sum, value) => sum + value, 0),
+      1
+    )
+  )
+}
+
+function validDecision(result: DecisionResult): boolean {
+  const { department, urgency, refund } = result.answers
+  return (
+    Object.keys(result.answers).sort().join(',') === 'department,refund,urgency' &&
+    department?.type === 'choice' &&
+    ['billing', 'technical'].includes(String(department.choice)) &&
+    validDistribution(department.probabilities, ['billing', 'technical']) &&
+    close(
+      department.probabilities[String(department.choice)],
+      Math.max(...Object.values(department.probabilities))
+    ) &&
+    close(department.answerConfidence, department.probabilities[String(department.choice)]) &&
+    urgency?.type === 'score' &&
+    validDistribution(urgency.probabilities, ['0', '1', '2']) &&
+    Object.keys(urgency.legend).sort().join(',') === '0,1,2' &&
+    urgency.score >= 0 &&
+    urgency.score <= 2 &&
+    close(urgency.score, urgency.probabilities['1'] + 2 * urgency.probabilities['2']) &&
+    refund?.type === 'noul' &&
+    isProbability(refund.noul) &&
+    Object.values(result.answers).every(
+      (answer) =>
+        isProbability(answer.confidence) &&
+        isProbability(answer.answerConfidence) &&
+        isProbability(answer.action.actProbability)
+    ) &&
+    result.usage.inputTokens > 0
+  )
+}
+
+function decisionExpectation(count: number): Expectation {
+  return {
+    validation: 'function',
+    fn: (value: unknown) => {
+      const { results, reference } = value as DecisionComparison
+      const passed =
+        results.length === count &&
+        reference.length === count &&
+        [...results, ...reference].every(validDecision) &&
+        results.every((result, index) => {
+          const expected = reference[index]
+          return (
+            result.model === expected.model &&
+            Object.entries(result.answers).every(([id, answer]) => {
+              const other = expected.answers[id]
+              if (answer.type === 'noul')
+                return other.type === 'noul' && close(answer.noul, other.noul)
+              if (other.type === 'noul' || answer.type !== other.type) return false
+              return (
+                Object.keys(answer.probabilities).every((key) =>
+                  close(answer.probabilities[key], other.probabilities[key])
+                ) &&
+                (answer.type !== 'score' ||
+                  (other.type === 'score' && close(answer.score, other.score)))
+              )
+            })
+          )
+        })
+      return { passed, output: JSON.stringify({ results, reference }) }
+    }
+  }
+}
+
 export const decisionTests = [
   {
     testId: 'decision-concurrent-queued',
@@ -40,37 +121,14 @@ export const decisionTests = [
       states: [state, 'The app crashes on startup.'],
       questions
     },
-    expectation: {
-      validation: 'contains-all',
-      contains: ['billing, technical']
-    },
+    expectation: decisionExpectation(2),
     metadata: { category: 'decision', dependency: 'decision', estimatedDurationMs: 60000 }
   },
   {
     testId: 'decision-ticket',
     params: { state, questions },
     suites: ['smoke'],
-    expectation: {
-      validation: 'function',
-      fn: (value: unknown) => {
-        const result = value as DecisionResult
-        const team = result.answers['department']
-        const urgency = result.answers['urgency']
-        const refund = result.answers['refund']
-        const passed =
-          team?.type === 'choice' &&
-          team.choice === 'billing' &&
-          (team.probabilities['billing'] ?? 0) > 0.5 &&
-          urgency?.type === 'score' &&
-          urgency.score >= 0 &&
-          urgency.score <= 2 &&
-          refund?.type === 'noul' &&
-          refund.noul > 0.5 &&
-          refund.noul <= 1 &&
-          result.usage.inputTokens > 0
-        return { passed, output: JSON.stringify(result.answers) }
-      }
-    },
+    expectation: decisionExpectation(1),
     metadata: { category: 'decision', dependency: 'decision', estimatedDurationMs: 60000 }
   },
   {
@@ -82,23 +140,7 @@ export const decisionTests = [
       ],
       questions
     },
-    expectation: {
-      validation: 'function',
-      fn: (value: unknown) => {
-        const results = value as DecisionResult[]
-        const first = results[0]?.answers['department']
-        const second = results[1]?.answers['department']
-        return {
-          passed:
-            results.length === 2 &&
-            first?.type === 'choice' &&
-            first.choice === 'technical' &&
-            second?.type === 'choice' &&
-            second.choice === 'billing',
-          output: JSON.stringify(results.map((result) => result.answers))
-        }
-      }
-    },
+    expectation: decisionExpectation(2),
     metadata: { category: 'decision', dependency: 'decision', estimatedDurationMs: 60000 }
   },
   {
@@ -107,10 +149,7 @@ export const decisionTests = [
       invalid: { state, questions, maxLen: -1 },
       recovery: { state, questions }
     },
-    expectation: {
-      validation: 'contains-all',
-      contains: ['rejected invalid budget', 'recovered billing']
-    },
+    expectation: decisionExpectation(1),
     metadata: { category: 'decision', dependency: 'decision', estimatedDurationMs: 60000 }
   }
 ] satisfies DecisionTestDefinition[]
