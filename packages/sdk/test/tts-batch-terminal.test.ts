@@ -1,22 +1,29 @@
-import { mock } from 'bun:test'
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 
 let returned = false
-mock.module('@/client/rpc/rpc-client', () => ({
-  stream: async function* () {
-    try {
-      yield { type: 'textToSpeech', buffer: [1, 2], done: false, text: 'Four.', sampleRate: 24000 }
-      yield { type: 'textToSpeech', buffer: [], done: true, stopReason: 'completed' }
-      await new Promise(() => {})
-    } finally {
-      returned = true
+mock.module('@/client/rpc/rpc-client', {
+  namedExports: {
+    stream: async function* () {
+      try {
+        yield {
+          type: 'textToSpeech',
+          buffer: [1, 2],
+          done: false,
+          text: 'Four.',
+          sampleRate: 24000
+        }
+        yield { type: 'textToSpeech', buffer: [], done: true, stopReason: 'completed' }
+        await new Promise(() => {})
+      } finally {
+        returned = true
+      }
+    },
+    duplex: async () => {
+      throw new Error('unused')
     }
-  },
-  duplex: async () => {
-    throw new Error('unused')
   }
-}))
+})
 
 const { textToSpeech } = await import('@/client/api/text-to-speech')
 test('batch TTS settles PCM and reply text at its terminal frame without waiting for transport EOF', async () => {

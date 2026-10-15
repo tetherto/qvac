@@ -23,11 +23,11 @@ function loadFit() {
 
 const workload = { engine: 'moss-transcribe', modelPath: '/models/moss.gguf', audioSeconds: 30 }
 
-test('MOSS fit preserves explicit selectors and gpuLayers at the native boundary', (t) => {
+test('MOSS fit preserves explicit selectors and gpuLayers at the native boundary', async (t) => {
   const { assessFit, calls, result } = loadFit()
   for (const backend of ['auto', 'cpu', 'cuda', 'vulkan', 'CUDA1', 'Vulkan0']) {
     for (const gpuLayers of [0, 1]) {
-      t.is(assessFit({ ...workload, backend, gpuLayers }), result)
+      t.is(await assessFit({ ...workload, backend, gpuLayers }), result)
       t.is(calls.at(-1).backend, backend)
       t.is(calls.at(-1).gpuLayers, gpuLayers)
     }
@@ -36,12 +36,12 @@ test('MOSS fit preserves explicit selectors and gpuLayers at the native boundary
   t.is(calls.length, 12)
 })
 
-test('MOSS fit retains the default selector and rejects invalid selector types', (t) => {
+test('MOSS fit retains the default selector and rejects invalid selector types', async (t) => {
   const { assessFit, calls } = loadFit()
-  assessFit(workload)
+  await assessFit(workload)
   t.is(calls[0].backend, undefined)
   for (const backend of [null, true, 1, {}, []]) {
-    t.exception(() => assessFit({ ...workload, backend }), /backend must be a string/)
+    await t.exception(assessFit({ ...workload, backend }), /backend must be a string/)
   }
   t.is(calls.length, 1)
 })

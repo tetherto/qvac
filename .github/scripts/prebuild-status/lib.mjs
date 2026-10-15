@@ -23,6 +23,7 @@ export const PREBUILD_KEYS = [
   'ocr-ggml',
   'translation-nmtcpp',
   'tts-ggml',
+  'turbovec-ggml',
   'vla',
 ]
 
@@ -44,6 +45,7 @@ export const CPP_TEST_KEYS = [
   'model-fit',
   'translation-nmtcpp',
   'tts-ggml',
+  'turbovec-ggml',
   'vla',
 ]
 

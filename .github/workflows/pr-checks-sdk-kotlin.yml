@@ -1,90 +1,212 @@
 name: PR Checks (SDK Kotlin)
 
 on:
+  # Plain `pull_request` (NOT pull_request_target): fork PRs run with a read-only
+  # token and no secrets, so checking out and building PR code is safe. The merge
+  # gate (pr-gate-merge.yml) runs these same checks via the workflow_call trigger
+  # below, so a passing run here is what blocks the merge — not a status this
+  # workflow posts.
+  #
+  # No trigger-level `paths:` filter on purpose: the detect step is the single
+  # source of truth for "is this a Kotlin-relevant change", shared with the merge
+  # gate's workflow_call run (which ignores event path filters). A `paths:` list
+  # here would be a second list that could silently drift from the detect step.
   pull_request:
-    paths:
-      - 'packages/sdk-kotlin/**'
-      - 'packages/inference/package.json'
-      - 'packages/inference/src/schemas/**'
-      - 'packages/sdk/src/worker/**'
-      - 'packages/sdk/e2e/conformance/**'
-      - 'packages/sdk/contract/**'
-      - 'packages/sdk/package.json'
-      - '.github/workflows/pr-checks-sdk-kotlin.yml'
-      - '.github/workflows/publish-sdk-kotlin.yml'
-      - '.github/workflows/on-pr-sdk-kotlin-e2e.yml'
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
       - main
       - release-*
       - feature-*
       - tmp-*
   workflow_dispatch:
+  # Lets pr-gate-merge.yml run these checks as a required merge-gate input.
+  workflow_call:
 
 permissions:
   contents: read
+  packages: read
 
+# Literal prefix, not github.workflow: under workflow_call that resolves to the
+# caller's name, so every workflow Merge Guard calls would share one group and
+# cancel each other. event_name keeps the direct pull_request run and the Merge
+# Guard (pull_request_target) call in separate groups.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: pr-checks-sdk-kotlin-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
-
-defaults:
-  run:
-    working-directory: packages/sdk-kotlin
 
 jobs:
   check:
     name: Contract, tests, artifacts, consumer
     runs-on: ubuntu-latest
-    # Non-blocking until QVAC-25125 makes it required.
-    continue-on-error: true
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      # Detect from the trusted base commit, never the PR head, so a PR cannot
+      # edit the path list to exclude itself from its own checks. Mirrors
+      # pr-checks-sdk-pod.yml.
+      - name: Checkout base
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          ref: ${{ github.event.pull_request.base.sha || github.ref }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+      - name: Detect Kotlin-relevant changes
+        id: detect
+        timeout-minutes: 5
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::workflow_dispatch - running Kotlin SDK checks."
+            exit 0
+          fi
+
+          # Fetch PR head (available on the repo via pull refs) and diff it
+          # against the base. The path list below is the one place that defines
+          # what the Kotlin SDK depends on: its own tree, the worker/contract it
+          # bundles, the inference schemas the contract is generated from, and
+          # the workflows that build or publish it.
+          git fetch origin "refs/pull/${PR_NUMBER}/head"
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
+
+          has_changes=$(jq -rn --arg files "$CHANGED_FILES" '
+            [
+              "packages/sdk-kotlin/",
+              "packages/inference/package.json",
+              "packages/inference/src/schemas/",
+              "packages/sdk/src/worker/",
+              "packages/sdk/e2e/conformance/",
+              "packages/sdk/contract/",
+              "packages/sdk/package.json",
+              ".github/workflows/pr-checks-sdk-kotlin.yml",
+              ".github/workflows/publish-sdk-kotlin.yml",
+              ".github/workflows/on-pr-sdk-kotlin-e2e.yml"
+            ] as $paths
+            | ($files | split("\n") | map(select(length > 0))) as $changed
+            | any($paths[]; . as $p | any($changed[]; startswith($p)))
+          ')
+
+          echo "has_changes=${has_changes}" >> "$GITHUB_OUTPUT"
+          if [ "$has_changes" = "true" ]; then
+            echo "::notice::Kotlin-relevant files changed - running Kotlin SDK checks."
+          else
+            echo "::notice::No Kotlin-relevant files changed - gate passes."
+          fi
+
+      # ----- Everything below runs only when Kotlin-relevant files changed -----
+
+      - name: Checkout PR head
+        if: steps.detect.outputs.has_changes == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          persist-credentials: false
+
+      - name: Setup Python
+        if: steps.detect.outputs.has_changes == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.10'
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Setup Node
+        if: steps.detect.outputs.has_changes == 'true'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
           package-manager-cache: false
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
-
-      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
+      - name: Setup Java
+        if: steps.detect.outputs.has_changes == 'true'
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
         with:
           java-version: '17'
           distribution: temurin
 
-      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+      - name: Setup Android SDK
+        if: steps.detect.outputs.has_changes == 'true'
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
         with:
           packages: platform-tools
 
       - name: Install Android NDK
+        if: steps.detect.outputs.has_changes == 'true'
         run: sdkmanager 'ndk;29.0.14206865'
 
-      - name: Verify contract and JVM behavior
-        run: ./gradlew --no-daemon checkVersionAlignment checkContract jvmTest
+      # Build the in-repo @qvac/sdk and run every Kotlin check in one step. This
+      # workflow is reachable from pr-gate-merge.yml (pull_request_target) via
+      # workflow_call, so each step that builds the checked-out PR code is a
+      # cache-poisoning "poisonable step" to CodeQL. Collapsing the build into a
+      # single step keeps that to one reviewable, dismissed finding, matching
+      # pr-checks-sdk-pod.yml. No secrets reach this workflow, so running PR code
+      # here is safe.
+      - name: Build the in-repo @qvac/sdk and run the Kotlin checks
+        if: steps.detect.outputs.has_changes == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
 
-      - name: Verify Android source build
-        run: >-
-          ./gradlew --no-daemon
-          :android-example:testDebugUnitTest
-          :android-example:assembleDebug
-          :android-example:compileDebugAndroidTestKotlin
+          # Build @qvac/sdk against the in-repo @qvac/inference. sdk-source:workspace
+          # installs and builds the sibling engine, rewrites the SDK's
+          # @qvac/inference to file:../inference, and installs the SDK with
+          # --install-links (copying the engine in, as the mobile bundle steps
+          # need), so tsc sees this commit's inference surface. Restore the
+          # published range before packing so the tarball is self-contained.
+          # Skip lint; sdk-pod-checks owns the SDK's lint.
+          pushd packages/sdk
+          npm run sdk-source:workspace
+          npx tsc --project tsconfig.json
+          npm run postcompile:aliases
+          git checkout -- package.json
+          sdk_tgz=$(npm pack --ignore-scripts --silent)
+          popd
 
-      - name: Publish release-shaped artifacts locally
-        run: ./gradlew --no-daemon verifyMavenPublications
+          # Pack the in-repo @qvac/inference the workspace link step just built,
+          # to point the Kotlin worker bundle's transitive @qvac/inference at
+          # this commit's engine rather than a published release.
+          pushd packages/inference
+          inf_tgz=$(npm pack --ignore-scripts --silent)
+          popd
 
-      - name: Verify standalone Maven consumer
-        run: ./scripts/verify-maven-consumers.sh
+          pushd packages/sdk-kotlin
+          # Validate the ship contract on the committed registry pin first — a
+          # pure package.json check with no install — so the Kotlin runtime
+          # version, the @qvac/sdk pin, and packages/sdk/package.json are
+          # confirmed to share one version before the pin is swapped.
+          ./gradlew --no-daemon checkVersionAlignment
+
+          # @qvac/inference is transitive here (via @qvac/sdk), so an override is
+          # allowed (npm rejects one for a direct dependency), and it points the
+          # worker bundle at this commit's engine rather than a published release.
+          npm pkg set "overrides.@qvac/inference=file:../inference/${inf_tgz}"
+
+          # Swap @qvac/sdk for the packed tarball. A bare file:../sdk dependency
+          # symlinks the package but does not install its own dependencies
+          # (bare-rpc, @qvac/inference, ...) up into sdk-kotlin, and npm rejects
+          # an overrides entry for a direct dependency (EOVERRIDE). A tarball
+          # resolves the full tree the way a registry install would, but from
+          # this commit's SDK — so a release-sdk-* PR whose @qvac/sdk is not yet
+          # on npm still installs.
+          npm install --ignore-scripts --legacy-peer-deps --no-package-lock "../sdk/${sdk_tgz}"
+
+          ./gradlew --no-daemon \
+            checkContract \
+            jvmTest \
+            :android-example:testDebugUnitTest \
+            :android-example:assembleDebug \
+            :android-example:compileDebugAndroidTestKotlin \
+            verifyMavenPublications
+          ./scripts/verify-maven-consumers.sh
+          popd
 
       - name: Upload Maven repository and example APK
+        if: steps.detect.outputs.has_changes == 'true'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: qvac-sdk-kotlin-${{ github.sha }}

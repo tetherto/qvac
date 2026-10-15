@@ -80,16 +80,12 @@ jobs:
         with:
           extras: gen,dev,vla,notebook
           export-python-bin: "true"
-      # node/bun are needed to build the worker. Unlike setup-python these
-      # actions work on the runners (they find the pre-cached tool, no download),
-      # and bun in particular is not otherwise on PATH. Same actions the SDK's
-      # own desktop e2e (test-node-sdk.yml) uses on these runners.
+      # node is needed to build the worker. Unlike setup-python this action
+      # works on the runners (it finds the pre-cached tool, no download). Same
+      # action the SDK's own desktop e2e (test-node-sdk.yml) uses on these runners.
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
 
       # Shared model cache, keyed on the same registry the SDK e2e keys on, so
       # it invalidates in lockstep. Cross-OS so the three platforms share it.

@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.22.0] - 2026-10-14
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11018.1.0#1` -> `11018.2.0`, which changes
+  the native ABI and the RPC wire protocol:
+  - `GGML_MAX_NAME` is 128 (was 64), and `ggml_tensor::name` is an inline
+    array, so native consumers must be rebuilt against this release.
+  - The RPC protocol moves 109 -> 111. RPC clients and servers from earlier
+    releases fail the handshake.
+  - 13 new ggml ops shift `GGML_OP_COUNT` and `GGML_GLU_OP_COUNT`.
+
+### Fixed
+
+- Tensor names longer than 63 characters (ACE-Step DiT) load instead of being
+  truncated or rejected.
+- On Linux the RPC backend loads on hosts without libibverbs and uses TCP;
+  it previously failed to load even for TCP-only use.
+- The RPC server rejects a malformed endpoint port instead of binding a
+  different one (`:65536`, `:-1` and `:50052abc` bound 0, 65535 and 50052).
+
+### Added
+
+- `ggml_backend_rpc_server_get_port()` reports the port a server bound, and
+  `ggml_backend_rpc_rdma_supported()` reports whether new connections will
+  try RDMA.
+- ggml ops `CONV_1D_DW_DIRECT`, `NORM_CHANNEL`, `SCALE_RESIDUAL`, `BIAS_GELU`,
+  `PAD_REPLICATE_1D`, `GRU`, `ZERO_UPSAMPLE`, `CHANNEL_SHUFFLE`,
+  `AFFINE_PRELU`, `SNAKE`, `LSTM_CELL`, `TDT_STEP` and the `SIGLU` GLU op
+  (CPU implementations).
+- `common_fit_params_measured()` returns the measured memory of the fitted
+  parameters.
+
 ## [0.21.1] - 2026-10-14
 
 ### Fixed
