@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.61.1] - 2026-10-15
+
+### Fixed
+
+- Require `qvac-lib-inference-addon-cpp` 1.5.1 to reject malformed GGUF shard counts and indices before allocating shard paths.
+
 ## [0.61.0] - 2026-10-14
 
 ### Breaking
