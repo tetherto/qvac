@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.1] - 2026-10-15
+
+### Fixed
+- Reject GGUF shard filenames unless both numeric fields contain five digits and satisfy `1 <= shard <= total <= 99999`, before allocating the shard list. Invalid numeric shard names log an error and return no shards.
+
 ## [1.5.0] - 2026-10-13
 
 ### Added

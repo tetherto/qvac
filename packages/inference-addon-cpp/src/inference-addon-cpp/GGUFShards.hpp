@@ -1,7 +1,9 @@
 #pragma once
 
 #include <filesystem>
+#include <iomanip>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -22,10 +24,22 @@ struct GGUFShards {
     std::filesystem::path path(base_model_path);
     std::string filename = path.filename().string();
 
-    std::regex pattern(R"(^(.+)-(\d+)-of-(\d+)\.gguf$)");
+    auto invalidShards = [&base_model_path]() {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+          "Invalid sharded file (expected five-digit shard numbers with "
+          "1 <= shard <= total <= 99999): " +
+              base_model_path);
+      return GGUFShards{};
+    };
+
+    std::regex pattern(R"(^(.+)-(\d{5})-of-(\d{5})\.gguf$)");
     std::smatch matches;
 
     if (!std::regex_match(filename, matches, pattern)) {
+      if (std::regex_match(filename, std::regex(R"(^.+-\d+-of-\d+\.gguf$)"))) {
+        return invalidShards();
+      }
       return shards;
     }
 
@@ -33,14 +47,17 @@ struct GGUFShards {
     std::string totalShards = matches[3].str();
 
     int totalShardsNum;
+    int currentShardNum;
     try {
       totalShardsNum = std::stoi(totalShards);
+      currentShardNum = std::stoi(matches[2].str());
     } catch (...) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-          "Invalid sharded file (could not parse total shards number): " +
-              base_model_path);
-      return shards;
+      return invalidShards();
+    }
+
+    if (totalShardsNum < 1 || totalShardsNum > 99999 || currentShardNum < 1 ||
+        currentShardNum > totalShardsNum) {
+      return invalidShards();
     }
 
     shards.tensors_file = basename + ".tensors.txt";
