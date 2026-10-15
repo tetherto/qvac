@@ -1,10 +1,19 @@
 # Changelog
 
-## [0.61.1] - 2026-10-15
+## [0.61.2] - 2026-10-15
 
 ### Fixed
 
 - Require `qvac-lib-inference-addon-cpp` 1.5.1 to reject malformed GGUF shard counts and indices before allocating shard paths.
+
+## [0.61.1] - 2026-10-15
+
+### Fixed
+
+- On Windows, `assessFit` no longer fails with `0xC06D007E` when it is the
+  first fabric call in the process ([#5121](https://github.com/tetherto/qvac/pull/5121)). The addon now binds the
+  delay-loaded `@qvac/fabric` runtime when it loads, and loading throws an
+  error naming the fabric module if that fails.
 
 ## [0.61.0] - 2026-10-14
 
