@@ -13,6 +13,9 @@ on:
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
       - ".github/actions/run-mobile-integration-tests/setup/**"
       - ".github/actions/run-mobile-integration-tests/build-mobile-app/**"
+      - ".github/actions/run-mobile-integration-tests/collect-and-upload-logs/**"
+      - ".github/actions/run-mobile-integration-tests/extract-addon-perf/**"
+      - ".github/actions/run-mobile-integration-tests/test/**"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
       - "packages/ocr-ggml/.agent/setup.sh"
@@ -60,6 +63,8 @@ jobs:
       # change runs this parity check too.
       - name: Run mobile platform-package installer unit tests
         run: node --test .github/actions/run-mobile-integration-tests/build-mobile-app/*.test.mjs
+      - name: Run mobile log collection tests
+        run: node --test .github/actions/run-mobile-integration-tests/test/*.test.mjs
 
   # The per-addon benchmark aggregators are plain Node scripts shared by the
   # benchmark-performance-*.yml workflows, which only run on demand — so without
