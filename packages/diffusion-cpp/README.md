@@ -56,6 +56,11 @@ The package exposes four JS entry points:
 | ABot-World                   | interactive world walk                 | Causal block-by-block generation under keyboard input; see [ABot-World guide](docs/abot-world.md) |
 | ESRGAN                       | upscale                                | Standalone or post-generation image upscale                                       |
 
+## Qwen-Image-2.1 integration
+
+See [Qwen-Image-2.1](docs/qwen-image-21.md) for the pinned native overlay,
+pinned downloads, text-to-image, ordered reference editing, and RGBA handling.
+
 ## Supported Platforms
 
 | Platform | Architecture | Status | GPU backend    |

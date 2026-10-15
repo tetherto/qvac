@@ -355,6 +355,7 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.clip_g_path = optPath(config_.clipGPath);
   params.t5xxl_path = optPath(config_.t5XxlPath);
   params.llm_path = optPath(config_.llmPath);
+  params.llm_vision_path = optPath(config_.llmVisionPath);
   params.vae_path = optPath(config_.vaePath);
   params.clip_vision_path = optPath(config_.clipVisionPath);
   params.taesd_path = optPath(config_.taesdPath);
@@ -917,9 +918,13 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
   if (gen.mode == "img2img") {
     const bool isFlux2 = config_.flux2Requested;
+    const bool usesReferences = sd_ctx_uses_reference_images(sdCtx_.get());
+    const auto channels = sd_ctx_get_image_channels(sdCtx_.get()) == 4
+                              ? image_codec::DecodeChannels::RGBA
+                              : image_codec::DecodeChannels::RGB;
     const size_t nMulti = job.initImagesBytes.size();
 
-    // -- Input validation: mutual exclusion + FLUX-only for multi -----------
+    // -- Input validation: mutual exclusion + model capabilities -----------
     //
     // These checks mirror the JS-layer validation in index.js but are
     // duplicated here so the C++ API stays safe when called directly from
@@ -928,17 +933,16 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       throw StatusError(
           general_error::InvalidArgument,
           "img2img: init_image and init_images are mutually exclusive -- "
-          "pick one. Use init_images (with FLUX2) for multi-reference "
-          "fusion, or init_image for single-image conditioning.");
+          "pick one. Use init_images for multi-reference editing, "
+          "or init_image for single-image conditioning.");
 
-    if (nMulti > 0 && !isFlux2)
+    if (nMulti > 0 && !usesReferences)
       throw StatusError(
           general_error::InvalidArgument,
-          "img2img: init_images (multi-reference fusion) requires a FLUX2 "
-          "model with prediction='flux2_flow'. The current model does not "
-          "support @image1/@imageN in-context references.");
+          "img2img: init_images requires a model supporting reference editing "
+          "(FLUX.2 or Qwen-Image-2.1).");
 
-    // -- Multi-image (FLUX2 "fusion" mode) ---------------------------------
+    // -- Multiple ordered reference images ---------------------------------
     if (nMulti > 0) {
       refImgs->reserve(nMulti);
       for (size_t i = 0; i < nMulti; ++i) {
@@ -954,7 +958,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
             job.initImagesBytes[i],
             config_.maxJobPixels - decodedPixels,
             &decodeFailure,
-            config_.maxImagePixels);
+            config_.maxImagePixels,
+            channels);
         if (decoded.data == nullptr) {
           throw StatusError(
               general_error::InvalidArgument,
@@ -977,23 +982,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       // both dimensions explicitly. ref_image_args' resize_before_vae
       // handles the remaining refs.
 
-      // clang-format off
-      // NOTE: Homebrew and apt.llvm.org builds of clang-format-19 disagree on
-      // whether the std::string(...) branches of this ternary should hang the
-      // call open-paren on its own line. Pinning the layout here keeps local
-      // and CI bit-for-bit.
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "img2img: entering FLUX2 *fusion* mode -- " + std::to_string(nMulti) +
-              " reference images. increase_ref_index=" +
-              (gen.increaseRefIndex
-                   ? std::string("true (distinct RoPE slots per ref -- use "
-                                 "when the text encoder supports vision "
-                                 "tokens, e.g. Qwen-Image-Edit)")
-                   : std::string("false (refs tile into one coordinate "
-                                 "space -- visual feature fusion; CLI "
-                                 "default, recommended for FLUX2-klein)")));
-      // clang-format on
+          "img2img: reference editing with " + std::to_string(nMulti) +
+              " images");
 
       genParams.ref_images = refImgs->data();
       genParams.ref_images_count = static_cast<int>(nMulti);
@@ -1029,7 +1021,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
             initPng,
             config_.maxImagePixels,
             &decodeFailure,
-            config_.maxImagePixels);
+            config_.maxImagePixels,
+            channels);
         if (initImg.data == nullptr) {
           throw StatusError(
               general_error::InvalidArgument,
@@ -1052,11 +1045,11 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       const int imgW = static_cast<int>(initImg.width);
       const int imgH = static_cast<int>(initImg.height);
 
-      if (isFlux2) {
+      if (usesReferences) {
         // FLUX in-context conditioning: ref_images handles its own resizing
         // via ref_image_args' resize_before_vae, so only override genParams
         // dimensions when they are still at the 512x512 default.
-        if (gen.width == 512 && gen.height == 512) {
+        if (isFlux2 && gen.width == 512 && gen.height == 512) {
           genParams.width = imgW;
           genParams.height = imgH;
         }
@@ -1066,7 +1059,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
             "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
-                " -- FLUX in-context conditioning (ref_images, count=1)");
+                " -- reference conditioning (ref_images, count=1)");
 
         genParams.ref_images = &initImg;
         genParams.ref_images_count = 1;
