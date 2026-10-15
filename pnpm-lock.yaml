@@ -2014,7 +2014,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: 0.19.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -2039,10 +2039,10 @@ importers:
         version: 2.4.6
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.19.0
+        specifier: 0.19.0
         version: 0.19.0
       '@qvac/fabric-ios':
-        specifier: ^0.19.0
+        specifier: 0.19.0
         version: 0.19.0
       '@qvac/registry-client':
         specifier: ^0.6.1
