@@ -17,8 +17,10 @@ import {
   validateManifest,
 } from '../select.mjs'
 
-const MANIFEST_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'verifiers.json')
+const HERE = dirname(fileURLToPath(import.meta.url))
+const MANIFEST_PATH = join(HERE, '..', 'verifiers.json')
 const MANIFEST = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
+const REUSABLE_PREBUILDS = join(HERE, '..', '..', '..', 'workflows', 'reusable-prebuilds.yml')
 
 function withWorkdir(pkg, fn) {
   const dir = mkdtempSync(join(tmpdir(), 'select-verifier-'))
@@ -52,6 +54,18 @@ function withOutput(fn) {
 
 test('the shipped manifest is valid', () => {
   assert.doesNotThrow(() => validateManifest(MANIFEST))
+})
+
+// An id without a matching step would leave that addon's prebuild with no
+// symbol check and a green run.
+test('reusable-prebuilds.yml runs a verify step for every verifier id', () => {
+  const workflow = readFileSync(REUSABLE_PREBUILDS, 'utf8')
+  for (const id of MANIFEST.verifiers) {
+    assert.ok(
+      workflow.includes(`steps.symbols-verifier.outputs.verifier == '${id}'`),
+      `reusable-prebuilds.yml has no verify step for '${id}'`,
+    )
+  }
 })
 
 test('a backport on fabric 0.20 or earlier gets the fabric-0.20 verifier', () => {

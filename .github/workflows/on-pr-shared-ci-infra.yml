@@ -14,6 +14,8 @@ on:
       - ".github/actions/run-mobile-integration-tests/setup/**"
       - ".github/actions/run-mobile-integration-tests/build-mobile-app/**"
       - ".github/actions/select-prebuild-symbols-verifier/**"
+      # Holds one verify step per selector id, which the selector tests check.
+      - ".github/workflows/reusable-prebuilds.yml"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
       - "packages/ocr-ggml/.agent/setup.sh"
