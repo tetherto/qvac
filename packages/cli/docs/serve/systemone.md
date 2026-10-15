@@ -67,17 +67,19 @@ Content-Type is `application/json`. Fields:
   one shared context, such as a conversation.
 - `questions` (required): question IDs mapped to `choice`, `score`, or `noul`
   questions using the
-  [SDK decision contract](https://docs.qvac.tether.io/sdk/ai-capabilities/laya-decisions/).
+  [SDK decision contract](https://docs.qvac.tether.io/sdk/ai-capabilities/decisions/).
 - `max_len`, `head_max_len` (optional): token budgets.
 
+HTTP fields use snake_case, such as `option_order`, while SDK fields use camelCase.
 This endpoint uses the System One request shape. It rejects `states`, `stream`,
 and unknown fields. Use SDK `decide({ states, ... })` directly for batch processing.
 
 ### Response
 
-The SDK result as JSON, with `model` set to the configured alias, `answers` keyed
-by question ID, and `usage` containing token counts and truncation information.
-Each answer retains its confidence and probability fields.
+The decision result as JSON in System One format, with `model` set to the
+configured alias, `answers` keyed by question ID, and `usage` containing token
+counts and truncation information. Each answer retains its confidence and
+probability fields.
 
 The route returns the full result without a token stream. A client disconnect
 cancels the SDK request.

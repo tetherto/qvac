@@ -40,6 +40,11 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 2048 }
   },
 
+  decision: {
+    constant: { $const: 'LAYA_MULTILINGUAL_322M_Q8_0' },
+    type: 'llamacpp-decision'
+  },
+
   embeddings: {
     constant: { $const: 'GTE_LARGE_FP16' },
     type: 'llamacpp-embedding'

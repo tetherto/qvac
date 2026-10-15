@@ -18,7 +18,7 @@ const questions = {
     type: 'choice',
     instructions: 'Which team?',
     criteria: { billing: null, technical: 'Bugs' },
-    option_order: [1, 0]
+    optionOrder: [1, 0]
   },
   urgency: { type: 'score', instructions: 'How urgent?', criteria: ['low', 'high'] },
   refund: {
@@ -29,13 +29,13 @@ const questions = {
   }
 }
 
-test('Laya requests preserve option order, labels, structured states and batch shape', (t) => {
+test('Decision requests preserve option order, labels, structured states and batch shape', (t) => {
   const single = {
     modelId: 'laya',
     state: { text: 'Refund', history: [null, true, 1] },
     questions,
-    max_len: 512,
-    head_max_len: 128
+    maxLen: 512,
+    headMaxLen: 128
   }
   t.alike(decideParamsSchema.parse(single), single)
   const batch = {
@@ -50,7 +50,9 @@ test('Laya requests preserve option order, labels, structured states and batch s
     { modelId: 'laya', questions },
     { ...single, state: { bad: undefined } },
     { ...single, state: { bad: BigInt(1) } },
-    { ...single, max_len: -1 },
+    { ...single, maxLen: -1 },
+    { ...single, max_len: 512 },
+    { ...single, questions: { team: { ...questions.team, option_order: [0, 1] } } },
     { ...single, questions: { q: { type: 'unknown', instructions: 'x' } } }
   ]) {
     t.absent(decideParamsSchema.safeParse(input).success)

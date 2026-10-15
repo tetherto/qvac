@@ -1,6 +1,6 @@
 import { describe, it, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { RequestRejectedByPolicyError, type LayaResult } from '@qvac/sdk'
+import { RequestRejectedByPolicyError, type DecisionResult } from '@qvac/sdk'
 import { buildServer } from '@/serve/index'
 import type { DecideFn } from '@/serve/extensions/systemone/state'
 import { writeConfigDir } from '../helpers/config.js'
@@ -9,7 +9,8 @@ const questions = {
   route: {
     type: 'choice' as const,
     instructions: 'Which queue?',
-    criteria: { billing: 'Payments', technical: 'Bugs' }
+    criteria: { billing: 'Payments', technical: 'Bugs' },
+    option_order: [1, 0]
   },
   severity: {
     type: 'score' as const,
@@ -19,7 +20,46 @@ const questions = {
   urgent: { type: 'noul' as const, instructions: 'Does this need a human now?' }
 }
 
-const result: LayaResult = {
+const result: DecisionResult = {
+  model: 'native-checkpoint-name',
+  answers: {
+    route: {
+      type: 'choice',
+      choice: 'billing',
+      probabilities: { billing: 0.9, technical: 0.1 },
+      answerConfidence: 0.9,
+      confidence: 0.9,
+      action: { actProbability: 0.9 }
+    },
+    severity: {
+      type: 'score',
+      score: 0.8,
+      legend: { '0': 'Minor', '1': 'Major' },
+      probabilities: { '0': 0.2, '1': 0.8 },
+      answerConfidence: 0.8,
+      confidence: 0.8,
+      action: { actProbability: 0.8 }
+    },
+    urgent: {
+      type: 'noul',
+      noul: 0.7,
+      answerConfidence: 0.7,
+      confidence: 0.7,
+      action: { actProbability: 0.7 }
+    }
+  },
+  usage: {
+    inputTokens: 42,
+    outputTokens: 0,
+    stateTokens: 12,
+    stateTokensDropped: 0,
+    truncated: false,
+    truncatedQuestions: [],
+    options: { route: { total: 2, distinct: 2, tokensPerOption: null } }
+  }
+}
+
+const httpResult = {
   model: 'native-checkpoint-name',
   answers: {
     route: {
@@ -53,7 +93,8 @@ const result: LayaResult = {
     state_tokens: 12,
     state_tokens_dropped: 0,
     truncated: false,
-    truncated_questions: []
+    truncated_questions: [],
+    options: { route: { total: 2, distinct: 2, tokens_per_option: null } }
   }
 }
 
@@ -100,13 +141,13 @@ describe('System One HTTP API', () => {
   it('lazy-loads once, forwards typed questions, and binds cancellation before awaiting', async (t) => {
     const calls: Parameters<DecideFn>[0][] = []
     const bound: string[] = []
-    let completeDecision: (value: LayaResult) => void = () => {}
+    let completeDecision: (value: DecisionResult) => void = () => {}
     let notifyBinding: (id: string) => void = () => {}
     const { app, loaded } = await server(t, {
       decideOverride: (params) => {
         calls.push(params)
         return Object.assign(
-          new Promise<LayaResult>((resolve) => {
+          new Promise<DecisionResult>((resolve) => {
             completeDecision = resolve
           }),
           { requestId: 'decision-id' }
@@ -136,14 +177,22 @@ describe('System One HTTP API', () => {
       completeDecision(result)
       const response = await pending
       assert.equal(response.statusCode, 200, response.body)
-      assert.deepEqual(response.json(), { ...result, model: 'laya' })
+      assert.deepEqual(response.json(), { ...httpResult, model: 'laya' })
       assert.match(response.headers['content-type'] ?? '', /application\/json/)
       assert.deepEqual(calls.at(-1), {
         modelId: 'sdk-laya-id',
         state,
-        questions,
-        max_len: 512,
-        head_max_len: 128
+        questions: {
+          ...questions,
+          route: {
+            type: 'choice',
+            instructions: 'Which queue?',
+            criteria: { billing: 'Payments', technical: 'Bugs' },
+            optionOrder: [1, 0]
+          }
+        },
+        maxLen: 512,
+        headMaxLen: 128
       })
     }
     assert.equal(loaded.length, 1)
@@ -163,7 +212,7 @@ describe('System One HTTP API', () => {
   })
 
   it('returns 429 for decision queue overflow without interrupting the active request', async (t) => {
-    let completeDecision: (value: LayaResult) => void = () => {}
+    let completeDecision: (value: DecisionResult) => void = () => {}
     let notifyStarted: () => void = () => {}
     const started = new Promise<void>((resolve) => {
       notifyStarted = resolve
@@ -182,7 +231,7 @@ describe('System One HTTP API', () => {
         }
         active = true
         return Object.assign(
-          new Promise<LayaResult>((resolve) => {
+          new Promise<DecisionResult>((resolve) => {
             completeDecision = resolve
             notifyStarted()
           }).finally(() => {
@@ -213,7 +262,7 @@ describe('System One HTTP API', () => {
     }
     const response = await first
     assert.equal(response.statusCode, 200, response.body)
-    assert.deepEqual(response.json(), { ...result, model: 'laya' })
+    assert.deepEqual(response.json(), { ...httpResult, model: 'laya' })
   })
 
   it('rejects malformed requests, batching, and streaming before loading a model', async (t) => {
@@ -225,10 +274,14 @@ describe('System One HTTP API', () => {
       { model: 'laya', states: ['a', 'b'], questions },
       { ...valid, stream: true },
       { ...valid, questions: { bad: { type: 'boolean', instructions: 'Urgent?' } } },
-      { ...valid, max_len: 0 }
+      { ...valid, max_len: 0 },
+      { ...valid, maxLen: 512 },
+      { ...valid, headMaxLen: 128 },
+      { ...valid, questions: { bad: { ...questions.urgent, optionOrder: [1, 0] } } }
     ]) {
       const response = await app.inject({ method: 'POST', url: '/v1/systemone', payload })
       assert.equal(response.statusCode, 400, response.body)
+      assert.equal(response.json().error.type, 'invalid_request_error')
     }
     assert.equal(loaded.length, 0)
   })
@@ -295,6 +348,105 @@ describe('System One HTTP API', () => {
     assert.equal(paths['/v1/chat/completions'], undefined)
     assert.match(JSON.stringify(paths['/v1/systemone']), /questions/)
     assert.match(JSON.stringify(paths['/v1/systemone']), /answers/)
+    for (const field of [
+      'max_len',
+      'head_max_len',
+      'option_order',
+      'answer_confidence',
+      'act_probability',
+      'input_tokens',
+      'output_tokens',
+      'state_tokens',
+      'state_tokens_dropped',
+      'truncated_questions',
+      'tokens_per_option'
+    ]) {
+      assert.ok(JSON.stringify(paths['/v1/systemone']).includes(`"${field}"`), field)
+    }
+    for (const field of [
+      'maxLen',
+      'headMaxLen',
+      'optionOrder',
+      'answerConfidence',
+      'actProbability',
+      'inputTokens',
+      'outputTokens'
+    ]) {
+      assert.ok(!JSON.stringify(paths['/v1/systemone']).includes(`"${field}"`), field)
+    }
+  })
+
+  it('accepts a TypeSafe request without Laya options and returns snake_case token usage', async (t) => {
+    const calls: Parameters<DecideFn>[0][] = []
+    const sdkResult: DecisionResult = {
+      ...result,
+      answers: {
+        is_urgent: {
+          type: 'noul',
+          noul: 0.95,
+          confidence: 0.95,
+          answerConfidence: 0.95,
+          action: { actProbability: 1 }
+        }
+      }
+    }
+    const { app } = await server(t, {
+      decideOverride: (params) => {
+        calls.push(params)
+        return Object.assign(Promise.resolve(sdkResult), { requestId: 'decision-id' })
+      }
+    })
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/systemone',
+      payload: {
+        model: 'laya',
+        state: 'Help! My payouts have been failing for 3 days.',
+        questions: { is_urgent: { type: 'noul', instructions: 'Does this convey urgency?' } }
+      }
+    })
+    assert.equal(response.statusCode, 200, response.body)
+    assert.deepEqual(calls, [
+      {
+        modelId: 'sdk-laya-id',
+        state: 'Help! My payouts have been failing for 3 days.',
+        questions: { is_urgent: { type: 'noul', instructions: 'Does this convey urgency?' } }
+      }
+    ])
+    assert.deepEqual(response.json(), {
+      model: 'laya',
+      answers: {
+        is_urgent: {
+          type: 'noul',
+          noul: 0.95,
+          confidence: 0.95,
+          answer_confidence: 0.95,
+          action: { act_probability: 1 }
+        }
+      },
+      usage: httpResult.usage
+    })
+  })
+
+  it('uses shared 400 errors for malformed JSON and questions', async (t) => {
+    const { app, loaded } = await server(t)
+    const malformedJson = await app.inject({
+      method: 'POST',
+      url: '/v1/systemone',
+      headers: { 'content-type': 'application/json' },
+      payload: '{'
+    })
+    assert.equal(malformedJson.statusCode, 400, malformedJson.body)
+    assert.equal(malformedJson.json().error.code, 'invalid_json')
+    const malformedQuestion = await app.inject({
+      method: 'POST',
+      url: '/v1/systemone',
+      payload: { model: 'laya', state: 'Ticket', questions: { route: { type: 'choice' } } }
+    })
+    assert.equal(malformedQuestion.statusCode, 400, malformedQuestion.body)
+    assert.equal(malformedQuestion.json().error.code, 'invalid_questions')
+    assert.match(malformedQuestion.json().error.message, /questions/)
+    assert.equal(loaded.length, 0)
   })
 
   it('returns a server error when SDK inference fails', async (t) => {

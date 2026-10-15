@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Nested JSON stays inline in the wire contract. The refinement rejects values
-// that JSON serialization would discard or change before reaching Laya.
+// that JSON serialization would discard or change before reaching the model.
 function isJson(value: unknown, ancestors = new Set<object>()): boolean {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return true
   if (typeof value === 'number') return Number.isFinite(value)
@@ -13,7 +13,7 @@ function isJson(value: unknown, ancestors = new Set<object>()): boolean {
   return valid
 }
 
-export const layaStateSchema = z.union([
+export const decisionStateSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
@@ -22,18 +22,18 @@ export const layaStateSchema = z.union([
 ])
 
 const questionBase = {
-  instructions: layaStateSchema.refine((value) => value !== '', 'Instructions cannot be empty'),
-  option_order: z.array(z.number().int().nonnegative()).optional()
+  instructions: decisionStateSchema.refine((value) => value !== '', 'Instructions cannot be empty'),
+  optionOrder: z.array(z.number().int().nonnegative()).optional()
 }
 
-export const layaQuestionSchema = z.discriminatedUnion('type', [
+export const decisionQuestionSchema = z.discriminatedUnion('type', [
   z
     .object({
       ...questionBase,
       type: z.literal('choice'),
       criteria: z.union([
         z.array(z.union([z.string(), z.number(), z.boolean()])),
-        z.record(z.string(), layaStateSchema.nullable())
+        z.record(z.string(), decisionStateSchema.nullable())
       ])
     })
     .strict(),
@@ -41,7 +41,7 @@ export const layaQuestionSchema = z.discriminatedUnion('type', [
     .object({
       ...questionBase,
       type: z.literal('score'),
-      criteria: z.array(layaStateSchema)
+      criteria: z.array(decisionStateSchema)
     })
     .strict(),
   z
@@ -50,8 +50,8 @@ export const layaQuestionSchema = z.discriminatedUnion('type', [
       type: z.literal('noul'),
       criteria: z
         .object({
-          true: layaStateSchema.nullable().optional(),
-          false: layaStateSchema.nullable().optional()
+          true: decisionStateSchema.nullable().optional(),
+          false: decisionStateSchema.nullable().optional()
         })
         .strict()
         .nullable()
@@ -62,14 +62,16 @@ export const layaQuestionSchema = z.discriminatedUnion('type', [
 ])
 
 const decisionFields = {
-  questions: z.record(z.string(), layaQuestionSchema).describe('Question ID to Laya question.'),
-  max_len: z
+  questions: z
+    .record(z.string(), decisionQuestionSchema)
+    .describe('Question ID to decision question.'),
+  maxLen: z
     .number()
     .int()
     .positive()
     .optional()
     .describe('Token budget per sequence; unset uses the checkpoint budget.'),
-  head_max_len: z
+  headMaxLen: z
     .number()
     .int()
     .positive()
@@ -77,18 +79,21 @@ const decisionFields = {
     .describe('Token budget for each question and its options; unset uses the checkpoint budget.')
 }
 
-export const layaSingleRequestSchema = z
-  .object({ ...decisionFields, state: layaStateSchema })
+export const decisionSingleRequestSchema = z
+  .object({ ...decisionFields, state: decisionStateSchema })
   .strict()
-export const layaBatchRequestSchema = z
-  .object({ ...decisionFields, states: z.array(layaStateSchema) })
+export const decisionBatchRequestSchema = z
+  .object({ ...decisionFields, states: z.array(decisionStateSchema) })
   .strict()
-export const layaRequestSchema = z.union([layaSingleRequestSchema, layaBatchRequestSchema])
+export const decisionRequestSchema = z.union([
+  decisionSingleRequestSchema,
+  decisionBatchRequestSchema
+])
 
 const envelope = { modelId: z.string().min(1) }
 export const decideParamsSchema = z.union([
-  layaSingleRequestSchema.extend(envelope),
-  layaBatchRequestSchema.extend(envelope)
+  decisionSingleRequestSchema.extend(envelope),
+  decisionBatchRequestSchema.extend(envelope)
 ])
 const wireEnvelope = {
   ...envelope,
@@ -96,16 +101,18 @@ const wireEnvelope = {
   requestId: z.string().min(1).optional()
 }
 export const decideRequestSchema = z.union([
-  layaSingleRequestSchema.extend(wireEnvelope).meta({ title: 'DecideSingleRequest' }),
-  layaBatchRequestSchema.extend(wireEnvelope).meta({ title: 'DecideBatchRequest' })
+  decisionSingleRequestSchema.extend(wireEnvelope).meta({ title: 'DecideSingleRequest' }),
+  decisionBatchRequestSchema.extend(wireEnvelope).meta({ title: 'DecideBatchRequest' })
 ])
 
 const answerBase = {
-  answer_confidence: z.number(),
+  answerConfidence: z.number(),
   confidence: z.number(),
-  action: z.object({ act_probability: z.number() })
+  action: z.object({
+    actProbability: z.number().describe('Currently unreliable; do not use to trigger actions.')
+  })
 }
-export const layaAnswerSchema = z.discriminatedUnion('type', [
+export const decisionAnswerSchema = z.discriminatedUnion('type', [
   z.object({
     ...answerBase,
     type: z.literal('choice'),
@@ -122,32 +129,32 @@ export const layaAnswerSchema = z.discriminatedUnion('type', [
   z.object({ ...answerBase, type: z.literal('noul'), noul: z.number() })
 ])
 
-export const layaResultSchema = z.object({
+export const decisionResultSchema = z.object({
   model: z.string(),
-  answers: z.record(z.string(), layaAnswerSchema),
+  answers: z.record(z.string(), decisionAnswerSchema),
   usage: z.object({
-    input_tokens: z.number(),
-    output_tokens: z.number(),
-    state_tokens: z.number(),
-    state_tokens_dropped: z.number(),
+    inputTokens: z.number(),
+    outputTokens: z.number(),
+    stateTokens: z.number(),
+    stateTokensDropped: z.number(),
     truncated: z.boolean(),
-    truncated_questions: z.array(z.string()),
+    truncatedQuestions: z.array(z.string()),
     options: z
       .record(
         z.string(),
         z.object({
           total: z.number(),
           distinct: z.number(),
-          tokens_per_option: z.number().nullable()
+          tokensPerOption: z.number().nullable()
         })
       )
       .optional()
   })
 })
-export const layaResponseSchema = z.union([layaResultSchema, z.array(layaResultSchema)])
+export const decisionResponseSchema = z.union([decisionResultSchema, z.array(decisionResultSchema)])
 export const decideResponseSchema = z.object({
   type: z.literal('decide'),
-  result: layaResponseSchema
+  result: decisionResponseSchema
 })
 
 export const decisionConfigBaseSchema = z
@@ -210,12 +217,12 @@ export const decisionConfigSchema = decisionConfigBaseSchema.transform((data) =>
   device: data.device ?? DECISION_CONFIG_DEFAULTS.device
 }))
 
-export type LayaState = z.infer<typeof layaStateSchema>
-export type LayaQuestion = z.infer<typeof layaQuestionSchema>
-export type LayaAnswer = z.infer<typeof layaAnswerSchema>
-export type LayaResult = z.infer<typeof layaResultSchema>
-export type LayaResponse = z.infer<typeof layaResponseSchema>
-export type LayaRequest = z.infer<typeof layaRequestSchema>
+export type DecisionState = z.infer<typeof decisionStateSchema>
+export type DecisionQuestion = z.infer<typeof decisionQuestionSchema>
+export type DecisionAnswer = z.infer<typeof decisionAnswerSchema>
+export type DecisionResult = z.infer<typeof decisionResultSchema>
+export type DecisionResponse = z.infer<typeof decisionResponseSchema>
+export type DecisionRequest = z.infer<typeof decisionRequestSchema>
 type InferredDecideParams = z.infer<typeof decideParamsSchema>
 export type DecideParams =
   | (Extract<InferredDecideParams, { state: unknown }> & { states?: never })

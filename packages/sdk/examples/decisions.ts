@@ -2,7 +2,7 @@ import { loadModel, decide, unloadModel, close } from '@qvac/sdk'
 
 const modelSrc = process.argv[2]
 if (!modelSrc) {
-  console.error('✖ Usage: node dist/examples/laya-decisions.js /models/laya-multilingual-Q8_0.gguf')
+  console.error('✖ Usage: node dist/examples/decisions.js /models/laya-multilingual-Q8_0.gguf')
   process.exit(1)
 }
 

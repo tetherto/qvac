@@ -1,5 +1,5 @@
 import type { TestDefinition } from '@qvac/test-suite'
-import type { LayaResult } from '@qvac/sdk'
+import type { DecisionResult } from '@qvac/sdk'
 
 export const decisionTests: TestDefinition[] = [
   {
@@ -17,7 +17,7 @@ export const decisionTests: TestDefinition[] = [
     expectation: {
       validation: 'function',
       fn: (value: unknown) => {
-        const result = value as LayaResult
+        const result = value as DecisionResult
         const team = result.answers['department']
         const urgency = result.answers['urgency']
         const refund = result.answers['refund']
@@ -31,7 +31,7 @@ export const decisionTests: TestDefinition[] = [
           refund?.type === 'noul' &&
           refund.noul > 0.5 &&
           refund.noul <= 1 &&
-          result.usage.input_tokens > 0
+          result.usage.inputTokens > 0
         return { passed, output: JSON.stringify(result.answers) }
       }
     },
@@ -43,7 +43,7 @@ export const decisionTests: TestDefinition[] = [
     expectation: {
       validation: 'function',
       fn: (value: unknown) => {
-        const results = value as LayaResult[]
+        const results = value as DecisionResult[]
         const first = results[0]?.answers['department']
         const second = results[1]?.answers['department']
         return {

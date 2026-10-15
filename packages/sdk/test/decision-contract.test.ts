@@ -12,7 +12,9 @@ test('decisions are a typed unary method in the generated client contract', (t) 
     type: 'decide',
     modelId: 'laya',
     state: 'Refund',
-    questions: { refund: { type: 'noul', instructions: 'Refund requested.' } },
+    questions: { refund: { type: 'noul', instructions: 'Refund requested.', optionOrder: [1, 0] } },
+    maxLen: 512,
+    headMaxLen: 128,
     requestId: 'decision-id'
   }
   t.is(decideRequestSchema.parse(single).requestId, 'decision-id')
@@ -20,6 +22,7 @@ test('decisions are a typed unary method in the generated client contract', (t) 
   const { state, ...base } = single
   t.ok(contractValidate('decide.request', { ...base, states: [state] }).valid)
   t.absent(contractValidate('decide.request', { ...single, states: [state] }).valid)
+  t.absent(contractValidate('decide.request', { ...single, max_len: 512 }).valid)
   t.ok(contractValidate('constants.ModelType', ModelType.llamacppDecision).valid)
   t.ok(contractValidate('constants.PluginId', PLUGIN_DECISION).valid)
 })

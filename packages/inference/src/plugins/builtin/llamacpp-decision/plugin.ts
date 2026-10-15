@@ -36,7 +36,7 @@ function createDecisionModel(params: CreateModelParams): LayaDecisions {
 
 export const decisionPlugin = definePlugin({
   modelType: ModelType.llamacppDecision,
-  displayName: 'Laya decisions (llama.cpp)',
+  displayName: 'Decisions (llama.cpp)',
   addonPackage: ADDON_EMBEDDING,
   loadConfigSchema: decisionConfigSchema,
   createModel: (params) => ({ model: createDecisionModel(params) }),

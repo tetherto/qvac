@@ -70,7 +70,7 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"image\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"image\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\"},\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"type\":{\"type\":\"string\",\"const\":\"classify\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"history\",\"modelId\",\"stream\",\"type\"],\"properties\":{\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"modelId\":{\"type\":\"string\"},\"kvCache\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\"}]},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"stream\":{\"type\":\"boolean\"},\"generationParams\":{\"type\":\"object\",\"properties\":{\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"number\"},\"predict\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"presence_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"reasoning_budget\":{\"type\":\"integer\"},\"tool_choice\":{\"type\":\"string\"},\"parallel_tool_calls\":{\"type\":\"boolean\"}}},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"responseFormat\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"}}},{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_object\"}}},{\"type\":\"object\",\"required\":[\"type\",\"json_schema\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_schema\"},\"json_schema\":{\"type\":\"object\",\"required\":[\"name\",\"schema\"]}}}]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"maxToolTurns\":{\"type\":\"integer\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"history\",\"modelId\",\"stream\",\"type\"],\"properties\":{\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"modelId\":{\"type\":\"string\"},\"kvCache\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\"}]},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"stream\":{\"type\":\"boolean\"},\"generationParams\":{\"type\":\"object\",\"properties\":{\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"number\"},\"predict\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"presence_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"reasoning_budget\":{\"type\":\"integer\"},\"tool_choice\":{\"type\":\"string\"},\"parallel_tool_calls\":{\"type\":\"boolean\"}}},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"responseFormat\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"}}},{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_object\"}}},{\"type\":\"object\",\"required\":[\"type\",\"json_schema\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_schema\"},\"json_schema\":{\"type\":\"object\",\"required\":[\"name\",\"schema\"]}}}]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"completionStream\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"questions\",\"state\",\"modelId\",\"type\"],\"properties\":{\"questions\":{\"type\":\"object\"},\"max_len\":{\"type\":\"integer\"},\"head_max_len\":{\"type\":\"integer\"},\"state\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"questions\",\"states\",\"modelId\",\"type\"],\"properties\":{\"questions\":{\"type\":\"object\"},\"max_len\":{\"type\":\"integer\"},\"head_max_len\":{\"type\":\"integer\"},\"states\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}},\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"requestId\":{\"type\":\"string\"}}}]}").jsonObject,
+        Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"questions\",\"state\",\"modelId\",\"type\"],\"properties\":{\"questions\":{\"type\":\"object\"},\"maxLen\":{\"type\":\"integer\"},\"headMaxLen\":{\"type\":\"integer\"},\"state\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"questions\",\"states\",\"modelId\",\"type\"],\"properties\":{\"questions\":{\"type\":\"object\"},\"maxLen\":{\"type\":\"integer\"},\"headMaxLen\":{\"type\":\"integer\"},\"states\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}},\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"requestId\":{\"type\":\"string\"}}}]}").jsonObject,
         Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"all\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"deleteCache\"},\"all\":{\"type\":\"boolean\",\"const\":true}}},{\"type\":\"object\",\"required\":[\"type\",\"auto\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"deleteCache\"},\"auto\":{\"type\":\"boolean\",\"const\":true}}},{\"type\":\"object\",\"required\":[\"type\",\"kvCacheKey\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"deleteCache\"},\"kvCacheKey\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"prompt\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"negative_prompt\":{\"type\":\"string\"},\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"steps\":{\"type\":\"integer\"},\"cfg_scale\":{\"type\":\"number\"},\"img_cfg_scale\":{\"type\":\"number\"},\"guidance\":{\"type\":\"number\"},\"sampling_method\":{\"type\":\"string\",\"enum\":[\"euler\",\"euler_a\",\"heun\",\"dpm2\",\"dpm++2m\",\"dpm++2mv2\",\"dpm++2s_a\",\"lcm\",\"ipndm\",\"ipndm_v\",\"ddim_trailing\",\"tcd\",\"res_multistep\",\"res_2s\"]},\"scheduler\":{\"type\":\"string\",\"enum\":[\"discrete\",\"karras\",\"exponential\",\"ays\",\"gits\",\"sgm_uniform\",\"simple\",\"lcm\",\"smoothstep\",\"kl_optimal\",\"bong_tangent\"]},\"seed\":{\"type\":\"integer\"},\"batch_count\":{\"type\":\"integer\"},\"vae_tiling\":{\"type\":\"boolean\"},\"cache_preset\":{\"type\":\"string\"},\"init_image\":{\"type\":\"string\"},\"init_images\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"increase_ref_index\":{\"type\":\"boolean\"},\"auto_resize_ref_image\":{\"type\":\"boolean\"},\"lora\":{\"type\":\"string\"},\"strength\":{\"type\":\"number\"},\"upscale\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"object\",\"properties\":{\"repeats\":{\"type\":\"integer\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"diffusionStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"topic\",\"type\"],\"properties\":{\"topic\":{\"type\":\"string\"},\"timeoutMs\":{\"type\":\"integer\"},\"type\":{\"type\":\"string\",\"const\":\"discoverRpcServers\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
@@ -1245,8 +1245,8 @@ sealed class DecideRequest {
 internal object DecideRequestSerializer : KSerializer<DecideRequest> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideRequest")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"questions\",\"state\",\"modelId\",\"type\"],\"properties\":{\"questions\":{\"type\":\"object\"},\"max_len\":{\"type\":\"integer\"},\"head_max_len\":{\"type\":\"integer\"},\"state\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"questions\",\"states\",\"modelId\",\"type\"],\"properties\":{\"questions\":{\"type\":\"object\"},\"max_len\":{\"type\":\"integer\"},\"head_max_len\":{\"type\":\"integer\"},\"states\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}},\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"questions\",\"state\",\"modelId\",\"type\"],\"properties\":{\"questions\":{\"type\":\"object\"},\"maxLen\":{\"type\":\"integer\"},\"headMaxLen\":{\"type\":\"integer\"},\"state\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"questions\",\"states\",\"modelId\",\"type\"],\"properties\":{\"questions\":{\"type\":\"object\"},\"maxLen\":{\"type\":\"integer\"},\"headMaxLen\":{\"type\":\"integer\"},\"states\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}},\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): DecideRequest {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -1268,8 +1268,8 @@ internal object DecideRequestSerializer : KSerializer<DecideRequest> {
 @Serializable
 data class DecideSingleRequest(
     @SerialName("questions") val `questions`: Map<String, DecideSingleRequestQuestionsValue>,
-    @SerialName("max_len") val `max_len`: Long? = null,
-    @SerialName("head_max_len") val `head_max_len`: Long? = null,
+    @SerialName("maxLen") val `maxLen`: Long? = null,
+    @SerialName("headMaxLen") val `headMaxLen`: Long? = null,
     @SerialName("state") val `state`: DecideSingleRequestState,
     @SerialName("modelId") val `modelId`: String,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
@@ -1286,9 +1286,9 @@ sealed class DecideSingleRequestQuestionsValue {
 internal object DecideSingleRequestQuestionsValueSerializer : KSerializer<DecideSingleRequestQuestionsValue> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideSingleRequestQuestionsValue")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}},{\"type\":\"object\"}]}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"criteria\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"labels\":{\"type\":\"object\",\"required\":[\"false\",\"true\"],\"properties\":{\"false\":{\"type\":\"string\"},\"true\":{\"type\":\"string\"}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"optionOrder\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}},{\"type\":\"object\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"optionOrder\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"criteria\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"optionOrder\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"labels\":{\"type\":\"object\",\"required\":[\"false\",\"true\"],\"properties\":{\"false\":{\"type\":\"string\"},\"true\":{\"type\":\"string\"}}}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): DecideSingleRequestQuestionsValue {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -1312,7 +1312,7 @@ internal object DecideSingleRequestQuestionsValueSerializer : KSerializer<Decide
 @Serializable
 data class DecideSingleRequestQuestionsValueChoice(
     @SerialName("instructions") val `instructions`: DecideSingleRequestQuestionsValueChoiceInstructions,
-    @SerialName("option_order") val `option_order`: List<Long>? = null,
+    @SerialName("optionOrder") val `optionOrder`: List<Long>? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "choice",
     @SerialName("criteria") val `criteria`: DecideSingleRequestQuestionsValueChoiceCriteria,
@@ -1461,7 +1461,7 @@ internal object DecideSingleRequestQuestionsValueChoiceCriteriaVariant2ValueSeri
 @Serializable
 data class DecideSingleRequestQuestionsValueScore(
     @SerialName("instructions") val `instructions`: DecideSingleRequestQuestionsValueScoreInstructions,
-    @SerialName("option_order") val `option_order`: List<Long>? = null,
+    @SerialName("optionOrder") val `optionOrder`: List<Long>? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "score",
     @SerialName("criteria") val `criteria`: List<DecideSingleRequestQuestionsValueScoreCriteriaItem>,
@@ -1550,7 +1550,7 @@ internal object DecideSingleRequestQuestionsValueScoreCriteriaItemSerializer : K
 @Serializable
 data class DecideSingleRequestQuestionsValueNoul(
     @SerialName("instructions") val `instructions`: DecideSingleRequestQuestionsValueNoulInstructions,
-    @SerialName("option_order") val `option_order`: List<Long>? = null,
+    @SerialName("optionOrder") val `optionOrder`: List<Long>? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "noul",
     @SerialName("criteria") val `criteria`: DecideSingleRequestQuestionsValueNoulCriteria? = null,
@@ -1732,8 +1732,8 @@ internal object DecideSingleRequestStateSerializer : KSerializer<DecideSingleReq
 @Serializable
 data class DecideBatchRequest(
     @SerialName("questions") val `questions`: Map<String, DecideBatchRequestQuestionsValue>,
-    @SerialName("max_len") val `max_len`: Long? = null,
-    @SerialName("head_max_len") val `head_max_len`: Long? = null,
+    @SerialName("maxLen") val `maxLen`: Long? = null,
+    @SerialName("headMaxLen") val `headMaxLen`: Long? = null,
     @SerialName("states") val `states`: List<DecideBatchRequestStatesItem>,
     @SerialName("modelId") val `modelId`: String,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
@@ -1750,9 +1750,9 @@ sealed class DecideBatchRequestQuestionsValue {
 internal object DecideBatchRequestQuestionsValueSerializer : KSerializer<DecideBatchRequestQuestionsValue> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideBatchRequestQuestionsValue")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}},{\"type\":\"object\"}]}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"criteria\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"labels\":{\"type\":\"object\",\"required\":[\"false\",\"true\"],\"properties\":{\"false\":{\"type\":\"string\"},\"true\":{\"type\":\"string\"}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"optionOrder\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}},{\"type\":\"object\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"optionOrder\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"criteria\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"optionOrder\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"labels\":{\"type\":\"object\",\"required\":[\"false\",\"true\"],\"properties\":{\"false\":{\"type\":\"string\"},\"true\":{\"type\":\"string\"}}}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): DecideBatchRequestQuestionsValue {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -1776,7 +1776,7 @@ internal object DecideBatchRequestQuestionsValueSerializer : KSerializer<DecideB
 @Serializable
 data class DecideBatchRequestQuestionsValueChoice(
     @SerialName("instructions") val `instructions`: DecideBatchRequestQuestionsValueChoiceInstructions,
-    @SerialName("option_order") val `option_order`: List<Long>? = null,
+    @SerialName("optionOrder") val `optionOrder`: List<Long>? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "choice",
     @SerialName("criteria") val `criteria`: DecideBatchRequestQuestionsValueChoiceCriteria,
@@ -1925,7 +1925,7 @@ internal object DecideBatchRequestQuestionsValueChoiceCriteriaVariant2ValueSeria
 @Serializable
 data class DecideBatchRequestQuestionsValueScore(
     @SerialName("instructions") val `instructions`: DecideBatchRequestQuestionsValueScoreInstructions,
-    @SerialName("option_order") val `option_order`: List<Long>? = null,
+    @SerialName("optionOrder") val `optionOrder`: List<Long>? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "score",
     @SerialName("criteria") val `criteria`: List<DecideBatchRequestQuestionsValueScoreCriteriaItem>,
@@ -2014,7 +2014,7 @@ internal object DecideBatchRequestQuestionsValueScoreCriteriaItemSerializer : KS
 @Serializable
 data class DecideBatchRequestQuestionsValueNoul(
     @SerialName("instructions") val `instructions`: DecideBatchRequestQuestionsValueNoulInstructions,
-    @SerialName("option_order") val `option_order`: List<Long>? = null,
+    @SerialName("optionOrder") val `optionOrder`: List<Long>? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "noul",
     @SerialName("criteria") val `criteria`: DecideBatchRequestQuestionsValueNoulCriteria? = null,
@@ -11604,7 +11604,7 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"results\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"classify\"},\"results\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"label\",\"confidence\"]}},\"done\":{\"type\":\"boolean\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"turn\":{\"type\":\"integer\"},\"events\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"call\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stats\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stopReason\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\"]}]}},\"toolCallback\":{\"type\":\"object\",\"required\":[\"callId\",\"name\",\"arguments\"],\"properties\":{\"callId\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"arguments\":{\"type\":\"object\"}}},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"const\":\"maxToolTurns\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"events\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"completionStream\"},\"done\":{\"type\":\"boolean\"},\"events\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"call\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stats\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stopReason\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\"]}]}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"result\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"result\":{\"anyOf\":[{\"type\":\"object\",\"required\":[\"model\",\"answers\",\"usage\"],\"properties\":{\"model\":{\"type\":\"string\"},\"answers\":{\"type\":\"object\"},\"usage\":{\"type\":\"object\",\"required\":[\"input_tokens\",\"output_tokens\",\"state_tokens\",\"state_tokens_dropped\",\"truncated\",\"truncated_questions\"]}}},{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"model\",\"answers\",\"usage\"]}}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"result\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"decide\"},\"result\":{\"anyOf\":[{\"type\":\"object\",\"required\":[\"model\",\"answers\",\"usage\"],\"properties\":{\"model\":{\"type\":\"string\"},\"answers\":{\"type\":\"object\"},\"usage\":{\"type\":\"object\",\"required\":[\"inputTokens\",\"outputTokens\",\"stateTokens\",\"stateTokensDropped\",\"truncated\",\"truncatedQuestions\"]}}},{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"model\",\"answers\",\"usage\"]}}]}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"deleteCache\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"diffusionStream\"},\"step\":{\"type\":\"number\"},\"totalSteps\":{\"type\":\"number\"},\"elapsedMs\":{\"type\":\"number\"},\"data\":{\"type\":\"string\"},\"outputIndex\":{\"type\":\"number\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"modelLoadMs\":{\"type\":\"number\"},\"generationMs\":{\"type\":\"number\"},\"conditionerMs\":{\"type\":\"number\"},\"denoiseMs\":{\"type\":\"number\"},\"vaeMs\":{\"type\":\"number\"},\"postProcessMs\":{\"type\":\"number\"},\"stepsPerSecond\":{\"type\":\"number\"},\"totalGenerationMs\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSteps\":{\"type\":\"number\"},\"totalGenerations\":{\"type\":\"number\"},\"totalImages\":{\"type\":\"number\"},\"totalPixels\":{\"type\":\"number\"},\"width\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"servers\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"discoverRpcServers\"},\"servers\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"url\",\"rdmaAvailable\",\"devices\"]}}}}").jsonObject,
@@ -12586,74 +12586,74 @@ data class DecideResponse(
 
 @Serializable(with = DecideResponseResultSerializer::class)
 sealed class DecideResponseResult {
-    data class CFEA51B3(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultCFEA51B3) : DecideResponseResult()
+    data class Value6E8073E7(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResult6E8073E7) : DecideResponseResult()
     data class Variant2(val value: List<DecideResponseResultItem>) : DecideResponseResult()
 }
 internal object DecideResponseResultSerializer : KSerializer<DecideResponseResult> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideResponseResult")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"model\",\"answers\",\"usage\"],\"properties\":{\"model\":{\"type\":\"string\"},\"answers\":{\"type\":\"object\"},\"usage\":{\"type\":\"object\",\"required\":[\"input_tokens\",\"output_tokens\",\"state_tokens\",\"state_tokens_dropped\",\"truncated\",\"truncated_questions\"],\"properties\":{\"input_tokens\":{\"type\":\"number\"},\"output_tokens\":{\"type\":\"number\"},\"state_tokens\":{\"type\":\"number\"},\"state_tokens_dropped\":{\"type\":\"number\"},\"truncated\":{\"type\":\"boolean\"},\"truncated_questions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"options\":{\"type\":\"object\"}}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"model\",\"answers\",\"usage\"],\"properties\":{\"model\":{\"type\":\"string\"},\"answers\":{\"type\":\"object\"},\"usage\":{\"type\":\"object\",\"required\":[\"input_tokens\",\"output_tokens\",\"state_tokens\",\"state_tokens_dropped\",\"truncated\",\"truncated_questions\"]}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"model\",\"answers\",\"usage\"],\"properties\":{\"model\":{\"type\":\"string\"},\"answers\":{\"type\":\"object\"},\"usage\":{\"type\":\"object\",\"required\":[\"inputTokens\",\"outputTokens\",\"stateTokens\",\"stateTokensDropped\",\"truncated\",\"truncatedQuestions\"],\"properties\":{\"inputTokens\":{\"type\":\"number\"},\"outputTokens\":{\"type\":\"number\"},\"stateTokens\":{\"type\":\"number\"},\"stateTokensDropped\":{\"type\":\"number\"},\"truncated\":{\"type\":\"boolean\"},\"truncatedQuestions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"options\":{\"type\":\"object\"}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"model\",\"answers\",\"usage\"],\"properties\":{\"model\":{\"type\":\"string\"},\"answers\":{\"type\":\"object\"},\"usage\":{\"type\":\"object\",\"required\":[\"inputTokens\",\"outputTokens\",\"stateTokens\",\"stateTokensDropped\",\"truncated\",\"truncatedQuestions\"]}}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): DecideResponseResult {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> DecideResponseResult.CFEA51B3(input.json.decodeFromJsonElement(serializer<DecideResponseResultCFEA51B3>(), element))
+            0 -> DecideResponseResult.Value6E8073E7(input.json.decodeFromJsonElement(serializer<DecideResponseResult6E8073E7>(), element))
             1 -> DecideResponseResult.Variant2(input.json.decodeFromJsonElement(serializer<List<DecideResponseResultItem>>(), element))
             else -> throw SerializationException("No matching DecideResponseResult variant")
         }
     }
     override fun serialize(encoder: Encoder, value: DecideResponseResult) {
         when (value) {
-            is DecideResponseResult.CFEA51B3 -> encoder.encodeSerializableValue(serializer<DecideResponseResultCFEA51B3>(), value.value)
+            is DecideResponseResult.Value6E8073E7 -> encoder.encodeSerializableValue(serializer<DecideResponseResult6E8073E7>(), value.value)
             is DecideResponseResult.Variant2 -> encoder.encodeSerializableValue(serializer<List<DecideResponseResultItem>>(), value.value)
         }
     }
 }
 
 @Serializable
-data class DecideResponseResultCFEA51B3(
+data class DecideResponseResult6E8073E7(
     @SerialName("model") val `model`: String,
-    @SerialName("answers") val `answers`: Map<String, DecideResponseResultCFEA51B3AnswersValue>,
+    @SerialName("answers") val `answers`: Map<String, DecideResponseResult6E8073E7AnswersValue>,
     @SerialName("usage") val `usage`: DecideResponseResultUsage,
 )
 
-@Serializable(with = DecideResponseResultCFEA51B3AnswersValueSerializer::class)
-sealed class DecideResponseResultCFEA51B3AnswersValue {
-    data class DecideResponseResultAnswersValueChoice(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueChoice) : DecideResponseResultCFEA51B3AnswersValue()
-    data class DecideResponseResultAnswersValueScore(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueScore) : DecideResponseResultCFEA51B3AnswersValue()
-    data class DecideResponseResultAnswersValueNoul(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueNoul) : DecideResponseResultCFEA51B3AnswersValue()
+@Serializable(with = DecideResponseResult6E8073E7AnswersValueSerializer::class)
+sealed class DecideResponseResult6E8073E7AnswersValue {
+    data class DecideResponseResultAnswersValueChoice(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueChoice) : DecideResponseResult6E8073E7AnswersValue()
+    data class DecideResponseResultAnswersValueScore(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueScore) : DecideResponseResult6E8073E7AnswersValue()
+    data class DecideResponseResultAnswersValueNoul(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueNoul) : DecideResponseResult6E8073E7AnswersValue()
 }
-internal object DecideResponseResultCFEA51B3AnswersValueSerializer : KSerializer<DecideResponseResultCFEA51B3AnswersValue> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideResponseResultCFEA51B3AnswersValue")
+internal object DecideResponseResult6E8073E7AnswersValueSerializer : KSerializer<DecideResponseResult6E8073E7AnswersValue> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideResponseResult6E8073E7AnswersValue")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"choice\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"choice\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"score\",\"legend\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"score\":{\"type\":\"number\"},\"legend\":{\"type\":\"object\"},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"noul\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"noul\":{\"type\":\"number\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answerConfidence\",\"confidence\",\"action\",\"type\",\"choice\",\"probabilities\"],\"properties\":{\"answerConfidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"actProbability\"],\"properties\":{\"actProbability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"choice\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answerConfidence\",\"confidence\",\"action\",\"type\",\"score\",\"legend\",\"probabilities\"],\"properties\":{\"answerConfidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"actProbability\"],\"properties\":{\"actProbability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"score\":{\"type\":\"number\"},\"legend\":{\"type\":\"object\"},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answerConfidence\",\"confidence\",\"action\",\"type\",\"noul\"],\"properties\":{\"answerConfidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"actProbability\"],\"properties\":{\"actProbability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"noul\":{\"type\":\"number\"}}}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): DecideResponseResultCFEA51B3AnswersValue {
+    override fun deserialize(decoder: Decoder): DecideResponseResult6E8073E7AnswersValue {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueChoice(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueChoice>(), element))
-            1 -> DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueScore(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueScore>(), element))
-            2 -> DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueNoul(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueNoul>(), element))
-            else -> throw SerializationException("No matching DecideResponseResultCFEA51B3AnswersValue variant")
+            0 -> DecideResponseResult6E8073E7AnswersValue.DecideResponseResultAnswersValueChoice(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueChoice>(), element))
+            1 -> DecideResponseResult6E8073E7AnswersValue.DecideResponseResultAnswersValueScore(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueScore>(), element))
+            2 -> DecideResponseResult6E8073E7AnswersValue.DecideResponseResultAnswersValueNoul(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueNoul>(), element))
+            else -> throw SerializationException("No matching DecideResponseResult6E8073E7AnswersValue variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: DecideResponseResultCFEA51B3AnswersValue) {
+    override fun serialize(encoder: Encoder, value: DecideResponseResult6E8073E7AnswersValue) {
         when (value) {
-            is DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueChoice -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueChoice>(), value.value)
-            is DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueScore -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueScore>(), value.value)
-            is DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueNoul -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueNoul>(), value.value)
+            is DecideResponseResult6E8073E7AnswersValue.DecideResponseResultAnswersValueChoice -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueChoice>(), value.value)
+            is DecideResponseResult6E8073E7AnswersValue.DecideResponseResultAnswersValueScore -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueScore>(), value.value)
+            is DecideResponseResult6E8073E7AnswersValue.DecideResponseResultAnswersValueNoul -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueNoul>(), value.value)
         }
     }
 }
 
 @Serializable
 data class DecideResponseResultAnswersValueChoice(
-    @SerialName("answer_confidence") val `answer_confidence`: Double,
+    @SerialName("answerConfidence") val `answerConfidence`: Double,
     @SerialName("confidence") val `confidence`: Double,
     @SerialName("action") val `action`: DecideResponseResultAnswersValueChoiceAction,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
@@ -12664,7 +12664,7 @@ data class DecideResponseResultAnswersValueChoice(
 
 @Serializable
 data class DecideResponseResultAnswersValueChoiceAction(
-    @SerialName("act_probability") val `act_probability`: Double,
+    @SerialName("actProbability") val `actProbability`: Double,
 )
 
 @Serializable(with = DecideResponseResultAnswersValueChoiceChoiceSerializer::class)
@@ -12701,7 +12701,7 @@ internal object DecideResponseResultAnswersValueChoiceChoiceSerializer : KSerial
 
 @Serializable
 data class DecideResponseResultAnswersValueScore(
-    @SerialName("answer_confidence") val `answer_confidence`: Double,
+    @SerialName("answerConfidence") val `answerConfidence`: Double,
     @SerialName("confidence") val `confidence`: Double,
     @SerialName("action") val `action`: DecideResponseResultAnswersValueScoreAction,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
@@ -12713,12 +12713,12 @@ data class DecideResponseResultAnswersValueScore(
 
 @Serializable
 data class DecideResponseResultAnswersValueScoreAction(
-    @SerialName("act_probability") val `act_probability`: Double,
+    @SerialName("actProbability") val `actProbability`: Double,
 )
 
 @Serializable
 data class DecideResponseResultAnswersValueNoul(
-    @SerialName("answer_confidence") val `answer_confidence`: Double,
+    @SerialName("answerConfidence") val `answerConfidence`: Double,
     @SerialName("confidence") val `confidence`: Double,
     @SerialName("action") val `action`: DecideResponseResultAnswersValueNoulAction,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
@@ -12728,17 +12728,17 @@ data class DecideResponseResultAnswersValueNoul(
 
 @Serializable
 data class DecideResponseResultAnswersValueNoulAction(
-    @SerialName("act_probability") val `act_probability`: Double,
+    @SerialName("actProbability") val `actProbability`: Double,
 )
 
 @Serializable
 data class DecideResponseResultUsage(
-    @SerialName("input_tokens") val `input_tokens`: Double,
-    @SerialName("output_tokens") val `output_tokens`: Double,
-    @SerialName("state_tokens") val `state_tokens`: Double,
-    @SerialName("state_tokens_dropped") val `state_tokens_dropped`: Double,
+    @SerialName("inputTokens") val `inputTokens`: Double,
+    @SerialName("outputTokens") val `outputTokens`: Double,
+    @SerialName("stateTokens") val `stateTokens`: Double,
+    @SerialName("stateTokensDropped") val `stateTokensDropped`: Double,
     @SerialName("truncated") val `truncated`: Boolean,
-    @SerialName("truncated_questions") val `truncated_questions`: List<String>,
+    @SerialName("truncatedQuestions") val `truncatedQuestions`: List<String>,
     @SerialName("options") val `options`: Map<String, DecideResponseResultUsageOptionsValue>? = null,
 )
 
@@ -12746,7 +12746,7 @@ data class DecideResponseResultUsage(
 data class DecideResponseResultUsageOptionsValue(
     @SerialName("total") val `total`: Double,
     @SerialName("distinct") val `distinct`: Double,
-    @SerialName("tokens_per_option") val `tokens_per_option`: Double?,
+    @SerialName("tokensPerOption") val `tokensPerOption`: Double?,
 )
 
 @Serializable
@@ -12765,9 +12765,9 @@ sealed class DecideResponseResultItemAnswersValue {
 internal object DecideResponseResultItemAnswersValueSerializer : KSerializer<DecideResponseResultItemAnswersValue> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideResponseResultItemAnswersValue")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"choice\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"choice\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"score\",\"legend\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"score\":{\"type\":\"number\"},\"legend\":{\"type\":\"object\"},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"noul\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"noul\":{\"type\":\"number\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answerConfidence\",\"confidence\",\"action\",\"type\",\"choice\",\"probabilities\"],\"properties\":{\"answerConfidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"actProbability\"],\"properties\":{\"actProbability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"choice\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answerConfidence\",\"confidence\",\"action\",\"type\",\"score\",\"legend\",\"probabilities\"],\"properties\":{\"answerConfidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"actProbability\"],\"properties\":{\"actProbability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"score\":{\"type\":\"number\"},\"legend\":{\"type\":\"object\"},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answerConfidence\",\"confidence\",\"action\",\"type\",\"noul\"],\"properties\":{\"answerConfidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"actProbability\"],\"properties\":{\"actProbability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"noul\":{\"type\":\"number\"}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): DecideResponseResultItemAnswersValue {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -12790,7 +12790,7 @@ internal object DecideResponseResultItemAnswersValueSerializer : KSerializer<Dec
 
 @Serializable
 data class DecideResponseResultItemAnswersValueChoice(
-    @SerialName("answer_confidence") val `answer_confidence`: Double,
+    @SerialName("answerConfidence") val `answerConfidence`: Double,
     @SerialName("confidence") val `confidence`: Double,
     @SerialName("action") val `action`: DecideResponseResultItemAnswersValueChoiceAction,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
@@ -12801,7 +12801,7 @@ data class DecideResponseResultItemAnswersValueChoice(
 
 @Serializable
 data class DecideResponseResultItemAnswersValueChoiceAction(
-    @SerialName("act_probability") val `act_probability`: Double,
+    @SerialName("actProbability") val `actProbability`: Double,
 )
 
 @Serializable(with = DecideResponseResultItemAnswersValueChoiceChoiceSerializer::class)
@@ -12838,7 +12838,7 @@ internal object DecideResponseResultItemAnswersValueChoiceChoiceSerializer : KSe
 
 @Serializable
 data class DecideResponseResultItemAnswersValueScore(
-    @SerialName("answer_confidence") val `answer_confidence`: Double,
+    @SerialName("answerConfidence") val `answerConfidence`: Double,
     @SerialName("confidence") val `confidence`: Double,
     @SerialName("action") val `action`: DecideResponseResultItemAnswersValueScoreAction,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
@@ -12850,12 +12850,12 @@ data class DecideResponseResultItemAnswersValueScore(
 
 @Serializable
 data class DecideResponseResultItemAnswersValueScoreAction(
-    @SerialName("act_probability") val `act_probability`: Double,
+    @SerialName("actProbability") val `actProbability`: Double,
 )
 
 @Serializable
 data class DecideResponseResultItemAnswersValueNoul(
-    @SerialName("answer_confidence") val `answer_confidence`: Double,
+    @SerialName("answerConfidence") val `answerConfidence`: Double,
     @SerialName("confidence") val `confidence`: Double,
     @SerialName("action") val `action`: DecideResponseResultItemAnswersValueNoulAction,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
@@ -12865,17 +12865,17 @@ data class DecideResponseResultItemAnswersValueNoul(
 
 @Serializable
 data class DecideResponseResultItemAnswersValueNoulAction(
-    @SerialName("act_probability") val `act_probability`: Double,
+    @SerialName("actProbability") val `actProbability`: Double,
 )
 
 @Serializable
 data class DecideResponseResultItemUsage(
-    @SerialName("input_tokens") val `input_tokens`: Double,
-    @SerialName("output_tokens") val `output_tokens`: Double,
-    @SerialName("state_tokens") val `state_tokens`: Double,
-    @SerialName("state_tokens_dropped") val `state_tokens_dropped`: Double,
+    @SerialName("inputTokens") val `inputTokens`: Double,
+    @SerialName("outputTokens") val `outputTokens`: Double,
+    @SerialName("stateTokens") val `stateTokens`: Double,
+    @SerialName("stateTokensDropped") val `stateTokensDropped`: Double,
     @SerialName("truncated") val `truncated`: Boolean,
-    @SerialName("truncated_questions") val `truncated_questions`: List<String>,
+    @SerialName("truncatedQuestions") val `truncatedQuestions`: List<String>,
     @SerialName("options") val `options`: Map<String, DecideResponseResultItemUsageOptionsValue>? = null,
 )
 
@@ -12883,7 +12883,7 @@ data class DecideResponseResultItemUsage(
 data class DecideResponseResultItemUsageOptionsValue(
     @SerialName("total") val `total`: Double,
     @SerialName("distinct") val `distinct`: Double,
-    @SerialName("tokens_per_option") val `tokens_per_option`: Double?,
+    @SerialName("tokensPerOption") val `tokensPerOption`: Double?,
 )
 
 @Serializable

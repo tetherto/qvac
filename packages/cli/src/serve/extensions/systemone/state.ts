@@ -1,9 +1,9 @@
-import { decide, type DecideParams, type LayaResult } from '@qvac/sdk'
+import { decide, type DecideParams, type DecisionResult } from '@qvac/sdk'
 import type { QvacContext } from '@/serve/core/context'
 
 export type DecideFn = (
   params: Extract<DecideParams, { state: unknown }>
-) => Promise<LayaResult> & { requestId: string }
+) => Promise<DecisionResult> & { requestId: string }
 
 export interface SystemOneState {
   decide: DecideFn

@@ -3,8 +3,8 @@ import {
   decideParamsSchema,
   decideResponseSchema,
   type DecideParams,
-  type LayaResult,
-  type LayaResponse,
+  type DecisionResult,
+  type DecisionResponse,
   type RPCOptions
 } from '@/schemas/index'
 import { InvalidResponseError } from '@/errors/index'
@@ -13,7 +13,7 @@ import { generateRequestId } from '@/runtime/request-id'
 import { parseClientInput } from '@/api/parse-input'
 
 /**
- * Answers typed Laya questions about one state or a batch of states.
+ * Answers typed decision questions about one state or a batch of states.
  *
  * @param params - Model ID, states, questions, and optional token budgets.
  * @param options - Dispatch options.
@@ -27,19 +27,19 @@ import { parseClientInput } from '@/api/parse-input'
 export function decide(
   params: Extract<DecideParams, { state: unknown }>,
   options?: RPCOptions
-): Promise<LayaResult> & { requestId: string }
+): Promise<DecisionResult> & { requestId: string }
 export function decide(
   params: Extract<DecideParams, { states: unknown }>,
   options?: RPCOptions
-): Promise<LayaResult[]> & { requestId: string }
+): Promise<DecisionResult[]> & { requestId: string }
 export function decide(
   params: DecideParams,
   options?: RPCOptions
-): Promise<LayaResponse> & { requestId: string }
+): Promise<DecisionResponse> & { requestId: string }
 export function decide(
   params: DecideParams,
   options?: RPCOptions
-): Promise<LayaResponse> & { requestId: string } {
+): Promise<DecisionResponse> & { requestId: string } {
   const requestId = generateRequestId()
   return decoratePromise(runDecide(params, requestId, options), { requestId })
 }
@@ -48,7 +48,7 @@ async function runDecide(
   params: DecideParams,
   requestId: string,
   options?: RPCOptions
-): Promise<LayaResponse> {
+): Promise<DecisionResponse> {
   const input = parseClientInput(decideParamsSchema, params)
   const response = await send({ ...input, type: 'decide', requestId }, options)
   if (response.type !== 'decide') throw new InvalidResponseError('decide')
