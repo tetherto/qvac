@@ -107,7 +107,7 @@ jobs:
         working-directory: .
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
           submodules: recursive
@@ -117,7 +117,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@67b35e94c1c979089e633fe7e974dceef5c27133
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
@@ -138,7 +138,7 @@ jobs:
         uses: ./.github/actions/setup-cuda
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@67b35e94c1c979089e633fe7e974dceef5c27133
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -152,7 +152,7 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # 7.1.0
         with:
           node-version: lts/*
 
@@ -195,7 +195,7 @@ jobs:
       # what bakes those include paths into compile_commands.json for clang-tidy.
       - if: ${{ inputs.fabric-overlay-artifact != '' }}
         name: Download fabric-prebuilds for overlay
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           name: ${{ inputs.fabric-overlay-artifact }}
           path: ${{ runner.temp }}/fabric-prebuilds
