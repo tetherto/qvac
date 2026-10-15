@@ -2,4 +2,8 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.15.1
 
-Patch release with no functional changes. It ships the 0.15.0 code through the SDK release train.
+## Bug Fixes
+
+### Translate batch cap
+
+With zod 4.6.6 and later, a `qvac translate` request whose text array is over the input cap returned `missing_text`. It returns `too_many_inputs` again.
