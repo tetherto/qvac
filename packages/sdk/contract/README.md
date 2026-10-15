@@ -23,10 +23,10 @@ registry` (`ModelType`, `Verbosity`, `PluginId`,
 Do not edit these files by hand. Regenerate with:
 
 ```bash
-bun run contract:export
+npm run contract:export
 ```
 
-`bun run contract:check` exits non-zero when the artifacts are stale;
+`npm run contract:check` exits non-zero when the artifacts are stale;
 `test/unit/contract-export.test.ts` enforces the same in `test:unit`.
 
 ## Naming nested/inline schemas

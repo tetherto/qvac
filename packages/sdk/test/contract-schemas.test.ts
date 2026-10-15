@@ -15,6 +15,36 @@ function findSchemaTitle(node: unknown, title: string): Record<string, unknown> 
   return undefined
 }
 
+test('contract backend config: ordered arrays and addon allow-lists', (t) => {
+  const document: unknown = JSON.parse(
+    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
+  )
+  for (const modelType of ['LlamacppCompletion', 'LlamacppEmbedding', 'GgmlVla']) {
+    const schema = findSchemaTitle(document, `LoadModelSrcRequest${modelType}ModelConfig`)
+    t.ok(schema)
+    if (!schema) continue
+    const validate = new Ajv2020({ strict: false }).compile(schema)
+    t.ok(validate({}))
+    for (const backend of [['auto'], ['cuda'], ['vulkan', 'cuda'], ['metal', 'opencl']]) {
+      t.ok(validate({ backend }))
+    }
+    for (const backend of [
+      'cuda',
+      'cuda,vulkan',
+      [],
+      ['unknown'],
+      ['cuda', 'unknown'],
+      [''],
+      [1]
+    ]) {
+      t.is(validate({ backend }), false)
+    }
+    for (const name of ['cpu', 'hip', 'rocm', 'sycl']) {
+      t.is(validate({ backend: [name] }), modelType === 'GgmlVla')
+    }
+  }
+})
+
 test('contract diffusion load config: memory controls and removed options', (t) => {
   const document: unknown = JSON.parse(
     readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')

@@ -24,6 +24,7 @@ import argparse
 import glob
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -38,6 +39,20 @@ def sdk_dir() -> Path:
 
 def worker_path(sdk: Path) -> Path:
     return sdk / "dist" / "src" / "worker" / "index.js"
+
+
+def _tool(name: str) -> str:
+    """Resolve an npm CLI to its executable path.
+
+    On Windows npm and npx are `.cmd` shims, which subprocess only finds through
+    PATHEXT resolution; `shutil.which` applies it on every platform.
+    """
+    found = shutil.which(name)
+    if found is None:
+        raise SystemExit(
+            f"{name} not found on PATH; install Node.js (https://nodejs.org)"
+        )
+    return found
 
 
 def _run(cmd: list[str], cwd: Path) -> None:
@@ -79,9 +94,11 @@ def build(sdk: Path, *, force: bool) -> Path:
             f"SDK checkout not found at {sdk}. Set QVAC_POC_SDK_DIR to a "
             "@qvac/sdk checkout, or run from the monorepo."
         )
-    # `bun run build` is lint + tsc + alias resolution; run the worker-producing
+    npm = _tool("npm")
+    npx = _tool("npx")
+    # `npm run build` is lint + tsc + alias resolution; run the worker-producing
     # steps directly so a build here doesn't depend on the SDK's lint passing
-    # (the SDK has its own lint CI). `bun install` pulls the addon prebuilds.
+    # (the SDK has its own lint CI). `npm install` pulls the addon prebuilds.
     #
     # Compile against the sibling engine where there is one: the published
     # release lags the engine API the SDK source already consumes.
@@ -91,20 +108,22 @@ def build(sdk: Path, *, force: bool) -> Path:
         manifest = sdk / "package.json"
         saved = manifest.read_text(encoding="utf-8")
         try:
-            _run(["bun", "run", "sdk-source:workspace"], sdk)
+            _run([npm, "run", "sdk-source:workspace"], sdk)
         finally:
             manifest.write_text(saved, encoding="utf-8")
     else:
-        _run(["bun", "install"], sdk)
-    # bun/npm don't reliably set the exec bit on the prebuilt Bare binary, and
+        _run([npm, "install", "--ignore-scripts"], sdk)
+    # npm doesn't reliably set the exec bit on the prebuilt Bare binary, and
     # the client execs it directly (node_modules/bare-runtime-<plat>/bin/bare),
     # so it fails with EACCES on Linux CI. Make every installed bare runnable.
     for bare in glob.glob(
         str(sdk / "node_modules" / "bare-runtime-*" / "bin" / "bare")
     ):
         os.chmod(bare, 0o755)
-    _run(["bunx", "tsc", "--project", "tsconfig.json"], sdk)
-    _run(["bunx", "tsc-alias", "-p", "tsconfig.alias.json"], sdk)
+    # --no: run the SDK's installed tsc / tsc-alias, never a registry download.
+    # `--` keeps npm from reading the tool's flags as its own.
+    _run([npx, "--no", "--", "tsc", "--project", "tsconfig.json"], sdk)
+    _run([npx, "--no", "--", "tsc-alias", "-p", "tsconfig.alias.json"], sdk)
     if not worker.exists():
         raise SystemExit(f"build finished but {worker} is still missing")
     print(f"▸ built worker: {worker}", file=sys.stderr)

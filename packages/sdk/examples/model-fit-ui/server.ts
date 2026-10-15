@@ -17,7 +17,7 @@
  * machine is doing — fine for a demo, not a measurement.
  *
  * Run (Node or Bun, not Bare — this uses node:http):
- *   bun run examples/model-fit-ui/server.ts
+ *   npx tsx examples/model-fit-ui/server.ts
  *   node dist/examples/model-fit-ui/server.js
  */
 

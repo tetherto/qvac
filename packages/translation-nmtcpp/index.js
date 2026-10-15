@@ -78,7 +78,7 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         IndicTrans: "IndicTrans",
         Bergamot: "Bergamot",
     };
-    static assessFit(request) {
+    static async assessFit(request) {
         if (!request ||
             !request.files ||
             typeof request.files.model !== "string" ||
@@ -112,7 +112,7 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         }
         const config = { ...request.config };
         normalizeGpuAliases(config);
-        return binding.assessFit({
+        return await binding.assessFit({
             ...request,
             config,
         });
