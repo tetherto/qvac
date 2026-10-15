@@ -1286,7 +1286,7 @@ sealed class DecideSingleRequestQuestionsValue {
 internal object DecideSingleRequestQuestionsValueSerializer : KSerializer<DecideSingleRequestQuestionsValue> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideSingleRequestQuestionsValue")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"type\":[\"string\",\"number\",\"boolean\"]}},{\"type\":\"object\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}},{\"type\":\"object\"}]}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"criteria\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"labels\":{\"type\":\"object\",\"required\":[\"false\",\"true\"],\"properties\":{\"false\":{\"type\":\"string\"},\"true\":{\"type\":\"string\"}}}}}").jsonObject,
     )
@@ -1360,28 +1360,60 @@ internal object DecideSingleRequestQuestionsValueChoiceInstructionsSerializer : 
 
 @Serializable(with = DecideSingleRequestQuestionsValueChoiceCriteriaSerializer::class)
 sealed class DecideSingleRequestQuestionsValueChoiceCriteria {
-    data class Variant1(val value: List<JsonElement>) : DecideSingleRequestQuestionsValueChoiceCriteria()
+    data class Variant1(val value: List<DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item>) : DecideSingleRequestQuestionsValueChoiceCriteria()
     data class Variant2(val value: Map<String, DecideSingleRequestQuestionsValueChoiceCriteriaVariant2Value?>) : DecideSingleRequestQuestionsValueChoiceCriteria()
 }
 internal object DecideSingleRequestQuestionsValueChoiceCriteriaSerializer : KSerializer<DecideSingleRequestQuestionsValueChoiceCriteria> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideSingleRequestQuestionsValueChoiceCriteria")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":[\"string\",\"number\",\"boolean\"]}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\"}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): DecideSingleRequestQuestionsValueChoiceCriteria {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> DecideSingleRequestQuestionsValueChoiceCriteria.Variant1(input.json.decodeFromJsonElement(serializer<List<JsonElement>>(), element))
+            0 -> DecideSingleRequestQuestionsValueChoiceCriteria.Variant1(input.json.decodeFromJsonElement(serializer<List<DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item>>(), element))
             1 -> DecideSingleRequestQuestionsValueChoiceCriteria.Variant2(input.json.decodeFromJsonElement(serializer<Map<String, DecideSingleRequestQuestionsValueChoiceCriteriaVariant2Value?>>(), element))
             else -> throw SerializationException("No matching DecideSingleRequestQuestionsValueChoiceCriteria variant")
         }
     }
     override fun serialize(encoder: Encoder, value: DecideSingleRequestQuestionsValueChoiceCriteria) {
         when (value) {
-            is DecideSingleRequestQuestionsValueChoiceCriteria.Variant1 -> encoder.encodeSerializableValue(serializer<List<JsonElement>>(), value.value)
+            is DecideSingleRequestQuestionsValueChoiceCriteria.Variant1 -> encoder.encodeSerializableValue(serializer<List<DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item>>(), value.value)
             is DecideSingleRequestQuestionsValueChoiceCriteria.Variant2 -> encoder.encodeSerializableValue(serializer<Map<String, DecideSingleRequestQuestionsValueChoiceCriteriaVariant2Value?>>(), value.value)
+        }
+    }
+}
+
+@Serializable(with = DecideSingleRequestQuestionsValueChoiceCriteriaVariant1ItemSerializer::class)
+sealed class DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item {
+    data class Variant1(val value: String) : DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item()
+    data class Variant2(val value: Double) : DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item()
+    data class Variant3(val value: Boolean) : DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item()
+}
+internal object DecideSingleRequestQuestionsValueChoiceCriteriaVariant1ItemSerializer : KSerializer<DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"number\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"boolean\"}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item.Variant2(input.json.decodeFromJsonElement(serializer<Double>(), element))
+            2 -> DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item.Variant3(input.json.decodeFromJsonElement(serializer<Boolean>(), element))
+            else -> throw SerializationException("No matching DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item) {
+        when (value) {
+            is DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item.Variant2 -> encoder.encodeSerializableValue(serializer<Double>(), value.value)
+            is DecideSingleRequestQuestionsValueChoiceCriteriaVariant1Item.Variant3 -> encoder.encodeSerializableValue(serializer<Boolean>(), value.value)
         }
     }
 }
@@ -1718,7 +1750,7 @@ sealed class DecideBatchRequestQuestionsValue {
 internal object DecideBatchRequestQuestionsValueSerializer : KSerializer<DecideBatchRequestQuestionsValue> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideBatchRequestQuestionsValue")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"type\":[\"string\",\"number\",\"boolean\"]}},{\"type\":\"object\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}},{\"type\":\"object\"}]}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"criteria\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"option_order\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"labels\":{\"type\":\"object\",\"required\":[\"false\",\"true\"],\"properties\":{\"false\":{\"type\":\"string\"},\"true\":{\"type\":\"string\"}}}}}").jsonObject,
     )
@@ -1792,28 +1824,60 @@ internal object DecideBatchRequestQuestionsValueChoiceInstructionsSerializer : K
 
 @Serializable(with = DecideBatchRequestQuestionsValueChoiceCriteriaSerializer::class)
 sealed class DecideBatchRequestQuestionsValueChoiceCriteria {
-    data class Variant1(val value: List<JsonElement>) : DecideBatchRequestQuestionsValueChoiceCriteria()
+    data class Variant1(val value: List<DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item>) : DecideBatchRequestQuestionsValueChoiceCriteria()
     data class Variant2(val value: Map<String, DecideBatchRequestQuestionsValueChoiceCriteriaVariant2Value?>) : DecideBatchRequestQuestionsValueChoiceCriteria()
 }
 internal object DecideBatchRequestQuestionsValueChoiceCriteriaSerializer : KSerializer<DecideBatchRequestQuestionsValueChoiceCriteria> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideBatchRequestQuestionsValueChoiceCriteria")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":[\"string\",\"number\",\"boolean\"]}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\"}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): DecideBatchRequestQuestionsValueChoiceCriteria {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> DecideBatchRequestQuestionsValueChoiceCriteria.Variant1(input.json.decodeFromJsonElement(serializer<List<JsonElement>>(), element))
+            0 -> DecideBatchRequestQuestionsValueChoiceCriteria.Variant1(input.json.decodeFromJsonElement(serializer<List<DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item>>(), element))
             1 -> DecideBatchRequestQuestionsValueChoiceCriteria.Variant2(input.json.decodeFromJsonElement(serializer<Map<String, DecideBatchRequestQuestionsValueChoiceCriteriaVariant2Value?>>(), element))
             else -> throw SerializationException("No matching DecideBatchRequestQuestionsValueChoiceCriteria variant")
         }
     }
     override fun serialize(encoder: Encoder, value: DecideBatchRequestQuestionsValueChoiceCriteria) {
         when (value) {
-            is DecideBatchRequestQuestionsValueChoiceCriteria.Variant1 -> encoder.encodeSerializableValue(serializer<List<JsonElement>>(), value.value)
+            is DecideBatchRequestQuestionsValueChoiceCriteria.Variant1 -> encoder.encodeSerializableValue(serializer<List<DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item>>(), value.value)
             is DecideBatchRequestQuestionsValueChoiceCriteria.Variant2 -> encoder.encodeSerializableValue(serializer<Map<String, DecideBatchRequestQuestionsValueChoiceCriteriaVariant2Value?>>(), value.value)
+        }
+    }
+}
+
+@Serializable(with = DecideBatchRequestQuestionsValueChoiceCriteriaVariant1ItemSerializer::class)
+sealed class DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item {
+    data class Variant1(val value: String) : DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item()
+    data class Variant2(val value: Double) : DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item()
+    data class Variant3(val value: Boolean) : DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item()
+}
+internal object DecideBatchRequestQuestionsValueChoiceCriteriaVariant1ItemSerializer : KSerializer<DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"number\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"boolean\"}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item.Variant2(input.json.decodeFromJsonElement(serializer<Double>(), element))
+            2 -> DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item.Variant3(input.json.decodeFromJsonElement(serializer<Boolean>(), element))
+            else -> throw SerializationException("No matching DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item) {
+        when (value) {
+            is DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item.Variant2 -> encoder.encodeSerializableValue(serializer<Double>(), value.value)
+            is DecideBatchRequestQuestionsValueChoiceCriteriaVariant1Item.Variant3 -> encoder.encodeSerializableValue(serializer<Boolean>(), value.value)
         }
     }
 }
@@ -12522,7 +12586,7 @@ data class DecideResponse(
 
 @Serializable(with = DecideResponseResultSerializer::class)
 sealed class DecideResponseResult {
-    data class D8071590(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultD8071590) : DecideResponseResult()
+    data class CFEA51B3(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultCFEA51B3) : DecideResponseResult()
     data class Variant2(val value: List<DecideResponseResultItem>) : DecideResponseResult()
 }
 internal object DecideResponseResultSerializer : KSerializer<DecideResponseResult> {
@@ -12535,54 +12599,54 @@ internal object DecideResponseResultSerializer : KSerializer<DecideResponseResul
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> DecideResponseResult.D8071590(input.json.decodeFromJsonElement(serializer<DecideResponseResultD8071590>(), element))
+            0 -> DecideResponseResult.CFEA51B3(input.json.decodeFromJsonElement(serializer<DecideResponseResultCFEA51B3>(), element))
             1 -> DecideResponseResult.Variant2(input.json.decodeFromJsonElement(serializer<List<DecideResponseResultItem>>(), element))
             else -> throw SerializationException("No matching DecideResponseResult variant")
         }
     }
     override fun serialize(encoder: Encoder, value: DecideResponseResult) {
         when (value) {
-            is DecideResponseResult.D8071590 -> encoder.encodeSerializableValue(serializer<DecideResponseResultD8071590>(), value.value)
+            is DecideResponseResult.CFEA51B3 -> encoder.encodeSerializableValue(serializer<DecideResponseResultCFEA51B3>(), value.value)
             is DecideResponseResult.Variant2 -> encoder.encodeSerializableValue(serializer<List<DecideResponseResultItem>>(), value.value)
         }
     }
 }
 
 @Serializable
-data class DecideResponseResultD8071590(
+data class DecideResponseResultCFEA51B3(
     @SerialName("model") val `model`: String,
-    @SerialName("answers") val `answers`: Map<String, DecideResponseResultD8071590AnswersValue>,
+    @SerialName("answers") val `answers`: Map<String, DecideResponseResultCFEA51B3AnswersValue>,
     @SerialName("usage") val `usage`: DecideResponseResultUsage,
 )
 
-@Serializable(with = DecideResponseResultD8071590AnswersValueSerializer::class)
-sealed class DecideResponseResultD8071590AnswersValue {
-    data class DecideResponseResultAnswersValueChoice(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueChoice) : DecideResponseResultD8071590AnswersValue()
-    data class DecideResponseResultAnswersValueScore(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueScore) : DecideResponseResultD8071590AnswersValue()
-    data class DecideResponseResultAnswersValueNoul(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueNoul) : DecideResponseResultD8071590AnswersValue()
+@Serializable(with = DecideResponseResultCFEA51B3AnswersValueSerializer::class)
+sealed class DecideResponseResultCFEA51B3AnswersValue {
+    data class DecideResponseResultAnswersValueChoice(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueChoice) : DecideResponseResultCFEA51B3AnswersValue()
+    data class DecideResponseResultAnswersValueScore(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueScore) : DecideResponseResultCFEA51B3AnswersValue()
+    data class DecideResponseResultAnswersValueNoul(val value: io.tether.qvac.sdk.generated.schema.DecideResponseResultAnswersValueNoul) : DecideResponseResultCFEA51B3AnswersValue()
 }
-internal object DecideResponseResultD8071590AnswersValueSerializer : KSerializer<DecideResponseResultD8071590AnswersValue> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideResponseResultD8071590AnswersValue")
+internal object DecideResponseResultCFEA51B3AnswersValueSerializer : KSerializer<DecideResponseResultCFEA51B3AnswersValue> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideResponseResultCFEA51B3AnswersValue")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"choice\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"choice\":{\"type\":[\"string\",\"number\",\"boolean\"]},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"choice\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"choice\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"score\",\"legend\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"score\":{\"type\":\"number\"},\"legend\":{\"type\":\"object\"},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"noul\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"noul\":{\"type\":\"number\"}}}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): DecideResponseResultD8071590AnswersValue {
+    override fun deserialize(decoder: Decoder): DecideResponseResultCFEA51B3AnswersValue {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> DecideResponseResultD8071590AnswersValue.DecideResponseResultAnswersValueChoice(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueChoice>(), element))
-            1 -> DecideResponseResultD8071590AnswersValue.DecideResponseResultAnswersValueScore(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueScore>(), element))
-            2 -> DecideResponseResultD8071590AnswersValue.DecideResponseResultAnswersValueNoul(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueNoul>(), element))
-            else -> throw SerializationException("No matching DecideResponseResultD8071590AnswersValue variant")
+            0 -> DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueChoice(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueChoice>(), element))
+            1 -> DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueScore(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueScore>(), element))
+            2 -> DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueNoul(input.json.decodeFromJsonElement(serializer<DecideResponseResultAnswersValueNoul>(), element))
+            else -> throw SerializationException("No matching DecideResponseResultCFEA51B3AnswersValue variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: DecideResponseResultD8071590AnswersValue) {
+    override fun serialize(encoder: Encoder, value: DecideResponseResultCFEA51B3AnswersValue) {
         when (value) {
-            is DecideResponseResultD8071590AnswersValue.DecideResponseResultAnswersValueChoice -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueChoice>(), value.value)
-            is DecideResponseResultD8071590AnswersValue.DecideResponseResultAnswersValueScore -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueScore>(), value.value)
-            is DecideResponseResultD8071590AnswersValue.DecideResponseResultAnswersValueNoul -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueNoul>(), value.value)
+            is DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueChoice -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueChoice>(), value.value)
+            is DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueScore -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueScore>(), value.value)
+            is DecideResponseResultCFEA51B3AnswersValue.DecideResponseResultAnswersValueNoul -> encoder.encodeSerializableValue(serializer<DecideResponseResultAnswersValueNoul>(), value.value)
         }
     }
 }
@@ -12594,7 +12658,7 @@ data class DecideResponseResultAnswersValueChoice(
     @SerialName("action") val `action`: DecideResponseResultAnswersValueChoiceAction,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "choice",
-    @SerialName("choice") val `choice`: JsonElement,
+    @SerialName("choice") val `choice`: DecideResponseResultAnswersValueChoiceChoice,
     @SerialName("probabilities") val `probabilities`: Map<String, Double>,
 )
 
@@ -12602,6 +12666,38 @@ data class DecideResponseResultAnswersValueChoice(
 data class DecideResponseResultAnswersValueChoiceAction(
     @SerialName("act_probability") val `act_probability`: Double,
 )
+
+@Serializable(with = DecideResponseResultAnswersValueChoiceChoiceSerializer::class)
+sealed class DecideResponseResultAnswersValueChoiceChoice {
+    data class Variant1(val value: String) : DecideResponseResultAnswersValueChoiceChoice()
+    data class Variant2(val value: Double) : DecideResponseResultAnswersValueChoiceChoice()
+    data class Variant3(val value: Boolean) : DecideResponseResultAnswersValueChoiceChoice()
+}
+internal object DecideResponseResultAnswersValueChoiceChoiceSerializer : KSerializer<DecideResponseResultAnswersValueChoiceChoice> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideResponseResultAnswersValueChoiceChoice")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"number\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"boolean\"}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): DecideResponseResultAnswersValueChoiceChoice {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> DecideResponseResultAnswersValueChoiceChoice.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> DecideResponseResultAnswersValueChoiceChoice.Variant2(input.json.decodeFromJsonElement(serializer<Double>(), element))
+            2 -> DecideResponseResultAnswersValueChoiceChoice.Variant3(input.json.decodeFromJsonElement(serializer<Boolean>(), element))
+            else -> throw SerializationException("No matching DecideResponseResultAnswersValueChoiceChoice variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: DecideResponseResultAnswersValueChoiceChoice) {
+        when (value) {
+            is DecideResponseResultAnswersValueChoiceChoice.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is DecideResponseResultAnswersValueChoiceChoice.Variant2 -> encoder.encodeSerializableValue(serializer<Double>(), value.value)
+            is DecideResponseResultAnswersValueChoiceChoice.Variant3 -> encoder.encodeSerializableValue(serializer<Boolean>(), value.value)
+        }
+    }
+}
 
 @Serializable
 data class DecideResponseResultAnswersValueScore(
@@ -12669,7 +12765,7 @@ sealed class DecideResponseResultItemAnswersValue {
 internal object DecideResponseResultItemAnswersValueSerializer : KSerializer<DecideResponseResultItemAnswersValue> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideResponseResultItemAnswersValue")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"choice\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"choice\":{\"type\":[\"string\",\"number\",\"boolean\"]},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"choice\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"choice\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"score\",\"legend\",\"probabilities\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"score\":{\"type\":\"number\"},\"legend\":{\"type\":\"object\"},\"probabilities\":{\"type\":\"object\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"answer_confidence\",\"confidence\",\"action\",\"type\",\"noul\"],\"properties\":{\"answer_confidence\":{\"type\":\"number\"},\"confidence\":{\"type\":\"number\"},\"action\":{\"type\":\"object\",\"required\":[\"act_probability\"],\"properties\":{\"act_probability\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"noul\":{\"type\":\"number\"}}}").jsonObject,
     )
@@ -12699,7 +12795,7 @@ data class DecideResponseResultItemAnswersValueChoice(
     @SerialName("action") val `action`: DecideResponseResultItemAnswersValueChoiceAction,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "choice",
-    @SerialName("choice") val `choice`: JsonElement,
+    @SerialName("choice") val `choice`: DecideResponseResultItemAnswersValueChoiceChoice,
     @SerialName("probabilities") val `probabilities`: Map<String, Double>,
 )
 
@@ -12707,6 +12803,38 @@ data class DecideResponseResultItemAnswersValueChoice(
 data class DecideResponseResultItemAnswersValueChoiceAction(
     @SerialName("act_probability") val `act_probability`: Double,
 )
+
+@Serializable(with = DecideResponseResultItemAnswersValueChoiceChoiceSerializer::class)
+sealed class DecideResponseResultItemAnswersValueChoiceChoice {
+    data class Variant1(val value: String) : DecideResponseResultItemAnswersValueChoiceChoice()
+    data class Variant2(val value: Double) : DecideResponseResultItemAnswersValueChoiceChoice()
+    data class Variant3(val value: Boolean) : DecideResponseResultItemAnswersValueChoiceChoice()
+}
+internal object DecideResponseResultItemAnswersValueChoiceChoiceSerializer : KSerializer<DecideResponseResultItemAnswersValueChoiceChoice> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("DecideResponseResultItemAnswersValueChoiceChoice")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"number\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"boolean\"}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): DecideResponseResultItemAnswersValueChoiceChoice {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> DecideResponseResultItemAnswersValueChoiceChoice.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> DecideResponseResultItemAnswersValueChoiceChoice.Variant2(input.json.decodeFromJsonElement(serializer<Double>(), element))
+            2 -> DecideResponseResultItemAnswersValueChoiceChoice.Variant3(input.json.decodeFromJsonElement(serializer<Boolean>(), element))
+            else -> throw SerializationException("No matching DecideResponseResultItemAnswersValueChoiceChoice variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: DecideResponseResultItemAnswersValueChoiceChoice) {
+        when (value) {
+            is DecideResponseResultItemAnswersValueChoiceChoice.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is DecideResponseResultItemAnswersValueChoiceChoice.Variant2 -> encoder.encodeSerializableValue(serializer<Double>(), value.value)
+            is DecideResponseResultItemAnswersValueChoiceChoice.Variant3 -> encoder.encodeSerializableValue(serializer<Boolean>(), value.value)
+        }
+    }
+}
 
 @Serializable
 data class DecideResponseResultItemAnswersValueScore(
