@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-10-15
+
+### Changed
+
+- Raise the `qvac-lib-inference-addon-cpp` minimum from `1.4.0` to `1.5.0` so
+  its public headers include `<uv.h>` directly after libjs stopped including it
+  transitively. No addon API change.
+
 ## [0.10.1] - 2026-09-29
 
 ### Changed
