@@ -12,7 +12,10 @@ type DecisionTestDefinition = Omit<TestDefinition, 'params'> &
   (
     | { testId: 'decision-ticket'; params: DecisionSingleParams }
     | {
-        testId: 'decision-concurrent-queued' | 'decision-structured-batch'
+        testId:
+          | 'decision-concurrent-queued'
+          | 'decision-structured-batch'
+          | 'decision-structured-batch-parity'
         params: DecisionBatchParams
       }
     | { testId: 'decision-invalid-budget'; params: DecisionInvalidBudgetParams }
@@ -32,6 +35,13 @@ const questions: DecisionSingleParams['questions'] = {
   refund: { type: 'noul', instructions: 'The customer asks for a refund.' }
 }
 const state = 'My payment failed twice and I was charged both times. Please refund the duplicate.'
+const structuredBatch: DecisionBatchParams = {
+  states: [
+    { message: 'The app crashes on startup.' },
+    [{ role: 'user', content: "Please send me last month's invoice." }]
+  ],
+  questions
+}
 
 export type DecisionComparison = { results: DecisionResult[]; reference: DecisionResult[] }
 
@@ -81,7 +91,7 @@ function validDecision(result: DecisionResult): boolean {
   )
 }
 
-function decisionExpectation(count: number): Expectation {
+function decisionExpectation(count: number, compareNumbers = true): Expectation {
   return {
     validation: 'function',
     fn: (value: unknown) => {
@@ -94,11 +104,39 @@ function decisionExpectation(count: number): Expectation {
           const expected = reference[index]
           return (
             result.model === expected.model &&
+            result.usage.inputTokens === expected.usage.inputTokens &&
+            result.usage.outputTokens === expected.usage.outputTokens &&
+            result.usage.stateTokens === expected.usage.stateTokens &&
+            result.usage.stateTokensDropped === expected.usage.stateTokensDropped &&
+            result.usage.truncated === expected.usage.truncated &&
+            result.usage.truncatedQuestions.length === expected.usage.truncatedQuestions.length &&
+            result.usage.truncatedQuestions.every(
+              (id, index) => id === expected.usage.truncatedQuestions[index]
+            ) &&
             Object.entries(result.answers).every(([id, answer]) => {
               const other = expected.answers[id]
-              if (answer.type === 'noul')
+              if (answer.type !== other.type) return false
+              if (
+                !compareNumbers &&
+                answer.type === 'choice' &&
+                other.type === 'choice' &&
+                answer.choice !== other.choice
+              ) {
+                return false
+              }
+              if (
+                answer.type === 'score' &&
+                other.type === 'score' &&
+                Object.keys(answer.legend).some((key) => answer.legend[key] !== other.legend[key])
+              ) {
+                return false
+              }
+              // Packed forward passes can round differently from individual calls.
+              if (!compareNumbers) return true
+              if (answer.type === 'noul') {
                 return other.type === 'noul' && close(answer.noul, other.noul)
-              if (other.type === 'noul' || answer.type !== other.type) return false
+              }
+              if (other.type === 'noul') return false
               return (
                 Object.keys(answer.probabilities).every((key) =>
                   close(answer.probabilities[key], other.probabilities[key])
@@ -133,15 +171,15 @@ export const decisionTests = [
   },
   {
     testId: 'decision-structured-batch',
-    params: {
-      states: [
-        { message: 'The app crashes on startup.' },
-        [{ role: 'user', content: "Please send me last month's invoice." }]
-      ],
-      questions
-    },
-    expectation: decisionExpectation(2),
+    params: structuredBatch,
+    expectation: decisionExpectation(2, false),
     metadata: { category: 'decision', dependency: 'decision', estimatedDurationMs: 60000 }
+  },
+  {
+    testId: 'decision-structured-batch-parity',
+    params: structuredBatch,
+    expectation: decisionExpectation(2),
+    metadata: { category: 'decision', dependency: 'decision-parity', estimatedDurationMs: 60000 }
   },
   {
     testId: 'decision-invalid-budget',

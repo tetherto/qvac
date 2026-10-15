@@ -14,6 +14,7 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
     'decision-ticket': this.ticket.bind(this),
     'decision-concurrent-queued': this.concurrent.bind(this),
     'decision-structured-batch': this.batch.bind(this),
+    'decision-structured-batch-parity': this.batchParity.bind(this),
     'decision-invalid-budget': this.invalidBudget.bind(this)
   }
 
@@ -33,8 +34,16 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
     return ValidationHelpers.validate({ results, reference }, expectation)
   }
 
-  async batch(params: DecisionBatchParams, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded('decision')
+  async batchParity(params: DecisionBatchParams, expectation: Expectation): Promise<TestResult> {
+    return this.batch(params, expectation, 'decision-parity')
+  }
+
+  async batch(
+    params: DecisionBatchParams,
+    expectation: Expectation,
+    dependency = 'decision'
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded(dependency)
     const { states, ...request } = params
     const reference = []
     for (const state of states) reference.push(await decide({ ...request, modelId, state }))
