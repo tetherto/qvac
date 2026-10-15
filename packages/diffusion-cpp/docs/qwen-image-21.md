@@ -52,6 +52,21 @@ QWEN_PROMPT='Put the object in the first image into the scene in the second imag
   CUDA_VISIBLE_DEVICES=0 bare examples/generate-image-qwen-21.js first.png second.png
 ```
 
+For the background-removal example, run:
+
+```sh
+CUDA_VISIBLE_DEVICES=0 bare examples/generate-image-qwen-21.js --remove-background
+```
+
+This uses `assets/von-neumann-colorized.jpg`, loads the vision projector, and
+writes the RGBA result to `output/qwen-image-21-no-background.png`. To use your
+own image, pass its path after `--remove-background`. The preset accepts one
+reference and uses the same generation settings as below; `QWEN_PROMPT` and
+`QWEN_OUTPUT` can still override its prompt and destination. The result is saved
+directly without alpha thresholding or background-removal postprocessing.
+As a generative edit, it can slightly change subject details and may leave
+near-zero alpha rather than exactly zero across the background.
+
 The example defaults to `cuda0`, 512×512, 30 Euler steps, CFG 6, and seed 42.
 `QWEN_WIDTH`, `QWEN_HEIGHT`, `QWEN_STEPS`, `QWEN_SEED`, `QWEN_PROMPT`,
 `QWEN_OUTPUT`, and `QWEN_BACKEND` override those settings. Width and height must

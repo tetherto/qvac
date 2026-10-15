@@ -7,8 +7,21 @@ const ImgStableDiffusion = require('../index')
 
 async function main () {
   const dir = path.resolve(process.env.QWEN_MODELS_DIR || path.join(__dirname, '../models/qwen-image-21'))
-  const output = path.resolve(process.env.QWEN_OUTPUT || path.join(__dirname, '../output/qwen-image-21.png'))
-  const refs = process.argv.slice(2).map(file => fs.readFileSync(path.resolve(file)))
+  const args = process.argv.slice(2)
+  const removeBackground = args[0] === '--remove-background'
+  const inputFiles = removeBackground ? args.slice(1) : args
+  if (removeBackground && inputFiles.length > 1) {
+    throw new Error('Usage: generate-image-qwen-21.js --remove-background [image]')
+  }
+  if (removeBackground && inputFiles.length === 0) {
+    inputFiles.push(path.join(__dirname, '../assets/von-neumann-colorized.jpg'))
+  }
+  const defaultOutput = removeBackground ? 'qwen-image-21-no-background.png' : 'qwen-image-21.png'
+  const output = path.resolve(process.env.QWEN_OUTPUT || path.join(__dirname, '../output', defaultOutput))
+  const refs = inputFiles.map(file => fs.readFileSync(path.resolve(file)))
+  const defaultPrompt = removeBackground
+    ? 'Remove the entire background from the reference image. Keep the foreground subject, preserving its appearance, colors, position and framing. Output an RGBA cutout with a fully transparent background and clean natural edges. Do not replace the background with a solid color or checkerboard.'
+    : 'A red ceramic teapot on a wooden table, soft daylight, product photograph.'
   const width = Number(process.env.QWEN_WIDTH || 512)
   const height = Number(process.env.QWEN_HEIGHT || 512)
   if (![width, height].every(value => Number.isInteger(value) && value > 0 && value % 32 === 0)) {
@@ -38,7 +51,7 @@ async function main () {
     console.log(JSON.stringify({ event: 'loaded', elapsedMs: Date.now() - loadStart }))
     const start = Date.now()
     const response = await model.run({
-      prompt: process.env.QWEN_PROMPT || 'A red ceramic teapot on a wooden table, soft daylight, product photograph.',
+      prompt: process.env.QWEN_PROMPT || defaultPrompt,
       width,
       height,
       steps: Number(process.env.QWEN_STEPS || 30),
