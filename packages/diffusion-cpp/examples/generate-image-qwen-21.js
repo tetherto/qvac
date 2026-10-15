@@ -22,8 +22,8 @@ async function main () {
     },
     compose: {
       inputs: [portrait, originalPortrait],
-      output: 'qwen-image-21-portraits-composed.png',
-      prompt: 'Create a side-by-side diptych of the two reference portraits. Put the color portrait from the first image on the left and the black-and-white portrait from the second image on the right. Preserve each portrait\'s face, clothing, pose and original colors. Show both portraits in separate equally sized panels, with a thin white divider. Keep the complete image opaque.'
+      output: 'qwen-image-21-handshake.png',
+      prompt: 'Create one photorealistic color photograph of two men warmly shaking hands. Use the man in the first reference portrait for the person on the left and the man in the second reference portrait for the person on the right. Preserve their respective facial features, hairstyles, suits and ties. Show both men from the waist up, standing face to face at a slight angle toward the camera, with their right hands clasped together in one natural handshake clearly visible at the center. Keep both faces and the complete handshake in frame. Place them together in the same softly lit office with a neutral background, consistent perspective and natural anatomy. Colorize the second reference naturally. Output a single continuous opaque photograph, with no panels, collage, divider, text or borders.'
     },
     transparent: {
       inputs: [],

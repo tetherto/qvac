@@ -55,7 +55,7 @@ npm run generate:qwen:text-to-image
 # Single-reference edit: change the colorized portrait's jacket to burgundy.
 npm run generate:qwen:edit
 
-# Two-reference composition: colorized portrait left, original monochrome right.
+# Two-reference composition: the two referenced men shaking hands in one scene.
 npm run generate:qwen:compose
 
 # Transparent generation: create a new portrait cutout from text alone.
@@ -69,14 +69,16 @@ npm run generate:qwen:remove-background
 | --- | --- | --- |
 | `text-to-image` | None | `qwen-image-21-portrait.png` |
 | `edit` | `von-neumann-colorized.jpg` | `qwen-image-21-portrait-edit.png` |
-| `compose` | `von-neumann-colorized.jpg`, then `von-neumann.jpg` | `qwen-image-21-portraits-composed.png` |
+| `compose` | `von-neumann-colorized.jpg`, then `von-neumann.jpg` | `qwen-image-21-handshake.png` |
 | `transparent` | None | `qwen-image-21-transparent-portrait.png` |
 | `remove-background` | `von-neumann-colorized.jpg` | `qwen-image-21-no-background.png` |
 
 Text-to-image and transparent generation use only a portrait prompt; they do
 not load the asset or reproduce its exact likeness. The editing modes load the
 vision projector automatically. Composition demonstrates two ordered references
-using the two bundled von Neumann portraits; no earlier generation is required.
+using the two bundled von Neumann portraits to create a handshake scene; no
+earlier generation is required. Both inputs depict the same historical person,
+so this illustrates two-reference composition rather than distinct-identity fidelity.
 
 Pass your own files after npm's `--` separator to replace the default references
 (one for `edit` or `remove-background`, two for `compose`). The zero-reference modes
@@ -144,13 +146,15 @@ The five bundled portrait presets were also run individually through their
 | --- | ---: |
 | `text-to-image` | 6.48 s |
 | `edit` | 13.13 s |
-| `compose` | 21.22 s |
+| `compose` | 25.39 s |
 | `transparent` | 6.55 s |
 | `remove-background` | 13.28 s |
 
-All five PNG SHA-256 hashes matched the earlier, visually inspected direct-Bare
-outputs exactly. The edit changed the jacket to burgundy. Composition placed the color portrait
-on the left and the monochrome portrait on the right. Both transparency presets
+The four unchanged presets matched their earlier, visually inspected direct-Bare
+PNG SHA-256 hashes exactly. The edit changed the jacket to burgundy. The updated
+composition preset was rerun and visually inspected: it places the two referenced
+men together in one office scene with a handshake visible between them. Generated
+faces, clothing and hands can differ from the references. Both transparency presets
 produced RGBA PNGs with alpha spanning 0–255. Sampled background strips had alpha
 0–7 for transparent generation and 0–2 for background removal, without
 postprocessing; their backgrounds are not uniformly zero-alpha.
