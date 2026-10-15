@@ -49,6 +49,9 @@ const std::unordered_set<std::string>& allowedConfigKeys() {
       "threads",
       "threads-batch",
       "threads_batch",
+      "poll",
+      "poll-batch",
+      "poll_batch",
       "openclCacheDir"};
   return keys;
 }
@@ -126,7 +129,8 @@ const std::unordered_map<std::string, std::string>& LayaModel::checkConfig(
           string_format(
               "%s: '%s' is not a Laya load option; accepted: device, "
               "gpu_layers, batch_size, verbosity, main-gpu, split-mode, "
-              "tensor-split, flash_attn, threads, threads-batch, "
+              "tensor-split, flash_attn, threads, threads-batch, poll, "
+              "poll-batch, "
               "openclCacheDir",
               __func__,
               key.c_str()));
