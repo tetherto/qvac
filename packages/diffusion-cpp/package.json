@@ -47,7 +47,7 @@
     "generate:ltx": "bare examples/generate-video-ltx.js",
     "generate:ltx-coffee": "bare examples/generate-video-ltx-coffee-everest.js",
     "test": "npm run test:types && npm run test:integration",
-    "test:ltx": "npm run build:ts && bare test/integration/generate-video-ltx.test.js --exit",
+    "test:ltx": "npm run build:ts && npm run link:platform && bare test/integration/generate-video-ltx.test.js --exit",
     "generate:img2vid": "bare examples/img2vid-wan.js",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js video.js world.js addon.js addonLogging.js fit.js file-paths.js index.d.ts video.d.ts world.d.ts addon.d.ts addonLogging.d.ts fit.d.ts file-paths.d.ts) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
