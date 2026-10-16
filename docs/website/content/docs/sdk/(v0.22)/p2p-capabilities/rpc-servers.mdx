@@ -10,9 +10,7 @@ schemaType: HowTo
 Use `startRpcServer()` to serve native devices from a QVAC worker and `discoverRpcServers()` to find endpoints on a shared discovery topic. Load a model with the selected endpoints to run inference across their devices.
 
 <Callout type="warn">
-  Use RPC endpoints only on a trusted private network. Native RPC traffic is
-  unencrypted and unauthenticated. A discovery topic does not authenticate
-  peers.
+Use RPC endpoints only on a trusted private network. Native RPC traffic is unencrypted and unauthenticated. A discovery topic does not authenticate peers.
 </Callout>
 
 ## Enable serving
@@ -68,9 +66,7 @@ The following script starts an RPC server on a private IPv4 address and shared t
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rpc-server.js title="rpc-server.js" lineNumbers
-
 ```
-
 </WrapCode>
 </Tab>
 
@@ -78,9 +74,7 @@ The following script starts an RPC server on a private IPv4 address and shared t
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rpc-server.ts title="rpc-server.ts" lineNumbers
-
 ```
-
 </WrapCode>
 </Tab>
 
@@ -88,9 +82,7 @@ The following script starts an RPC server on a private IPv4 address and shared t
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/rpc_servers.py title="rpc_servers.py" lineNumbers
-
 ```
-
 </WrapCode>
 </Tab>
 </Tabs>
@@ -106,9 +98,7 @@ The following script discovers two idle RPC servers, maps their device aliases, 
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rpc-inference.js title="rpc-inference.js" lineNumbers
-
 ```
-
 </WrapCode>
 </Tab>
 
@@ -116,15 +106,11 @@ The following script discovers two idle RPC servers, maps their device aliases, 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rpc-inference.ts title="rpc-inference.ts" lineNumbers
-
 ```
-
 </WrapCode>
 </Tab>
 </Tabs>
 
 <Callout type="success">
-  All examples are self-contained and runnable. See the [JS/TS
-  quickstart](/sdk/js-ts-sdk#quickstart) or [Python
-  quickstart](/sdk/python-sdk#quickstart) for instructions.
+All examples are self-contained and runnable. See the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or [Python quickstart](/sdk/python-sdk#quickstart) for instructions.
 </Callout>
