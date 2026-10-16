@@ -8,6 +8,10 @@ Update native add-ons to include the latest fixes and allow compatible patch upd
 
 Update your app lockfile and rebuild native bundles to apply the fixes.
 
+## Maintenance
+
+SDK end-to-end test setup no longer depends on retired CI tokens.
+
 ## [0.21.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.21.0
