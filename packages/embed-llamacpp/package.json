@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.48.0",
+  "version": "0.48.1",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -21,7 +21,7 @@
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
-    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/fit.test.js && bare test/integration/all.js --exit",
     "test:integration:generate": "npm run generate:benchmark-shards && brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "generate:benchmark-shards": "node scripts/generate-benchmark-shards.js",
     "verify:benchmark-shards": "node scripts/generate-benchmark-shards.js --check",

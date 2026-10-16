@@ -25,6 +25,8 @@ Serving requires `@qvac/ggml-rpc-server` and a worker rebuilt with this setting 
 
 Rebuild the worker with `qvac bundle sdk`. See [Configuration](/sdk/configuration) for the config file format.
 
+On Linux, `startRpcServer()` needs `libibverbs.so.1` (`sudo apt install -y libibverbs1`), even over TCP. See [missing libibverbs](/resources/troubleshooting#rpc-server-failure-missing-libibverbsso1).
+
 Python callers must select the generated worker with `QVAC_WORKER_PATH` or `Client(worker_path=...)`. See [Python SDK RPC server setup](/sdk/python-sdk#rpc-servers) for installation, bundling, and run commands.
 
 ## Start and stop a server
