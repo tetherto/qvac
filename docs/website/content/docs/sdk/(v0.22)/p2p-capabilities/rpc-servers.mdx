@@ -25,7 +25,7 @@ Serving requires `@qvac/ggml-rpc-server` and a worker rebuilt with this setting 
 
 Rebuild the worker with `qvac bundle sdk`. See [Configuration](/sdk/configuration) for the config file format.
 
-On Linux, the server uses TCP when libibverbs or an RDMA device is unavailable. RDMA requires `libibverbs.so.1`, which can be installed with `sudo apt install -y libibverbs1`.
+On Linux, the server uses TCP when libibverbs or an RDMA device is unavailable. RDMA requires `libibverbs.so.1` and your NIC's provider package. On Debian or Ubuntu, install them with `sudo apt install -y libibverbs1 ibverbs-providers`.
 
 Python callers must select the generated worker with `QVAC_WORKER_PATH` or `Client(worker_path=...)`. See [Python SDK RPC server setup](/sdk/python-sdk#rpc-servers) for installation, bundling, and run commands.
 
