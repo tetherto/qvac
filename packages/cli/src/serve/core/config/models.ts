@@ -114,13 +114,7 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
   }
 
   const rawConfig = entry.config ?? {}
-  const resolved = entry.type
-    ? resolveExplicitServeModel(entry.type, rawConfig)
-    : {
-        sdkType: model.addon,
-        endpointCategory: normalizeEndpointCategory(model.addon),
-        config: rawConfig
-      }
+  const resolved = resolveExplicitServeModel(entry.type || model.engine || model.addon, rawConfig)
 
   return {
     alias,

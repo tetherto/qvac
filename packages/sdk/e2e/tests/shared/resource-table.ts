@@ -40,6 +40,18 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 2048 }
   },
 
+  decision: {
+    constant: { $const: 'LAYA_MULTILINGUAL_322M_Q8_0' },
+    type: 'llamacpp-decision'
+  },
+
+  'decision-parity': {
+    constant: { $const: 'LAYA_MULTILINGUAL_322M_Q8_0' },
+    type: 'llamacpp-decision',
+    // Keep these short question/state sequences in separate forward passes for numerical parity.
+    config: { device: 'cpu', flash_attn: 'off', batch_size: 64 }
+  },
+
   embeddings: {
     constant: { $const: 'GTE_LARGE_FP16' },
     type: 'llamacpp-embedding'

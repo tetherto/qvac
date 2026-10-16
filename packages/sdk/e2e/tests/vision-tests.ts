@@ -318,8 +318,9 @@ export const visionErrorUnsupportedFormat: TestDefinition = {
   params: {
     history: unsupportedFormatHistory('shared-test-data/images/invalid-format.bmp')
   },
-  expectation: { validation: 'throws-error', errorContains: 'failed to load' },
-  // This one does resolve: the file exists, it is the format the decoder refuses.
+  expectation: { validation: 'throws-error', errorContains: 'unsupported or corrupt image' },
+  // This one does resolve: the file exists, but its dimensions cannot be read, so it is rejected
+  // before decoding.
   steps: visionRejects(unsupportedFormatHistory('$image'), [
     { asset: { kind: 'image', file: 'invalid-format.bmp', form: 'path', as: 'image' } }
   ]),
