@@ -1,6 +1,5 @@
 import { z } from 'zod'
 
-// Source: https://developers.openai.com/api/reference/resources/decisions/methods/create
 const text = z.string().max(10485760)
 const shortText = z.string().max(1048576)
 const unsupportedCache = z
