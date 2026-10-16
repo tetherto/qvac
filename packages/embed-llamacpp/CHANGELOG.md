@@ -11,8 +11,25 @@
   compiled into this addon. Replace
   `require('@qvac/embed-llamacpp/idMapIndex')` with
   `require('@qvac/turbovec-ggml/idMapIndex')`.
+- `pooling: "rank"` is no longer a `GGMLBert` option, and a model whose GGUF
+  defaults to rank pooling no longer loads in `GGMLBert`
+  ([#4995](https://github.com/tetherto/qvac/pull/4995)). Rank pooling returns
+  one classifier score per sequence, not an embedding, so `GGMLBert` read past
+  the end of the result: the vectors were mostly zeros that changed on every
+  run, and the process could crash. The load now fails with
+  `UnsupportedEmbeddings` before the weights load. Load reranker models with
+  `Reranker`.
 
 ### Added
+
+- `Reranker` scores documents by relevance to a query with a reranker
+  (cross-encoder) GGUF such as jina-reranker, bge-reranker or Qwen3-Reranker
+  ([#4995](https://github.com/tetherto/qvac/pull/4995)).
+  `run({ query, documents })` resolves to one score per document, in the
+  order given; higher is more relevant. The query is paired with each
+  document as llama-server's `/rerank` does, and the scores match fabric's
+  `llama-embedding --pooling rank`. A GGUF that declares another pooling or
+  has no classifier head is rejected before its weights load.
 
 - `poll` and `poll-batch` are now documented public JavaScript load options.
   They control the main and batch GGML threadpool busy-wait levels; both
