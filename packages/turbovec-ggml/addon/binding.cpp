@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <bare.h>
+#include <qvac-addon/fabric-bind.h>
 
 #include "VectorIndex.hpp"
 #include "VectorIndexErrors.hpp"
@@ -1376,6 +1377,10 @@ js_value_t* idxIntGetter(js_env_t* env, js_callback_info_t* info) {
 }
 
 js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
   do {                                                                         \

@@ -10,7 +10,7 @@ tocMaxDepth: 3
 
 For OpenCode, use the published [`@qvac/opencode-plugin`](https://www.npmjs.com/package/@qvac/opencode-plugin). The plugin starts a local managed QVAC server for the project, registers the `qvac` provider, selects the default local model, and cleans up when OpenCode exits.
 
-For OpenClaw, use the published [`@qvac/openclaw-plugin`](https://www.npmjs.com/package/@qvac/openclaw-plugin). The plugin registers the `qvac` provider, exposes the QVAC model catalog, and uses OpenClaw's `localService` support to start `qvac serve --openai` when the local provider is used.
+For OpenClaw, use the published [`@qvac/openclaw-plugin`](https://www.npmjs.com/package/@qvac/openclaw-plugin). The plugin registers the `qvac` provider, exposes the QVAC model catalog, and starts its own `qvac serve --openai` on a free port when the local provider is used. It requires `@qvac/cli` 0.16.0 or newer.
 
 Manual HTTP-server setup is still available for other OpenAI-compatible tools, or for users who want to run `qvac serve --openai` themselves. In that mode, the model name requested by the tool must match an alias declared in `serve.models`, and the tool's base URL must point to the running server (`http://localhost:11434/v1` by default).
 
@@ -53,7 +53,7 @@ openclaw plugins enable qvac --accept-capabilities
 openclaw config set plugins.allow '["qvac"]' --strict-json
 ```
 
-The explicit `@qvac/sdk` install keeps SDK model constants available to the `qvac` command that OpenClaw starts through `localService`.
+The explicit `@qvac/sdk` install keeps SDK model constants available to the `qvac` command the plugin starts.
 
 Then let the plugin create the QVAC provider entry in OpenClaw:
 
@@ -61,7 +61,7 @@ Then let the plugin create the QVAC provider entry in OpenClaw:
 QVAC_BIN="$(which qvac)"
 
 openclaw config set plugins.entries.qvac.config \
-  "{\"model\":\"qwen3.5-9b\",\"qvacCommand\":\"$QVAC_BIN\",\"port\":11434}" \
+  "{\"model\":\"qwen3.5-9b\",\"qvacCommand\":\"$QVAC_BIN\"}" \
   --strict-json
 
 openclaw onboard \
@@ -75,7 +75,7 @@ openclaw onboard \
 openclaw config validate
 ```
 
-The setup command registers `qvac`, selects `qvac/qwen3.5-9b`, and enables OpenClaw's local-model mode. You do not need to create a `qvac.config.json` file for the plugin path; the plugin generates the temporary QVAC serve config when OpenClaw starts the local service.
+The setup command registers `qvac`, selects `qvac/qwen3.5-9b`, and enables OpenClaw's local-model mode. You do not need to create a `qvac.config.json` file for the plugin path; the plugin generates the temporary QVAC serve config when it starts `qvac serve`.
 
 Check that OpenClaw can see the QVAC model:
 
@@ -136,7 +136,7 @@ openclaw onboard \
   --skip-health
 ```
 
-Advanced plugin options use camelCase because they configure the plugin, not `qvac.config.json` directly. The plugin converts them into the temporary QVAC serve config that OpenClaw starts through `localService`.
+Advanced plugin options use camelCase because they configure the plugin, not `qvac.config.json` directly. The plugin converts them into the temporary QVAC serve config it starts `qvac serve` with.
 
 | Plugin option | What it controls | Default |
 | --- | --- | --- |
@@ -145,7 +145,7 @@ Advanced plugin options use camelCase because they configure the plugin, not `qv
 | `ctxSize` | Context window written as `ctx_size` in the generated serve config. | `32768` |
 | `reasoningBudget` | QVAC reasoning budget; `0` disables reasoning and `-1` enables the model default. | `-1` |
 | `tools` | Enables QVAC tool-call formatting for agent use. | `true` |
-| `port` | Local HTTP server port. | `11434` |
+| `port` | Local HTTP server port; `0` lets `qvac serve` bind a free port and report it to the plugin. | `0` |
 
 If you need a model that is not in the OpenClaw plugin catalog yet, use the manual HTTP-server path below. In that path, `qvac.config.json` can expose any supported SDK model constant under the alias you choose, and OpenClaw points at that alias through a custom OpenAI-compatible provider.
 

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import { createHmac } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -25,7 +27,7 @@ import {
   writeRecord
 } from '../src/managed/registry.js'
 import { releaseLock, tryLock } from '../src/managed/index.js'
-import { allocateFreePort, spawnServe } from '../src/managed/serve-process.js'
+import { spawnServe } from '../src/managed/serve-process.js'
 import { fakeServeSkip, makeFakeServe, setBehavior } from './helpers/fake-serve.js'
 
 const DEAD_PID = 2_147_483_646
@@ -65,12 +67,28 @@ function makeRecord(over: Partial<ServeRecord>): ServeRecord {
 }
 
 // A throwaway health endpoint so findReusableServe's GET /v1/models succeeds.
+// What `qvac serve` answers on its unauthenticated identity route.
+function identityResponse(url: string, port: number): Response {
+  const nonce = new URL(url).searchParams.get('nonce') ?? ''
+  const proof = createHmac('sha256', API_KEY)
+    .update(`qvac-serve-identity-v1\n${port}\n${nonce}`)
+    .digest('base64url')
+  return Response.json({ proof })
+}
+
 async function listenHealthy(): Promise<{
   baseURL: string
   port: number
   close: () => Promise<void>
 }> {
   const server: Server = createServer((req, res) => {
+    if (req.url?.startsWith('/qvac/identity') === true) {
+      const port = (server.address() as AddressInfo).port
+      void identityResponse(`http://x${req.url}`, port)
+        .text()
+        .then((body) => res.end(body))
+      return
+    }
     if (req.headers.authorization !== `Bearer ${API_KEY}`) {
       res.statusCode = 401
       res.end('unauthorized')
@@ -369,7 +387,12 @@ test('findReusableServe accepts an authenticated non-loopback destination', asyn
         baseURL: 'http://192.0.2.10:4321/v1'
       })
     )
-    const fetchImpl: typeof fetch = (_input, init) => {
+    const fetchImpl: typeof fetch = (input, init) => {
+      const url = String(input)
+      if (url.startsWith('http://192.0.2.10:4321/qvac/identity')) {
+        assert.equal(new Headers(init?.headers).get('authorization'), null)
+        return Promise.resolve(identityResponse(url, 4321))
+      }
       assert.equal(new Headers(init?.headers).get('authorization'), `Bearer ${API_KEY}`)
       return Promise.resolve(new Response(null, { status: 200 }))
     }
@@ -458,11 +481,9 @@ test(
       })
       try {
         // Orphan that actually serves on its recorded baseURL → must be killed.
-        const port = await allocateFreePort('127.0.0.1')
         const serve = await spawnServe({
           apiKey: API_KEY,
           configPath: 'unused.json',
-          port,
           serveBinPath: fake.binPath,
           startTimeoutMs: 10_000
         })

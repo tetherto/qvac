@@ -12,6 +12,15 @@
   `require('@qvac/embed-llamacpp/idMapIndex')` with
   `require('@qvac/turbovec-ggml/idMapIndex')`.
 
+## [0.48.1] - 2026-10-15
+
+### Fixed
+
+- On Windows, `assessFit` no longer fails with `0xC06D007E` when it is the
+  first fabric call in the process ([#5121](https://github.com/tetherto/qvac/pull/5121)). The addon now binds the
+  delay-loaded `@qvac/fabric` runtime when it loads, and loading throws an
+  error naming the fabric module if that fails.
+
 ## [0.48.0] - 2026-10-14
 
 ### Breaking
