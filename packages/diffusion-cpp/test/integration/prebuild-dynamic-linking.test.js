@@ -7,7 +7,11 @@ const proc = require('bare-process')
 const test = require('brittle')
 
 const PREBUILDS_DIR = path.resolve(__dirname, '../../prebuilds')
-const MODULE_NAME = 'qvac__diffusion-cpp'
+
+function moduleNameForHost(host) {
+  const suffix = host.startsWith('ios-') ? 'ios' : host
+  return 'qvac__diffusion-cpp-' + suffix
+}
 
 // GPU userspace loaders that must never be a hard DT_NEEDED of the addon
 // module itself: a CPU-only server has none of them installed, and a hard
@@ -93,13 +97,14 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
   }
 
   const target = `${os.platform()}-${os.arch()}`
-  const addonPath = path.join(PREBUILDS_DIR, target, `${MODULE_NAME}.bare`)
+  const moduleName = moduleNameForHost(target)
+  const addonPath = path.join(PREBUILDS_DIR, target, `${moduleName}.bare`)
   t.ok(fs.existsSync(addonPath), `prebuild present: ${addonPath}`)
 
   // 1. The addon itself must load on a host that has never had a graphics
   //    stack: no GPU userspace loader and no external C++ runtime in NEEDED.
   const addonNeeded = elfNeeded(fs.readFileSync(addonPath))
-  t.comment(`${MODULE_NAME}.bare NEEDED: ${addonNeeded.join(', ')}`)
+  t.comment(`${moduleName}.bare NEEDED: ${addonNeeded.join(', ')}`)
   for (const lib of [...FORBIDDEN_NEEDED, ...FORBIDDEN_RUNTIME]) {
     t.absent(
       addonNeeded.find((n) => n.startsWith(lib)),
@@ -112,7 +117,7 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
   const vulkanModulePath = path.join(
     PREBUILDS_DIR,
     target,
-    MODULE_NAME,
+    moduleName,
     'libqvac-diffusion-ggml-vulkan.so'
   )
   t.ok(fs.existsSync(vulkanModulePath), `Vulkan DL backend module present: ${vulkanModulePath}`)
@@ -185,8 +190,7 @@ test(
           'main-gpu': 0,
           threads: 4,
           prediction: 'v',
-          verbosity: 2,
-          backendsDir: PREBUILDS_DIR
+          verbosity: 2
         },
         logger: console
       })

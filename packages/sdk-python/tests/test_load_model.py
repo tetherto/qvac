@@ -23,7 +23,7 @@ from tetherto.qvac_sdk.model_types import (
     normalize_model_type,
     resolve_canonical_engine,
 )
-from tetherto.qvac_sdk.models import QWEN3_600M_INST_Q4
+from tetherto.qvac_sdk.models import LAYA_MULTILINGUAL_322M_Q8_0, QWEN3_600M_INST_Q4
 
 OK = {"type": "loadModel", "success": True, "modelId": "m-1"}
 
@@ -96,6 +96,28 @@ async def test_load_model_infers_type_from_descriptor():
     assert transport.sent["modelType"] == "llamacpp-completion"
     # The wire modelSrc is the descriptor's src string, not the dataclass.
     assert transport.sent["modelSrc"] == QWEN3_600M_INST_Q4.src
+
+
+async def test_laya_constant_infers_decision_engine_with_shared_addon():
+    transport = FakeTransport(response=OK)
+    await api.load_model(
+        transport,
+        model_src=LAYA_MULTILINGUAL_322M_Q8_0,
+        model_config={"device": "cpu"},
+    )
+    assert LAYA_MULTILINGUAL_322M_Q8_0.addon == "embeddings"
+    assert transport.sent["modelType"] == "llamacpp-decision"
+
+
+async def test_laya_constant_rejects_embedding_engine_override():
+    transport = FakeTransport(response=OK)
+    with pytest.raises(ModelSrcTypeMismatchError):
+        await api.load_model(
+            transport,
+            model_src=LAYA_MULTILINGUAL_322M_Q8_0,
+            model_type="llamacpp-embedding",
+        )
+    assert transport.sent is None
 
 
 async def test_load_model_requires_type_for_plain_string_src():

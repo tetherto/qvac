@@ -108,6 +108,7 @@
   "implicitDependencies": [
     "inference-addon-cpp",
     "lint-cpp",
-    "qvac-addon-cmake"
+    "qvac-addon-cmake",
+    "!@qvac/turbovec-ggml"
   ]
 }
