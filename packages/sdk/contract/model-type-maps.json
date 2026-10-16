@@ -62,5 +62,13 @@
     "tts": "tts-ggml",
     "vad": "onnx-vad",
     "vla": "ggml-vla"
+  },
+  "legacyRegistryEngineRules": {
+    "@qvac/asr-ggml": [
+      {
+        "tag": "moss-transcribe",
+        "engine": "moss-transcribe"
+      }
+    ]
   }
 }

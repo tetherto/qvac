@@ -317,6 +317,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
 | `rag` | `@qvac/rag` | RAG with HyperDB |
+| `turbovec-ggml` | `@qvac/turbovec-ggml` | CPU vector index (`IdMapIndex`, TurboVec quantization) |
 | `decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
 | `logging` | `@qvac/logging` | Logging utilities |
 | `error` | `@qvac/error` | Base error types |

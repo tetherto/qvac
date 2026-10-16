@@ -87,6 +87,8 @@ This is true for self-hosted runners regardless of the matrix label string, and 
 
 **When the step is absent:** Some workflows were refactored (for example mobile integration flows that checkout sparse paths first) and no longer use Manual Workspace Cleanup. Do not add the step unless the job checks out the full repo on a persistent self-hosted runner at `$GITHUB_WORKSPACE`.
 
+Without the step, anything a job writes at the workspace root outside a checkout path is still there for the next job on that runner, including jobs from other workflows. A step or composite action that writes such a directory must delete it before writing. The mobile [`collect-and-upload-logs`](../../.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml) action does this for `devicefarm-logs/`, `console-logs/` and `perf-report/`, and [`extract-addon-perf`](../../.github/actions/run-mobile-integration-tests/extract-addon-perf/action.yml) does it for its output directory. Otherwise an earlier job's Device Farm logs end up in a later run's `console-logs-*` artifact.
+
 ## Related patterns
 
 ### Model cache on self-hosted runners

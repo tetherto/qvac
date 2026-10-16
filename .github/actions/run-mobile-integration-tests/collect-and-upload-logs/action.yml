@@ -3,6 +3,9 @@ description: |
   Phase 6 of the mobile integration test pipeline.
 
   Always runs, even on monitor failure (so crashes get full forensic data).
+  Starts by deleting the workspace directories it writes. Self-hosted runners
+  keep the workspace between jobs, so an earlier job's Device Farm logs would
+  otherwise be extracted and uploaded as this run's.
   Refreshes AWS credentials, downloads only the essential artifacts from
   Device Farm (Customer_Artifacts.zip + Logcat + test-spec output), extracts
   bare_console.log, test-results.json, logcat_full.txt, host-phase diagnostics,
@@ -48,6 +51,12 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Clear log directories left in the workspace by an earlier job
+      if: always()
+      shell: bash
+      run: |
+        rm -rf devicefarm-logs console-logs perf-report
+
     - name: Refresh AWS credentials before log download
       if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
       uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -341,8 +350,6 @@ runs:
                 title = t.get('title', '?')
                 status = t.get('status', 'unknown')
                 dur = t.get('duration', 0) or 0
-                if status == 'passed' and dur < 500:
-                    status = 'skipped'
                 runner_rows.setdefault(title, {})[dev] = {
                     'status': status, 'durationMs': dur
                 }

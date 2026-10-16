@@ -43,6 +43,34 @@ function resolved(over: Partial<ResolvedModelEntry> & { alias: string }): Resolv
 }
 
 describe('model-catalog', () => {
+  it('classifies every canonical engine independently of its addon category', () => {
+    const roles = {
+      'llamacpp-completion': 'chat',
+      'llamacpp-embedding': 'embedding',
+      'whispercpp-transcription': 'transcription',
+      'bci-whispercpp-transcription': 'bci',
+      'parakeet-transcription': 'transcription',
+      'moss-transcribe': 'transcription',
+      'nmtcpp-translation': 'translation',
+      'onnx-tts': 'speech',
+      'tts-ggml': 'speech',
+      'ggml-ocr': 'ocr',
+      'sdcpp-generation': 'image',
+      'audiogen-ggml': 'audiogen',
+      'ggml-vla': 'vla',
+      'ggml-classification': 'classification',
+      'onnx-vad': 'vad'
+    } satisfies Record<ModelConstant['engine'], string>
+    const constants = new Map<string, ModelConstant>()
+    for (const engine of Object.keys(roles) as ModelConstant['engine'][]) {
+      constants.set(engine, constant(engine, { engine, addon: 'embeddings' }))
+    }
+    const catalog = buildCatalog(serveConfig(new Map()), createModelRegistry(), constants)
+    for (const entry of catalog) {
+      assert.equal(entry.role, roles[entry.engine as ModelConstant['engine']], entry.engine!)
+    }
+  })
+
   it('marks a built-in constant not_configured / not usable, with size + role', () => {
     const cat = buildCatalog(
       serveConfig(new Map()),
