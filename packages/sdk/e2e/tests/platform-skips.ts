@@ -17,7 +17,7 @@ const RULES: Rule[] = [
     match: /^tts-moss-/,
     skip: {
       reason:
-        'MOSS-SoundEffect and MOSS-Speech require desktop GPU memory; Python MOSS step bindings are not yet exposed.',
+        'MOSS-SoundEffect and MOSS-Speech require desktop GPU memory; the Python client has no MOSS step bindings.',
       platforms: ['mobile', 'desktop-python']
     }
   },

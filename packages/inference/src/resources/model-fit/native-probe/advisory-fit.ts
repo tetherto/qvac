@@ -1,8 +1,8 @@
-import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import type { AbortSignal } from 'bare-abort-controller'
 
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import type {
   CanonicalModelType,
   NativeProbeFit,
@@ -295,9 +295,8 @@ export async function runAdvisoryFitCheck(
       (options.extraResidentBytes ?? 0)
     const residentReserveMiB = Math.ceil(residentBytes / BYTES_PER_MIB)
 
-    // Always sent, even with a zero reserve: relying on the engine default for
-    // the base margin would leave two sources of truth that match today and
-    // diverge silently if an engine default moves.
+    // Always sent, even with a zero reserve, so the base margin has one source
+    // and an engine default never decides it.
     const plan = createFitRequest({
       modelType: input.modelType,
       modelPath: input.modelPath,
