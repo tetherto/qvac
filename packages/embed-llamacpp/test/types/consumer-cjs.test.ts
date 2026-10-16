@@ -1,4 +1,4 @@
-import GGMLBert, { LayaDecisions } from '@qvac/embed-llamacpp'
+import GGMLBert, { LayaDecisions, Reranker } from '@qvac/embed-llamacpp'
 
 const rootConstructor: typeof GGMLBert = GGMLBert
 
@@ -22,4 +22,20 @@ export function layaTypes(model: string) {
   // @ts-expect-error config is required
   void new LayaDecisions({ files: { model: [model] } })
   return laya
+}
+
+// Reranker: config (with device) is required, and pooling is not an option.
+export function rerankerTypes(model: string) {
+  const reranker = new Reranker({
+    files: { model: [model] },
+    config: { device: 'gpu', gpu_layers: '99', batch_size: '512' }
+  })
+  // @ts-expect-error config is required
+  void new Reranker({ files: { model: [model] } })
+  void new Reranker({
+    files: { model: [model] },
+    // @ts-expect-error pooling is fixed to rank
+    config: { device: 'cpu', pooling: 'rank' }
+  })
+  return reranker
 }

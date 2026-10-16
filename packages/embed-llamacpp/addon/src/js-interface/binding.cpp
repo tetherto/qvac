@@ -25,6 +25,8 @@ qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
   V("assessFit", qvac_lib_inference_addon_embed::assessFit)
   V("createInstance", qvac_lib_inference_addon_embed::createInstance)
   V("createLayaInstance", qvac_lib_inference_addon_embed::createLayaInstance)
+  V("createRerankInstance",
+    qvac_lib_inference_addon_embed::createRerankInstance)
   V("runJob", qvac_lib_inference_addon_embed::runJob)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
