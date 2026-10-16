@@ -248,6 +248,8 @@ The `kvCache` parameter on `completion()` both enables caching and sets the cach
 
 SDK-managed auto caches are removed after 24 hours idle or under disk quota pressure. The quota is 512 MiB on React Native and 4 GiB on other runtimes. [`deleteCache({ auto: true })`](/sdk/reference/api#deletecache) reclaims them on demand instead of waiting for either bound, skipping any cache a request is still using. Caller-managed string-key caches are not subject to the automatic retention policy and are not touched by that call — clean those up with [`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache).
 
+On a cached turn, `stats.promptTokens` counts only the prompt tokens the model processed on that turn. Tokens reused from the cache are not included, so a warm turn reports far fewer than the full prompt. `stats.cacheTokens` is the number of tokens held in the cache after the turn. Before v0.22, `promptTokens` counted the whole prompt.
+
 There is no separate `kvCacheKey` completion parameter — when you want a caller-managed cache, pass the key string directly as `kvCache`:
 
 ```js
