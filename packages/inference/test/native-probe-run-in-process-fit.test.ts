@@ -127,6 +127,39 @@ test('runInProcessFit: a thrown fit is invocation-error and clears the marker', 
   t.is(exists(crashedMarkerPath(stateDir, PROBE)), false)
 })
 
+test('runInProcessFit: concurrent fits of one request share the running marker', async (t) => {
+  const stateDir = tempDir()
+  const running = crashMarkerPath(stateDir, PROBE)
+  const release: Array<() => void> = []
+  let markerHeld = 0
+
+  const callFit = async () => {
+    if (exists(running)) markerHeld += 1
+    await new Promise<void>((resolve) => release.push(resolve))
+    return FIT_RESULT
+  }
+
+  const first = runInProcessFit(PROBE, { stateDir, callFit })
+  const second = runInProcessFit(
+    { ...PROBE, request: { ...PROBE.request, marginBytes: 0 } },
+    { stateDir, callFit }
+  )
+  while (release.length < 2) await new Promise<void>((resolve) => setImmediate(() => resolve()))
+
+  release[0]?.()
+  const firstResult = await first
+  t.is(exists(running), true, 'the marker stays while a fit is in flight')
+
+  release[1]?.()
+  const secondResult = await second
+
+  t.alike(firstResult, { status: 'completed', probe: FIT_RESULT })
+  t.alike(secondResult, { status: 'completed', probe: FIT_RESULT })
+  t.is(markerHeld, 2, 'both fits ran under the marker')
+  t.is(exists(running), false, 'the last fit removes the marker')
+  t.is(exists(crashedMarkerPath(stateDir, PROBE)), false, 'an in-flight fit is not a crash')
+})
+
 test('runInProcessFit: an aborted caller never reaches the fitter', async (t) => {
   const stateDir = tempDir()
   const controller = new AbortController()

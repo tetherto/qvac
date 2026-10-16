@@ -78,7 +78,7 @@ allowBuilds:
   tree-sitter-bash: false
 
 minimumReleaseAgeExclude:
-  - '@qvac/asr-ggml@0.8.1'
+  - '@qvac/asr-ggml@0.8.1 || 0.10.0'
   - '@qvac/bci-whispercpp@0.11.2'
   - '@qvac/fabric-android-arm64@0.21.1 || 0.22.0'
   - '@qvac/fabric-ios@0.21.1 || 0.22.0'
@@ -87,4 +87,6 @@ minimumReleaseAgeExclude:
   - '@qvac/fabric-linux-arm64@0.21.1 || 0.22.0'
   - '@qvac/fabric-linux-x64@0.21.1 || 0.22.0'
   - '@qvac/fabric-win32-x64@0.21.1 || 0.22.0'
-  - '@qvac/fabric@0.21.1'
+  - '@qvac/fabric@0.21.1 || 0.22.0'
+  - '@qvac/ggml-rpc-server@0.5.0'
+  - '@qvac/infer-base@0.8.0'

@@ -160,7 +160,8 @@ export {
   getAddonFromEngine,
   resolveCanonicalEngine,
   ENGINE_TO_ADDON,
-  LEGACY_ENGINE_TO_CANONICAL
+  LEGACY_ENGINE_TO_CANONICAL,
+  LEGACY_REGISTRY_ENGINE_RULES
 } from '@/schemas/engine-addon-map'
 export { generateProfileId } from '@/profiling/clock'
 export { readModelExecutionMs } from '@/profiling/model-execution'
