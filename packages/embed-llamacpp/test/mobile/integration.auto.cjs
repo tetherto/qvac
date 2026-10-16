@@ -180,11 +180,6 @@ async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/fit.test.js', options)
 }
 
-async function runIdMapIndexTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runIdMapIndexTest')) return __FILTERED
-  return runIntegrationModule('../integration/id-map-index.test.js', options)
-}
-
 async function runLayaTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLayaTest')) return __FILTERED
   return runIntegrationModule('../integration/laya.test.js', options)
