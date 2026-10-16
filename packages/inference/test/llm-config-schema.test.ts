@@ -225,6 +225,35 @@ test('llmConfigBaseSchema: rejects reasoning_budget other values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: REASONING_BUDGET_MAX + 1 }).success, false)
 })
 
+test('llmConfigBaseSchema: accepts cache_checkpoints from 0 to 1024', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 0 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 2 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 1024 }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects cache_checkpoints the addon refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 1025 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: '2' }).success, false)
+})
+
+test('llmConfigSchema: does not inject a default for cache_checkpoints', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.absent('cache_checkpoints' in result.data)
+})
+
+test('loadModelOptionsToRequestSchema: accepts cache_checkpoints for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { cache_checkpoints: 2 }
+    }).success,
+    true
+  )
+})
+
 test('llmConfigBaseSchema: accepts valid image_tile_mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'disabled' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'batched' }).success, true)

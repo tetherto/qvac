@@ -121,6 +121,11 @@ test('transformLlmConfig: placement and fit keys keep their kebab spelling', (t)
   t.is(result['fit-ctx'], '8192')
 })
 
+test('transformLlmConfig: cache_checkpoints is forwarded as a string', (t) => {
+  t.is(transformLlmConfig(makeConfig({ cache_checkpoints: 0 }))['cache_checkpoints'], '0')
+  t.is(transformLlmConfig(makeConfig({ cache_checkpoints: 2 }))['cache_checkpoints'], '2')
+})
+
 test('transformLlmConfig: image-max-megapixels is forwarded as a kebab string', (t) => {
   const result = transformLlmConfig(makeConfig({ 'image-max-megapixels': 20 }))
   t.is(result['image-max-megapixels'], '20')
