@@ -50,10 +50,17 @@ gh workflow run integration-mobile-test-ggml-rpc-server.yml --repo tetherto/qvac
 
 The workflow runs from upstream `main`; its `ref` input checks out your PR's
 head from the upstream pull-request ref, so your branch need not exist upstream.
-For iOS, use `-f platform=iOS -f devices_custom="Apple iPhone 16 Pro, Apple
-iPhone 17 Pro"`, after the Android run finishes. Its concurrency group keys on
-`ref`, so dispatches for different PRs run side by side, while a second dispatch
-for the same PR cancels the first. Without `prebuild_run_id`, a standalone
+For iOS, dispatch again after the Android run finishes, replacing the platform
+and device inputs with:
+
+```bash
+  -f platform=iOS \
+  -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
+```
+
+Its concurrency group keys on `ref` as well as the dispatched branch, so
+dispatches for different PRs run side by side, while a second dispatch for the
+same PR cancels the first. Without `prebuild_run_id`, a standalone
 dispatch builds prebuilds from the selected ref in the same run before packaging
 the device app. With a run id, it skips that build and installs the named run's
 artifact, failing if the artifact cannot be used.
@@ -655,8 +662,8 @@ never accidentally stack two Device Farm runs (and two bills). Dispatches on
 **different branches are independent** — that is what lets a few test branches run
 in parallel. The `workflow_call` paths (benchmarks / weekend / on-merge) are never
 cancelled by this. `ggml-rpc-server` is dispatched from `main` with the PR in
-`ref`, so its guard keys on `ref` when it is set: one run per PR, not one for
-everything dispatched from `main`.
+`ref`, so its guard keys on `ref` as well as the branch: one run per PR, not one
+for everything dispatched from `main`.
 
 ## Typical flow (worked example)
 

@@ -90,13 +90,14 @@ permissions:
   id-token: write
 
 concurrency:
-  # workflow_dispatch: at most one manual mobile run per (workflow, tested ref)
-  # at a time — a fresh dispatch cancels the in-flight one so a re-run never
-  # stacks a second Device Farm run. Dispatches run from main and name the PR in
-  # `ref`, so the group keys on `ref` when it is set: on github.ref alone, every
-  # dispatch from main would share one group and cancel unrelated PRs' runs.
-  # workflow_call is keyed per run and never cancels.
-  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, inputs.ref != '' && inputs.ref || github.ref) || format('mobile-call-{0}', github.run_id) }}
+  # workflow_dispatch: at most one manual mobile run per (workflow, dispatched
+  # branch, tested ref) at a time — a fresh dispatch cancels the in-flight one so
+  # a re-run never stacks a second Device Farm run. Dispatches run from main and
+  # name the PR in `ref`, so the group also keys on `ref`: on github.ref alone,
+  # every dispatch from main would share one group and cancel unrelated PRs'
+  # runs. github.ref stays in the key so dispatches from different branches stay
+  # independent. workflow_call is keyed per run and never cancels.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}-{2}', github.workflow, github.ref, inputs.ref) || format('mobile-call-{0}', github.run_id) }}
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:

@@ -1826,6 +1826,30 @@ test('ggml-rpc-server keeps Device Farm runs on demand', () => {
   )
 });
 
+test('ggml-rpc-server manual dispatch serializes per branch and tested PR ref', () => {
+  const path = '.github/workflows/integration-mobile-test-ggml-rpc-server.yml'
+  const source = read(path)
+  // Dispatches run from main and name the PR in `ref`: keying on github.ref
+  // alone would let one PR's dispatch cancel another PR's Device Farm run.
+  assert.match(
+    source,
+    /concurrency:\s*\n[\s\S]*?group:\s*\$\{\{ inputs\.platform != '' && format\('mobile-dispatch-\{0\}-\{1\}-\{2\}', github\.workflow, github\.ref, inputs\.ref\) \|\| format\('mobile-call-\{0\}', github\.run_id\) \}\}/,
+    `${path}: manual dispatch must key on the dispatched branch and the tested ref`,
+  )
+  assert.match(source, /cancel-in-progress:\s*\$\{\{ inputs\.platform != '' \}\}/)
+  // Validation must approve exactly the devices the scheduler bills.
+  const devices =
+    "inputs.devices_custom != '' && inputs.devices_custom || (inputs.platform == 'Android' && inputs.android_device || inputs.ios_device)"
+  const validate = source.match(/^\s+devices: \$\{\{ (.+) \}\}$/m)
+  const schedule = source.match(/^\s+device-models: \$\{\{ (.+) \}\}$/m)
+  assert.equal(validate?.[1], devices, `${path}: validate-devices must resolve devices_custom over the dropdown`)
+  assert.equal(
+    schedule?.[1],
+    `inputs.platform != '' && (${devices}) || ''`,
+    `${path}: the scheduler must bill the same devices validation approved`,
+  )
+});
+
 test('ggml-rpc-server prebuild callers grant reusable workflow permissions', () => {
   for (const [path, jobName] of [
     ['.github/workflows/on-merge-ggml-rpc-server.yml', 'build'],
