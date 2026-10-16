@@ -4,20 +4,4 @@ Release Date: 2026-10-16
 
 ## 🐞 Fixes
 
-- Allow the corrected native add-on patches through matching peer and development dependency ranges.
-- Use caret ranges starting at the fixed versions so later compatible patches remain eligible.
-
-| Add-on                      | Minimum version |
-| --------------------------- | --------------- |
-| `@qvac/asr-ggml`            | `0.7.1`         |
-| `@qvac/audiogen-ggml`       | `0.5.2`         |
-| `@qvac/bci-whispercpp`      | `0.10.2`        |
-| `@qvac/classification-ggml` | `0.28.2`        |
-| `@qvac/diffusion-cpp`       | `0.26.1`        |
-| `@qvac/embed-llamacpp`      | `0.43.2`        |
-| `@qvac/ggml-rpc-server`     | `0.1.2`         |
-| `@qvac/llm-llamacpp`        | `0.55.2`        |
-| `@qvac/ocr-ggml`            | `0.26.2`        |
-| `@qvac/translation-nmtcpp`  | `0.18.2`        |
-| `@qvac/tts-ggml`            | `0.10.2`        |
-| `@qvac/vla-ggml`            | `0.29.2`        |
+- Update native add-on compatibility ranges to include the latest fixes and allow compatible patch updates.
