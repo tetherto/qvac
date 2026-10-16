@@ -6,6 +6,7 @@ import {
 } from 'fastify-type-provider-zod'
 import { HttpError, errorType } from '@/serve/lib/http-error'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
+import { RequestRejectedByPolicyError } from '@qvac/sdk'
 
 export interface ErrorHandlerOptions {
   /**
@@ -46,6 +47,13 @@ const plugin: FastifyPluginAsync<ErrorHandlerOptions> = async (app, opts) => {
     if (err instanceof HttpError) {
       reply.code(err.status).send({
         error: { message, type: errorType(err.status), code: err.code }
+      })
+      return
+    }
+
+    if (err instanceof RequestRejectedByPolicyError) {
+      reply.code(429).send({
+        error: { message, type: 'rate_limit_error', code: 'request_rejected_by_policy' }
       })
       return
     }

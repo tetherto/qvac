@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-ggml",
-  "version": "0.29.0",
+  "version": "0.29.1",
   "description": "GGML-backed OCR addon for qvac (EasyOCR and DocTR pipelines on GGUF weights)",
   "addon": true,
   "engines": {
@@ -27,7 +27,7 @@
     "test:mobile:groups": "node --test scripts/__tests__/mobile-test-groups.test.js",
     "test:package": "node --test test/package/package-contract.test.js",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
-    "test:integration": "npm run test:integration:generate && bash test/integration/run-tests.sh",
+    "test:integration": "npm run test:integration:generate && bare test/integration/fit.test.js && bash test/integration/run-tests.sh",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test": "npm run lint && npm run test:types && npm run test:unit && npm run test:integration",

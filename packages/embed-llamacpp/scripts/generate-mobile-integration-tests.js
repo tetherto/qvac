@@ -9,8 +9,8 @@ const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
 const MOBILE_EXCLUDED_INTEGRATION_FILES = new Set([
-  // This test is desktop-only and uses package-root relative imports that do
-  // not resolve after the mobile test app copies integration tests.
+  // This test is desktop-only: it needs the @qvac/turbovec-ggml devDependency,
+  // which the mobile test app does not install.
   'rag-id-map-index.test.js'
 ])
 
