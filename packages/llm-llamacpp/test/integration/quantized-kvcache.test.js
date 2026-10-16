@@ -47,10 +47,13 @@ const forceVulkanLeg =
   process.env.FORCE_VULKAN === 'true' || process.env.CUDA_VISIBLE_DEVICES === '-1'
 
 // Expect CUDA only with an NVIDIA driver present, detected outside the addon
-// so a silent Vulkan fallback still fails. Native Linux exposes /dev/nvidia0;
-// WSL2 exposes only /dev/dxg, with libcuda under /usr/lib/wsl/lib.
+// so a silent Vulkan fallback still fails. Native Linux exposes /dev/nvidia<N>
+// (a container may get only /dev/nvidia1); WSL2 exposes only /dev/dxg, with
+// libcuda under /usr/lib/wsl/lib.
 const hasNvidiaGpu =
-  isLinuxX64 && (fs.existsSync('/dev/nvidia0') || fs.existsSync('/usr/lib/wsl/lib/libcuda.so.1'))
+  isLinuxX64 &&
+  (fs.readdirSync('/dev').some((d) => /^nvidia\d+$/.test(d)) ||
+    fs.existsSync('/usr/lib/wsl/lib/libcuda.so.1'))
 const expectCuda = hasNvidiaGpu && !forceVulkanLeg
 
 const skipReason =
