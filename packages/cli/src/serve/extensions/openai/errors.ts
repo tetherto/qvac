@@ -5,6 +5,7 @@
  */
 export const OPENAI_FIELD_CODES: Record<string, string> = {
   messages: 'missing_messages',
+  questions: 'invalid_questions',
   input: 'missing_input',
   prompt: 'missing_prompt',
   file: 'missing_file',

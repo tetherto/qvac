@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "0.21.0",
+  "version": "0.21.1",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -25,7 +25,7 @@
     "test:package": "npm run build:ts && node --test test/package/package-contract.test.js",
     "test:prestage": "node --test scripts/__tests__/generate-prestage-block.test.js",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
-    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/fit.test.js && bare test/integration/all.js",
     "test:mobile:generate": "bare scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test": "npm run lint && npm run test:unit && npm run test:integration",

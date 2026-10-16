@@ -2,6 +2,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import audio from '@/serve/extensions/openai/routes/audio'
 import chat from '@/serve/extensions/openai/routes/chat'
 import completions from '@/serve/extensions/openai/routes/completions'
+import decisions from '@/serve/extensions/openai/routes/decisions'
 import embeddings from '@/serve/extensions/openai/routes/embeddings'
 import files from '@/serve/extensions/openai/routes/files'
 import images from '@/serve/extensions/openai/routes/images'
@@ -16,6 +17,7 @@ export const routes: readonly FastifyPluginAsyncZod[] = [
   audio,
   chat,
   completions,
+  decisions,
   embeddings,
   files,
   images,

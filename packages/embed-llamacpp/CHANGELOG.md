@@ -1,5 +1,40 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- `IdMapIndex` and `IdMapIndexFilter` moved to the new `@qvac/turbovec-ggml`
+  addon, with the same API, error names and snapshot formats. The
+  `@qvac/embed-llamacpp/idMapIndex` subpath and the root `IdMapIndex` /
+  `IdMapIndexFilter` exports are gone, and the vector index is no longer
+  compiled into this addon. Replace
+  `require('@qvac/embed-llamacpp/idMapIndex')` with
+  `require('@qvac/turbovec-ggml/idMapIndex')`.
+
+### Added
+
+- `poll` and `poll-batch` are now documented public JavaScript load options.
+  They control the main and batch GGML threadpool busy-wait levels; both
+  default to `0`, `poll-batch` inherits an explicit `poll` when omitted, and
+  values outside `0`–`100` are rejected
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+### Fixed
+
+- Both GGML threadpools now default to `poll=0`, so GPU-offloaded embedding no
+  longer keeps CPU workers busy-spinning between graph work
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+## [0.48.1] - 2026-10-15
+
+### Fixed
+
+- On Windows, `assessFit` no longer fails with `0xC06D007E` when it is the
+  first fabric call in the process ([#5121](https://github.com/tetherto/qvac/pull/5121)). The addon now binds the
+  delay-loaded `@qvac/fabric` runtime when it loads, and loading throws an
+  error naming the fabric module if that fails.
+
 ## [0.48.0] - 2026-10-14
 
 ### Breaking

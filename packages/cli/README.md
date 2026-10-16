@@ -135,7 +135,7 @@ capability (role, addon, quantization) — and on a wide terminal previews, for 
 highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
 its alias, set config parameters (guided by the SDK's config schema — each field shows its
 type and description and is validated on entry, for model types the SDK exposes a schema for;
-currently llama.cpp chat + embedding), and (with `$EDITOR`) tweak the entry and review the
+currently llama.cpp chat + embedding + decision), and (with `$EDITOR`) tweak the entry and review the
 result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C`
 aborts without writing. Existing entries are preserved; re-running is idempotent per model.
 
@@ -143,17 +143,18 @@ aborts without writing. Existing entries are preserved; re-running is idempotent
 qvac configure                 # interactive
 qvac configure --yes           # non-interactive: write a chat + transcription starter
 qvac configure --modality chat --modality image
+qvac configure --modality decision
 ```
 
-| Flag                  | Description                                                                                                 |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                            |
-| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                   |
-| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image`. |
-| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                         |
-| `-q, --quiet`         | Suppress output.                                                                                            |
+| Flag                  | Description                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                                         |
+| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                                |
+| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image` / `decision`. |
+| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                                      |
+| `-q, --quiet`         | Suppress output.                                                                                                         |
 
-Single-artifact modalities (chat, embedding, transcription, image) are runnable as written.
+Single-artifact modalities (chat, embedding, transcription, image, decision) are runnable as written.
 Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder —
 set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for
 non-TTY use `--yes` / `--modality`.
@@ -403,6 +404,9 @@ Run an HTTP server backed by locally configured QVAC models (`serve.models` in `
 ```bash
 qvac serve --openai [options]
 ```
+
+The OpenAI extension includes `POST /v1/decisions` for local typed decisions.
+See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request examples.
 
 `--no-default` leaves the QVAC surface out. `qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 

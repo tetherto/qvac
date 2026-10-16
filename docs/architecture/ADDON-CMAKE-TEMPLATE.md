@@ -181,8 +181,10 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
   on Linux, lint-cpp `.clang-format`/`.clang-tidy` sync (the `.valgrind.supp`
   file and pre-commit hook are opt-in), C++20 block, WIN32 defs.
 - `qvac_addon_use_fabric()` (macro) — fabric discovery (`set(qvac-fabric_DIR …)`
-  + `find_package` + `include_bare_module`). Sets `qvac_fabric_target` in the
-  caller's scope.
+  + `find_package` + `include_bare_module`). Sets `qvac_fabric_target` and
+  `qvac_fabric_soname` in the caller's scope. `qvac_fabric_soname` is the
+  runtime's file name on the build host, `qvac__fabric-<suffix>@<major>.bare`,
+  with `<major>` read from the installed platform package.
 - `qvac_addon_fabric_layout(<host> <base_dir> <out_specifier> <out_working_dir>
   <out_prebuilds>)` — locates the fabric runtime for `<host>`: always the
   platform package `@qvac/fabric`'s `#host-addon` names for it
@@ -194,7 +196,10 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
   root. Requires `@qvac/fabric` >= 0.21.
 - `qvac_addon_link_fabric(<addon_target> <fabric_target>)` — the two-target link
   split (`qvac-fabric::headers` on the lib, `${fabric_target}_module` on the
-  module), plus `qvac_addon_import_fabric_cxx_runtime` on the module.
+  module), plus `qvac_addon_import_fabric_cxx_runtime` on the module. The lib
+  also gets `<qvac-addon/fabric-bind.h>` and `QVAC_FABRIC_MODULE_NAME`
+  (`qvac_fabric_soname`), which the addon's exports function needs to bind
+  fabric (see below).
 - `qvac_addon_import_fabric_cxx_runtime(<target> <fabric_target>)` — Linux only: link `<target>`
   with `-nostdlib++` so libc++ / libc++abi come from fabric rather than a second
   static copy. Two copies means two `std::exception` typeinfos, and RTTI matches
@@ -261,6 +266,29 @@ if(BUILD_TESTING)
   add_subdirectory(test/unit)   # calls qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 endif()
 ```
+
+### Binding fabric in the exports function
+
+Windows delay-loads the fabric runtime, and Bare resolves it only on a thread
+that is loading an addon. Every fabric consumer binds fabric in its exports
+function, which runs inside `require.addon()`, so any later fabric call works
+from any thread:
+
+```cpp
+#include <qvac-addon/fabric-bind.h>
+
+js_value_t* exports(js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
+  // ...register functions...
+}
+```
+
+On Windows `qvacAddonBindFabric()` binds every fabric import through
+`__HrLoadAllImportsForDll`; elsewhere fabric loads with the addon and the call
+does nothing.
 
 ## Keeping addons in sync
 
