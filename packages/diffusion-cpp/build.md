@@ -106,7 +106,8 @@ If you want to build the addon from source instead of using pre-built packages, 
    This command runs the complete build pipeline:
    - `bare-make generate` - Generates build files and downloads/builds vcpkg dependencies (including `stable-diffusion.cpp` and `ggml`)
    - `bare-make build` - Compiles the native addon
-   - `bare-make install` - Installs the built addon into `prebuilds/`
+   - `bare-make install` - Installs the built addon into `prebuilds/<host>/` as `qvac__diffusion-cpp-<host>.bare`
+   - `npm run link:platform` - Stages that directory as `node_modules/@qvac/diffusion-cpp-<host>`, which is what `binding.js` loads
 
 > **First build note:** The vcpkg step clones and compiles `stable-diffusion.cpp` and `ggml` from source, which can take **5–15 minutes** depending on your machine and internet connection.
 
