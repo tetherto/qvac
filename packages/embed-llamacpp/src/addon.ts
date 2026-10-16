@@ -5,6 +5,10 @@ export interface GGMLConfig {
   gpu_layers?: NumericLike;
   batch_size?: NumericLike;
   ctx_size?: NumericLike;
+  /** Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100 (maximum polling). Defaults to 0. */
+  poll?: NumericLike;
+  /** Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when neither option is set. */
+  "poll-batch"?: NumericLike;
   pooling?: "none" | "mean" | "cls" | "last" | "rank";
   attention?: "causal" | "non-causal";
   embd_normalize?: NumericLike;

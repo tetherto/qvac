@@ -9,7 +9,7 @@ import { getMossJobOptions } from '@/plugins/builtin/tts-ggml/ops/moss-options'
 const sfx = { ttsEngine: 'moss-sfx', steps: 20, guidance: 4, shift: 5 }
 const speech = { ttsEngine: 'moss-speech', mossSpeechCodecModelSrc: '/models/codec.gguf' }
 
-test('0.11 load and request schemas accept native controls and reject invalid bounds', (t) => {
+test('MOSS load and request schemas accept native controls and reject invalid bounds', (t) => {
   t.ok(ttsConfigSchema.safeParse(sfx).success)
   t.ok(ttsConfigSchema.safeParse(speech).success)
   t.absent(ttsConfigSchema.safeParse({ ttsEngine: 'moss-speech' }).success)
@@ -23,7 +23,7 @@ test('0.11 load and request schemas accept native controls and reject invalid bo
   t.absent(ttsClientParamsSchema.safeParse({ ...request, replyVoice: [0] }).success)
 })
 
-test('0.11 fits forward explicit batch, streaming and reference workloads', (t) => {
+test('MOSS fits forward explicit batch, streaming and reference workloads', (t) => {
   const params = {
     modelPath: '/models/backbone.gguf',
     modelConfig: {

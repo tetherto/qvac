@@ -1,5 +1,32 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `poll` and `poll-batch` are now documented public JavaScript load options.
+  They control the main and batch GGML threadpool busy-wait levels; both
+  default to `0`, `poll-batch` inherits an explicit `poll` when omitted, and
+  values outside `0`–`100` are rejected
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+### Changed
+
+- Single-sequence generation now uses `threads`, `cpu-mask` and `prio`.
+  `threads-batch` and `cpu-mask-batch` apply only to steps that process
+  several tokens at once: prompt processing, batched decoding across parallel
+  sequences, and speculative verification. Previously an explicit
+  `threads-batch` also capped generation and `cpu-mask` was ignored
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+### Fixed
+
+- File-backed model loads now default both GGML threadpools to `poll=0`, so
+  GPU-offloaded inference no longer keeps CPU workers busy-spinning between
+  graph work. The addon also reuses the threadpools owned by Fabric's common
+  initialization instead of creating duplicates
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
 ## [0.61.1] - 2026-10-15
 
 ### Fixed
