@@ -6,7 +6,8 @@
 
 - `poll` and `poll-batch` are now documented public JavaScript load options.
   They control the main and batch GGML threadpool busy-wait levels; both
-  default to `0`, and `poll-batch` inherits an explicit `poll` when omitted
+  default to `0`, `poll-batch` inherits an explicit `poll` when omitted, and
+  values outside `0`–`100` are rejected
   ([#5083](https://github.com/tetherto/qvac/pull/5083)).
 
 ### Changed
