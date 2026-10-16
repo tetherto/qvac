@@ -31,10 +31,6 @@ Use a compatible decision checkpoint in GGUF format. The SDK exports these regis
 - Laya multilingual: `LAYA_MULTILINGUAL_322M_F16` and `LAYA_MULTILINGUAL_322M_Q8_0`.
 - Laya typed decisions: `LAYA_TYPED_DECISIONS_421M_F16` and `LAYA_TYPED_DECISIONS_421M_Q8_0`.
 
-<Callout type="warn">
-Laya and Laya multilingual have low zero-shot accuracy on typed-decisions: 36.2% and 34.2%, versus 76.6% for the task-specific fine-tuned checkpoint in the [Hugging Face benchmarks](https://huggingface.co/convaiinnovations/laya-typed-decisions#benchmark). Fine-tune on your target task and validate accuracy before production use.
-</Callout>
-
 Pass a registry constant as `modelSrc` to `loadModel()`. Its `llamacpp-decision` engine selects the decision plugin automatically. The decision and embedding plugins share an addon package, but their descriptors are not interchangeable. The example below loads `LAYA_MULTILINGUAL_322M_Q8_0` by default.
 
 You can also pass a local GGUF path or another model source supported by [`loadModel()`](/sdk/reference/api#loadmodel) with explicit `modelType: 'llamacpp-decision'`. An embedding-only GGUF cannot answer decision questions. For checkpoints split into multiple GGUF files, see [Sharded models](/sdk/models/sharded-models).
