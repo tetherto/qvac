@@ -1,11 +1,16 @@
 import type { ServeExtension } from '@/serve/core/extensions'
 import defaultExtension from '@/serve/extensions/default'
 import openaiExtension from '@/serve/extensions/openai'
+import systemoneExtension from '@/serve/extensions/systemone'
 
 /** Mounted unless `--no-default` is passed; every other extension needs its flag. */
 export const DEFAULT_EXTENSION = defaultExtension.name
 
-export const EXTENSIONS: readonly ServeExtension[] = [defaultExtension, openaiExtension]
+export const EXTENSIONS: readonly ServeExtension[] = [
+  defaultExtension,
+  openaiExtension,
+  systemoneExtension
+]
 
 export function resolveExtensions(names?: readonly string[]): ServeExtension[] {
   if (names === undefined) return [...EXTENSIONS]
