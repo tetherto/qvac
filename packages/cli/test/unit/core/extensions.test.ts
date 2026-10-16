@@ -104,13 +104,12 @@ describe('mounted surfaces', () => {
     const printed = await build(['openai'])
     assert.match(printed, /chat/)
     assert.match(printed, /embeddings/)
+    assert.match(printed, /decisions/)
+    assert.ok(!printed.includes('systemone'))
     assert.ok(!printed.includes('/qvac/'))
   })
 
-  it('mounts the System One endpoint independently', async () => {
-    const printed = await build(['systemone'])
-    assert.match(printed, /\/v1\/systemone/)
-    assert.ok(!printed.includes('chat'))
-    assert.ok(!printed.includes('/qvac/'))
+  it('rejects the removed System One extension', () => {
+    assert.throws(() => resolveExtensions(['systemone']), /Unknown serve extension/)
   })
 })
