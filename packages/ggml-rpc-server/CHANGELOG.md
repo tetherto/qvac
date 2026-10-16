@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.5.1] - 2026-10-15
+
+### Fixed
+
+- On Windows, the addon now binds the delay-loaded `@qvac/fabric` runtime
+  when it loads, so a first fabric call on a worker thread cannot fail with
+  `0xC06D007E` ([#5121](https://github.com/tetherto/qvac/pull/5121)). Loading throws an error naming the fabric
+  module if the bind fails.
+
+## [0.5.0] - 2026-10-15
+
+### Changed
+
+- Without a `port`, the native server binds a free port itself and reports it,
+  instead of this package picking a free port and releasing it before the
+  server bound it. Another process could take the port in between, which showed
+  up as a rare `RpcServerStartError`. `allocateFreePort()` is still exported.
+- `rdmaCapable` and `expectRdma` now use the capability that `@qvac/fabric`
+  reports, replacing a search of the RPC module for a log line. They mean the
+  server will try RDMA, which on Linux also needs `libibverbs.so.1` installed,
+  an RDMA device, and `GGML_RPC_NO_RDMA` unset. A host with the library but no
+  RDMA device now reports `rdmaCapable: false`, so `expectRdma: true` fails
+  closed there.
+- Requires `@qvac/fabric` 0.22.0, whose RPC backend exports
+  `ggml_backend_rpc_server_get_port` and `ggml_backend_rpc_rdma_supported`.
+  A mobile app that still installs `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` 0.21 fails to start the server with
+  `RpcServerStartError`.
+
 ## [0.4.0] - 2026-10-14
 
 ### Changed

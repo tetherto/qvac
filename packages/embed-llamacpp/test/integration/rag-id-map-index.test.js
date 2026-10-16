@@ -4,7 +4,7 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
 
-const IdMapIndex = require('../../idMapIndex')
+const IdMapIndex = require('@qvac/turbovec-ggml/idMapIndex')
 const {
   cleanupResources,
   createEmbeddingsTestInstance,

@@ -178,3 +178,40 @@ test('resolve load: a minimax load naming both useGPU and device is not answered
 
   t.is(resolved.status, 'unsupported-load')
 })
+
+test('resolve load: a translation source not on disk fetches no stub', async (t) => {
+  clearPlugins()
+  registerPlugin(companionPlugin(ModelType.nmtcppTranslation))
+
+  const resolved = await resolveLoadFromStubs({
+    modelSrc: {
+      src: 'registry://s3/models/model.enfr.intgemm.alphas.bin',
+      sha256Checksum: 'a'.repeat(64),
+      registryPath: 'models/model.enfr.intgemm.alphas.bin',
+      registrySource: 's3'
+    },
+    modelType: ModelType.nmtcppTranslation,
+    modelConfig: {}
+  })
+
+  t.is(resolved.status, 'no-stub')
+  if (resolved.status !== 'no-stub') return
+  t.is(resolved.reason, 'files-only-engine')
+})
+
+test('resolve load: a translation source on disk is read directly', async (t) => {
+  clearPlugins()
+  registerPlugin(companionPlugin(ModelType.nmtcppTranslation))
+  const model = scratchFile('model.enfr.intgemm.alphas.bin')
+
+  const resolved = await resolveLoadFromStubs({
+    modelSrc: model,
+    modelType: ModelType.nmtcppTranslation,
+    modelConfig: {}
+  })
+
+  t.is(resolved.status, 'resolved')
+  if (resolved.status !== 'resolved') return
+  t.is(resolved.modelPath, model)
+  await resolved.release()
+})

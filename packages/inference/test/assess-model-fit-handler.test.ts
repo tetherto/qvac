@@ -1,6 +1,6 @@
 import test from 'brittle'
 
-import { estimateTargetFor } from '@/handlers/assess-model-fit'
+import { estimateTargetFor, noStubDetail } from '@/handlers/assess-model-fit'
 import { ModelType } from '@/schemas/index'
 
 const CONSTANT = {
@@ -181,6 +181,22 @@ test('handler: a minimax device is read in place of the switch', (t) => {
   }
 })
 
+test('handler: an ocr backend device other than the CPU is the GPU', (t) => {
+  const devices = { cpu: 'cpu', vulkan: 'gpu', metal: 'gpu', opencl: 'gpu' }
+
+  for (const [backendDevice, expected] of Object.entries(devices)) {
+    const target = estimateTargetFor({
+      modelSrc: CONSTANT,
+      modelType: ModelType.ggmlOcr,
+      modelConfig: { backendDevice }
+    })
+    t.is(target.device, expected, backendDevice)
+  }
+
+  const unset = estimateTargetFor({ modelSrc: CONSTANT, modelType: ModelType.ggmlOcr })
+  t.is(unset.device, 'cpu', 'the addon defaults to the CPU')
+})
+
 // `nGpuLayers` takes effect on its own and the config schema rejects it
 // disagreeing with `useGPU`, so it is read first.
 test('handler: tts reads its layer count ahead of its switch', (t) => {
@@ -261,4 +277,19 @@ test('handler: MOSS omits the recording window when the workload is undeclared',
   })
   t.alike(target.workload, { kind: 'audio', streaming: false })
   t.absent('windowMs' in target.workload)
+})
+
+test('handler: a files-only engine names the download as what is missing', (t) => {
+  t.is(
+    noStubDetail('files-only-engine'),
+    'the engine measures downloaded files only, and this model is not downloaded'
+  )
+})
+
+test('handler: a missing description names its reason and detail', (t) => {
+  t.is(noStubDetail('timed-out'), 'no registry description (timed-out)')
+  t.is(
+    noStubDetail('no-fit-blob', 'models/model.gguf'),
+    'no registry description (no-fit-blob): models/model.gguf'
+  )
 })

@@ -87,6 +87,22 @@ const RULES: Rule[] = [
       platforms: ['electron', 'snap']
     }
   },
+  {
+    match: /^tts-moss-/,
+    skip: {
+      reason:
+        'The packaged Electron pass, Snap included, skips MOSS: its 13.5 GiB model set is desktop-only',
+      platforms: ['electron', 'snap']
+    }
+  },
+  {
+    match: ['tools-simple-function-gemma4'],
+    skip: {
+      reason:
+        'The packaged Electron pass, Snap included, skips the Gemma4 tool dialect: its 3.22 GiB model is desktop-only',
+      platforms: ['electron', 'snap']
+    }
+  },
 
   // ── mobile, both OSes ────────────────────────────────────────────────────
   {
@@ -102,13 +118,6 @@ const RULES: Rule[] = [
     skip: {
       reason:
         'ABot-World disabled on mobile: a walk session needs a dedicated GPU with GBs of free VRAM, and world operations have no delegated route',
-      platforms: ['mobile']
-    }
-  },
-  {
-    match: /^multi-gpu-/,
-    skip: {
-      reason: 'Multi-GPU tests disabled on mobile (not supported on single-GPU devices)',
       platforms: ['mobile']
     }
   },
@@ -164,7 +173,7 @@ const RULES: Rule[] = [
   {
     match: /^bci-/,
     skip: {
-      reason: 'BCI addon tests are desktop-only until mobile support is enabled',
+      reason: 'BCI addon tests are disabled on mobile until mobile support is enabled',
       platforms: ['mobile']
     }
   },
@@ -172,7 +181,7 @@ const RULES: Rule[] = [
     match: /^parakeet-indic-conformer-/,
     skip: {
       reason:
-        'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile',
+        'Indic Conformer e2e does not run on mobile: the parakeet-indic-conformer resource is not defined there',
       platforms: ['mobile']
     }
   },
@@ -187,7 +196,7 @@ const RULES: Rule[] = [
     match: /^(ocr-doctr-|model-load-ocr-doctr$)/,
     skip: {
       reason:
-        'DocTR OCR e2e is desktop-only; the pipeline/detector auto-derivation under test (QVAC-22514) is server-side Bare code identical across platforms, and the doctr resource is not defined on mobile',
+        'DocTR OCR e2e does not run on mobile: the pipeline/detector auto-derivation under test (QVAC-22514) is server-side Bare code identical across platforms, and the doctr resource is not defined there',
       platforms: ['mobile']
     }
   },
@@ -221,7 +230,7 @@ const RULES: Rule[] = [
     match: /^ocr-main-gpu-/,
     skip: {
       reason:
-        'The plugin strips main-gpu on single-GPU devices, and the ocr-main-gpu resource is desktop and Electron only',
+        'The plugin strips main-gpu on single-GPU devices, and the ocr-main-gpu resource is desktop, Electron and Snap only',
       platforms: ['mobile', 'desktop-python']
     }
   },
@@ -248,7 +257,7 @@ const RULES: Rule[] = [
     match: ['model-fit-probe-bci'],
     skip: {
       reason:
-        'BCI is desktop-only until mobile support is enabled; the assessment needs no load and still runs',
+        'BCI is disabled on mobile until mobile support is enabled; the assessment needs no load and still runs',
       platforms: ['mobile']
     }
   },
