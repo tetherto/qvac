@@ -8,14 +8,12 @@ import { getEngineLogger } from '@/logging/index'
 import { throwIfAborted } from './network'
 
 // Fabric RPC_PROTO_*_VERSION:
-// https://github.com/tetherto/qvac-fabric-llm.cpp/blob/v10549.5.0/ggml/include/ggml-rpc.h
+// https://github.com/tetherto/qvac-fabric-llm.cpp/blob/v11018.2.0/ggml/include/ggml-rpc.h
 // Command IDs and HELLO layouts, rpc_cmd and rpc_msg_hello_*:
-// https://github.com/tetherto/qvac-fabric-llm.cpp/blob/v10549.5.0/ggml/src/ggml-rpc/ggml-rpc.cpp
-// QVAC RPC 108.0/109.0 share these inventory messages. Patch versions are compatible.
-const SUPPORTED_VERSIONS = [
-  { major: 108, minor: 0 },
-  { major: 109, minor: 0 }
-]
+// https://github.com/tetherto/qvac-fabric-llm.cpp/blob/v11018.2.0/ggml/src/ggml-rpc/ggml-rpc.cpp
+// Native inference needs matching protocol majors, so only servers on the bundled
+// Fabric's protocol are listed. Patch versions are compatible.
+const SUPPORTED_VERSIONS = [{ major: 111, minor: 0 }]
 const SUPPORTED_VERSION_LABEL = SUPPORTED_VERSIONS.map(
   ({ major, minor }) => `${major}.${minor}.x`
 ).join(', ')

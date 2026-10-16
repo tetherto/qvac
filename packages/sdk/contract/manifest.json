@@ -67,6 +67,12 @@
       "responseSchema": "schema.json#/$defs/completionStream.response"
     },
     {
+      "name": "decide",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/decide.request",
+      "responseSchema": "schema.json#/$defs/decide.response"
+    },
+    {
       "name": "deleteCache",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/deleteCache.request",

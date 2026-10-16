@@ -354,6 +354,12 @@ export const pluginDefinitionRuntimeSchema = z
 export const PLUGIN_LLM = '@qvac/inference/llamacpp-completion/plugin' as const
 
 /**
+ * Decision plugin (llama.cpp).
+ * Provides: typed choice, score, and noul answers about a state.
+ */
+export const PLUGIN_DECISION = '@qvac/inference/llamacpp-decision/plugin' as const
+
+/**
  * Text embedding plugin (llama.cpp).
  * Provides: vector embeddings for RAG and semantic search.
  */
@@ -432,6 +438,7 @@ export const PLUGIN_CLASSIFICATION = '@qvac/inference/ggml-classification/plugin
 export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_DECISION,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_PARAKEET,

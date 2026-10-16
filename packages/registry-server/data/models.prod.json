@@ -9629,7 +9629,7 @@
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-f16.gguf",
-    "engine": "@qvac/embed-llamacpp",
+    "engine": "llamacpp-decision",
     "description": "Laya English decision model: answers typed questions about a text in one forward pass (GGUF)",
     "quantization": "f16",
     "params": "421M",
@@ -9640,7 +9640,7 @@
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-Q8_0.gguf",
-    "engine": "@qvac/embed-llamacpp",
+    "engine": "llamacpp-decision",
     "description": "Laya English decision model: answers typed questions about a text in one forward pass (GGUF)",
     "quantization": "q8_0",
     "params": "421M",
@@ -9651,7 +9651,7 @@
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-f16.gguf",
-    "engine": "@qvac/embed-llamacpp",
+    "engine": "llamacpp-decision",
     "description": "Laya multilingual decision model (100+ languages): answers typed questions about a text in one forward pass (GGUF)",
     "quantization": "f16",
     "params": "322M",
@@ -9662,7 +9662,7 @@
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-Q8_0.gguf",
-    "engine": "@qvac/embed-llamacpp",
+    "engine": "llamacpp-decision",
     "description": "Laya multilingual decision model (100+ languages): answers typed questions about a text in one forward pass (GGUF)",
     "quantization": "q8_0",
     "params": "322M",
@@ -9673,7 +9673,7 @@
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-typed-decisions-f16.gguf",
-    "engine": "@qvac/embed-llamacpp",
+    "engine": "llamacpp-decision",
     "description": "Laya decision model fine-tuned on typed-decisions data: answers typed questions about a text in one forward pass (GGUF)",
     "quantization": "f16",
     "params": "421M",
@@ -9684,7 +9684,7 @@
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-typed-decisions-Q8_0.gguf",
-    "engine": "@qvac/embed-llamacpp",
+    "engine": "llamacpp-decision",
     "description": "Laya decision model fine-tuned on typed-decisions data: answers typed questions about a text in one forward pass (GGUF)",
     "quantization": "q8_0",
     "params": "421M",

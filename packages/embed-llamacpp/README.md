@@ -20,7 +20,7 @@ It also runs [Laya](https://github.com/NandhaKishorM/laya) decision models throu
 - [API behavior by state](#api-behavior-by-state)
 - [Laya decision models](#laya-decision-models)
 - [Assessing fit](#assessing-fit)
-- [IdMapIndex vector database](#idmapindex-vector-database)
+- [Vector index](#vector-index)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
 - [Benchmarking](#benchmarking)
@@ -52,7 +52,7 @@ are loaded from `%CUDA_PATH%\bin\x64`, not from `PATH`.
 
 **Dependencies:**
 - inference-addon-cpp (≥1.1.2): C++ addon framework
-- @qvac/fabric (^0.18.0): Shared llama.cpp/ggml inference engine, including the vector-index API. The desktop runtime ships in the `@qvac/fabric-<host>` platform package that `@qvac/fabric` installs as an optional dependency, so install without `--omit=optional` and keep both present before `bare-make generate`/`build`. Android and iOS apps add `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as direct dependencies at the same exact version.
+- @qvac/fabric (^0.22.0): Shared llama.cpp/ggml inference engine. The desktop runtime ships in the `@qvac/fabric-<host>` platform package that `@qvac/fabric` installs as an optional dependency, so install without `--omit=optional` and keep both present before `bare-make generate`/`build`. Android and iOS apps add `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as direct dependencies at the same exact version.
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
 
@@ -397,49 +397,11 @@ The projection applies the embedding load's own normalization: the micro-batch f
 
 A model the fitter cannot read resolves to `status: "error"`; only a broken request rejects.
 
-## IdMapIndex vector database
+## Vector index
 
-`IdMapIndex` is a synchronous CPU vector index with stable unsigned 64-bit IDs. Vector-only consumers should use the subpath export so importing the index does not load the embedding-model runtime:
-
-```javascript
-const IdMapIndex = require('@qvac/embed-llamacpp/idMapIndex')
-
-const index = new IdMapIndex({ dim: 768, storage: 'turbovec-q4' })
-try {
-  index.addWithIds(vectors, new BigUint64Array([1n, 2n]))
-  index.prepare()
-  const { ids, scores } = index.search(query, 2)
-} finally {
-  index.dispose()
-}
-```
-
-`vectors` contains row-major `Float32Array` data with one `dim`-sized row per ID. Queries use the same layout and may contain multiple rows. Search uses dot-product similarity; L2-normalize indexed vectors and queries first when cosine similarity is required. Results are ordered by descending score and then ascending ID.
-
-### Storage modes
-
-| Storage | Effective bits | Snapshot | Mmap | Delta log |
-|---------|---------------:|----------|------|-----------|
-| `f32` | 32 | v2 | Yes | Yes |
-| `q8` | 8 | v2 | Yes | Yes |
-| `q4` | 4 | v2 | Yes | Yes |
-| `turbovec-q4` | 4 | v3 | No | No |
-| `turbovec-q2` | 2 | v3 | No | No |
-
-The default storage is `q8`. `bitWidth: 2` selects `turbovec-q2`, while `bitWidth: 4` selects generic `q4`; use `storage: 'turbovec-q4'` explicitly for TurboVec Q4.
-
-TurboVec requires a 64-bit target and dimensions divisible by 8 and no greater than 1,024. It provides approximate rotated/quantized dot-product search. TurboVec snapshots support `write()` and `load()`, but reject mmap loading, delta-log loading, logged mutations, and delta compaction.
-
-### Operations and lifecycle
-
-- `addWithIds()`, `remove()`, `contains()`, and `compact()` mutate or inspect the index.
-- `search()`, `searchFiltered()`, and `prepareFilter()` perform full-scan retrieval.
-- `buildIvf()` enables approximate `searchIvf()` retrieval. IVF state is in-memory only and must be rebuilt after a mutation or snapshot load.
-- `write()` and `load()` persist all storage modes. Generic `f32`, `q8`, and `q4` additionally support `loadMmap()`, `loadWithDelta()`, `addLogged()`, `removeLogged()`, and `compactDelta()`.
-- Mutations invalidate prepared filters and IVF state.
-- Call `dispose()` on indexes and prepared filters when finished. Disposal is idempotent.
-
-See [RAG with TurboVec](./examples/ragWithTurboVec.js) for an end-to-end embedding and retrieval example.
+The `IdMapIndex` vector index, including TurboVec storage, lives in
+[`@qvac/turbovec-ggml`](https://github.com/tetherto/qvac/tree/main/packages/turbovec-ggml). Pair it with `GGMLBert`
+embeddings for retrieval; see [RAG with TurboVec](./examples/ragWithTurboVec.js).
 
 ## Quickstart Example
 
@@ -462,11 +424,14 @@ npm run quickstart
 
 - [Batch Inference](./examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
 - [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
-- [RAG with TurboVec](./examples/ragWithTurboVec.js) – Embeds document chunks, retrieves relevant context with `IdMapIndex`, and prepares it for an LLM.
+- [RAG with TurboVec](./examples/ragWithTurboVec.js) – Embeds document chunks, retrieves relevant context with `IdMapIndex` from `@qvac/turbovec-ggml`, and prepares it for an LLM.
 - [Laya Decisions](./examples/layaDecisions.js) – Answers `choice`, `score` and `noul` questions about a support ticket, then about several tickets in one call. Takes the path to a Laya GGUF: `bare examples/layaDecisions.js /path/to/laya-multilingual-Q8_0.gguf`.
 
-Run the TurboVec RAG retrieval example on a 64-bit desktop:
+Run the TurboVec RAG retrieval example on a 64-bit desktop. It imports
+`IdMapIndex` from `@qvac/turbovec-ggml`, a dev dependency here, so install it
+first when running the example outside this package's dev setup:
 ```bash
+npm install @qvac/turbovec-ggml
 bare examples/ragWithTurboVec.js
 ```
 
