@@ -5,7 +5,3 @@
 Update native add-ons to include the latest fixes and allow compatible patch updates.
 
 Update your app lockfile and rebuild native bundles to apply the fixes.
-
-## Maintenance
-
-SDK end-to-end test setup no longer depends on retired CI tokens.
