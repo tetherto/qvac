@@ -1,8 +1,8 @@
-import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import fs from 'bare-fs'
 import path from 'bare-path'
 import type { TtsFitRequest } from '@qvac/tts-ggml'
 
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import type { TtsRuntimeConfig } from '@/schemas/index'
 import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-fit-request'
 import { gpuLayersFromCount } from '@/resources/model-fit/native-probe/engines/gpu'

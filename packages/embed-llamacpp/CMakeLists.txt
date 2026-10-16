@@ -10,7 +10,7 @@ qvac_addon_project_setup(VALGRIND_SUPP PRE_COMMIT_HOOK)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
-# llama / ggml / vector-index runtime is the shared @qvac/fabric prebuild
+# llama / ggml runtime is the shared @qvac/fabric prebuild
 # (dynamically linked, loaded once per process); sets qvac_fabric_target.
 qvac_addon_use_fabric()
 
@@ -20,7 +20,6 @@ target_sources(
   ${embed-llamacpp}
   PRIVATE
   ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/js-interface/vector-index-binding.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
@@ -30,7 +29,6 @@ target_sources(
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LayaModel.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/VectorIndex.cpp
 )
 target_include_directories(
   ${embed-llamacpp}

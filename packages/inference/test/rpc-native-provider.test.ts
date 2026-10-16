@@ -1,5 +1,6 @@
 import test from 'brittle'
 import { AbortController } from 'bare-abort-controller'
+import { RpcServerRdmaUnavailableError } from '@qvac/ggml-rpc-server'
 import { ggmlRpcServerProvider } from '@/rpc/ggml-provider'
 import { queryRpcInventory } from '@/rpc/inventory'
 import { rpcServerInfoSchema } from '@/schemas/rpc-server'
@@ -8,6 +9,8 @@ import { registerRpcServerProvider } from '@/rpc/provider'
 import { handleStartRpcServer } from '@/handlers/rpc-server'
 import { registerModel, getAllModelIds } from '@/runtime/model-registry'
 import { close, cleanupForTerminate } from '@/runtime/lifecycle'
+import { RpcServerOperationError } from '@/errors/index'
+import { rpcServers } from '@/rpc/instance'
 
 test('published RPC provider starts, serves inventory over TCP, and stops', async (t) => {
   const server = await ggmlRpcServerProvider.start({})
@@ -33,6 +36,42 @@ test('published RPC provider starts, serves inventory over TCP, and stops', asyn
     undefined,
     'stopped endpoint is unreachable'
   )
+})
+
+test('SDK RPC starts preserve native port allocation and enforce runtime RDMA availability', async (t) => {
+  registerRpcServerProvider(ggmlRpcServerProvider)
+  try {
+    const servers = await Promise.all([
+      handleStartRpcServer({ type: 'startRpcServer' }),
+      handleStartRpcServer({ type: 'startRpcServer' })
+    ])
+    t.not(servers[0]!.serverId, servers[1]!.serverId)
+    t.not(servers[0]!.url, servers[1]!.url, 'native servers bind distinct ports')
+    for (const server of servers) {
+      t.ok(server.url.startsWith('127.0.0.1:'))
+      const port = Number(server.url.slice(server.url.lastIndexOf(':') + 1))
+      t.ok(Number.isInteger(port) && port > 0 && port <= 65535, 'URL contains the bound port')
+    }
+
+    const strict = handleStartRpcServer({ type: 'startRpcServer', expectRdma: true })
+    if (servers[0]!.rdmaCapable) {
+      t.is((await strict).rdmaCapable, true, 'required RDMA is reported when available')
+    } else {
+      const error = await strict.then(
+        () => undefined,
+        (cause: unknown) => cause
+      )
+      t.ok(error instanceof RpcServerOperationError, 'SDK reports the failed start')
+      if (error instanceof RpcServerOperationError) {
+        t.is(error.operation, 'startRpcServer')
+        t.ok(error.details.includes('RDMA is not available'))
+        t.ok(error.cause instanceof RpcServerRdmaUnavailableError, 'native cause is preserved')
+      }
+      t.is(rpcServers.size, 2, 'failed strict start adds no owned server')
+    }
+  } finally {
+    await close()
+  }
 })
 
 for (const cleanup of [close, cleanupForTerminate]) {

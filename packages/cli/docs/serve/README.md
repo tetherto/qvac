@@ -10,12 +10,12 @@ OpenAPI document, and mounts one or more **extensions** that contribute the actu
 | `openai`  | `--openai`         | `/v1/...`      | [openai.md](openai.md)   |
 
 ```bash
-qvac serve                        # the QVAC surface
-qvac serve --openai               # QVAC + OpenAI-compatible
-qvac serve --openai --no-default  # OpenAI-compatible only
+qvac serve                          # the QVAC surface
+qvac serve --openai                 # QVAC + OpenAI-compatible
+qvac serve --openai --no-default    # OpenAI-compatible only
 ```
 
-`qvac serve openai` is a deprecated alias for the last form.
+`qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 
 The OpenAPI document describes whatever is mounted. It is always at `/openapi.json`;
 `--docs` additionally serves Swagger UI at `/docs`.

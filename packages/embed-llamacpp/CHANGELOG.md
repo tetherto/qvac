@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Breaking
+
+- `IdMapIndex` and `IdMapIndexFilter` moved to the new `@qvac/turbovec-ggml`
+  addon, with the same API, error names and snapshot formats. The
+  `@qvac/embed-llamacpp/idMapIndex` subpath and the root `IdMapIndex` /
+  `IdMapIndexFilter` exports are gone, and the vector index is no longer
+  compiled into this addon. Replace
+  `require('@qvac/embed-llamacpp/idMapIndex')` with
+  `require('@qvac/turbovec-ggml/idMapIndex')`.
+
 ### Added
 
 - `poll` and `poll-batch` are now documented public JavaScript load options.
