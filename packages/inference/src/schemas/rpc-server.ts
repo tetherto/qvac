@@ -16,7 +16,7 @@ export const startRpcServerOptionsSchema = z.object({
     .min(1)
     .max(65535)
     .optional()
-    .describe('TCP port. Omit to allocate a free port.'),
+    .describe('TCP port. Omit to let the native server bind a free port.'),
   device: z
     .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
     .optional()

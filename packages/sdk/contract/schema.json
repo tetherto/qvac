@@ -22687,7 +22687,7 @@
           "minLength": 1
         },
         "port": {
-          "description": "TCP port. Omit to allocate a free port.",
+          "description": "TCP port. Omit to let the native server bind a free port.",
           "type": "integer",
           "minimum": 1,
           "maximum": 65535

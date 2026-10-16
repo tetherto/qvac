@@ -22701,7 +22701,11 @@ class StartRpcServerRequest(GeneratedBaseModel):
     ] = None
     port: Annotated[
         int | None,
-        Field(description="TCP port. Omit to allocate a free port.", ge=1, le=65535),
+        Field(
+            description="TCP port. Omit to let the native server bind a free port.",
+            ge=1,
+            le=65535,
+        ),
     ] = None
     device: Annotated[
         Device | Device1 | None,
