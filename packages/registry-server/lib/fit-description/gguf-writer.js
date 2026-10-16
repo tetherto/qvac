@@ -16,6 +16,7 @@ const SOURCE_SIZE_KEY = 'fit_description.source_size'
 
 const GGUF_TYPE_UINT32 = 4
 const GGUF_TYPE_INT32 = 5
+const GGUF_TYPE_BOOL = 7
 const GGUF_TYPE_STRING = 8
 const GGUF_TYPE_ARRAY = 9
 const GGUF_TYPE_UINT64 = 10
@@ -36,6 +37,10 @@ function u64(value) {
   const buffer = Buffer.allocUnsafe(8)
   buffer.writeBigUInt64LE(BigInt(value))
   return buffer
+}
+
+function bool(value) {
+  return Buffer.from([value ? 1 : 0])
 }
 
 function ggufString(value) {
@@ -115,6 +120,10 @@ class DescriptionWriter {
 
   u64(key, value) {
     this.entries.push(encodeEntry(key, GGUF_TYPE_UINT64, u64(value)))
+  }
+
+  bool(key, value) {
+    this.entries.push(encodeEntry(key, GGUF_TYPE_BOOL, bool(value)))
   }
 
   string(key, value) {
