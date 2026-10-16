@@ -6,6 +6,8 @@ const { isKnownGgmlType, rowsAreWhole, ggmlTensorBytes } = require('./ggml-types
 const GGML_FILE_MAGIC = 0x67676d6c
 const GGML_MAX_DIMS = 4
 const MAX_TENSOR_NAME_BYTES = 256
+const BOOL_FALSE = 0
+const BOOL_TRUE = 1
 
 async function expectGgmlMagic(cursor) {
   const magic = await cursor.u32()
@@ -17,6 +19,20 @@ async function expectGgmlMagic(cursor) {
 async function readInt32Fields(cursor, names) {
   const fields = {}
   for (const name of names) fields[name] = await cursor.i32()
+  return fields
+}
+
+async function readBool(cursor) {
+  const value = await cursor.u8()
+  if (value !== BOOL_FALSE && value !== BOOL_TRUE) {
+    throw new FormatError(`byte ${value} at ${cursor.position - 1} is not a bool`)
+  }
+  return value === BOOL_TRUE
+}
+
+async function readBoolFields(cursor, names) {
+  const fields = {}
+  for (const name of names) fields[name] = await readBool(cursor)
   return fields
 }
 
@@ -70,6 +86,7 @@ function writeTensors(writer, tensors) {
 module.exports = {
   expectGgmlMagic,
   readInt32Fields,
+  readBoolFields,
   readCount,
   readTensorsToEnd,
   writeTensors
