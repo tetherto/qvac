@@ -232,7 +232,7 @@ TEST(RerankModelLoadTest, RerankerDeclaresNoPoolingButHasAClassifier) {
   ModelMetaData meta;
   meta.parse(path, GGUFShards{}, false, "Test");
   EXPECT_FALSE(meta.tryGetPoolingType().has_value());
-  EXPECT_EQ(meta.hasTensor("cls.weight"), true);
+  EXPECT_EQ(meta.hasAnyTensor({"cls.weight"}), true);
 }
 
 /// Needs the reranker GGUF, see rerankModelPath().

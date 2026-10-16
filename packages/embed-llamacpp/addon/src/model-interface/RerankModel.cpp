@@ -180,8 +180,7 @@ void RerankModel::configureParams(
   // and/or `cls.output` (e.g. Qwen3-Reranker). A chat model declares no
   // pooling and has neither. A streamed model's tensor table is not on disk,
   // so it is not checked.
-  if (metadata.hasTensor("cls.weight") == false &&
-      metadata.hasTensor("cls.output.weight") == false) {
+  if (metadata.hasAnyTensor({"cls.weight", "cls.output.weight"}) == false) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnsupportedModel),
@@ -226,15 +225,15 @@ void RerankModel::decodeBatch(
   llama_context* ctx = loader_.context();
 
   common_batch_clear(batch_);
+  // common_batch_add takes the sequence ids by vector: fill one per pair
+  // rather than building one per token.
+  std::vector<llama_seq_id> seqIds(1);
   for (std::size_t seq = 0; seq < count; ++seq) {
     const std::vector<int32_t>& tokens = pairs[first + seq];
+    seqIds[0] = static_cast<llama_seq_id>(seq);
     for (std::size_t pos = 0; pos < tokens.size(); ++pos) {
       common_batch_add(
-          batch_,
-          tokens[pos],
-          static_cast<llama_pos>(pos),
-          {static_cast<llama_seq_id>(seq)},
-          true);
+          batch_, tokens[pos], static_cast<llama_pos>(pos), seqIds, true);
     }
   }
 

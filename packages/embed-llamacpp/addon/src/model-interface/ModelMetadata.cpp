@@ -1,5 +1,7 @@
 #include "model-interface/ModelMetadata.hpp"
 
+#include <algorithm>
+
 #include <common/common.h>
 #include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -126,7 +128,8 @@ std::optional<uint32_t> ModelMetaData::tryGetPoolingType() const {
   return tryGetU32(key.c_str());
 }
 
-std::optional<bool> ModelMetaData::hasTensor(const char* name) const {
+std::optional<bool>
+ModelMetaData::hasAnyTensor(std::initializer_list<const char*> names) const {
   if (diskFiles_.empty()) {
     return std::nullopt;
   }
@@ -136,7 +139,9 @@ std::optional<bool> ModelMetaData::hasTensor(const char* name) const {
     if (ctx == nullptr) {
       return std::nullopt;
     }
-    const bool found = gguf_find_tensor(ctx, name) >= 0;
+    const bool found = std::ranges::any_of(names, [ctx](const char* name) {
+      return gguf_find_tensor(ctx, name) >= 0;
+    });
     gguf_free(ctx);
     if (found) {
       return true;

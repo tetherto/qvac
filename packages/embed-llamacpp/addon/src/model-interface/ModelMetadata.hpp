@@ -61,10 +61,12 @@ public:
   /// it declares none.
   [[nodiscard]] std::optional<uint32_t> tryGetPoolingType() const;
 
-  /// @brief Whether a tensor named @p name is in the model's GGUF files, read
-  /// from their headers without loading weights. nullopt for a streamed model,
-  /// whose tensor table is not on disk, or a header that cannot be read.
-  [[nodiscard]] std::optional<bool> hasTensor(const char* name) const;
+  /// @brief Whether any tensor named in @p names is in the model's GGUF files,
+  /// read from their headers in one pass without loading weights. nullopt for
+  /// a streamed model, whose tensor table is not on disk, or a header that
+  /// cannot be read.
+  [[nodiscard]] std::optional<bool>
+  hasAnyTensor(std::initializer_list<const char*> names) const;
 
   class FirstFileFromGgufStreamState {
   public:
