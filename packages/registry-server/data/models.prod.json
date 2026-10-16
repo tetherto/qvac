@@ -9692,5 +9692,27 @@
     "tags": ["classification", "modernbert", "laya-typed-decisions"],
     "notes": "Q8_0 GGUF conversion of convaiinnovations/laya-typed-decisions. Requires qvac-fabric >= 10549.5.1.",
     "link": "https://huggingface.co/convaiinnovations/laya-typed-decisions"
+  },
+  {
+    "source": "https://huggingface.co/TuesdayCrowd/transkun-onnx/resolve/b44598166715a50d863973a8ecbbdbbb392f08d6/transkun.onnx",
+    "engine": "@qvac/transkun",
+    "description": "Transkun V2 piano transcription backbone (ONNX), used for on-device sheet music",
+    "quantization": "fp32",
+    "params": "12.77M",
+    "licenseId": "MIT",
+    "tags": ["music-transcription", "piano", "transkun", "onnx", "backbone"],
+    "notes": "Upstream Transkun by Yujia Yan (https://github.com/Yujia-Yan/Transkun, MIT). Pair with the transkun-heads.onnx entry; both files are needed.",
+    "link": "https://huggingface.co/TuesdayCrowd/transkun-onnx"
+  },
+  {
+    "source": "https://huggingface.co/TuesdayCrowd/transkun-onnx/resolve/b44598166715a50d863973a8ecbbdbbb392f08d6/transkun-heads.onnx",
+    "engine": "@qvac/transkun",
+    "description": "Transkun V2 piano transcription edge-refinement heads (ONNX), used for on-device sheet music",
+    "quantization": "fp32",
+    "params": "0.86M",
+    "licenseId": "MIT",
+    "tags": ["music-transcription", "piano", "transkun", "onnx", "heads"],
+    "notes": "Upstream Transkun by Yujia Yan (https://github.com/Yujia-Yan/Transkun, MIT). Pair with the transkun.onnx entry; both files are needed.",
+    "link": "https://huggingface.co/TuesdayCrowd/transkun-onnx"
   }
 ]
