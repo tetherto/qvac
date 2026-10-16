@@ -1,7 +1,3 @@
-/**
- * MOSS-Speech (spoken dialogue): model discovery, the per-call conversation
- * surface and its validation, and native parameters.
- */
 import type { TTSConfigurationParams } from "../../tts";
 import type { EngineSetup, ModelPaths } from "../engineSetup";
 import { type NormalizedFiles } from "../modelFiles";
@@ -78,7 +74,6 @@ export declare function assertSpeechCall(fields: MossSpeechFields & {
 }, where: string): void;
 /** Collect the fields only MOSS-Speech reads that are present on `source`; undefined when none are set. */
 export declare function pickSpeechFields(source: MossSpeechFields | null | undefined): Partial<MossSpeechFields> | undefined;
-/** Explicit paths win over the quant-ranked GGUFs discovered under `modelDir`. */
 export declare function resolveMossSpeechModelPaths(files: NormalizedFiles): Pick<ModelPaths, "mossSpeechModelPath" | "mossSpeechCodecPath">;
 export declare function assertMossSpeechOptions(setup: EngineSetup): void;
 /**

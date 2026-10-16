@@ -8,10 +8,6 @@ exports.assertCosyvoiceOptionConsistency = assertCosyvoiceOptionConsistency;
 exports.assertCosyvoiceCloneConsistent = assertCosyvoiceCloneConsistent;
 exports.resolveJobInstruct = resolveJobInstruct;
 exports.buildCosyvoiceParams = buildCosyvoiceParams;
-/**
- * CosyVoice3: model directory discovery, the instruct2 control vocabulary,
- * option consistency and native parameters.
- */
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const engineIds_1 = require("../engineIds");

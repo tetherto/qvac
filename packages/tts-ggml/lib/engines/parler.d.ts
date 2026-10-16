@@ -49,7 +49,6 @@ export declare function pickParlerDescFields(source: ParlerJobSource | null | un
  * template fields, so setting both together is an error.
  */
 export declare function assertParlerDescFieldsConsistent(fields: ParlerDescFields | undefined, where: string): void;
-/** An explicit path wins over the GGUF discovered under `modelDir`. */
 export declare function resolveParlerModelPaths(files: NormalizedFiles): Pick<ModelPaths, "parlerModelPath">;
 /**
  * Constructor-time rules: on Parler the description and template fields are

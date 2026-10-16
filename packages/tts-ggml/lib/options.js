@@ -1,5 +1,4 @@
 "use strict";
-/** Helpers that name the options a caller set, for "wrong engine" errors. */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setOptionNames = setOptionNames;
 exports.keysPresent = keysPresent;

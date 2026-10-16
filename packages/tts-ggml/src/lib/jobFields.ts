@@ -1,7 +1,3 @@
-/**
- * The per-call fields a run input or streaming options may carry for the
- * loaded engine, validated and shaped for the native job object.
- */
 import {
   assertPerCallConditioning,
   assertSingleCosyvoiceControl,
@@ -33,8 +29,6 @@ import {
   type ParlerJobSource,
 } from "./engines/parler";
 import { keysPresent } from "./options";
-
-
 
 /** Per-call engine fields forwarded verbatim onto the native job object. */
 export type JobFields = ParlerDescFields &

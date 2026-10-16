@@ -57,7 +57,6 @@ function pickSoundEffectFields(source) {
         return undefined;
     return Object.fromEntries(present.map((key) => [key, source[key]]));
 }
-/** An explicit path wins over the quant-ranked GGUF discovered under `modelDir`. */
 function resolveMossSoundEffectModelPaths(files) {
     return {
         mossSoundEffectPath: (0, modelFiles_1.firstNonEmpty)(files.mossSoundEffect, (0, modelFiles_1.findQuantRankedGguf)(files.modelDir, exports.MOSS_SFX_RE)),

@@ -1,4 +1,3 @@
-/** Chatterbox (Turbo and multilingual): model files and native parameters. */
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 import path = require("bare-path");
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -20,7 +19,6 @@ export const CHATTERBOX_T3_MTL = "chatterbox-t3-mtl.gguf";
 export const CHATTERBOX_S3GEN_DEFAULT = "chatterbox-s3gen.gguf";
 export const CHATTERBOX_S3GEN_MTL = "chatterbox-s3gen-mtl.gguf";
 
-/** True when `modelDir` holds a Chatterbox T3 GGUF (Turbo or multilingual). */
 export function hasChatterboxModelDir(modelDir: string): boolean {
   return (
     fileExistsSafe(path.join(modelDir, CHATTERBOX_T3_TURBO)) ||
@@ -52,7 +50,6 @@ function resolveChatterboxModelDirPaths(
   return { t3: turboT3, s3: defaultS3 };
 }
 
-/** Explicit T3 / S3Gen paths win over the pair discovered under `modelDir`. */
 export function resolveChatterboxModelPaths(
   files: NormalizedFiles,
 ): Pick<ModelPaths, "t3ModelPath" | "s3genModelPath"> {

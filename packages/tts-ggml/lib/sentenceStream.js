@@ -106,7 +106,6 @@ function computeSentenceStreamStats(chunks, accumulator, countsFrames) {
         stats.generatedFrames = generatedFrames;
     return stats;
 }
-/** The stats of a stream that produced no chunks at all. */
 function emptyRuntimeStats() {
     return {
         totalTime: 0,
@@ -219,7 +218,6 @@ class SentenceStreamer {
     constructor(host) {
         this.host = host;
     }
-    /** Pre-chunked synthesis: every chunk is known up front. */
     streamChunks(chunks, jobFields) {
         const response = this.host.startJob();
         const context = {
@@ -233,7 +231,6 @@ class SentenceStreamer {
         void this.driveChunks(context).catch((error) => this.abort(context, error));
         return response;
     }
-    /** Text-stream mode: chunks arrive from an async source until it ends. */
     streamText(source, jobFields) {
         const response = this.host.startJob();
         const context = {
@@ -249,7 +246,6 @@ class SentenceStreamer {
         void this.driveText(context, source).catch((error) => this.abort(context, error));
         return response;
     }
-    /** Rejects the chunk in flight, if any, without ending the stream. */
     rejectActiveChunk(error) {
         const resolver = this.ctx?.chunkResolver;
         if (!resolver)
@@ -257,13 +253,11 @@ class SentenceStreamer {
         this.ctx.chunkResolver = null;
         resolver.reject(error);
     }
-    /** Drops the active stream and fails its response (cancel, unload, reload). */
     fail(reason) {
         this.rejectActiveChunk(reason instanceof Error ? reason : new Error(reason));
         this.ctx = null;
         this.host.failJob(reason);
     }
-    /** Tags a native chunk with the sentence it came from. */
     enrich(data) {
         const context = this.ctx;
         if (!context) {
@@ -303,7 +297,6 @@ class SentenceStreamer {
         }
         return true;
     }
-    /** Fails the stream, unless a newer stream has already replaced `context`. */
     abort(context, error) {
         if (context !== this.ctx)
             return;
@@ -346,7 +339,6 @@ class SentenceStreamer {
             ? emptyRuntimeStats()
             : computeSentenceStreamStats(context.chunks, context.acc, this.host.countsFrames()));
     }
-    /** One native job for `text`, resolved by the stats event that closes it. */
     async synthesizeChunk(context, text) {
         const done = new Promise((resolve, reject) => {
             context.chunkResolver = { resolve, reject };

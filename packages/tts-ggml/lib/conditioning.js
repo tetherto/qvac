@@ -10,10 +10,6 @@ exports.assertPerCallConditioning = assertPerCallConditioning;
 exports.engagedCosyvoiceControls = engagedCosyvoiceControls;
 exports.assertSingleCosyvoiceControl = assertSingleCosyvoiceControl;
 exports.assertConditioningConsistency = assertConditioningConsistency;
-/**
- * Cross-engine conditioning (`emotion` / `pace`): the canonical vocabulary,
- * each engine's supported subset, and the checks every entry point applies.
- */
 const engineIds_1 = require("./engineIds");
 // Canonical cross-engine conditioning vocabulary. This is a MIRROR, not the
 // source of truth: tts-cpp owns it in include/tts-cpp/voice_controls.h, and

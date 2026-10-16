@@ -1,4 +1,3 @@
-/** MOSS-SoundEffect: model discovery, per-call controls and native parameters. */
 import type { TTSConfigurationParams } from "../../tts";
 import { ENGINE_MOSS_SFX } from "../engineIds";
 import type { EngineSetup, ModelPaths } from "../engineSetup";
@@ -86,7 +85,6 @@ export function pickSoundEffectFields(
   return Object.fromEntries(present.map((key) => [key, source[key]]));
 }
 
-/** An explicit path wins over the quant-ranked GGUF discovered under `modelDir`. */
 export function resolveMossSoundEffectModelPaths(
   files: NormalizedFiles,
 ): Pick<ModelPaths, "mossSoundEffectPath"> {

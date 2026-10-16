@@ -1,4 +1,3 @@
-/** Picks the native parameter builder of the configured engine. */
 import type { TTSConfigurationParams } from "../tts";
 import {
   ENGINE_AUDIO8,
@@ -19,7 +18,6 @@ import { buildMossSpeechParams } from "./engines/mossSpeech";
 import { buildParlerParams } from "./engines/parler";
 import { buildSupertonicParams } from "./engines/supertonic";
 
-/** The `createInstance` parameters for the current setup. */
 export function buildNativeParams(setup: EngineSetup): TTSConfigurationParams {
   if (setup.pocket) return { ...setup.pocket.params };
   switch (setup.engineType) {

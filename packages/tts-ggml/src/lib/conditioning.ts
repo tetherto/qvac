@@ -1,7 +1,3 @@
-/**
- * Cross-engine conditioning (`emotion` / `pace`): the canonical vocabulary,
- * each engine's supported subset, and the checks every entry point applies.
- */
 import {
   ENGINE_AUDIO8,
   ENGINE_CHATTERBOX,

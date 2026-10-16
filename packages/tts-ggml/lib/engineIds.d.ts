@@ -1,8 +1,3 @@
-/**
- * Engine identifiers shared by every module of the wrapper. Each engine's own
- * vocabulary (file names, options, native parameters, reload rules) lives in
- * `./engines/<engine>.ts`.
- */
 export declare const ENGINE_CHATTERBOX = "chatterbox";
 export declare const ENGINE_SUPERTONIC = "supertonic";
 export declare const ENGINE_COSYVOICE3 = "cosyvoice3";
@@ -13,7 +8,6 @@ export declare const ENGINE_MOSS_SFX = "moss-sfx";
 export declare const ENGINE_MOSS_SPEECH = "moss-speech";
 export declare const ENGINE_POCKET = "pocket";
 export type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8 | typeof ENGINE_MOSS | typeof ENGINE_MOSS_SFX | typeof ENGINE_MOSS_SPEECH | typeof ENGINE_POCKET;
-/** Every engine this package wraps. */
 export declare const ENGINE_TYPES: readonly EngineType[];
 export declare function isEngineType(value: unknown): value is EngineType;
 /** Engines that draw tokens, and so accept temperature / topK / topP / maxFrames. */

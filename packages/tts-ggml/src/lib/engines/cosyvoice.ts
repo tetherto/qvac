@@ -1,7 +1,3 @@
-/**
- * CosyVoice3: model directory discovery, the instruct2 control vocabulary,
- * option consistency and native parameters.
- */
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 import fs = require("bare-fs");
 /* eslint-enable @typescript-eslint/no-require-imports */

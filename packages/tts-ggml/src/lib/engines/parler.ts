@@ -1,8 +1,3 @@
-/**
- * Parler (mini / large / indic): model discovery, the voice-description and
- * template surface, native parameters, per-call fields and reload, kept in
- * one place so the description/template rules read the same everywhere.
- */
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 import fs = require("bare-fs");
 import path = require("bare-path");
@@ -165,7 +160,6 @@ export function assertParlerDescFieldsConsistent(
   }
 }
 
-/** An explicit path wins over the GGUF discovered under `modelDir`. */
 export function resolveParlerModelPaths(
   files: NormalizedFiles,
 ): Pick<ModelPaths, "parlerModelPath"> {

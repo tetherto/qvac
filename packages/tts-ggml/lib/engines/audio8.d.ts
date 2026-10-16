@@ -1,7 +1,3 @@
-/**
- * Audio8: model discovery, voice cloning and sampler validation, native
- * parameters, per-call voice overrides and reload.
- */
 import type { TTSConfigurationParams } from "../../tts";
 import type { EngineSetup, ModelPaths } from "../engineSetup";
 import { type NormalizedFiles } from "../modelFiles";
@@ -64,7 +60,6 @@ export declare function pickAudio8VoiceFields(source: Audio8VoiceFields | null |
  * object by then, and the two would describe different samplers.
  */
 export declare function assertAudio8SamplingValid(sampling: Audio8SamplingFields, where: string): void;
-/** Explicit paths win over the quant-ranked GGUFs discovered under `modelDir`. */
 export declare function resolveAudio8ModelPaths(files: NormalizedFiles): Pick<ModelPaths, "audio8LmPath" | "audio8CodecDecoderPath" | "audio8CodecEncoderPath">;
 /**
  * A recording without its transcript is accepted by the model but degrades

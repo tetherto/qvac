@@ -1,8 +1,3 @@
-/**
- * The public option and result types of `@qvac/tts-ggml`, composed from the
- * per-engine field groups. `index.ts` re-exports them under the `TTSGgml`
- * namespace.
- */
 import type { TTSConditioningFields } from "./conditioning";
 import type { EngineType } from "./engineIds";
 import type { TTSGgmlRuntimeConfig } from "./engineSetup";

@@ -1,6 +1,3 @@
-/**
- * Native parameter mapping shared by the per-engine builders in `./engines`.
- */
 import type { TTSConfigurationParams } from "../tts";
 import type { EngineSetup } from "./engineSetup";
 /** The knobs every engine in SAMPLING_ENGINES reads. */

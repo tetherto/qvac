@@ -1,7 +1,3 @@
-/**
- * Which streaming modes each engine supports. Pure capability checks; the
- * sentence-stream execution lives in `./sentenceStream`.
- */
 import {
   ENGINE_AUDIO8,
   ENGINE_MOSS,

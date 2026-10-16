@@ -1,5 +1,3 @@
-/** Helpers that name the options a caller set, for "wrong engine" errors. */
-
 /** Names of the entries that carry a value, for "wrong engine" messages. */
 export function setOptionNames(
   options: Record<string, string | number | boolean | undefined>,

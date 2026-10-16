@@ -171,7 +171,6 @@ function pickSpeechFields(source) {
         return undefined;
     return Object.fromEntries(present.map((key) => [key, source[key]]));
 }
-/** Explicit paths win over the quant-ranked GGUFs discovered under `modelDir`. */
 function resolveMossSpeechModelPaths(files) {
     return {
         mossSpeechModelPath: (0, modelFiles_1.firstNonEmpty)(files.mossSpeechModel, (0, modelFiles_1.findQuantRankedGguf)(files.modelDir, exports.MOSS_SPEECH_RE)),

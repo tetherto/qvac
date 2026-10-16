@@ -1,10 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveJobFields = resolveJobFields;
-/**
- * The per-call fields a run input or streaming options may carry for the
- * loaded engine, validated and shaped for the native job object.
- */
 const conditioning_1 = require("./conditioning");
 const engineIds_1 = require("./engineIds");
 const audio8_1 = require("./engines/audio8");

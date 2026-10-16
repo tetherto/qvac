@@ -4,10 +4,6 @@ exports.requestsChunkStreaming = requestsChunkStreaming;
 exports.assertChunkStreamingSupport = assertChunkStreamingSupport;
 exports.assertDenoiserBatchOnly = assertDenoiserBatchOnly;
 exports.assertSentenceStreamingAllowed = assertSentenceStreamingAllowed;
-/**
- * Which streaming modes each engine supports. Pure capability checks; the
- * sentence-stream execution lives in `./sentenceStream`.
- */
 const engineIds_1 = require("./engineIds");
 const moss_1 = require("./engines/moss");
 // Every streaming engine starts native chunk streaming on

@@ -1,7 +1,3 @@
-/**
- * MOSS-TTS Delay and MOSS-TTSD dialogue: model discovery, voice and length
- * options, native parameters and reload.
- */
 import type { TTSConfigurationParams } from "../../tts";
 import { ENGINE_MOSS } from "../engineIds";
 import type { EngineSetup, ModelPaths, SynthesisSettings } from "../engineSetup";
@@ -81,7 +77,6 @@ function findMossBackbone(
   );
 }
 
-/** Explicit paths win over the quant-ranked GGUFs discovered under `modelDir`. */
 export function resolveMossModelPaths(
   files: NormalizedFiles,
   dialogue: boolean,

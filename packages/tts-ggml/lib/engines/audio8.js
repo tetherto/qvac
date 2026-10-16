@@ -78,7 +78,6 @@ function assertAudio8SamplingValid(sampling, where) {
     assertNotNegative(sampling.maxFrames, "maxFrames", "engine default", where);
     assertAudio8TopP(sampling.topP, where);
 }
-/** Explicit paths win over the quant-ranked GGUFs discovered under `modelDir`. */
 function resolveAudio8ModelPaths(files) {
     return {
         audio8LmPath: (0, modelFiles_1.firstNonEmpty)(files.audio8Lm, (0, modelFiles_1.findQuantRankedGguf)(files.modelDir, exports.AUDIO8_LM_RE)),

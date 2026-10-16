@@ -2,11 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FABRIC_ENGINE_TYPES = exports.SAMPLING_ENGINES = exports.ENGINE_TYPES = exports.ENGINE_POCKET = exports.ENGINE_MOSS_SPEECH = exports.ENGINE_MOSS_SFX = exports.ENGINE_MOSS = exports.ENGINE_AUDIO8 = exports.ENGINE_PARLER = exports.ENGINE_COSYVOICE3 = exports.ENGINE_SUPERTONIC = exports.ENGINE_CHATTERBOX = void 0;
 exports.isEngineType = isEngineType;
-/**
- * Engine identifiers shared by every module of the wrapper. Each engine's own
- * vocabulary (file names, options, native parameters, reload rules) lives in
- * `./engines/<engine>.ts`.
- */
 exports.ENGINE_CHATTERBOX = "chatterbox";
 exports.ENGINE_SUPERTONIC = "supertonic";
 // CosyVoice3 (Fun-CosyVoice3-0.5B / 1.5B). Ships as a small set of GGUFs
@@ -20,7 +15,6 @@ exports.ENGINE_MOSS = "moss";
 exports.ENGINE_MOSS_SFX = "moss-sfx";
 exports.ENGINE_MOSS_SPEECH = "moss-speech";
 exports.ENGINE_POCKET = "pocket";
-/** Every engine this package wraps. */
 exports.ENGINE_TYPES = [
     exports.ENGINE_CHATTERBOX,
     exports.ENGINE_SUPERTONIC,

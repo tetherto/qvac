@@ -1,8 +1,3 @@
-/**
- * Sentence-level streaming execution: text goes out as one native job per
- * chunk, each awaited before the next, and the per-chunk stats fold into one
- * aggregate. Also holds the pure helpers that shape stream input and output.
- */
 import type { QvacResponse } from "@qvac/infer-base";
 import type { TTSJobData } from "../tts";
 import { ERR_CODES, QvacErrorAddonTTSGgml } from "./error";
@@ -179,7 +174,6 @@ export function computeSentenceStreamStats(
   return stats;
 }
 
-/** The stats of a stream that produced no chunks at all. */
 function emptyRuntimeStats(): RuntimeStats {
   return {
     totalTime: 0,
@@ -352,7 +346,6 @@ export class SentenceStreamer {
 
   constructor(private readonly host: SentenceStreamHost) {}
 
-  /** Pre-chunked synthesis: every chunk is known up front. */
   streamChunks(chunks: string[], jobFields?: JobFields): SentenceStreamResponse {
     const response = this.host.startJob();
     const context: SentenceStreamContext = {
@@ -369,7 +362,6 @@ export class SentenceStreamer {
     return response;
   }
 
-  /** Text-stream mode: chunks arrive from an async source until it ends. */
   streamText(
     source: AsyncIterable<string>,
     jobFields?: JobFields,
@@ -391,7 +383,6 @@ export class SentenceStreamer {
     return response;
   }
 
-  /** Rejects the chunk in flight, if any, without ending the stream. */
   rejectActiveChunk(error: unknown): void {
     const resolver = this.ctx?.chunkResolver;
     if (!resolver) return;
@@ -399,14 +390,12 @@ export class SentenceStreamer {
     resolver.reject(error);
   }
 
-  /** Drops the active stream and fails its response (cancel, unload, reload). */
   fail(reason: string | Error): void {
     this.rejectActiveChunk(reason instanceof Error ? reason : new Error(reason));
     this.ctx = null;
     this.host.failJob(reason);
   }
 
-  /** Tags a native chunk with the sentence it came from. */
   enrich(data: NativeOutputChunk): TTSOutputChunk & SentenceStreamChunkMeta {
     const context = this.ctx;
     if (!context) {
@@ -455,7 +444,6 @@ export class SentenceStreamer {
     return true;
   }
 
-  /** Fails the stream, unless a newer stream has already replaced `context`. */
   private abort(context: SentenceStreamContext, error: unknown): void {
     if (context !== this.ctx) return;
     this.rejectActiveChunk(error);
@@ -503,7 +491,6 @@ export class SentenceStreamer {
     );
   }
 
-  /** One native job for `text`, resolved by the stats event that closes it. */
   private async synthesizeChunk(
     context: SentenceStreamContext,
     text: string,

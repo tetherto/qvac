@@ -4,7 +4,6 @@ exports.CHATTERBOX_S3GEN_MTL = exports.CHATTERBOX_S3GEN_DEFAULT = exports.CHATTE
 exports.hasChatterboxModelDir = hasChatterboxModelDir;
 exports.resolveChatterboxModelPaths = resolveChatterboxModelPaths;
 exports.buildChatterboxParams = buildChatterboxParams;
-/** Chatterbox (Turbo and multilingual): model files and native parameters. */
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const path = require("bare-path");
 const engineIds_1 = require("../engineIds");
@@ -14,7 +13,6 @@ exports.CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
 exports.CHATTERBOX_T3_MTL = "chatterbox-t3-mtl.gguf";
 exports.CHATTERBOX_S3GEN_DEFAULT = "chatterbox-s3gen.gguf";
 exports.CHATTERBOX_S3GEN_MTL = "chatterbox-s3gen-mtl.gguf";
-/** True when `modelDir` holds a Chatterbox T3 GGUF (Turbo or multilingual). */
 function hasChatterboxModelDir(modelDir) {
     return ((0, modelFiles_1.fileExistsSafe)(path.join(modelDir, exports.CHATTERBOX_T3_TURBO)) ||
         (0, modelFiles_1.fileExistsSafe)(path.join(modelDir, exports.CHATTERBOX_T3_MTL)));
@@ -35,7 +33,6 @@ function resolveChatterboxModelDirPaths(modelDir) {
     }
     return { t3: turboT3, s3: defaultS3 };
 }
-/** Explicit T3 / S3Gen paths win over the pair discovered under `modelDir`. */
 function resolveChatterboxModelPaths(files) {
     if (!files.modelDir) {
         return { t3ModelPath: files.t3Model, s3genModelPath: files.s3genModel };

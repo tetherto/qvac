@@ -1,7 +1,3 @@
-/**
- * MOSS-TTS Delay and MOSS-TTSD dialogue: model discovery, voice and length
- * options, native parameters and reload.
- */
 import type { TTSConfigurationParams } from "../../tts";
 import type { EngineSetup, ModelPaths, SynthesisSettings } from "../engineSetup";
 import { type NormalizedFiles } from "../modelFiles";
@@ -17,7 +13,6 @@ export declare const MOSS_TERMINATION_ROWS = 2;
 export declare const MOSS_MAX_DURATION_TOKENS: number;
 export declare const MOSS_INSTANCE_VOICE_KEYS: readonly ["referenceAudio", "dialogueReferences"];
 export declare function assertMossDurationTokens(value: number | null | undefined, where: string): void;
-/** Explicit paths win over the quant-ranked GGUFs discovered under `modelDir`. */
 export declare function resolveMossModelPaths(files: NormalizedFiles, dialogue: boolean): Pick<ModelPaths, "mossBackbonePath" | "mossCodecDecoderPath" | "mossCodecEncoderPath">;
 /** The MOSS voice and length options, read before model paths are resolved. */
 export declare function mossVoiceSettings(options: {

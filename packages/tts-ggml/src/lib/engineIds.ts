@@ -1,8 +1,3 @@
-/**
- * Engine identifiers shared by every module of the wrapper. Each engine's own
- * vocabulary (file names, options, native parameters, reload rules) lives in
- * `./engines/<engine>.ts`.
- */
 export const ENGINE_CHATTERBOX = "chatterbox";
 export const ENGINE_SUPERTONIC = "supertonic";
 // CosyVoice3 (Fun-CosyVoice3-0.5B / 1.5B). Ships as a small set of GGUFs
@@ -28,7 +23,6 @@ export type EngineType =
   | typeof ENGINE_MOSS_SPEECH
   | typeof ENGINE_POCKET;
 
-/** Every engine this package wraps. */
 export const ENGINE_TYPES: readonly EngineType[] = [
   ENGINE_CHATTERBOX,
   ENGINE_SUPERTONIC,

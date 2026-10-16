@@ -5,7 +5,6 @@ exports.findSupertonicV3InDir = findSupertonicV3InDir;
 exports.hasSupertonicModelDir = hasSupertonicModelDir;
 exports.resolveSupertonicModelPaths = resolveSupertonicModelPaths;
 exports.buildSupertonicParams = buildSupertonicParams;
-/** Supertonic (v1 / v2 multilingual / v3): model files and native parameters. */
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
@@ -48,7 +47,6 @@ function findSupertonicV3InDir(modelDir) {
     matches.sort((left, right) => rank(left) - rank(right));
     return path.join(modelDir, matches[0]);
 }
-/** True when `modelDir` holds any Supertonic GGUF (v1, v2 or v3). */
 function hasSupertonicModelDir(modelDir) {
     return ((0, modelFiles_1.fileExistsSafe)(path.join(modelDir, exports.SUPERTONIC_DEFAULT)) ||
         (0, modelFiles_1.fileExistsSafe)(path.join(modelDir, exports.SUPERTONIC_MTL)) ||
@@ -66,7 +64,6 @@ function resolveSupertonicModelDirPath(modelDir) {
         return versionThree;
     return english;
 }
-/** An explicit path wins over the GGUF discovered under `modelDir`. */
 function resolveSupertonicModelPaths(files) {
     return {
         supertonicModelPath: (0, modelFiles_1.firstNonEmpty)(files.supertonicModel, files.modelDir ? resolveSupertonicModelDirPath(files.modelDir) : undefined),

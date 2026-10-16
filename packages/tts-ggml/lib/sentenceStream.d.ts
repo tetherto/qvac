@@ -1,8 +1,3 @@
-/**
- * Sentence-level streaming execution: text goes out as one native job per
- * chunk, each awaited before the next, and the per-chunk stats fold into one
- * aggregate. Also holds the pure helpers that shape stream input and output.
- */
 import type { QvacResponse } from "@qvac/infer-base";
 import type { TTSJobData } from "../tts";
 import type { JobFields } from "./jobFields";
@@ -70,15 +65,10 @@ export declare class SentenceStreamer {
     /** The active stream, or null between streams. */
     ctx: SentenceStreamContext | null;
     constructor(host: SentenceStreamHost);
-    /** Pre-chunked synthesis: every chunk is known up front. */
     streamChunks(chunks: string[], jobFields?: JobFields): SentenceStreamResponse;
-    /** Text-stream mode: chunks arrive from an async source until it ends. */
     streamText(source: AsyncIterable<string>, jobFields?: JobFields): SentenceStreamResponse;
-    /** Rejects the chunk in flight, if any, without ending the stream. */
     rejectActiveChunk(error: unknown): void;
-    /** Drops the active stream and fails its response (cancel, unload, reload). */
     fail(reason: string | Error): void;
-    /** Tags a native chunk with the sentence it came from. */
     enrich(data: NativeOutputChunk): TTSOutputChunk & SentenceStreamChunkMeta;
     /**
      * Folds a chunk's stats into the aggregate and releases the chunk; after the
@@ -86,10 +76,8 @@ export declare class SentenceStreamer {
      * active, so the caller can end a plain job with the stats as they are.
      */
     onStats(data: NativeStats): boolean;
-    /** Fails the stream, unless a newer stream has already replaced `context`. */
     private abort;
     private driveChunks;
     private driveText;
-    /** One native job for `text`, resolved by the stats event that closes it. */
     private synthesizeChunk;
 }

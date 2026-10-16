@@ -61,7 +61,6 @@ function mossBackbonePatterns(dialogue) {
 function findMossBackbone(modelDir, dialogue) {
     return (0, modelFiles_1.firstNonEmpty)(...mossBackbonePatterns(dialogue).map((pattern) => (0, modelFiles_1.findQuantRankedGguf)(modelDir, pattern)));
 }
-/** Explicit paths win over the quant-ranked GGUFs discovered under `modelDir`. */
 function resolveMossModelPaths(files, dialogue) {
     return {
         mossBackbonePath: (0, modelFiles_1.firstNonEmpty)(files.mossBackbone, findMossBackbone(files.modelDir, dialogue)),

@@ -98,14 +98,6 @@ type ExclusiveRunner = <T>(fn: () => Promise<T>) => Promise<T>;
  * Owns a persistent native engine: model weights and voice-conditioning
  * tensors are loaded once by `load()` and reused by `run()`, `runStream()`,
  * and `runStreaming()`.
- *
- * This class keeps the execution lifecycle (load, run, cancel, reload,
- * exclusive execution, Pocket's job barrier); everything derived from the
- * constructor options lives in `lib/`: engine discovery and model paths
- * (`engineDetection`), options and their validation (`setup`,
- * `optionValidation`), native parameters (`engineParams` and the per-engine
- * modules), per-call fields (`jobFields`), reload (`reload`) and sentence
- * streaming (`streamingSupport`, `sentenceStream`).
  */
 class TTSGgml {
   static readonly inferenceManagerConfig = {

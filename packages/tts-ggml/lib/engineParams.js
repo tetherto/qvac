@@ -10,7 +10,6 @@ const mossSoundEffect_1 = require("./engines/mossSoundEffect");
 const mossSpeech_1 = require("./engines/mossSpeech");
 const parler_1 = require("./engines/parler");
 const supertonic_1 = require("./engines/supertonic");
-/** The `createInstance` parameters for the current setup. */
 function buildNativeParams(setup) {
     if (setup.pocket)
         return { ...setup.pocket.params };

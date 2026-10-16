@@ -9,11 +9,6 @@ exports.assertParlerOptions = assertParlerOptions;
 exports.resolveParlerJobFields = resolveParlerJobFields;
 exports.buildParlerParams = buildParlerParams;
 exports.applyParlerReload = applyParlerReload;
-/**
- * Parler (mini / large / indic): model discovery, the voice-description and
- * template surface, native parameters, per-call fields and reload, kept in
- * one place so the description/template rules read the same everywhere.
- */
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
@@ -126,7 +121,6 @@ function assertParlerDescFieldsConsistent(fields, where) {
             `voice-template options (got ${templateKeys.join(", ")})`);
     }
 }
-/** An explicit path wins over the GGUF discovered under `modelDir`. */
 function resolveParlerModelPaths(files) {
     return {
         parlerModelPath: (0, modelFiles_1.firstNonEmpty)(files.parlerModel, files.modelDir ? findParlerInDir(files.modelDir) : undefined),

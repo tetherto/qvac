@@ -43,12 +43,6 @@ export interface TTSGgmlRuntimeConfig {
   vulkanCacheDir?: string;
 }
 
-/**
- * LavaSR enhancer config. The discriminated `type` leaves room for future
- * enhancer kinds; v1 ships `lavasr`. Enhancement is enabled by providing a
- * GGUF path here or via `files.lavasrEnhancer`.
-
-/** Model, voice and dictionary paths resolved once at construction. */
 export interface ModelPaths {
   voicesDir?: string;
   supertonicModelPath?: string;
@@ -139,7 +133,6 @@ export interface SynthesisSettings {
   durationTokens?: number;
 }
 
-/** LavaSR stage GGUFs and the ggml backend directories. */
 export interface BackendPaths {
   enhancerGgufPath?: string;
   denoiserGgufPath?: string;
@@ -148,7 +141,6 @@ export interface BackendPaths {
   vulkanCacheDir?: string;
 }
 
-/** Pocket builds its native parameters up front and rebuilds them on reload. */
 export interface PocketSetup {
   files: NormalizedFiles;
   options: Record<string, unknown>;

@@ -1,7 +1,3 @@
-/**
- * Cross-engine conditioning (`emotion` / `pace`): the canonical vocabulary,
- * each engine's supported subset, and the checks every entry point applies.
- */
 import { type EngineType } from "./engineIds";
 import type { EngineSetup } from "./engineSetup";
 export declare const EMOTIONS: readonly ["command", "anger", "narration", "conversation", "disgust", "fear", "happy", "neutral", "proper noun", "news", "sad", "surprise"];
