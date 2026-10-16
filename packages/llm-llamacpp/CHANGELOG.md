@@ -9,6 +9,15 @@
   default to `0`, and `poll-batch` inherits an explicit `poll` when omitted
   ([#5083](https://github.com/tetherto/qvac/pull/5083)).
 
+### Changed
+
+- Single-sequence generation now uses `threads`, `cpu-mask` and `prio`.
+  `threads-batch` and `cpu-mask-batch` apply only to steps that process
+  several tokens at once: prompt processing, batched decoding across parallel
+  sequences, and speculative verification. Previously an explicit
+  `threads-batch` also capped generation and `cpu-mask` was ignored
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
 ### Fixed
 
 - File-backed model loads now default both GGML threadpools to `poll=0`, so

@@ -489,6 +489,21 @@ TEST_F(LoadFitNormalizationTest, ExplicitBatchPollOverridesPrimaryPoll) {
   EXPECT_EQ(result.params.cpuparams_batch.poll, 1U);
 }
 
+TEST_F(LoadFitNormalizationTest, ThreadsBatchDoesNotOverrideGenerationThreads) {
+  auto config = baseConfig();
+  config["threads"] = "2";
+  config["threads-batch"] = "1";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.cpuparams.n_threads, 2);
+  EXPECT_EQ(result.params.cpuparams_batch.n_threads, 1);
+}
+
 TEST(CpuTensorBufferOverrideTest, RewritesOnlyTheParsedCpuBufferIdentity) {
   std::uint64_t parsedCpuMarker = 0;
   std::uint64_t otherMarker = 0;
