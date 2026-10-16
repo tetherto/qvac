@@ -18,6 +18,7 @@ The package exposes four JS entry points:
 
 - [Supported Models](#supported-models)
 - [Supported Platforms](#supported-platforms)
+- [Platform packages](#platform-packages)
 - [Building From Source](#building-from-source)
 - [Downloading Models](#downloading-models)
 - [Examples](#examples)
@@ -72,6 +73,40 @@ Dependencies:
 - `ggml`
 - Bare Runtime >= 1.24.0
 - CMake >= 3.25 and a C++20-capable compiler
+
+## Platform packages
+
+`@qvac/diffusion-cpp` is a meta package that ships the JavaScript wrapper only.
+The native prebuild for each desktop host lives in a version-locked platform
+package selected at install time through `os`/`cpu` filtered
+`optionalDependencies`:
+
+| Host | Package |
+| --- | --- |
+| linux-x64 (glibc) | `@qvac/diffusion-cpp-linux-x64` |
+| linux-arm64 (glibc) | `@qvac/diffusion-cpp-linux-arm64` |
+| darwin-arm64 | `@qvac/diffusion-cpp-darwin-arm64` |
+| darwin-x64 | `@qvac/diffusion-cpp-darwin-x64` |
+| win32-x64 | `@qvac/diffusion-cpp-win32-x64` |
+
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time, and at `bare-pack` time, naming
+the missing package. Each platform package is an ordinary Bare addon whose
+`prebuilds/<host>/` holds the native module and, next to it, the dynamically
+loaded ggml backends the module finds on its own. A source build becomes
+loadable once `npm run link:platform` (run by `npm run build`, `build:vulkan`,
+and `build:cuda`) stages it as the host's platform package in `node_modules/`.
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/diffusion-cpp` version:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/diffusion-cpp-android-arm64` |
+| ios (device + simulators) | `@qvac/diffusion-cpp-ios` |
 
 ## Building From Source
 
@@ -244,7 +279,7 @@ argument.
 | `flow_shift`            | number                                    | model default     | Flow-matching noise schedule shift                                        |
 | `diffusion_conv_direct` | boolean                                   | `true`            | Use direct convolution in diffusion model                                 |
 | `vae_conv_direct`       | boolean                                   | `true`            | Use direct convolution in VAE                                             |
-| `backendsDir`           | string                                    | package prebuilds | Custom ggml backend directory                                             |
+| `backendsDir`           | string                                    | beside the loaded module | Directory of ggml backend modules, scanned as given                  |
 | `lora_apply_mode`       | string                                    | auto              | LoRA application mode                                                     |
 | `upscaler_tile_size`    | number                                    | `128`             | ESRGAN tile size                                                          |
 | `max_image_pixels`      | positive integer                          | `67108864`        | Maximum decoded input or ESRGAN output pixels per image                  |
