@@ -1,5 +1,12 @@
 import test from 'brittle'
 import { groupCompanionSets } from '@/models/update-models/companions'
+import { buildResourceProfile } from '@/models/update-models/profiles'
+import {
+  TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0,
+  TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  getModelByPath
+} from '@/models/registry'
+import { getModelResourceProfile } from '@/models/registry/resource-profiles'
 import type { ProcessedModel } from '@/models/update-models/types'
 
 function makeModel(overrides: Partial<ProcessedModel> & { registryPath: string }): ProcessedModel {
@@ -375,6 +382,103 @@ test('groupCompanionSets: cosyvoice llm outside /cosy_voice/ is skipped', (t) =>
   ])
 
   t.absent(result[0]!.companionSet)
+})
+
+const COSYVOICE_LIGHT_DIR = 'qvac_models_compiled/ggml/cosy_voice/2026-09-21/'
+
+function makeLightCosyvoiceSet() {
+  const files = makeCosyvoiceSet()
+  files.llm.registryPath = `${COSYVOICE_LIGHT_DIR}cosyvoice3-llm-q4_0.gguf`
+  files.flow.registryPath = `${COSYVOICE_LIGHT_DIR}cosyvoice3-flow-q4_0.gguf`
+  files.hift.registryPath = `${COSYVOICE_LIGHT_DIR}cosyvoice3-hift-f16.gguf`
+  return [files.llm, files.flow, files.hift, files.vocab, files.merges, files.voiceEn]
+}
+
+test('groupCompanionSets: cosyvoice Q4 pairs lighter weights with compatible shared assets', (t) => {
+  const light = makeLightCosyvoiceSet()
+  const original = Object.values(makeCosyvoiceSet())
+  const result = groupCompanionSets([...light, ...original])
+  const set = result[0]!.companionSet!
+  t.ok(set)
+  t.is(set.files.length, 6)
+  t.alike(
+    set.files.map((file) => file.targetName),
+    [
+      'cosyvoice3-llm-q4_0.gguf',
+      'cosyvoice3-flow-q4_0.gguf',
+      'cosyvoice3-hift-f16.gguf',
+      'vocab.json',
+      'merges.txt',
+      'voice.gguf'
+    ]
+  )
+  t.alike(
+    set.files.map((file) => file.registryPath),
+    light.map((file) => file.registryPath)
+  )
+  t.alike(
+    set.files.map((file) => file.sha256Checksum),
+    light.map((file) => file.sha256Checksum)
+  )
+  t.is(buildResourceProfile(result[0]!).artifactBytes, 6000, 'profile includes all six artifacts')
+  t.ok(result[6]!.companionSet, 'original Q8/F32 set still resolves')
+  t.not(set.setKey, result[6]!.companionSet!.setKey, 'variants have independent cache directories')
+  const reversed = groupCompanionSets([...original.reverse(), ...makeLightCosyvoiceSet().reverse()])
+  t.alike(
+    reversed[reversed.length - 1]!.companionSet,
+    set,
+    'selection is independent of registry order'
+  )
+})
+
+for (let missing = 1; missing < 6; missing++) {
+  test(`groupCompanionSets: cosyvoice Q4 refuses missing required asset ${missing}`, (t) => {
+    const files = makeLightCosyvoiceSet()
+    files.splice(missing, 1)
+    // The old weights must not silently replace a missing lighter component.
+    const original = makeCosyvoiceSet()
+    const result = groupCompanionSets([...files, original.flow, original.hift])
+    t.absent(result[0]!.companionSet)
+  })
+}
+
+test('groupCompanionSets: cosyvoice Q4 rejects assets from other releases or sources', (t) => {
+  for (const index of [1, 2, 3, 4, 5]) {
+    for (const crossSource of [true, false]) {
+      const files = makeLightCosyvoiceSet()
+      if (crossSource) {
+        files[index]!.registrySource = 'hf'
+      } else {
+        files[index]!.registryPath = files[index]!.registryPath.replace(
+          /2026-\d{2}-\d{2}/,
+          '2099-01-01'
+        )
+      }
+      t.absent(groupCompanionSets(files)[0]!.companionSet)
+    }
+  }
+})
+
+test('generated CosyVoice3 constants expose complete sets and matching resource profiles', (t) => {
+  for (const model of [TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0, TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0]) {
+    const set = getModelByPath(model.registryPath)!.companionSet!
+    t.ok(set, `${model.name} has a companion set`)
+    if (!set) continue
+    t.is(set.files.length, 6)
+    t.is(set.files.filter((file) => file.primary).length, 1)
+    t.is(new Set(set.files.map((file) => file.targetName)).size, 6)
+    for (const file of set.files) {
+      const entry = getModelByPath(file.registryPath)
+      t.ok(entry, `${file.targetName} remains addressable`)
+      t.is(entry?.sha256Checksum, file.sha256Checksum)
+      t.ok(file.expectedSize > 0)
+      t.ok(file.blobCoreKey)
+    }
+    t.is(
+      getModelResourceProfile(model.sha256Checksum)?.artifactBytes,
+      set.files.reduce((sum, file) => sum + file.expectedSize, 0)
+    )
+  }
 })
 
 test('groupCompanionSets: Core ML bundle files do not become public model constants', (t) => {
