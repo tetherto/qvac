@@ -130,7 +130,7 @@ qvac doctor --quiet || exit 1
 ### `configure`
 
 Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
-straight to `qvac serve --openai` or `qvac serve --systemone`. It searches the models the SDK provides — by name or by
+straight to `qvac serve --openai`. It searches the models the SDK provides — by name or by
 capability (role, addon, quantization) — and on a wide terminal previews, for the
 highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
 its alias, set config parameters (guided by the SDK's config schema — each field shows its
@@ -399,13 +399,14 @@ accepting dependents when another dependent still requires the current version.
 
 ### `serve`
 
-Run an HTTP server backed by locally configured QVAC models (`serve.models` in `qvac.config.*`), with optional **OpenAI-compatible** and **System One** extensions.
+Run an HTTP server backed by locally configured QVAC models (`serve.models` in `qvac.config.*`), with an optional **OpenAI-compatible** extension.
 
 ```bash
 qvac serve --openai [options]
-qvac serve --systemone [options]
-qvac serve --openai --systemone [options]
 ```
+
+The OpenAI extension includes `POST /v1/decisions` for local typed decisions.
+See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request examples.
 
 `--no-default` leaves the QVAC surface out. `qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 
@@ -415,7 +416,6 @@ qvac serve --openai --systemone [options]
 | `-p, --port <number>`            | Port to listen on (default: `11434`).                                                                                               |
 | `-H, --host <address>`           | Host to bind to (default: `127.0.0.1`).                                                                                             |
 | `--model <alias>`                | Force a model alias to preload at startup (repeatable; must be in config). Models not preloaded still load lazily on first request. |
-| `--systemone`                    | Mount `POST /v1/systemone` for typed decisions. See [System One](docs/serve/systemone.md).                                          |
 | `--api-key <key>`                | Require Bearer authentication. Recommended for every non-loopback bind.                                                             |
 | `--api-key-file <path>`          | Read the Bearer token from a file. Keeps it out of argv, which `/proc` exposes locally.                                             |
 | `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                          |
