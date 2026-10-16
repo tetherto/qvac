@@ -10,7 +10,9 @@ schemaType: HowTo
 Use `startRpcServer()` to serve native devices from a QVAC worker and `discoverRpcServers()` to find endpoints on a shared discovery topic. Load a model with the selected endpoints to run inference across their devices.
 
 <Callout type="warn">
-Use RPC endpoints only on a trusted private network. Native RPC traffic is unencrypted and unauthenticated. A discovery topic does not authenticate peers.
+  Use RPC endpoints only on a trusted private network. Native RPC traffic is
+  unencrypted and unauthenticated. A discovery topic does not authenticate
+  peers.
 </Callout>
 
 ## Enable serving
@@ -25,7 +27,7 @@ Serving requires `@qvac/ggml-rpc-server` and a worker rebuilt with this setting 
 
 Rebuild the worker with `qvac bundle sdk`. See [Configuration](/sdk/configuration) for the config file format.
 
-On Linux, `startRpcServer()` needs `libibverbs.so.1` (`sudo apt install -y libibverbs1`), even over TCP. See [missing libibverbs](/resources/troubleshooting#rpc-server-failure-missing-libibverbsso1).
+On Linux, the server uses TCP when libibverbs or an RDMA device is unavailable. RDMA requires `libibverbs.so.1`, which can be installed with `sudo apt install -y libibverbs1`.
 
 Python callers must select the generated worker with `QVAC_WORKER_PATH` or `Client(worker_path=...)`. See [Python SDK RPC server setup](/sdk/python-sdk#rpc-servers) for installation, bundling, and run commands.
 
@@ -45,7 +47,7 @@ Unload models using the endpoint before calling `stopRpcServer({ serverId })`. T
 
 `rdmaAvailable` describes the server's advertised RDMA availability. Actual transport depends on client support and negotiation.
 
-Discovery reads inventories from RPC protocols 108.0, 109.0, and 110.0. Native inference requires matching protocol major versions between the server and client. A protocol 109 client cannot use a protocol 110 server for inference, even when discovery lists that server. Keep the Fabric versions used by your model addon and RPC servers compatible.
+Discovery accepts only RPC protocol `111.0.x` and rejects incompatible servers with a diagnostic containing the received and supported versions. Native inference also requires matching protocol major versions. Keep the Fabric versions used by your model addon and RPC servers compatible.
 
 Choose and order the endpoints before calling `getRpcDeviceMap(selected)`. Pass those same endpoints, in the same order, as the comma-separated `modelConfig["rpc-servers"]` value to [`loadModel()`](/sdk/reference/api#loadmodel). The map assigns `RPC0`, `RPC1`, and subsequent aliases across every device in endpoint order. Aliases start at `RPC0` for each model load, including when you reuse a worker.
 
@@ -66,7 +68,9 @@ The following script starts an RPC server on a private IPv4 address and shared t
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rpc-server.js title="rpc-server.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -74,7 +78,9 @@ The following script starts an RPC server on a private IPv4 address and shared t
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rpc-server.ts title="rpc-server.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -82,7 +88,9 @@ The following script starts an RPC server on a private IPv4 address and shared t
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/rpc_servers.py title="rpc_servers.py" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -98,7 +106,9 @@ The following script discovers two idle RPC servers, maps their device aliases, 
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rpc-inference.js title="rpc-inference.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -106,11 +116,15 @@ The following script discovers two idle RPC servers, maps their device aliases, 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rpc-inference.ts title="rpc-inference.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
 
 <Callout type="success">
-All examples are self-contained and runnable. See the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or [Python quickstart](/sdk/python-sdk#quickstart) for instructions.
+  All examples are self-contained and runnable. See the [JS/TS
+  quickstart](/sdk/js-ts-sdk#quickstart) or [Python
+  quickstart](/sdk/python-sdk#quickstart) for instructions.
 </Callout>
