@@ -52,8 +52,8 @@ recovered from code or context.
    `numeric-range`).
 8. **After approval**, scaffold with [`references/scaffolding.md`](references/scaffolding.md) and
    give the user the exact local commands for every consumer (§"Validation"). Always include
-   `run:local:electron --filter <feature>-` to verify either the handler or an intentional skip for
-   Electron/Snap.
+   `run:local:electron --filter <feature>-` to verify that the body runs on Electron/Snap or is
+   skipped there on purpose.
 
 ## Model-output strategy
 
@@ -72,8 +72,10 @@ Pick the strongest achievable strategy:
    pattern anchored and stable.
 5. **Shape-only fallback** — `type` with `minLength`. Flag as weak coverage in the plan.
 6. **Error path** — `throws-error` with a substring that is stable across SDK versions.
-7. **Custom `function`** — use for deterministic but non-trivial checks like cosine similarity against a
-   reference vector.
+7. **Named assertion** — for deterministic but non-trivial checks like cosine similarity against a
+   reference vector, assert with `named:` and implement it for both clients, in
+   `tests/shared/step-bindings.ts` and `python/qvac_e2e/assertions.py`. Avoid a `function`
+   expectation: it is a JavaScript closure, so a non-JS client reports the test `incomplete`.
 
 If the model's output is inherently non-deterministic and cannot be constrained, say so in the plan and
 justify why shape-only or range-based coverage is the best achievable — do not silently ship a weak
@@ -93,10 +95,12 @@ More cases are encouraged for multi-branch features.
 
 ## Body and placement
 
-**Prefer a declarative body.** A definition with `steps` runs through the shared step interpreter on
-desktop, Electron and the Snap, with no executor. Mobile has no step interpreter yet, so a step-only
-test needs a mobile executor or a `mobile` skip. Write an executor only for a body that cannot be
-data.
+**Prefer a declarative body.** A definition with `steps` runs through the shared step interpreter,
+with no executor, on every consumer whose `tests/<leg>/consumer.ts` sets `executor.stepBindings`.
+Check that for each leg the test runs on: elsewhere the definition goes to the executors and fails
+with `No handler found` or `Unknown test`. Mobile has no interpreter, because the step bindings
+import `node:*`, so a step-only test needs a mobile executor or a `mobile` skip. Write an executor
+only for a body that cannot be data.
 
 Executor placement, when one is needed:
 
@@ -159,7 +163,7 @@ npm run install:build:full
 npm run install:build
 
 npx qvac-test run:local:desktop --filter <feature>-
-npx qvac-test run:local:electron --filter <feature>- # verifies the handler or intentional skip
+npx qvac-test run:local:electron --filter <feature>- # the body runs here, or the skip is intended
 npx qvac-test run:local:android --filter <feature>-  # or run:local:ios; required before smoke
 ```
 
@@ -185,6 +189,7 @@ Before presenting the plan:
 Before marking scaffolding complete:
 
 - [ ] Test definitions aggregated in `tests/test-definitions.ts`.
+- [ ] Every leg that runs a step-only test sets `executor.stepBindings` in its consumer.
 - [ ] Executors registered in every compatible consumer, Electron included (it covers the Snap);
       unsupported legs skipped in `tests/platform-skips.ts`.
 - [ ] Models added to `tests/shared/resource-table.ts` with `on` naming every leg that runs the
