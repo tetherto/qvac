@@ -4,13 +4,6 @@
 
 ### Breaking
 
-- `IdMapIndex` and `IdMapIndexFilter` moved to the new `@qvac/turbovec-ggml`
-  addon, with the same API, error names and snapshot formats. The
-  `@qvac/embed-llamacpp/idMapIndex` subpath and the root `IdMapIndex` /
-  `IdMapIndexFilter` exports are gone, and the vector index is no longer
-  compiled into this addon. Replace
-  `require('@qvac/embed-llamacpp/idMapIndex')` with
-  `require('@qvac/turbovec-ggml/idMapIndex')`.
 - `pooling: "rank"` is no longer a `GGMLBert` option, and a model whose GGUF
   defaults to rank pooling no longer loads in `GGMLBert`
   ([#4995](https://github.com/tetherto/qvac/pull/4995)). Rank pooling returns
@@ -30,6 +23,20 @@
   document as llama-server's `/rerank` does, and the scores match fabric's
   `llama-embedding --pooling rank`. A GGUF that declares another pooling or
   has no classifier head is rejected before its weights load.
+
+## [Unreleased]
+
+### Breaking
+
+- `IdMapIndex` and `IdMapIndexFilter` moved to the new `@qvac/turbovec-ggml`
+  addon, with the same API, error names and snapshot formats. The
+  `@qvac/embed-llamacpp/idMapIndex` subpath and the root `IdMapIndex` /
+  `IdMapIndexFilter` exports are gone, and the vector index is no longer
+  compiled into this addon. Replace
+  `require('@qvac/embed-llamacpp/idMapIndex')` with
+  `require('@qvac/turbovec-ggml/idMapIndex')`.
+
+### Added
 
 - `poll` and `poll-batch` are now documented public JavaScript load options.
   They control the main and batch GGML threadpool busy-wait levels; both
