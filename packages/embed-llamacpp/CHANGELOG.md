@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.49.0] - 2026-10-16
 
 ### Breaking
 
@@ -11,8 +11,6 @@
   compiled into this addon. Replace
   `require('@qvac/embed-llamacpp/idMapIndex')` with
   `require('@qvac/turbovec-ggml/idMapIndex')`.
-
-## [0.48.2] - 2026-10-15
 
 ### Fixed
 
