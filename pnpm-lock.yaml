@@ -1670,7 +1670,7 @@ importers:
         specifier: ^0.5.1
         version: link:../ggml-rpc-server
       '@qvac/inference':
-        specifier: ^0.21.0
+        specifier: ^0.21.1
         version: link:../inference
       '@qvac/langdetect-text':
         specifier: ^0.1.2
