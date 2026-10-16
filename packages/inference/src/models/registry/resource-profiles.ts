@@ -8,8 +8,7 @@ import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
  * `sha256Checksum` — the same checksum a model constant carries.
  *
  * Facts only: on-disk bytes plus the GGUF transformer shape when the registry
- * captured it. Memory estimates are derived at call time by the estimators, so
- * a re-calibration never regenerates this file.
+ * captured it.
  */
 export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfile>> = {
   '002fe52ee02cef4e76f8114bfd810bb64aefb44a218666b01872a46e5c0349fc': {

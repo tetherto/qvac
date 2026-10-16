@@ -7,51 +7,45 @@ import {
 } from '@qvac/sdk'
 import { buildServer } from '@/serve/index'
 import { buildGenericEntry } from '@/configure/presets'
-import type { DecideFn } from '@/serve/extensions/systemone/state'
+import type { DecideFn } from '@/serve/extensions/openai/adapters/decisions'
 import { writeConfigDir } from '../helpers/config.js'
 
-const questions = {
-  route: {
+const questions = [
+  {
     type: 'choice' as const,
+    name: 'route',
     instructions: 'Which queue?',
-    criteria: { billing: 'Payments', technical: 'Bugs' },
-    option_order: [1, 0]
+    choices: [
+      { value: 'billing', description: 'Payments' },
+      { value: 'technical', description: 'Bugs' }
+    ]
   },
-  severity: {
+  {
     type: 'score' as const,
+    name: 'severity',
     instructions: 'How severe?',
-    criteria: ['Minor', 'Major']
+    levels: [{ label: 'Minor' }, { label: 'Major' }]
   },
-  urgent: { type: 'noul' as const, instructions: 'Does this need a human now?' }
-}
-
+  { type: 'predicate' as const, name: 'urgent', instructions: 'Does this need a human now?' }
+]
+const base = { answerConfidence: 0.9, confidence: 0.6, action: { actProbability: 0.1 } }
 const result: DecisionResult = {
   model: 'native-checkpoint-name',
   answers: {
-    route: {
+    question_0: {
+      ...base,
       type: 'choice',
       choice: 'billing',
-      probabilities: { billing: 0.9, technical: 0.1 },
-      answerConfidence: 0.9,
-      confidence: 0.9,
-      action: { actProbability: 0.9 }
+      probabilities: { billing: 0.9, technical: 0.1 }
     },
-    severity: {
+    question_1: {
+      ...base,
       type: 'score',
       score: 0.8,
       legend: { '0': 'Minor', '1': 'Major' },
-      probabilities: { '0': 0.2, '1': 0.8 },
-      answerConfidence: 0.8,
-      confidence: 0.8,
-      action: { actProbability: 0.8 }
+      probabilities: { '0': 0.2, '1': 0.8 }
     },
-    urgent: {
-      type: 'noul',
-      noul: 0.7,
-      answerConfidence: 0.7,
-      confidence: 0.7,
-      action: { actProbability: 0.7 }
-    }
+    question_2: { ...base, type: 'noul', noul: 0.7 }
   },
   usage: {
     inputTokens: 42,
@@ -60,46 +54,40 @@ const result: DecisionResult = {
     stateTokensDropped: 0,
     truncated: false,
     truncatedQuestions: [],
-    options: { route: { total: 2, distinct: 2, tokensPerOption: null } }
+    options: { question_0: { total: 2, distinct: 2, tokensPerOption: null } }
   }
 }
-
 const httpResult = {
   model: 'native-checkpoint-name',
-  answers: {
-    route: {
+  answers: [
+    {
       type: 'choice',
+      name: 'route',
       choice: 'billing',
-      probabilities: { billing: 0.9, technical: 0.1 },
-      answer_confidence: 0.9,
-      confidence: 0.9,
-      action: { act_probability: 0.9 }
+      confidence: 0.6,
+      probabilities: [
+        { value: 'billing', probability: 0.9 },
+        { value: 'technical', probability: 0.1 }
+      ]
     },
-    severity: {
+    {
       type: 'score',
+      name: 'severity',
       score: 0.8,
-      legend: { '0': 'Minor', '1': 'Major' },
-      probabilities: { '0': 0.2, '1': 0.8 },
-      answer_confidence: 0.8,
-      confidence: 0.8,
-      action: { act_probability: 0.8 }
+      confidence: 0.6,
+      probabilities: [
+        { value: 0, label: 'Minor', probability: 0.2 },
+        { value: 1, label: 'Major', probability: 0.8 }
+      ]
     },
-    urgent: {
-      type: 'noul',
-      noul: 0.7,
-      answer_confidence: 0.7,
-      confidence: 0.7,
-      action: { act_probability: 0.7 }
-    }
-  },
+    { type: 'predicate', name: 'urgent', probability: 0.7 }
+  ],
   usage: {
     input_tokens: 42,
+    input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
     output_tokens: 0,
-    state_tokens: 12,
-    state_tokens_dropped: 0,
-    truncated: false,
-    truncated_questions: [],
-    options: { route: { total: 2, distinct: 2, tokens_per_option: null } }
+    output_tokens_details: { reasoning_tokens: 0 },
+    total_tokens: 42
   }
 }
 
@@ -136,9 +124,9 @@ async function server(
     port: 0,
     host: '127.0.0.1',
     quiet: true,
-    extensions: ['systemone'],
+    extensions: ['openai'],
     ...(options.apiKey !== undefined ? { apiKey: options.apiKey } : {}),
-    extensionOptions: { systemone: options },
+    extensionOptions: { openai: options },
     loadModelOverride: (params) => {
       loaded.push(params)
       return Object.assign(Promise.resolve('sdk-laya-id'), { requestId: 'load-id' })
@@ -150,7 +138,7 @@ async function server(
   return { app, loaded }
 }
 
-describe('System One HTTP API', () => {
+describe('OpenAI Decisions HTTP API', () => {
   it('loads a search-all decision constant without an explicit type override', async (t) => {
     const { app, loaded } = await server(t, {
       constantModel: true,
@@ -158,8 +146,8 @@ describe('System One HTTP API', () => {
     })
     const response = await app.inject({
       method: 'POST',
-      url: '/v1/systemone',
-      payload: { model: 'laya', state: 'Charged twice', questions }
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'Charged twice', questions }
     })
     assert.equal(response.statusCode, 200, response.body)
     assert.equal(loaded.length, 1)
@@ -201,8 +189,8 @@ describe('System One HTTP API', () => {
       const pending = app
         .inject({
           method: 'POST',
-          url: '/v1/systemone',
-          payload: { model, state, questions, max_len: 512, head_max_len: 128 }
+          url: '/v1/decisions',
+          payload: { model, input: state, questions }
         })
         .then((response) => response)
       assert.equal(await binding, 'decision-id')
@@ -215,16 +203,14 @@ describe('System One HTTP API', () => {
         modelId: 'sdk-laya-id',
         state,
         questions: {
-          ...questions,
-          route: {
+          question_0: {
             type: 'choice',
             instructions: 'Which queue?',
-            criteria: { billing: 'Payments', technical: 'Bugs' },
-            optionOrder: [1, 0]
-          }
-        },
-        maxLen: 512,
-        headMaxLen: 128
+            criteria: { billing: 'Payments', technical: 'Bugs' }
+          },
+          question_1: { type: 'score', instructions: 'How severe?', criteria: ['Minor', 'Major'] },
+          question_2: { type: 'noul', instructions: 'Does this need a human now?' }
+        }
       })
     }
     assert.equal(loaded.length, 1)
@@ -236,8 +222,8 @@ describe('System One HTTP API', () => {
     app.qvac.loadModelOverride = () => Promise.reject(new Error('checkpoint unavailable'))
     const response = await app.inject({
       method: 'POST',
-      url: '/v1/systemone',
-      payload: { model: 'laya', state: 'a', questions }
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'a', questions }
     })
     assert.equal(response.statusCode, 503)
     assert.equal(response.json().error.code, 'model_load_failed')
@@ -275,8 +261,8 @@ describe('System One HTTP API', () => {
     })
     const request = {
       method: 'POST' as const,
-      url: '/v1/systemone',
-      payload: { model: 'laya', state: 'a', questions }
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'a', questions }
     }
     const first = app.inject(request).then((response) => response)
     await started
@@ -299,22 +285,53 @@ describe('System One HTTP API', () => {
 
   it('rejects malformed requests, batching, and streaming before loading a model', async (t) => {
     const { app, loaded } = await server(t)
-    const valid = { model: 'laya', state: 'Charged twice', questions }
+    const valid = { model: 'laya', input: 'Charged twice', questions }
     for (const payload of [
-      { state: valid.state, questions },
-      { ...valid, state: null },
+      { input: valid.input, questions },
+      { ...valid, input: null },
       { model: 'laya', states: ['a', 'b'], questions },
       { ...valid, stream: true },
-      { ...valid, questions: { bad: { type: 'boolean', instructions: 'Urgent?' } } },
-      { ...valid, max_len: 0 },
-      { ...valid, maxLen: 512 },
-      { ...valid, headMaxLen: 128 },
-      { ...valid, questions: { bad: { ...questions.urgent, optionOrder: [1, 0] } } }
+      { ...valid, questions: [{ type: 'noul', instructions: 'Urgent?' }] },
+      { ...valid, max_len: 512 },
+      { ...valid, head_max_len: 128 },
+      { ...valid, questions: [] },
+      {
+        ...valid,
+        input: [
+          {
+            role: 'user',
+            content: [{ type: 'input_image', image_url: 'https://example.com/image.png' }]
+          }
+        ]
+      },
+      { ...valid, prompt_cache_options: { mode: 'explicit' } }
     ]) {
-      const response = await app.inject({ method: 'POST', url: '/v1/systemone', payload })
+      const response = await app.inject({ method: 'POST', url: '/v1/decisions', payload })
       assert.equal(response.statusCode, 400, response.body)
       assert.equal(response.json().error.type, 'invalid_request_error')
     }
+    assert.equal(loaded.length, 0)
+  })
+
+  it('explains unsupported image inputs before loading or inference', async (t) => {
+    const { app, loaded } = await server(t)
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/decisions',
+      payload: {
+        model: 'laya',
+        questions,
+        input: [
+          {
+            role: 'user',
+            content: [{ type: 'input_image', image_url: 'https://example.com/photo.png' }]
+          }
+        ]
+      }
+    })
+    assert.equal(response.statusCode, 400)
+    assert.equal(response.json().error.code, 'unsupported_input')
+    assert.match(response.json().error.message, /do not support image input/)
     assert.equal(loaded.length, 0)
   })
 
@@ -327,8 +344,8 @@ describe('System One HTTP API', () => {
     ] as const) {
       const response = await app.inject({
         method: 'POST',
-        url: '/v1/systemone',
-        payload: { model, state: 'a', questions }
+        url: '/v1/decisions',
+        payload: { model, input: 'a', questions }
       })
       assert.equal(response.statusCode, status)
       assert.equal(response.json().error.code, code)
@@ -340,8 +357,8 @@ describe('System One HTTP API', () => {
     const { app, loaded } = await server(t, { lazy: false })
     const response = await app.inject({
       method: 'POST',
-      url: '/v1/systemone',
-      payload: { model: 'laya', state: 'a', questions }
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'a', questions }
     })
     assert.equal(response.statusCode, 503)
     assert.equal(response.json().error.code, 'model_not_loaded')
@@ -355,8 +372,8 @@ describe('System One HTTP API', () => {
     })
     const request = {
       method: 'POST' as const,
-      url: '/v1/systemone',
-      payload: { model: 'laya', state: 'a', questions }
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'a', questions }
     }
     assert.equal((await app.inject(request)).statusCode, 401)
     assert.equal(loaded.length, 0)
@@ -376,86 +393,70 @@ describe('System One HTTP API', () => {
     const response = await app.inject({ method: 'GET', url: '/openapi.json' })
     assert.equal(response.statusCode, 200, response.body)
     const paths = response.json().paths
-    assert.ok(paths['/v1/systemone'].post)
-    assert.equal(paths['/v1/chat/completions'], undefined)
-    assert.match(JSON.stringify(paths['/v1/systemone']), /questions/)
-    assert.match(JSON.stringify(paths['/v1/systemone']), /answers/)
+    assert.ok(paths['/v1/decisions'].post)
+    assert.ok(paths['/v1/chat/completions'].post)
     for (const field of [
+      'input',
+      'questions',
+      'answers',
+      'predicate',
+      'choices',
+      'levels',
+      'name',
+      'probabilities',
+      'cache_write_tokens',
+      'reasoning_tokens',
+      'total_tokens',
+      'refusal'
+    ]) {
+      assert.ok(JSON.stringify(paths['/v1/decisions']).includes(`"${field}"`), field)
+    }
+    for (const field of [
+      'state',
       'max_len',
       'head_max_len',
       'option_order',
+      'noul',
       'answer_confidence',
       'act_probability',
-      'input_tokens',
-      'output_tokens',
-      'state_tokens',
-      'state_tokens_dropped',
-      'truncated_questions',
-      'tokens_per_option'
+      'state_tokens'
     ]) {
-      assert.ok(JSON.stringify(paths['/v1/systemone']).includes(`"${field}"`), field)
-    }
-    for (const field of [
-      'maxLen',
-      'headMaxLen',
-      'optionOrder',
-      'answerConfidence',
-      'actProbability',
-      'inputTokens',
-      'outputTokens'
-    ]) {
-      assert.ok(!JSON.stringify(paths['/v1/systemone']).includes(`"${field}"`), field)
+      assert.ok(!JSON.stringify(paths['/v1/decisions']).includes(`"${field}"`), field)
     }
   })
 
-  it('accepts a TypeSafe request without Laya options and returns snake_case token usage', async (t) => {
+  it('accepts an unnamed predicate and the safety identifier', async (t) => {
     const calls: Parameters<DecideFn>[0][] = []
-    const sdkResult: DecisionResult = {
-      ...result,
-      answers: {
-        is_urgent: {
-          type: 'noul',
-          noul: 0.95,
-          confidence: 0.95,
-          answerConfidence: 0.95,
-          action: { actProbability: 1 }
-        }
-      }
-    }
     const { app } = await server(t, {
       decideOverride: (params) => {
         calls.push(params)
-        return Object.assign(Promise.resolve(sdkResult), { requestId: 'decision-id' })
+        return Object.assign(
+          Promise.resolve({ ...result, answers: { question_0: result.answers['question_2']! } }),
+          { requestId: 'decision-id' }
+        )
       }
     })
     const response = await app.inject({
       method: 'POST',
-      url: '/v1/systemone',
+      url: '/v1/decisions',
       payload: {
         model: 'laya',
-        state: 'Help! My payouts have been failing for 3 days.',
-        questions: { is_urgent: { type: 'noul', instructions: 'Does this convey urgency?' } }
+        input: 'Help!',
+        questions: [{ type: 'predicate', instructions: 'Urgent?' }],
+        safety_identifier: 'customer-example'
       }
     })
     assert.equal(response.statusCode, 200, response.body)
     assert.deepEqual(calls, [
       {
         modelId: 'sdk-laya-id',
-        state: 'Help! My payouts have been failing for 3 days.',
-        questions: { is_urgent: { type: 'noul', instructions: 'Does this convey urgency?' } }
+        state: 'Help!',
+        questions: { question_0: { type: 'noul', instructions: 'Urgent?' } }
       }
     ])
     assert.deepEqual(response.json(), {
       model: 'laya',
-      answers: {
-        is_urgent: {
-          type: 'noul',
-          noul: 0.95,
-          confidence: 0.95,
-          answer_confidence: 0.95,
-          action: { act_probability: 1 }
-        }
-      },
+      answers: [{ type: 'predicate', name: null, probability: 0.7 }],
       usage: httpResult.usage
     })
   })
@@ -464,7 +465,7 @@ describe('System One HTTP API', () => {
     const { app, loaded } = await server(t)
     const malformedJson = await app.inject({
       method: 'POST',
-      url: '/v1/systemone',
+      url: '/v1/decisions',
       headers: { 'content-type': 'application/json' },
       payload: '{'
     })
@@ -472,8 +473,8 @@ describe('System One HTTP API', () => {
     assert.equal(malformedJson.json().error.code, 'invalid_json')
     const malformedQuestion = await app.inject({
       method: 'POST',
-      url: '/v1/systemone',
-      payload: { model: 'laya', state: 'Ticket', questions: { route: { type: 'choice' } } }
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'Ticket', questions: { route: { type: 'choice' } } }
     })
     assert.equal(malformedQuestion.statusCode, 400, malformedQuestion.body)
     assert.equal(malformedQuestion.json().error.code, 'invalid_questions')
@@ -490,8 +491,8 @@ describe('System One HTTP API', () => {
     })
     const response = await app.inject({
       method: 'POST',
-      url: '/v1/systemone',
-      payload: { model: 'laya', state: 'a', questions }
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'a', questions }
     })
     assert.equal(response.statusCode, 500)
     assert.equal(response.json().error.code, 'internal_error')

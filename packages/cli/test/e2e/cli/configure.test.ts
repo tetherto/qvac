@@ -18,13 +18,13 @@ async function readConfig(dir: string): Promise<{ serve: { models: Record<string
 }
 
 describe('cli: configure', () => {
-  it('advertises the System One server extension', async () => {
+  it('advertises the OpenAI server extension', async () => {
     const response = await runCli(['serve', '--help'])
     assert.equal(response.code, 0, response.output)
-    assert.match(response.output, /--systemone\s+Mount the System One decision API/)
+    assert.match(response.output, /--openai\s+Mount the OpenAI-compatible REST API/)
   })
 
-  it('configures chat and decision models together and prints the System One serve flag', async () => {
+  it('configures chat and decision models together and prints the OpenAI serve flag', async () => {
     const dir = await tmp()
     try {
       const args = ['configure', '--modality', 'chat', '--modality', 'decision']
@@ -39,7 +39,7 @@ describe('cli: configure', () => {
       const parsed = parseServeConfig(config as Parameters<typeof parseServeConfig>[0], {})
       assert.equal(parsed.models.get('qwen3-600m-inst-q4')?.endpointCategory, 'chat')
       assert.equal(parsed.models.get('laya-multilingual-322m-q8-0')?.endpointCategory, 'decision')
-      assert.match(response.output, /qvac serve --openai --systemone/)
+      assert.match(response.output, /qvac serve --openai/)
       const again = await runCli(args, { cwd: dir })
       assert.equal(again.code, 0, again.output)
       assert.match(again.output, /Already configured/)
@@ -68,7 +68,7 @@ describe('cli: configure', () => {
       const parsed = parseServeConfig(config as Parameters<typeof parseServeConfig>[0], {})
       assert.equal(parsed.models.get(alias)?.endpointCategory, 'decision')
       assert.equal(parsed.models.get(alias)?.modelSrc, LAYA_MULTILINGUAL_322M_Q8_0)
-      assert.match(response.output, /--systemone/)
+      assert.match(response.output, /--openai/)
       const again = await runCli(args, { cwd: dir })
       assert.equal(again.code, 0, again.output)
       assert.match(again.output, /Already configured/)

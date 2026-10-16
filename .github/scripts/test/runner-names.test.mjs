@@ -73,6 +73,7 @@ test('audiogen C++ build carve-out uses the CPU runner', () => {
   assert.equal(project.targets['test:cpp'].options.ci.carveOut, true)
   const source = readRepoFile('.github/workflows/cpp-test-coverage-audiogen-ggml.yml')
   assert.match(source, /runner: \$\{\{ needs.runner_names.outputs.linux_ubuntu2204_x64 \}\}/)
+  assert.doesNotMatch(source, /linux_ubuntu2204_x64_gpu/)
   assert.doesNotMatch(source, /runs-on:.*gpu/)
 })
 
