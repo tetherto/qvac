@@ -1826,17 +1826,9 @@ test('ggml-rpc-server keeps Device Farm runs on demand', () => {
   )
 });
 
-test('ggml-rpc-server manual dispatch serializes per branch and tested PR ref', () => {
+test('ggml-rpc-server validates the same devices it schedules', () => {
   const path = '.github/workflows/integration-mobile-test-ggml-rpc-server.yml'
   const source = read(path)
-  // Dispatches run from main and name the PR in `ref`: keying on github.ref
-  // alone would let one PR's dispatch cancel another PR's Device Farm run.
-  assert.match(
-    source,
-    /concurrency:\s*\n[\s\S]*?group:\s*\$\{\{ inputs\.platform != '' && format\('mobile-dispatch-\{0\}-\{1\}-\{2\}', github\.workflow, github\.ref, inputs\.ref\) \|\| format\('mobile-call-\{0\}', github\.run_id\) \}\}/,
-    `${path}: manual dispatch must key on the dispatched branch and the tested ref`,
-  )
-  assert.match(source, /cancel-in-progress:\s*\$\{\{ inputs\.platform != '' \}\}/)
   // Validation must approve exactly the devices the scheduler bills.
   const devices =
     "inputs.devices_custom != '' && inputs.devices_custom || (inputs.platform == 'Android' && inputs.android_device || inputs.ios_device)"

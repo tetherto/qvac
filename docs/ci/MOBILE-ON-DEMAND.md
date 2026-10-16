@@ -58,10 +58,7 @@ and device inputs with:
   -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
 ```
 
-Its concurrency group keys on `ref` as well as the dispatched branch, so
-dispatches for different PRs run side by side, while a second dispatch for the
-same PR cancels the first. Without `prebuild_run_id`, a standalone
-dispatch builds prebuilds from the selected ref in the same run before packaging
+Without `prebuild_run_id`, a standalone dispatch builds prebuilds from the selected ref in the same run before packaging
 the device app. With a run id, it skips that build and installs the named run's
 artifact, failing if the artifact cannot be used.
 
@@ -661,9 +658,7 @@ previous in-flight dispatch of the same workflow on the same branch**, so you ca
 never accidentally stack two Device Farm runs (and two bills). Dispatches on
 **different branches are independent** — that is what lets a few test branches run
 in parallel. The `workflow_call` paths (benchmarks / weekend / on-merge) are never
-cancelled by this. `ggml-rpc-server` is dispatched from `main` with the PR in
-`ref`, so its guard keys on `ref` as well as the branch: one run per PR, not one
-for everything dispatched from `main`.
+cancelled by this.
 
 ## Typical flow (worked example)
 
