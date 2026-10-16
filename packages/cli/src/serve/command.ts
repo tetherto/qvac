@@ -13,6 +13,8 @@ interface ServeOptions {
   allowUnauthenticated?: boolean
   cors?: boolean
   corsOrigin: string[]
+  allowedHost: string[]
+  allowAnyHost?: boolean
   publicBaseUrl?: string
   docs?: boolean
   lazyLoad?: boolean
@@ -86,6 +88,13 @@ function addServeOptions(command: Command): Command {
     .option('--cors', 'Validate that explicit trusted CORS origins are configured')
     .option('--cors-origin <origin>', 'Trusted CORS origin (repeatable)', collect, [])
     .option(
+      '--allowed-host <host>',
+      'Accept this Host header besides loopback, IP addresses and the bind host; .example.com covers subdomains (repeatable)',
+      collect,
+      []
+    )
+    .option('--allow-any-host', 'Accept any Host header (turns off DNS-rebinding protection)')
+    .option(
       '--public-base-url <url>',
       'Externally reachable origin (required for image response_format=url)'
     )
@@ -124,6 +133,8 @@ async function runServe(options: ServeOptions): Promise<void> {
       allowUnauthenticated: options.allowUnauthenticated,
       cors: options.cors,
       corsOrigins: options.corsOrigin.length > 0 ? options.corsOrigin : undefined,
+      allowedHosts: options.allowedHost.length > 0 ? options.allowedHost : undefined,
+      allowAnyHost: options.allowAnyHost,
       publicBaseUrl: options.publicBaseUrl,
       docs: options.docs,
       extensions: resolveExtensionNames(options),
