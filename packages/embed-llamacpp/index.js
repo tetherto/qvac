@@ -20,10 +20,6 @@ Object.defineProperty(exports, "mapLayaEvent", { enumerable: true, get: function
 var fit_2 = require("./fit");
 Object.defineProperty(exports, "assessFit", { enumerable: true, get: function () { return fit_2.assessFit; } });
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
-function loadIdMapIndex() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
-    return require("./idMapIndex");
-}
 /** BERT client wrapping the native BertInterface for embedding generation. */
 class GGMLBert {
     addon;
@@ -217,14 +213,4 @@ cjsExports.LayaDecisions = laya_1.LayaDecisions;
 cjsExports.LayaInterface = laya_1.LayaInterface;
 cjsExports.mapLayaEvent = laya_1.mapLayaEvent;
 cjsExports.assessFit = fit_1.assessFit;
-Object.defineProperties(cjsExports, {
-    IdMapIndex: {
-        enumerable: true,
-        get: loadIdMapIndex,
-    },
-    IdMapIndexFilter: {
-        enumerable: true,
-        get: () => loadIdMapIndex().IdMapIndexFilter,
-    },
-});
 module.exports = cjsExports;

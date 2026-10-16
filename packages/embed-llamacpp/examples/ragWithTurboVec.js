@@ -5,7 +5,7 @@ const path = require('bare-path')
 const process = require('bare-process')
 
 const GGMLBert = require('../index')
-const IdMapIndex = require('../idMapIndex')
+const IdMapIndex = require('@qvac/turbovec-ggml/idMapIndex')
 const { downloadModel } = require('./utils')
 
 const MODEL_URL =
