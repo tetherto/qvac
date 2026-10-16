@@ -64,8 +64,26 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;29.0.14206865'
 
+      - name: Build and pack the SDK candidate
+        working-directory: packages/sdk
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts
+          npx tsc --project tsconfig.json
+          npm run postcompile:aliases
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP" --json > "$RUNNER_TEMP/kotlin-sdk-pack.json"
+          node -e 'const fs = require("node:fs"); const path = require("node:path"); const [packed] = JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP, "kotlin-sdk-pack.json"), "utf8")); fs.appendFileSync(process.env.GITHUB_ENV, `QVAC_KOTLIN_SDK_TARBALL=${path.join(process.env.RUNNER_TEMP, packed.filename)}\n`);'
+
+      - name: Verify committed version alignment
+        run: ./gradlew --no-daemon checkVersionAlignment
+
+      - name: Install the SDK candidate for Kotlin checks
+        shell: bash
+        run: npm install --ignore-scripts --legacy-peer-deps --no-package-lock "$QVAC_KOTLIN_SDK_TARBALL"
+
       - name: Verify contract and JVM behavior
-        run: ./gradlew --no-daemon checkVersionAlignment checkContract jvmTest
+        run: ./gradlew --no-daemon checkContract jvmTest
 
       - name: Verify Android source build
         run: >-
