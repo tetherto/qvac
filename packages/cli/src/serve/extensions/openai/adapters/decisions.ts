@@ -6,7 +6,6 @@ export type DecideFn = (
 ) => Promise<DecisionResult> & { requestId: string }
 
 const questionId = (index: number): string => `question_${index}`
-const optionId = (index: number): string => `option_${index}`
 
 export function toDecideParams(
   body: DecisionsBody,
@@ -35,14 +34,8 @@ export function toDecideParams(
             {
               type: 'choice',
               instructions,
-              // Native probability keys are strings. Separate IDs preserve true and "true".
               criteria: Object.fromEntries(
-                question.choices.map(({ value, description }, option) => [
-                  optionId(option),
-                  description === undefined
-                    ? JSON.stringify(value)
-                    : `${JSON.stringify(value)}: ${description}`
-                ])
+                choiceOptions(question.choices).map(({ key, description }) => [key, description])
               )
             }
           ]
@@ -76,16 +69,17 @@ export function toDecisionsResult(
         return { type: 'predicate', name, probability: answer.noul }
       }
       if (question.type === 'choice' && answer?.type === 'choice') {
-        const selected = question.choices.find((_, option) => optionId(option) === answer.choice)
+        const options = choiceOptions(question.choices)
+        const selected = options.find(({ key }) => key === answer.choice)
         if (selected === undefined) throw new Error('Decision model returned an unknown choice.')
         return {
           type: 'choice',
           name,
           choice: selected.value,
           confidence: answer.confidence,
-          probabilities: question.choices.map(({ value }, option) => ({
+          probabilities: options.map(({ key, value }) => ({
             value,
-            probability: readProbability(answer.probabilities, optionId(option))
+            probability: readProbability(answer.probabilities, key)
           }))
         }
       }
@@ -112,6 +106,23 @@ export function toDecisionsResult(
       total_tokens: result.usage.inputTokens + result.usage.outputTokens
     }
   }
+}
+
+function choiceOptions(
+  choices: Extract<DecisionsBody['questions'][number], { type: 'choice' }>['choices']
+) {
+  const keys = choices.map(({ value }) => String(value))
+  // Use index IDs only when typed values collide as strings, such as true and "true".
+  const indexed = new Set(keys).size !== keys.length
+  return choices.map(({ value, description }, index) => ({
+    key: indexed ? `option_${index}` : String(value),
+    value,
+    description: indexed
+      ? description === undefined
+        ? JSON.stringify(value)
+        : `${JSON.stringify(value)}: ${description}`
+      : (description ?? null)
+  }))
 }
 
 function readProbability(probabilities: Record<string, number>, key: string): number {

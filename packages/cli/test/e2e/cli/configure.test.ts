@@ -22,7 +22,6 @@ describe('cli: configure', () => {
     const response = await runCli(['serve', '--help'])
     assert.equal(response.code, 0, response.output)
     assert.match(response.output, /--openai\s+Mount the OpenAI-compatible REST API/)
-    assert.doesNotMatch(response.output, /--systemone/)
   })
 
   it('configures chat and decision models together and prints the OpenAI serve flag', async () => {

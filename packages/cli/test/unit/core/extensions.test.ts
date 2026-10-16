@@ -105,11 +105,6 @@ describe('mounted surfaces', () => {
     assert.match(printed, /chat/)
     assert.match(printed, /embeddings/)
     assert.match(printed, /decisions/)
-    assert.ok(!printed.includes('systemone'))
     assert.ok(!printed.includes('/qvac/'))
-  })
-
-  it('rejects the removed System One extension', () => {
-    assert.throws(() => resolveExtensions(['systemone']), /Unknown serve extension/)
   })
 })

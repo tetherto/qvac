@@ -386,11 +386,8 @@ execute them.
 have no effect on local inference. Prompt caching is unavailable. Non-null
 `prompt_cache_options` and content `prompt_cache_breakpoint` fields are rejected.
 
-The route returns a complete JSON response. Streaming, batching, and Laya-specific
-HTTP fields such as `state`, `criteria`, `max_len`, `head_max_len`, and
-`option_order` are not part of this endpoint. Use SDK `decide()` directly for
-Laya token budgets or batch inputs. The previous `/v1/systemone` route and
-`--systemone` flag have been removed.
+The route returns a complete JSON response. Streaming and batching are unsupported.
+Use SDK `decide()` directly for Laya token budgets or batch inputs.
 
 ### Response
 

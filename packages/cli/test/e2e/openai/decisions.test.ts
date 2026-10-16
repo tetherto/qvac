@@ -35,8 +35,8 @@ const result: DecisionResult = {
     question_0: {
       ...base,
       type: 'choice',
-      choice: 'option_0',
-      probabilities: { option_0: 0.9, option_1: 0.1 }
+      choice: 'billing',
+      probabilities: { billing: 0.9, technical: 0.1 }
     },
     question_1: {
       ...base,
@@ -206,7 +206,7 @@ describe('OpenAI Decisions HTTP API', () => {
           question_0: {
             type: 'choice',
             instructions: 'Which queue?',
-            criteria: { option_0: '"billing": Payments', option_1: '"technical": Bugs' }
+            criteria: { billing: 'Payments', technical: 'Bugs' }
           },
           question_1: { type: 'score', instructions: 'How severe?', criteria: ['Minor', 'Major'] },
           question_2: { type: 'noul', instructions: 'Does this need a human now?' }
@@ -395,7 +395,6 @@ describe('OpenAI Decisions HTTP API', () => {
     const paths = response.json().paths
     assert.ok(paths['/v1/decisions'].post)
     assert.ok(paths['/v1/chat/completions'].post)
-    assert.equal(paths['/v1/systemone'], undefined)
     for (const field of [
       'input',
       'questions',
@@ -460,17 +459,6 @@ describe('OpenAI Decisions HTTP API', () => {
       answers: [{ type: 'predicate', name: null, probability: 0.7 }],
       usage: httpResult.usage
     })
-  })
-
-  it('removes the System One route', async (t) => {
-    const { app, loaded } = await server(t)
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/systemone',
-      payload: { model: 'laya', state: 'a', questions: {} }
-    })
-    assert.equal(response.statusCode, 404)
-    assert.equal(loaded.length, 0)
   })
 
   it('uses shared 400 errors for malformed JSON and questions', async (t) => {

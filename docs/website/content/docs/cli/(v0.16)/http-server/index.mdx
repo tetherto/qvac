@@ -932,10 +932,6 @@ Local decisions accept text only. Images, files, audio, item references, streami
 
 A client disconnect cancels the SDK request. Each model runs one decision request at a time, with up to 64 requests waiting in a FIFO queue. Additional requests return HTTP `429` with error type `rate_limit_error` and code `request_rejected_by_policy`.
 
-<Callout type="warn">
-The previous `/v1/systemone` route and `--systemone` flag have been removed. Use `qvac serve --openai` and `/v1/decisions`. Replace `state` with `input`, keyed questions with an array, `noul` with `predicate`, and `criteria` with `choices` or `levels`. HTTP token-budget fields such as `max_len` and `head_max_len` are no longer accepted.
-</Callout>
-
 ### Audio
 
 Transcription, translation, and text-to-speech endpoints. Transcription and translation use `multipart/form-data`; speech accepts JSON and returns binary audio.
