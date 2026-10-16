@@ -1390,6 +1390,60 @@ TEST_F(BertModelTest, BackendWithSplitModeRejected) {
   }
 }
 
+TEST_F(BertModelTest, SetupParamsDefaultsCpuPollingToZero) {
+  const auto setup = setupParams(getInvalidModelPath(), {{"device", "cpu"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 0U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 0U);
+}
+
+TEST_F(BertModelTest, SetupParamsExplicitPollOverridesBothDefaults) {
+  const auto setup =
+      setupParams(getInvalidModelPath(), {{"device", "cpu"}, {"poll", "50"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 50U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 50U);
+}
+
+TEST_F(BertModelTest, SetupParamsExplicitBatchPollOverridesPrimaryPoll) {
+  const auto setup = setupParams(
+      getInvalidModelPath(),
+      {{"device", "cpu"}, {"poll", "50"}, {"poll-batch", "1"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 50U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 1U);
+}
+
+TEST_F(BertModelTest, SetupParamsAcceptsBatchPollUnderscoreAlias) {
+  const auto setup = setupParams(
+      getInvalidModelPath(),
+      {{"device", "cpu"}, {"poll", "50"}, {"poll_batch", "1"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 50U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 1U);
+}
+
+TEST_F(BertModelTest, SetupParamsRejectsPollLevelsOutsideZeroToHundred) {
+  for (const std::string key : {"poll", "poll-batch", "poll_batch"}) {
+    for (const std::string value : {"-1", "101", "4294967396", "", "5x"}) {
+      EXPECT_THROW(
+          static_cast<void>(setupParams(
+              getInvalidModelPath(), {{"device", "cpu"}, {key, value}})),
+          qvac_errors::StatusError)
+          << key << "=" << value;
+    }
+  }
+}
+
+TEST_F(BertModelTest, SetupParamsAcceptsPollLevelBounds) {
+  const auto setup = setupParams(
+      getInvalidModelPath(),
+      {{"device", "cpu"}, {"poll", "100"}, {"poll-batch", "0"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 100U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 0U);
+}
+
 TEST_F(BertModelTest, DeprecatedNoMmapAliasLoadsWithoutMmap) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

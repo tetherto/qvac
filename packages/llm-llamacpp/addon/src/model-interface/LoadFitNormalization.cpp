@@ -119,6 +119,36 @@ load_fit_normalization::ConfigMap::iterator findOneOfAliasedKeys(
   return found.empty() ? configFilemap.end() : found.front();
 }
 
+// Fabric stores poll levels in uint32_t without a range check, so "-1" wraps
+// to UINT32_MAX and workers effectively never sleep. Checked on the raw string
+// because a large enough value can also wrap back into 0-100.
+void requirePollLevelsInRange(
+    const load_fit_normalization::ConfigMap& configFilemap) {
+  for (const std::string_view key : {"poll", "poll-batch", "poll_batch"}) {
+    const auto it = configFilemap.find(std::string(key));
+    if (it == configFilemap.end()) {
+      continue;
+    }
+    const std::string& value = it->second;
+    const bool inRange = !value.empty() && value.size() <= 3 &&
+                         std::ranges::all_of(
+                             value,
+                             [](unsigned char character) {
+                               return std::isdigit(character) != 0;
+                             }) &&
+                         std::stoi(value) <= 100;
+    if (!inRange) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: '%s' must be an integer from 0 to 100, got '%s'.\n",
+              K_LEGACY_PARSER_NAME.data(),
+              it->first.c_str(),
+              value.c_str()));
+    }
+  }
+}
+
 // QVAC-24112: register remote RPC devices before backend selection runs.
 //
 // llama.cpp registers RPC endpoints from its own `--rpc` handler, which the
@@ -1206,6 +1236,16 @@ NormalizedLoad normalizeLoadForFit(
   NormalizedLoad result;
   common_params& params = result.params;
 
+  // The native GGML threadpool busy-waits at Fabric's default polling level
+  // even when inference is GPU-offloaded. Default both pools to sleeping
+  // waits; callers can still opt back into polling with --poll and
+  // --poll-batch.
+  params.cpuparams.poll = 0;
+  params.cpuparams_batch.poll = 0;
+  requirePollLevelsInRange(configFilemap);
+  const bool hasExplicitBatchPoll = configFilemap.contains("poll-batch") ||
+                                    configFilemap.contains("poll_batch");
+
   std::vector<std::string> configVector;
 
   // Check if tools are enabled and exclude it with jinja from the config file
@@ -2115,8 +2155,11 @@ NormalizedLoad normalizeLoadForFit(
         "ctx_size to the model's trained context unless set explicitly\n");
   }
 
+  const uint32_t parsedBatchPoll = params.cpuparams_batch.poll;
   postprocess_cpu_params(params.cpuparams, nullptr);
   postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
+  params.cpuparams_batch.poll =
+      hasExplicitBatchPoll ? parsedBatchPoll : params.cpuparams.poll;
 
   if (!params.kv_overrides.empty()) {
     params.kv_overrides.emplace_back();
