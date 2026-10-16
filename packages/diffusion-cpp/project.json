@@ -144,7 +144,8 @@
           "verifyGenerated": true,
           "nameTransform": "scope-rewrite",
           "repoName": "diffusion-cpp",
-          "testGateMode": "none"
+          "testGateMode": "none",
+          "slicePlatformPackages": true
         }
       }
     }

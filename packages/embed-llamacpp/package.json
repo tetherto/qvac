@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.48.1",
+  "version": "0.49.0",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -10,7 +10,7 @@
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
-    "check:generated": "npm run build:ts && npm run test:types:consumer && git diff --exit-code -- index.js index.mjs addon.js addonLogging.js idMapIndex.js idMapIndex.mjs fit.js laya.js index.d.ts addon.d.ts addonLogging.d.ts idMapIndex.d.ts fit.d.ts laya.d.ts test/types/consumer-cjs.test.js",
+    "check:generated": "npm run build:ts && npm run test:types:consumer && git diff --exit-code -- index.js index.mjs addon.js addonLogging.js fit.js laya.js index.d.ts addon.d.ts addonLogging.d.ts fit.d.ts laya.d.ts test/types/consumer-cjs.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
@@ -57,9 +57,6 @@
     "addonLogging.js",
     "addonLogging.d.ts",
     "addon.d.ts",
-    "idMapIndex.js",
-    "idMapIndex.mjs",
-    "idMapIndex.d.ts",
     "fit.js",
     "fit.d.ts",
     "laya.js",
@@ -81,9 +78,9 @@
   "devDependencies": {
     "@qvac/fabric-android-arm64": "0.22.0",
     "@qvac/fabric-ios": "0.22.0",
+    "@qvac/turbovec-ggml": "^0.1.0",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
-    "bare-subprocess": "^6.1.0",
     "brittle": "^3.4.0",
     "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0",
@@ -134,12 +131,6 @@
       "import": "./index.mjs",
       "default": "./index.js"
     },
-    "./idMapIndex": {
-      "types": "./idMapIndex.d.ts",
-      "import": "./idMapIndex.mjs",
-      "default": "./idMapIndex.js"
-    },
-    "./idMapIndex.js": "./idMapIndex.js",
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"

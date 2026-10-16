@@ -1,21 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRootDefaultImport = getRootDefaultImport;
-exports.getDefaultImport = getDefaultImport;
+exports.pollingTypes = pollingTypes;
 exports.layaTypes = layaTypes;
 const embed_llamacpp_1 = require("@qvac/embed-llamacpp");
-const idMapIndex_1 = require("@qvac/embed-llamacpp/idMapIndex");
 const rootConstructor = embed_llamacpp_1.default;
-const sameConstructor = idMapIndex_1.default;
-const filterConstructor = idMapIndex_1.default.IdMapIndexFilter;
 void rootConstructor;
-void sameConstructor;
-void filterConstructor;
-function getRootDefaultImport() {
-    return embed_llamacpp_1.default;
-}
-function getDefaultImport() {
-    return idMapIndex_1.default;
+function pollingTypes(model) {
+    return new embed_llamacpp_1.default({
+        files: { model: [model] },
+        config: { device: 'gpu', poll: '0', 'poll-batch': '0' }
+    });
 }
 // Laya: config (with device) is required. run()'s per-shape result types are
 // checked in consumer-interop.test.ts: in this CommonJS setup QvacResponse
@@ -23,7 +17,7 @@ function getDefaultImport() {
 function layaTypes(model) {
     const laya = new embed_llamacpp_1.LayaDecisions({
         files: { model: [model] },
-        config: { device: 'cpu', threads: '4' }
+        config: { device: 'cpu', threads: '4', poll: '0', 'poll-batch': '0' }
     });
     // @ts-expect-error config is required
     void new embed_llamacpp_1.LayaDecisions({ files: { model: [model] } });
