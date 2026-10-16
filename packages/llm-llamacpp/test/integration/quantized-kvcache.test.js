@@ -46,12 +46,11 @@ const pinTbqPqToVulkan = (platform === 'linux' || platform === 'win32') && os.ar
 const forceVulkanLeg =
   process.env.FORCE_VULKAN === 'true' || process.env.CUDA_VISIBLE_DEVICES === '-1'
 
-// linux x64 alone does not mean CUDA: AMD and Intel hosts (e.g. Strix Halo)
-// have only Vulkan, so the default cascade correctly lands there. The NVIDIA
-// kernel driver creates /dev/nvidia0, which is a hardware signal independent
-// of the addon, so a silent CUDA-to-Vulkan fallback on an NVIDIA runner still
-// fails the check below.
-const hasNvidiaGpu = isLinuxX64 && fs.existsSync('/dev/nvidia0')
+// Expect CUDA only with an NVIDIA driver present, detected outside the addon
+// so a silent Vulkan fallback still fails. Native Linux exposes /dev/nvidia0;
+// WSL2 exposes only /dev/dxg, with libcuda under /usr/lib/wsl/lib.
+const hasNvidiaGpu =
+  isLinuxX64 && (fs.existsSync('/dev/nvidia0') || fs.existsSync('/usr/lib/wsl/lib/libcuda.so.1'))
 const expectCuda = hasNvidiaGpu && !forceVulkanLeg
 
 const skipReason =
