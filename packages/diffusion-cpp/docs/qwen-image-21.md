@@ -1,12 +1,13 @@
 # Qwen-Image-2.1
 
 The integration uses the native QVAC engine through `ImgStableDiffusion`.
-The package's `vcpkg-configuration.json` automatically selects the checked-in
-`vcpkg-overlays/stable-diffusion-cpp` port. That port pins native engine commit
-[`31ee95cb7c9e46e41b97c25ea7526d7de24fa6d0`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/commit/31ee95cb7c9e46e41b97c25ea7526d7de24fa6d0)
-from [native draft PR #57](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/57),
+The package's `vcpkg-configuration.json` selects the versioned
+`stable-diffusion-cpp` port from the QVAC registry at revision `2026-08-11#7`.
+That port pins merged native engine commit
+[`4ec33ca21eec64b9778b6fd16d58e88cd501936d`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/commit/4ec33ca21eec64b9778b6fd16d58e88cd501936d)
+from [native PR #57](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/57),
 with a verified archive SHA-512. It retains ggml
-`9f94f330ac196e0a2e3176e798b36226b22091a5` and the registry port's platform features.
+`9f94f330ac196e0a2e3176e798b36226b22091a5` and the existing platform features.
 
 Build from this package directory using the normal CUDA commands:
 
@@ -14,12 +15,17 @@ Build from this package directory using the normal CUDA commands:
 npm run build:cuda
 ```
 
-No external overlay directory or uncommitted native patch is needed. The local
-port is versioned `2026-08-11#8`; this does not publish that revision to the
-registry. Keep the overlay until a registry port containing the native changes
-is available, then update the dependency/baseline and remove it together.
+No package-local port overlay or uncommitted native patch is needed. While
+[registry PR #432](https://github.com/tetherto/qvac-registry-vcpkg/pull/432) is
+pending, the registry entry for `stable-diffusion-cpp` uses
+`feature-stable-diffusion-qwen-image-21` at baseline
+`534efa7ced8c5104af11f9f00f0b4f78949a0a4a`. Other dependencies keep their existing
+registries and baselines. Merge the registry PR first, then change this entry's
+reference to `main` and baseline to the registry merge commit before merging
+the addon PR. The old overlay's local revision #8 was never a published registry
+version; registry revision #7 is the next revision after the published #6.
 Existing binaries built with native port #6 do not provide the new context
-capability APIs; rebuild the addon with this source pin.
+capability APIs; rebuild the addon with the updated registry configuration.
 
 ## Model files
 

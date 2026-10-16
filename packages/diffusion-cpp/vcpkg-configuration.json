@@ -8,6 +8,15 @@
   "registries": [
     {
       "kind": "git",
+      "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
+      "reference": "feature-stable-diffusion-qwen-image-21",
+      "baseline": "534efa7ced8c5104af11f9f00f0b4f78949a0a4a",
+      "packages": [
+        "stable-diffusion-cpp"
+      ]
+    },
+    {
+      "kind": "git",
       "baseline": "16c71a39e5a0fc0bdb3fad03beef8f38ee00ee3b",
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
@@ -17,8 +26,5 @@
         "stb"
       ]
     }
-  ],
-  "overlay-ports": [
-    "vcpkg-overlays"
   ]
 }
