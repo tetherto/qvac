@@ -29,6 +29,10 @@ export interface LayaConfig {
      * as `threads`; unset uses `threads`, `0` or below every logical CPU.
      */
     "threads-batch"?: NumericLike;
+    /** Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100 (maximum polling). Defaults to 0. */
+    poll?: NumericLike;
+    /** Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when neither option is set. */
+    "poll-batch"?: NumericLike;
     "main-gpu"?: NumericLike | "integrated" | "dedicated";
     "split-mode"?: "none" | "layer";
     "tensor-split"?: string;

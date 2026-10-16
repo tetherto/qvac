@@ -2,13 +2,37 @@
   "name": "@qvac/diffusion-cpp",
   "version": "0.30.0",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
-  "addon": true,
+  "imports": {
+    "#host-addon": {
+      "linux": {
+        "x64": "@qvac/diffusion-cpp-linux-x64",
+        "arm64": "@qvac/diffusion-cpp-linux-arm64",
+        "default": "./addon-unavailable.js"
+      },
+      "darwin": {
+        "arm64": "@qvac/diffusion-cpp-darwin-arm64",
+        "x64": "@qvac/diffusion-cpp-darwin-x64",
+        "default": "./addon-unavailable.js"
+      },
+      "win32": {
+        "x64": "@qvac/diffusion-cpp-win32-x64",
+        "default": "./addon-unavailable.js"
+      },
+      "android": {
+        "arm64": "@qvac/diffusion-cpp-android-arm64",
+        "default": "./addon-unavailable.js"
+      },
+      "ios": "@qvac/diffusion-cpp-ios",
+      "default": "./addon-unavailable.js"
+    }
+  },
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
-    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:native": "bare-make generate && bare-make build && bare-make install && npm run link:platform",
+    "link:platform": "node ../../scripts/ci/slice-platform-packages.mjs --link-local --workdir .",
     "build:ts": "tsc -p tsconfig.build.json",
-    "build:vulkan": "npm run build:ts && bare-make generate && bare-make build && bare-make install",
-    "build:cuda": "npm run build:ts && bare-make generate -D SD_CUDA=ON && bare-make build && bare-make install",
+    "build:vulkan": "npm run build:ts && bare-make generate && bare-make build && bare-make install && npm run link:platform",
+    "build:cuda": "npm run build:ts && bare-make generate -D SD_CUDA=ON && bare-make build && bare-make install && npm run link:platform",
     "example": "bare examples/load-model.js",
     "walk:world": "bare examples/world-walk-server.js",
     "generate": "bare examples/generate-image.js",
@@ -23,7 +47,7 @@
     "generate:ltx": "bare examples/generate-video-ltx.js",
     "generate:ltx-coffee": "bare examples/generate-video-ltx-coffee-everest.js",
     "test": "npm run test:types && npm run test:integration",
-    "test:ltx": "npm run build:ts && bare test/integration/generate-video-ltx.test.js --exit",
+    "test:ltx": "npm run build:ts && npm run link:platform && bare test/integration/generate-video-ltx.test.js --exit",
     "generate:img2vid": "bare examples/img2vid-wan.js",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js video.js world.js addon.js addonLogging.js fit.js file-paths.js index.d.ts video.d.ts world.d.ts addon.d.ts addonLogging.d.ts fit.d.ts file-paths.d.ts) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
@@ -39,7 +63,7 @@
     "format:cpp:check": "git-clang-format --binary clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx --diff \"$(git merge-base HEAD origin/main)\" -- .",
     "format:cpp": "git-clang-format --binary clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx \"$(git merge-base HEAD origin/main)\" -- .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:integration": "npm run build:ts && npm run link:platform && npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:node",
@@ -66,6 +90,7 @@
     "generate:h3-coffee": "bare examples/generate-video-minimax-h3.js"
   },
   "files": [
+    "addon-unavailable.js",
     "binding.js",
     "index.js",
     "video.js",
@@ -123,6 +148,13 @@
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-path": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@qvac/diffusion-cpp-linux-x64": "0.30.0",
+    "@qvac/diffusion-cpp-linux-arm64": "0.30.0",
+    "@qvac/diffusion-cpp-darwin-arm64": "0.30.0",
+    "@qvac/diffusion-cpp-darwin-x64": "0.30.0",
+    "@qvac/diffusion-cpp-win32-x64": "0.30.0"
   },
   "engines": {
     "bare": ">=1.24.0"
