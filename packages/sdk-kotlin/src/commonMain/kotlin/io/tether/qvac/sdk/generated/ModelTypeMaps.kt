@@ -24,6 +24,7 @@ object ModelTypeMaps {
         "ggml-ocr" to "ocr",
         "ggml-vla" to "vla",
         "llamacpp-completion" to "llm",
+        "llamacpp-decision" to "embeddings",
         "llamacpp-embedding" to "embeddings",
         "moss-transcribe" to "moss-transcribe",
         "nmtcpp-translation" to "nmt",
