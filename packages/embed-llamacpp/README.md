@@ -152,6 +152,8 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `gpu_layers`     | string of integer                             | `"0"`         | Number of model layers to offload to GPU                                                 |
 | `batch_size`     | string of integer                             | `"2048"`      | Tokens processed per batch (input throughput)                                            |
 | `ctx_size`       | string of integer                             | model's trained context size (`n_ctx_train`) | Runtime context window in tokens (llama.cpp `n_ctx`); oversized values are capped to the model's trained context |
+| `poll`           | string of integer `"0"`–`"100"`             | `"0"`         | Main GGML threadpool busy-wait level. `"0"` sleeps while idle; higher values can reduce wake latency but consume CPU during GPU work |
+| `poll-batch`     | string of integer `"0"`–`"100"`             | `poll`          | Batch GGML threadpool busy-wait level                                                     |
 | `pooling`        | `"none"` \| `"mean"` \| `"cls"` \| `"last"` \| `"rank"` | model default | Pooling strategy used to collapse token embeddings into a single sequence vector        |
 | `attention`      | `"causal"` \| `"non-causal"`                  | model default | Attention type                                                                            |
 | `embd_normalize` | string of integer                             | `"2"`         | Embedding normalization (`-1` = none, `0` = max abs int16, `1` = taxicab, `2` = euclidean, `>2` = p-norm) |
@@ -321,6 +323,8 @@ Only these keys are accepted, multi-word ones in either spelling (`batch_size` o
 | `batch_size` | string of integer | `"2048"` | Tokens per forward pass. Every sequence (one question over one state) must fit, and the cost of a pass grows with the square of the batch size, so raise it only for longer states |
 | `threads` | string of integer | one per physical core | CPU threads, at most the device's CPU count; `"0"` uses every CPU |
 | `threads-batch` | string of integer | `threads` | CPU threads for batch processing, which is all of Laya's work; same limit as `threads` |
+| `poll` | string of integer `"0"`–`"100"` | `"0"` | Main GGML threadpool busy-wait level |
+| `poll-batch` | string of integer `"0"`–`"100"` | `poll` | Batch GGML threadpool busy-wait level |
 | `flash_attn` | `"on"` \| `"off"` \| `"auto"` | `"auto"` | Flash attention |
 | `main-gpu`, `split-mode`, `tensor-split` | | | GPU selection and multi-GPU split, as in [`config`](#3-create-config) |
 | `verbosity`, `openclCacheDir` | | | As in [`config`](#3-create-config) |
