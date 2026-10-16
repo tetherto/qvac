@@ -190,6 +190,8 @@ Relevant options are summarized below; run `qvac serve --help` for the exact gen
 | `--allow-unauthenticated` | Permit binding to a non-loopback host without a key |
 | `--cors` | Validate that an explicit trusted origin is configured |
 | `--cors-origin <origin>` | Add a trusted CORS origin (repeatable; no wildcard) |
+| `--allowed-host <host>` | Accept this `Host` header besides loopback, IP addresses and the bind host (repeatable) |
+| `--allow-any-host` | Accept any `Host` header (turns off DNS-rebinding protection) |
 | `--public-base-url <url>` | Externally reachable origin required for image `response_format=url` |
 | `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins (requires a fixed `--port`) |
 | `--ready-fd <fd>` | Write `QVAC_SERVE_READY {"port":…,"pid":…}` to this inherited descriptor once listening |
@@ -214,6 +216,18 @@ qvac serve --openai --cors
 # After
 qvac serve --openai --cors --cors-origin https://app.example.com
 ```
+
+### Host header
+
+CORS only governs cross-origin requests. A page that points its own domain at `127.0.0.1` (DNS rebinding) is same-origin with the server, so the server also checks the `Host` header. Requests are served only when it names a loopback host (`localhost`, `*.localhost`, `127.0.0.0/8`, `[::1]`), an IP address, the bind host, the `--public-base-url` host or an allowed host; the port is ignored. Anything else, `/openapi.json` included, gets `403 host_not_allowed`.
+
+Add names that reach the server through a proxy or DNS with `--allowed-host` or `serve.allowedHosts`. A leading dot covers the domain and its subdomains:
+
+```bash
+qvac serve --openai --allowed-host qvac.internal --allowed-host .corp.example
+```
+
+`--allow-any-host` (or `"allowedHosts": true`) turns the check off.
 
 ## QVAC API
 

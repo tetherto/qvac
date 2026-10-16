@@ -287,7 +287,6 @@ private:
       const std::function<void(const std::string&)>& outputCallback,
       const std::string& text);
   void initializeCommonState();
-  void initializeOwnedThreadpools();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
   // Reasoning-channel tracking is retained for output parsing and stop
@@ -365,8 +364,6 @@ private:
   // `onCancel` to roll back to the pre-request cursor.
   llama_pos preRequestNPast_ = 0;
   GenerationStopReason generationStopReason_ = GenerationStopReason::None;
-  ThreadPoolPtr threadpool_;
-  ThreadPoolPtr threadpoolBatch_;
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
