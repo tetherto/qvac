@@ -5,7 +5,3 @@
 QVAC Inference 0.21.1 updates native add-on compatibility ranges to include the latest fixes.
 
 The updated ranges accept the corrected add-ons while allowing future compatible patches.
-
-## Maintenance
-
-SDK end-to-end test setup no longer depends on retired CI tokens.
