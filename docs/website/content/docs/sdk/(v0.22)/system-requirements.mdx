@@ -149,11 +149,11 @@ The `qvac` CLI itself runs on desktops only. The SDK additionally targets Androi
 
 ## Deploy targets
 
-These checks are informational. They never cause `qvac doctor` to exit non-zero, because cross-bundling is always supported via bare-pack prebuilt binaries. What is checked here is the host toolchain needed to install/deploy to each target class.
+These checks are informational. They never cause `qvac doctor` to exit non-zero. What is checked here is the host toolchain needed to install/deploy to each target class.
 
 | Target | Check | Status when missing |
 | --- | --- | --- |
-| `darwin-{arm64,x64}`, `linux-{arm64,x64}`, `win32-x64` | Listed under "Desktop"; native host flagged with `(native)`. | Always `pass` — cross-bundling is built in. |
+| `darwin-{arm64,x64}`, `linux-{arm64,x64}`, `win32-x64` | Listed under "Desktop"; native host flagged with `(native)`. | Always `pass`. Bundling for a desktop host other than the native one needs that host's addon platform packages installed; see [Electron](/resources/tutorials/electron). |
 | `android-arm64` | `adb --version` | `warn` — install [Android platform tools](https://developer.android.com/tools/releases/platform-tools) to deploy to devices. |
 | `ios-arm64` + simulators | `xcodebuild -version` (macOS only) | `warn` on macOS without Xcode, `info` on non-macOS hosts. |
 

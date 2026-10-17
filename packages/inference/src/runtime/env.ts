@@ -7,34 +7,23 @@ const envSchema = z.object({
 
 type Env = z.infer<typeof envSchema>
 
+export interface EnvOptions {
+  /** Folder that holds `.qvac`. Defaults to the user's home folder. */
+  homeDir?: string | undefined
+}
+
 let validatedEnv: Env | null = null
+
+function defaultHomeDir(): string {
+  // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
+  return env['SNAP_USER_COMMON'] ?? env['HOME'] ?? env['USERPROFILE'] ?? '/tmp'
+}
 
 /**
  * Initialize the environment. Call once at startup.
  */
-export function initEnv(): void {
-  const defaultHomeDir =
-    // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
-    env['SNAP_USER_COMMON'] ?? env['HOME'] ?? env['USERPROFILE'] ?? '/tmp'
-  let envConfig: Record<string, string | undefined> = {
-    HOME_DIR: defaultHomeDir
-  }
-
-  const isBareKit = typeof (globalThis as { BareKit?: unknown }).BareKit !== 'undefined'
-  if (isBareKit && Bare.argv[0]) {
-    envConfig['HOME_DIR'] = Bare.argv[0]
-  }
-
-  if (Bare.argv[2]) {
-    try {
-      const overrides = JSON.parse(Bare.argv[2]) as Record<string, string>
-      envConfig = { ...envConfig, ...overrides }
-    } catch {
-      // Ignore non-JSON args
-    }
-  }
-
-  validatedEnv = envSchema.parse(envConfig)
+export function initEnv(options: EnvOptions = {}): void {
+  validatedEnv = envSchema.parse({ HOME_DIR: options.homeDir ?? defaultHomeDir() })
 }
 
 /**

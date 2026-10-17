@@ -1,41 +1,57 @@
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import stow from 'bare-stow'
 import { DEFAULT_HOSTS, DEFAULT_SDK_NAME } from '@/commands/bundle/constants'
 import {
   CONFIG_CANDIDATES,
   resolveConfigForProject
 } from '@/client/config-loader/resolve-config.node'
 import { createCommandLogger } from '@/commands/command-logger'
-import { BareImportsMapNotFoundError, HostPrebuildsMissingError } from '@/utils/errors-client'
+import {
+  AddonLinkFailedError,
+  BareImportsMapNotFoundError,
+  BundleFailedError,
+  BundleVerificationFailedError,
+  HostPrebuildsMissingError
+} from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
-import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
-import { runBarePack } from '@/commands/bundle/bare-pack'
+import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
+import { createSdkImportResolver, sdkImportsMap } from '@/commands/bundle/resolve-sdk-import'
 import {
   AUDIO_DECODER_ADDON,
-  extractBarePackHeader,
-  extractPackedString,
-  generateAddonsManifest
-} from '@/commands/bundle/manifest'
-import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
+  listBundledAddonModules,
+  listBundledAddons
+} from '@/commands/bundle/addons'
+import { assertReactNativeBareKitSupported, linkAddons } from '@/commands/bundle/link'
+import { assertNodeCanBundle } from '@/commands/bundle/node-support'
+import { readBundle } from '@/commands/bundle/read-bundle'
+import { TARGETS, type BundleTarget } from '@/commands/bundle/targets'
 import {
-  findMissingHostPrebuilds,
+  findMissingPlatformPackages,
   installMissingHostPrebuilds,
   resolveAddons,
   type HostPrebuildPackage
 } from '@/commands/host-prebuilds/index'
+import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import type { NativeAddon } from '@/commands/verify/addon-source'
-import { verifyBundle } from '@/commands/verify/index'
+import { isMobileHost } from '@/commands/verify/prebuilds'
+import { formatVerifyBundleResult, verifyBundle } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
 import type { Logger } from '@/logging/types'
-
-const require = createRequire(import.meta.url)
 
 export interface BundleSdkOptions {
   projectRoot?: string | undefined
   configPath?: string | undefined
   sdkPath?: string | undefined
+  /** Where the worker runs. Defaults to `bare-sidecar`. */
+  target?: BundleTarget | undefined
+  /**
+   * Hosts to bundle for. Defaults to this machine for `bare-sidecar` and
+   * `pear-runtime`, and to every phone host for `react-native`.
+   */
   hosts?: string[] | undefined
   defer?: string[] | undefined
   quiet?: boolean | undefined
@@ -44,30 +60,44 @@ export interface BundleSdkOptions {
    * Install the addon platform packages that the split addons the bundle
    * reaches need for its mobile hosts, with the project's package manager
    * (see `ensureHostPrebuilds`), before bundling. Off by default: without it,
-   * bundling never changes package.json or node_modules, and a mobile host
-   * whose platform package is missing fails with `HostPrebuildsMissingError`,
-   * naming the exact pins. A refused install
-   * throws `HostPrebuildsInstallRefusedError` before anything is written.
+   * bundling never changes package.json or node_modules. A host whose
+   * platform package is missing fails with `HostPrebuildsMissingError`,
+   * naming the exact pins; desktop packages are never installed. A refused
+   * install throws `HostPrebuildsInstallRefusedError` before anything is
+   * written.
    */
   installMissingPrebuilds?: boolean | undefined
   /**
-   * Check the bundled packages' engines.bare against the Bare runtime of each
-   * host and warn on a mismatch. Defaults to true; callers that run
-   * `verifyBundle` on the result can turn it off.
+   * Run `verifyBundle` on the bundle and fail with
+   * `BundleVerificationFailedError` on its errors. An engines.bare mismatch
+   * against the Bare runtime in react-native-bare-kit only warns. Defaults to
+   * true; callers that run `verifyBundle` on the result can turn it off.
    */
-  checkEngines?: boolean | undefined
-  /** Allow network lookups during the engines check. Defaults to true. */
+  verify?: boolean | undefined
+  /** Allow network lookups during verification. Defaults to true. */
   network?: boolean | undefined
+  /**
+   * For the `react-native` target, link the native addons for the phone hosts
+   * into react-native-bare-kit. Defaults to true.
+   */
+  link?: boolean | undefined
 }
 
 export interface BundleSdkResult {
+  target: BundleTarget
+  hosts: string[]
+  /** The generated worker entry the bundle starts from. */
+  entryPath: string
+  /** The bare-stow harness that starts the bundled worker. */
+  harnessPath: string
   bundlePath: string
   plugins: string[]
   addons: string[]
-  entryPaths: { worker: string }
-  manifestPath: string
+  addonModules: string[]
   /** Platform packages `installMissingPrebuilds` installed; empty when it is off. */
   installedPrebuilds: HostPrebuildPackage[]
+  /** Paths the link step wrote. */
+  linked: string[]
 }
 
 function resolveSdkPath(projectRoot: string, explicitSdkPath?: string): string {
@@ -77,13 +107,25 @@ function resolveSdkPath(projectRoot: string, explicitSdkPath?: string): string {
       : path.join(projectRoot, explicitSdkPath)
   }
 
+  return (
+    findInAncestorNodeModules(projectRoot, DEFAULT_SDK_NAME) ??
+    path.join(projectRoot, 'node_modules', DEFAULT_SDK_NAME)
+  )
+}
+
+function isLink(file: string): boolean {
   try {
-    const pkgJsonPath = require.resolve('@qvac/sdk/package.json', {
-      paths: [projectRoot]
-    })
-    return path.dirname(pkgJsonPath)
+    return fs.lstatSync(file).isSymbolicLink()
   } catch {
-    return path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
+    return false
+  }
+}
+
+function realpath(dir: string): string {
+  try {
+    return fs.realpathSync(dir)
+  } catch {
+    return dir
   }
 }
 
@@ -113,11 +155,10 @@ function resolveImportsMapPath(sdkPath: string, sdkName: string): string {
   throw new BareImportsMapNotFoundError(sdkName, importsMapPath)
 }
 
-interface CheckBundleEnginesOptions {
+interface VerifyOutputOptions {
   projectRoot: string
   bundlePath: string
   hosts: string[]
-  configPath: string | undefined
   network: boolean | undefined
   logger: Logger
 }
@@ -138,57 +179,133 @@ function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
   })
 }
 
-async function checkBundleEngines(options: CheckBundleEnginesOptions) {
-  const { projectRoot, bundlePath, hosts, configPath, network, logger } = options
+async function verifyOutput(options: VerifyOutputOptions) {
+  const { projectRoot, bundlePath, hosts, network, logger } = options
 
-  logger.info('\n🔎 Checking engines.bare against the Bare runtime of each host...')
+  logger.info('\n🔎 Verifying the bundle...')
   const result = await verifyBundle({
     projectRoot,
     addonsSource: bundlePath,
     hosts,
-    ...(configPath !== undefined ? { configPath } : {}),
     ...(network !== undefined ? { network } : {}),
     onProgress: (message) => logger.info(`   ${message}`)
   })
 
-  const checkedHosts: string[] = []
-  for (const group of result.runtimes ?? []) {
-    const label = group.hosts.join(', ')
-    if (group.resolution.resolved) {
-      checkedHosts.push(...group.hosts)
-      logger.info(
-        `   ${label}: Bare ${group.resolution.runtime.version} (from ${formatRuntimeSource(group.resolution.runtime)})`
-      )
-    } else {
-      logger.warn(`engines.bare not checked for ${label}: ${group.resolution.error.reason}`)
-    }
+  const blocking = result.issues.filter(
+    (issue) => issue.level === 'error' && !ENGINES_ISSUE_CODES.has(issue.code)
+  )
+  if (blocking.length > 0) {
+    throw new BundleVerificationFailedError(
+      bundlePath,
+      new Error(formatVerifyBundleResult({ ...result, issues: blocking }))
+    )
   }
+
+  const label = hosts.join(', ')
+  if (result.runtime === null) return
+  if (!result.runtime.resolved) {
+    logger.warn(`engines.bare not checked for ${label}: ${result.runtime.error.reason}`)
+    return
+  }
+  logger.info(
+    `   ${label}: Bare ${result.runtime.runtime.version} (from ${formatRuntimeSource(result.runtime.runtime)})`
+  )
 
   const mismatches = result.issues.filter(
     (issue) => ENGINES_ISSUE_CODES.has(issue.code) && issue.level === 'error'
   )
   if (mismatches.length === 0) {
-    if (checkedHosts.length > 0) {
-      logger.info(`   No engines.bare mismatches for ${checkedHosts.join(', ')}`)
-    }
+    logger.info(`   No engines.bare mismatches for ${label}`)
     return
   }
 
   const lines = ['The bundle contains packages that require a newer Bare runtime:']
   for (const issue of mismatches) lines.push(`  - ${issue.message}`)
   lines.push('')
-  for (const advice of result.advice ?? []) lines.push(...formatEnginesAdvice(advice))
+  if (result.advice !== undefined) lines.push(...formatEnginesAdvice(result.advice))
   logger.warn(lines.join('\n').trimEnd())
+}
+
+function defaultHosts(target: BundleTarget): string[] {
+  if (target === 'react-native') return DEFAULT_HOSTS.filter(isMobileHost)
+  return [`${process.platform}-${process.arch}`]
+}
+
+interface StowBundleOptions {
+  projectRoot: string
+  entryPath: string
+  target: BundleTarget
+  outputDir: string
+  hosts: string[]
+  imports: Record<string, unknown>
+  deferModules: string[]
+}
+
+/** Writes the bundle, the harness and the files the bundle loads, and returns the bundle's path. */
+async function stowBundle(options: StowBundleOptions): Promise<string> {
+  const { projectRoot, entryPath, target, outputDir, hosts, imports, deferModules } = options
+  const spec = TARGETS[target]
+  const harnessPath = path.join(outputDir, spec.harness)
+  const stowTarget = await spec.load(projectRoot)
+
+  assertNodeCanBundle()
+  await fsp.rm(outputDir, { recursive: true, force: true })
+
+  // bare-module-traverse types its options from bare-addon-resolve, which lacks
+  // the `imports` and `defer` that bare-module-resolve takes. With no base,
+  // bare-stow keys the bundle from the closest folder holding every module.
+  const stowOptions: stow.StowOptions & { imports: Record<string, unknown>; defer: string[] } = {
+    imports,
+    defer: deferModules,
+    hosts
+  }
+
+  const written: string[] = []
+  try {
+    for await (const artifact of stow(
+      pathToFileURL(entryPath).href,
+      stowTarget,
+      pathToFileURL(harnessPath).href,
+      stowOptions
+    )) {
+      written.push(fileURLToPath(artifact.url.href))
+    }
+  } catch (error) {
+    throw new BundleFailedError(entryPath, error)
+  }
+
+  const harnessRequire = createRequire(harnessPath)
+  for (const name of spec.harnessImports) {
+    try {
+      harnessRequire.resolve(name)
+    } catch (error) {
+      throw new BundleFailedError(
+        entryPath,
+        new Error(
+          `the harness imports ${name}, which does not resolve from ${outputDir}; add it to the app's dependencies`,
+          { cause: error }
+        )
+      )
+    }
+  }
+
+  const bundlePath = written.find(
+    (file) => path.dirname(file) === outputDir && file !== harnessPath && !file.endsWith('.d.ts')
+  )
+  if (bundlePath === undefined) {
+    throw new BundleFailedError(entryPath, new Error(`bare-stow wrote no bundle to ${outputDir}`))
+  }
+  return bundlePath
 }
 
 export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleSdkResult> {
   const startTime = Date.now()
 
-  const projectRoot = options.projectRoot ?? process.cwd()
-  const outputDir = path.join(projectRoot, 'qvac')
-  const entryPath = path.join(outputDir, 'worker.entry.mjs')
-  const bundleEntryPath = path.join(outputDir, 'worker.bundle.entry.mjs')
-  const bundlePath = path.join(outputDir, 'worker.bundle.js')
+  const projectRoot = path.resolve(options.projectRoot ?? process.cwd())
+  const qvacDir = path.join(projectRoot, 'qvac')
+  const outputDir = path.join(qvacDir, 'worker')
+  const entryPath = path.join(qvacDir, 'worker.entry.mjs')
+  const target = options.target ?? 'bare-sidecar'
 
   const logger = createCommandLogger(options)
 
@@ -208,12 +325,28 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     )
   }
 
-  const sdkPath = resolveSdkPath(projectRoot, options.sdkPath)
+  const sdkPath = realpath(resolveSdkPath(projectRoot, options.sdkPath))
   const sdkName = await resolveSdkName(sdkPath)
   logger.info(`📦 SDK: ${sdkName}`)
   logger.debug(`   Path: ${sdkPath}`)
 
   const importsMapPath = resolveImportsMapPath(sdkPath, sdkName)
+  const imports = JSON.parse(await fsp.readFile(importsMapPath, 'utf8')) as Record<string, unknown>
+
+  // The bundler resolves the SDK's dependencies from the path it reaches the
+  // SDK by, without following links. An SDK installed in node_modules is
+  // imported by name; one linked in, as pnpm installs it, or outside the
+  // project is imported by its real path, and so is its bare-stow, which the
+  // generated shim imports.
+  const installedSdk = findInAncestorNodeModules(projectRoot, sdkName)
+  const sdkByName =
+    installedSdk !== null && !isLink(installedSdk) && realpath(installedSdk) === sdkPath
+  const resolveImport = sdkByName ? undefined : createSdkImportResolver(sdkPath, sdkName)
+  if (!sdkByName) {
+    const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
+    Object.assign(imports, sdkImportsMap(sdkPath, sdkName))
+    imports['bare-stow/protocol'] = pathToFileURL(sdkRequire.resolve('bare-stow/protocol')).href
+  }
 
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
   logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
@@ -222,7 +355,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.info(`   ${label}: ${spec}`)
   }
 
-  const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : DEFAULT_HOSTS
+  const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : defaultHosts(target)
 
   const explicitDefer = options.defer ?? []
   const includeAudioDecoder =
@@ -240,35 +373,26 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     }
   }
 
-  await fsp.mkdir(outputDir, { recursive: true })
+  if (target === 'react-native') await assertReactNativeBareKitSupported(projectRoot, sdkPath)
+
+  await fsp.mkdir(qvacDir, { recursive: true })
 
   logger.info('\n📝 Generating worker entry...')
-  const resolveSdkImport = createSdkImportResolver(sdkPath, sdkName)
-  const { runtimeEntry, bundleEntry } = generateWorkerEntries(
-    pluginSpecifiers,
-    sdkName,
-    resolveSdkImport,
-    config.rpcServerProvider
+  await fsp.writeFile(
+    entryPath,
+    generateWorkerEntry(pluginSpecifiers, sdkName, config.rpcServerProvider, resolveImport),
+    'utf8'
   )
-  await fsp.writeFile(entryPath, runtimeEntry, 'utf8')
   logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
-  logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
 
-  logger.info('\n🔨 Bundling with bare-pack...')
+  logger.info(`\n🔨 Bundling for ${target}...`)
   logger.debug(`   Hosts: ${hosts.join(', ')}`)
   if (deferModules.length > 0) {
     logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
-  // Missing mobile platform packages are installed, or reported, before bundling.
-  let installedPrebuilds: HostPrebuildPackage[] = []
-  const barePackOptions = {
-    entryPath: bundleEntryPath,
-    hosts,
-    importsMapPath,
-    quiet: options.quiet === true,
-    logger
-  }
+  const stowOptions = { projectRoot, entryPath, target, outputDir, hosts, imports, deferModules }
+
   const addonsMissingPlatformPackages = () =>
     reachedAddonsMissingPlatformPackages({
       addons: async () =>
@@ -276,97 +400,112 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
           (addon) => !deferModules.includes(addon.name)
         ),
       hosts,
-      scan: (extraDefer, outputPath) =>
-        runBarePack({
-          ...barePackOptions,
-          outputPath,
-          deferModules: [...deferModules, ...extraDefer],
-          quiet: true
-        }),
-      scanPath: path.join(outputDir, 'worker.scan.bundle.js'),
+      scan: async (extraDefer) => {
+        const scanDir = path.join(qvacDir, 'worker.scan')
+        try {
+          const bundlePath = await stowBundle({
+            ...stowOptions,
+            outputDir: scanDir,
+            deferModules: [...deferModules, ...extraDefer]
+          })
+          return (await readBundle(bundlePath)).resolutions
+        } finally {
+          await fsp.rm(scanDir, { recursive: true, force: true })
+        }
+      },
       logger
     })
 
-  try {
-    await fsp.writeFile(bundleEntryPath, bundleEntry, 'utf8')
-    const addons = await addonsMissingPlatformPackages()
-    if (options.installMissingPrebuilds === true) {
-      const { installed } = await installMissingHostPrebuilds({
-        projectRoot,
-        hosts,
-        addons,
-        quiet: options.quiet === true,
-        logger
-      })
-      installedPrebuilds = installed
-    } else {
-      await throwIfPlatformPackagesMissing(addons, hosts)
-    }
-
-    await runBarePack({ ...barePackOptions, outputPath: bundlePath, deferModules })
-  } finally {
-    await fsp.rm(bundleEntryPath, { force: true })
+  let installedPrebuilds: HostPrebuildPackage[] = []
+  const missingPlatformAddons = await addonsMissingPlatformPackages()
+  if (options.installMissingPrebuilds === true) {
+    const { installed } = await installMissingHostPrebuilds({
+      projectRoot,
+      hosts,
+      addons: missingPlatformAddons,
+      quiet: options.quiet === true,
+      logger
+    })
+    installedPrebuilds = installed
+    await throwIfPlatformPackagesMissing(
+      missingPlatformAddons,
+      hosts.filter((host) => !isMobileHost(host))
+    )
+  } else {
+    await throwIfPlatformPackagesMissing(missingPlatformAddons, hosts)
   }
+
+  const bundlePath = await stowBundle(stowOptions)
 
   const stats = await fsp.stat(bundlePath)
   const sizeKB = (stats.size / 1024).toFixed(1)
   logger.info(`\n✅ Bundle created: ${path.relative(projectRoot, bundlePath)}`)
   logger.info(`   Size: ${sizeKB} KB`)
 
-  const manifestResult = await generateAddonsManifest({
+  const addons = await listBundledAddons({ bundlePath, projectRoot, logger, includeAudioDecoder })
+  const addonModules = await listBundledAddonModules({
     bundlePath,
-    outputDir,
     projectRoot,
     logger,
     includeAudioDecoder
   })
+  logger.info(`   Native addons (${addons.length}): ${addons.join(', ') || '(none)'}`)
 
-  if (options.checkEngines !== false) {
-    await checkBundleEngines({
+  if (options.verify !== false) {
+    await verifyOutput({
       projectRoot,
       bundlePath,
       hosts,
-      configPath: configPath ?? undefined,
       network: options.network,
       logger
     })
   }
 
+  let linked: string[] = []
+  if (target === 'react-native' && options.link !== false) {
+    if (findInAncestorNodeModules(projectRoot, 'react-native-bare-kit') === null) {
+      throw new AddonLinkFailedError(hosts, new Error('react-native-bare-kit is not installed'))
+    }
+    logger.info('\n🔗 Linking native addons into react-native-bare-kit...')
+    linked = await linkAddons({ projectRoot, addonModules, hosts, logger })
+    logger.info(`   Wrote ${linked.length} files`)
+  }
+
+  const harnessPath = path.join(outputDir, TARGETS[target].harness)
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   logger.info(`\n🎉 Done in ${elapsed}s!\n`)
   logger.info('Generated files:')
-  logger.info('  - qvac/worker.entry.mjs    (standalone worker with RPC + lifecycle)')
-  logger.info('  - qvac/worker.bundle.js    (mobile bundle for Expo/React Native BareKit)')
-  logger.info('  - qvac/addons.manifest.json\n')
-  logger.info('Mobile: Expo plugin auto-configures worker.bundle.js')
-  logger.info('Standalone: Import qvac/worker.entry.mjs for full worker with RPC\n')
+  logger.info(`  - ${path.relative(projectRoot, entryPath)}    (worker entry)`)
+  logger.info(`  - ${path.relative(projectRoot, harnessPath)}    (starts the bundled worker)`)
+  logger.info(`  - ${path.relative(projectRoot, bundlePath)}\n`)
 
   return {
+    target,
+    hosts,
+    entryPath,
+    harnessPath,
     bundlePath,
     plugins: pluginSpecifiers,
-    addons: manifestResult.addons,
-    entryPaths: {
-      worker: entryPath
-    },
-    manifestPath: manifestResult.manifestPath,
-    installedPrebuilds
+    addons,
+    addonModules,
+    installedPrebuilds,
+    linked
   }
 }
 
 interface ReachedAddonsOptions {
   addons: () => Promise<NativeAddon[]>
   hosts: string[]
-  /** Runs bare-pack with these extra modules deferred, writing `outputPath`. */
-  scan: (extraDefer: string[], outputPath: string) => Promise<void>
-  scanPath: string
+  /** Bundles with these extra modules deferred and returns the bundle's resolutions. */
+  scan: (extraDefer: string[]) => Promise<unknown>
   logger: Logger
 }
 
 /**
  * The installed split addons that the bundle reaches and that are missing a
- * mobile platform package. Every installed addon is a candidate (`@qvac/sdk`
- * depends on all of them), so a first bare-pack pass defers each missing
- * platform package: bare-pack then records the reached ones as
+ * platform package for one of the hosts. Every installed addon is a candidate (`@qvac/sdk`
+ * depends on all of them), so a first bundling pass defers each missing
+ * platform package: the bundle then records the reached ones as
  * `deferred:<package>` and never visits the rest. Empty when nothing is
  * missing, or when that pass fails, which leaves the real bundle to report
  * the failure.
@@ -374,35 +513,28 @@ interface ReachedAddonsOptions {
 async function reachedAddonsMissingPlatformPackages(
   options: ReachedAddonsOptions
 ): Promise<NativeAddon[]> {
-  const { hosts, scan, scanPath, logger } = options
+  const { hosts, scan, logger } = options
   const addons = await options.addons()
-  const missing = await findMissingHostPrebuilds(addons, hosts)
+  const missing = await findMissingPlatformPackages(addons, hosts)
   if (missing.length === 0) return []
 
   logger.debug(
     `\n🔎 Checking which of ${missing.length} missing platform packages the bundle reaches...`
   )
   try {
-    await scan(
-      missing.map((pkg) => pkg.name),
-      scanPath
-    )
-    const reached = deferredSpecifiers(await fsp.readFile(scanPath, 'utf8'))
+    const reached = deferredSpecifiers(await scan(missing.map((pkg) => pkg.name)))
     const owners = new Set(missing.filter((pkg) => reached.has(pkg.name)).map((pkg) => pkg.addon))
     return addons.filter((addon) => owners.has(addon.name))
   } catch (error: unknown) {
     logger.debug(`   Scan failed: ${error instanceof Error ? error.message : String(error)}`)
     return []
-  } finally {
-    await fsp.rm(scanPath, { force: true })
   }
 }
 
 const DEFERRED_PROTOCOL = 'deferred:'
 
-/** Every specifier a bare-pack bundle leaves as `deferred:<specifier>`. */
-function deferredSpecifiers(bundleText: string): Set<string> {
-  const { resolutions = {} } = extractBarePackHeader(extractPackedString(bundleText))
+/** Every specifier a bundle leaves as `deferred:<specifier>`. */
+function deferredSpecifiers(resolutions: unknown): Set<string> {
   const found = new Set<string>()
   const visit = (value: unknown) => {
     if (typeof value === 'string') {
@@ -416,13 +548,13 @@ function deferredSpecifiers(bundleText: string): Set<string> {
 }
 
 /**
- * Throws `HostPrebuildsMissingError` when split addons are missing mobile
- * platform packages, naming the exact pins.
+ * Throws `HostPrebuildsMissingError` when split addons are missing platform
+ * packages for `hosts`, naming the exact pins.
  */
 async function throwIfPlatformPackagesMissing(addons: NativeAddon[], hosts: string[]) {
   let missing: HostPrebuildPackage[]
   try {
-    missing = await findMissingHostPrebuilds(addons, hosts)
+    missing = await findMissingPlatformPackages(addons, hosts)
   } catch {
     return
   }

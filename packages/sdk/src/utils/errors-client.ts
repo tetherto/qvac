@@ -99,56 +99,16 @@ export class RPCConnectionFailedError extends QvacErrorBase {
   }
 }
 
-export class RPCInitTimeoutError extends QvacErrorBase {
-  constructor(timeoutMs: number, cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT, [timeoutMs], cause))
-  }
-}
-
 export class WorkerCrashedError extends QvacErrorBase {
-  public readonly exitCode: number | null
-  public readonly exitSignal: NodeJS.Signals | null
-
-  constructor(exitCode: number | null, exitSignal: NodeJS.Signals | null, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.WORKER_CRASHED,
-        [String(exitCode), String(exitSignal)],
-        cause
-      )
-    )
-    this.exitCode = exitCode
-    this.exitSignal = exitSignal
+  constructor(cause?: unknown) {
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_CRASHED, undefined, cause))
   }
 }
 
-/**
- * A worker that failed before the IPC handshake, attached as the `cause` of
- * `RPCInitTimeoutError`. `workerExited` separates a dead worker from a merely
- * slow one; `exitCode` / `exitSignal` mirror what `WorkerCrashedError` carries
- * on the post-handshake path.
- */
+/** A worker that failed before signalling ready; `cause` is the worker's own error. */
 export class WorkerStartupError extends QvacErrorBase {
-  /** False while the process is still running and simply has not connected. */
-  public readonly workerExited: boolean
-  public readonly exitCode: number | null
-  public readonly exitSignal: NodeJS.Signals | null
-  /** Bounded tail of the worker's stderr; empty when it wrote nothing. */
-  public readonly stderrTail: string
-
-  constructor(
-    details: string,
-    exit: { code: number | null; signal: NodeJS.Signals | null } | null,
-    stderrTail: string,
-    cause?: unknown
-  ) {
-    super(
-      createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED, [details, stderrTail], cause)
-    )
-    this.workerExited = exit !== null
-    this.exitCode = exit?.code ?? null
-    this.exitSignal = exit?.signal ?? null
-    this.stderrTail = stderrTail
+  constructor(details: string, cause?: unknown) {
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED, [details], cause))
   }
 }
 
@@ -180,20 +140,6 @@ export class WorkerFileNotFoundError extends QvacErrorBase {
   }
 }
 
-export class PearWorkerEntryRequiredError extends QvacErrorBase {
-  constructor(workerEntry: string, cause?: unknown) {
-    super(
-      createErrorOptions(SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED, [workerEntry], cause)
-    )
-  }
-}
-
-export class WorkerPluginsNotRegisteredError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED, [], cause))
-  }
-}
-
 export class BundleVerificationFailedError extends QvacErrorBase {
   constructor(bundlePath: string, cause?: unknown) {
     super(
@@ -202,21 +148,10 @@ export class BundleVerificationFailedError extends QvacErrorBase {
   }
 }
 
-export class BarePackNotInstalledError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED, undefined, cause))
-  }
-}
-
-export class BarePackError extends QvacErrorBase {
-  constructor(exitCode: number, entryPath: string, outputPath: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.BARE_PACK_ERROR,
-        [exitCode, entryPath, outputPath],
-        cause
-      )
-    )
+export class BundleFailedError extends QvacErrorBase {
+  constructor(entryPath: string, cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.BUNDLE_FAILED, [entryPath, reason], cause))
   }
 }
 
@@ -226,6 +161,30 @@ export class BarePackNodeUnsupportedError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED,
         [nodeVersion, requiredRange],
+        cause
+      )
+    )
+  }
+}
+
+export class BundleTargetNotInstalledError extends QvacErrorBase {
+  constructor(target: string, packageName: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BUNDLE_TARGET_NOT_INSTALLED,
+        [target, packageName],
+        cause
+      )
+    )
+  }
+}
+
+export class ReactNativeBareKitUnsupportedError extends QvacErrorBase {
+  constructor(installedVersion: string, requiredRange: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.REACT_NATIVE_BARE_KIT_UNSUPPORTED,
+        [installedVersion, requiredRange],
         cause
       )
     )
@@ -245,18 +204,6 @@ export class BareImportsMapNotFoundError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.BARE_IMPORTS_MAP_NOT_FOUND,
         [sdkName, expectedPath],
-        cause
-      )
-    )
-  }
-}
-
-export class BareRuntimeBinaryNotFoundError extends QvacErrorBase {
-  constructor(platform: string, arch: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.BARE_RUNTIME_BINARY_NOT_FOUND,
-        [platform, arch],
         cause
       )
     )

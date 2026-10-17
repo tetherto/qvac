@@ -4,6 +4,7 @@ import io.tether.qvac.sdk.rpc.BareRpcCodec
 import io.tether.qvac.sdk.rpc.BareRpcMessage
 import kotlinx.coroutines.runBlocking
 import java.io.InputStream
+import java.io.OutputStream
 import java.net.Socket
 import java.nio.file.Path
 import kotlin.test.Test
@@ -21,7 +22,7 @@ class JvmBareRpcTransportProcessTest {
     @Test
     fun authenticatesByDefaultAndSendsRuntimeContext() = runBlocking {
         // The worker must receive an __init_config carrying this client's
-        // runtime context, after the token handshake.
+        // runtime context and home folder, after the token handshake.
         val transport = JvmBareRpcTransport.connect(command = workerCommand())
         val client = QvacClient(transport)
 
@@ -67,8 +68,7 @@ class JvmBareRpcTransportProcessTest {
 private object TokenlessJvmWorker {
     @JvmStatic
     fun main(args: Array<String>) {
-        val endpoint = Regex("tcp://127\\.0\\.0\\.1:(\\d+)").find(args.last())!!.groupValues[1].toInt()
-        Socket("127.0.0.1", endpoint).use { socket ->
+        Socket("127.0.0.1", args.last().toInt()).use { socket ->
             socket.shutdownOutput()
             // Exit only once the client has dropped the connection, as a real worker does.
             while (socket.getInputStream().read() >= 0) Unit
@@ -77,68 +77,90 @@ private object TokenlessJvmWorker {
     }
 }
 
+/** Stands in for bare-sidecar's runtime running the SDK's TCP shim. */
 private object FakeJvmWorker {
+    private const val CONTROL = 0
+    private const val DATA = 1
+
     @JvmStatic
     fun main(args: Array<String>) {
-        val environment = args.last()
-        val endpoint = Regex("tcp://127\\.0\\.0\\.1:(\\d+)")
-            .find(environment)
-            ?.groupValues
-            ?.get(1)
-            ?.toInt()
-            ?: error("worker endpoint missing")
-        check("QVAC_IPC_AUTH_TOKEN" !in environment) { "auth token leaked into argv" }
+        val port = args.last().toInt()
         val authToken = System.getenv("QVAC_IPC_AUTH_TOKEN")
+        check(authToken == null || args.none { authToken in it }) { "auth token leaked into argv" }
 
         val socket = if (authToken != null) {
             // A racing loopback connection without the inherited capability is rejected.
-            Socket("127.0.0.1", endpoint).use { unauthenticated ->
+            Socket("127.0.0.1", port).use { unauthenticated ->
                 unauthenticated.getOutputStream().write("wrong-token\n".encodeToByteArray())
                 unauthenticated.getOutputStream().flush()
             }
             // A peer that connects first and never writes must not hold up the
             // handshake of the real worker behind it.
-            val silent = Socket("127.0.0.1", endpoint)
+            val silent = Socket("127.0.0.1", port)
             Runtime.getRuntime().addShutdownHook(Thread { runCatching { silent.close() } })
-            Socket("127.0.0.1", endpoint).also {
+            Socket("127.0.0.1", port).also {
                 it.getOutputStream().write((authToken + "\n").encodeToByteArray())
                 it.getOutputStream().flush()
             }
         } else {
-            Socket("127.0.0.1", endpoint)
+            Socket("127.0.0.1", port)
         }
 
         socket.use { connection ->
+            val output = connection.getOutputStream()
+            writeFrame(output, CONTROL, """{"type":"ready"}""".encodeToByteArray())
             while (true) {
-                val request = assertIs<BareRpcMessage.Request>(
-                    BareRpcCodec.decodeFrame(readProcessFrame(connection.getInputStream())),
-                )
+                val (tag, payload) = readFrame(connection.getInputStream())
+                if (tag == CONTROL) {
+                    if (payload.decodeToString().contains("terminate")) {
+                        writeFrame(output, CONTROL, """{"type":"exit","code":0}""".encodeToByteArray())
+                        break
+                    }
+                    continue
+                }
+                val request = assertIs<BareRpcMessage.Request>(BareRpcCodec.decodeFrame(payload))
                 val body = request.data?.decodeToString() ?: ""
                 val reply = when {
                     body.contains("__init_config") ->
-                        if (body.contains("\"runtime\":\"jvm\"") && body.contains("\"platform\"")) {
+                        if (body.contains("\"homeDir\"") && runtimeContextMatches(body)) {
                             "{\"success\":true}"
                         } else {
-                            "{\"success\":false,\"error\":\"missing runtime context\"}"
+                            "{\"success\":false,\"error\":\"missing home folder or runtime context\"}"
                         }
-                    body.contains("__shutdown__") -> "{\"success\":true}"
                     else -> "{\"type\":\"heartbeat\",\"number\":9}"
                 }
-                connection.getOutputStream().write(
-                    BareRpcCodec.encodeResponse(request.id, reply.encodeToByteArray()),
-                )
-                if (body.contains("__shutdown__")) break
+                writeFrame(output, DATA, BareRpcCodec.encodeResponse(request.id, reply.encodeToByteArray()))
             }
         }
     }
-}
 
-private fun readProcessFrame(input: InputStream): ByteArray {
-    val prefix = input.readNBytes(4)
-    require(prefix.size == 4)
-    val length = (prefix[0].toInt() and 0xff) or
-        ((prefix[1].toInt() and 0xff) shl 8) or
-        ((prefix[2].toInt() and 0xff) shl 16) or
-        ((prefix[3].toInt() and 0xff) shl 24)
-    return prefix + input.readNBytes(length)
+    /** A runtime context, when sent, names the JVM and the platform. */
+    private fun runtimeContextMatches(body: String): Boolean =
+        !body.contains("runtimeContext") ||
+            (body.contains("\"runtime\":\"jvm\"") && body.contains("\"platform\""))
+
+    private fun writeFrame(output: OutputStream, tag: Int, payload: ByteArray) {
+        val length = payload.size + 1
+        output.write(
+            byteArrayOf(
+                length.toByte(),
+                (length ushr 8).toByte(),
+                (length ushr 16).toByte(),
+                (length ushr 24).toByte(),
+                tag.toByte(),
+            ) + payload,
+        )
+        output.flush()
+    }
+
+    private fun readFrame(input: InputStream): Pair<Int, ByteArray> {
+        val prefix = input.readNBytes(4)
+        require(prefix.size == 4) { "worker connection closed" }
+        val length = (prefix[0].toInt() and 0xff) or
+            ((prefix[1].toInt() and 0xff) shl 8) or
+            ((prefix[2].toInt() and 0xff) shl 16) or
+            ((prefix[3].toInt() and 0xff) shl 24)
+        val body = input.readNBytes(length)
+        return body[0].toInt() to body.copyOfRange(1, body.size)
+    }
 }

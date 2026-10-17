@@ -16,8 +16,9 @@ const packagedBareBinary = join(
   'resources',
   'app',
   'node_modules',
-  `bare-runtime-linux-${process.arch}`,
-  'bin',
+  'bare-sidecar',
+  'prebuilds',
+  `linux-${process.arch}`,
   'bare'
 )
 const stableArtifact = resolve(projectDir, snapConfig.artifactPath)
@@ -51,7 +52,7 @@ run(
 
 mkdirSync(electronDist, { recursive: true })
 cpSync(electronOutput, packagedSnapApp, { recursive: true })
-// bare-runtime normally repairs this mode at startup, but a mounted Snap is read-only.
+// A mounted Snap is read-only, so the Bare binary has to be executable before packaging.
 chmodSync(packagedBareBinary, 0o755)
 writeFileSync(
   join(electronDist, 'qvac-snap-build-id'),
