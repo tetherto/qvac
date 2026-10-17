@@ -90,7 +90,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-ggml-rpc-server', github.run_id) }}
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:

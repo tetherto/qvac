@@ -213,8 +213,9 @@ concurrency:
   # because benchmark-vlm-model-comparison fans several parallel legs from ONE
   # run (all sharing run_id, since github.* resolves to the CALLER under
   # workflow_call); each leg passes a distinct artifact_suffix, so this keeps the
-  # legs in separate groups instead of serialising or cancelling them.
-  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-{1}', github.run_id, inputs.artifact_suffix) }}
+  # legs in separate groups instead of serialising or cancelling them. The literal
+  # package name keeps it apart from other mobile workflows called by the same run.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-llm-llamacpp-{1}', github.run_id, inputs.artifact_suffix) }}
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
