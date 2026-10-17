@@ -68,6 +68,29 @@ try {
 - Base libraries should have lower code ranges
 - Document your code range to avoid conflicts with other libraries
 
+### Reserved ranges
+
+Claim a range here in the same PR that registers its first code. Packages in this repository stay below 100000, and products built on QVAC outside it take ranges from 100000 up, so a new package here never lands on one of theirs.
+
+| Range | Owner |
+| --- | --- |
+| 0-999 | `@qvac/error` internal codes |
+| 6001-7000 | `@qvac/asr-ggml` (whisper engine and shared codes) |
+| 8001-9000 | `@qvac/translation-nmtcpp` |
+| 8101-8200 | `@qvac/ocr-ggml` |
+| 11001-12000 | `@qvac/decoder-audio` |
+| 13001-14000 | `@qvac/tts-ggml` |
+| 14001-15000 | `@qvac/rag` |
+| 19001-20000 | `@qvac/registry-client` |
+| 24001-25000 | `@qvac/asr-ggml` (parakeet engine codes) |
+| 26001-27000 | `@qvac/bci-whispercpp` |
+| 30001-31000 | `@qvac/vla-ggml` |
+| 31001-32000 | `@qvac/audiogen-ggml` |
+| 50001-52000 | `@qvac/sdk` client codes, also registered by `@qvac/inference` |
+| 52001-54000 | `@qvac/sdk` server codes, also registered by `@qvac/inference` |
+| 100001-102000 | `@qvac/core` |
+| 102001-104000 | `@qvac/harness` |
+
 ### API Reference
 
 #### `QvacErrorBase`
