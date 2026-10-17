@@ -5,7 +5,7 @@ export function registerDoctorCommand(program: Command): void {
   program
     .command('doctor')
     .description('Validate that the host satisfies QVAC SDK system requirements')
-    .option('--deep', 'Start the installed SDK worker and verify its heartbeat')
+    .option('--deep', 'Check native prerequisites and verify the installed SDK worker heartbeat')
     .option('--json', 'Output the report as JSON')
     .option('-q, --quiet', 'Suppress human-readable output (only set exit code)')
     .option('-v, --verbose', 'Detailed output')

@@ -2,6 +2,7 @@ import { fork, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveSdkEntrypoint } from '@/doctor/checks/project'
+import { checkNativeLibraries } from '@/doctor/native-libraries'
 import {
   isDeepProbeMessage,
   isDeepProbeProtocolCandidate,
@@ -418,9 +419,10 @@ export async function checkSdkRuntime(projectRoot: string): Promise<CheckResult>
 }
 
 export async function collectDeepCheckSection(projectRoot: string): Promise<CheckSection> {
+  const nativeChecks = await checkNativeLibraries(projectRoot)
   return {
     id: 'deep',
     title: 'SDK runtime (deep)',
-    checks: [await checkSdkRuntime(projectRoot)]
+    checks: [...nativeChecks, await checkSdkRuntime(projectRoot)]
   }
 }
