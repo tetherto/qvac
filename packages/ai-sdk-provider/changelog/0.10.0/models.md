@@ -4,6 +4,10 @@
 
 ```
 PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0
+TTS_CODEC_MOSS_SPEECH_F16
+TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16
+TTS_MOSS_SPEECH_BF16
+TTS_MOSS_SPEECH_Q8_0
 ```
 
 ## Removed Models
@@ -56,3 +60,4 @@ QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD
 
 - [#4945](https://github.com/tetherto/qvac/pull/4945) - Add MOSS ASR and Nemotron diarization support
 - [#5012](https://github.com/tetherto/qvac/pull/5012) - Drop Core ML bundle files from the provider catalog
+- [#5207](https://github.com/tetherto/qvac/pull/5207) - Sync model constants from registry

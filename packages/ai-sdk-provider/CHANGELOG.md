@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.10.0
 
-QVAC AI SDK Provider 0.10.0 follows `@qvac/cli` 0.16.0. Managed mode verifies the listener before sending it the API key, the catalog adds Nemotron 3 diarization, and Core ML bundle-file constants plus two Qwen3.8 Flash Next UD shard named exports are dropped.
+QVAC AI SDK Provider 0.10.0 follows `@qvac/cli` 0.16.0. Managed mode verifies the listener before sending it the API key, the catalog adds Nemotron 3 diarization and four MOSS TTS constants, and Core ML bundle-file constants plus two Qwen3.8 Flash Next UD shard named exports are dropped.
 
 The optional `@qvac/cli` peer is now `^0.16.0`. External mode is unchanged.
 
@@ -103,6 +103,10 @@ MOSS GPU fields are validated against what the engine accepts, and CI catalog fi
 
 ```
 PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0
+TTS_CODEC_MOSS_SPEECH_F16
+TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16
+TTS_MOSS_SPEECH_BF16
+TTS_MOSS_SPEECH_Q8_0
 ```
 
 ### Removed
