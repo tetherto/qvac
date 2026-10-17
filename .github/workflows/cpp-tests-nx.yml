@@ -282,13 +282,27 @@ jobs:
         with:
           node-version: lts/*
 
+      # The source checkout above can be an older release branch that predates
+      # this helper. Load it from the exact revision that supplied this reusable
+      # workflow, rather than from the code under test.
+      - name: Checkout C++ build helper (workflow revision)
+        if: matrix.mode == 'coverage'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts/configure-cpp-build.mjs
+          sparse-checkout-cone-mode: false
+          path: .cpp-build-workflow
+
       - name: Configure C++ build resources
         if: matrix.mode == 'coverage'
         env:
           CPP_BUILD_JOBS: ${{ matrix.cppBuildJobs }}
           CPP_PACKAGE: ${{ matrix.package }}
           CPP_HAS_CCACHE: ${{ matrix.hasCcache }}
-        run: node .github/scripts/configure-cpp-build.mjs
+        run: node .cpp-build-workflow/.github/scripts/configure-cpp-build.mjs
 
       - name: Get ccache cache
         if: matrix.hasCcache
