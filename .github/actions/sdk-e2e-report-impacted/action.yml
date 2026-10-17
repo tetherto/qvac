@@ -30,14 +30,18 @@ runs:
 
           const MARKER = '<!-- sdk-e2e-impacted -->';
           const E2E_PREFIX = 'packages/sdk/e2e/';
-          const SAFE_PATH = /^[A-Za-z0-9._/-]+$/;
+          // A path, a package name, or `consumer.ts#<resource id>`.
+          const SAFE_PATH = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[A-Za-z0-9._/-]+(?:#[A-Za-z0-9._-]+)?)$/;
           const SAFE_TEST_ID = /^[A-Za-z0-9._-]+$/;
           const KNOWN_VIA = new Set([
             'definitions (whole file)',
             'definitions (changed lines)',
             'executor pattern',
             'import graph',
+            'resource definition',
             'inference engine',
+            'addon dependency',
+            'inference schema',
             'sdk handler',
             'sdk api',
           ]);
