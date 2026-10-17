@@ -11,6 +11,7 @@
 
 const test = require('brittle')
 const path = require('bare-path')
+const fs = require('bare-fs')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -44,6 +45,16 @@ const pinTbqPqToVulkan = (platform === 'linux' || platform === 'win32') && os.ar
 // job level, while embed only exports the CUDA_VISIBLE_DEVICES it turns into.
 const forceVulkanLeg =
   process.env.FORCE_VULKAN === 'true' || process.env.CUDA_VISIBLE_DEVICES === '-1'
+
+// Expect CUDA only with an NVIDIA driver present, detected outside the addon
+// so a silent Vulkan fallback still fails. Native Linux exposes /dev/nvidia<N>
+// (a container may get only /dev/nvidia1); WSL2 exposes only /dev/dxg, with
+// libcuda under /usr/lib/wsl/lib.
+const hasNvidiaGpu =
+  isLinuxX64 &&
+  (fs.readdirSync('/dev').some((d) => /^nvidia\d+$/.test(d)) ||
+    fs.existsSync('/usr/lib/wsl/lib/libcuda.so.1'))
+const expectCuda = hasNvidiaGpu && !forceVulkanLeg
 
 const skipReason =
   isDarwin || isIos
@@ -228,10 +239,12 @@ async function runHeadDimSmoke(t, modelInfo, label) {
         // did. Without it a silent fallback is invisible: both integration legs
         // pass either way, and the pinned rows above only prove the override
         // path. The two legs expect opposite answers.
-        if (forceVulkanLeg) {
+        if (expectCuda) {
+          t.ok(result.choseCuda, `${cfg.label}: CUDA is preferred on linux x64 and was chosen`)
+        } else if (forceVulkanLeg) {
           t.absent(result.choseCuda, `${cfg.label}: CUDA hidden, so CUDA was not chosen`)
         } else {
-          t.ok(result.choseCuda, `${cfg.label}: CUDA is preferred on linux x64 and was chosen`)
+          t.absent(result.choseCuda, `${cfg.label}: no NVIDIA device, so CUDA was not chosen`)
         }
       }
     } catch (err) {

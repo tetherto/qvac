@@ -1,6 +1,6 @@
-import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import fs from 'bare-fs'
 
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import {
   ModelType,
   type CanonicalModelType,

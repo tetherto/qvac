@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
-import path = require('bare-path')
-/* eslint-enable @typescript-eslint/no-require-imports */
-
 import type { DiffusionFiles, EsrganFiles, EsrganUpscalerConfig, SdConfig } from './index'
 import type { DiffusionVideoFiles } from './file-paths'
 import { assertAbsolute, assertFilePaths, toFilePaths } from './file-paths'
@@ -105,9 +101,6 @@ export async function assessFit(
   // The native side reads the config sub-object as a string map, the same way
   // createInstance does.
   const merged: SdConfig | EsrganUpscalerConfig | WorldConfig = { ...request.config }
-  if (!merged.backendsDir) {
-    merged.backendsDir = path.join(__dirname, 'prebuilds')
-  }
   const config = Object.fromEntries(
     Object.entries(merged)
       .filter(([, value]) => value !== undefined)

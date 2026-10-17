@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1] - 2026-10-15
+
+### Fixed
+
+- On Windows, the addon now binds the delay-loaded `@qvac/fabric` runtime
+  when it loads, so a first fabric call on a worker thread cannot fail with
+  `0xC06D007E` ([#5121](https://github.com/tetherto/qvac/pull/5121)). Loading throws an error naming the fabric
+  module if the bind fails.
+
 ## [0.5.0] - 2026-10-15
 
 ### Changed

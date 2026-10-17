@@ -29,6 +29,7 @@ const includesClassification = (qvacConfig.plugins ?? []).includes(
 const pluginCapabilities = new Map([
   ['@qvac/sdk/llamacpp-completion/plugin', ['LLM']],
   ['@qvac/sdk/llamacpp-embedding/plugin', ['EMBEDDINGS']],
+  ['@qvac/sdk/llamacpp-decision/plugin', ['DECISION']],
   ['@qvac/sdk/whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/parakeet-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/moss-transcribe/plugin', ['TRANSCRIPTION']],
