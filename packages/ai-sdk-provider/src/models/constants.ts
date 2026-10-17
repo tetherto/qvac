@@ -18841,6 +18841,78 @@ export const allModels = [
     endpointCategory: 'speech'
   } as const,
   {
+    name: 'TTS_MOSS_SPEECH_BF16',
+    src: `registry://s3/qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-bf16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-bf16.gguf',
+    registrySource: 's3',
+    blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
+    blobBlockOffset: 967685,
+    blobBlockLength: 277680,
+    blobByteOffset: 63413332782,
+    modelId: 'moss-speech-bf16.gguf',
+    addon: 'tts',
+    expectedSize: 18198030464,
+    sha256Checksum: 'a8d18fdfb5429fa25f062c9915938eae6a309509cd089e86857d4544d5dd3fbf',
+    engine: 'tts-ggml',
+    quantization: 'bf16',
+    params: '9B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_CODEC_MOSS_SPEECH_F16',
+    src: `registry://s3/qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-codec-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-codec-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
+    blobBlockOffset: 1245366,
+    blobBlockLength: 20342,
+    blobByteOffset: 81611391374,
+    modelId: 'moss-speech-codec-f16.gguf',
+    addon: 'tts',
+    expectedSize: 1333086144,
+    sha256Checksum: '75605e251bdc3da9662c6cb01fb8fb8fff5fe82b76c39719af7f042406f8ab0c',
+    engine: 'tts-ggml',
+    quantization: 'f16',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MOSS_SPEECH_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
+    blobBlockOffset: 1265711,
+    blobBlockLength: 147570,
+    blobByteOffset: 82944644814,
+    modelId: 'moss-speech-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 9671141504,
+    sha256Checksum: 'dc1055984979d4a00d8d69fb70a5b79a75da3f8721d29abf3955f3d188426820',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '9B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16',
+    src: `registry://s3/qvac_models_compiled/ggml/openmoss/2026-10-01/moss-ttsd-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/openmoss/2026-10-01/moss-ttsd-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
+    blobBlockOffset: 1465904,
+    blobBlockLength: 255081,
+    blobByteOffset: 96064309550,
+    modelId: 'moss-ttsd-f16.gguf',
+    addon: 'tts',
+    expectedSize: 16716943744,
+    sha256Checksum: 'a91cf9758fab31bdd545b8d0fb3e7c05d15a00ab4e6641ee4ea1664d352399c3',
+    engine: 'tts-ggml',
+    quantization: 'f16',
+    params: '8B',
+    endpointCategory: 'speech'
+  } as const,
+  {
     name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16',
     src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-f16.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-f16.gguf',
@@ -20112,6 +20184,10 @@ export const MMPROJ_QWEN3_8_27B_MULTIMODAL_F16: ModelConstant<'chat'> = allModel
 export const QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL: ModelConstant<'chat'> = allModels[160]
 export const QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL: ModelConstant<'chat'> = allModels[161]
 export const MMPROJ_QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[162]
+export const QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD: ModelConstant<'chat'> =
+  allModels[163]
+export const QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD: ModelConstant<'chat'> =
+  allModels[164]
 export const MMPROJ_OCR_3B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[165]
 export const OCR_3B_MULTIMODAL_Q4_0: ModelConstant<'chat'> = allModels[166]
 export const BERGAMOT_AR_EN: ModelConstant<'translation'> = allModels[169]
@@ -20314,63 +20390,67 @@ export const TTS_DENOISER_LAVASR_FP32: ModelConstant<'speech'> = allModels[672]
 export const TTS_CODEC_DECODER_MOSS_TTS_F16: ModelConstant<'speech'> = allModels[673]
 export const TTS_CODEC_ENCODER_MOSS_TTS_F16: ModelConstant<'speech'> = allModels[674]
 export const TTS_DELAY_LLM_MOSS_TTS_F16: ModelConstant<'speech'> = allModels[675]
-export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16: ModelConstant<'speech'> = allModels[676]
-export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32: ModelConstant<'speech'> = allModels[677]
-export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0: ModelConstant<'speech'> = allModels[678]
-export const TTS_LARGE_V1_EN_PARLER_TTS_FP16: ModelConstant<'speech'> = allModels[679]
-export const TTS_LARGE_V1_EN_PARLER_TTS_FP32: ModelConstant<'speech'> = allModels[680]
-export const TTS_LARGE_V1_EN_PARLER_TTS_Q8_0: ModelConstant<'speech'> = allModels[681]
-export const TTS_MINI_V1_EN_PARLER_TTS_FP16: ModelConstant<'speech'> = allModels[682]
-export const TTS_MINI_V1_EN_PARLER_TTS_FP32: ModelConstant<'speech'> = allModels[683]
-export const TTS_MINI_V1_EN_PARLER_TTS_Q8_0: ModelConstant<'speech'> = allModels[684]
-export const TTS_EN_SUPERTONIC_Q4_0: ModelConstant<'speech'> = allModels[685]
-export const TTS_EN_SUPERTONIC_Q8_0: ModelConstant<'speech'> = allModels[686]
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0: ModelConstant<'speech'> = allModels[687]
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0: ModelConstant<'speech'> = allModels[688]
-export const TTS_MULTILINGUAL_SUPERTONIC3_FP16: ModelConstant<'speech'> = allModels[689]
-export const TTS_MULTILINGUAL_SUPERTONIC3_FP32: ModelConstant<'speech'> = allModels[690]
-export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0: ModelConstant<'speech'> = allModels[691]
-export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0: ModelConstant<'speech'> = allModels[692]
-export const WHISPER_BASE_Q8_0: ModelConstant<'transcription'> = allModels[693]
-export const WHISPER_BASE_Q0F16: ModelConstant<'transcription'> = allModels[694]
-export const WHISPER_EN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[695]
-export const WHISPER_EN_BASE_Q0F16: ModelConstant<'transcription'> = allModels[696]
-export const WHISPER_LARGE_V3_TURBO: ModelConstant<'transcription'> = allModels[697]
-export const WHISPER_SMALL_Q8_0: ModelConstant<'transcription'> = allModels[698]
-export const WHISPER_SMALL_Q0F16: ModelConstant<'transcription'> = allModels[699]
-export const WHISPER_EN_SMALL_Q8_0: ModelConstant<'transcription'> = allModels[700]
-export const WHISPER_EN_SMALL_Q0F16: ModelConstant<'transcription'> = allModels[701]
-export const WHISPER_TINY_Q8_0: ModelConstant<'transcription'> = allModels[702]
-export const WHISPER_TINY: ModelConstant<'transcription'> = allModels[703]
-export const WHISPER_EN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[704]
-export const WHISPER_EN_TINY_Q0F16: ModelConstant<'transcription'> = allModels[705]
-export const VAD_SILERO_5_1_2: ModelConstant<'transcription'> = allModels[706]
-export const WHISPER_FRENCH_BASE_F16: ModelConstant<'transcription'> = allModels[707]
-export const WHISPER_FRENCH_BASE_Q8_0: ModelConstant<'transcription'> = allModels[708]
-export const WHISPER_FRENCH_TINY_F16: ModelConstant<'transcription'> = allModels[709]
-export const WHISPER_FRENCH_TINY_Q8_0: ModelConstant<'transcription'> = allModels[710]
-export const WHISPER_GERMAN_BASE_F16: ModelConstant<'transcription'> = allModels[711]
-export const WHISPER_GERMAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[712]
-export const WHISPER_GERMAN_TINY_F16: ModelConstant<'transcription'> = allModels[713]
-export const WHISPER_GERMAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[714]
-export const WHISPER_ITALIAN_BASE_F16: ModelConstant<'transcription'> = allModels[715]
-export const WHISPER_ITALIAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[716]
-export const WHISPER_ITALIAN_TINY_F16: ModelConstant<'transcription'> = allModels[717]
-export const WHISPER_ITALIAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[718]
-export const WHISPER_JAPANESE_BASE_F16: ModelConstant<'transcription'> = allModels[719]
-export const WHISPER_JAPANESE_BASE_Q8_0: ModelConstant<'transcription'> = allModels[720]
-export const WHISPER_JAPANESE_TINY_F16: ModelConstant<'transcription'> = allModels[721]
-export const WHISPER_JAPANESE_TINY_Q8_0: ModelConstant<'transcription'> = allModels[722]
-export const WHISPER_NORWEGIAN_TINY: ModelConstant<'transcription'> = allModels[723]
-export const WHISPER_PORTUGUESE_BASE_F16: ModelConstant<'transcription'> = allModels[724]
-export const WHISPER_PORTUGUESE_BASE_Q8_0: ModelConstant<'transcription'> = allModels[725]
-export const WHISPER_PORTUGUESE_TINY_F16: ModelConstant<'transcription'> = allModels[726]
-export const WHISPER_PORTUGUESE_TINY_Q8_0: ModelConstant<'transcription'> = allModels[727]
-export const WHISPER_RUSSIAN_BASE_F16: ModelConstant<'transcription'> = allModels[728]
-export const WHISPER_RUSSIAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[729]
-export const WHISPER_RUSSIAN_TINY_F16: ModelConstant<'transcription'> = allModels[730]
-export const WHISPER_RUSSIAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[731]
-export const WHISPER_SPANISH_TINY_F16: ModelConstant<'transcription'> = allModels[732]
-export const WHISPER_SPANISH_TINY_Q8_0: ModelConstant<'transcription'> = allModels[733]
-export const WHISPER_Q8_0: ModelConstant<'transcription'> = allModels[734]
-export const WHISPER_Q8_0_1: ModelConstant<'transcription'> = allModels[735]
+export const TTS_MOSS_SPEECH_BF16: ModelConstant<'speech'> = allModels[676]
+export const TTS_CODEC_MOSS_SPEECH_F16: ModelConstant<'speech'> = allModels[677]
+export const TTS_MOSS_SPEECH_Q8_0: ModelConstant<'speech'> = allModels[678]
+export const TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16: ModelConstant<'speech'> = allModels[679]
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16: ModelConstant<'speech'> = allModels[680]
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32: ModelConstant<'speech'> = allModels[681]
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0: ModelConstant<'speech'> = allModels[682]
+export const TTS_LARGE_V1_EN_PARLER_TTS_FP16: ModelConstant<'speech'> = allModels[683]
+export const TTS_LARGE_V1_EN_PARLER_TTS_FP32: ModelConstant<'speech'> = allModels[684]
+export const TTS_LARGE_V1_EN_PARLER_TTS_Q8_0: ModelConstant<'speech'> = allModels[685]
+export const TTS_MINI_V1_EN_PARLER_TTS_FP16: ModelConstant<'speech'> = allModels[686]
+export const TTS_MINI_V1_EN_PARLER_TTS_FP32: ModelConstant<'speech'> = allModels[687]
+export const TTS_MINI_V1_EN_PARLER_TTS_Q8_0: ModelConstant<'speech'> = allModels[688]
+export const TTS_EN_SUPERTONIC_Q4_0: ModelConstant<'speech'> = allModels[689]
+export const TTS_EN_SUPERTONIC_Q8_0: ModelConstant<'speech'> = allModels[690]
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0: ModelConstant<'speech'> = allModels[691]
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0: ModelConstant<'speech'> = allModels[692]
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP16: ModelConstant<'speech'> = allModels[693]
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP32: ModelConstant<'speech'> = allModels[694]
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0: ModelConstant<'speech'> = allModels[695]
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0: ModelConstant<'speech'> = allModels[696]
+export const WHISPER_BASE_Q8_0: ModelConstant<'transcription'> = allModels[697]
+export const WHISPER_BASE_Q0F16: ModelConstant<'transcription'> = allModels[698]
+export const WHISPER_EN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[699]
+export const WHISPER_EN_BASE_Q0F16: ModelConstant<'transcription'> = allModels[700]
+export const WHISPER_LARGE_V3_TURBO: ModelConstant<'transcription'> = allModels[701]
+export const WHISPER_SMALL_Q8_0: ModelConstant<'transcription'> = allModels[702]
+export const WHISPER_SMALL_Q0F16: ModelConstant<'transcription'> = allModels[703]
+export const WHISPER_EN_SMALL_Q8_0: ModelConstant<'transcription'> = allModels[704]
+export const WHISPER_EN_SMALL_Q0F16: ModelConstant<'transcription'> = allModels[705]
+export const WHISPER_TINY_Q8_0: ModelConstant<'transcription'> = allModels[706]
+export const WHISPER_TINY: ModelConstant<'transcription'> = allModels[707]
+export const WHISPER_EN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[708]
+export const WHISPER_EN_TINY_Q0F16: ModelConstant<'transcription'> = allModels[709]
+export const VAD_SILERO_5_1_2: ModelConstant<'transcription'> = allModels[710]
+export const WHISPER_FRENCH_BASE_F16: ModelConstant<'transcription'> = allModels[711]
+export const WHISPER_FRENCH_BASE_Q8_0: ModelConstant<'transcription'> = allModels[712]
+export const WHISPER_FRENCH_TINY_F16: ModelConstant<'transcription'> = allModels[713]
+export const WHISPER_FRENCH_TINY_Q8_0: ModelConstant<'transcription'> = allModels[714]
+export const WHISPER_GERMAN_BASE_F16: ModelConstant<'transcription'> = allModels[715]
+export const WHISPER_GERMAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[716]
+export const WHISPER_GERMAN_TINY_F16: ModelConstant<'transcription'> = allModels[717]
+export const WHISPER_GERMAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[718]
+export const WHISPER_ITALIAN_BASE_F16: ModelConstant<'transcription'> = allModels[719]
+export const WHISPER_ITALIAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[720]
+export const WHISPER_ITALIAN_TINY_F16: ModelConstant<'transcription'> = allModels[721]
+export const WHISPER_ITALIAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[722]
+export const WHISPER_JAPANESE_BASE_F16: ModelConstant<'transcription'> = allModels[723]
+export const WHISPER_JAPANESE_BASE_Q8_0: ModelConstant<'transcription'> = allModels[724]
+export const WHISPER_JAPANESE_TINY_F16: ModelConstant<'transcription'> = allModels[725]
+export const WHISPER_JAPANESE_TINY_Q8_0: ModelConstant<'transcription'> = allModels[726]
+export const WHISPER_NORWEGIAN_TINY: ModelConstant<'transcription'> = allModels[727]
+export const WHISPER_PORTUGUESE_BASE_F16: ModelConstant<'transcription'> = allModels[728]
+export const WHISPER_PORTUGUESE_BASE_Q8_0: ModelConstant<'transcription'> = allModels[729]
+export const WHISPER_PORTUGUESE_TINY_F16: ModelConstant<'transcription'> = allModels[730]
+export const WHISPER_PORTUGUESE_TINY_Q8_0: ModelConstant<'transcription'> = allModels[731]
+export const WHISPER_RUSSIAN_BASE_F16: ModelConstant<'transcription'> = allModels[732]
+export const WHISPER_RUSSIAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[733]
+export const WHISPER_RUSSIAN_TINY_F16: ModelConstant<'transcription'> = allModels[734]
+export const WHISPER_RUSSIAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[735]
+export const WHISPER_SPANISH_TINY_F16: ModelConstant<'transcription'> = allModels[736]
+export const WHISPER_SPANISH_TINY_Q8_0: ModelConstant<'transcription'> = allModels[737]
+export const WHISPER_Q8_0: ModelConstant<'transcription'> = allModels[738]
+export const WHISPER_Q8_0_1: ModelConstant<'transcription'> = allModels[739]
