@@ -25,6 +25,7 @@
 #include "utils/ImageCodec.hpp"
 #include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ReferenceImages.hpp"
 #include "utils/SdErrors.hpp"
 #include "utils/SdVideoFrames.hpp"
 #include "utils/VideoModelCapabilities.hpp"
@@ -892,29 +893,13 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   sd_image_t initImg{}; // single-image (SDEdit or 1x FLUX)
   std::unique_ptr<uint8_t, image_codec::FreeDeleter> initData;
   std::unique_ptr<uint8_t, image_codec::FreeDeleter> maskData;
-  uint64_t decodedPixels = 0;
   std::vector<uint8_t> initPng;
   // Owned storage for genParams.ref_image_args; must outlive
   // generate_image(). Replaces the removed auto_resize_ref_image /
   // increase_ref_index fields with the engine's key=value spec.
   std::string refImageArgs;
 
-  // RAII wrapper for multi-image FLUX fusion reference images. Automatically
-  // frees pixel buffers on scope exit (normal or exceptional) using a custom
-  // deleter that iterates the vector and frees each sd_image_t.data pointer.
-  auto refImgsDeleter = [](std::vector<sd_image_t>* v) {
-    if (!v)
-      return;
-    for (auto& img : *v) {
-      if (img.data) {
-        image_codec::FreeDeleter{}(img.data);
-        img.data = nullptr;
-      }
-    }
-    delete v;
-  };
-  std::unique_ptr<std::vector<sd_image_t>, decltype(refImgsDeleter)> refImgs(
-      new std::vector<sd_image_t>(), refImgsDeleter);
+  qvac_lib_inference_addon_sd::ReferenceImages refImgs;
 
   if (gen.mode == "img2img") {
     const bool isFlux2 = config_.flux2Requested;
@@ -944,37 +929,11 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
     // -- Multiple ordered reference images ---------------------------------
     if (nMulti > 0) {
-      refImgs->reserve(nMulti);
-      for (size_t i = 0; i < nMulti; ++i) {
-        if (job.initImagesBytes[i].empty())
-          throw StatusError(
-              general_error::InvalidArgument,
-              "img2img: init_images[" + std::to_string(i) +
-                  "] is empty -- every reference must be a non-empty "
-                  "PNG/JPEG buffer.");
-
-        image_codec::DecodeFailure decodeFailure;
-        sd_image_t decoded = image_codec::decodeImage(
-            job.initImagesBytes[i],
-            config_.maxJobPixels - decodedPixels,
-            &decodeFailure,
-            config_.maxImagePixels,
-            channels);
-        if (decoded.data == nullptr) {
-          throw StatusError(
-              general_error::InvalidArgument,
-              "img2img: failed to decode init_images[" + std::to_string(i) +
-                  "]: " +
-                  image_codec::decodeFailureMessage(
-                      decodeFailure,
-                      config_.maxImagePixels,
-                      config_.maxJobPixels));
-        }
-        std::unique_ptr<uint8_t, image_codec::FreeDeleter> owned(decoded.data);
-        refImgs->push_back(decoded);
-        owned.release();
-        decodedPixels += static_cast<uint64_t>(decoded.width) * decoded.height;
-      }
+      refImgs = qvac_lib_inference_addon_sd::decodeReferenceImages(
+          job.initImagesBytes,
+          config_.maxImagePixels,
+          config_.maxJobPixels,
+          channels);
 
       // Output dimensions come from the JS shim (addon.js::_fillDimsFromImage,
       // which falls back to the first reference's size when the caller omits
