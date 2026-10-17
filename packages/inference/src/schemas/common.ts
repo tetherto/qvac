@@ -225,6 +225,13 @@ export const responseSchema = z.discriminatedUnion('type', [
   decideResponseSchema
 ])
 
+/** Structural `AbortSignal`: fits the global one and bare-abort-controller's. */
+export interface AbortSignalLike {
+  readonly aborted: boolean
+  addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void
+  removeEventListener(type: 'abort', listener: () => void): void
+}
+
 export const rpcOptionsSchema = z.object({
   timeout: z
     .number()
@@ -250,3 +257,6 @@ export const rpcOptionsSchema = z.object({
 export type Request = z.input<typeof requestSchema>
 export type Response = z.infer<typeof responseSchema>
 export type RPCOptions = z.infer<typeof rpcOptionsSchema>
+
+/** `signal` ends only streams with `endsOnAbort` (the log stream); stop inference with `cancel`. */
+export type AbortableRPCOptions = RPCOptions & { signal?: AbortSignalLike }
