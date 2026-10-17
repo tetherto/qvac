@@ -9,7 +9,7 @@ description: >
 
 inputs:
   native-hash:
-    description: 'native_hash output of detect-native-changes'
+    description: 'native_hash output of detect-native-changes, or a key derived from it (reusable-prebuilds appends a build-config hash). Must match the value given to prebuild-artifact-reuse.'
     required: true
   pr-number:
     description: 'github.event.pull_request.number'

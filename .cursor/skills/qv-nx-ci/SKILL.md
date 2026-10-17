@@ -25,7 +25,7 @@ The matrix action flattens **every** field under `options.ci` into each matrix r
 
 ## Hard rules
 
-1. **Config is read from the trusted default branch, never PR head.** `nx-project-matrix` does `git show <config-ref>:packages/<pkg>/project.json`, and on `pull_request_target` `config-ref` = `default_branch`. A new package's `project.json` must land on the default branch before its CI runs. Never "fix" a pre-merge red by reading config from head.
+1. **Config is read from a trusted ref, never PR head.** `nx-project-matrix` does `git show <config-ref>:packages/<pkg>/project.json`. On `pull_request_target`, `on-pr-nx.yml` sets `config-ref` to the PR's base when it is a protected `release-*` branch and to `default_branch` otherwise, and passes it to the leaves' `config-ref` input. A new package's `project.json` must land on the base branch before its CI runs. Never "fix" a pre-merge red by reading config from head.
 2. **Fork safety is non-negotiable.** `on-pr-nx.yml` is `pull_request_target` (base context, secrets). Base = control surface, head = code-under-test. Every privileged job has `fork-approval` first in `needs:` and gates on `authorize.outputs.allowed`. Never add a privileged job without both. Leaves build/test `github.event.pull_request.head.sha` — only after the gates pass.
 3. **Mobile stays as `main`'s.** Do not consolidate `integration-mobile-test-<pkg>.yml` or add mobile to PRs beyond the existing asr/tts `coload-smoke-mobile` main-parity job. Never add `run-mobile-addon-tests` on PRs.
 4. **`hasPrebuilds` is derived, not declared** — it is true iff `build.options.ci` exists. Don't add it by hand.
@@ -48,7 +48,7 @@ The matrix action flattens **every** field under `options.ci` into each matrix r
 
 1. Add `packages/<pkg>/project.json` with the targets it needs (`build`, `on-pr`, `test:cpp`, `test:integration`, `benchmark`, `on-merge`) and their `options.ci`. Copy the closest existing package as a template.
 2. Native addon: set `implicitDependencies: ["inference-addon-cpp", "lint-cpp"]` (and any real deps) so the graph and affected-detection are correct.
-3. Land `project.json` on the default branch first (rule 1) — until then, dispatch the leaf with `config_ref_override` / `base-ref` pointed at your branch to test.
+3. Land `project.json` on the default branch first (rule 1) — until then, dispatch `on-pr-nx` with `config_ref_override`, or a leaf with `config-ref`, pointed at your branch to test.
 
 ## Recipe D — generalise a bespoke per-package workflow into a leaf
 

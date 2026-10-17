@@ -243,7 +243,7 @@ jobs:
     # caller lacks (startup_failure), so inherit; on-pr-nx grants actions: read.
     outputs:
       reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
-      native_hash: ${{ steps.detect.outputs.native_hash }}
+      reuse_key: ${{ steps.key.outputs.reuse_key }}
     steps:
       - name: Resolve package name from workdir
         id: pkg
@@ -267,6 +267,21 @@ jobs:
         uses: ./.github/actions/detect-native-changes
         with:
           workdir: ${{ inputs.workdir }}
+      # The build inputs come from the caller's options.ci, so a config change
+      # with an unchanged native tree (a release-* PR first built with the
+      # default branch's CUDA define) must not re-publish the old build. ref and
+      # repository change on every push and never pick build settings.
+      - name: Key the reuse marker on the build config
+        id: key
+        if: steps.detect.outputs.native_hash != ''
+        shell: bash
+        env:
+          NATIVE_HASH: ${{ steps.detect.outputs.native_hash }}
+          BUILD_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          set -euo pipefail
+          config_hash=$(jq -cS 'del(.ref, .repository, ."reuse-workflow-file", ."artifact-name-prefix")' <<< "$BUILD_INPUTS" | sha256sum | cut -c1-16)
+          echo "reuse_key=${NATIVE_HASH}-${config_hash}" >> "$GITHUB_OUTPUT"
       - name: Reuse prior prebuilds (no native change)
         id: reuse
         if: inputs.reuse-workflow-file != '' && steps.detect.outputs.native_changed == 'false'
@@ -274,7 +289,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           workflow-file: ${{ inputs.reuse-workflow-file }}
-          native-hash: ${{ steps.detect.outputs.native_hash }}
+          native-hash: ${{ steps.key.outputs.reuse_key }}
           pr-number: ${{ github.event.pull_request.number }}
           artifact-name: prebuilds-${{ steps.pkg.outputs.name }}
 
@@ -897,10 +912,11 @@ jobs:
           name: prebuilds-${{ steps.pkg.outputs.name }}
           path: prebuilds
       # Tag this run so a later no-native-change push of the same PR can reuse the
-      # prebuilds-<pkg> just uploaded. native_hash keeps the marker per-package.
+      # prebuilds-<pkg> just uploaded. reuse_key keeps the marker per-package and
+      # per build config.
       - name: Save prebuild reuse marker
-        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.detect-reuse.outputs.native_hash != ''
+        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.detect-reuse.outputs.reuse_key != ''
         uses: ./.github/actions/prebuild-artifact-save
         with:
-          native-hash: ${{ needs.detect-reuse.outputs.native_hash }}
+          native-hash: ${{ needs.detect-reuse.outputs.reuse_key }}
           pr-number: ${{ github.event.pull_request.number }}

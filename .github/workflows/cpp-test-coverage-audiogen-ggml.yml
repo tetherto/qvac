@@ -136,12 +136,28 @@ jobs:
         with:
           node-version: lts/*
 
+      # A release-* tree cut before the script landed still runs this workflow,
+      # so take the default branch's copy when the checkout has none.
+      - name: Checkout C++ build configurator (default branch)
+        if: hashFiles('.github/scripts/configure-cpp-build.mjs') == ''
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/configure-cpp-build.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+          path: .ci-default-branch
+
       - name: Configure C++ build resources
+        shell: bash
         env:
           CPP_BUILD_JOBS: ${{ matrix.cppBuildJobs }}
           CPP_PACKAGE: ${{ matrix.package }}
           CPP_HAS_CCACHE: ${{ matrix.hasCcache }}
-        run: node .github/scripts/configure-cpp-build.mjs
+        run: |
+          script=.github/scripts/configure-cpp-build.mjs
+          [ -f "$script" ] || script=".ci-default-branch/$script"
+          node "$script"
 
       - name: Get ccache cache
         if: matrix.hasCcache

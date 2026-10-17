@@ -1488,21 +1488,51 @@ test("on-pr-nx matrix job loads nx-project-matrix from the trusted default branc
   );
 
   // (ii) config-ref (the options.ci source) must resolve to the trusted default
-  // branch, never a PR-head expression (else a fork points the git-show at its tree).
+  // branch or a protected release-* base, never a PR-head expression (else a
+  // fork points the git-show at its tree).
   const configRefLine = matrix
     .split("\n")
     .find((line) => line.trim().startsWith("config-ref:"));
   assert.ok(configRefLine, "matrix job passes config-ref to nx-project-matrix");
+  assert.match(configRefLine, /\$\{\{ env\.CONFIG_REF \}\}/, "config-ref reads the job's CONFIG_REF");
+  const configRefEnv = matrix
+    .split("\n")
+    .find((line) => line.trim().startsWith("CONFIG_REF:"));
+  assert.ok(configRefEnv, "matrix job defines CONFIG_REF");
   assert.doesNotMatch(
-    configRefLine,
+    configRefEnv,
     /github\.event\.pull_request\.head\./,
-    "config-ref must not resolve to a PR-head expression",
+    "CONFIG_REF must not resolve to a PR-head expression",
   );
   assert.match(
-    configRefLine,
-    /github\.event\.repository\.default_branch/,
-    "config-ref resolves to the trusted default branch",
+    configRefEnv,
+    /github\.event\.repository\.default_branch \}\}$/,
+    "CONFIG_REF falls back to the trusted default branch",
   );
+  const baseRefs = configRefEnv.match(/github\.event\.pull_request\.base\.ref/g) || [];
+  assert.equal(baseRefs.length, 2, "CONFIG_REF reads the PR base only behind its release-* check");
+  assert.match(
+    configRefEnv,
+    /\(startsWith\(github\.event\.pull_request\.base\.ref, 'release-'\) && github\.event\.pull_request\.base\.ref\)/,
+    "CONFIG_REF uses the PR base only when it is a release-* branch",
+  );
+  assert.match(matrix, /configref: \$\{\{ env\.CONFIG_REF \}\}/, "matrix job exports CONFIG_REF");
+
+  // (iii) The leaves build their own matrices; they must read the same config.
+  for (const job of ["prebuild", "cpp-tests", "run-integration-tests"]) {
+    assert.match(
+      jobBlock(source, job),
+      /config-ref: \$\{\{ needs\.matrix\.outputs\.configref \}\}/,
+      `${job} passes the matrix job's config ref to its leaf`,
+    );
+  }
+  for (const leaf of ["prebuilds-nx.yml", "cpp-tests-nx.yml", "integration-test-nx.yml"]) {
+    assert.match(
+      read(`.github/workflows/${leaf}`),
+      /uses: \.\/\.github\/actions\/nx-project-matrix\n\s+with:[\s\S]*?config-ref: \$\{\{ inputs\.config-ref \}\}/,
+      `${leaf} forwards its config-ref input to nx-project-matrix`,
+    );
+  }
 });
 
 test("publish-prebuild-status stamps its run URL into target_url", () => {

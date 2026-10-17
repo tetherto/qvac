@@ -475,6 +475,10 @@ jobs:
           QVAC_VLA_BACKEND_SELECTION_SMOKE: 'true'
           CUDA_VISIBLE_DEVICES: '-1'
         run: |
+          if [ ! -f test/integration/backend-selection.test.js ]; then
+            echo "::notice::This tree predates test/integration/backend-selection.test.js; nothing to verify."
+            exit 0
+          fi
           npm run build:ts
           set -o pipefail
           bare test/integration/backend-selection.test.js --exit 2>&1 | tee backend-selection-test.log
@@ -489,7 +493,12 @@ jobs:
           QVAC_VLA_REQUESTED_BACKEND: vulkan
           QVAC_VLA_EXPECTED_BACKEND: vulkan
           QVAC_VLA_BACKEND_LOAD_ONLY: 'true'
-        run: bare test/integration/backend-selection.test.js --exit
+        run: |
+          if [ ! -f test/integration/backend-selection.test.js ]; then
+            echo "::notice::This tree predates test/integration/backend-selection.test.js; nothing to verify."
+            exit 0
+          fi
+          bare test/integration/backend-selection.test.js --exit
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}

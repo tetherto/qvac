@@ -21,7 +21,7 @@ This builds on the pnpm + Nx workspace. Read `docs/pnpm-nx-workspace.md` first f
 2. Reads each affected package's `options.ci` for that target from a **trusted ref** via `git show <config-ref>:packages/<pkg>/project.json` — never the checked-out (PR-head) tree.
 3. Emits a flattened `{package, platform, ...ci-fields}` JSON matrix, an `any` boolean, and a `carveouts` list (packages flagged `carveOut: true`, routed to bespoke reusables instead of the generic matrix).
 
-`config-ref` defaults to the affected base; callers on `pull_request_target` pass `github.event.repository.default_branch` so config is always read from the trusted default branch. See "Fork safety".
+`config-ref` defaults to the affected base. On `pull_request_target`, `on-pr-nx.yml` passes the PR's base when it is a `release-*` branch and `github.event.repository.default_branch` otherwise, and hands the same ref to the leaves' own matrices through their `config-ref` input. A backport then builds and tests with the `options.ci` of the tree it was cut from, not with the default branch's newer settings (for example a CUDA define the backported tests do not expect). See "Fork safety".
 
 ## Workflow wiring
 
@@ -30,7 +30,7 @@ on-pr-nx.yml            (pull_request_target)  ── PR orchestrator
   ├─ fork-approval      (reusable-fork-approval.yml)   gate: fork must be approved
   ├─ ci-router          (actions/ci-router)            label -> which stages run
   ├─ authorize          (actions/authorize-pr)         gate: PR authorized
-  ├─ matrix             (actions/nx-project-matrix, target: on-pr, config-ref: default_branch)
+  ├─ matrix             (actions/nx-project-matrix, target: on-pr, config-ref: release-* base or default_branch)
   ├─ prebuild           → prebuilds-nx.yml              (target: build)
   ├─ cpp-tests          → cpp-tests-nx.yml              (target: test:cpp)
   ├─ run-integration    → integration-test-nx.yml       (target: test:integration)
@@ -134,7 +134,8 @@ Package config is read from the trusted base ref. After merging a runner change 
 
 `on-pr-nx.yml` runs on `pull_request_target` — the base-repo workflow with secrets, against fork code. The rule: **base = control surface, head = code-under-test.**
 
-- The `matrix`, `ci-router`, `authorize` jobs check out their action + config from `default_branch` (never head), and `nx-project-matrix` reads `options.ci` via `git show default_branch:...`. A fork editing its own `project.json` cannot change what CI runs.
+- The `matrix`, `ci-router`, `authorize` jobs check out their action + config from `default_branch` (never head), and `nx-project-matrix` reads `options.ci` via `git show <config-ref>:...`, where `config-ref` is the default branch or a protected `release-*` base. A fork editing its own `project.json` cannot change what CI runs.
+- Workflows always come from the default branch, so a step that calls a script or test file added there must tolerate a `release-*` tree that predates it (`link:platform`, `configure-cpp-build.mjs` and VLA's `backend-selection.test.js` are guarded this way).
 - Every privileged job (`prebuild`, `cpp-tests`, `run-integration-tests`, `coload-smoke*`, `merge-guard`, ...) has `fork-approval` first in `needs:` and gates on `authorize.outputs.allowed`. Fork head never runs until a maintainer approves.
 - The leaves build/test the **head** SHA (`github.event.pull_request.head.sha`) — that's the point — but only after the gates pass.
 

@@ -220,10 +220,15 @@ jobs:
 
       # binding.js loads only `#host-addon`, i.e. the host's platform package, so
       # the staged prebuilds/<host>/ is wrapped as that package in node_modules.
+      # A release-* tree without `link:platform` loads prebuilds/ directly.
       - name: Stage the platform package
         working-directory: ${{ github.workspace }}/packages/audiogen-ggml
         shell: bash
-        run: npm run link:platform
+        run: |
+          set -euo pipefail
+          if node -e 'const s=require("./package.json").scripts||{}; if(!s["link:platform"]) process.exit(1)'; then
+            npm run link:platform
+          fi
 
       - name: Linux - install dependencies
         if: matrix.arch == 'arm64' && (matrix.platform == 'linux' || matrix.platform == 'android')

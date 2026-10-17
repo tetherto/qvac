@@ -10,7 +10,7 @@ inputs:
     description: 'Basename of the calling on-pr workflow, e.g. on-pr-llm-llamacpp.yml'
     required: true
   native-hash:
-    description: 'native_hash output of detect-native-changes'
+    description: 'native_hash output of detect-native-changes, or a key derived from it (reusable-prebuilds appends a build-config hash). Must match the value given to prebuild-artifact-save.'
     required: true
   pr-number:
     description: 'github.event.pull_request.number'
