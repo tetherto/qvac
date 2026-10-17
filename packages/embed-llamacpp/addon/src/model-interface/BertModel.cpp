@@ -364,6 +364,9 @@ void BertModel::configureParams(
             .c_str(),
         nullptr);
     params.kv_unified = true;
+    // The unified cache no longer lifts the batch's sequence limit on its own:
+    // every seq_id must be below the context's n_seq_max.
+    params.n_parallel = static_cast<int32_t>(llama_max_parallel_sequences());
   }
 
   // For non-causal models, batch size must be equal to ubatch size

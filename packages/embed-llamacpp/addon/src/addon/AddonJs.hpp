@@ -180,10 +180,12 @@ inline FitResult runFit(FitRequest request) {
 
   // `BertModel::configureParams` applies both to every embedding load: a
   // non-causal model decodes one ubatch at a time, and a single sequence needs
-  // no split cache.
+  // no split cache but must still admit every sequence id.
   loadParams.n_ubatch = loadParams.n_batch;
   if (loadParams.n_parallel == 1) {
     loadParams.kv_unified = true;
+    loadParams.n_parallel =
+        static_cast<int32_t>(llama_max_parallel_sequences());
   }
 
   // The fitter reduces the context only when it is 0, so an embedding load
