@@ -691,3 +691,38 @@ TEST_F(StbImageSecurityTest, BoundsProjectedEsrganOutput) {
   EXPECT_TRUE(esrganOutputFitsLimits(
       1024, 1024, 4, 2, image_codec::MAX_CONFIGURED_IMAGE_PIXELS));
 }
+
+TEST_F(
+    StbImageSecurityTest, RgbaDecodePreservesAlphaWithoutChangingRgbDefault) {
+  std::vector<uint8_t> pixels = {255, 0, 0, 0, 0, 255, 0, 127, 0, 0, 255, 255};
+  sd_image_t original{3, 1, 4, pixels.data()};
+  auto png = image_codec::encodeToPng(original);
+  ASSERT_FALSE(png.empty());
+  auto rgba = image_codec::decodeImage(
+      png, 3, nullptr, 3, image_codec::DecodeChannels::RGBA);
+  std::unique_ptr<uint8_t, image_codec::FreeDeleter> rgbaOwner(rgba.data);
+  ASSERT_NE(rgba.data, nullptr);
+  EXPECT_EQ(rgba.channel, 4u);
+  EXPECT_TRUE(std::equal(pixels.begin(), pixels.end(), rgba.data));
+  auto rgb = image_codec::decodeImage(png);
+  std::unique_ptr<uint8_t, image_codec::FreeDeleter> rgbOwner(rgb.data);
+  ASSERT_NE(rgb.data, nullptr);
+  EXPECT_EQ(rgb.channel, 3u);
+  EXPECT_EQ(rgb.data[0], 255);
+  EXPECT_EQ(rgb.data[4], 255);
+  auto rejected = image_codec::decodeImage(
+      png, 2, nullptr, 3, image_codec::DecodeChannels::RGBA);
+  EXPECT_EQ(rejected.data, nullptr);
+}
+
+TEST_F(StbImageSecurityTest, RgbaDecodeAddsOpaqueAlphaToRgbInput) {
+  std::vector<uint8_t> pixels = {10, 20, 30};
+  sd_image_t original{1, 1, 3, pixels.data()};
+  auto png = image_codec::encodeToPng(original);
+  auto rgba = image_codec::decodeImage(
+      png, 1, nullptr, 1, image_codec::DecodeChannels::RGBA);
+  std::unique_ptr<uint8_t, image_codec::FreeDeleter> owner(rgba.data);
+  ASSERT_NE(rgba.data, nullptr);
+  EXPECT_EQ(rgba.channel, 4u);
+  EXPECT_EQ(rgba.data[3], 255);
+}

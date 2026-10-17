@@ -456,92 +456,38 @@ nativeTest('EsrganUpscaler | upscale rejects invalid repeats', async (t) => {
   }
 })
 
-// ---------- FLUX img2img prediction guard ----------
-
-nativeTest('FLUX img2img | throws when prediction is omitted', async (t) => {
-  const model = new ImgStableDiffusion({
-    files: {
-      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
-      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
-    },
-    config: {
-      threads: 1,
-      diffusion_fa: true,
-      verbosity: 2
-    },
-    logger: console,
-    opts: { stats: true }
-  })
-
-  const fakeImage = VALID_PNG_HEADER
-
-  try {
-    await model.run({ prompt: 'test', init_image: fakeImage })
-    t.fail('should have thrown')
-  } catch (err) {
-    t.ok(
-      /FLUX img2img requires an explicit prediction type/.test(err.message),
-      'error message mentions FLUX prediction requirement'
-    )
-    t.ok(/flux2_flow/.test(err.message), 'error message suggests flux2_flow')
-  }
-})
-
-nativeTest('FLUX img2img | throws when prediction is "auto"', async (t) => {
-  const model = new ImgStableDiffusion({
-    files: {
-      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
-      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
-    },
-    config: {
-      threads: 1,
-      prediction: 'auto',
-      diffusion_fa: true,
-      verbosity: 2
-    },
-    logger: console,
-    opts: { stats: true }
-  })
-
-  const fakeImage = VALID_PNG_HEADER
-
-  try {
-    await model.run({ prompt: 'test', init_image: fakeImage })
-    t.fail('should have thrown')
-  } catch (err) {
-    t.ok(
-      /FLUX img2img requires an explicit prediction type/.test(err.message),
-      'prediction: "auto" is rejected for FLUX img2img'
-    )
-  }
-})
-
-nativeTest('FLUX img2img | throws when prediction is "flux_flow"', async (t) => {
-  const model = new ImgStableDiffusion({
-    files: {
-      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
-      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
-    },
-    config: {
-      threads: 1,
-      prediction: 'flux_flow',
-      diffusion_fa: true,
-      verbosity: 2
-    },
-    logger: console,
-    opts: { stats: true }
-  })
-
-  try {
-    await model.run({ prompt: 'test', init_image: VALID_PNG_HEADER })
-    t.fail('should have thrown')
-  } catch (err) {
-    t.ok(
-      /FLUX img2img requires an explicit prediction type/.test(err.message),
-      'prediction: "flux_flow" is rejected for FLUX img2img'
-    )
-  }
-})
+// Reference routing is selected from the loaded native model, not encoder presence.
+for (const prediction of [undefined, 'auto', 'flux2_flow']) {
+  nativeTest(
+    `reference img2img | delegates model routing with prediction=${prediction}`,
+    async (t) => {
+      const model = new ImgStableDiffusion({
+        files: { model: '/tmp/image.gguf', llm: '/tmp/encoder.gguf' },
+        config: { prediction },
+        logger: console
+      })
+      let received
+      model.addon = {
+        runJob: (params) => {
+          received = params
+          return Promise.resolve(false)
+        }
+      }
+      await t.exception.all(
+        model.run({
+          prompt: 'test',
+          init_image: VALID_PNG_HEADER,
+          width: 512,
+          height: 512
+        }),
+        /a job is already set or being processed/
+      )
+      t.is(received.mode, 'img2img')
+      t.is(received.init_image, VALID_PNG_HEADER)
+      t.is(received.width, 512)
+    }
+  )
+}
 
 nativeTest('FLUX img2img | does NOT throw for txt2img even without prediction', async (t) => {
   const model = new ImgStableDiffusion({
@@ -628,62 +574,35 @@ nativeTest('init_images | rejects combining init_image + init_images', async (t)
   }
 })
 
-nativeTest('init_images | rejects non-FLUX.2 model (no files.llm)', async (t) => {
-  const model = new ImgStableDiffusion({
-    files: {
-      model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
-    },
-    config: {
-      threads: 1,
-      diffusion_fa: true,
-      verbosity: 2
-    },
-    logger: console,
-    opts: { stats: true }
-  })
-
-  try {
-    await model.run({
-      prompt: 'test @image1 @image2',
-      init_images: [VALID_PNG_HEADER, VALID_JPEG_HEADER]
-    })
-    t.fail('should have thrown')
-  } catch (err) {
-    t.ok(
-      /multi-reference fusion\) requires a FLUX\.2 model/.test(err.message),
-      'error mentions FLUX.2 requirement'
-    )
-  }
-})
-
-nativeTest('init_images | rejects FLUX.2 model without prediction=flux2_flow', async (t) => {
-  const model = new ImgStableDiffusion({
-    files: {
-      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
-      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
-    },
-    config: {
-      threads: 1,
-      diffusion_fa: true /* no prediction */,
-      verbosity: 2
-    },
-    logger: console,
-    opts: { stats: true }
-  })
-
-  try {
-    await model.run({
-      prompt: 'test @image1 @image2',
-      init_images: [VALID_PNG_HEADER, VALID_JPEG_HEADER]
-    })
-    t.fail('should have thrown')
-  } catch (err) {
-    t.ok(
-      /multi-reference fusion\) requires a FLUX\.2 model/.test(err.message),
-      'error message mentions FLUX.2 / fusion'
-    )
-  }
-})
+for (const llm of [undefined, '/tmp/encoder.gguf']) {
+  nativeTest(
+    `init_images | delegates capability validation without filename heuristics (llm=${!!llm})`,
+    async (t) => {
+      const model = new ImgStableDiffusion({
+        files: { model: '/tmp/image.gguf', ...(llm ? { llm } : {}) },
+        logger: console
+      })
+      let received
+      model.addon = {
+        runJob: (params) => {
+          received = params
+          return Promise.reject(new Error('native model does not support reference editing'))
+        }
+      }
+      await t.exception.all(
+        model.run({
+          prompt: 'test',
+          init_images: [VALID_PNG_HEADER, VALID_JPEG_HEADER],
+          width: 512,
+          height: 512
+        }),
+        /native model does not support reference editing/
+      )
+      t.is(received.mode, 'img2img')
+      t.alike(received.init_images, [VALID_PNG_HEADER, VALID_JPEG_HEADER])
+    }
+  )
+}
 
 nativeTest('init_images | rejects non-Uint8Array entries', async (t) => {
   const model = new ImgStableDiffusion({

@@ -156,6 +156,7 @@ class VideoStableDiffusion {
             clipGPath: '',
             t5XxlPath: this._files.t5Xxl || '',
             llmPath: this._files.llm || '',
+            llmVisionPath: this._files.llmVision || '',
             vaePath: this._files.vae || '',
             clipVisionPath: this._files.clipVision || '',
             esrganPath: this._files.esrgan || '',
