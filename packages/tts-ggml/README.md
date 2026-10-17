@@ -1744,4 +1744,9 @@ Apache-2.0.  See [LICENSE](./LICENSE).
 
 ## Pocket TTS
 
+The pinned `speech-cpp` 2026-10-15 source includes Pocket Metal, CUDA and
+Vulkan support in the native library. The JavaScript Pocket API continues
+to require `config.useGPU: false`; updating the native dependency does not
+remove that addon validation.
+
 See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.
