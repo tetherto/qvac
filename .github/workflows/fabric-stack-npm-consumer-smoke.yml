@@ -44,7 +44,7 @@ jobs:
         if: runner.environment != 'github-hosted'
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -54,12 +54,12 @@ jobs:
           persist-credentials: false
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@b5199bf1f3d1f4392039747c0778ff8659e8968f
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@b5199bf1f3d1f4392039747c0778ff8659e8968f
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -67,14 +67,14 @@ jobs:
           arch: ${{ env.ARCH }}
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@ef3d614873ab1ed71aaa07c3df7b23d2760fb12b
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@b5199bf1f3d1f4392039747c0778ff8659e8968f
 
       - name: Set Vulkan SDK Path on Linux
         shell: bash
         run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
 
       - name: Download fabric-prebuilds
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           name: fabric-prebuilds
           path: ${{ runner.temp }}/fabric-prebuilds
