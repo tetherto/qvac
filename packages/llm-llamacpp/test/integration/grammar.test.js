@@ -212,6 +212,38 @@ safeTest('generationParams | json_schema (string) is accepted', { timeout: 600_0
   )
 })
 
+// Regression (#5008): a one-field schema with maxLength 2000 failed sampler
+// init while 1999/2001/4000 passed — fabric rejected the generated
+// `char{1,2000}` rule via its repetition guard (upstream 11575 accepts it).
+// Red until the fabric fork carries the upstream grammar fix.
+safeTest(
+  'generationParams | json_schema accepts maxLength boundary values',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model } = await setupModel(t, { seed: '42' })
+
+    for (const maxLength of [1999, 2000, 2001, 4000]) {
+      const schema = {
+        type: 'object',
+        properties: { value: { type: 'string', minLength: 1, maxLength } },
+        required: ['value'],
+        additionalProperties: false
+      }
+      const response = await model.run(
+        [{ role: 'user', content: 'Return {"value":"hello"}. /no_think' }],
+        { generationParams: { json_schema: schema, predict: 32, seed: 42 } }
+      )
+      const output = (await collectResponse(response)).trim()
+
+      let parsed
+      t.execution(() => {
+        parsed = JSON.parse(output)
+      }, `maxLength ${maxLength}: output parses as JSON (got "${output}")`)
+      t.is(parsed?.value, 'hello', `maxLength ${maxLength}: value round-trips`)
+    }
+  }
+)
+
 safeTest(
   'generationParams | grammar + json_schema together throws',
   { timeout: 600_000 },
