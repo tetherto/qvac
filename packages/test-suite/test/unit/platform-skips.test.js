@@ -12,6 +12,9 @@ class Probe extends ConsumerBase {
   reasonFor(platforms) {
     return this.getTestSkipReason({ testId: 't', skip: { reason: 'because', platforms } })
   }
+  reasonOf(skip) {
+    return this.getTestSkipReason({ testId: 't', skip })
+  }
 }
 
 const skips = (platform, platforms) => new Probe(platform).reasonFor(platforms) !== null
@@ -48,6 +51,49 @@ test('matching is by segment, not by string prefix', () => {
 test('no declared platforms is not a platform skip', () => {
   assert.equal(new Probe('desktop-macos').reasonFor(undefined), null)
   assert.equal(new Probe('desktop-macos').reasonFor([]), null)
+})
+
+// Two rules matched `vla-*`: one for the packaged pass, one for mobile. Each leg reports its own.
+const merged = {
+  reason: 'electron, snap: too slow for the packaged pass | mobile: OOM on device',
+  platforms: ['electron', 'snap', 'mobile'],
+  reasons: [
+    { platforms: ['electron', 'snap'], reason: 'too slow for the packaged pass' },
+    { platforms: ['mobile'], reason: 'OOM on device' }
+  ]
+}
+
+test('a merged skip reports only the reasons for this platform', () => {
+  assert.equal(new Probe('mobile-android').reasonOf(merged), 'OOM on device')
+  assert.equal(new Probe('mobile-ios').reasonOf(merged), 'OOM on device')
+  assert.equal(new Probe('electron-linux').reasonOf(merged), 'too slow for the packaged pass')
+  assert.equal(new Probe('snap-linux').reasonOf(merged), 'too slow for the packaged pass')
+})
+
+test('every group matching this platform is reported', () => {
+  const skip = {
+    ...merged,
+    reasons: [...merged.reasons, { platforms: ['mobile-android'], reason: 'flaky on Android' }]
+  }
+  assert.equal(new Probe('mobile-android').reasonOf(skip), 'OOM on device | flaky on Android')
+  assert.equal(new Probe('mobile-ios').reasonOf(skip), 'OOM on device')
+})
+
+test('per-platform reasons never widen the skip', () => {
+  const skip = { ...merged, platforms: ['mobile'] }
+  assert.equal(new Probe('electron-linux').reasonOf(skip), null)
+  assert.equal(new Probe('desktop-macos').reasonOf(merged), null)
+})
+
+test('a skip without per-platform reasons reports its reason', () => {
+  const { reasons, ...plain } = merged
+  assert.equal(new Probe('mobile-android').reasonOf(plain), merged.reason)
+  assert.equal(new Probe('mobile-android').reasonOf({ ...merged, reasons: [] }), merged.reason)
+})
+
+test('a platform with no matching group falls back to the reason', () => {
+  const skip = { ...merged, reasons: [merged.reasons[0]] }
+  assert.equal(new Probe('mobile-android').reasonOf(skip), merged.reason)
 })
 
 test('a JS consumer registers a label the per-OS rules can reach', async () => {
