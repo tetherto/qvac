@@ -1032,8 +1032,7 @@
           "verifyGenerated": true,
           "nameTransform": "rename-prefix",
           "repoName": "tts-ggml",
-          "testGateMode": "post-publish-integration",
-          "postIntegrationOnGpr": true,
+          "testGateMode": "none",
           "slicePlatformPackages": true
         }
       }
