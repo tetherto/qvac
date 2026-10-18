@@ -270,6 +270,17 @@ export function normalizeTextStream(
   });
 }
 
+/** `run({ streamOutput: true })` splits its text, so it needs a non-empty string. */
+export function requireStreamOutputText(input: unknown): string {
+  if (typeof input !== "string" || input.trim().length === 0) {
+    throw new QvacErrorAddonTTSGgml({
+      code: ERR_CODES.FAILED_TO_APPEND,
+      adds: "run with streamOutput: non-empty string `input` is required",
+    });
+  }
+  return input;
+}
+
 /** The sentence chunks of `text`; an input that yields none is an error. */
 export function splitSentenceChunks(
   text: string,

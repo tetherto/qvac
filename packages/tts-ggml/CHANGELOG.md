@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sentence streaming. `index.js` keeps the public `TTSGgml` class and its
   execution lifecycle; the public API, engine/file precedence, cancellation,
   exclusive execution and reload behaviour are unchanged.
+- The wrapper's Pocket execution rules (completion barrier, cancellation drain,
+  abort handling, lifecycle lock, reload), native event routing, the
+  `exclusiveRun` response queue and the `getVoiceControls()` catalog mapping
+  move to `lib/pocketLifecycle.js`, `lib/addonEvents.js`,
+  `lib/exclusiveQueue.js` and `lib/voiceControls.js`; `index.js` keeps the
+  public API and the load / run / cancel / reload lifecycle. No behaviour
+  change.
 
 ### Fixed
 
