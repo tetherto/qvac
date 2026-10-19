@@ -93,6 +93,19 @@ The catalog adds a Nemotron 3 diarization GGUF constant. MOSS transcribe/diarize
 import { PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0 } from '@qvac/ai-sdk-provider/models'
 ```
 
+### MOSS TTS constants
+
+Four MOSS speech GGUF constants are now named exports. Transcribe/diarize MOSS names remain on `@qvac/sdk`.
+
+```typescript
+import {
+  TTS_CODEC_MOSS_SPEECH_F16,
+  TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16,
+  TTS_MOSS_SPEECH_BF16,
+  TTS_MOSS_SPEECH_Q8_0
+} from '@qvac/ai-sdk-provider/models'
+```
+
 ## Bug Fixes
 
 MOSS GPU fields are validated against what the engine accepts, and CI catalog fixtures were repaired to match.
