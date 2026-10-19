@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.51.0] - 2026-10-19
 
 ### Breaking
 
@@ -24,7 +24,7 @@
   `llama-embedding --pooling rank`. A GGUF that declares another pooling or
   has no classifier head is rejected before its weights load.
 
-## [Unreleased]
+## [0.50.1] - 2026-10-19
 
 ### Added
 
