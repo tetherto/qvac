@@ -180,6 +180,8 @@ const config = {
 | device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
 | gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
 | ctx_size          | 0 – model-dependent                         | 4096 (0 = loaded from model) | Context window size                                   |
+| poll              | integer 0 – 100                             | 0                            | Main GGML threadpool busy-wait level. `0` sleeps while idle; higher values can reduce wake latency but consume CPU during GPU work |
+| poll-batch        | integer 0 – 100                             | `poll`                       | Batch GGML threadpool busy-wait level                  |
 | lora              | string                                      | —                            | Path to LoRA adapter file                             |
 | temp              | 0.00 – 2.00                                 | 0.8                          | Sampling temperature                                  |
 | top_p             | 0 – 1                                       | 0.9                          | Top-p (nucleus) sampling                              |

@@ -94,8 +94,8 @@ async function expectEachRejected(t, model, cases) {
 test('MOSS-Speech: explicit engine option routes to moss-speech', (t) => {
   const model = createMockedSpeechModel()
   t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS_SPEECH)
-  t.is(model._mossSpeechModelPath, SPEECH_MODEL)
-  t.is(model._mossSpeechCodecPath, SPEECH_CODEC)
+  t.is(model._setup.paths.mossSpeechModelPath, SPEECH_MODEL)
+  t.is(model._setup.paths.mossSpeechCodecPath, SPEECH_CODEC)
 })
 
 test('MOSS-Speech: the model files alone route to moss-speech, under either alias', (t) => {
@@ -107,7 +107,7 @@ test('MOSS-Speech: the model files alone route to moss-speech, under either alia
     files: { mossSpeechModelPath: SPEECH_MODEL, mossSpeechCodecPath: SPEECH_CODEC }
   })
   t.is(aliased.getEngineType(), TTSGgml.ENGINE_MOSS_SPEECH)
-  t.is(aliased._mossSpeechCodecPath, SPEECH_CODEC)
+  t.is(aliased._setup.paths.mossSpeechCodecPath, SPEECH_CODEC)
 })
 
 test('MOSS-Speech: modelDir detection pairs the model with its codec and prefers q8_0', (t) => {
@@ -117,8 +117,8 @@ test('MOSS-Speech: modelDir detection pairs the model with its codec and prefers
     fs.writeFileSync(path.join(root, 'moss-speech-codec-f16.gguf'), 'codec')
     const model = new TTSGgml({ files: { modelDir: root } })
     t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS_SPEECH)
-    t.is(model._mossSpeechModelPath, path.join(root, 'moss-speech-q8_0.gguf'))
-    t.is(model._mossSpeechCodecPath, path.join(root, 'moss-speech-codec-f16.gguf'))
+    t.is(model._setup.paths.mossSpeechModelPath, path.join(root, 'moss-speech-q8_0.gguf'))
+    t.is(model._setup.paths.mossSpeechCodecPath, path.join(root, 'moss-speech-codec-f16.gguf'))
   })
 })
 

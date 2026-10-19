@@ -116,6 +116,8 @@ TEST(LayaModelConfigTest, AcceptsLayaLoadOptions) {
       {"flash_attn", "auto"},
       {"threads", "1"},
       {"threads-batch", "0"},
+      {"poll", "50"},
+      {"poll-batch", "1"},
       {"openclCacheDir", "/tmp"}};
   EXPECT_NO_THROW(LayaModel::checkConfig(config));
 }

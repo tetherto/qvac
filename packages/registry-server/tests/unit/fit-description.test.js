@@ -20,6 +20,7 @@ const {
   buildWhisperVadBin,
   buildBciEmbedder,
   buildSentencePiece,
+  buildIndicTransHeader,
   buildIndicTransBin,
   buildMarianModel,
   buildMarianShortlist
@@ -28,6 +29,11 @@ const {
 const WHISPER_ENGINE = '@qvac/transcription-whispercpp'
 const BCI_ENGINE = '@qvac/bci-whispercpp'
 const NMT_ENGINE = '@qvac/translation-nmtcpp'
+
+const EN_INDIC_DIST_200M_Q4_0_HEADER = Buffer.from(
+  '6c6d6767427e00000001000000020000080000001200000000010000000200000800000012000000010000000200000030df010001010101000008000000080000',
+  'hex'
+)
 
 function tempDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fit-description-'))
@@ -199,6 +205,12 @@ test('an IndicTrans model is described with both vocabularies and embedded token
   t.is(metadata['nmt.model_type'], 1)
   t.is(metadata['nmt.n_vocab'], 6)
   t.is(metadata['nmt.n_tgt_vocab'], 4)
+  t.is(metadata['nmt.encoder_normalize_before'], true)
+  t.is(metadata['nmt.decoder_normalize_before'], false)
+  t.is(metadata['nmt.layernorm_embedding'], true)
+  t.is(metadata['nmt.scale_embedding'], true)
+  t.is(metadata['nmt.has_lm_head'], false)
+  t.is(metadata['nmt.encoder_ffn_dim'], 24)
   t.is(metadata['nmt.decoder_ffn_dim'], 16)
   t.is(metadata['nmt.src_vocab.n_tokens'], DEFAULT_TOKENS.length)
   t.is(metadata['nmt.tgt_vocab.n_tokens'], 2)
@@ -207,6 +219,34 @@ test('an IndicTrans model is described with both vocabularies and embedded token
   t.is(metadata['nmt.src_spm.n_pieces'], 6)
   t.is(metadata['nmt.tgt_spm.n_pieces'], 2)
   t.alike(shapes(tensors), DEFAULT_INDICTRANS_TENSORS)
+})
+
+test('an IndicTrans header is read with the byte layout of a converted model', async (t) => {
+  const { metadata } = await describe(
+    t,
+    'ggml-indictrans2-en-indic-dist-200M-q4_0.bin',
+    buildIndicTransBin({ header: EN_INDIC_DIST_200M_Q4_0_HEADER }),
+    NMT_ENGINE
+  )
+
+  t.is(metadata['nmt.n_vocab'], 32322)
+  t.is(metadata['nmt.d_model'], 512)
+  t.is(metadata['nmt.n_encoder_layers'], 18)
+  t.is(metadata['nmt.n_decoder_layers'], 18)
+  t.is(metadata['nmt.ftype'], 2)
+  t.is(metadata['nmt.n_tgt_vocab'], 122672)
+  t.is(metadata['nmt.encoder_normalize_before'], true)
+  t.is(metadata['nmt.decoder_normalize_before'], true)
+  t.is(metadata['nmt.layernorm_embedding'], true)
+  t.is(metadata['nmt.scale_embedding'], true)
+  t.is(metadata['nmt.has_lm_head'], false)
+  t.is(metadata['nmt.encoder_ffn_dim'], 2048)
+  t.is(metadata['nmt.decoder_ffn_dim'], 2048)
+})
+
+test('an IndicTrans header whose flags are not bools yields no description', async (t) => {
+  const header = buildIndicTransHeader({ flags: [1, 0, 2, 1, 0] })
+  t.is(await rejects(t, 'ggml-indictrans2.bin', buildIndicTransBin({ header }), NMT_ENGINE), null)
 })
 
 test('an IndicTrans model without embedded tokenizers records them as absent', async (t) => {

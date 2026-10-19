@@ -43,6 +43,8 @@ void discarded;
 const config: LlmLlamacpp.LlamaConfig = {
   device: "gpu",
   parallel: 4,
+  poll: "0",
+  "poll-batch": "0",
   "split-mode": "layer",
 };
 void config;

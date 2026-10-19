@@ -51,10 +51,10 @@ function createMockedParlerModel({
 test('Parler: explicit engine option routes to parler', (t) => {
   const model = createMockedParlerModel()
   t.is(model.getEngineType(), TTSGgml.ENGINE_PARLER, 'engine: parler detected')
-  t.is(model._parlerModelPath, './models/parler-mini-v1-q8_0.gguf')
-  t.absent(model._t3ModelPath, 'no t3 path on parler')
-  t.absent(model._s3genModelPath, 'no s3gen path on parler')
-  t.absent(model._supertonicModelPath, 'no supertonic path on parler')
+  t.is(model._setup.paths.parlerModelPath, './models/parler-mini-v1-q8_0.gguf')
+  t.absent(model._setup.paths.t3ModelPath, 'no t3 path on parler')
+  t.absent(model._setup.paths.s3genModelPath, 'no s3gen path on parler')
+  t.absent(model._setup.paths.supertonicModelPath, 'no supertonic path on parler')
 })
 
 test('Parler: parlerModel file path alone routes to parler engine', (t) => {
@@ -84,7 +84,7 @@ test('Parler: modelDir auto-detect ranks variant then quant tier', async (t) => 
     const model = new TTSGgml({ files: { modelDir: tmpRoot } })
     t.is(model.getEngineType(), TTSGgml.ENGINE_PARLER, 'modelDir with parler GGUFs detected')
     t.is(
-      model._parlerModelPath,
+      model._setup.paths.parlerModelPath,
       path.join(tmpRoot, 'parler-mini-v1-q8_0.gguf'),
       'mini beats indic; q8_0 beats f16; bare parler.gguf ignored'
     )

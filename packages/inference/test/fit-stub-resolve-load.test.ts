@@ -126,9 +126,8 @@ test('resolve load: a source with no registry coordinates resolves no stub', asy
   t.is(resolved.reason, 'unresolvable-ref')
 })
 
-// MiniMax-Music3 is not in the registry, so its pair is assessed from the files
-// on disk. The real plugin resolves them, and the fitter is asked for the load
-// the plugin would run.
+// The real plugin resolves the pair, and the fitter is asked for the load the
+// plugin would run.
 test('resolve load: a minimax pair on disk reaches the audiogen fitter', async (t) => {
   clearPlugins()
   registerPlugin(audioGenPlugin)

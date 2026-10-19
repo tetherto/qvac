@@ -1117,6 +1117,17 @@ namespace LlmLlamacpp {
     backend?: string;
     gpu_layers?: NumericLike;
     ctx_size?: NumericLike;
+    /**
+     * Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100
+     * (maximum polling). Defaults to 0. Values above 0 can reduce worker wake
+     * latency for CPU-heavy workloads, but consume CPU while GPU work runs.
+     */
+    poll?: NumericLike;
+    /**
+     * Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when
+     * neither option is set.
+     */
+    "poll-batch"?: NumericLike;
     system_prompt?: string;
     lora?: string;
     temp?: NumericLike;
