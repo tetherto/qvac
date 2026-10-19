@@ -29,6 +29,10 @@ struct EsrganUpscalerConfig {
 
 EsrganUpscalerConfig makeUpscalerConfig(const SdCtxConfig& config);
 
+// ESRGAN's native network accepts RGB only; reject other channel counts before
+// entering ggml, whose convolution assertions abort the process on mismatch.
+void validateEsrganImageChannels(int channels);
+
 bool esrganOutputFitsLimits(
     uint32_t width, uint32_t height, uint32_t factor, int repeats,
     uint64_t pixelLimit = image_codec::MAX_DECODED_PIXELS) noexcept;
