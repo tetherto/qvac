@@ -194,4 +194,14 @@ export declare function ggufQuantRank(name: string, pattern: RegExp): number;
  * reads best for its size (q8_0 > f16 > q4_0 > f32).
  */
 export declare function findQuantRankedGguf(modelDir: string | undefined, pattern: RegExp): string | undefined;
+type FileKey = keyof TTSGgmlFiles;
+type CanonicalFileKey = keyof NormalizedFiles;
+/**
+ * Alias table behind `normalizeGgmlFiles`: one row per `NormalizedFiles` key,
+ * the canonical key first and then its aliases in precedence order. The first
+ * non-empty value in a row wins, so the canonical key beats every alias and an
+ * earlier alias beats a later one.
+ */
+export declare const FILE_ALIAS_TABLE: ReadonlyArray<readonly [CanonicalFileKey, ...FileKey[]]>;
 export declare function normalizeGgmlFiles(files: TTSGgmlFiles | null | undefined): NormalizedFiles;
+export {};

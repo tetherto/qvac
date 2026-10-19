@@ -6,6 +6,7 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const process = require('bare-process')
 const {
+  FILE_ALIAS_TABLE,
   normalizeGgmlFiles,
   findQuantRankedGguf,
   firstNonEmpty
@@ -64,6 +65,47 @@ test('model files: every alias collapses onto its canonical key', (t) => {
   )
   t.alike(normalizeGgmlFiles(null), {})
   t.alike(normalizeGgmlFiles('not an object'), {})
+})
+
+test('model files: the alias table routes every alias to its canonical key, canonical first', (t) => {
+  const canonicalKeys = FILE_ALIAS_TABLE.map((row) => row[0])
+  const aliasKeys = FILE_ALIAS_TABLE.flatMap((row) => row.slice(1))
+  t.is(new Set(canonicalKeys).size, canonicalKeys.length, 'one row per canonical key')
+  t.is(new Set(aliasKeys).size, aliasKeys.length, 'no alias is listed twice')
+  for (const alias of aliasKeys) {
+    t.absent(canonicalKeys.includes(alias), `${alias} is an alias, not a canonical key`)
+  }
+  for (const [canonical, ...aliases] of FILE_ALIAS_TABLE) {
+    t.is(
+      normalizeGgmlFiles({ [canonical]: `/${canonical}` })[canonical],
+      `/${canonical}`,
+      `${canonical} passes through`
+    )
+    for (const alias of aliases) {
+      t.is(
+        normalizeGgmlFiles({ [alias]: `/${alias}` })[canonical],
+        `/${alias}`,
+        `${alias} lands on ${canonical}`
+      )
+    }
+    if (aliases.length === 0) continue
+    const aliasValues = Object.fromEntries(aliases.map((key) => [key, `/${key}`]))
+    t.is(
+      normalizeGgmlFiles({ [canonical]: `/${canonical}`, ...aliasValues })[canonical],
+      `/${canonical}`,
+      `${canonical} beats its aliases`
+    )
+    t.is(
+      normalizeGgmlFiles({ [canonical]: '', ...aliasValues })[canonical],
+      `/${aliases[0]}`,
+      `${canonical}: an empty canonical value falls through to the first alias`
+    )
+  }
+  t.alike(
+    Object.keys(normalizeGgmlFiles({})),
+    canonicalKeys,
+    'the normalized object lists every canonical key in table order'
+  )
 })
 
 test('model files: quant-ranked discovery prefers q8_0, f16, q4_0, f32, then anything else', (t) => {
