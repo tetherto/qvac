@@ -1001,8 +1001,29 @@ void TextLlmContext::generateSpeculative(
     appendResidentToken(sampled);
     ++lastGeneratedTokenCount_;
     const auto& ids = verified.ids;
+    // The verification decoded every accepted token but the last. Drops the
+    // ones from `ids[from]` on that were not streamed; memory that cannot
+    // trim keeps them, and so does the ledger.
+    const auto dropUnstreamed = [&](size_t from) {
+      if (from + 1 < ids.size() &&
+          !llama_memory_seq_rm(
+              llama_get_memory(modelCtx_.lctx), seqId_, nPast_, -1)) {
+        for (size_t j = from; j + 1 < ids.size(); ++j) {
+          ++nPast_;
+          appendResidentToken(ids[j]);
+        }
+      }
+    };
     for (size_t i = 0; i < ids.size(); ++i) {
       const bool isLast = i + 1 == ids.size();
+      if (stopGeneration_.load()) {
+        // Like the plain loop, nothing more is streamed once a cancel is
+        // recorded. The flag stays set for the caller's `onCancel`, which
+        // keeps the state after prefill, so the sequence must end at the
+        // last streamed token.
+        dropUnstreamed(i);
+        return;
+      }
       ++generatedAfterAccept;
       if (contextWindowFull(nPast_, ctxCeiling())) {
         step = {
@@ -1018,17 +1039,9 @@ void TextLlmContext::generateSpeculative(
             ids.size() - 1 - i);
       }
       if (step.contextOverflow || step.finished) {
-        // The plain loop never decodes the token it stops on. Drop it and
-        // the accepted tokens after it so the sequence ends the same way;
-        // memory that cannot trim keeps them, and so does the ledger.
-        if (!isLast &&
-            !llama_memory_seq_rm(
-                llama_get_memory(modelCtx_.lctx), seqId_, nPast_, -1)) {
-          for (size_t j = i; j + 1 < ids.size(); ++j) {
-            ++nPast_;
-            appendResidentToken(ids[j]);
-          }
-        }
+        // The plain loop never decodes the token it stops on, so the
+        // sequence ends before it.
+        dropUnstreamed(i);
         finish(step);
         return;
       }

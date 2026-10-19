@@ -2105,20 +2105,28 @@ void MtmdLlmContext::generateSpeculative(
 
     advanceDecodedTextToken(sampled);
     const auto& ids = verified.ids;
+    // See TextLlmContext::generateSpeculative.
+    const auto dropUnstreamed = [&](size_t from) {
+      if (from + 1 < ids.size() &&
+          !llama_memory_seq_rm(
+              llama_get_memory(modelCtx_.lctx), seqId_, current_.pos, -1)) {
+        for (size_t j = from; j + 1 < ids.size(); ++j) {
+          ++current_.pos;
+          ++current_.cacheTokens;
+          appendResidentToken(ids[j]);
+        }
+      }
+    };
     for (size_t i = 0; i < ids.size(); ++i) {
       const bool isLast = i + 1 == ids.size();
+      if (stopGeneration_.load()) {
+        // See TextLlmContext::generateSpeculative.
+        dropUnstreamed(i);
+        return;
+      }
       step = emit(ids[i], ids.size() - 1 - i);
       if (step.contextOverflow || step.finished) {
-        // See TextLlmContext::generateSpeculative.
-        if (!isLast &&
-            !llama_memory_seq_rm(
-                llama_get_memory(modelCtx_.lctx), seqId_, current_.pos, -1)) {
-          for (size_t j = i; j + 1 < ids.size(); ++j) {
-            ++current_.pos;
-            ++current_.cacheTokens;
-            appendResidentToken(ids[j]);
-          }
-        }
+        dropUnstreamed(i);
         finish(step);
         return;
       }
