@@ -66,43 +66,7 @@ await loadModel({ modelSrc, modelType, modelFitPolicy: 'off' })
 
 PR: [#4938](https://github.com/tetherto/qvac/pull/4938)
 
-**BEFORE:**
-consumer `package.json`
-
-```json
-"dependencies": { "@qvac/fabric": "^0.20.0" },
-"devDependencies": {
-  "@qvac/fabric-android-arm64": "^0.20.0",
-  "@qvac/fabric-ios": "^0.20.0"
-}
-```
-
-**AFTER:**
-
-```json
-"dependencies": { "@qvac/fabric": "^0.22.0" },
-"optionalDependencies": {
-  "@qvac/fabric-linux-x64": "^0.22.0",
-  "@qvac/fabric-linux-arm64": "^0.22.0",
-  "@qvac/fabric-darwin-arm64": "^0.22.0",
-  "@qvac/fabric-darwin-x64": "^0.22.0",
-  "@qvac/fabric-win32-x64": "^0.22.0"
-},
-"peerDependencies": {
-  "@qvac/fabric-android-arm64": "^0.22.0",
-  "@qvac/fabric-ios": "^0.22.0"
-},
-"peerDependenciesMeta": {
-  "@qvac/fabric-android-arm64": { "optional": true },
-  "@qvac/fabric-ios": { "optional": true }
-},
-"devDependencies": {
-  "@qvac/fabric-android-arm64": "0.22.0",
-  "@qvac/fabric-ios": "0.22.0"
-}
-```
-
-bare-link resolves `DT_NEEDED` replacements only from a package's own dependencies, so the platform packages must be in the consumer's manifest.
+Consumers are native addon packages (`llm-llamacpp`, `embed-llamacpp`, and the other engine addons), not application manifests.
 
 **BEFORE:** native consumer
 
@@ -162,16 +126,31 @@ PR: [#5005](https://github.com/tetherto/qvac/pull/5005)
 
 **BEFORE:**
 
-```kotlin
-LoadModelSrcRequestGgmlVlaModelConfig(
-    backend = LoadModelSrcRequestGgmlVlaModelConfigBackend.CPU
-)
+```json
+{
+  "serve": {
+    "models": {
+      "chat": {
+        "model": "QWEN3_600M_INST_Q4"
+      }
+    }
+  }
+}
 ```
 
 **AFTER:**
 
-```kotlin
-LoadModelSrcRequestGgmlVlaModelConfig(backend = "cpu")
+```json
+{
+  "serve": {
+    "models": {
+      "chat": {
+        "model": "QWEN3_600M_INST_Q4",
+        "config": { "backend": ["cuda", "vulkan"] }
+      }
+    }
+  }
+}
 ```
 
 ---

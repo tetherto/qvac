@@ -177,24 +177,17 @@ const sampleRate = await run.sampleRate
 
 PR: [#5005](https://github.com/tetherto/qvac/pull/5005)
 
-```kotlin
-LoadModelSrcRequestGgmlVlaModelConfig(
-    backend = LoadModelSrcRequestGgmlVlaModelConfigBackend.CPU
-)
-```
-
-```kotlin
-LoadModelSrcRequestGgmlVlaModelConfig(backend = "cpu")
-```
-
-```typescript
-import { loadModel, ModelType } from '@qvac/sdk'
-
-const modelId = await loadModel({
-  modelType: ModelType.llamacppCompletion,
-  modelSrc: '/models/llm.gguf',
-  modelConfig: { backend: 'cuda,vulkan' }
-})
+```json
+{
+  "serve": {
+    "models": {
+      "chat": {
+        "model": "QWEN3_600M_INST_Q4",
+        "config": { "backend": ["cuda", "vulkan"] }
+      }
+    }
+  }
+}
 ```
 
 ---

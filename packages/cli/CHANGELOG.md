@@ -74,45 +74,6 @@ QVAC_ADVISORY_MODEL_FIT=0
 }
 ```
 
-### Split addons resolve `#host-addon` from the consumer manifest
-
-bare-link resolves `DT_NEEDED` replacements only from a package's own dependencies, so fabric platform packages must be declared on the app that `qvac bundle` packages. Put host platforms in `optionalDependencies` and mobile platforms in optional peers. `qvac bundle` and `qvac verify bundle` still accept both the previous and the current split-addon layouts.
-
-**Before:**
-
-```json
-{
-  "dependencies": { "@qvac/fabric": "^0.20.0" },
-  "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.20.0",
-    "@qvac/fabric-ios": "^0.20.0"
-  }
-}
-```
-
-**After:**
-
-```json
-{
-  "dependencies": { "@qvac/fabric": "^0.22.0" },
-  "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.22.0",
-    "@qvac/fabric-linux-arm64": "^0.22.0",
-    "@qvac/fabric-darwin-arm64": "^0.22.0",
-    "@qvac/fabric-darwin-x64": "^0.22.0",
-    "@qvac/fabric-win32-x64": "^0.22.0"
-  },
-  "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.22.0",
-    "@qvac/fabric-ios": "^0.22.0"
-  },
-  "peerDependenciesMeta": {
-    "@qvac/fabric-android-arm64": { "optional": true },
-    "@qvac/fabric-ios": { "optional": true }
-  }
-}
-```
-
 ### Cached turns send the full conversation
 
 Named KV-cache completions on `qvac serve` send the whole history every turn. `remove_thinking_from_context` is no longer honored on `/v1/chat/completions`, `/v1/completions`, or `/v1/responses`. A changed tool set on a named key reuses the same cache file, trimmed where it differs. A deleted attachment now fails later cached turns, as it does uncached. `stats.promptTokens` on a cached turn counts only the tokens processed that turn; reused cache tokens are excluded.
