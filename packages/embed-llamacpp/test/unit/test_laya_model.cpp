@@ -144,6 +144,24 @@ TEST(LayaModelConfigTest, RejectsOptionsThatDoNotApply) {
   }
 }
 
+TEST(LayaModelConfigTest, RejectionNamesTheAcceptedOptions) {
+  try {
+    LayaModel::checkConfig({{"device", "cpu"}, {"pooling", "mean"}});
+    FAIL() << "pooling must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_EQ(
+        std::string(error.what())
+            .rfind(
+                "checkConfig: 'pooling' is not a Laya load option; accepted: "
+                "device, gpu_layers, batch_size, verbosity, main-gpu, "
+                "split-mode, tensor-split, flash_attn, threads, "
+                "threads-batch, poll, poll-batch, openclCacheDir",
+                0),
+        0U)
+        << error.what();
+  }
+}
+
 TEST(LayaModelConfigTest, ThreadsMustBeAWholeNumber) {
   for (const char* key : {"threads", "threads-batch", "threads_batch"}) {
     for (const char* value : {"abc", "4.5", "", "2x"}) {
