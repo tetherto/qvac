@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 import QvacLogger = require("@qvac/logging");
-import ffmpeg = require("bare-ffmpeg");
+import type ffmpeg = require("bare-ffmpeg");
 /* eslint-enable @typescript-eslint/no-require-imports */
+
+let ffmpegRuntime: typeof ffmpeg;
 import {
   createJobHandler,
   QvacResponse,
@@ -259,7 +261,6 @@ class FFmpegDecoder {
   /**
    * Load and initialize the decoder
    */
-  // eslint-disable-next-line @typescript-eslint/require-await -- preserves the established promise-returning API, so failures surface as rejections rather than synchronous throws.
   async load(): Promise<void> {
     if (this.isLoaded) {
       this.logger.info("FFmpegDecoder already loaded");
@@ -272,10 +273,12 @@ class FFmpegDecoder {
 
     this.logger.info("Loading FFmpegDecoder with config:", this.config);
 
+    ffmpegRuntime = await import("bare-ffmpeg");
+
     // Initialize format constants
-    this.SUPPORTED_AUDIO_FORMATS.s16le.format = ffmpeg.constants.sampleFormats.S16;
-    this.SUPPORTED_AUDIO_FORMATS.f32le.format = ffmpeg.constants.sampleFormats.FLT;
-    this.OUTPUT_CHANNEL_LAYOUT = ffmpeg.constants.channelLayouts.MONO;
+    this.SUPPORTED_AUDIO_FORMATS.s16le.format = ffmpegRuntime.constants.sampleFormats.S16;
+    this.SUPPORTED_AUDIO_FORMATS.f32le.format = ffmpegRuntime.constants.sampleFormats.FLT;
+    this.OUTPUT_CHANNEL_LAYOUT = ffmpegRuntime.constants.channelLayouts.MONO;
 
     // Validate audio format
     if (!this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat]) {
@@ -427,13 +430,13 @@ class FFmpegDecoder {
     const OUTPUT_SAMPLE_RATE = this.config.sampleRate;
 
     while (decoder.receiveFrame(raw)) {
-      const output = new ffmpeg.Frame();
+      const output = new ffmpegRuntime.Frame();
       output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
       output.format = OUTPUT_FORMAT;
       output.sampleRate = OUTPUT_SAMPLE_RATE;
       output.nbSamples = raw.nbSamples;
 
-      const samples = new ffmpeg.Samples();
+      const samples = new ffmpegRuntime.Samples();
       samples.fill(output);
 
       const count = resampler.convert(raw, output);
@@ -495,10 +498,10 @@ class FFmpegDecoder {
     run.stats.codecName = stream.codec.name;
     run.stats.inputSampleRate = stream.codecParameters.sampleRate;
 
-    const packet = new ffmpeg.Packet();
-    const raw = new ffmpeg.Frame();
+    const packet = new ffmpegRuntime.Packet();
+    const raw = new ffmpegRuntime.Frame();
 
-    const resampler = new ffmpeg.Resampler(
+    const resampler = new ffmpegRuntime.Resampler(
       stream.codecParameters.sampleRate,
       stream.codecParameters.channelLayout,
       stream.codecParameters.format,
@@ -536,13 +539,13 @@ class FFmpegDecoder {
     try {
       await this._processPacket(format, packet, raw, decoder, resampler, run);
 
-      const output = new ffmpeg.Frame();
+      const output = new ffmpegRuntime.Frame();
       output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
       output.format = OUTPUT_FORMAT;
       output.sampleRate = OUTPUT_SAMPLE_RATE;
       output.nbSamples = 1024;
 
-      const samples = new ffmpeg.Samples();
+      const samples = new ffmpegRuntime.Samples();
       samples.fill(output);
 
       let flushCount;
@@ -597,7 +600,7 @@ class FFmpegDecoder {
     const bufferSize = this._getBufferSize(this.config.inputBitrate);
     let bufferOffset = 0;
 
-    const io = new ffmpeg.IOContext(bufferSize, {
+    const io = new ffmpegRuntime.IOContext(bufferSize, {
       onread: (buffer, requestedLen) => {
         const remainingBytes = audioBuffer.length - bufferOffset;
         const bytesToRead = Math.min(requestedLen, remainingBytes);
@@ -643,7 +646,7 @@ class FFmpegDecoder {
     });
 
     this.logger.debug("[FFmpegDecoder] IOContext created");
-    const format = new ffmpeg.InputFormatContext(io);
+    const format = new ffmpegRuntime.InputFormatContext(io);
     this.logger.debug("[FFmpegDecoder] InputFormatContext created");
 
     const streamIndex = this.config.streamIndex || 0;

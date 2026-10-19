@@ -36,6 +36,10 @@ export function processRegistryModel(model: QVACModelEntry): ProcessedModel | nu
     return null
   }
 
+  // Compiled Core ML bundle components are staged by the SDK beside their
+  // primary model. They cannot be selected as standalone models in qvac serve.
+  if (/(?:^|\/)[^/]+\.mlmodelc\//.test(model.path)) return null
+
   const engine = resolveCanonicalEngine(model.engine)
   if (!engine) {
     console.warn(`⚠️  Skipping model with unknown engine "${model.engine}": ${model.path}`)

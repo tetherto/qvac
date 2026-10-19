@@ -1,6 +1,7 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.20.1",
+  "version": "0.22.0",
+  "qvacIpcAuthentication": "token-v1",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -154,7 +155,23 @@
       "import": "./dist/src/models/registry/index.js",
       "require": "./dist/src/models/registry/index.js"
     },
-    "./pear-pre": "./dist/src/pear/pre.js"
+    "./pear-pre": "./dist/src/pear/pre.js",
+    "./rpc-server-provider": {
+      "types": "./dist/src/worker/rpc-server-provider.d.ts",
+      "import": "./dist/src/worker/rpc-server-provider.js"
+    },
+    "./ggml-rpc-server/provider": {
+      "types": "./dist/src/worker/ggml-rpc-server-provider.d.ts",
+      "import": "./dist/src/worker/ggml-rpc-server-provider.js"
+    },
+    "./moss-transcribe/plugin": {
+      "types": "./dist/src/worker/plugins/moss-transcribe.d.ts",
+      "import": "./dist/src/worker/plugins/moss-transcribe.js"
+    },
+    "./llamacpp-decision/plugin": {
+      "types": "./dist/src/worker/plugins/llamacpp-decision.d.ts",
+      "import": "./dist/src/worker/plugins/llamacpp-decision.js"
+    }
   },
   "imports": {
     "#rpc": {
@@ -172,7 +189,6 @@
     "bare-imports.json",
     "dist/**/*",
     "src/electron-forge/**/*",
-    "src/expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
     "!**/yarn.lock",
@@ -183,59 +199,63 @@
     "docs/system-resources-support-matrix.md"
   ],
   "scripts": {
-    "test:unit": "bun run scripts/run-unit-tests.ts",
+    "test:unit": "tsx scripts/run-unit-tests.ts",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "lint": "lunte && npm run enforce-inference-versions",
     "lint:fix": "lunte --fix",
-    "enforce-inference-versions": "bun scripts/enforce-inference-versions.ts",
+    "enforce-inference-versions": "tsx scripts/enforce-inference-versions.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.types.json",
     "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
-    "build:pack": "bun run build && bun pm pack --destination dist/",
-    "sdk-source:workspace": "bun run ./scripts/link-workspace-inference.ts",
-    "watch": "nodemon --watch src --ext ts --exec 'bun run build'",
+    "build:pack": "npm run build && npm pack --ignore-scripts --pack-destination dist/",
+    "sdk-source:workspace": "node ./scripts/link-workspace-inference.mjs",
+    "watch": "nodemon --watch src --ext ts --exec 'npm run build'",
     "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
     "bare:ensureprebuilds:asr": "cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-ia32 && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-arm && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-x64",
     "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",
-    "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:asr && bun run bare:ensureprebuilds:embeddings",
-    "prepare:husky": "bun run husky",
+    "bare:ensureprebuilds": "npm run bare:ensureprebuilds:llamacpp && npm run bare:ensureprebuilds:asr && npm run bare:ensureprebuilds:embeddings",
+    "prepare:husky": "husky",
     "contract:export": "tsx ./scripts/export-contract.ts",
     "contract:check": "tsx ./scripts/export-contract.ts --check",
     "check:resource-collectors": "tsx ./scripts/check-resource-collectors-packaging.ts",
+    "bare-kit-runtimes:generate": "tsx ./scripts/generate-bare-kit-runtimes.ts",
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
-    "@qvac/asr-ggml": "^0.5.3",
-    "@qvac/audiogen-ggml": "^0.4.0",
-    "@qvac/bci-whispercpp": "^0.10.0",
-    "@qvac/classification-ggml": "^0.26.1",
-    "@qvac/decoder-audio": "^0.7.0",
-    "@qvac/diffusion-cpp": "^0.25.0",
-    "@qvac/embed-llamacpp": "^0.41.1",
+    "@qvac/asr-ggml": "^0.10.0",
+    "@qvac/audiogen-ggml": "^0.8.0",
+    "@qvac/bci-whispercpp": "^0.12.0",
+    "@qvac/classification-ggml": "^0.31.1",
+    "@qvac/decoder-audio": "^0.8.1",
+    "@qvac/diffusion-cpp": "^0.30.0",
+    "@qvac/embed-llamacpp": "^0.48.1",
     "@qvac/error": "^0.1.1",
-    "@qvac/inference": "^0.20.0",
+    "@qvac/ggml-rpc-server": "^0.5.1",
+    "@qvac/inference": "^0.22.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.53.1",
+    "@qvac/llm-llamacpp": "^0.61.1",
     "@qvac/logging": "^0.1.0",
-    "@qvac/ocr-ggml": "^0.24.1",
-    "@qvac/translation-nmtcpp": "^0.16.1",
-    "@qvac/tts-ggml": "^0.9.1",
-    "@qvac/vla-ggml": "^0.27.1",
+    "@qvac/ocr-ggml": "^0.29.1",
+    "@qvac/translation-nmtcpp": "^0.21.1",
+    "@qvac/tts-ggml": "^0.13.0",
+    "@qvac/vla-ggml": "^0.32.2",
     "bare-abort-controller": "^1.0.0",
     "bare-cpu-info": "0.1.1",
     "bare-crypto": "^1.15.0",
     "bare-env": "^3.0.0",
+    "bare-events": "2.9.1",
     "bare-fs": "^4.5.1",
     "bare-gpu-info": "0.1.1",
+    "bare-link": "^4.0.1",
     "bare-net": "^2.3.2",
     "bare-os": "^3.6.2",
     "bare-pack": "^2.0.1",
     "bare-path": "^3.0.1",
     "bare-rpc": "^1.3.2",
-    "bare-runtime": "^1.24.2",
-    "bare-signals": "^4.2.0",
-    "bare-stream": "^2.7.0",
+    "bare-runtime": "^1.34.1",
+    "bare-signals": "^5.0.0",
+    "bare-stream": "2.13.3",
     "bare-zlib": "^1.3.1",
     "compact-encoding": "^3.0.0",
     "corestore": "^7.4.5",
@@ -245,13 +265,13 @@
     "semver": "^7.8.0",
     "tar-stream": "^3.1.8",
     "which-runtime": "^1.3.2",
-    "zod": "^4.3.0",
+    "zod": "4.6.5",
     "bare-buffer": "^3.4.2"
   },
   "devDependencies": {
     "@electron-forge/plugin-base": "^7.11.1",
     "@expo/config-plugins": "^54.0.4",
-    "bare-module": "^6.2.0",
+    "bare-module": "^7.2.1",
     "@lancedb/lancedb": "^0.21.3",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "apache-arrow": "^18.1.0",
@@ -277,7 +297,7 @@
     "pear-pipe": "^1.0.6",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
-    "react-native-bare-kit": "^0.15.5",
+    "react-native-bare-kit": "^0.16.0",
     "tsc-alias": "^1.8.17",
     "tsx": "4.23.1",
     "typescript": "^5.9.3",
@@ -285,20 +305,16 @@
   },
   "peerDependencies": {
     "@electron-forge/plugin-base": "^7.11.1",
-    "bare-link": ">=3.0.0",
     "expo-build-properties": ">=0.12.0",
     "expo-device": ">=8.0.0",
     "expo-file-system": ">=19.0.0",
     "expo-modules-core": ">=3.0.0",
     "pear-pipe": ">=1.0.0",
-    "react-native-bare-kit": "*",
+    "react-native-bare-kit": ">=0.16.0",
     "tsx": "*"
   },
   "peerDependenciesMeta": {
     "@electron-forge/plugin-base": {
-      "optional": true
-    },
-    "bare-link": {
       "optional": true
     },
     "expo-build-properties": {
@@ -327,6 +343,5 @@
     "tar": "^7.5.22",
     "shell-quote": "^1.10.0",
     "@electron/rebuild": "^4.2.0"
-  },
-  "patchedDependencies": {}
+  }
 }

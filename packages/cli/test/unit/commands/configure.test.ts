@@ -1,15 +1,18 @@
 import { describe, it } from 'node:test'
+import { AUDIOGEN_MOSS_SFX_V2_Q8_0 } from '@qvac/sdk/models'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { LAYA_MULTILINGUAL_322M_Q8_0, LAYA_TYPED_DECISIONS_421M_F16 } from '@qvac/sdk'
 import {
   DEFAULT_STARTER,
   TTS_VOICE_PLACEHOLDER,
   aliasFor,
   buildAdditions,
   buildEntry,
-  buildGenericEntry
+  buildGenericEntry,
+  modalityInfo
 } from '@/configure/presets'
 import { CONFIG_DOCS_URL, docsUrlForAddon } from '@/configure/docs-links'
 import {
@@ -32,6 +35,38 @@ describe('configure: presets / buildEntry', () => {
     assert.equal(buildEntry('chat', 'LLAMA3_2_1B_INST_Q4').entry.model, 'LLAMA3_2_1B_INST_Q4')
   })
 
+  it('honors an explicit decision model choice without pinning a device', () => {
+    const built = buildEntry('decision', LAYA_TYPED_DECISIONS_421M_F16.name)
+    assert.equal(built.aliasBase, LAYA_TYPED_DECISIONS_421M_F16.name)
+    assert.equal(built.addon, 'llamacpp-decision')
+    assert.deepEqual(built.entry, {
+      model: LAYA_TYPED_DECISIONS_421M_F16.name,
+      type: 'llamacpp-decision',
+      preload: false
+    })
+  })
+
+  it('uses the recommended decision constant without requiring a source', () => {
+    assert.equal(modalityInfo('decision').role, 'decision')
+    const built = buildEntry('decision')
+    assert.equal(built.aliasBase, LAYA_MULTILINGUAL_322M_Q8_0.name)
+    assert.equal(built.addon, 'llamacpp-decision')
+    assert.deepEqual(built.entry, {
+      model: LAYA_MULTILINGUAL_322M_Q8_0.name,
+      type: 'llamacpp-decision',
+      preload: false
+    })
+  })
+
+  it('keeps search-all entries implicit so model engines select the plugin', () => {
+    const built = buildGenericEntry(LAYA_TYPED_DECISIONS_421M_F16.name, 'embeddings')
+    assert.equal(built.addon, 'embeddings')
+    assert.deepEqual(built.entry, {
+      model: LAYA_TYPED_DECISIONS_421M_F16.name,
+      preload: false
+    })
+  })
+
   it('adds prediction config for image', () => {
     const b = buildEntry('image')
     assert.equal(b.entry.model, 'SD_V2_1_1B_Q8_0')
@@ -46,6 +81,13 @@ describe('configure: presets / buildEntry', () => {
     const cfg = b.entry.config as Record<string, unknown>
     assert.equal(cfg['referenceAudioSrc'], TTS_VOICE_PLACEHOLDER)
     assert.ok(cfg['s3genModelSrc'])
+  })
+
+  it('routes MOSS-SoundEffect through a source URL rather than the audiogen descriptor', () => {
+    const b = buildEntry('speech', 'moss-sfx')
+    assert.equal(b.entry.src, AUDIOGEN_MOSS_SFX_V2_Q8_0.src)
+    assert.equal(b.entry.type, 'tts')
+    assert.equal(b.entry.config?.['ttsEngine'], 'moss-sfx')
   })
 
   it('buildGenericEntry is a bare model entry', () => {

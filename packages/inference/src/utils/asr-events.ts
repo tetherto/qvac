@@ -7,7 +7,7 @@ export function isVadEvent(event: ASRGgml.ASRStreamOutput): event is ASRGgml.Vad
     event.type === 'vad' &&
     typeof event.speaking === 'boolean' &&
     typeof event.score === 'number' &&
-    (event.source === 'silero' || event.source === 'energy')
+    (event.source === 'silero' || event.source === 'energy' || event.source === 'sortformer')
   )
 }
 
@@ -23,7 +23,8 @@ export function toVadStateEvent(event: ASRGgml.VadEvent) {
   return {
     speaking: event.speaking,
     probability: event.score,
-    source: event.source
+    source: event.source,
+    ...(event.speakerId !== undefined && { speakerId: event.speakerId })
   } satisfies VadStateEvent
 }
 

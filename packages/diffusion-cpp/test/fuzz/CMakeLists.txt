@@ -13,4 +13,5 @@ qvac_addon_add_fuzz_target(video-model-capabilities-fuzz
     ${CMAKE_SOURCE_DIR}/addon/src/utils/VideoModelCapabilities.cpp
   INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/addon/src
+    ${PICOJSON_INCLUDE_DIRS}
 )

@@ -9,19 +9,16 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getMDXComponents } from '@/mdx-components';
 import { SmartAnchor } from '@/components/mdx-smart-card';
-import { resolveIcon } from "@/lib/resolveIcon";
-import { cloneElement, isValidElement } from "react";
 import type { AnchorHTMLAttributes } from "react";
-import { CopyPageButton, ViewOptions, VersionSelector } from '@/components/page-actions';
+import { CopyPageButton, ViewOptions } from '@/components/page-actions';
+import { BreadcrumbRow } from '@/components/breadcrumb-row';
 import {
   DOCS_SITE_ORIGIN,
   buildCanonicalDocsUrl,
-  buildPageCanonicalUrl,
-  isArchivedVersionSlug,
 } from '@/lib/docs-open-graph';
 import { buildDocsJsonLd } from '@/lib/docs-json-ld';
+import { inkeepMetaTags } from '@/lib/page-attributes';
 import { QVAC_DOC_OG_HEIGHT, QVAC_DOC_OG_WIDTH } from '@/lib/qvac-doc-og';
-import { getVersionSelectorProps } from '@/lib/versions';
 
 function TitleText({
   title,
@@ -48,18 +45,6 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
 
   const MDXContent = page.data.body;
 
-  const rawIcon =
-  typeof page.data.icon === "string" ? resolveIcon(page.data.icon) : page.data.icon;
-
-  const titleIcon = isValidElement(rawIcon)
-    ? cloneElement(rawIcon, {
-        size: "1.2em",       // <- slightly larger than a capital letter
-        strokeWidth: 1.25,   // <- thinner stroke
-        className: "shrink-0",
-        "aria-hidden": true,
-      })
-    : null;
-
   // Filter ToC to include H2 through H5 by default. A page can opt into a
   // shallower ToC by setting `tocMaxDepth` in its frontmatter (e.g. `2` to
   // index only H2 headings).
@@ -76,7 +61,6 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
     isHomePage,
     (slugs) => source.getPage(slugs),
   );
-  const versionSelectorProps = getVersionSelectorProps(params.slug ?? []);
   const pageMarkdownUrl = page.url === '/' ? '/index.md' : `${page.url}.md`;
 
   return (
@@ -88,24 +72,12 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(block) }}
         />
       ))}
-      <DocsPage toc={filteredToc} tableOfContent={{ style: "clerk" }} tableOfContentPopover={{ style: "clerk" }} full={page.data.full}>
+      <DocsPage toc={filteredToc} slots={{ breadcrumb: BreadcrumbRow }} tableOfContent={{ style: "clerk" }} tableOfContentPopover={{ style: "clerk" }} full={page.data.full}>
       <DocsTitle>
-        <span className="inline-flex items-center gap-2 leading-none">
-          {titleIcon ? (
-            // micro-adjustment (very small). Start with 0.02em.
-            <span className="inline-flex items-center relative top-[0.02em]">
-              {titleIcon}
-            </span>
-          ) : null}
-
-          <span className="leading-none">
-            <TitleText title={page.data.title} style={page.data.titleStyle as any} />
-          </span>
-        </span>
+        <TitleText title={page.data.title} style={page.data.titleStyle as any} />
       </DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6 -mt-6">
-        {versionSelectorProps && <VersionSelector {...versionSelectorProps} />}
         <CopyPageButton markdownUrl={pageMarkdownUrl} />
         <ViewOptions markdownUrl={pageMarkdownUrl} />
       </div>
@@ -148,42 +120,22 @@ export async function generateMetadata(
   const isHomePage = !params.slug || params.slug.length === 0;
 
   const { title, description } = page.data;
-  // Self-URL of the page. Used for Open Graph / Twitter so shared links to a
-  // back-version (e.g. /reference/api/v0.7.0) still render a card that
-  // represents v0.7.0 specifically, not the latest.
+  // A page is canonical for its own line: the version-less URL for a page of
+  // the current line, and the versioned URL for a page of any other, so no
+  // line points its authority at another. The self-URL is therefore both the
+  // canonical and what Open Graph and Twitter carry.
   const selfUrl = buildCanonicalDocsUrl(params.slug);
-  // SEO canonical. For archived pages in sections whose back-versions are
-  // hidden from indexing (API summary), this points to the section's latest
-  // (`/reference/api`) so search engines consolidate authority on the
-  // canonical page. For every other page — including indexable archived
-  // release-notes — this equals `selfUrl`.
-  const linkCanonicalUrl = buildPageCanonicalUrl(params.slug);
   const ogImage = getPageImage(page);
-  // Archived back-versions in `SECTIONS_HIDDEN_FROM_INDEXING` are hidden from
-  // search engines and LLM training channels via per-page `noindex`. Combined
-  // with `linkCanonicalUrl` pointing to the section's latest, this is the
-  // textbook "this is a near-duplicate, prefer the canonical" signal. OG and
-  // Twitter still carry the self-URL so social previews remain version-accurate.
-  const isArchived = isArchivedVersionSlug(params.slug);
-  // Per-page Markdown alternate. Hidden archived pages (currently only the
-  // API summary back-versions) don't ship a `.md` sibling — see
-  // `isArchivedPage` in `docs-open-graph.ts` — so we omit the link for them
-  // to avoid advertising a 404. Every other page (including indexable
-  // archived release-notes) gets a `<link rel="alternate" type="text/markdown">`
-  // that mirrors the `Accept: text/markdown` redirect in `_redirects`.
-  const markdownAlternateUrl = isArchived
-    ? undefined
-    : `${DOCS_SITE_ORIGIN}${page.url === '/' ? '/index.md' : `${page.url}.md`}`;
+  // Mirrors the `Accept: text/markdown` redirect in `_redirects`. Every page
+  // ships a `.md` sibling, in every line.
+  const markdownAlternateUrl = `${DOCS_SITE_ORIGIN}${page.url === '/' ? '/index.md' : `${page.url}.md`}`;
 
   return {
     title: isHomePage ? { absolute: title } : title,
     description,
-    ...(isArchived && { robots: { index: false, follow: true } }),
     alternates: {
-      canonical: linkCanonicalUrl,
-      ...(markdownAlternateUrl && {
-        types: { 'text/markdown': markdownAlternateUrl },
-      }),
+      canonical: selfUrl,
+      types: { 'text/markdown': markdownAlternateUrl },
     },
     openGraph: {
       title,
@@ -207,5 +159,10 @@ export async function generateMetadata(
       description: description ?? undefined,
       images: [ogImage.url],
     },
+    // What the search index filters on. Inkeep's crawler reads `inkeep:`
+    // meta tags off the page and turns them into record attributes, which is
+    // the only way a current-line page can declare the release it documents:
+    // its URL carries no version segment to infer one from.
+    other: inkeepMetaTags(page.url),
   };
 }

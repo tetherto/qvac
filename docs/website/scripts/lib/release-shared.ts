@@ -13,6 +13,10 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { execSync } from "child_process";
 import { fileURLToPath } from "node:url";
+import {
+  getCurrentLine,
+  getDocumentedSoftware,
+} from "../../src/lib/versions.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -20,21 +24,81 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..", "..");
 
 /**
- * Absolute path to the versioned-content root. Both `api/` and
- * `release-notes/` live directly under here.
+ * The reference folder a version's generated pages belong in: the folder of
+ * the SDK's current documentation line, and only when that line is the
+ * version's own.
+ *
+ * The destination is read from the manifest rather than named on the command
+ * line, so it follows a cut without anything being passed. That is also why it
+ * has to be checked. Documenting a release before its line is cut would resolve
+ * to the line before it and overwrite the record of a release that already
+ * shipped — a full render replaces the page — and the tree that results still
+ * builds and still tests clean. Refusing here is what makes the missing cut
+ * visible, and what enforces the rule that a released line is never
+ * regenerated.
  */
-export const CONTENT_REFERENCE = path.join(
+export function referenceDirFor(version: string | SemVer): string {
+  const wanted = typeof version === "string" ? parseVersion(version) : version;
+  const sdk = getDocumentedSoftware("/sdk");
+  const current = sdk && getCurrentLine(sdk);
+  if (!current) {
+    throw new Error(
+      "The version manifest declares no current line for /sdk, so there is " +
+        "nowhere to write generated pages.",
+    );
+  }
+
+  const line = `v${wanted.major}.${wanted.minor}`;
+  if (current.version !== line) {
+    const ahead =
+      line.localeCompare(current.version, undefined, { numeric: true }) > 0;
+    throw new Error(
+      `Refusing to write ${line} pages into ${current.version}, the current ` +
+        `line of /sdk.\n` +
+        (ahead
+          ? `  ${line} has no line yet. Cut it before documenting the ` +
+            `release:\n` +
+            `    bun run scripts/cut-line.ts sdk ${line}\n`
+          : `  ${line} has already shipped. A released line is what the site ` +
+            `serves and is never regenerated.\n`),
+    );
+  }
+
+  return path.join(
+    DOCS_WEBSITE_DIR,
+    "content",
+    "docs",
+    "sdk",
+    current.folder,
+    "reference",
+  );
+}
+
+/** Absolute path to the API summary page of `version`'s line. */
+export function apiPageFor(version: string | SemVer): string {
+  return path.join(referenceDirFor(version), "api.mdx");
+}
+
+/** Absolute path to the release notes page of `version`'s line. */
+export function releaseNotesPageFor(version: string | SemVer): string {
+  return path.join(referenceDirFor(version), "release-notes.mdx");
+}
+
+/**
+ * The directories the patch-series scheme wrote its per-series pages into,
+ * before the SDK was cut into documentation lines. Nothing writes here: the
+ * pages moved into the lines and the scripts that addressed them are
+ * retired. Kept only so those scripts still compile.
+ */
+const RETIRED_REFERENCE = path.join(
   DOCS_WEBSITE_DIR,
   "content",
   "docs",
+  "sdk",
   "reference",
 );
-
-/** Absolute path to the API summary section directory. */
-export const API_DIR = path.join(CONTENT_REFERENCE, "api");
-
-/** Absolute path to the release notes section directory. */
-export const RELEASE_NOTES_DIR = path.join(CONTENT_REFERENCE, "release-notes");
+export const API_DIR = path.join(RETIRED_REFERENCE, "api");
+export const RELEASE_NOTES_DIR = path.join(RETIRED_REFERENCE, "release-notes");
 
 /** Absolute path to the version manifest the SPA reads at runtime. */
 export const VERSIONS_TS = path.join(

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.cjs.json",
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "noEmit": true
+  },
+  "files": [
+    "consumer-interop.test.ts"
+  ]
+}

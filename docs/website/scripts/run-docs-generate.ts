@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 /**
- * Orchestrates full docs generation: reads SDK version from the monorepo,
- * generates API docs via TypeDoc, and updates the version list.
+ * Orchestrates full docs generation: reads SDK version from the monorepo and
+ * generates API docs via TypeDoc.
+ *
+ * It used to refresh the version list afterwards. `src/lib/versions.ts` is now
+ * a hand-edited manifest, so nothing regenerates it.
  *
  * Usage: bun run scripts/run-docs-generate.ts
  *
@@ -46,10 +49,6 @@ console.log(`SDK path:    ${sdkPath}`);
 execSync(`bun run scripts/generate-api-docs.ts ${version}`, {
   stdio: "inherit",
   env: { ...process.env, SDK_PATH: sdkPath },
-});
-
-execSync(`bun run scripts/update-versions-list.ts --latest=${version}`, {
-  stdio: "inherit",
 });
 
 console.log("docs:generate complete");

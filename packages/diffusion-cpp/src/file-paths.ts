@@ -16,6 +16,7 @@ const COMPANION_FILE_KEYS = [
   'clipG',
   't5Xxl',
   'llm',
+  'llmVision',
   'vae',
   'esrgan',
   'highNoiseDiffusionModel',
@@ -25,7 +26,7 @@ const COMPANION_FILE_KEYS = [
   'embeddingsConnectors'
 ] as const
 
-function assertAbsolute(key: string, value: unknown): asserts value is string {
+export function assertAbsolute(key: string, value: unknown): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new TypeError(`files.${key} must be an absolute path string`)
   }
@@ -57,6 +58,7 @@ export interface DiffusionFilePaths {
   clipGPath: string
   t5XxlPath: string
   llmPath: string
+  llmVisionPath: string
   vaePath: string
   clipVisionPath: string
   esrganPath: string
@@ -73,9 +75,7 @@ export interface DiffusionFilePaths {
  * same way. The video load maps its own, keeping the weights under
  * `diffusionModelPath` whatever the companion set holds.
  */
-export function toFilePaths(
-  files: DiffusionFiles & DiffusionVideoFiles
-): DiffusionFilePaths {
+export function toFilePaths(files: DiffusionFiles & DiffusionVideoFiles): DiffusionFilePaths {
   const isSplitLayout = !!files.llm || !!files.t5Xxl || !!files.clipL || !!files.clipG
 
   return {
@@ -87,6 +87,7 @@ export function toFilePaths(
     clipGPath: files.clipG || '',
     t5XxlPath: files.t5Xxl || '',
     llmPath: files.llm || '',
+    llmVisionPath: files.llmVision || '',
     vaePath: files.vae || '',
     clipVisionPath: files.clipVision || '',
     esrganPath: files.esrgan || '',

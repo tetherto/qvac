@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
+# rather than qvac_addon_preproject() so overlay triplets and Android STL
+# stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+
 option(BUILD_TESTING "Build tests" OFF)
+qvac_addon_fuzz_manifest()
 
 # Vulkan / Metal / OpenCL are wired per-platform by the unconditional
 # speech-cpp dependencies in vcpkg.json. CUDA is opt-in because it needs
@@ -32,6 +38,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 # triplets actually differ from vcpkg's defaults today, but exposing the
 # directory uniformly avoids platform-conditional surprises.
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 project(bci-whispercpp CXX C)
 
@@ -49,6 +56,12 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.valgrind.supp
                ${CMAKE_CURRENT_SOURCE_DIR}/.valgrind.supp COPYONLY)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
+
+# Fuzz-only configure (BUILD_FUZZING without BUILD_TESTING): build just the
+# fuzz targets and skip engine find_package() + the .bare module so pure
+# parse/transform drivers keep full ASan + LSan.
+qvac_addon_fuzz_only_return()
+
 find_package(whisper CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -134,6 +147,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIConfig.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/EmbedderFit.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/NeuralProcessor.cpp
 )
 
@@ -160,6 +174,7 @@ if(BUILD_TESTING)
   set(CORE_SRCS
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIConfig.cpp
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIModel.cpp
+      ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/EmbedderFit.cpp
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/NeuralProcessor.cpp
   )
 
@@ -179,7 +194,12 @@ if(BUILD_TESTING)
   add_executable(
       test-bci-core
       ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
+      ${PROJECT_SOURCE_DIR}/addon/tests/test_embedder_fit.cpp
       ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
+  )
+
+  target_compile_definitions(test-bci-core PRIVATE
+      BCI_TEST_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/addon/tests/fixtures"
   )
 
   target_include_directories(test-bci-core PRIVATE
@@ -235,3 +255,5 @@ if(BUILD_TESTING)
       message(STATUS "LLVM Coverage enabled for bci-core tests")
   endif()
 endif()
+
+qvac_addon_add_fuzz_subdirectory()

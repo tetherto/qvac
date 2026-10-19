@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "reviewPageSize": 10,
+  "historyWindowDays": 180,
+  "ownershipSource": [
+    ".github/teams/sdk.json",
+    ".github/teams/devops.json"
+  ],
+  "teams": [
+    {
+      "name": "SDK",
+      "description": "SDK, inference orchestration, public client surfaces, and shared developer-facing support packages.",
+      "pathPrefixes": [
+        "packages/inference/",
+        "packages/sdk/",
+        "packages/sdk-python/",
+        "packages/rag/",
+        "packages/ai-sdk-provider/",
+        "packages/cli/",
+        "packages/error/",
+        "packages/logging/",
+        "packages/model-fit/",
+        "packages/test-suite/",
+        "packages/registry-server/",
+        "plugins/opencode/",
+        "plugins/openclaw/",
+        "docs/website/"
+      ]
+    },
+    {
+      "name": "NLP & Media Gen",
+      "description": "NLP and media-generation engines, plus the former Vision scope.",
+      "pathPrefixes": [
+        "packages/llm-llamacpp/",
+        "packages/embed-llamacpp/",
+        "packages/diffusion-cpp/",
+        "packages/audiogen-ggml/",
+        "packages/ocr-ggml/",
+        "packages/classification-ggml/",
+        "packages/vla-ggml/"
+      ]
+    },
+    {
+      "name": "Speech",
+      "description": "Speech engines plus the former Translation scope, including language detection.",
+      "pathPrefixes": [
+        "packages/asr-ggml/",
+        "packages/bci-whispercpp/",
+        "packages/decoder-audio/",
+        "packages/tts-ggml/",
+        "packages/translation-nmtcpp/",
+        "packages/langdetect-text/"
+      ]
+    },
+    {
+      "name": "DevOps",
+      "description": "Repository automation, CI workflows, shared actions, and operational scripts.",
+      "pathPrefixes": [
+        ".github/workflows/",
+        ".github/actions/",
+        ".github/scripts/",
+        "scripts/"
+      ]
+    }
+  ],
+  "ownershipOverrides": [],
+  "importanceDefaults": [
+    {
+      "pathPrefix": "packages/inference/",
+      "level": "high",
+      "reason": "Shared inference orchestration affects multiple public SDK capabilities."
+    },
+    {
+      "pathPrefix": "packages/sdk/",
+      "level": "high",
+      "reason": "The package contains the main public TypeScript SDK surface."
+    },
+    {
+      "pathPrefix": "packages/sdk-python/",
+      "level": "high",
+      "reason": "The package contains the public Python SDK surface."
+    }
+  ],
+  "importanceOverrides": [],
+  "groupOverrides": {
+    "merge": [],
+    "split": []
+  }
+}

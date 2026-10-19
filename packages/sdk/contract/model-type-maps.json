@@ -20,7 +20,9 @@
     "ggml-ocr": "ocr",
     "ggml-vla": "vla",
     "llamacpp-completion": "llm",
+    "llamacpp-decision": "embeddings",
     "llamacpp-embedding": "embeddings",
+    "moss-transcribe": "moss-transcribe",
     "nmtcpp-translation": "nmt",
     "onnx-tts": "tts",
     "onnx-vad": "vad",
@@ -61,5 +63,13 @@
     "tts": "tts-ggml",
     "vad": "onnx-vad",
     "vla": "ggml-vla"
+  },
+  "legacyRegistryEngineRules": {
+    "@qvac/asr-ggml": [
+      {
+        "tag": "moss-transcribe",
+        "engine": "moss-transcribe"
+      }
+    ]
   }
 }

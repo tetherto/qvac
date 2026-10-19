@@ -28,9 +28,11 @@ The first check classifies the material. Solutions documents how to build, deplo
 
 Draft a Solution when the material is a use case: someone set out to achieve something with QVAC, and the recommended way to do it is now known.
 
-If the material is a defect, a crash, an error message, a missing system library, an environment that fails to start, or a regression, do not draft a Solution. That knowledge belongs in `docs/website/content/docs/troubleshooting.mdx`, which already carries the Situation / Cause / Solution shape for it. Say so and stop.
+If the material is a defect, a crash, an error message, a missing system library, an environment that fails to start, or a regression, do not draft a Solution. That knowledge belongs in the SDK's `troubleshooting.mdx`, which already carries the Situation / Cause / Solution shape for it. Say so and stop.
 
-If the material is setting up or building an app on a platform the docs already teach, do not draft a Solution. That knowledge belongs in the matching tutorial — `docs/website/content/docs/tutorials/electron.mdx` for Electron, `docs/website/content/docs/tutorials/expo.mdx` for Expo. Say so and stop.
+If the material is setting up or building an app on a platform the docs already teach, do not draft a Solution. That knowledge belongs in the matching tutorial under the SDK's `tutorials/` — `electron.mdx` for Electron, `expo.mdx` for Expo. Say so and stop.
+
+Both live inside the SDK's current documentation line, whose folder is the parenthesized one under `docs/website/content/docs/sdk/`. Resolve it from the version manifest in `docs/website/src/lib/versions.ts` rather than hard-coding a version.
 
 If the material is an unresolved product gap with no working approach yet, recommend an issue instead of a page.
 
@@ -116,7 +118,7 @@ In the example above the provider and the region drop out because nothing in tha
 
 ## Write the page
 
-Write in English. Create one file per Solution at `docs/website/content/docs/solutions/<kebab-slug>.mdx`, following the editorial contract. The directory already exists and carries no landing page. If that path already exists, stop and ask whether to update it; do not overwrite.
+Write in English. Create one file per Solution at `docs/website/content/docs/resources/solutions/<kebab-slug>.mdx`, following the editorial contract. Solutions belong to the `resources` collection, which is not versioned, so a Solution is written once and never copied into a documentation line. The directory already exists and carries no landing page. If that path already exists, stop and ask whether to update it; do not overwrite.
 
 Draft in this order:
 
@@ -146,9 +148,9 @@ Solutions
   Build a read-only assistant over a REST API
 ```
 
-The sidebar is a hand-written tree in `docs/website/src/lib/custom-tree.ts`. The filesystem does not drive navigation and the site has no `meta.json`, so a page left out of the tree resolves as a URL but appears nowhere.
+The unversioned collections declare their sidebar by hand in `docs/website/src/lib/custom-tree.ts`; only the versioned collections derive theirs from a `meta.json` inside each line. Solutions is unversioned, so a page left out of that tree resolves as a URL but appears nowhere.
 
-If the tree has no `Solutions` node, create one in the `Help` section, after the `Troubleshooting` page and before the external `Discord` link:
+If the tree has no `Solutions` node, create one in `resourcesChildren`, after the `Corpus protocol` page:
 
 ```ts
 {
@@ -156,18 +158,18 @@ If the tree has no `Solutions` node, create one in the `Help` section, after the
   type: 'folder',
   icon: resolveIcon('Compass'),
   children: [
-    { name: '<page title>', url: '/solutions/<kebab-slug>', type: 'page' },
+    { name: '<page title>', url: '/resources/solutions/<kebab-slug>', type: 'page' },
   ],
 },
 ```
 
-Omit `index`. A folder without one renders as a group label in the sidebar and as plain text in the breadcrumb, which gives `Solutions` both a navigation entry and a breadcrumb position without a landing page of its own. Never add `content/docs/solutions/index.mdx`.
+Omit `index`. A folder without one renders as a group label in the sidebar and as plain text in the breadcrumb, which gives `Solutions` both a navigation entry and a breadcrumb position without a landing page of its own. Never add `content/docs/resources/solutions/index.mdx`.
 
 If the node already exists, append the page to its `children`.
 
 Keep the collection flat, with pages as direct children. Do not create subcategories such as `Deployment`, `Architecture`, or `Integration`. The tree supports them whenever content volume justifies it, and that call belongs to the docs owner.
 
-Site URLs carry no `/docs` prefix, so the page registered above serves at `/solutions/<kebab-slug>`.
+Site URLs carry no `/docs` prefix, so the page registered above serves at `/resources/solutions/<kebab-slug>`.
 
 ## Validate
 

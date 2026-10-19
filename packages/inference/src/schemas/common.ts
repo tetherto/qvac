@@ -1,3 +1,11 @@
+import {
+  startRpcServerRequestSchema,
+  startRpcServerResponseSchema,
+  stopRpcServerRequestSchema,
+  stopRpcServerResponseSchema,
+  discoverRpcServersRequestSchema,
+  discoverRpcServersResponseSchema
+} from '@/schemas/rpc-server'
 import { z } from 'zod'
 import { perCallProfilingSchema } from '@/schemas/profiling'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
@@ -102,6 +110,7 @@ import {
   stateRequestSchema,
   stateResponseSchema
 } from '@/schemas/lifecycle'
+import { decideRequestSchema, decideResponseSchema } from '@/schemas/decision'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
 import {
   audioEditStreamRequestSchema,
@@ -116,6 +125,9 @@ export const requestSchema = z.union([
   audioGenStreamRequestSchema,
   audioEditStreamRequestSchema,
   audioUnderstandRequestSchema,
+  startRpcServerRequestSchema,
+  stopRpcServerRequestSchema,
+  discoverRpcServersRequestSchema,
   heartbeatRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
@@ -155,13 +167,17 @@ export const requestSchema = z.union([
   suspendRequestSchema,
   resumeRequestSchema,
   stateRequestSchema,
-  classifyRequestSchema
+  classifyRequestSchema,
+  decideRequestSchema
 ])
 
 export const responseSchema = z.discriminatedUnion('type', [
   audioGenStreamResponseSchema,
   audioEditStreamResponseSchema,
   audioUnderstandResponseSchema,
+  startRpcServerResponseSchema,
+  stopRpcServerResponseSchema,
+  discoverRpcServersResponseSchema,
   heartbeatResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
@@ -205,7 +221,8 @@ export const responseSchema = z.discriminatedUnion('type', [
   suspendResponseSchema,
   resumeResponseSchema,
   stateResponseSchema,
-  classifyResponseSchema
+  classifyResponseSchema,
+  decideResponseSchema
 ])
 
 export const rpcOptionsSchema = z.object({

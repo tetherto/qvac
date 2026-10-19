@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - release-*
+    # No packages/fabric/** or cmake/qvac-addon/**: this build installs the
+    # published @qvac/fabric (no PR overlay exists on merge), and a change to
+    # either alone carries no ggml-rpc-server version bump to publish.
     paths:
       - packages/ggml-rpc-server/**
-      - packages/fabric/**
-      - cmake/qvac-addon/**
       - .github/workflows/*ggml-rpc-server*.yml
 
   workflow_dispatch:

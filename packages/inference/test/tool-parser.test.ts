@@ -236,14 +236,14 @@ test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
     ['Hermes-2-Pro-Mistral-7B', '/Users/x/.qvac/models/abc_Hermes-2-Pro-Mistral-7B-Q4_K_M.gguf'],
     ['MISTRAL_7B_INSTRUCT', '/Users/x/.qvac/models/abc_Mistral-7B-Instruct-v0.3-Q4_K_M.gguf'],
     [undefined, '/cache/abc_Mistral-Nemo-Instruct-2407.gguf'],
-    // Llama tool-calling fine-tunes (mav23, nguyenthanhthuan, etc.)
+    // Llama tool-calling fine-tunes (mradermacher, nguyenthanhthuan, etc.)
     // empirically emit OpenAI-style JSON, not pythonic, so they fall through
     // the catch-all rather than being auto-routed to pythonic. Callers with
     // a pythonic-emitting Llama variant should use `completion({ toolDialect:
     // "pythonic" })` to opt in.
     [
-      'LLAMA_TOOL_CALLING_1B_INST_Q4_K',
-      '/Users/x/.qvac/models/abc_llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf'
+      'LLAMA_TOOL_CALLING_1B_INST_Q4_K_M',
+      '/Users/x/.qvac/models/abc_Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf'
     ],
     ['LLAMA_3_2_1B_INST_Q4_0', '/Users/x/.qvac/models/abc_Llama-3.2-1B-Instruct-Q4_0.gguf'],
     [undefined, '/cache/abc_Llama-3.3-70B-Instruct-Tool-Calling.gguf'],
@@ -1636,4 +1636,119 @@ test('detectToolDialectFromName: DeepSeek sizes and quants are not DSML versions
   for (const [name, path] of cases) {
     t.is(detectToolDialectFromName(name, path), 'hermes', `name=${name} path=${path}`)
   }
+})
+
+// --- nullable and union parameter types ---
+
+const nullableTool: Tool = {
+  type: 'function',
+  name: 'search',
+  description: 'search',
+  parameters: {
+    type: 'object',
+    properties: {
+      limit: { type: ['integer', 'null'] },
+      offset: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      filter: { type: 'object', properties: { tag: { type: 'string' } } }
+    }
+  }
+}
+
+test('parseQwen35Format: nullable and anyOf types coerce to their non-null member', (t) => {
+  const text = `<tool_call><function=search><parameter=limit>7</parameter><parameter=offset>null</parameter><parameter=filter>{"tag":"a"}</parameter></function></tool_call>`
+  const result = parseQwen35Format(text, [nullableTool])
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { limit: 7, offset: null, filter: { tag: 'a' } })
+})
+
+test('parseDsmlFormat: nullable and anyOf types coerce to their non-null member', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="search">
+<｜DSML｜parameter name="limit">null</｜DSML｜parameter>
+<｜DSML｜parameter name="offset">3</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, [nullableTool])
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { limit: null, offset: 3 })
+})
+
+// Unions try each branch in declaration order with `string` last.
+const unionCases: Array<[string, Record<string, unknown>, string, unknown]> = [
+  [
+    'anyOf [integer, string] with text',
+    { anyOf: [{ type: 'integer' }, { type: 'string' }] },
+    'abc',
+    'abc'
+  ],
+  [
+    'anyOf [integer, string] with a number',
+    { anyOf: [{ type: 'integer' }, { type: 'string' }] },
+    '42',
+    42
+  ],
+  ["type ['string', 'object'] with JSON", { type: ['string', 'object'] }, '{"a":1}', { a: 1 }],
+  ["type ['string', 'object'] with text", { type: ['string', 'object'] }, 'hello', 'hello'],
+  [
+    'oneOf [boolean, integer] with a boolean',
+    { oneOf: [{ type: 'boolean' }, { type: 'integer' }] },
+    'true',
+    true
+  ],
+  [
+    'oneOf [boolean, integer] with a number',
+    { oneOf: [{ type: 'boolean' }, { type: 'integer' }] },
+    '7',
+    7
+  ],
+  [
+    'enum-only branch beside integer',
+    { anyOf: [{ enum: ['auto', 'off'] }, { type: 'integer' }] },
+    'auto',
+    'auto'
+  ],
+  [
+    'enum-only branch beside integer with a number',
+    { anyOf: [{ enum: ['auto', 'off'] }, { type: 'integer' }] },
+    '3',
+    3
+  ],
+  ["type ['object', 'array'] with an array", { type: ['object', 'array'] }, '[1,2]', [1, 2]]
+]
+
+function unionTool(schema: Record<string, unknown>): Tool {
+  return {
+    type: 'function',
+    name: 'pick',
+    description: 'pick',
+    parameters: { type: 'object', properties: { v: schema } }
+  }
+}
+
+for (const [label, schema, raw, expected] of unionCases) {
+  test(`union coercion (qwen35): ${label}`, (t) => {
+    const text = `<tool_call><function=pick><parameter=v>${raw}</parameter></function></tool_call>`
+    const result = parseQwen35Format(text, [unionTool(schema)])
+    t.is(result.errors.length, 0)
+    t.alike(result.toolCalls[0]?.arguments, { v: expected })
+  })
+
+  test(`union coercion (dsml): ${label}`, (t) => {
+    const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="pick">
+<｜DSML｜parameter name="v">${raw}</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+    const result = parseDsmlFormat(text, [unionTool(schema)])
+    t.is(result.errors.length, 0)
+    t.alike(result.toolCalls[0]?.arguments, { v: expected })
+  })
+}
+
+test('union coercion: no branch accepts the value → PARSE_ERROR', (t) => {
+  const tool = unionTool({ anyOf: [{ type: 'integer' }, { type: 'boolean' }] })
+  const text = `<tool_call><function=pick><parameter=v>abc</parameter></function></tool_call>`
+  const result = parseQwen35Format(text, [tool])
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
 })

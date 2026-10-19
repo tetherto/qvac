@@ -1,4 +1,116 @@
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+/** One synthesis, checked for the audio it produced. */
+const ttsSteps = (dependency: string): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  {
+    call: {
+      method: 'textToSpeech',
+      collect: 'pcm',
+      params: {
+        modelId: '$model',
+        text: '$params.text',
+        inputType: 'text',
+        stream: '$params.stream?',
+        sentenceStream: '$params.sentenceStream?'
+      },
+      as: 'run'
+    }
+  },
+  { project: { from: '$run', path: 'pcm', as: 'pcm' } },
+  { assert: { on: '$pcm', named: 'producedAudio', with: { minSamples: 1 } } }
+]
+
+/** Empty text is refused. */
+const ttsRefusesEmptyText = (dependency: string): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  {
+    callError: {
+      method: 'textToSpeech',
+      collect: 'pcm',
+      params: {
+        modelId: '$model',
+        text: '$params.text',
+        inputType: 'text',
+        stream: '$params.stream?'
+      },
+      as: 'err'
+    }
+  },
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  { assert: { on: '$message', named: 'nonEmptyText' } }
+]
+
+/** A request refused by schema validation, before any model is involved. */
+const ttsRejectsRequest = (): Step[] => [
+  {
+    callError: {
+      method: 'textToSpeech',
+      collect: 'pcm',
+      params: {
+        modelId: 'schema-validation-only',
+        text: '$params.text',
+        emotion: '$params.emotion?',
+        inputType: 'text',
+        stream: '$params.stream?'
+      },
+      as: 'err'
+    }
+  },
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  { assert: { on: '$message', use: 'expectation' } }
+]
+
+/**
+ * Tests whose body compares two runs against each other -- a sample rate against another sample
+ * rate, an emotion against the same emotion. One call is not what they are about, so they carry
+ * their own bodies below.
+ */
+const TTS_COMPARISONS = new Set([
+  'tts-supertonic-output-sample-rate',
+  'tts-parler-emotion-conditioning',
+  'tts-cosyvoice3-emotion-conditioning'
+])
+
+/** One synthesis, conditioned the way the caller asks, bound under `as`. */
+const synthesize = (model: string, as: string, extra: Record<string, unknown> = {}): Step[] => [
+  {
+    call: {
+      method: 'textToSpeech',
+      collect: 'pcm',
+      params: {
+        modelId: model,
+        text: '$params.text',
+        inputType: 'text',
+        stream: false,
+        ...extra
+      },
+      as: `${as}Run`
+    }
+  },
+  { project: { from: `$${as}Run`, path: 'pcm', as } }
+]
+
+/** Conditioning changed the audio, and only because of the conditioning. */
+const emotionConditioningSteps = (dependency: string, voice?: string): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  ...synthesize('$model', 'first', {
+    emotion: '$params.firstEmotion',
+    ...(voice ? { voice: '$params.voice' } : {})
+  }),
+  ...synthesize('$model', 'control', {
+    emotion: '$params.firstEmotion',
+    ...(voice ? { voice: '$params.voice' } : {})
+  }),
+  ...synthesize('$model', 'second', {
+    emotion: '$params.secondEmotion',
+    ...(voice ? { voice: '$params.voice' } : {})
+  }),
+  { assert: { on: '$first', named: 'producedAudio', with: { minSamples: 1 } } },
+  { assert: { on: '$second', named: 'producedAudio', with: { minSamples: 1 } } },
+  { compare: { left: '$first', right: '$control', named: 'identicalBytes' } },
+  { compare: { left: '$first', right: '$second', named: 'differentBytes' } }
+]
 
 export const ttsChatterboxShortText: TestDefinition = {
   testId: 'tts-chatterbox-short-text',
@@ -102,6 +214,23 @@ export const ttsSupertonicSentenceStream: TestDefinition = {
 // relative sample-count comparison is the strongest available assertion.
 export const ttsSupertonicOutputSampleRate: TestDefinition = {
   testId: 'tts-supertonic-output-sample-rate',
+  // The two resources are declared together so the eviction guard keeps both for the run;
+  // `$models[0]` is the native rate, `$models[1]` the 8 kHz one.
+  steps: [
+    { useModel: { deps: ['tts-supertonic', 'tts-supertonic-8k'], as: 'models' } },
+    ...synthesize('$models[0]', 'native'),
+    ...synthesize('$models[1]', 'down'),
+    {
+      compare: {
+        left: '$native',
+        right: '$down',
+        named: 'lengthRatioAtLeast',
+        // Sample count scales with the rate, so 44.1 kHz against 8 kHz is about 5.5x. The 3x floor
+        // clears per-load duration jitter while still proving the resample took effect.
+        with: { ratio: 3 }
+      }
+    }
+  ],
   params: {
     text: 'This is a test of the output sample rate configuration for speech synthesis.',
     stream: false
@@ -140,6 +269,7 @@ export const ttsSupertonicEnhanced: TestDefinition = {
 // then verifies changing only the emotion produces different non-empty PCM.
 export const ttsParlerEmotionConditioning: TestDefinition = {
   testId: 'tts-parler-emotion-conditioning',
+  steps: emotionConditioningSteps('tts-parler', 'voice'),
   params: {
     text: 'Today is a wonderful day.',
     voice: 'Laura',
@@ -244,6 +374,7 @@ export const ttsParlerInvalidEmotion: TestDefinition = {
 // different non-empty PCM.
 export const ttsCosyvoice3EmotionConditioning: TestDefinition = {
   testId: 'tts-cosyvoice3-emotion-conditioning',
+  steps: emotionConditioningSteps('tts-cosyvoice3'),
   params: {
     text: 'Today is a wonderful day.',
     firstEmotion: 'happy',
@@ -401,6 +532,21 @@ export const ttsAudio8DuplexStreaming: TestDefinition = {
   metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 90000 }
 }
 
+// macOS / iOS only: loading the decoder stages its Core ML bundle beside it,
+// and the codec's synthesis stack then runs there instead of on ggml.
+export const ttsAudio8Coreml: TestDefinition = {
+  testId: 'tts-audio8-coreml',
+  params: {
+    text: 'Hello from Audio8 on Core ML.',
+    requireCoreml: true
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'codec=coreml', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 120000 }
+}
+
 export const ttsTests = [
   ttsChatterboxShortText,
   ttsChatterboxMediumText,
@@ -431,5 +577,19 @@ export const ttsTests = [
   ttsAudio8Default,
   ttsAudio8Streaming,
   ttsAudio8SentenceStreaming,
-  ttsAudio8DuplexStreaming
+  ttsAudio8DuplexStreaming,
+  ttsAudio8Coreml
 ]
+
+/** Attach the declarative body to every definition that is one call. */
+for (const test of ttsTests) {
+  if (TTS_COMPARISONS.has(test.testId)) continue
+  const dependency = test.metadata?.dependency ?? 'tts-chatterbox'
+  if (test.expectation.validation === 'throws-error') {
+    test.steps = ttsRejectsRequest()
+    continue
+  }
+  const { text } = test.params as { text?: string }
+  test.steps =
+    !text || text.trim().length === 0 ? ttsRefusesEmptyText(dependency) : ttsSteps(dependency)
+}

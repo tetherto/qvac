@@ -16,7 +16,18 @@ import type {
   ParakeetStreamingRunConfig,
 } from "./parakeet/driver";
 
-export type EngineType = "whisper" | "parakeet";
+export type EngineType = "whisper" | "parakeet" | "moss-transcribe";
+
+/**
+ * Per-call `run()` options. Only the moss-transcribe engine takes any
+ * (`hotwords`, `prompt`, `maxNewTokens`); the other engines reject a
+ * non-empty object.
+ */
+export interface ASRRunOptions {
+  hotwords?: string[];
+  prompt?: string;
+  maxNewTokens?: number;
+}
 
 /** Files handed to the client; the engine drivers receive them verbatim. */
 export interface ASRGgmlFiles {
@@ -119,7 +130,10 @@ export interface AsrDriver {
    * All output/end/fail flows through ctx.job from the driver's output
    * callback.
    */
-  run(audio: NormalizedAudioStream): Promise<QvacResponse<ASRRunOutput>>;
+  run(
+    audio: NormalizedAudioStream,
+    options?: ASRRunOptions,
+  ): Promise<QvacResponse<ASRRunOutput>>;
 
   /**
    * Duplex streaming. The returned promise resolves once the native session

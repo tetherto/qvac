@@ -10,7 +10,7 @@ The package exposes four JS entry points:
 | API                    | Entry point                                 | Use case                                                                        |
 | ---------------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
 | `ImgStableDiffusion`   | `@qvac/diffusion-cpp`                       | Text-to-image, image-to-image, FLUX.2 reference fusion, optional ESRGAN upscale |
-| `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan and LTX text-to-video / image-to-video                                      |
+| `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan, LTX, and MiniMax-H3 text-to-video / image-to-video                          |
 | `WorldStableDiffusion` | `@qvac/diffusion-cpp/world`                 | ABot-World interactive walk: block-by-block generation under keyboard input     |
 | `EsrganUpscaler`       | named export from `@qvac/diffusion-cpp`     | Standalone PNG/JPEG upscaling                                                   |
 
@@ -18,6 +18,7 @@ The package exposes four JS entry points:
 
 - [Supported Models](#supported-models)
 - [Supported Platforms](#supported-platforms)
+- [Platform packages](#platform-packages)
 - [Building From Source](#building-from-source)
 - [Downloading Models](#downloading-models)
 - [Examples](#examples)
@@ -29,6 +30,7 @@ The package exposes four JS entry points:
 - [Video API](#video-api)
   - [Video Files](#video-files)
   - [Video Parameters](#video-parameters)
+- [MiniMax-H3 Text-to-Video and Image-to-Video](#minimax-h3-text-to-video-and-image-to-video)
 - [LTX-2 Text-to-Video With Audio](#ltx-2-text-to-video-with-audio)
 - [ABot-World Interactive Walk](#abot-world-interactive-walk)
 - [ESRGAN Upscaler](#esrgan-upscaler)
@@ -51,8 +53,14 @@ The package exposes four JS entry points:
 | Wan 2.1                      | text-to-video, image-to-video          | Single diffusion expert; I2V requires CLIP vision                                 |
 | Wan 2.2 TI2V-5B Turbo Q5_K_S | text-to-video                          | Community-distilled GGUF with Wan 2.2 VAE; use `scripts/download-model-wan2.2.sh` |
 | LTX-2 / LTXAV                | text-to-video + audio                  | Gemma text encoder, video VAE, audio VAE, embedding connectors                    |
+| MiniMax-H3 FL2VA ConvRot     | text-to-video, image-to-video + audio | Qwen3-VL text encoder, video VAE, audio VAE; see [H3 setup](#minimax-h3-text-to-video-and-image-to-video) |
 | ABot-World                   | interactive world walk                 | Causal block-by-block generation under keyboard input; see [ABot-World guide](docs/abot-world.md) |
 | ESRGAN                       | upscale                                | Standalone or post-generation image upscale                                       |
+
+## Qwen-Image-2.1 integration
+
+See [Qwen-Image-2.1](docs/qwen-image-21.md) for the native registry port,
+pinned downloads, text-to-image, ordered reference editing, and RGBA handling.
 
 ## Supported Platforms
 
@@ -70,6 +78,40 @@ Dependencies:
 - `ggml`
 - Bare Runtime >= 1.24.0
 - CMake >= 3.25 and a C++20-capable compiler
+
+## Platform packages
+
+`@qvac/diffusion-cpp` is a meta package that ships the JavaScript wrapper only.
+The native prebuild for each desktop host lives in a version-locked platform
+package selected at install time through `os`/`cpu` filtered
+`optionalDependencies`:
+
+| Host | Package |
+| --- | --- |
+| linux-x64 (glibc) | `@qvac/diffusion-cpp-linux-x64` |
+| linux-arm64 (glibc) | `@qvac/diffusion-cpp-linux-arm64` |
+| darwin-arm64 | `@qvac/diffusion-cpp-darwin-arm64` |
+| darwin-x64 | `@qvac/diffusion-cpp-darwin-x64` |
+| win32-x64 | `@qvac/diffusion-cpp-win32-x64` |
+
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time, and at `bare-pack` time, naming
+the missing package. Each platform package is an ordinary Bare addon whose
+`prebuilds/<host>/` holds the native module and, next to it, the dynamically
+loaded ggml backends the module finds on its own. A source build becomes
+loadable once `npm run link:platform` (run by `npm run build`, `build:vulkan`,
+and `build:cuda`) stages it as the host's platform package in `node_modules/`.
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/diffusion-cpp` version:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/diffusion-cpp-android-arm64` |
+| ios (device + simulators) | `@qvac/diffusion-cpp-ios` |
 
 ## Building From Source
 
@@ -103,6 +145,7 @@ by the examples.
 | `./scripts/download-model-wan-14b.sh` | Wan larger T2V variant        |
 | `./scripts/download-model-wan-i2v.sh` | Wan 2.1 I2V 14B + CLIP vision |
 | `./scripts/download-model-ltx.sh`     | LTX-2.3 video + audio files   |
+| `./scripts/download-minimax-h3-convrot.sh` | MiniMax-H3 FL2VA ConvRot T2V/I2V files |
 | `./scripts/download-model-abot.sh`    | ABot-World set into `test/model/abot` (from the [P2P model registry](docs/abot-world.md), no credentials) |
 
 The FLUX.2 [klein] default image example uses:
@@ -142,6 +185,8 @@ Downloads are resumable where supported by the script.
 | `npm run generate:video`                     | Wan text-to-video                           |
 | `npm run generate:ltx`                       | LTX-2.3 text-to-video with audio            |
 | `npm run generate:ltx-coffee`                | 9-second LTX Ingredients coffee example     |
+| `bare examples/generate-video-minimax-h3-comfy-t2v.js` | MiniMax-H3 text-to-video with audio |
+| `bare examples/generate-video-minimax-h3-comfy-i2v.js` | MiniMax-H3 image-to-video with audio |
 | `npm run generate:esrgan`                    | Image generation followed by ESRGAN upscale |
 | `bare examples/standalone-esrgan-upscale.js` | Standalone ESRGAN upscale                   |
 | `npm run walk:world`                         | ABot-World browser demo (generate + walk a world) |
@@ -235,13 +280,15 @@ argument.
 | `params_backend`        | string                                    | runtime backend   | Parameter residency on a backend, CPU RAM, or disk                        |
 | `max_vram`              | number \| string                          | `0`               | VRAM budget in GiB for graph-cut segmented execution                      |
 | `stream_layers`         | boolean                                   | `false`           | Stream diffusion layers from CPU RAM when graph cutting is active         |
-| `prediction`            | prediction type                           | auto              | Required for FLUX img2img/fusion routing; use `'flux2_flow'` for FLUX.2   |
+| `prediction`            | prediction type                           | auto              | Recommended for FLUX.2 sizing and prompt warnings: `'flux2_flow'`; leave automatic for Qwen |
 | `flow_shift`            | number                                    | model default     | Flow-matching noise schedule shift                                        |
 | `diffusion_conv_direct` | boolean                                   | `true`            | Use direct convolution in diffusion model                                 |
 | `vae_conv_direct`       | boolean                                   | `true`            | Use direct convolution in VAE                                             |
-| `backendsDir`           | string                                    | package prebuilds | Custom ggml backend directory                                             |
+| `backendsDir`           | string                                    | beside the loaded module | Directory of ggml backend modules, scanned as given                  |
 | `lora_apply_mode`       | string                                    | auto              | LoRA application mode                                                     |
 | `upscaler_tile_size`    | number                                    | `128`             | ESRGAN tile size                                                          |
+| `max_image_pixels`      | positive integer                          | `67108864`        | Maximum decoded input or ESRGAN output pixels per image                  |
+| `max_job_pixels`        | positive integer                          | `134217728`       | Maximum decoded input pixels retained by a multi-image or video job     |
 
 `main-gpu` is resolved against the addon's own ggml device enumeration and then
 pinned through `sd_ctx_params_t.backend`. If an explicit request cannot be
@@ -351,7 +398,24 @@ unset unless you know the model family requires an override.
   `strength` and denoised with the prompt.
 
 For FLUX.2 img2img, load the context with `files.llm` and
-`config.prediction: 'flux2_flow'`.
+keep `config.prediction: 'flux2_flow'` for the full FLUX.2 convenience behavior.
+Native model detection selects reference conditioning even when prediction is
+omitted or `'auto'`. However, the single-reference size fallback (replacing
+512×512 with the reference dimensions) still requires `'flux2_flow'`, and the
+JavaScript `@imageN` prompt warnings require both `files.llm` and that setting.
+Without it, pass explicit output dimensions and check reference tags yourself.
+Leave prediction automatic for Qwen-Image-2.1.
+
+Reference-validation compatibility: `init_images` on SD1/SD2/SDXL is now
+rejected by the loaded native model after job submission, rather than by the
+JavaScript file/prediction checks. Await the response's `.await()` promise to
+handle the error. The native message is
+`img2img: init_images requires a model supporting reference editing (FLUX.2 or Qwen-Image-2.1).`
+Callers matching the former JavaScript error text must update their handling.
+The former rejection of `init_image` with `files.llm` but no explicit
+`'flux2_flow'` prediction is also removed; native model capabilities determine
+the conditioning path. JavaScript still validates input types, empty arrays,
+and mutual exclusion of `init_image` and `init_images` before submission.
 
 ```js
 const inputImage = require('bare-fs').readFileSync('assets/source.jpg')
@@ -369,8 +433,8 @@ const response = await model.run({
 ```
 
 FLUX.2 multi-reference fusion uses `init_images`, an array of PNG/JPEG buffers.
-It is mutually exclusive with `init_image` and requires
-`config.prediction: 'flux2_flow'`.
+It is mutually exclusive with `init_image`. Keep
+`config.prediction: 'flux2_flow'` for the convenience behavior described above.
 
 ```js
 const response = await model.run({
@@ -449,12 +513,12 @@ The default export from `@qvac/diffusion-cpp/video` and the named
 
 | Key                             | Model family | Description                                                     |
 | ------------------------------- | ------------ | --------------------------------------------------------------- |
-| `files.model`                   | all video    | Wan single/low-noise expert or LTX diffusion transformer        |
+| `files.model`                   | all video    | Wan, LTX, or MiniMax-H3 diffusion transformer                    |
 | `files.t5Xxl`                   | Wan          | UMT5-XXL text encoder                                           |
-| `files.vae`                     | Wan / LTX    | Wan VAE or LTX video VAE                                        |
+| `files.vae`                     | all video    | Matching video VAE                                              |
 | `files.clipVision`              | Wan I2V      | OpenCLIP ViT-H/14; required for `mode: 'img2vid'` on Wan        |
-| `files.llm`                     | LTX          | Gemma text encoder                                              |
-| `files.audioVae`                | LTX          | Audio VAE decoder for synchronized audio                        |
+| `files.llm`                     | LTX / H3     | Gemma or Qwen3-VL text encoder                                   |
+| `files.audioVae`                | LTX / H3     | Audio VAE for synchronized audio                                 |
 | `files.embeddingsConnectors`    | LTX          | Text-embedding connector weights; also marks the context as LTX |
 
 ### Video Parameters
@@ -463,9 +527,9 @@ The default export from `@qvac/diffusion-cpp/video` and the named
 | ------------------------------------------------------------ | ------------------------------------------------------------------ |
 | `mode`                                                       | Required: `'txt2vid'` or `'img2vid'`                               |
 | `prompt`, `negative_prompt`                                  | Text conditioning                                                  |
-| `width`, `height`                                            | Wan: multiples of 16. LTX: multiples of 32                         |
-| `video_frames`                                               | Wan: `(4*k + 1)`. LTX: `(8*k + 1)`, max 257                        |
-| `fps`                                                        | AVI framerate metadata, default 16 for Wan examples and 24 for LTX |
+| `width`, `height`                                            | Wan 2.1: multiples of 16. LTX, Wan TI2V, H3: multiples of 32       |
+| `video_frames`                                               | Wan: `(4*k + 1)`. LTX: `(8*k + 1)`, max 257. H3: `(17*k + 5)`     |
+| `fps`                                                        | Generation rate and AVI rate; H3 is fixed at 24 FPS                  |
 | `steps`, `cfg_scale`, `sampling_method`, `scheduler`, `seed` | Sampling controls                                                  |
 | `flow_shift`                                                 | Per-job flow-shift override; Wan 2.1 T2V 1.3B works well at `3.0`  |
 | `init_image`                                                 | First frame for `img2vid`; required by that mode                   |
@@ -473,8 +537,18 @@ The default export from `@qvac/diffusion-cpp/video` and the named
 | `temporal_tiling`                                            | LTX-only temporal VAE tiling to reduce peak VRAM                   |
 | `cache_mode`, `cache_preset`, `cache_threshold`              | Step-cache controls                                                |
 
-Video output is a single MJPG AVI `Uint8Array`. For LTX-2 models loaded with
-`audioVae`, the AVI also contains a second IEEE-float PCM stream at 48 kHz.
+Decoded `init_image`, `control_frames`, and `reference_images` together are
+limited to 128 Mi pixels per job by default; each image is limited to 64 Mi
+pixels by default. At 1920×1080, up to 64 control frames fit when there are
+no other input images.
+An initial or reference image reduces the available control-frame budget.
+Set `config.max_job_pixels` and `config.max_image_pixels` to positive pixel
+counts when the target device can support a different budget. The fixed
+16,384-pixel edge and compressed-source safeguards still apply.
+
+Video output is a single MJPG AVI `Uint8Array`. For LTX-2 and H3 models loaded
+with `audioVae`, the AVI also contains a second IEEE-float PCM audio stream:
+48 kHz for LTX-2 and 32 kHz for H3.
 VLC handles these files well.
 
 ### Wan 2.2
@@ -496,46 +570,72 @@ backend runs one process on one device with optional CPU offload. Use dimensions
 that are multiples of 32 for this TI2V model so the emitted AVI dimensions match
 the requested dimensions.
 
-## MiniMax-H3 Text-to-Audio-Video
+## MiniMax-H3 Text-to-Video and Image-to-Video
 
-MiniMax-H3 is supported for prompt-only video generation. Download the matching
-FL2VA denoiser, Qwen3-VL text encoder, video VAE, and audio VAE:
+The Comfy-Org FL2VA ConvRot checkpoint supports both modes through
+`VideoStableDiffusion.run()`. Its `init_image` is a PNG/JPEG first frame, copied
+into the asynchronous native job and encoded into H3's keyframe conditioning.
+H3 does not use Wan's CLIP vision encoder. The video VAE must include encoder
+weights for I2V (`vae_decode_only: false`, the default).
+
+From the repository root, install the Hugging Face CLI, read the [MiniMax-H3
+license](https://huggingface.co/Comfy-Org/MiniMax-H3), and download the four
+matching files. If access requires authentication, run `hf auth login` first.
+`--dry-run` lists the files and sizes without fetching the weights. The
+downloader defaults to the validated model repository commit
+`e5eb578a89295337b8ff433a035929ce0279e0b6`; set `HF_REVISION` to use
+another commit.
 
 ```sh
-./scripts/download-model-minimax-h3.sh --q4
+python -m pip install -U huggingface_hub
+bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh --dry-run
+bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh
 ```
 
-Set `H3_MODELS_DIR` when running `npm run generate:h3-coffee` with model files
-stored outside the package.
+The four files total about 55 GB. The QVAC vcpkg registry pins
+`stable-diffusion-cpp 2026-08-11#4` to
+`qvac-ext-stable-diffusion.cpp` commit
+`107121df3ee9664cd47f80b19add495002d0232f` (merged PR #44) and
+`ggml 2026-08-11#1` to
+`qvac-ext-ggml` commit `9a7d2b36e96a198c1c67c013cafcde4e4c2c60eb`.
 
-The initial integration intentionally rejects init images, control frames, and
-reference images. Use a 32-pixel spatial grid and a `17*k + 5` frame count.
-H3 is distilled: `cfg_scale` must be `1.0`, and the output stream is always
-24 FPS with its native stereo audio.
+At the validated model revision, the four checkpoint SHA-256 hashes are:
 
-```js
-const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
-const model = new VideoStableDiffusion({
-  files: {
-    model: '/models/minimax-h3/minimax_h3_fl2va_pruned-Q4_K.gguf',
-    llm: '/models/minimax-h3/qwen3vl_32b_minimax_h3-Q4_K_M.gguf',
-    vae: '/models/minimax-h3/vae/minimax_h3_video_vae_fp16.safetensors',
-    audioVae: '/models/minimax-h3/vae/minimax_h3_audio_vae_fp32.safetensors'
-  },
-  config: { device: 'gpu', diffusion_fa: true, offload_to_cpu: true }
-})
-await model.load()
-const response = await model.run({
-  mode: 'txt2vid',
-  prompt: 'A cinematic close-up of a person enjoying coffee in warm morning light.',
-  width: 960,
-  height: 544,
-  video_frames: 124,
-  fps: 24,
-  steps: 8,
-  cfg_scale: 1.0
-})
+| File | SHA-256 |
+| --- | --- |
+| `diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors` | `e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a` |
+| `text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors` | `bc2ced0fbea64757fa9acddccfc0b3f4819d1dcf1da6c124d690d368be283923` |
+| `vae/minimax_h3_video_vae_fp16.safetensors` | `7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522` |
+| `vae/minimax_h3_audio_vae_fp32.safetensors` | `8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48` |
+
+From `packages/diffusion-cpp`, run the separate examples. Set `H3_MODELS_DIR`
+if the checkpoint is elsewhere, `H3_BACKEND` to select a backend, and
+`H3_OUTPUT` for the AVI path. The I2V example defaults to the FLUX.2-generated
+960×544 `assets/h3-keyframe-boat.png`; set `H3_INPUT_IMAGE` to a different
+PNG/JPEG of the same dimensions. Use `H3_FRAMES=22` for a short clip or 124
+for the longer reference workload.
+
+```sh
+bare examples/generate-video-minimax-h3-comfy-t2v.js
+bare examples/generate-video-minimax-h3-comfy-i2v.js
 ```
+
+`example-h3-minimax-comfy.js` first generates a commercial keyframe with
+FLUX.2 [klein] 4B and then passes that saved PNG to H3 I2V. Set
+`H3_SKIP_FLUX=1` and `H3_INPUT_IMAGE=/path/to/keyframe.png` to rerun H3 with an
+existing image. `FLUX_MODELS_DIR`, `FLUX_MODEL`, `FLUX_LLM`, `FLUX_VAE`,
+`FLUX_SEED`, `FLUX_STEPS`, and `FLUX_IMAGE_PROMPT` customize the first stage.
+
+```sh
+bare examples/example-h3-minimax-comfy.js
+```
+
+H3 requires dimensions on a 32-pixel grid and frame counts of `17*k + 5`
+(5, 22, 39, …). Its distilled guidance uses `cfg_scale: 1.0`, and output is
+always 24 FPS. The addon writes MJPG AVI with the decoded audio stream when
+`audioVae` is provided. Control frames, Ref2VA references, Wan MoE settings,
+and image-conditioning strength are rejected for this FL2VA path. The existing
+Unsloth GGUF T2V example remains available as `npm run generate:h3-coffee`.
 
 ## LTX-2 Text-to-Video With Audio
 
@@ -715,12 +815,12 @@ During ESRGAN upscale, cancellation is honored between repeat passes.
 
 ## Assessing fit
 
-`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data, so a GGUF file set can be the registry's weightless copy and the projection can run before anything is downloaded. A safetensors file is still read against its declared tensor data, so a header-only copy of one comes back as `status: "error"`. It is a module export, not an instance method — nothing is loaded to call it.
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data, so GGUF and safetensors files can be the registry's header-only copies and the projection can run before weights are downloaded. It is a module export, not an instance method — nothing is loaded to call it.
 
 ```js
 const { assessFit } = require('@qvac/diffusion-cpp')
 
-const fit = assessFit({
+const fit = await assessFit({
   files: { model: '/models/model.gguf' },
   config: { backendsDir: '/opt/backends' },
   workload: { prompt: 'a lighthouse at dusk', width: 1024, height: 1024 }
@@ -746,14 +846,30 @@ fit.report // per-device, per-module memory table, suitable for logging
 | `vaeTiling` | `false` | Tiled decoding trades speed for a much smaller VAE arena. |
 | `vaeTileSizeX`, `vaeTileSizeY` | 512 | The tile geometry, in pixels. |
 | `vaeTileOverlap` | 0.5 | Fraction of a tile used as the overlap seam. |
+| `upscaleRepeats` | 1 | ESRGAN passes, each applying the checkpoint's scale factor. |
 
 Every number must be finite, whole and in range; anything else is `status: "error"` with `reason: "unsupported-config"`.
 
 The engine chooses the placement, so it has to be given an unpinned configuration. A `config.mainGpu`, a `config.device` of `cpu`, or a `paramsBackend` naming individual modules is `reason: "unsupported-config"`.
 
+For standalone ESRGAN, use `mode: 'upscale'`, `files: { esrgan }` and the same config as `EsrganUpscaler`. This mode supports `device: 'cpu'`. `workload.width` and `height` describe the input image. The estimate includes weights, the tiled graph and full-image RAM buffers; smaller tiles do not remove full-image allocations.
+
+For post-generation upscaling, include `files.esrgan` and the `upscaler_*` config fields in the diffusion request. The estimate includes ESRGAN weights retained alongside diffusion, including GPU staging when its parameters are offloaded to CPU. Set `workload.upscaleRepeats` to the number of passes to assess.
+
+For ABot, use `mode: 'world'`, the same `files: { model, taehv, scene }` and
+`config` as `WorldSession`, and `workload: { walkSteps: 100 }`. The default is
+100 walk steps; an explicit value must be a whole number from 1 to 1,000,000.
+The scene header supplies the resolution and reference slots. The check sizes
+the configured placement, including CPU offload, graph cuts, KV caches, the
+decoder and retained latent history. It does not change generation settings
+or limit the walk. Scene creation with umT5 and the Wan VAE is outside this
+session estimate.
+
 A `changed` of `true` comes with `status: "does-not-fit"` — the configuration as given does not fit, and the engine reached a placement only by moving modules between backends. A `paramsBackend` of `*=cpu` is the exception: the engine replans every module for it, so the plan is compared against the placement that load already uses, and an equal one is `fits`.
 
-A model the engine cannot read is `status: "error"` with `reason: "model-unreadable"`; only a broken request throws.
+A model the engine cannot read resolves to `status: "error"` with `reason: "model-unreadable"`; only a broken request rejects.
+
+`assessFit` returns a Promise. Concurrent calls run one at a time within the addon.
 
 The projection runs in the calling process and shares its engine state: the GPU backend modules load once per process, so the first `config.backendsDir` any call supplies is the one every later load uses, and the native log callback is process-global like everywhere else.
 
@@ -765,11 +881,12 @@ The projection runs in the calling process and shares its engine state: the GPU 
   stable-diffusion.cpp auto-detection for model-specific defaults.
 - `diffusion_fa` defaults to true and is important for FLUX/LTX memory use.
 - For FLUX.2 img2img/fusion, set `config.prediction: 'flux2_flow'` so the JS
-  wrapper and native layer select the in-context conditioning path.
-- Wan I2V requires `files.clipVision`; LTX img2vid does not.
-- Wan dimensions must be multiples of 16; LTX dimensions must be multiples of 32.
-- Wan frame counts use `(4*k + 1)`; LTX frame counts use `(8*k + 1)`.
-- LTX audio is muxed into AVI as IEEE-float PCM at 48 kHz.
+  prompt warnings and single-reference size fallback remain enabled. Native
+  model detection selects the conditioning path independently of this setting.
+- Wan I2V requires `files.clipVision`; LTX and MiniMax-H3 img2vid do not.
+- Wan 2.1 dimensions must be multiples of 16; LTX and H3 dimensions must be multiples of 32.
+- Wan frame counts use `(4*k + 1)`; LTX uses `(8*k + 1)` and H3 uses `(17*k + 5)`.
+- LTX and H3 audio is muxed into AVI as IEEE-float PCM.
 - On Linux the shipped prebuild must not hard-link any GPU loader
   (`libvulkan`/`libOpenCL`/`libcuda`) — an integration test asserts this. For
   local custom builds that legitimately do (e.g. `SD_CUDA=ON`), skip it with
@@ -778,6 +895,14 @@ The projection runs in the calling process and shares its engine state: the GPU 
 ## Credits
 
 ### Test Images
+
+`assets/h3-keyframe-boat.png` and `assets/h3-keyframe-balloon.png` are 960×544
+FLUX.2 [klein] 4B images generated by `examples/generate-h3-keyframes-flux2.js`.
+Run `bare examples/generate-h3-keyframes-flux2.js` from this package to recreate
+them with the FLUX.2 models listed above. Set `FLUX_MODELS_DIR` if the models
+are elsewhere, or `H3_KEYFRAME=boat` to generate only the boat. They are included
+under this package's Apache-2.0 license for I2V examples and fixed-seed
+conditioning comparisons.
 
 `assets/von-neumann.jpg` — **John von Neumann** (1956).
 Source: U.S. Department of Energy, File ID: HD.3F.191.

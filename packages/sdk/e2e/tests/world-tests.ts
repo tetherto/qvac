@@ -5,7 +5,7 @@
 // class of card, so these can run on the shared GPU desktop runners. That makes
 // this a correctness lane, not a performance one — block times here are far
 // below interactive.
-import type { TestDefinition, TestResult } from '@qvac/test-suite'
+import type { Step, TestDefinition, TestResult } from '@qvac/test-suite'
 
 type ExpectationLike =
   | { validation: 'type'; expectedType: 'string' | 'number' | 'array' }
@@ -48,6 +48,56 @@ function createWorldTest<const TId extends string, const P extends Record<string
 
 export const SCENE_WIDTH = 448
 export const SCENE_HEIGHT = 256
+
+/**
+ * The prompt every scene in this category is created from.
+ *
+ * The leading `| unknown |` is the engine's own caption prefix, not decoration
+ * -- kept verbatim from the executor so the two paths create the same world.
+ */
+const SCENE_PROMPT = '| unknown | A realistic outdoor world scene with a navigable path.'
+
+/** Bring a world up on the session. */
+const createScene = (extra: Record<string, unknown> = {}): Step[] => [
+  { useModel: { deps: ['world'], as: 'model' } },
+  { asset: { kind: 'image', file: '$params.image', form: 'bytes', as: 'image' } },
+  {
+    call: {
+      method: 'worldCreateScene',
+      params: {
+        modelId: '$model',
+        prompt: SCENE_PROMPT,
+        image: '$image',
+        width: SCENE_WIDTH,
+        height: SCENE_HEIGHT,
+        ...extra
+      },
+      as: 'scene'
+    }
+  }
+]
+
+/** One walk step, with the frames and the engine's own account of it. */
+const walk = (keys: unknown, as: string): Step[] => [
+  {
+    call: {
+      method: 'worldStep',
+      collect: 'all',
+      params: { modelId: '$model', keys },
+      as
+    }
+  },
+  { project: { from: `$${as}`, path: 'all', as: `${as}Frames` } }
+]
+
+/** A block of frames at the tier this category runs at. */
+const blockOf = (count: number, as: string): Step => ({
+  assert: {
+    on: `$${as}Frames`,
+    named: 'framesAre',
+    with: { count, width: SCENE_WIDTH, height: SCENE_HEIGHT }
+  }
+})
 
 /** PNG IHDR or JPEG SOF0 dimensions, so both frame encodings are accepted. */
 function readFrameDims(buf: Uint8Array): { width: number; height: number } | null {
@@ -180,11 +230,142 @@ export const worldConcurrentStepRejected = createWorldTest(
 // load, so it only appears if the SDK really did drop the cancelled session and
 // rebuild it from the promoted pack. A session that survived the cancel would
 // deliver 12 and fail here.
+// Keeps its hand-written body: the cancel has to name the started call's request id, which a
+// step cannot. As data it became a broad cancel on a timer, and a fast GPU finished first.
 export const worldCancelThenReload = createWorldTest(
   'world-cancel-then-reload',
   { image: 'elephant.jpg', keys: ['W'] },
   { validation: 'function', fn: framesAre(9, 'post-cancel reload') }
 )
+
+// The bodies, attached after the definitions so each reads as one block.
+worldCreateSceneReturnsPack.steps = [
+  ...createScene({ returnPack: true }),
+  { project: { from: '$scene', path: 'stats.sceneCreateMs', as: 'sceneCreateMs' } },
+  { assert: { on: '$sceneCreateMs', named: 'atLeast', with: { value: 1 } } },
+  { project: { from: '$scene', path: 'stats.width', as: 'sceneWidth' } },
+  { assert: { on: '$sceneWidth', named: 'valueIn', with: { values: [SCENE_WIDTH] } } },
+  { project: { from: '$scene', path: 'stats.height', as: 'sceneHeight' } },
+  { assert: { on: '$sceneHeight', named: 'valueIn', with: { values: [SCENE_HEIGHT] } } },
+  { project: { from: '$scene', path: 'scene', as: 'pack' } },
+  { assert: { on: '$pack', named: 'safetensorsContainer', with: { minBytes: 1024 } } }
+]
+
+worldFirstBlockFrames.steps = [
+  ...createScene(),
+  ...walk('$params.keys', 'step'),
+  blockOf(9, 'step'),
+  { project: { from: '$step', path: 'stats.actionMask', as: 'actionMask' } },
+  {
+    assert: {
+      on: '$actionMask',
+      named: 'valueIn',
+      with: { values: ['$params.expectedActionMask'] }
+    }
+  },
+  { project: { from: '$step', path: 'stats.totalSteps', as: 'totalSteps' } },
+  { assert: { on: '$totalSteps', named: 'valueIn', with: { values: [1] } } }
+]
+
+worldSecondBlockFrames.steps = [
+  ...createScene(),
+  // One step to leave the warm-up block behind, then the one under test: an empty key array has to
+  // be accepted AND reach the engine as mask 0.
+  ...walk(['W'], 'warmup'),
+  ...walk('$params.keys', 'step'),
+  blockOf(12, 'step'),
+  { project: { from: '$step', path: 'stats.actionMask', as: 'actionMask' } },
+  {
+    assert: {
+      on: '$actionMask',
+      named: 'valueIn',
+      with: { values: ['$params.expectedActionMask'] }
+    }
+  }
+]
+
+worldStepBeforeSceneFails.steps = [
+  // Evict first: the resource is shared, so an earlier test may already have built a world on this
+  // model and stepping would then legitimately succeed.
+  { call: { method: 'evictResource', params: { dep: 'world' } } },
+  { useModel: { deps: ['world'], as: 'model' } },
+  {
+    callError: {
+      method: 'worldStep',
+      collect: 'all',
+      params: { modelId: '$model', keys: ['W'] },
+      as: 'err'
+    }
+  },
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  { assert: { on: '$message', use: 'expectation' } }
+]
+
+worldInvalidKeyRejected.steps = [
+  // No model: the key set is checked client-side before any RPC, and loading the 13.3 GB ABot set
+  // to exercise a string check would be absurd.
+  {
+    callError: {
+      method: 'worldStep',
+      collect: 'all',
+      params: { modelId: '$params.modelId', keys: '$params.keys' },
+      as: 'err'
+    }
+  },
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  // The wording is deliberately not asserted. Both clients refuse before any RPC -- the SDK's own
+  // key-set check on JS, the request model's enum on Python -- and each words it its own way.
+  { assert: { on: '$message', named: 'nonEmptyText' } }
+]
+
+worldInvalidDimensionsRejected.steps = [
+  // Same as the invalid key: the multiple-of-32 refinement runs client-side.
+  { asset: { kind: 'image', file: '$params.image', form: 'bytes', as: 'image' } },
+  {
+    callError: {
+      method: 'worldCreateScene',
+      params: {
+        modelId: '$params.modelId',
+        prompt: SCENE_PROMPT,
+        image: '$image',
+        width: '$params.width',
+        height: '$params.height'
+      },
+      as: 'err'
+    }
+  },
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  { assert: { on: '$message', use: 'expectation' } }
+]
+
+worldConcurrentStepRejected.steps = [
+  ...createScene(),
+  // The overlap is issued immediately.
+  {
+    start: {
+      method: 'worldStep',
+      collect: 'all',
+      params: { modelId: '$model', keys: '$params.keys' },
+      as: 'running'
+    }
+  },
+  {
+    callError: {
+      method: 'worldStep',
+      collect: 'all',
+      params: { modelId: '$model', keys: ['S'] },
+      as: 'err'
+    }
+  },
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  { assert: { on: '$message', use: 'expectation' } },
+  // Admission is proven after the fact: the first step must have run a whole block. Without this
+  // the overlap could have been refused for an unrelated reason and the test would report
+  // concurrency coverage it never exercised.
+  { settle: { of: '$running', as: 'first' } },
+  { project: { from: '$first', path: 'all', as: 'firstFrames' } },
+  { assert: { on: '$firstFrames', named: 'lengthAtLeast', with: { length: 1 } } }
+]
 
 export const worldTests = [
   worldCreateSceneReturnsPack,

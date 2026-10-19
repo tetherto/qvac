@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.assertAbsolute = assertAbsolute;
 exports.assertFilePaths = assertFilePaths;
 exports.toFilePaths = toFilePaths;
 /* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
@@ -9,6 +10,7 @@ const COMPANION_FILE_KEYS = [
     'clipG',
     't5Xxl',
     'llm',
+    'llmVision',
     'vae',
     'esrgan',
     'highNoiseDiffusionModel',
@@ -57,6 +59,7 @@ function toFilePaths(files) {
         clipGPath: files.clipG || '',
         t5XxlPath: files.t5Xxl || '',
         llmPath: files.llm || '',
+        llmVisionPath: files.llmVision || '',
         vaePath: files.vae || '',
         clipVisionPath: files.clipVision || '',
         esrganPath: files.esrgan || '',

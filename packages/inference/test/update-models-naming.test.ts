@@ -865,6 +865,43 @@ test('tts: Piper config file — _CONFIG suffix', (t) => {
 })
 
 // ---------------------------------------------------------------------------
+// TTS: registry variant tag distinguishes fused CosyVoice3 weights
+// ---------------------------------------------------------------------------
+
+test('tts: CosyVoice3 fused Q8 model uses its registry tag in the export name', (t) => {
+  const usedNames = new Set<string>()
+  const common = {
+    engine: 'tts-ggml' as const,
+    name: 'ggml',
+    quantization: 'q8_0',
+    params: '0.5B'
+  }
+
+  const original = generateExportName({
+    ...common,
+    path: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf',
+    tags: ['tts', 'cosyvoice', 'cosyvoice3', 'llm', 'multilingual', 'gguf'],
+    usedNames
+  })
+  const fused = generateExportName({
+    ...common,
+    path: 'qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf',
+    tags: ['tts', 'cosyvoice', 'cosyvoice3', 'llm', 'fused', 'multilingual', 'gguf'],
+    usedNames
+  })
+  const filenameWithoutTag = generateExportName({
+    ...common,
+    path: 'qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf',
+    tags: ['tts', 'cosyvoice', 'cosyvoice3', 'llm', 'multilingual', 'gguf'],
+    usedNames: new Set<string>()
+  })
+
+  t.is(original, 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0')
+  t.is(fused, 'TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0')
+  t.is(filenameWithoutTag, original, 'the registry tag, rather than the filename, selects FUSED')
+})
+
+// ---------------------------------------------------------------------------
 // OCR: Recognizer English
 // ---------------------------------------------------------------------------
 
@@ -1798,6 +1835,32 @@ test('parakeet: Nemotron GGUF includes NEMOTRON in the name', (t) => {
   })
 
   t.is(exportName, 'PARAKEET_NEMOTRON_0_6B_Q4_0')
+})
+
+test('parakeet: Nemotron 3 diarization has a distinct model constant', (t) => {
+  const coreKey = Buffer.from('dd'.repeat(32), 'hex')
+
+  const { exportName } = processAndName({
+    path: 'qvac_models_compiled/ggml/nemotron/2026-10-09/Nemotron-3-Diarization.q8_0.gguf',
+    source: 's3',
+    engine: 'parakeet-transcription',
+    license: 'openmdw-1.1',
+    name: '',
+    sizeBytes: 107012128,
+    sha256: 'dd'.repeat(32),
+    quantization: 'q8_0',
+    params: '99.2M',
+    tags: ['transcription', 'parakeet', 'nemotron', 'streaming'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 1,
+      blockLength: 1,
+      byteOffset: 1,
+      byteLength: 107012128
+    }
+  })
+
+  t.is(exportName, 'PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0')
 })
 
 // ---------------------------------------------------------------------------

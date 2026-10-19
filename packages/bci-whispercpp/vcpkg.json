@@ -4,15 +4,18 @@
   "dependencies": [
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.4.0"
+      "version>=": "1.5.0"
     },
     {
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#3"
     },
     {
+      "name": "ggml-speech",
+      "default-features": false
+    },
+    {
       "name": "speech-cpp",
-      "version>=": "2026-09-25#1",
       "default-features": false,
       "features": [
         "whisper",
@@ -23,7 +26,6 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-25#1",
       "default-features": false,
       "features": [
         "whisper",
@@ -33,7 +35,6 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-25#1",
       "default-features": false,
       "features": [
         "whisper",
@@ -49,12 +50,39 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-09-25#1",
           "default-features": false,
           "features": [
             "cuda"
           ],
           "platform": "!(osx | ios | android)"
+        }
+      ]
+    },
+    "fuzz": {
+      "description": "Build fuzz targets (Google FuzzTest dependencies)",
+      "dependencies": [
+        {
+          "name": "abseil",
+          "version>=": "20260526.0",
+          "features": [
+            "asan"
+          ]
+        },
+        "antlr4",
+        {
+          "name": "fuzztest",
+          "version>=": "2026-06-29",
+          "features": [
+            "asan"
+          ]
+        },
+        "gtest",
+        {
+          "name": "re2",
+          "version>=": "2025-11-05",
+          "features": [
+            "asan"
+          ]
         }
       ]
     },
@@ -64,5 +92,16 @@
         "gtest"
       ]
     }
-  }
+  },
+  "overrides": [
+    {
+      "name": "ggml-speech",
+      "version": "2026-10-07",
+      "port-version": 1
+    },
+    {
+      "name": "speech-cpp",
+      "version": "2026-10-14"
+    }
+  ]
 }

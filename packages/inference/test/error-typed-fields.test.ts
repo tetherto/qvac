@@ -184,19 +184,18 @@ test('createErrorResponse: plain Error produces a non-typed envelope', (t) => {
   t.is(response.typedFields, undefined)
 })
 
-test('createErrorResponse: InferenceCancelledError does NOT round-trip via typedFields (client-constructed)', (t) => {
-  // InferenceCancelledError is built client-side in completion-stream.ts
-  // when the event stream ends with stopReason: "cancelled". Even if the
-  // server happens to throw one (rare — e.g. a fixture), the reconstructor
-  // map deliberately has no entry for its name, so a `typedFields` value
-  // here would be inert. We assert the envelope shape is sane and explicitly
-  // does not declare typed fields the client wasn't asked to reconstruct.
-  const err = new InferenceCancelledError('rid-4')
-  const response = createErrorResponse(err)
+test('createErrorResponse: InferenceCancelledError carries its request and empty partial result', (t) => {
+  const response = createErrorResponse(new InferenceCancelledError('rid-4'))
 
   t.is(response.name, 'INFERENCE_CANCELLED')
   t.is(response.code, 52419)
-  // No `toErrorResponseFields()` method on this class — typedFields stays
-  // undefined.
-  t.is(response.typedFields, undefined)
+  t.alike(response.typedFields, { requestId: 'rid-4', partial: {} })
+})
+
+test('createErrorResponse: InferenceCancelledError preserves partial output across JSON transport', (t) => {
+  const partial = { text: 'generated before cancellation' }
+  const response = createErrorResponse(new InferenceCancelledError('rid-5', partial))
+  const wire = JSON.parse(JSON.stringify(response))
+
+  t.alike(wire.typedFields, { requestId: 'rid-5', partial })
 })

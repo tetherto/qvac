@@ -93,7 +93,7 @@ jobs:
           node-version: lts/*
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare bare-make@1.8.0
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
@@ -270,6 +270,19 @@ jobs:
             cat build/addon/tests/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
+
+      # Fuzz-only configure after coverage artifacts are collected: BUILD_FUZZING
+      # would pull FuzzTest into the coverage tree and reconfigure the same
+      # build/ dir. Bounded unit-test mode; libFuzzer + ASan is Linux-only.
+      - name: Build fuzz targets
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run test:scripts
+          npm run fuzz:run
 
   coverage-report:
     permissions:

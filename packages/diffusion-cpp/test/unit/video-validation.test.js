@@ -23,6 +23,8 @@ const FAKE_PNG = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
   0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x30
 ])
+const H3_FAKE_PNG = new Uint8Array(FAKE_PNG)
+H3_FAKE_PNG[23] = 0x40 // 64x64, aligned to H3's 32-pixel grid.
 
 const FAKE_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x60, 0x00, 0x80])
 
@@ -69,6 +71,18 @@ function makeLtxModel(config = { threads: 1 }) {
       embeddingsConnectors: FAKE_LTX_CONNECTORS
     },
     config,
+    logger: makeQuiet()
+  })
+}
+
+function makeH3Model(withAudioVae = true) {
+  return new VideoStableDiffusion({
+    files: {
+      model: '/tmp/minimax-h3.safetensors',
+      llm: '/tmp/qwen3vl-h3.safetensors',
+      vae: '/tmp/h3-video-vae.safetensors',
+      ...(withAudioVae && { audioVae: '/tmp/h3-audio-vae.safetensors' })
+    },
     logger: makeQuiet()
   })
 }
@@ -749,6 +763,39 @@ test('run | img2vid requires init_image', async (t) => {
   await t.exception.all(m.run({ mode: 'img2vid', prompt: 'hi' }), /img2vid requires init_image/)
 })
 
+test('run | H3 img2vid accepts a first-frame image without Wan CLIP vision', async (t) => {
+  const m = makeH3Model()
+  const dispatches = recordNativeDispatch(m)
+  await t.exception.all(
+    m.run({ mode: 'img2vid', prompt: 'A slow camera move', init_image: H3_FAKE_PNG }),
+    /native dispatch reached/
+  )
+  t.is(dispatches(), 1)
+})
+
+test('run | H3 without audio VAE keeps image mode and 32-pixel alignment', async (t) => {
+  const m = makeH3Model(false)
+  const dispatches = recordNativeDispatch(m)
+  await t.exception.all(
+    m.run({ mode: 'img2vid', prompt: 'A slow camera move', init_image: H3_FAKE_PNG, width: 48 }),
+    /positive multiples of 32/
+  )
+  t.is(dispatches(), 0)
+  await t.exception.all(
+    m.run({ mode: 'img2vid', prompt: 'A slow camera move', init_image: H3_FAKE_PNG, width: 64 }),
+    /native dispatch reached/
+  )
+  t.is(dispatches(), 1)
+})
+
+test('run | H3 img2vid still requires an image', async (t) => {
+  const m = makeH3Model()
+  await t.exception.all(
+    m.run({ mode: 'img2vid', prompt: 'A slow camera move' }),
+    /img2vid requires init_image/
+  )
+})
+
 // ─────────────────────────────────────────────────────────────────────
 //  run(): control_frames (VACE)
 // ─────────────────────────────────────────────────────────────────────
@@ -767,6 +814,55 @@ test('run | rejects empty control_frames array', async (t) => {
     m.run({ mode: 'txt2vid', prompt: 'hi', control_frames: [] }),
     /control_frames must not be an empty array/
   )
+})
+
+test('run | rejects input images above the decoded job budget before dispatch', async (t) => {
+  const m = makeWanModel()
+  const dispatches = recordNativeDispatch(m)
+  const largeHeader = Uint8Array.from(FAKE_PNG)
+  largeHeader[18] = 0x20
+  largeHeader[19] = 0
+  largeHeader[22] = 0x20
+  largeHeader[23] = 0
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      control_frames: [largeHeader, largeHeader, largeHeader]
+    }),
+    /128 Mi pixel decoded job limit/
+  )
+  t.is(dispatches(), 0)
+})
+
+test('run | uses the configured decoded job budget', async (t) => {
+  const m = makeWanModel({ config: { max_job_pixels: 192 * 1024 * 1024 } })
+  const dispatches = recordNativeDispatch(m)
+  const largeHeader = Uint8Array.from(FAKE_PNG)
+  largeHeader[18] = 0x20
+  largeHeader[19] = 0
+  largeHeader[22] = 0x20
+  largeHeader[23] = 0
+
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      control_frames: [largeHeader, largeHeader, largeHeader]
+    }),
+    /native dispatch reached/
+  )
+  t.is(dispatches(), 1)
+
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      control_frames: [largeHeader, largeHeader, largeHeader, largeHeader]
+    }),
+    /192 Mi pixel decoded job limit/
+  )
+  t.is(dispatches(), 1)
 })
 
 test('run | rejects non-Uint8Array entry in control_frames (with index)', async (t) => {

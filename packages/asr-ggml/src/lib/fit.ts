@@ -1,4 +1,4 @@
-import { resolveBackendsDir } from './backends'
+import { mossTranscribeBackend, mossTranscribeJobFields, type MossTranscribeRunOptions } from '../engines/moss/driver'
 
 interface AsrFitCommon {
   /** Absolute path to the model, or to a weightless copy where one exists. */
@@ -37,7 +37,15 @@ export interface WhisperFitRequest extends AsrFitCommon {
   decoders?: number
 }
 
-export type AsrFitRequest = ParakeetFitRequest | WhisperFitRequest
+export interface MossTranscribeFitRequest extends AsrFitCommon, MossTranscribeRunOptions {
+  engine: 'moss-transcribe'
+  /** Same selector as mossTranscribeConfig.backend; overrides gpuLayers. */
+  backend?: string
+  audioSeconds: number
+  threads?: number
+}
+
+export type AsrFitRequest = ParakeetFitRequest | WhisperFitRequest | MossTranscribeFitRequest
 
 export type AsrFitStatus = 'fits' | 'does-not-fit' | 'error'
 
@@ -46,8 +54,9 @@ export interface AsrFitResult {
   /** The engine's own wording, e.g. `model-unreadable`, `workload-too-large`. */
   reason: string
   /**
-   * Parakeet: `ctc` | `rnnt` | `tdt` | `eou` | `nemotron` | `sortformer`.
-   * Whisper: `tiny` | `base` | ... | `large v3`.
+   * Parakeet: `ctc` | `rnnt` | `tdt` | `eou` | `nemotron` | `sortformer` |
+   * `nemotron-diarization`.
+   * Whisper: `tiny` | `base` | ... | `large v3`. MOSS: `moss-transcribe`.
    */
   modelType: string
   modelVariant: string
@@ -62,7 +71,7 @@ export interface AsrFitResult {
   hostBytes: number
   report: string
 
-  /** Parakeet only. */
+  /** Parakeet and MOSS-Transcribe. */
   encoderComputeBytes?: number
   decoderStateBytes?: number
   decoderComputeBytes?: number
@@ -77,7 +86,7 @@ export interface AsrFitResult {
 }
 
 interface FitBinding {
-  assessFit(request: AsrFitRequest): AsrFitResult
+  assessFit(request: AsrFitRequest): Promise<AsrFitResult>
 }
 
 /**
@@ -86,23 +95,32 @@ interface FitBinding {
  * a parakeet model answers the same as the model itself. Whisper ships as
  * `.bin`, which the registry has no weightless form for.
  *
+ * MOSS-Transcribe requires `audioSeconds`; `prompt`, `hotwords`, and
+ * `maxNewTokens` use the transcription rules and model defaults. Its
+ * projection includes the chunked encoder, prefill/decode, and KV cache.
+ *
  * `engine` picks the fitter and defaults to parakeet. With `gpuLayers`
  * omitted, parakeet projects on the CPU and whisper on the GPU, matching what
  * each load does. `marginBytes` defaults to the engine's own headroom, which
  * is 256 MiB for parakeet.
  *
- * A model the fitter cannot read comes back as `status: "error"` with the
- * engine's reason. Only a broken request throws.
+ * A model the fitter cannot read resolves with `status: "error"` and the
+ * engine's reason. Only a broken request rejects.
+ *
+ * Concurrent calls run one at a time.
  */
-export function assessFit(request: AsrFitRequest): AsrFitResult {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+export async function assessFit(request: AsrFitRequest): Promise<AsrFitResult> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
   const binding = require('../binding.js') as FitBinding
 
-  return binding.assessFit({
-    ...request,
-    backendsDir:
-      typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-        ? request.backendsDir
-        : resolveBackendsDir()
-  })
+  if (request.engine === 'moss-transcribe') {
+    mossTranscribeBackend(request.backend)
+    mossTranscribeJobFields({
+      prompt: request.prompt,
+      hotwords: request.hotwords,
+      maxNewTokens: request.maxNewTokens
+    })
+  }
+
+  return await binding.assessFit(request)
 }

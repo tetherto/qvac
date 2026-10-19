@@ -7,10 +7,16 @@ if(VK_PROFILING)
   list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
 endif()
 
+option(QVAC_CUDA_JETSON "Build the CUDA 12 Jetson backend module" OFF)
+if(QVAC_CUDA_JETSON)
+  list(APPEND VCPKG_MANIFEST_FEATURES "cuda-jetson")
+endif()
+
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
@@ -73,6 +79,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
+               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
+               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -108,7 +118,7 @@ endif()
 # single loaded runtime (exported via symbols.map).
 #
 # Without GGML_BACKEND_DL the backends are static archives that get linked
-# directly into qvac__fabric.bare, so there is nothing to stage.
+# directly into the runtime module, so there is nothing to stage.
 set(BACKEND_DL_LIBS "")
 if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
@@ -126,9 +136,21 @@ if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   endforeach()
 endif()
 
-add_bare_module(qvac-fabric EXPORTS ${BACKEND_DL_LIBS})
+# The module is named after the platform package that ships it,
+# qvac__fabric-<suffix>, so that package is an ordinary addon: require.addon(),
+# bare-pack and bare-link all find prebuilds/<host>/qvac__fabric-<suffix>.bare
+# there without an inner manifest posing as @qvac/fabric.
+include(cmake/qvac-fabric-hosts.cmake)
+bare_target(_fabric_host)
+qvac_fabric_module_name("${_fabric_host}" _fabric_module_name)
 
-target_sources(${qvac-fabric} PRIVATE addon/binding.cpp)
+add_bare_module(qvac-fabric NAME ${_fabric_module_name} EXPORTS ${BACKEND_DL_LIBS})
+
+target_sources(${qvac-fabric} PRIVATE addon/binding.cpp addon/backends.cpp)
+target_include_directories(${qvac-fabric} PRIVATE include)
+target_compile_definitions(${qvac-fabric} PRIVATE
+  QVAC_FABRIC_BUILD
+  QVAC_FABRIC_MODULE_NAME="${_fabric_module_name}")
 
 # Force-include the full llama / common / mtmd object code into the shared
 # module so the entire public API is present (the carrier addon itself does not
@@ -276,7 +298,7 @@ elseif(APPLE)
   target_link_options(${qvac-fabric}_module PRIVATE
     -Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/exports.txt)
 elseif(WIN32)
-  # Consumers link against the import library generated for qvac__fabric.bare,
+  # Consumers link against the import library generated for the runtime module,
   # so the Windows module must export the llama/ggml/common runtime surface.
   #
   # cmake-bare enables WINDOWS_EXPORT_ALL_SYMBOLS by default, but CMake only
@@ -289,7 +311,13 @@ elseif(WIN32)
   # for the same symbol prefixes the ELF/Mach-O builds export, and feed it via
   # /DEF. The export entries double as references that pull the matching members
   # out of the archives, so the listed symbols are always present in the image.
-  find_program(FABRIC_NM NAMES llvm-nm nm)
+  # npm's Windows bin for llvm-nm is three files. The bare name is a
+  # #!/bin/sh script, which find_program selects when generate runs under
+  # Git bash. CreateProcess cannot run that script. The .cmd shim can.
+  find_program(FABRIC_NM NAMES llvm-nm.cmd llvm-nm.exe nm.cmd nm.exe)
+  if(NOT FABRIC_NM)
+    find_program(FABRIC_NM NAMES llvm-nm nm)
+  endif()
   if(NOT FABRIC_NM)
     set(FABRIC_NM "${CMAKE_NM}")
   endif()
@@ -387,6 +415,7 @@ install(DIRECTORY ${VCPKG_INSTALLED_PATH}/include/ DESTINATION include
   PATTERN "lint-cpp" EXCLUDE
   PATTERN "gtest" EXCLUDE
   PATTERN "gmock" EXCLUDE)
+install(FILES include/qvac-fabric.h DESTINATION include)
 
 # --- qvac-fabric cmake package config ----------------------------------------
 install(TARGETS qvac-fabric-headers EXPORT qvac-fabricTargets)
@@ -403,6 +432,7 @@ write_basic_package_version_file(
 install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-fabricConfig.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-fabricConfigVersion.cmake
+  cmake/qvac-fabric-hosts.cmake
   DESTINATION share/qvac-fabric/cmake)
 
 # --- Platform-specific -------------------------------------------------------

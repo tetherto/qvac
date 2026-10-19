@@ -1,6 +1,6 @@
 # @qvac/inference
 
-The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare runtime](https://bare.pears.com) in a single process — no RPC, no worker, no subprocess. You register the inference engines you need and call the same API surface as `@qvac/sdk`, in-process.
+The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare runtime](https://bare.pears.com) in a single process without a worker or subprocess. Native GGML RPC is available as an opt-in distributed GPU path. You register the inference engines you need and call the same API surface as `@qvac/sdk`, in-process.
 
 > _Part of the **QVAC** ecosystem_
 >
@@ -13,7 +13,7 @@ The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare ru
 
 `@qvac/inference` is the pure-Bare layer of the SDK, written in TypeScript: the client API, the request engine, and the plugin system, all running in one Bare process. `@qvac/sdk` builds on top of it to reach Node, Electron, Expo, and Pear by launching this engine as a worker; on Bare you use it directly. It replaces the deprecated `@qvac/bare-sdk` package (last release 0.18.2).
 
-`@qvac/inference` ships no plugins by default and no addon dependencies. You install only the addon packages your app registers, so the resulting binary scales with the engines you actually assemble.
+`@qvac/inference` ships no plugins by default and has no required model or RPC server addon dependencies. Model addons are optional peers; RPC serving uses an explicitly registered provider. You install only the addon packages your app registers, so the resulting binary scales with the engines and services you actually assemble.
 
 ## Requirements
 
@@ -57,7 +57,10 @@ const modelId = await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 })
 const run = completion({ modelId, history: [{ role: 'user', content: 'Hi' }] })
 ```
 
-An operation called before any plugin is registered throws `PluginsNotRegisteredError`.
+Model operations require a registered model plugin. RPC discovery needs no model plugin or server provider; serving requires an explicitly registered server provider.
+
+The [Bare serving example](examples/rpc-server.ts)
+shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.5.1`.
 
 ## Capability to addon package
 
@@ -75,13 +78,56 @@ An operation called before any plugin is registered throws `PluginsNotRegistered
 | `@qvac/inference/ggml-vla/plugin`                     | `@qvac/vla-ggml`                 |
 | `@qvac/inference/ggml-classification/plugin`          | `@qvac/classification-ggml`      |
 
+## MOSS engines and memory fit
+
+`@qvac/tts-ggml` carries two desktop batch engines for `textToSpeech`.
+Load MOSS-SoundEffect with `modelType: 'tts-ggml'` and
+`modelConfig: { ttsEngine: 'moss-sfx' }`; the primary source is its single
+GGUF. With an `AUDIOGEN_MOSS_SFX_V2_*` constant, pass its `.src` URL as
+`modelSrc`, because the full descriptor selects the audiogen plugin. To assess
+its fit, pass a downloaded local file with explicit `modelType` and
+`ttsEngine`. Use a text description, with optional `seconds`
+(up to 30), `negativePrompt`, `steps`, `guidance` and `shift`. These controls
+can also be load defaults. The output is 48 kHz.
+
+Load MOSS-Speech with `modelConfig: { ttsEngine: 'moss-speech',
+mossSpeechCodecModelSrc: <codec source> }` and the language-model GGUF as
+`modelSrc`. Use either `text`, or `audio` plus
+`sampleRate`. Audio is a JSON array of normalized mono samples in [-1, 1].
+Earlier turns go in `messages`; each turn has a `role` and either `text` or
+`audio` plus `sampleRate`. Per-call controls include `systemPrompt`,
+`replyVoice` plus `replyVoiceSampleRate`, `maxReplySeconds`, `maxNewTokens`,
+`textReply`, `greedy`, `temperature`, `topP` and `topK`. Consume `bufferStream` in the default streaming mode, or await `buffer` with
+`stream: false`, then await `result.text` for any reply text.
+Spoken mode can return an audio-only reply; use `textReply: true` when text is required.
+Spoken replies are 24 kHz; `textReply: true` returns text with an empty audio
+buffer. Omitting `maxNewTokens` preserves the addon's remaining-context budget.
+Both engines run one native batch job. The default `stream: true` emits the completed audio as one chunk; `stream: false` collects it in `buffer`. Neither supports sentence streaming or duplex text input.
+
+`assessModelFit` supports metadata-only MOSS-TTS/TTSD and MOSS-SoundEffect
+projections. Add `ttsWorkload` beside `modelConfig` on the assessment candidate:
+`{ promptRows, referenceSamples, streaming }` for MOSS, or
+`{ prompt, seconds }` for sound effects. MOSS needs its backbone and codec
+decoder; reference encoding also needs the codec encoder. Prompt rows must
+cover the complete native prompt, including dialogue and reference rows.
+Missing workloads return an unknown assessment rather than guessing.
+MOSS-Speech has no native fitter and assesses as unknown. Workloads are
+fit-only: loading a MOSS model does not accept them, so the fit check before a
+MOSS load is unknown.
+
+The CLI configuration picker includes both engines. Their conversation and
+sound-effect request controls are library-only because the OpenAI speech
+endpoint cannot represent those requests.
+
 ## Configuration
 
 The engine resolves a `qvac.config.js` or `qvac.config.json` from the current working directory, or from the path in `QVAC_CONFIG_PATH`. The resolved config applies on the first API call.
 
+The `includeAudioDecoder` setting is read by the SDK bundler. Set it to `false` when packaging a worker that only receives raw PCM or streaming audio; `audiogen-ggml` can also use PCM or WAV output without FFmpeg. Compressed audio file decoding and compressed audiogen output formats require `bare-ffmpeg` to be bundled.
+
 ## System resource diagnostics
 
-Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Like any other operation it runs after the first plugin is registered:
+Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Register a model plugin or RPC server provider before requesting diagnostics:
 
 ```js
 import { registerPlugin, getSystemResources } from '@qvac/inference'
@@ -110,7 +156,7 @@ Every metric reports `supported`, `unavailable`, `unverified`, or `failed`. Supp
 import { close, unloadModel } from '@qvac/inference'
 
 await unloadModel({ modelId })
-await close() // release the swarm, registry client, storage-root lock, and registered plugins
+await close() // release the swarm, registry client, storage-root lock, and registered plugins. Stop owned RPC servers.
 ```
 
 `close()` also clears the plugin registry, so if you keep using the API afterward you must `registerPlugin` / `plugins([...])` again first — otherwise the next call throws `PluginsNotRegisteredError`.

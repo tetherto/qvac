@@ -59,10 +59,10 @@ function createLlmModel(
   const llmConfigStrings = transformLlmConfig(llmConfig)
 
   if (isMobile()) {
-    const stripped = stripMultiGpuKeys(llmConfigStrings)
+    const stripped = stripMultiGpuKeys(llmConfigStrings, true)
     if (stripped.length > 0) {
       getEngineLogger().warn(
-        `[${ModelType.llamacppCompletion}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
+        `[${ModelType.llamacppCompletion}:${modelId}] Removing unsupported mobile parameters: ${stripped.join(', ')}`
       )
     }
   }
@@ -117,6 +117,7 @@ export const llmPlugin = definePlugin({
   displayName: 'LLM (llama.cpp)',
   addonPackage: ADDON_LLM,
   loadConfigSchema: llmConfigBaseSchema,
+  assessFit: LlmLlamacpp.assessFit,
 
   async resolveConfig(cfg: LlmConfigInput, ctx: ResolveContext) {
     const { projectionModelSrc, ...llmConfig } = cfg
@@ -336,10 +337,9 @@ export const llmPlugin = definePlugin({
       cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
-        const filteredHistory = request.history.map(({ role, content, attachments }) => ({
-          role,
-          content,
-          attachments: attachments ?? []
+        const filteredHistory = request.history.map((message) => ({
+          ...message,
+          attachments: message.attachments ?? []
         }))
 
         const modelCfg = getModelConfig(request.modelId)

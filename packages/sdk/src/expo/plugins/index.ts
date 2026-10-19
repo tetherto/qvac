@@ -4,6 +4,8 @@ export { default as withDeviceInfo } from './withDeviceInfo'
 export { default as withMobileBundle } from './withMobileBundle'
 export { default as withOpenCL } from './withOpenCL'
 export { default as withQvacSDK } from './withQvacSDK'
+export type { QvacSDKPluginOptions } from './withQvacSDK'
+export type { MobileBundleOptions } from './withMobileBundle'
 
 // Helpers for downstream plugin authors composing on top of these plugins.
 export { getProjectRootFromMod, getProjectRootFromBaseConfig } from './get-project-root'

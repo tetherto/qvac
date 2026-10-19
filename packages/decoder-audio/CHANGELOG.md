@@ -5,14 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.1] - 2026-10-14
 
-## [0.7.1] - 2026-09-25
+### Changed
+
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5068](https://github.com/tetherto/qvac/pull/5068)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package keeps its own `retainOutput` run option, served by its own non-retaining response class, so there is no API or
+  runtime behaviour change for this package.
+
+## [0.8.0] - 2026-10-01
 
 ### Added
 
 - Limit decoded PCM output to 64 MiB by default, with a configurable `maxDecodedBytes` limit and options to stream without retaining chunks and wait for consumer capacity.
 - Keep overlapping decode responses and statistics separate, wake paused decoding on cancellation, and support bounded iteration over non-retained PCM chunks.
+
+### Changed
+
+- Load `bare-ffmpeg` only when the decoder is loaded, allowing PCM-only bundles to omit the native addon.
 
 ## [0.7.0] - 2026-09-24
 

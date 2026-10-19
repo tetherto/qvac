@@ -99,7 +99,7 @@ private:
   // gets stuck and never finishes consuming/releasing the streamed buffer.
   static constexpr int64_t METADATA_RELEASE_TIMEOUT_SEC = 60;
 
-  // These references are safe because BertModel owns both the referenced
+  // These references are safe because LlamaModelLoader owns both the referenced
   // objects and this AsyncWeightsLoader; C++ destroys members in reverse
   // declaration order, so the loader is destroyed before its references.
   const GGUFShards& shards_;

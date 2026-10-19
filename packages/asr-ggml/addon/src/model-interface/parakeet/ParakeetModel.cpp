@@ -22,6 +22,8 @@
 #include "ggml.h"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/ModuleBackendsDir.hpp"
+#include "model-interface/PcmDecode.hpp"
 
 namespace qvac::asrggml::parakeet {
 
@@ -175,26 +177,6 @@ template <typename Fn> int64_t measureMs(Fn&& fn) {
 // installNativeLogForwarderOnce() -- it covers both engines, so this file's
 // old line-buffered trampoline was deleted in the asr-ggml merge.
 
-constexpr float PCM_S16_SCALE = 1.0F / 32768.0F;
-
-float pcmS16ToFloat32(int16_t sample) {
-  return static_cast<float>(sample) * PCM_S16_SCALE;
-}
-
-int16_t readLittleEndianS16(uint8_t lo, uint8_t hi) {
-  return static_cast<int16_t>(lo | (hi << 8));
-}
-
-std::vector<float> decodeS16lePcm(const std::vector<uint8_t>& bytes) {
-  const size_t nSamples = bytes.size() / 2;
-  std::vector<float> out(nSamples);
-  for (size_t i = 0; i < nSamples; ++i) {
-    out[i] =
-        pcmS16ToFloat32(readLittleEndianS16(bytes[i * 2], bytes[i * 2 + 1]));
-  }
-  return out;
-}
-
 std::string formatSpeakerSegment(int speakerId, double startS, double endS) {
   std::ostringstream os;
   os << "Speaker " << speakerId << ": "
@@ -270,14 +252,18 @@ void ParakeetModel::validateConfig(const ParakeetConfig& cfg) {
 }
 
 float ParakeetModel::resolveDiarizationThreshold(const ParakeetConfig& cfg) {
-  return cfg.diarizationThreshold >= 0.0F
-             ? cfg.diarizationThreshold
+  if (cfg.diarizationThreshold >= 0.0F)
+    return cfg.diarizationThreshold;
+  return cfg.modelType == ModelType::NemotronDiarization
+             ? ParakeetConfig::DEFAULT_NEMOTRON_DIARIZATION_THRESHOLD
              : ParakeetConfig::DEFAULT_DIARIZATION_THRESHOLD;
 }
 
 int ParakeetModel::resolveDiarizationMinSegmentMs(const ParakeetConfig& cfg) {
-  return cfg.diarizationMinSegmentMs >= 0
-             ? cfg.diarizationMinSegmentMs
+  if (cfg.diarizationMinSegmentMs >= 0)
+    return cfg.diarizationMinSegmentMs;
+  return cfg.modelType == ModelType::NemotronDiarization
+             ? ParakeetConfig::DEFAULT_NEMOTRON_DIARIZATION_MIN_SEGMENT_MS
              : ParakeetConfig::DEFAULT_DIARIZATION_MIN_SEGMENT_MS;
 }
 
@@ -291,17 +277,7 @@ pkt::EngineOptions ParakeetModel::buildEngineOptions(
   eopts.n_gpu_layers = cfg.useGPU ? OFFLOAD_ALL_LAYERS_TO_GPU : 0;
   eopts.verbose = false;
   eopts.language = cfg.language;
-  // Compose the backends-scan dir from the host prebuilds root plus the
-  // cmake-bare per-target subdir (BACKENDS_SUBDIR). Empty -> ggml's default
-  // compile-time search path.
-  if (!cfg.backendsDir.empty()) {
-    fs::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath =
-        (backendsDirPath / fs::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-    eopts.backends_dir = backendsDirPath.string();
-  }
+  eopts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   // Empty -> leave $GGML_OPENCL_CACHE_DIR alone (Android-only, read once).
   eopts.opencl_cache_dir = cfg.openclCacheDir;
   eopts.prewarm = cfg.prewarm;
@@ -498,8 +474,7 @@ std::filesystem::path ParakeetModel::resolveGgufPath() {
 void ParakeetModel::detectModelType() {
   if (!engine_)
     return;
-  cfg_.modelType =
-      modelTypeFromMetadata(engine_->model_type(), cfg_.modelType);
+  cfg_.modelType = modelTypeFromMetadata(engine_->model_type(), cfg_.modelType);
 }
 
 ModelType ParakeetModel::modelTypeFromMetadata(
@@ -512,6 +487,8 @@ ModelType ParakeetModel::modelTypeFromMetadata(
     return ModelType::EOU;
   if (detected == "sortformer")
     return ModelType::SORTFORMER;
+  if (detected == "nemotron-diarization")
+    return ModelType::NemotronDiarization;
   if (detected == "rnnt")
     return ModelType::RNNT;
   if (detected == "nemotron")
@@ -823,7 +800,7 @@ std::vector<float> ParakeetModel::preprocessAudioData(
         qvac_errors::general_error::InvalidArgument,
         "ParakeetModel::preprocessAudioData: only s16le PCM is supported");
   }
-  return decodeS16lePcm(audioData);
+  return qvac::asrggml::decodeS16lePcm(audioData);
 }
 
 std::string ParakeetModel::runAsrProcess(const Input& input) {
@@ -946,7 +923,7 @@ void ParakeetModel::openStreamingSession() {
     lastVadSpeaking_.reset();
   }
 
-  if (cfg_.modelType == ModelType::SORTFORMER) {
+  if (isDiarization()) {
     openSortformerStreamingSession(*engine);
   } else {
     openAsrStreamingSession(*engine);
@@ -1054,7 +1031,7 @@ int64_t ParakeetModel::feedStreamingChunk(const Input& input) {
   // Feed the batch then finalize so flush_remainder() drains the trailing
   // right_lookahead window (otherwise the terminal <EOU> never surfaces).
   return measureMs([&] {
-    if (cfg_.modelType == ModelType::SORTFORMER) {
+    if (isDiarization()) {
       if (diar_session_) {
         diar_session_->feed_pcm_f32(
             input.data(), static_cast<int>(input.size()));
@@ -1115,14 +1092,13 @@ std::string ParakeetModel::runStreamingProcess(const Input& input) {
 
   std::vector<Transcript> drained = takePendingStreamingSegments();
   if (drained.empty()) {
-    return cfg_.modelType == ModelType::SORTFORMER ? ERR_NO_SPEAKERS
-                                                   : ERR_NO_SPEECH;
+    return isDiarization() ? ERR_NO_SPEAKERS : ERR_NO_SPEECH;
   }
 
   emitStreamingSegments(drained);
-  // Sortformer segments are pre-formatted ("Speaker N: ..."); join with
+  // Diarization segments are pre-formatted ("Speaker N: ..."); join with
   // newlines so the JS parser keeps working. ASR joins with spaces.
-  const char* separator = isSortformer() ? "\n" : " ";
+  const char* separator = isDiarization() ? "\n" : " ";
   std::string joined = joinTranscriptText(drained, separator);
 
   reopenStreamingSession();
@@ -1155,14 +1131,14 @@ void ParakeetModel::process(const Input& input) {
     try {
       throwIfCancelled();
       const bool hasSession =
-          (cfg_.modelType == ModelType::SORTFORMER ? diar_session_ != nullptr
-                                                   : asr_session_ != nullptr);
+          (isDiarization() ? diar_session_ != nullptr
+                           : asr_session_ != nullptr);
       if (cfg_.streaming && hasSession) {
         // runStreamingProcess already pushes per-segment Transcripts, so
         // skip the single-Transcript push below.
         text = runStreamingProcess(input);
         streamed = true;
-      } else if (cfg_.modelType == ModelType::SORTFORMER) {
+      } else if (isDiarization()) {
         text = runSortformerProcess(input, speakerSegments);
       } else {
         text = runAsrProcess(input);
@@ -1282,7 +1258,7 @@ RuntimeStats ParakeetModel::runtimeStats() const {
         static_cast<int64_t>(
             jobCoremlEncoderCalls_ == jobEncoderCalls_ ? 1 : 0));
   }
-  if (isSortformer()) {
+  if (isDiarization()) {
     stats.emplace_back("aoscActive", aoscActive_);
   }
 

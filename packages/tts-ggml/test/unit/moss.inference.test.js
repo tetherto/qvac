@@ -62,10 +62,10 @@ function withTempDir(name, body) {
 test('MOSS: explicit engine option routes to moss', (t) => {
   const model = createMockedMossModel()
   t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS)
-  t.is(model._mossBackbonePath, BACKBONE)
-  t.is(model._mossCodecDecoderPath, DECODER)
-  t.absent(model._audio8LmPath, 'no audio8 path on moss')
-  t.absent(model._t3ModelPath, 'no t3 path on moss')
+  t.is(model._setup.paths.mossBackbonePath, BACKBONE)
+  t.is(model._setup.paths.mossCodecDecoderPath, DECODER)
+  t.absent(model._setup.paths.audio8LmPath, 'no audio8 path on moss')
+  t.absent(model._setup.paths.t3ModelPath, 'no t3 path on moss')
 })
 
 test('MOSS: the backbone or the decoder alone routes to moss', (t) => {
@@ -82,9 +82,9 @@ test('MOSS: the *Path file aliases normalize onto the same fields', (t) => {
     }
   })
   t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS)
-  t.is(model._mossBackbonePath, BACKBONE)
-  t.is(model._mossCodecDecoderPath, DECODER)
-  t.is(model._mossCodecEncoderPath, ENCODER)
+  t.is(model._setup.paths.mossBackbonePath, BACKBONE)
+  t.is(model._setup.paths.mossCodecDecoderPath, DECODER)
+  t.is(model._setup.paths.mossCodecEncoderPath, ENCODER)
 })
 
 test('MOSS: modelDir auto-detect finds all three GGUFs', (t) => {
@@ -95,9 +95,9 @@ test('MOSS: modelDir auto-detect finds all three GGUFs', (t) => {
 
     const model = new TTSGgml({ files: { modelDir: root } })
     t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS)
-    t.is(model._mossBackbonePath, path.join(root, 'moss-tts-delay-f16.gguf'))
-    t.is(model._mossCodecDecoderPath, path.join(root, 'moss-codec-decoder-f16.gguf'))
-    t.is(model._mossCodecEncoderPath, path.join(root, 'moss-codec-encoder-f16.gguf'))
+    t.is(model._setup.paths.mossBackbonePath, path.join(root, 'moss-tts-delay-f16.gguf'))
+    t.is(model._setup.paths.mossCodecDecoderPath, path.join(root, 'moss-codec-decoder-f16.gguf'))
+    t.is(model._setup.paths.mossCodecEncoderPath, path.join(root, 'moss-codec-encoder-f16.gguf'))
   })
 })
 
@@ -420,14 +420,14 @@ test('MOSS: modelDir picks the TTSD backbone for dialogue and MOSS-TTS otherwise
     fs.writeFileSync(path.join(root, 'moss-codec-encoder-f16.gguf'), 'encoder')
 
     const plain = new TTSGgml({ files: { modelDir: root } })
-    t.is(plain._mossBackbonePath, path.join(root, 'moss-tts-delay-f16.gguf'))
+    t.is(plain._setup.paths.mossBackbonePath, path.join(root, 'moss-tts-delay-f16.gguf'))
 
     const dialogue = new TTSGgml({
       engine: TTSGgml.ENGINE_MOSS,
       files: { modelDir: root },
       dialogueReferences: [SPEAKER_ONE, SPEAKER_TWO]
     })
-    t.is(dialogue._mossBackbonePath, path.join(root, 'moss-ttsd-f16.gguf'))
+    t.is(dialogue._setup.paths.mossBackbonePath, path.join(root, 'moss-ttsd-f16.gguf'))
   })
 })
 
@@ -437,7 +437,7 @@ test('MOSS: a modelDir holding only the TTSD backbone routes to moss', (t) => {
     fs.writeFileSync(path.join(root, 'moss-codec-decoder-f16.gguf'), 'decoder')
     const model = new TTSGgml({ files: { modelDir: root } })
     t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS)
-    t.is(model._mossBackbonePath, path.join(root, 'moss-ttsd-f16.gguf'))
+    t.is(model._setup.paths.mossBackbonePath, path.join(root, 'moss-ttsd-f16.gguf'))
 
     fs.writeFileSync(path.join(root, 'flow-lm.gguf'), 'pocket')
     const sharedModel = new TTSGgml({ files: { modelDir: root } })

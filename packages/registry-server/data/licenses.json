@@ -55,6 +55,11 @@
     "url": "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"
   },
   {
+    "spdxId": "openmdw-1.1",
+    "name": "OpenMDW License Agreement, version 1.1",
+    "url": "https://openmdw.ai/license/1-1/"
+  },
+  {
     "spdxId": "ltx-2-community",
     "name": "LTX-2 Community License Agreement",
     "url": "https://github.com/Lightricks/LTX-2/blob/main/LICENSE"

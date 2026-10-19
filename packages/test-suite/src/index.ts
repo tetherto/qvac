@@ -1,7 +1,9 @@
 // Type exports
 export type { QvacTestConfig } from './types/config.js'
 export type { Expectation } from './schemas/expectations.js'
-export type { TestDefinition } from './types/test-definition.js'
+export type { TestDefinition, Step, CollectMode, SkipInfo } from './types/test-definition.js'
+export { zodStepOperations } from './types/test-definition.js'
+export type { ExternalConsumerConfig } from './types/config.js'
 export type { TestExecutor, TestResult } from './core/consumer-base.js'
 export type { TestHandler, TestExecutorConfig } from './types/test-handler.js'
 export type { TestDefinitions, ExtractTest, HandlerFn } from './core/base-executor.js'
@@ -9,7 +11,7 @@ export type { TestDefinitions, ExtractTest, HandlerFn } from './core/base-execut
 // Schema exports (for validation)
 export { expectationSchema } from './schemas/expectations.js'
 export { mqttConnectionSchema } from './schemas/mqtt-config.js'
-export { testDefinitionSchema } from './types/test-definition.js'
+export { testDefinitionSchema, stepSchema } from './types/test-definition.js'
 export { qvacTestConfigSchema } from './types/config.js'
 export {
   consumerRegistrationSchema,
@@ -34,6 +36,10 @@ export { defineConfig } from './types/config.js'
 // Core exports
 export { BatchOrchestrator } from './core/batch-orchestrator.js'
 export { ConsumerBase } from './core/consumer-base.js'
+export { StepInterpreter, StepIncompleteError } from './core/step-interpreter.js'
+export type { StepBindings } from './core/step-interpreter.js'
+export { BridgeExecutor } from './core/bridge-executor.js'
+export type { BridgeExecutorOptions } from './core/bridge-executor.js'
 export { createExecutor } from './core/test-executor.js'
 export {
   startNodeMemoryPoller,

@@ -13,6 +13,9 @@ add_executable(
   test_llama_model.cpp
   test_llama_finetuning_helpers.cpp
   test_cache_management.cpp
+  test_cache_ledger.cpp
+  test_cache_checkpoint_file.cpp
+  test_kv_cache_extended.cpp
   test_text_llm_context.cpp
   test_addon_cpp.cpp
   test_cancel_stale_flag.cpp
@@ -23,6 +26,7 @@ add_executable(
   test_generation_params_apply.cpp
   test_llm_parsers.cpp
   test_load_config_handlers.cpp
+  test_image_pixel_limit.cpp
   test_finetune_param_defaults.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
@@ -33,8 +37,7 @@ add_executable(
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp
   test_reasoning_utils.cpp
-  test_recurrent_state_snapshot.cpp
-  test_qwen_template.cpp
+  test_sequence_state_snapshot.cpp
   test_logging_macros.cpp
   test_log_safe_string.cpp
   test_stop_string_match.cpp
@@ -44,6 +47,7 @@ add_executable(
   test_continuous_batch_finalize.cpp
   test_batch_entry_guard.cpp
   test_media_load_order.cpp
+  test_image_token_budget.cpp
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
   test_continuous_batching_integration.cpp
@@ -58,20 +62,22 @@ add_executable(
   test_tool_grammar.cpp
   test_cancel_rollback.cpp
   test_job_cancel_registry.cpp
-  test_reasoning_block_compactor.cpp
   test_parse_unsigned.cpp
   test_parallel_ceiling.cpp
   test_finetune_cancel_action.cpp
   test_finetune_pending_pause.cpp
   test_whole_model_cancel_finetune.cpp
   backend_env.cpp
+  temp_dir_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
@@ -81,14 +87,12 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
 )
 
 target_compile_options(
@@ -117,19 +121,12 @@ target_include_directories(
 # Set C++20 standard for std::views support (required by inference-addon-cpp)
 target_compile_features(addon-test PRIVATE cxx_std_20)
 
-# Set macOS deployment target for C++20 std::format support
-if(APPLE AND NOT IOS)
-  set_target_properties(addon-test PROPERTIES
-    XCODE_ATTRIBUTE_MACOSX_DEPLOYMENT_TARGET "14.0"
-    OSX_DEPLOYMENT_TARGET "14.0"
-  )
-endif()
-
 # Define test binary directory path for runtime use
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
 target_compile_definitions(addon-test PRIVATE
   STANDALONE_TEST_BUILD
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
+  TEST_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media"
 )
 
 # Optional coverage instrumentation
@@ -161,7 +158,7 @@ qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 
 # AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
 # addon-test dynamically links the shared @qvac/fabric runtime
-# (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
+# (qvac__fabric-<host>@0.bare), and the shipped fabric prebuild is built with
 # -static-libstdc++. See packages/classification-ggml/test/unit/CMakeLists.txt
 # for the full rationale. scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI
 # runs: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1.
@@ -177,4 +174,3 @@ add_test(NAME LlamaModelTests COMMAND addon-test)
 set_tests_properties(LlamaModelTests PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   TIMEOUT 900)  # 15 minutes
-

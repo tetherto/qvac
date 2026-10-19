@@ -42,7 +42,9 @@ import {
   historyPrefixFromStoredResponse,
   UnsupportedToolTypeError,
   InvalidResponsesConversationError,
-  InvalidResponsesBackgroundError
+  InvalidResponsesBackgroundError,
+  responsesBody,
+  toSdkResponsesArgs
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   parseLegacyPrompt,
@@ -57,7 +59,7 @@ describe('openaiMessagesToHistory', () => {
       { role: 'user', content: 'hello' },
       { role: 'assistant', content: 'hi there' }
     ]
-    const history = openaiMessagesToHistory(messages, 'hermes')
+    const history = openaiMessagesToHistory(messages)
     assert.deepEqual(history, [
       { role: 'user', content: 'hello' },
       { role: 'assistant', content: 'hi there' }
@@ -66,88 +68,19 @@ describe('openaiMessagesToHistory', () => {
 
   it('handles null content gracefully', () => {
     const messages: OpenAIMessage[] = [{ role: 'assistant', content: null }]
-    const history = openaiMessagesToHistory(messages, 'hermes')
+    const history = openaiMessagesToHistory(messages)
     assert.equal(history[0]!.content, '')
   })
 
   it('handles undefined content gracefully', () => {
     const messages: OpenAIMessage[] = [{ role: 'assistant', content: undefined }]
-    const history = openaiMessagesToHistory(messages, 'hermes')
+    const history = openaiMessagesToHistory(messages)
     assert.equal(history[0]!.content, '')
   })
 
-  it('synthesizes hermes JSON tool_call content for assistant messages', () => {
-    const messages: OpenAIMessage[] = [
-      {
-        role: 'assistant',
-        content: null,
-        tool_calls: [
-          {
-            id: 'call_1',
-            type: 'function',
-            function: { name: 'get_weather', arguments: '{"location":"Tokyo"}' }
-          }
-        ]
-      }
-    ]
-    const history = openaiMessagesToHistory(messages, 'hermes')
-    assert.equal(history[0]!.role, 'assistant')
-    assert.equal(
-      history[0]!.content,
-      '<tool_call>\n{"name":"get_weather","arguments":{"location":"Tokyo"}}\n</tool_call>'
-    )
-  })
-
-  // Replaying a Qwen3.5 tool call as Hermes JSON makes the model imitate that
-  // foreign shape and emit a malformed hybrid frame, which then leaks raw markup
-  // into `content`. Render it in the model's native Pythonic-XML instead.
-  it('synthesizes native qwen35 XML tool_call content for assistant messages', () => {
-    const messages: OpenAIMessage[] = [
-      {
-        role: 'assistant',
-        content: null,
-        tool_calls: [
-          {
-            id: 'call_1',
-            type: 'function',
-            function: { name: 'bash', arguments: '{"command":"ls -la"}' }
-          }
-        ]
-      }
-    ]
-    const history = openaiMessagesToHistory(messages, 'qwen35')
-    assert.equal(
-      history[0]!.content,
-      '<tool_call>\n<function=bash>\n<parameter=command>ls -la</parameter>\n</function>\n</tool_call>'
-    )
-    // No JSON envelope leaks in — the whole point of the native rendering.
-    assert.ok(!history[0]!.content.includes('"arguments"'))
-  })
-
-  it('renders qwen35 non-string params as text/JSON per the parser contract', () => {
-    const messages: OpenAIMessage[] = [
-      {
-        role: 'assistant',
-        content: null,
-        tool_calls: [
-          {
-            id: 'call_1',
-            type: 'function',
-            function: {
-              name: 'configure',
-              arguments: '{"limit":5,"enabled":true,"tags":["a","b"]}'
-            }
-          }
-        ]
-      }
-    ]
-    const content = openaiMessagesToHistory(messages, 'qwen35')[0]!.content
-    assert.ok(content.includes('<parameter=limit>5</parameter>'))
-    assert.ok(content.includes('<parameter=enabled>true</parameter>'))
-    assert.ok(content.includes('<parameter=tags>["a","b"]</parameter>'))
-  })
-
-  it('handles multiple tool calls in single message', () => {
+  // Past tool calls stay structured, so the model's chat template renders them
+  // in its own format instead of a hand-written dialect.
+  it('maps assistant tool_calls to structured toolCalls', () => {
     const messages: OpenAIMessage[] = [
       {
         role: 'assistant',
@@ -158,36 +91,77 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    const history = openaiMessagesToHistory(messages, 'hermes')
-    const content = history[0]!.content
-    assert.ok(content.includes('fn_a'))
-    assert.ok(content.includes('fn_b'))
+    assert.deepEqual(openaiMessagesToHistory(messages), [
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'call_1', name: 'fn_a', arguments: {} },
+          { id: 'call_2', name: 'fn_b', arguments: { x: 1 } }
+        ]
+      }
+    ])
   })
 
-  it('handles malformed tool call arguments JSON', () => {
+  it('keeps assistant text alongside its tool calls', () => {
+    const messages: OpenAIMessage[] = [
+      {
+        role: 'assistant',
+        content: 'Checking.',
+        tool_calls: [
+          { id: 'call_1', type: 'function', function: { name: 'f', arguments: '{"a":"b"}' } }
+        ]
+      }
+    ]
+    const history = openaiMessagesToHistory(messages)
+    assert.equal(history[0]!.content, 'Checking.')
+    assert.deepEqual(history[0]!.toolCalls, [{ id: 'call_1', name: 'f', arguments: { a: 'b' } }])
+  })
+
+  it('sends arguments that are not a JSON object as {}', () => {
     const messages: OpenAIMessage[] = [
       {
         role: 'assistant',
         content: null,
         tool_calls: [
-          {
-            id: 'call_1',
-            type: 'function',
-            function: { name: 'broken', arguments: '{not valid json}' }
-          }
+          { id: 'call_1', type: 'function', function: { name: 'broken', arguments: '{not json' } },
+          { id: 'call_2', type: 'function', function: { name: 'list', arguments: '[1,2]' } }
         ]
       }
     ]
-    const history = openaiMessagesToHistory(messages, 'hermes')
-    assert.ok(history[0]!.content.includes('broken'))
+    const calls = openaiMessagesToHistory(messages)[0]!.toolCalls!
+    assert.deepEqual(
+      calls.map((call) => call.arguments),
+      [{}, {}]
+    )
   })
 
-  it('preserves tool_call_id messages as-is', () => {
+  it('maps a tool result to toolCallId and the name of the call it answers', () => {
     const messages: OpenAIMessage[] = [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '{}' } }
+        ]
+      },
       { role: 'tool', content: '{"result": 42}', tool_call_id: 'call_1' }
     ]
-    const history = openaiMessagesToHistory(messages, 'hermes')
-    assert.deepEqual(history[0], { role: 'tool', content: '{"result": 42}' })
+    assert.deepEqual(openaiMessagesToHistory(messages)[1], {
+      role: 'tool',
+      content: '{"result": 42}',
+      toolCallId: 'call_1',
+      toolName: 'get_weather'
+    })
+  })
+
+  it('keeps a tool result whose call is not in the history', () => {
+    const messages: OpenAIMessage[] = [{ role: 'tool', content: 'ok', tool_call_id: 'call_9' }]
+    assert.deepEqual(openaiMessagesToHistory(messages)[0], {
+      role: 'tool',
+      content: 'ok',
+      toolCallId: 'call_9'
+    })
   })
 
   it('concatenates text content parts into a string', () => {
@@ -200,7 +174,7 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    const history = openaiMessagesToHistory(messages, 'hermes')
+    const history = openaiMessagesToHistory(messages)
     assert.deepEqual(history[0], { role: 'user', content: 'hello world' })
   })
 
@@ -217,7 +191,7 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    const history = openaiMessagesToHistory(messages, 'hermes')
+    const history = openaiMessagesToHistory(messages)
     assert.equal(history[0]!.role, 'user')
     assert.equal(history[0]!.content, 'what is this?')
     assert.equal(history[0]!.attachments!.length, 1)
@@ -230,7 +204,7 @@ describe('openaiMessagesToHistory', () => {
     const messages: OpenAIMessage[] = [
       { role: 'user', content: [{ type: 'image_url', image_url: dataUrl }] }
     ]
-    const history = openaiMessagesToHistory(messages, 'hermes')
+    const history = openaiMessagesToHistory(messages)
     assert.equal(history[0]!.attachments!.length, 1)
     assert.equal(history[0]!.attachments![0]!.ext, 'jpg')
   })
@@ -241,7 +215,7 @@ describe('openaiMessagesToHistory', () => {
     const messages: OpenAIMessage[] = [
       { role: 'user', content: [{ type: 'image_url', image_url: 'https://example.com/x.png' }] }
     ]
-    assert.throws(() => openaiMessagesToHistory(messages, 'hermes'), UnsupportedImageContentError)
+    assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
   })
 
   it('throws on an unsupported image format (e.g. webp)', () => {
@@ -255,7 +229,7 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    assert.throws(() => openaiMessagesToHistory(messages, 'hermes'), UnsupportedImageContentError)
+    assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
   })
 
   it('throws on a payload that is not valid base64 image data', () => {
@@ -267,7 +241,7 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    assert.throws(() => openaiMessagesToHistory(messages, 'hermes'), UnsupportedImageContentError)
+    assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
   })
 
   it('writeChatImages materializes attachment bytes to flat temp files', async () => {
@@ -276,7 +250,7 @@ describe('openaiMessagesToHistory', () => {
     const messages: OpenAIMessage[] = [
       { role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }] }
     ]
-    const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages, 'hermes'))
+    const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages))
     assert.equal(tmpPaths.length, 1)
     assert.ok(tmpPaths[0]!.endsWith('.png'))
     assert.ok(existsSync(tmpPaths[0]!))
@@ -347,7 +321,7 @@ describe('openaiToolsToSdk', () => {
     assert.equal(result[1]!.name, 'fn_b')
   })
 
-  it('normalizes composite types like ["string", "null"] to "string"', () => {
+  it('keeps nullable type arrays like ["string", "null"]', () => {
     const tools = [
       {
         type: 'function',
@@ -367,12 +341,12 @@ describe('openaiToolsToSdk', () => {
     ]
     const result = openaiToolsToSdk(tools)
     assert.ok(result)
-    const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
-    assert.equal(props.properties['path']!.type, 'string')
-    assert.equal(props.properties['glob']!.type, 'string')
+    const props = result[0]!.parameters as { properties: Record<string, { type: unknown }> }
+    assert.deepEqual(props.properties['path']!.type, ['string', 'null'])
+    assert.deepEqual(props.properties['glob']!.type, ['string', 'null'])
   })
 
-  it('normalizes ["integer", "null"] to "integer"', () => {
+  it('drops unrecognized members of a type array', () => {
     const tools = [
       {
         type: 'function',
@@ -382,7 +356,7 @@ describe('openaiToolsToSdk', () => {
           parameters: {
             type: 'object',
             properties: {
-              limit: { type: ['integer', 'null'] }
+              limit: { type: ['integer', 'date', 'null'] }
             }
           }
         }
@@ -390,8 +364,31 @@ describe('openaiToolsToSdk', () => {
     ]
     const result = openaiToolsToSdk(tools)
     assert.ok(result)
-    const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
-    assert.equal(props.properties['limit']!.type, 'integer')
+    const props = result[0]!.parameters as { properties: Record<string, { type: unknown }> }
+    assert.deepEqual(props.properties['limit']!.type, ['integer', 'null'])
+  })
+
+  it('leaves anyOf properties and nested keywords as declared', () => {
+    const when = { anyOf: [{ type: 'string' }, { type: 'null' }] }
+    const stops = {
+      type: 'array',
+      items: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
+    }
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'plan',
+          description: 'Plan',
+          parameters: { type: 'object', properties: { when, stops } }
+        }
+      }
+    ]
+    const result = openaiToolsToSdk(tools)
+    assert.ok(result)
+    const props = result[0]!.parameters as { properties: Record<string, unknown> }
+    assert.deepEqual(props.properties['when'], when)
+    assert.deepEqual(props.properties['stops'], stops)
   })
 
   it('falls back to "string" for unrecognized types', () => {
@@ -575,23 +572,6 @@ describe('extractGenerationParams (chat semantics)', () => {
 
   it('ignores unsupported numeric reasoning_budget values', () => {
     const params = extractChat({ reasoning_budget: 1 })
-    assert.equal(params, undefined)
-  })
-
-  it('extracts remove_thinking_from_context true', () => {
-    const params = extractChat({ remove_thinking_from_context: true })
-    assert.ok(params)
-    assert.equal(params.remove_thinking_from_context, true)
-  })
-
-  it('extracts remove_thinking_from_context false', () => {
-    const params = extractChat({ remove_thinking_from_context: false })
-    assert.ok(params)
-    assert.equal(params.remove_thinking_from_context, false)
-  })
-
-  it('ignores non-boolean remove_thinking_from_context', () => {
-    const params = extractChat({ remove_thinking_from_context: 1 })
     assert.equal(params, undefined)
   })
 
@@ -931,14 +911,39 @@ describe('openaiResponsesInputToHistory', () => {
     assert.deepEqual(h[0], { role: 'tool', content: '{"ok":true}' })
   })
 
-  it('maps function_call to synthesized assistant tool markup', () => {
+  it('maps function_call to a structured assistant tool call', () => {
     const h = openaiResponsesInputToHistory(
-      [{ type: 'function_call', name: 'x', arguments: '{"a":1}' }],
+      [{ type: 'function_call', call_id: 'c1', name: 'x', arguments: '{"a":1}' }],
       undefined
     )
-    assert.equal(h[0]!.role, 'assistant')
-    assert.ok(h[0]!.content.includes('<tool_call>'))
-    assert.ok(h[0]!.content.includes('x'))
+    assert.deepEqual(h, [
+      { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'x', arguments: { a: 1 } }] }
+    ])
+  })
+
+  it('joins calls to the assistant turn before them and names their results', () => {
+    const h = openaiResponsesInputToHistory(
+      [
+        { type: 'message', role: 'assistant', content: 'Looking.' },
+        { type: 'function_call', call_id: 'c1', name: 'a', arguments: '{}' },
+        { type: 'function_call', call_id: 'c2', name: 'b', arguments: '{}' },
+        { type: 'function_call_output', call_id: 'c2', output: 'B' },
+        { type: 'function_call_output', call_id: 'c1', output: 'A' }
+      ],
+      undefined
+    )
+    assert.deepEqual(h, [
+      {
+        role: 'assistant',
+        content: 'Looking.',
+        toolCalls: [
+          { id: 'c1', name: 'a', arguments: {} },
+          { id: 'c2', name: 'b', arguments: {} }
+        ]
+      },
+      { role: 'tool', content: 'B', toolCallId: 'c2', toolName: 'b' },
+      { role: 'tool', content: 'A', toolCallId: 'c1', toolName: 'a' }
+    ])
   })
 })
 
@@ -1040,15 +1045,13 @@ describe('historyPrefixFromStoredResponse', () => {
         ]
       }
     })
-    const assistantText = prefix.filter(
-      (p) => p.role === 'assistant' && !p.content.includes('tool_call')
-    )
-    const toolCalls = prefix.filter(
-      (p) => p.role === 'assistant' && p.content.includes('tool_call')
-    )
-    assert.equal(assistantText.length, 1)
-    assert.equal(assistantText[0]!.content, 'hello')
-    assert.equal(toolCalls.length, 1)
+    assert.deepEqual(prefix, [
+      {
+        role: 'assistant',
+        content: 'hello',
+        toolCalls: [{ id: 'c1', name: 'f', arguments: {} }]
+      }
+    ])
   })
 
   it('includes function_call_output from stored input items', () => {
@@ -1350,10 +1353,7 @@ describe('chat tool_choice wiring', () => {
   })
 
   it('threads a mode choice into generationParams', () => {
-    const args = toSdkChatArgs(
-      chatCompletionsBody.parse(body({ tool_choice: 'required' })),
-      'hermes'
-    )
+    const args = toSdkChatArgs(chatCompletionsBody.parse(body({ tool_choice: 'required' })))
     assert.equal(args.generationParams?.tool_choice, 'required')
   })
 
@@ -1361,23 +1361,21 @@ describe('chat tool_choice wiring', () => {
     const args = toSdkChatArgs(
       chatCompletionsBody.parse(
         body({ tool_choice: { type: 'function', function: { name: 'get_weather' } } })
-      ),
-      'hermes'
+      )
     )
     assert.equal(args.generationParams?.tool_choice, 'get_weather')
   })
 
   it('keeps tool_choice alongside the other generation params', () => {
     const args = toSdkChatArgs(
-      chatCompletionsBody.parse(body({ tool_choice: 'required', temperature: 0.3 })),
-      'hermes'
+      chatCompletionsBody.parse(body({ tool_choice: 'required', temperature: 0.3 }))
     )
     assert.equal(args.generationParams?.tool_choice, 'required')
     assert.equal(args.generationParams?.temp, 0.3)
   })
 
   it('leaves generationParams undefined when nothing was set', () => {
-    const args = toSdkChatArgs(chatCompletionsBody.parse(body({})), 'hermes')
+    const args = toSdkChatArgs(chatCompletionsBody.parse(body({ tools: undefined })))
     assert.equal(args.generationParams, undefined)
   })
 
@@ -1387,6 +1385,58 @@ describe('chat tool_choice wiring', () => {
       messages: [{ role: 'user', content: 'hi' }],
       tool_choice: 'required'
     })
-    assert.throws(() => toSdkChatArgs(parsed, 'hermes'), InvalidToolChoiceError)
+    assert.throws(() => toSdkChatArgs(parsed), InvalidToolChoiceError)
+  })
+})
+
+describe('parallel_tool_calls wiring', () => {
+  const tools = [
+    {
+      type: 'function',
+      function: { name: 'get_weather', parameters: { type: 'object', properties: {} } }
+    }
+  ]
+  const messages = [{ role: 'user', content: 'Weather in Lugano and Rome?' }]
+
+  function chatParams(extra: Record<string, unknown>) {
+    return toSdkChatArgs(chatCompletionsBody.parse({ model: 'm', messages, ...extra }))
+      .generationParams
+  }
+
+  function responsesParams(extra: Record<string, unknown>) {
+    return toSdkResponsesArgs(responsesBody.parse({ model: 'm', input: 'hi', ...extra }))
+      .generationParams
+  }
+
+  it('defaults to true on a chat request with tools', () => {
+    assert.deepEqual(chatParams({ tools }), { parallel_tool_calls: true })
+  })
+
+  it('forwards an explicit false on a chat request', () => {
+    assert.deepEqual(chatParams({ tools, parallel_tool_calls: false }), {
+      parallel_tool_calls: false
+    })
+  })
+
+  it('is not sent without tools', () => {
+    assert.equal(chatParams({ parallel_tool_calls: true }), undefined)
+  })
+
+  it('rides along with tool_choice', () => {
+    assert.deepEqual(chatParams({ tools, tool_choice: 'required' }), {
+      tool_choice: 'required',
+      parallel_tool_calls: true
+    })
+  })
+
+  it('defaults to true on a responses request with tools and forwards false', () => {
+    const responsesTools = [
+      { type: 'function', name: 'get_weather', parameters: { type: 'object' } }
+    ]
+    assert.deepEqual(responsesParams({ tools: responsesTools }), { parallel_tool_calls: true })
+    assert.deepEqual(responsesParams({ tools: responsesTools, parallel_tool_calls: false }), {
+      parallel_tool_calls: false
+    })
+    assert.equal(responsesParams({}), undefined)
   })
 })

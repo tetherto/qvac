@@ -4,11 +4,17 @@ export interface GGMLConfig {
     gpu_layers?: NumericLike;
     batch_size?: NumericLike;
     ctx_size?: NumericLike;
+    /** Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100 (maximum polling). Defaults to 0. */
+    poll?: NumericLike;
+    /** Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when neither option is set. */
+    "poll-batch"?: NumericLike;
     pooling?: "none" | "mean" | "cls" | "last" | "rank";
     attention?: "causal" | "non-causal";
     embd_normalize?: NumericLike;
     flash_attn?: "on" | "off" | "auto";
     "main-gpu"?: NumericLike | "integrated" | "dedicated";
+    /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, plus auto for no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use device 'cpu' to run on CPU. */
+    backend?: string;
     /** How to split the model across GPUs: 'none' pins one device, 'layer' distributes layers. 'row' is rejected at load; use 'layer'. */
     "split-mode"?: "none" | "layer";
     "tensor-split"?: string;
@@ -21,10 +27,9 @@ export interface AddonConfigurationParams {
     path: string;
     config: GGMLConfig;
     /**
-     * Root the native side searches for ggml compute backends, with
-     * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the root
-     * `@qvac/fabric/backends` resolves on desktop, falling back to this
-     * addon's own `prebuilds/` on mobile.
+     * Directory holding the ggml compute backend modules, overriding the ones
+     * @qvac/fabric ships. Empty (the default) lets fabric load its own, which
+     * it locates next to its runtime on every platform.
      */
     backendsDir?: string;
 }
@@ -81,7 +86,12 @@ export type MappedAddonEvent = {
  * event names (caller logs and skips dispatch).
  */
 export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedAddonEvent | null;
-export declare function resolveBackendsDir(): string;
+/**
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ */
+export declare function pickPrimaryGgufPath(files: string[]): string;
 /** An interface between the Bare C++ addon and the JS runtime. */
 export declare class BertInterface implements Addon {
     private readonly _binding;

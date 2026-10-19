@@ -17,7 +17,6 @@
 #include <vector>
 
 #include <inference-addon-cpp/Errors.hpp>
-#include <inference-addon-cpp/Logger.hpp>
 #include <picojson/picojson.h>
 
 #include "utils/AviWriter.hpp"
@@ -26,6 +25,7 @@
 #include "utils/ImageCodec.hpp"
 #include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ReferenceImages.hpp"
 #include "utils/SdErrors.hpp"
 #include "utils/SdVideoFrames.hpp"
 #include "utils/VideoModelCapabilities.hpp"
@@ -356,6 +356,7 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.clip_g_path = optPath(config_.clipGPath);
   params.t5xxl_path = optPath(config_.t5XxlPath);
   params.llm_path = optPath(config_.llmPath);
+  params.llm_vision_path = optPath(config_.llmVisionPath);
   params.vae_path = optPath(config_.vaePath);
   params.clip_vision_path = optPath(config_.clipVisionPath);
   params.taesd_path = optPath(config_.taesdPath);
@@ -555,7 +556,8 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
   const bool openClElsewhere =
       ctx.params.preferred_gpu_backend == SD_BACKEND_PREF_OPENCL &&
       !sd_backend_selection::openClPreferenceMatchesEnumeratedGpu();
-  if (pinnedBackend || pinnedParams || cpuPreferred || openClElsewhere) {
+  if (!workload.upscaleOnly &&
+      (pinnedBackend || pinnedParams || cpuPreferred || openClElsewhere)) {
     outcome.status = SD_FIT_ERROR;
     outcome.reason = "unsupported-config";
     return outcome;
@@ -577,9 +579,54 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
   request.vae_tiling_params.tile_size_y = workload.vaeTileSizeY;
   request.vae_tiling_params.target_overlap = workload.vaeTileOverlap;
 
+  sd_upscaler_fit_params_t upscaler;
+  sd_upscaler_fit_params_init(&upscaler);
+  upscaler.esrgan_path = config_.esrganPath.c_str();
+  upscaler.n_threads =
+      config_.upscalerThreads > 0 ? config_.upscalerThreads : config_.nThreads;
+  if (upscaler.n_threads <= 0) {
+    upscaler.n_threads = sd_get_num_physical_cores();
+  }
+  upscaler.tile_size = std::max(1, config_.upscalerTileSize);
+  upscaler.width = workload.width;
+  upscaler.height = workload.height;
+  upscaler.repeats = workload.upscaleRepeats;
+  upscaler.direct = config_.upscalerDirect;
+  upscaler.offload_params_to_cpu = config_.upscalerOffloadParamsToCpu;
+  upscaler.device =
+      config_.device == "cpu" ? SD_UPSCALER_DEVICE_CPU : SD_UPSCALER_DEVICE_GPU;
+  upscaler.gpu_backend_pref =
+      sd_backend_selection::preferredEsrganBackendForConfigDevice(
+          config_.device);
+
   sd_fit_result_t result{};
+  const bool useUpscaler =
+      workload.upscaleOnly ||
+      (!config_.esrganPath.empty() && workload.videoFrames <= 1 &&
+       !sd_model_supports_video(
+           config_.modelPath.empty() ? config_.diffusionModelPath.c_str()
+                                     : config_.modelPath.c_str()));
+  if (useUpscaler) {
+    const int scale = sd_upscaler_model_scale(config_.esrganPath.c_str());
+    if (scale > 0 && !qvac_lib_inference_addon_sd::esrganOutputFitsLimits(
+                         workload.width,
+                         workload.height,
+                         scale,
+                         workload.upscaleRepeats,
+                         config_.maxImagePixels)) {
+      outcome.reason = "unsupported-config";
+      return outcome;
+    }
+  }
   try {
-    outcome.status = sd_fit_params(&ctx.params, &request, &result);
+    if (workload.upscaleOnly) {
+      outcome.status = sd_upscaler_fit_params(&upscaler, &result);
+    } else if (useUpscaler) {
+      outcome.status = sd_fit_params_with_upscaler(
+          &ctx.params, &request, &upscaler, &result);
+    } else {
+      outcome.status = sd_fit_params(&ctx.params, &request, &result);
+    }
   } catch (const std::exception& error) {
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
@@ -774,6 +821,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
         general_error::InvalidArgument,
         "Unsupported mode: '" + gen.mode + "'. Supported: txt2img, img2img.");
 
+  if (gen.upscale) {
+    qvac_lib_inference_addon_sd::validateEsrganImageChannels(
+        sd_ctx_get_image_channels(sdCtx_.get()));
+  }
   if (gen.upscale && config_.esrganPath.empty()) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -844,34 +895,25 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   //     is rejected outright for these architectures.
   //
   sd_image_t initImg{}; // single-image (SDEdit or 1x FLUX)
+  std::unique_ptr<uint8_t, image_codec::FreeDeleter> initData;
+  std::unique_ptr<uint8_t, image_codec::FreeDeleter> maskData;
   std::vector<uint8_t> initPng;
   // Owned storage for genParams.ref_image_args; must outlive
   // generate_image(). Replaces the removed auto_resize_ref_image /
   // increase_ref_index fields with the engine's key=value spec.
   std::string refImageArgs;
 
-  // RAII wrapper for multi-image FLUX fusion reference images. Automatically
-  // frees pixel buffers on scope exit (normal or exceptional) using a custom
-  // deleter that iterates the vector and frees each sd_image_t.data pointer.
-  auto refImgsDeleter = [](std::vector<sd_image_t>* v) {
-    if (!v)
-      return;
-    for (auto& img : *v) {
-      if (img.data) {
-        free(img.data);
-        img.data = nullptr;
-      }
-    }
-    delete v;
-  };
-  std::unique_ptr<std::vector<sd_image_t>, decltype(refImgsDeleter)> refImgs(
-      new std::vector<sd_image_t>(), refImgsDeleter);
+  qvac_lib_inference_addon_sd::ReferenceImages refImgs;
 
   if (gen.mode == "img2img") {
     const bool isFlux2 = config_.flux2Requested;
+    const bool usesReferences = sd_ctx_uses_reference_images(sdCtx_.get());
+    const auto channels = sd_ctx_get_image_channels(sdCtx_.get()) == 4
+                              ? image_codec::DecodeChannels::RGBA
+                              : image_codec::DecodeChannels::RGB;
     const size_t nMulti = job.initImagesBytes.size();
 
-    // -- Input validation: mutual exclusion + FLUX-only for multi -----------
+    // -- Input validation: mutual exclusion + model capabilities -----------
     //
     // These checks mirror the JS-layer validation in index.js but are
     // duplicated here so the C++ API stays safe when called directly from
@@ -880,36 +922,22 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       throw StatusError(
           general_error::InvalidArgument,
           "img2img: init_image and init_images are mutually exclusive -- "
-          "pick one. Use init_images (with FLUX2) for multi-reference "
-          "fusion, or init_image for single-image conditioning.");
+          "pick one. Use init_images for multi-reference editing, "
+          "or init_image for single-image conditioning.");
 
-    if (nMulti > 0 && !isFlux2)
+    if (nMulti > 0 && !usesReferences)
       throw StatusError(
           general_error::InvalidArgument,
-          "img2img: init_images (multi-reference fusion) requires a FLUX2 "
-          "model with prediction='flux2_flow'. The current model does not "
-          "support @image1/@imageN in-context references.");
+          "img2img: init_images requires a model supporting reference editing "
+          "(FLUX.2 or Qwen-Image-2.1).");
 
-    // -- Multi-image (FLUX2 "fusion" mode) ---------------------------------
+    // -- Multiple ordered reference images ---------------------------------
     if (nMulti > 0) {
-      refImgs->reserve(nMulti);
-      for (size_t i = 0; i < nMulti; ++i) {
-        if (job.initImagesBytes[i].empty())
-          throw StatusError(
-              general_error::InvalidArgument,
-              "img2img: init_images[" + std::to_string(i) +
-                  "] is empty -- every reference must be a non-empty "
-                  "PNG/JPEG buffer.");
-
-        sd_image_t decoded = image_codec::decodeImage(job.initImagesBytes[i]);
-        if (decoded.data == nullptr) {
-          throw StatusError(
-              general_error::InvalidArgument,
-              "img2img: failed to decode init_images[" + std::to_string(i) +
-                  "] (corrupt or unsupported format; supported: PNG, JPEG)");
-        }
-        refImgs->push_back(decoded);
-      }
+      refImgs = qvac_lib_inference_addon_sd::decodeReferenceImages(
+          job.initImagesBytes,
+          config_.maxImagePixels,
+          config_.maxJobPixels,
+          channels);
 
       // Output dimensions come from the JS shim (addon.js::_fillDimsFromImage,
       // which falls back to the first reference's size when the caller omits
@@ -917,23 +945,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       // both dimensions explicitly. ref_image_args' resize_before_vae
       // handles the remaining refs.
 
-      // clang-format off
-      // NOTE: Homebrew and apt.llvm.org builds of clang-format-19 disagree on
-      // whether the std::string(...) branches of this ternary should hang the
-      // call open-paren on its own line. Pinning the layout here keeps local
-      // and CI bit-for-bit.
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "img2img: entering FLUX2 *fusion* mode -- " + std::to_string(nMulti) +
-              " reference images. increase_ref_index=" +
-              (gen.increaseRefIndex
-                   ? std::string("true (distinct RoPE slots per ref -- use "
-                                 "when the text encoder supports vision "
-                                 "tokens, e.g. Qwen-Image-Edit)")
-                   : std::string("false (refs tile into one coordinate "
-                                 "space -- visual feature fusion; CLI "
-                                 "default, recommended for FLUX2-klein)")));
-      // clang-format on
+          "img2img: reference editing with " + std::to_string(nMulti) +
+              " images");
 
       genParams.ref_images = refImgs->data();
       genParams.ref_images_count = static_cast<int>(nMulti);
@@ -964,7 +979,23 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
         }
       }
       if (!initPng.empty()) {
-        initImg = image_codec::decodeImage(initPng);
+        image_codec::DecodeFailure decodeFailure;
+        initImg = image_codec::decodeImage(
+            initPng,
+            config_.maxImagePixels,
+            &decodeFailure,
+            config_.maxImagePixels,
+            channels);
+        if (initImg.data == nullptr) {
+          throw StatusError(
+              general_error::InvalidArgument,
+              "img2img: failed to decode init_image: " +
+                  image_codec::decodeFailureMessage(
+                      decodeFailure,
+                      config_.maxImagePixels,
+                      config_.maxJobPixels));
+        }
+        initData.reset(initImg.data);
       }
 
       if (initImg.data == nullptr) {
@@ -977,11 +1008,11 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       const int imgW = static_cast<int>(initImg.width);
       const int imgH = static_cast<int>(initImg.height);
 
-      if (isFlux2) {
+      if (usesReferences) {
         // FLUX in-context conditioning: ref_images handles its own resizing
         // via ref_image_args' resize_before_vae, so only override genParams
         // dimensions when they are still at the 512x512 default.
-        if (gen.width == 512 && gen.height == 512) {
+        if (isFlux2 && gen.width == 512 && gen.height == 512) {
           genParams.width = imgW;
           genParams.height = imgH;
         }
@@ -991,7 +1022,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
             "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
-                " -- FLUX in-context conditioning (ref_images, count=1)");
+                " -- reference conditioning (ref_images, count=1)");
 
         genParams.ref_images = &initImg;
         genParams.ref_images_count = 1;
@@ -1031,7 +1062,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
                 "Failed to resize init_image from " + std::to_string(imgW) +
                     "x" + std::to_string(imgH) + " to " +
                     std::to_string(alignedW) + "x" + std::to_string(alignedH));
-          free(initImg.data);
+          initData.reset(resized.data);
           initImg = resized;
         }
 
@@ -1050,19 +1081,19 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
         if (!genParams.mask_image.data) {
           const size_t maskSize =
               static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
-          auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
+          maskData.reset(static_cast<uint8_t*>(malloc(maskSize)));
           if (!maskData)
             throw StatusError(
                 general_error::InternalError,
                 "Failed to allocate " + std::to_string(maskSize) +
                     " bytes for SDEdit mask (" + std::to_string(alignedW) +
                     "x" + std::to_string(alignedH) + ")");
-          memset(maskData, 255, maskSize);
+          memset(maskData.get(), 255, maskSize);
           genParams.mask_image = {
               static_cast<uint32_t>(alignedW),
               static_cast<uint32_t>(alignedH),
               1,
-              maskData};
+              maskData.get()};
         }
       } // end SDEdit else
     } // end single-image else (nMulti == 0)
@@ -1090,6 +1121,13 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       tEnc = gen.steps - 1;
     g_progressCtx.denoiseTotals.push_back(tEnc + 1);
   }
+  if (gen.upscale &&
+      !upscaler_.outputFitsLimits(
+          genParams.width, genParams.height, gen.upscaleRepeats)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ESRGAN output exceeds configured pixel or 16,384 pixel edge limit");
+  }
   const auto t0 = std::chrono::steady_clock::now();
 
   sd_image_t* genImages = nullptr;
@@ -1101,13 +1139,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   // VAE-decode boundary: captured before PNG encode / upscale / output so
   // vaeMs reflects only the in-library decode, not post-processing.
   const auto tGen = std::chrono::steady_clock::now();
-
-  if (initImg.data) {
-    free(initImg.data);
-  }
-  if (genParams.mask_image.data) {
-    free(genParams.mask_image.data);
-  }
 
   if (!genOk) {
     if (cancelRequested_.load()) {
@@ -1259,15 +1290,18 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
             "' (expected txt2vid or img2vid)");
 
   if (isMiniMaxH3) {
-    // H3 currently supports text-to-audio-video only. Keep this native check
-    // authoritative so renamed GGUFs and bindings that bypass video.ts cannot
-    // enter unsupported image/reference/control paths.
-    if (vid.mode != "txt2vid" || !job.initImageBytes.empty() ||
-        !job.initImagesBytes.empty())
+    // H3's public generate_video() consumes init_image as a first-frame
+    // keyframe. The generic mode/input checks below require it for img2vid.
+    if (!job.initImagesBytes.empty())
       throw StatusError(
           general_error::InvalidArgument,
-          "MiniMax-H3 supports text-to-audio-video only; image conditioning "
-          "(img2vid/init_image) is not supported");
+          "MiniMax-H3 does not accept init_images; use one init_image for "
+          "img2vid");
+    if (vid.mode == "img2vid" && config_.vaeDecodeOnly)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 img2vid requires VAE encoder weights; "
+          "vae_decode_only must be false");
     if (!config_.highNoiseDiffusionModelPath.empty())
       throw StatusError(
           general_error::InvalidArgument,
@@ -1468,17 +1502,25 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   PixelBuffer initData;
   std::vector<PixelBuffer> controlData;
   std::vector<PixelBuffer> referenceData;
+  uint64_t decodedPixels = 0;
 
   if (!job.initImageBytes.empty()) {
-    initImg = image_codec::decodeImage(job.initImageBytes);
+    image_codec::DecodeFailure decodeFailure;
+    initImg = image_codec::decodeImage(
+        job.initImageBytes,
+        config_.maxJobPixels,
+        &decodeFailure,
+        config_.maxImagePixels);
     if (!initImg.data)
       throw StatusError(
           general_error::InvalidArgument,
-          "processVideo: failed to decode init_image (corrupt or "
-          "unsupported format; supported: PNG, JPEG)");
+          "processVideo: failed to decode init_image: " +
+              image_codec::decodeFailureMessage(
+                  decodeFailure, config_.maxImagePixels, config_.maxJobPixels));
     // Take ownership *before* the dimension check so a mismatch can't leak
     // the freshly-decoded pixel buffer (mirrors the control_frames path).
     initData.reset(initImg.data);
+    decodedPixels += static_cast<uint64_t>(initImg.width) * initImg.height;
     if (static_cast<int>(initImg.width) != vid.width ||
         static_cast<int>(initImg.height) != vid.height)
       throw StatusError(
@@ -1494,13 +1536,21 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     controlFrames.reserve(job.controlFramesBytes.size());
     controlData.reserve(job.controlFramesBytes.size());
     for (size_t i = 0; i < job.controlFramesBytes.size(); ++i) {
-      sd_image_t decoded = image_codec::decodeImage(job.controlFramesBytes[i]);
+      image_codec::DecodeFailure decodeFailure;
+      sd_image_t decoded = image_codec::decodeImage(
+          job.controlFramesBytes[i],
+          config_.maxJobPixels - decodedPixels,
+          &decodeFailure,
+          config_.maxImagePixels);
       if (!decoded.data)
         throw StatusError(
             general_error::InvalidArgument,
             "processVideo: failed to decode control_frames[" +
-                std::to_string(i) +
-                "] (corrupt or unsupported format; supported: PNG, JPEG)");
+                std::to_string(i) + "]: " +
+                image_codec::decodeFailureMessage(
+                    decodeFailure,
+                    config_.maxImagePixels,
+                    config_.maxJobPixels));
       // Take ownership *before* the dimension check so a mismatch can't leak.
       PixelBuffer owned(decoded.data);
       if (static_cast<int>(decoded.width) != vid.width ||
@@ -1514,6 +1564,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
                 "x" + std::to_string(vid.height));
       controlData.push_back(std::move(owned));
       controlFrames.push_back(decoded);
+      decodedPixels += static_cast<uint64_t>(decoded.width) * decoded.height;
     }
   }
 
@@ -1521,16 +1572,24 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     referenceImages.reserve(job.referenceImagesBytes.size());
     referenceData.reserve(job.referenceImagesBytes.size());
     for (size_t i = 0; i < job.referenceImagesBytes.size(); ++i) {
-      sd_image_t decoded =
-          image_codec::decodeImage(job.referenceImagesBytes[i]);
+      image_codec::DecodeFailure decodeFailure;
+      sd_image_t decoded = image_codec::decodeImage(
+          job.referenceImagesBytes[i],
+          config_.maxJobPixels - decodedPixels,
+          &decodeFailure,
+          config_.maxImagePixels);
       if (!decoded.data)
         throw StatusError(
             general_error::InvalidArgument,
             "processVideo: failed to decode reference_images[" +
-                std::to_string(i) +
-                "] (corrupt or unsupported format; supported: PNG, JPEG)");
+                std::to_string(i) + "]: " +
+                image_codec::decodeFailureMessage(
+                    decodeFailure,
+                    config_.maxImagePixels,
+                    config_.maxJobPixels));
       referenceData.emplace_back(decoded.data);
       referenceImages.push_back(decoded);
+      decodedPixels += static_cast<uint64_t>(decoded.width) * decoded.height;
     }
   }
 

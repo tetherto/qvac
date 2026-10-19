@@ -32,6 +32,8 @@ Third-Party Model Licenses
 
 --- apache-2.0 (Apache License 2.0) ---
 
+  moss-transcribe-diarize (f16, q8_0, q5_0 GGUF)
+    https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize
   de-tiny-ggml-model-f16
     https://huggingface.co/primeline/whisper-tiny-german-1224
   en-base-ggml-model-f16

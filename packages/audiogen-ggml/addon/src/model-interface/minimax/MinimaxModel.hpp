@@ -78,6 +78,11 @@ private:
   double audioDurationMs_ = 0.0;
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
+  int64_t emittedFrames_ = 0; // semantic frames the AR stage produced
+  double arMs_ = 0.0;
+  double conditionMs_ = 0.0;
+  double flowMs_ = 0.0;
+  double vocoderMs_ = 0.0;
   int sampleRate_ = 0;
   int channels_ = 0;
   std::string backendName_ = "CPU";

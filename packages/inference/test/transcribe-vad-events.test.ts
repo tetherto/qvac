@@ -22,6 +22,15 @@ test('vadStateEventSchema: accepts a well-formed VAD payload', (t) => {
   t.ok(result.success, 'vad payload is valid')
 })
 
+test('vadStateEventSchema: accepts Sortformer speaker activity', (t) => {
+  const result = vadStateEventSchema.safeParse({
+    speaking: true,
+    probability: 0.87,
+    source: 'sortformer'
+  })
+  t.ok(result.success, 'Sortformer VAD payload is valid')
+})
+
 test('vadStateEventSchema: rejects missing fields', (t) => {
   const noProbability = vadStateEventSchema.safeParse({ speaking: false })
   t.ok(!noProbability.success, 'vad without probability is rejected')
@@ -255,5 +264,10 @@ test('toVadStateEvent: carries the detector source', (t) => {
     toVadStateEvent({ type: 'vad', speaking: false, score: 0.1, source: 'energy' }).source,
     'energy',
     "the addon's reserved 'energy' value is passed through unchanged"
+  )
+  t.is(
+    toVadStateEvent({ type: 'vad', speaking: true, score: 0.8, source: 'sortformer' }).source,
+    'sortformer',
+    'Sortformer speaker activity is passed through unchanged'
   )
 })

@@ -1,0 +1,129 @@
+package io.tether.qvac.sdk
+
+import io.tether.qvac.sdk.generated.schema.HeartbeatRequest
+import io.tether.qvac.sdk.generated.schema.HeartbeatResponse
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+class QvacClient(
+    private val transport: QvacTransport,
+    internal val json: Json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = true
+    },
+) {
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val runtimeProfile: QvacRuntimeProfile? get() = transport.runtimeProfile
+
+    suspend fun heartbeat(): HeartbeatResponse = heartbeat(HeartbeatRequest())
+
+    suspend fun call(payload: JsonObject): JsonObject {
+        transport.runtimeProfile?.requirePayload(payload)
+        return checkResponse(transport.call(payload))
+    }
+
+    fun stream(payload: JsonObject): Flow<JsonObject> {
+        transport.runtimeProfile?.requirePayload(payload)
+        return transport.stream(payload).map(::checkResponse)
+    }
+
+    fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> {
+        transport.runtimeProfile?.requirePayload(payload)
+        return transport.duplex(payload, input).map(::checkResponse)
+    }
+
+    internal suspend inline fun <reified Request : Any, reified Response : Any> callTyped(
+        request: Request,
+    ): Response {
+        val payload = json.encodeToJsonElement(request).jsonObject
+        transport.runtimeProfile?.requirePayload(payload)
+        return json.decodeFromJsonElement(checkResponse(transport.call(payload)))
+    }
+
+    internal inline fun <reified Request : Any, reified Response : Any> streamTyped(
+        request: Request,
+    ): Flow<Response> {
+        val payload = json.encodeToJsonElement(request).jsonObject
+        transport.runtimeProfile?.requirePayload(payload)
+        return transport.stream(payload).map { response ->
+            json.decodeFromJsonElement(checkResponse(response))
+        }
+    }
+
+    internal inline fun <reified Request : Any, reified Response : Any> duplexTyped(
+        request: Request,
+        input: Flow<ByteArray>,
+    ): Flow<Response> {
+        val payload = json.encodeToJsonElement(request).jsonObject
+        transport.runtimeProfile?.requirePayload(payload)
+        return transport.duplex(payload, input).map { response ->
+            json.decodeFromJsonElement(checkResponse(response))
+        }
+    }
+
+    /** Typed request, undecoded frames: for callers that decode frames leniently. */
+    internal inline fun <reified Request : Any> streamEncoded(request: Request): Flow<JsonObject> =
+        stream(json.encodeToJsonElement(request).jsonObject)
+
+    internal inline fun <reified Request : Any> duplexEncoded(
+        request: Request,
+        input: Flow<ByteArray>,
+    ): Flow<JsonObject> = duplex(json.encodeToJsonElement(request).jsonObject, input)
+
+    /** Typed frames paired with the raw frame, for open objects such as `stats` whose extra keys the types drop. */
+    internal inline fun <reified Request : Any, reified Response : Any> streamWithRaw(
+        request: Request,
+    ): Flow<Pair<Response, JsonObject>> =
+        streamEncoded(request).map { frame -> json.decodeFromJsonElement<Response>(frame) to frame }
+
+    internal inline fun <reified Request : Any, reified Response : Any> duplexWithRaw(
+        request: Request,
+        input: Flow<ByteArray>,
+    ): Flow<Pair<Response, JsonObject>> =
+        duplexEncoded(request, input).map { frame -> json.decodeFromJsonElement<Response>(frame) to frame }
+
+    internal inline fun <
+        reified Request : Any,
+        reified Progress : Any,
+        reified Response : Any,
+        > progressTyped(
+        request: Request,
+        progressType: String,
+    ): Flow<QvacProgressEvent<Progress, Response>> {
+        val payload = json.encodeToJsonElement(request).jsonObject
+        transport.runtimeProfile?.requirePayload(payload)
+        return transport.stream(payload).map { response ->
+            val checked = checkResponse(response)
+            if (checked["type"]?.jsonPrimitive?.content == progressType) {
+                QvacProgressEvent.Progress(json.decodeFromJsonElement<Progress>(checked))
+            } else {
+                QvacProgressEvent.Result(json.decodeFromJsonElement<Response>(checked))
+            }
+        }
+    }
+
+    suspend fun close() {
+        try {
+            transport.close()
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    private fun checkResponse(response: JsonObject): JsonObject {
+        if (response["type"]?.jsonPrimitive?.content == "error") {
+            throw QvacException.from(response)
+        }
+        return response
+    }
+}

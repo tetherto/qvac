@@ -12,6 +12,12 @@ const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { readWavAsFloat32, createWav, resampleLinear } = require('../utils/wav-helper')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
 const { NO_GPU, GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
+const { assertMossBackend } = require('../utils/mossBackend')
+const {
+  createMossGpuValidation,
+  ENCODER_RE,
+  DIALOGUE_BACKBONE_RE
+} = require('../utils/mossGpuValidation')
 
 const MOSS_SAMPLE_RATE = 24000
 const MOSS_STREAM_FRAMES = 10
@@ -19,8 +25,6 @@ const MOSS_SAMPLES_PER_FRAME = 1920
 const TEST_TIMEOUT_MS = 1800000
 const SYNTHESIS_TEXT = 'The MOSS integration test checks this generated voice.'
 const MODEL_DIR_ENV = 'QVAC_TEST_MOSS_MODEL_DIR'
-const ENCODER_RE = /^moss-codec-encoder(-[a-z0-9_]+)?\.gguf$/i
-const DIALOGUE_BACKBONE_RE = /^moss-ttsd(-[a-z0-9_]+)?\.gguf$/i
 const DIALOGUE_TEXT =
   '[S1] And so, my fellow Americans, [S2] ask what you can do for your country. ' +
   '[S1] Did the build finish this morning? [S2] Yes, every single test passed.'
@@ -29,12 +33,12 @@ const SPEAKER_TWO_SECONDS = [7.6, 10.6]
 const SHORT_DURATION_TOKENS = 25
 const LONG_DURATION_TOKENS = 100
 const INT16_FULL_SCALE = 32767
-const CPU_DEVICE = 0
-const CPU_BACKEND = 0
-const GPU_DEVICE = 1
+const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 
 const modelDir = (proc.env && proc.env[MODEL_DIR_ENV]) || ''
 const skipWithoutModels = modelDir === ''
+const sourceAudio = resolveRefWavPath({})
+const validation = createMossGpuValidation(proc.env || {}, sourceAudio, GPU_ONLY_USE_GPU)
 
 function createMossModel(extra = {}, useGPU = false) {
   return new TTSGgml({
@@ -133,9 +137,8 @@ function recordMoss(t, label, result, wallMs) {
   )
 }
 
-function assertCpuBackend(t, label, stats) {
-  t.is(stats.backendDevice, CPU_DEVICE, `${label} reports a CPU device`)
-  t.is(stats.backendId, CPU_BACKEND, `${label} reports the CPU backend`)
+function assertBackend(t, label, stats, useGPU = false) {
+  assertMossBackend(t, label, stats, useGPU, PINNED_GPU_BACKEND)
 }
 
 async function withLoadedModel(extra, body, useGPU = false) {
@@ -156,31 +159,40 @@ test(
       const started = Date.now()
       const result = await synthesize(model, SYNTHESIS_TEXT)
       assertAudio(t, 'MOSS batch', result)
-      assertCpuBackend(t, 'MOSS batch', result.stats)
+      assertBackend(t, 'MOSS batch', result.stats)
       t.is(nonEmptyChunks(result).length, 1, 'batch synthesis emits one buffer')
       recordMoss(t, 'moss batch', result, Date.now() - started)
     })
+    validation.completed('CPU batch')
   }
 )
 
-test(
-  'MOSS TTS: native chunk streaming emits frame-sized chunks',
-  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels },
-  async (t) => {
-    await withLoadedModel({ streamChunkTokens: MOSS_STREAM_FRAMES }, async (model) => {
-      const started = Date.now()
-      const result = await synthesize(model, SYNTHESIS_TEXT)
-      assertAudio(t, 'MOSS stream', result)
-      const chunks = nonEmptyChunks(result)
-      t.ok(chunks.length > 1, `streaming emits several chunks (got ${chunks.length})`)
-      t.ok(
-        chunks.every((length) => length <= MOSS_STREAM_FRAMES * MOSS_SAMPLES_PER_FRAME),
-        'no chunk exceeds the configured frame count'
+for (const useGPU of [false, true]) {
+  test(
+    `MOSS TTS: native chunk streaming emits frame-sized chunks (${useGPU ? 'GPU' : 'CPU'})`,
+    { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels || (useGPU && NO_GPU) },
+    async (t) => {
+      await withLoadedModel(
+        { streamChunkTokens: MOSS_STREAM_FRAMES },
+        async (model) => {
+          const started = Date.now()
+          const result = await synthesize(model, SYNTHESIS_TEXT)
+          assertAudio(t, 'MOSS stream', result)
+          assertBackend(t, 'MOSS stream', result.stats, useGPU)
+          const chunks = nonEmptyChunks(result)
+          t.ok(chunks.length > 1, `streaming emits several chunks (got ${chunks.length})`)
+          t.ok(
+            chunks.every((length) => length <= MOSS_STREAM_FRAMES * MOSS_SAMPLES_PER_FRAME),
+            'no chunk exceeds the configured frame count'
+          )
+          recordMoss(t, 'moss stream', result, Date.now() - started)
+        },
+        useGPU
       )
-      recordMoss(t, 'moss stream', result, Date.now() - started)
-    })
-  }
-)
+      validation.completed(`${useGPU ? 'GPU' : 'CPU'} streaming`)
+    }
+  )
+}
 
 test(
   'MOSS TTS: useGPU=true synthesizes on a GPU backend',
@@ -192,42 +204,48 @@ test(
         const started = Date.now()
         const result = await synthesize(model, SYNTHESIS_TEXT)
         assertAudio(t, 'MOSS GPU', result)
-        t.is(result.stats.backendDevice, GPU_DEVICE, 'MOSS GPU reports a GPU device')
-        t.not(result.stats.backendId, CPU_BACKEND, 'MOSS GPU does not report the CPU backend')
-        t.is(result.stats.gpuUnsupported, 0, 'MOSS GPU does not report a GPU fallback')
+        assertBackend(t, 'MOSS GPU', result.stats, true)
         recordMoss(t, 'moss gpu', result, Date.now() - started)
       },
       true
     )
+    validation.completed('GPU batch')
   }
 )
 
-test(
-  'MOSS TTS: voice cloning synthesizes from a reference recording',
-  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels },
-  async (t) => {
-    const sourceAudio = resolveRefWavPath({})
-    if (!hasEncoder()) {
-      t.comment(`skipping: no moss-codec-encoder GGUF in ${modelDir}`)
-      return
+for (const useGPU of [false, true]) {
+  test(
+    `MOSS TTS: voice cloning synthesizes from a reference recording (${useGPU ? 'GPU' : 'CPU'})`,
+    { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels || (useGPU && NO_GPU) },
+    async (t) => {
+      if (!hasEncoder()) {
+        t.comment(`skipping: no moss-codec-encoder GGUF in ${modelDir}`)
+        return
+      }
+      if (!fs.existsSync(sourceAudio)) {
+        t.fail(`MOSS reference audio is missing: ${sourceAudio}`)
+        return
+      }
+      const referenceAudio = writeReferenceAtMossRate(sourceAudio)
+      try {
+        await withLoadedModel(
+          { referenceAudio, seed: 7 },
+          async (model) => {
+            const started = Date.now()
+            const result = await synthesize(model, SYNTHESIS_TEXT)
+            assertAudio(t, 'MOSS clone', result)
+            assertBackend(t, 'MOSS clone', result.stats, useGPU)
+            recordMoss(t, 'moss clone', result, Date.now() - started)
+          },
+          useGPU
+        )
+      } finally {
+        fs.unlinkSync(referenceAudio)
+      }
+      validation.completed(`${useGPU ? 'GPU' : 'CPU'} cloning`)
     }
-    if (!fs.existsSync(sourceAudio)) {
-      t.fail(`MOSS reference audio is missing: ${sourceAudio}`)
-      return
-    }
-    const referenceAudio = writeReferenceAtMossRate(sourceAudio)
-    try {
-      await withLoadedModel({ referenceAudio, seed: 7 }, async (model) => {
-        const started = Date.now()
-        const result = await synthesize(model, SYNTHESIS_TEXT)
-        assertAudio(t, 'MOSS clone', result)
-        recordMoss(t, 'moss clone', result, Date.now() - started)
-      })
-    } finally {
-      fs.unlinkSync(referenceAudio)
-    }
-  }
-)
+  )
+}
 
 test(
   'MOSS TTS: durationTokens steers the length of the synthesized speech',
@@ -238,9 +256,11 @@ test(
       async (model) => {
         const short = await synthesize(model, SYNTHESIS_TEXT)
         assertAudio(t, 'MOSS short target', short)
+        assertBackend(t, 'MOSS short target', short.stats, GPU_ONLY_USE_GPU)
         await model.reload({ durationTokens: LONG_DURATION_TOKENS })
         const long = await synthesize(model, SYNTHESIS_TEXT)
         assertAudio(t, 'MOSS long target', long)
+        assertBackend(t, 'MOSS long target', long.stats, GPU_ONLY_USE_GPU)
         t.ok(
           long.samples.length > short.samples.length,
           `a longer target yields longer speech (${short.samples.length} -> ${long.samples.length} samples)`
@@ -248,6 +268,7 @@ test(
       },
       GPU_ONLY_USE_GPU
     )
+    validation.completed('GPU duration/reload')
   }
 )
 
@@ -259,7 +280,6 @@ test(
       t.comment(`skipping: the TTSD backbone or the codec encoder is not in ${modelDir}`)
       return
     }
-    const sourceAudio = resolveRefWavPath({})
     if (!fs.existsSync(sourceAudio)) {
       t.fail(`MOSS reference audio is missing: ${sourceAudio}`)
       return
@@ -270,12 +290,13 @@ test(
         { dialogueReferences: references, seed: 7, files: { modelDir: path.resolve(modelDir) } },
         async (model) => {
           t.ok(
-            DIALOGUE_BACKBONE_RE.test(path.basename(model._mossBackbonePath)),
+            DIALOGUE_BACKBONE_RE.test(path.basename(model._setup.paths.mossBackbonePath)),
             'dialogue picks the TTSD backbone'
           )
           const started = Date.now()
           const result = await synthesize(model, DIALOGUE_TEXT)
           assertAudio(t, 'MOSS dialogue', result)
+          assertBackend(t, 'MOSS dialogue', result.stats, GPU_ONLY_USE_GPU)
           recordMoss(t, 'moss dialogue', result, Date.now() - started)
         },
         GPU_ONLY_USE_GPU
@@ -283,5 +304,21 @@ test(
     } finally {
       removeFiles(references)
     }
+    validation.completed('GPU TTSD dialogue')
   }
 )
+
+if (validation.enabled) {
+  test('MOSS TTS: full GPU validation completed every required case', (t) => {
+    validation.assertComplete(t, [
+      'CPU batch',
+      'CPU streaming',
+      'GPU streaming',
+      'GPU batch',
+      'CPU cloning',
+      'GPU cloning',
+      'GPU duration/reload',
+      'GPU TTSD dialogue'
+    ])
+  })
+}

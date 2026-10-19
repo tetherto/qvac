@@ -1,6 +1,11 @@
-import { source } from '@/lib/source';
 import { getLLMText } from '@/lib/get-llm-text';
-import { isArchivedPage, isReleaseNotesPage } from '@/lib/docs-open-graph';
+import { isReleaseNotesPage } from '@/lib/docs-open-graph';
+import {
+  corpusHeader,
+  pagesOfLine,
+  unversionedPages,
+  versionedCollections,
+} from '@/lib/artifacts';
 
 // Resolves the response at build time so the result is written to
 // `out/llms-full.txt` as a static file under `output: 'export'`.
@@ -8,30 +13,39 @@ export const dynamic = 'force-static';
 export const revalidate = false;
 
 /**
- * Generates `/llms-full.txt` at build time.
+ * Generates `/llms-full.txt` at build time: everything the site publishes,
+ * minus the choices it cannot make for the reader.
  *
- * Concatenates the processed Markdown of every non-archived page into a
- * single dump so AI agents can ingest the full documentation in one fetch.
- * Per-section archived versions (`/reference/api/v0.7.0`, etc.) are excluded
- * via `isArchivedPage` so the dump only carries the latest canonical
- * documentation — consistent with `sitemap.xml`, `llms.txt`, and per-page
- * `noindex` metadata.
+ * A versioned collection contributes its current line only. Concatenating two
+ * lines of the same collection would put two releases of the same API in one
+ * corpus, which is the failure the lines exist to prevent; an agent that needs
+ * an older line fetches that line's own corpus, named in the header below.
  *
- * Additionally, the entire release-notes section (`/reference/release-notes`
- * and its archived series) is dropped via `isReleaseNotesPage`. Release notes
- * are historical changelogs whose bulk text inflates the dump's token count
- * and dilutes an agent's reasoning without adding context needed for SDK
- * usage (QVAC-21379). Unlike the archive exclusion above, this is scoped to
- * `llms-full.txt` only: release notes stay indexed in `sitemap.xml`,
- * `llms.txt`, and per-page `.md` so an agent can still fetch a specific
- * release note on demand.
+ * The release notes of every line are dropped. They are historical changelogs
+ * whose bulk text inflates the dump's token count and dilutes an agent's
+ * reasoning without adding context needed to use the release (QVAC-21379).
+ * They stay indexed in `sitemap.xml`, in each line's index, and as per-page
+ * Markdown, so a specific release note is still one fetch away.
  */
 export async function GET() {
-  const scan = source
-    .getPages()
-    .filter((page) => !isArchivedPage(page) && !isReleaseNotesPage(page))
-    .map(getLLMText);
-  const scanned = await Promise.all(scan);
+  const collections = versionedCollections();
 
-  return new Response(scanned.join('\n\n'));
+  const versionedPages = [];
+  for (const { lines } of collections) {
+    const current = lines.find((line) => line.current);
+    if (!current) continue;
+    versionedPages.push(...pagesOfLine(current));
+  }
+
+  const all = [...unversionedPages(), ...versionedPages];
+  const pages = all.filter((page) => !isReleaseNotesPage(page));
+  const texts = await Promise.all(pages.map(getLLMText));
+  const header = corpusHeader({
+    kind: 'site',
+    collections,
+    pages: pages.length,
+    withheld: all.length - pages.length,
+  });
+
+  return new Response([header, ...texts].join('\n\n'));
 }

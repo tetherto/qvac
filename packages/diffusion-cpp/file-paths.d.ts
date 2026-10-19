@@ -5,6 +5,7 @@ export interface DiffusionVideoFiles {
     audioVae?: string;
     embeddingsConnectors?: string;
 }
+export declare function assertAbsolute(key: string, value: unknown): asserts value is string;
 /**
  * Rejects a file set the engine could only report as an opaque error. Shared
  * so a fit refuses the same paths a load refuses.
@@ -20,6 +21,7 @@ export interface DiffusionFilePaths {
     clipGPath: string;
     t5XxlPath: string;
     llmPath: string;
+    llmVisionPath: string;
     vaePath: string;
     clipVisionPath: string;
     esrganPath: string;

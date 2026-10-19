@@ -16,11 +16,13 @@ import {
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
   toSdkResponsesArgs,
-  UnsupportedToolTypeError
+  UnsupportedToolTypeError,
+  type ResponsesHistoryItem
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   InvalidResponseFormatError,
   InvalidToolChoiceError,
+  nameToolResults,
   type GenerationParams,
   type ResponseFormat
 } from '@/serve/extensions/openai/schemas/common'
@@ -39,7 +41,7 @@ const VOLATILE_HEADER = 'X-QVAC-Stub'
 interface HandlerParams {
   sdkModelId: string
   modelAlias: string
-  history: Array<{ role: string; content: string }>
+  history: ResponsesHistoryItem[]
   tools: Tool[] | undefined
   generationParams: GenerationParams | undefined
   responseFormat: ResponseFormat | undefined
@@ -82,6 +84,9 @@ addressable via GET / DELETE / input_items.
 **\`tool_choice\`**: \`"auto"\` (default), \`"none"\`, \`"required"\`, or
 \`{ type: 'function', name }\` to force one tool. \`required\` and a named tool
 constrain generation with the chat template's tool grammar.
+
+**\`parallel_tool_calls\`**: \`true\` (default) lets one response carry several
+tool calls; \`false\` limits it to one.
 
 **Streaming** (\`stream: true\`) emits the OpenAI Responses SSE event sequence
 (\`response.created\` → \`response.output_text.delta\` … → \`response.completed\`)
@@ -169,7 +174,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           )
         }
         const prefix = historyPrefixFromStoredResponse(prev, (id) => openai.responsesStore.get(id))
-        history = [...prefix, ...history]
+        // A result in this request can answer a call from the stored turns.
+        history = nameToolResults([...prefix, ...history])
       }
 
       const params: HandlerParams = {

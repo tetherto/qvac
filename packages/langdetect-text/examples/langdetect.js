@@ -2,17 +2,17 @@
 
 const { detectOne, detectMultiple, getLangName, getISO2FromName } = require('..')
 
-function detectMostProbableLanguage (text) {
+function detectMostProbableLanguage(text) {
   const result = detectOne(text)
   console.log(`Text: ${text}\nMost probable language:`, result)
 }
 
-function detectMultipleLanguages (text, topK) {
+function detectMultipleLanguages(text, topK) {
   const results = detectMultiple(text, topK)
   console.log(`Text: ${text}\nTop ${topK} probable languages:`, results)
 }
 
-function languageNameLookup () {
+function languageNameLookup() {
   console.log('getLangName("en"):', getLangName('en'))
   console.log('getLangName("fr"):', getLangName('fr'))
   console.log('getLangName("es"):', getLangName('es'))
@@ -24,7 +24,7 @@ function languageNameLookup () {
   console.log('getLangName("invalid"):', getLangName('invalid'))
 }
 
-function iso2Lookup () {
+function iso2Lookup() {
   console.log('getISO2FromName("English"):', getISO2FromName('English'))
   console.log('getISO2FromName("French"):', getISO2FromName('French'))
   console.log('getISO2FromName("Spanish"):', getISO2FromName('Spanish'))

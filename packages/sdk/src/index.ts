@@ -31,6 +31,9 @@ export {
   textToSpeechStream,
   getModelInfo,
   getLoadedModelInfo,
+  startRpcServer,
+  stopRpcServer,
+  discoverRpcServers,
   getSystemResources,
   assessModelFit,
   loggingStream,
@@ -42,6 +45,7 @@ export {
   diffusion,
   type DiffusionProgressTick,
   classify,
+  decide,
   video,
   type VideoProgressTick,
   upscale,
@@ -91,6 +95,13 @@ export {
   type BatchCompletionRun,
   type BatchPrompt,
   type EmbedStats,
+  type DecideParams,
+  type DecisionState,
+  type DecisionQuestion,
+  type DecisionAnswer,
+  type DecisionResult,
+  type DecisionResponse,
+  type DecisionConfig,
   type TranscribeStats,
   VERBOSITY,
   type Attachment,
@@ -101,6 +112,7 @@ export {
   type VadStateEvent,
   type EndOfTurnEvent,
   type TranscribeSegment,
+  type TranscribeSpeakerSegment,
   ASR_BACKEND_IDS,
   type AsrBackendId,
   type BciConfig,
@@ -146,6 +158,12 @@ export {
   type TtsCosyvoice3RuntimeConfig,
   type TtsAudio8LoadConfig,
   type TtsAudio8RuntimeConfig,
+  type TtsMossLoadConfig,
+  type TtsMossSoundEffectLoadConfig,
+  type TtsMossSpeechLoadConfig,
+  type TtsMossSoundEffectRuntimeConfig,
+  type TtsMossSpeechRuntimeConfig,
+  type TtsMossRuntimeConfig,
   type CompletionParams,
   type ToolDialect,
   type RagSearchResult,
@@ -193,6 +211,8 @@ export {
   type SystemResourceSample,
   type SystemResources,
   type AssessModelFitInput,
+  type TranscriptionFitWorkload,
+  type TtsFitWorkload,
   type AssessModelFitResult,
   type LoadedInstance,
   type CacheFileInfo,
@@ -231,6 +251,7 @@ export {
   type AudioGenProgress,
   type AudioGenAudio,
   type AudioGenStats,
+  type AudioGenGenerationMetadata,
   type AudioGenResult,
   type AudioGenStreamResponse,
   type AudioGenEditOperationType,
@@ -298,8 +319,10 @@ export { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
 export {
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_DECISION,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
+  PLUGIN_MOSS_TRANSCRIBE,
   PLUGIN_NMT,
   PLUGIN_TTS,
   PLUGIN_OCR,
@@ -392,3 +415,14 @@ export type {
   ProfilerGPUResourceGauge,
   ProfilerResourceGauge
 } from '@qvac/inference/surface'
+
+export type {
+  StartRpcServerOptions,
+  StopRpcServerOptions,
+  DiscoverRpcServersOptions,
+  RpcServerInfo,
+  RpcServerCandidate
+} from '@qvac/inference/surface'
+export { RpcServerOperationError } from './utils/errors-server'
+
+export { getRpcDeviceMap, type RpcDeviceMapping, type RpcDevice } from '@qvac/inference/surface'

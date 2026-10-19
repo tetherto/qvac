@@ -285,6 +285,33 @@ async function main () {
       toolCallResults.push(result)
     }
 
+    // 5b. Feeding results back as structured history: the calls go on an
+    // assistant turn as `tool_calls`, each result on a `tool` turn, and the
+    // chat template renders both in the model's own format.
+    const firstCalls = toolCallResults[0].toolCalls
+    if (firstCalls.length > 0) {
+      const mockResults = {
+        searchProducts: { results: [{ productId: 'laptop-123', name: 'UltraBook 14', price: 899 }] },
+        addToCart: { ok: true, cartSize: 2 },
+        queryDB: { rows: 42, includeMetadata: true }
+      }
+      const followUp = [
+        ...toolQuery1,
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: firstCalls.map((call, i) => ({ id: `call_${i + 1}`, name: call.name, arguments: call.arguments }))
+        },
+        ...firstCalls.map((call, i) => ({
+          role: 'tool',
+          content: JSON.stringify(mockResults[call.name] ?? { ok: true }),
+          tool_call_id: `call_${i + 1}`,
+          name: call.name
+        }))
+      ]
+      toolCallResults.push(await runQuery(model, { name: 'Query 4: Answer from structured tool history', prompt: followUp }))
+    }
+
     // Print all tool calls together at the end
     printToolCallSummary(toolCallResults)
   } catch (error) {

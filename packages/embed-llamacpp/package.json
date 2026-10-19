@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.43.0",
+  "version": "0.50.0",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -8,9 +8,9 @@
   },
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
-    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
-    "check:generated": "npm run build:ts && npm run test:types:consumer && git diff --exit-code -- index.js index.mjs addon.js addonLogging.js idMapIndex.js idMapIndex.mjs fit.js index.d.ts addon.d.ts addonLogging.d.ts idMapIndex.d.ts fit.d.ts test/types/consumer-cjs.test.js",
+    "check:generated": "npm run build:ts && npm run test:types:consumer && git diff --exit-code -- index.js index.mjs addon.js addonLogging.js fit.js laya.js index.d.ts addon.d.ts addonLogging.d.ts fit.d.ts laya.d.ts test/types/consumer-cjs.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
@@ -21,17 +21,17 @@
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
-    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/fit.test.js && bare test/integration/all.js --exit",
     "test:integration:generate": "npm run generate:benchmark-shards && brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "generate:benchmark-shards": "node scripts/generate-benchmark-shards.js",
     "verify:benchmark-shards": "node scripts/generate-benchmark-shards.js --check",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:prestage": "node --test scripts/__tests__/*.test.js",
     "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:prestage",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target addon-test",
     "test:cpp:run": "node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
-    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target addon-test",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON -D BUILD_FUZZING=OFF && bare-make build --target addon-test",
     "coverage:cpp:run": "LLVM_PROFILE_FILE=default.profraw node scripts/run-cpp-tests.js",
     "coverage:cpp:summary": "cd build/test/unit && llvm-cov report ./addon-test --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build/test/unit/ && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
@@ -41,13 +41,25 @@
     "test:mobile:validate": "npm run generate:benchmark-shards && node scripts/validate-mobile-tests.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
     "test:types": "npm run typecheck && npm run test:types:consumer && npm run check:generated",
-    "test:types:consumer": "tsc -p test/types/tsconfig.cjs.json",
+    "test:types:consumer": "tsc -p test/types/tsconfig.cjs.json && tsc -p test/types/tsconfig.interop.json",
     "test:dts": "npm run test:types",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
     "performance:install": "cd ./benchmarks/performance && npm install",
     "performance:prepare-models": "cd ./benchmarks/performance && npm run prepare:models:addon",
     "benchmarks:param-sweep": "cd ./benchmarks/performance && npm run run:param-sweep --",
-    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1"
+    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1",
+    "fuzz:build": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target embed-config-parse-fuzz",
+    "fuzz:build:continuous": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=ON && bare-make build --target embed-config-parse-fuzz",
+    "fuzz:run": "node scripts/run-cpp-fuzz.js",
+    "fuzz": "npm run fuzz:build && npm run fuzz:run",
+    "fuzz:continuous": "npm run fuzz:build:continuous && node scripts/run-cpp-fuzz.js --continuous",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-fuzz.test.js",
+    "test:cpp:fuzz:configure": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=ON -D FUZZTEST_FUZZING_MODE=OFF",
+    "test:cpp:fuzz:build:tests": "bare-make build --target addon-test",
+    "test:cpp:fuzz:build:fuzz": "bare-make build --target embed-config-parse-fuzz",
+    "test:cpp:fuzz:build": "npm run test:cpp:fuzz:configure && npm run test:cpp:fuzz:build:tests && npm run test:cpp:fuzz:build:fuzz",
+    "test:cpp:fuzz:run": "npm run test:scripts && node scripts/run-cpp-tests.js && node scripts/run-cpp-fuzz.js",
+    "test:cpp:fuzz": "npm run test:cpp:fuzz:build && npm run test:cpp:fuzz:run"
   },
   "files": [
     "binding.js",
@@ -57,11 +69,10 @@
     "addonLogging.js",
     "addonLogging.d.ts",
     "addon.d.ts",
-    "idMapIndex.js",
-    "idMapIndex.mjs",
-    "idMapIndex.d.ts",
     "fit.js",
     "fit.d.ts",
+    "laya.js",
+    "laya.d.ts",
     "prebuilds",
     "index.d.ts",
     "LICENSE",
@@ -77,13 +88,13 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.18.0",
-    "@qvac/fabric-ios": "^0.18.0",
+    "@qvac/fabric-android-arm64": "0.22.0",
+    "@qvac/fabric-ios": "0.22.0",
+    "@qvac/turbovec-ggml": "^0.1.0",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
-    "bare-subprocess": "^6.1.0",
     "brittle": "^3.4.0",
-    "cmake-bare": "^1.7.5",
+    "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
@@ -100,11 +111,30 @@
     "bare-url": "^2.1.6"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.18.0",
-    "@qvac/infer-base": "^0.6.2",
+    "@qvac/fabric": "^0.22.0",
+    "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@qvac/fabric-linux-x64": "^0.22.0",
+    "@qvac/fabric-linux-arm64": "^0.22.0",
+    "@qvac/fabric-darwin-arm64": "^0.22.0",
+    "@qvac/fabric-darwin-x64": "^0.22.0",
+    "@qvac/fabric-win32-x64": "^0.22.0"
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.22.0",
+    "@qvac/fabric-ios": "^0.22.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
   },
   "exports": {
     "./package": "./package.json",
@@ -113,12 +143,6 @@
       "import": "./index.mjs",
       "default": "./index.js"
     },
-    "./idMapIndex": {
-      "types": "./idMapIndex.d.ts",
-      "import": "./idMapIndex.mjs",
-      "default": "./idMapIndex.js"
-    },
-    "./idMapIndex.js": "./idMapIndex.js",
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"

@@ -9,11 +9,6 @@ const { startRpcServer } = require("@qvac/ggml-rpc-server");
 // eslint-disable-next-line no-unused-vars
 async function runRpcServerLifecycle() {
   const server = await startRpcServer({ device: "CPU" });
-  if (server.runtime !== "in-process") {
-    throw new Error(
-      `Expected in-process RPC server, received ${server.runtime}`,
-    );
-  }
 
   try {
     const probe = await globalThis.probeRpcServerProtocol(

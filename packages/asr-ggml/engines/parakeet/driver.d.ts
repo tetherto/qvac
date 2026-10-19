@@ -1,7 +1,7 @@
 import type { QvacResponse } from "@qvac/infer-base";
 import { ParakeetInterface, type ParakeetConfigurationParams, type StreamingConfig } from "./parakeet";
 import type { ASRRunOutput, AudioInput, BackendInfo } from "../../lib/types";
-import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
+import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
 /**
  * Parakeet-specific configuration options. CTC, TDT, RNN-T, EOU, Nemotron,
  * and Sortformer are auto-detected from the loaded GGUF metadata.
@@ -75,18 +75,18 @@ export interface ParakeetConfig {
     streamingSpkCacheLen?: number;
     /** AOSC FIFO warmup buffer rows (default: 188). */
     streamingFifoLen?: number;
-    /** AOSC encoder left-context window in ms (default: 80). */
+    /** AOSC encoder left-context window in ms (default: 80 for Sortformer, 0 for Nemotron 3 Diarization). */
     streamingChunkLeftContextMs?: number;
     /** AOSC encoder right-context window in ms (default: 560). */
     streamingChunkRightContextMs?: number;
     /** AOSC FIFO-overflow pop-out count (default: 144). */
     streamingSpkCacheUpdatePeriod?: number;
     /**
-     * Sortformer speaker-activity threshold, 0..1, for offline and streaming
-     * diarization (default: 0.641).
+     * Speaker-activity threshold, 0..1, for offline and streaming diarization
+     * (default: 0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).
      */
     diarizationThreshold?: number;
-    /** Shortest Sortformer segment reported, in ms (default: 510). */
+    /** Shortest diarization segment reported, in ms (default: 510 for Sortformer, 200 for Nemotron 3 Diarization). */
     diarizationMinSegmentMs?: number;
     /**
      * Run one synthetic encoder pass at load so the first request does not pay
@@ -130,6 +130,8 @@ export type ParakeetStreamingRunConfig = StreamingConfig;
 export interface ParakeetReloadConfig {
     parakeetConfig?: Partial<ParakeetConfig>;
 }
+/** Rejects per-call `run()` options on an engine that takes none. */
+export declare function assertNoRunOptions(options: ASRRunOptions, engine: string): void;
 /**
  * Parakeet engine driver: owns the `ParakeetInterface`, the parakeet event
  * mapping, and the parakeet streaming lifecycle. Backed by
@@ -152,7 +154,7 @@ export declare class ParakeetDriver implements AsrDriver {
     cancelActive(jobId?: number): Promise<void>;
     status(): Promise<string>;
     getBackendInfo(): BackendInfo | null;
-    run(audio: NormalizedAudioStream): Promise<QvacResponse<ASRRunOutput>>;
+    run(audio: NormalizedAudioStream, options?: ASRRunOptions): Promise<QvacResponse<ASRRunOutput>>;
     createStreamingSession(audio: NormalizedAudioStream, opts?: ASRStreamingOptions): Promise<StreamingSession>;
     _validateStreamingOptions(opts: ASRStreamingOptions): ParakeetStreamingRunConfig;
     _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;

@@ -1,14 +1,21 @@
-// Maps an SDK model type (or a serve-only alias for one) to the endpoint
-// category that routes match against.
-const ENDPOINT_CATEGORY: Record<string, string> = {
+import type { ModelType } from '@qvac/sdk'
+
+type CanonicalModelType = (typeof ModelType)[keyof typeof ModelType]
+
+// Classifies every canonical SDK model type for discovery and route matching.
+// Legacy aliases remain supported for existing serve configurations.
+const ENDPOINT_CATEGORY: Record<CanonicalModelType, string> & Record<string, string> = {
   llm: 'chat',
   'llamacpp-completion': 'chat',
   embeddings: 'embedding',
   embedding: 'embedding',
   'llamacpp-embedding': 'embedding',
+  'llamacpp-decision': 'decision',
   whisper: 'transcription',
   'whispercpp-transcription': 'transcription',
+  'bci-whispercpp-transcription': 'bci',
   'whispercpp-audio-translation': 'audio-translation',
+  'moss-transcribe': 'transcription',
   parakeet: 'transcription',
   'parakeet-transcription': 'transcription',
   nmt: 'translation',
@@ -22,7 +29,11 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
   // SDK's migration error surfaces instead of a category-less 400.
   'onnx-ocr': 'ocr',
   diffusion: 'image',
-  'sdcpp-generation': 'image'
+  'sdcpp-generation': 'image',
+  'audiogen-ggml': 'audiogen',
+  'ggml-vla': 'vla',
+  'ggml-classification': 'classification',
+  'onnx-vad': 'vad'
 }
 
 export function normalizeEndpointCategory(sdkType: string): string {

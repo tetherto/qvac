@@ -17,7 +17,7 @@ export interface TranscriptionToken {
     probability: number;
 }
 /**
- * A single transcription segment. Core fields are shared by both engines;
+ * A single transcription segment. Core fields are shared by every engine;
  * engine-specific extras pass through untouched via the index signature.
  */
 export interface TranscriptionSegment {
@@ -40,6 +40,11 @@ export interface TranscriptionSegment {
      * `"Speaker N: start - end"` lines of `text`.
      */
     speakerSegments?: SpeakerSegment[];
+    /**
+     * MOSS-Transcribe-Diarize: the model's speaker label (`"S01"`, `"S02"`,
+     * ...); `speakerId` carries the same speaker 0-based.
+     */
+    speaker?: string;
     /** Whisper: language the window was decoded in (e.g. `"en"`). */
     language?: string;
     /** Whisper: probability that the segment's window holds no speech. */
@@ -99,13 +104,14 @@ export interface BackendInfo {
     encoderOnCoreml: boolean;
     /**
      * Loaded model family: `"whisper"`, or parakeet's detected type
-     * (`"ctc"`, `"tdt"`, `"rnnt"`, `"eou"`, `"nemotron"`, `"sortformer"`).
+     * (`"ctc"`, `"tdt"`, `"rnnt"`, `"eou"`, `"nemotron"`, `"sortformer"`,
+     * `"nemotron-diarization"`).
      */
     modelType?: string;
     gpuMemTotalMb?: number;
     gpuMemFreeMb?: number;
 }
-/** Runtime-statistics fields shared by both engines. */
+/** Runtime-statistics fields shared by the Whisper and Parakeet engines. */
 export interface RuntimeStatsCore {
     backendId: number;
     backendDevice: number;

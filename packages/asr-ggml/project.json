@@ -30,7 +30,9 @@
           "artifactNamePrefix": "asr-ggml-",
           "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev",
           "setupPythonOnWindows": true,
-          "includeVulkanSdk": true
+          "includeVulkanSdk": true,
+          "includeCuda": true,
+          "platformCmakeDefines": "linux-x64: -D ASR_CUDA=ON"
         }
       },
       "inputs": [
@@ -83,9 +85,10 @@
         "cwd": "packages/asr-ggml",
         "ci": {
           "mode": "coverage",
-          "continueOnError": true,
+          "continueOnError": false,
+          "cppBuildJobs": 2,
           "platforms": [
-            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" }
           ],
           "hasCcache": true,
           "needsWhisperHfModels": true,

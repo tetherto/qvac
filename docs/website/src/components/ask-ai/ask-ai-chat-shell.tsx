@@ -1,15 +1,18 @@
 'use client';
 
 import { ArrowUp, Maximize2, Minimize2, Sparkles, X } from 'lucide-react';
+import { usePathname } from 'fumadocs-core/framework';
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
 } from 'react';
 
 import { cn } from '@/lib/cn';
+import { retrievalFilter } from '@/lib/retrieval-filter';
 import { AskAIShortcutHint } from './ask-ai-button';
 import { AskAIChatMessages } from './ask-ai-chat-messages';
 import { useAskAI } from './ask-ai-provider';
@@ -64,7 +67,11 @@ function renderContextBlock(context: AskAIContextSnippet): string {
 export function AskAIChatShell() {
   const askAI = useAskAI();
   const apiKey = process.env.NEXT_PUBLIC_INKEEP_API_KEY;
-  const chat = useAskAIChat({ apiKey });
+  // The assistant answers from the line the reader is on. The shell outlives
+  // navigation, so the filter is recomputed per page and read at send time.
+  const pathname = usePathname();
+  const filters = useMemo(() => retrievalFilter(pathname), [pathname]);
+  const chat = useAskAIChat({ apiKey, filters });
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isPageBottom, setIsPageBottom] = useState(false);

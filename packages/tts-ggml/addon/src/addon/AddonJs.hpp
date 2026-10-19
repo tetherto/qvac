@@ -3,6 +3,8 @@
 #include <any>
 #include <cmath>
 #include <filesystem>
+#include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -24,6 +26,8 @@
 #include <tts-cpp/chatterbox/fit.h>
 #include <tts-cpp/cosyvoice/fit.h>
 #include <tts-cpp/log.h>
+#include <tts-cpp/moss/fit.h>
+#include <tts-cpp/moss/sound_effect_fit.h>
 #include <tts-cpp/parler/fit.h>
 #include <tts-cpp/supertonic/fit.h>
 
@@ -35,6 +39,8 @@
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
 #include "model-interface/moss/MossModel.hpp"
+#include "model-interface/moss/MossSoundEffectModel.hpp"
+#include "model-interface/moss/MossSpeechModel.hpp"
 #include "model-interface/parler/ParlerModel.hpp"
 #include "model-interface/pocket/PocketModel.hpp"
 #include "model-interface/supertonic/SupertonicModel.hpp"
@@ -47,6 +53,8 @@ using audio8::Audio8Model;
 using chatterbox::ChatterboxModel;
 using cosyvoice::CosyvoiceModel;
 using moss::MossModel;
+using moss::MossSoundEffectModel;
+using moss::MossSpeechModel;
 using parler::ParlerModel;
 using pocket::PocketModel;
 using supertonic::SupertonicModel;
@@ -78,6 +86,32 @@ struct JsAudioOutputHandler
                   this->env_,
                   "sampleRate",
                   js::Number::create(this->env_, sampleRate));
+              return result;
+            }) {}
+};
+
+struct JsSpeechReplyHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          moss::MossSpeechReply> {
+  explicit JsSpeechReplyHandler(int sampleRate)
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            moss::MossSpeechReply>(
+            [this,
+             sampleRate](const moss::MossSpeechReply& reply) -> js_value_t* {
+              auto result = js::Object::create(this->env_);
+              std::span<const int16_t> outputSpan(
+                  reply.pcm.data(), reply.pcm.size());
+              auto typedArray =
+                  js::TypedArray<int16_t>::create(this->env_, outputSpan);
+              result.setProperty(this->env_, "outputArray", typedArray);
+              result.setProperty(
+                  this->env_,
+                  "sampleRate",
+                  js::Number::create(this->env_, sampleRate));
+              result.setProperty(
+                  this->env_,
+                  "text",
+                  js::String::create(this->env_, reply.text));
               return result;
             }) {}
 };
@@ -181,6 +215,16 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     auto mtm = make_unique<MossModel>(std::move(cfg));
     sampleRate = mtm->sampleRate();
     model = std::move(mtm);
+  } else if (engineType == EngineType::MossSoundEffect) {
+    auto cfg = adapter.buildMossSoundEffectConfig(configurationParams, env);
+    auto sfx = make_unique<MossSoundEffectModel>(std::move(cfg));
+    sampleRate = sfx->sampleRate();
+    model = std::move(sfx);
+  } else if (engineType == EngineType::MossSpeech) {
+    auto cfg = adapter.buildMossSpeechConfig(configurationParams, env);
+    auto speech = make_unique<MossSpeechModel>(std::move(cfg));
+    sampleRate = speech->sampleRate();
+    model = std::move(speech);
   } else {
     auto cfg = adapter.buildChatterboxConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
@@ -195,6 +239,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<JsAudioOutputHandler>(sampleRate));
   outHandlers.add(make_shared<JsStreamingPcmHandler>(sampleRate));
+  outHandlers.add(make_shared<JsSpeechReplyHandler>(sampleRate));
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),
@@ -298,6 +343,23 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
+  if (dynamic_cast<MossSpeechModel*>(&instance.addonCpp->model.get())) {
+    MossSpeechModel::AnyInput modelInput;
+    JSAdapter adapter;
+    modelInput.call =
+        adapter.readMossSpeechCall(args.getJsObject(1, "inputObj"), env);
+    return instance.runJob(std::any(std::move(modelInput)));
+  }
+
+  if (dynamic_cast<MossSoundEffectModel*>(&instance.addonCpp->model.get())) {
+    MossSoundEffectModel::AnyInput modelInput;
+    modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    JSAdapter adapter;
+    modelInput.call =
+        adapter.readMossSoundEffectCall(args.getJsObject(1, "inputObj"), env);
+    return instance.runJob(std::any(std::move(modelInput)));
+  }
+
   if (auto* pt = dynamic_cast<ParlerModel*>(&instance.addonCpp->model.get())) {
     ParlerModel::AnyInput modelInput;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
@@ -372,14 +434,29 @@ fitBackendsDir(const std::string& configured, const std::string& requested) {
 //
 // Projects one voice against the memory free right now. Args: [request], whose
 // `engineType` picks the fitter and whose remaining keys carry that engine's
-// files and workload.
+// files and workload. Returns a Promise of the result.
 //
 // Takes no instance and loads nothing: every fitter reads GGUF metadata only.
 // A model one cannot read is an "error" status carrying its own reason, never
-// a throw.
+// a rejection.
+//
+// The request is read into plain C++ values on the JS thread, the fitter runs
+// on a worker thread with no JS access, and the result object is built back
+// on the JS thread. The only state a fitter shares with a loaded model is
+// tts-cpp's process-wide backend registry, which is loaded once and never
+// released, so a fit cannot race a model's unload or the addon's teardown.
 
-inline js_value_t* fitResultToJs(
-    js_env_t* env, const tts_cpp::FitResult& fit, uint64_t lavasrBytes = 0) {
+/// Everything a fit reports, owned by the worker until the JS thread reads it.
+struct FitOutcome {
+  tts_cpp::FitResult fit;
+  uint64_t lavasrFileBytes = 0;
+};
+
+/// One engine's fit, bound to values copied out of the request.
+using FitWork = std::function<FitOutcome()>;
+
+inline js_value_t* fitResultToJs(js_env_t* env, const FitOutcome& outcome) {
+  const tts_cpp::FitResult& fit = outcome.fit;
   const char* status = "error";
   if (fit.status == tts_cpp::FitStatus::Success) {
     status = "fits";
@@ -415,42 +492,20 @@ inline js_value_t* fitResultToJs(
   bytes("lmComputeBytes", fit.device.lm_compute_bytes);
   bytes("codecComputeBytes", fit.device.codec_compute_bytes);
   bytes("hostBytes", fit.host_bytes);
-  bytes("lavasrFileBytes", lavasrBytes);
+  bytes("lavasrFileBytes", outcome.lavasrFileBytes);
   return result;
 }
 
 /// A voice the addon loads but speech-cpp cannot project. The shape matches a
 /// fit so a caller reads the verdict the same way for every engine.
-inline js_value_t* unsupportedEngineResult(js_env_t* env, const char* engine) {
-  auto result = js::Object::create(env);
-  auto text = [&](const char* name, const std::string& value) {
-    result.setProperty(env, name, js::String::create(env, value));
+inline FitWork unsupportedEngineFit(const char* engine) {
+  return [variant = std::string(engine)]() {
+    FitOutcome outcome;
+    outcome.fit.status = tts_cpp::FitStatus::Error;
+    outcome.fit.reason = "unsupported-engine";
+    outcome.fit.model_variant = variant;
+    return outcome;
   };
-  auto bytes = [&](const char* name) {
-    result.setProperty(env, name, js::Number::create(env, 0));
-  };
-
-  text("status", "error");
-  text("reason", "unsupported-engine");
-  text("modelVariant", engine);
-  text("deviceName", "");
-  text("report", "");
-  result.setProperty(env, "deviceIsCpu", js::Boolean::create(env, false));
-  result.setProperty(
-      env, "deviceSharesHostMemory", js::Boolean::create(env, false));
-  for (const char* name :
-       {"deviceFreeBytes",
-        "deviceTotalBytes",
-        "deviceBytes",
-        "weightsBytes",
-        "stateBytes",
-        "lmComputeBytes",
-        "codecComputeBytes",
-        "hostBytes",
-        "lavasrFileBytes"}) {
-    bytes(name);
-  }
-  return result;
 }
 
 /// The load's offload intent: an explicit layer count wins, otherwise the
@@ -483,7 +538,21 @@ inline uint64_t lavasrFileBytes(
   return total;
 }
 
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+/// Pairs a fitter's result with the on-disk size of the LavaSR stages, which
+/// the worker reads beside the projection.
+template <typename Fit>
+FitWork lavasrFit(Fit fit, std::string enhancerPath, std::string denoiserPath) {
+  return [fit = std::move(fit),
+          enhancerPath = std::move(enhancerPath),
+          denoiserPath = std::move(denoiserPath)]() {
+    FitOutcome outcome;
+    outcome.fit = fit();
+    outcome.lavasrFileBytes = lavasrFileBytes(enhancerPath, denoiserPath);
+    return outcome;
+  };
+}
+
+inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
@@ -555,10 +624,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     if (auto seconds = number("audioSeconds")) {
       options.audio_seconds = static_cast<float>(*seconds);
     }
-    return fitResultToJs(
-        env,
-        tts_cpp::supertonic::fit_params(options),
-        lavasrFileBytes(cfg.enhancerGgufPath, cfg.denoiserGgufPath));
+    return lavasrFit(
+        [options]() { return tts_cpp::supertonic::fit_params(options); },
+        cfg.enhancerGgufPath,
+        cfg.denoiserGgufPath);
   }
   case EngineType::Parler: {
     const auto cfg = adapter.buildParlerConfig(request, env);
@@ -570,10 +639,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     integer("promptTokens", options.prompt_tokens);
     integer("maxFrames", options.max_frames);
     margin(options.margin_bytes);
-    return fitResultToJs(
-        env,
-        tts_cpp::parler::fit_params(options),
-        lavasrFileBytes(cfg.enhancerGgufPath, cfg.denoiserGgufPath));
+    return lavasrFit(
+        [options]() { return tts_cpp::parler::fit_params(options); },
+        cfg.enhancerGgufPath,
+        cfg.denoiserGgufPath);
   }
   case EngineType::Chatterbox: {
     const auto cfg = adapter.buildChatterboxConfig(request, env);
@@ -591,10 +660,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     integer("textTokens", options.text_tokens);
     integer("predictTokens", options.n_predict);
     margin(options.margin_bytes);
-    return fitResultToJs(
-        env,
-        tts_cpp::chatterbox::fit_params(options),
-        lavasrFileBytes(cfg.enhancerGgufPath, cfg.denoiserGgufPath));
+    return lavasrFit(
+        [options]() { return tts_cpp::chatterbox::fit_params(options); },
+        cfg.enhancerGgufPath,
+        cfg.denoiserGgufPath);
   }
   case EngineType::Audio8: {
     const auto cfg = adapter.buildAudio8Config(request, env);
@@ -611,7 +680,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
     margin(options.margin_bytes);
     // Audio8 takes no LavaSR stage.
-    return fitResultToJs(env, tts_cpp::audio8::fit_params(options));
+    return [options]() {
+      return FitOutcome{tts_cpp::audio8::fit_params(options)};
+    };
   }
   case EngineType::Cosyvoice: {
     const auto cfg = adapter.buildCosyvoiceConfig(request, env);
@@ -628,17 +699,103 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     integer("textTokens", options.text_tokens);
     integer("speechTokens", options.speech_tokens);
     margin(options.margin_bytes);
-    return fitResultToJs(
-        env,
-        tts_cpp::cosyvoice::fit_params(options),
-        lavasrFileBytes(cfg.enhancerGgufPath, cfg.denoiserGgufPath));
+    return lavasrFit(
+        [options]() { return tts_cpp::cosyvoice::fit_params(options); },
+        cfg.enhancerGgufPath,
+        cfg.denoiserGgufPath);
   }
-  case EngineType::Moss:
-    // speech-cpp ships a fitter for every voice but MOSS.
-    return unsupportedEngineResult(env, "moss");
+  case EngineType::Moss: {
+    const auto cfg = adapter.buildMossConfig(request, env);
+    MossModel::validateFitConfig(cfg);
+    constexpr uint64_t fitMarginBytes = 256ull * 1024 * 1024;
+    auto requiredCount = [&](const char* name) -> int {
+      const auto value = number(name);
+      if (!value || std::floor(*value) != *value ||
+          *value > std::numeric_limits<int>::max()) {
+        throw StatusError(
+            general_error::InvalidArgument,
+            std::string("assessFit: ") + name + " must be an integer count");
+      }
+      return static_cast<int>(*value);
+    };
+    auto streaming = request.getOptionalProperty<js::Boolean>(env, "streaming");
+    if (!streaming) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "assessFit: streaming is required for MOSS");
+    }
+    uint64_t marginBytes = fitMarginBytes;
+    if (const auto value = number("marginBytes")) {
+      if (*value >= static_cast<double>(std::numeric_limits<uint64_t>::max())) {
+        marginBytes = std::numeric_limits<uint64_t>::max();
+      } else {
+        marginBytes = static_cast<uint64_t>(*value);
+      }
+    }
+    const int promptRows = requiredCount("promptRows");
+    const int referenceSamples = requiredCount("referenceSamples");
+    const bool streams = streaming->as<bool>(env);
+    return [cfg,
+            backendsDir = fitBackendsDir(cfg.backendsDir, requestBackendsDir),
+            promptRows,
+            referenceSamples,
+            streams,
+            marginBytes]() {
+      auto options = MossModel::toEngineOptions(cfg);
+      options.backends_dir = backendsDir;
+      const tts_cpp::moss::FitWorkload workload(
+          promptRows, referenceSamples, streams, marginBytes);
+      return FitOutcome{tts_cpp::moss::fit_params(options, workload)};
+    };
+  }
+  case EngineType::MossSoundEffect: {
+    const auto cfg = adapter.buildMossSoundEffectConfig(request, env);
+    MossSoundEffectModel::validateFitConfig(cfg);
+    MossSoundEffectModel::AnyInput input;
+    input.text = text("prompt");
+    input.call = adapter.readMossSoundEffectCall(request, env);
+    if (input.text.empty() || !input.call.seconds.has_value()) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "assessFit: prompt and seconds are required for MOSS-SoundEffect");
+    }
+    constexpr uint64_t fitMarginBytes = 256ull * 1024 * 1024;
+    uint64_t marginBytes = fitMarginBytes;
+    if (const auto value = number("marginBytes")) {
+      marginBytes =
+          *value >= static_cast<double>(std::numeric_limits<uint64_t>::max())
+              ? std::numeric_limits<uint64_t>::max()
+              : static_cast<uint64_t>(*value);
+    }
+    return [cfg,
+            backendsDir = fitBackendsDir(cfg.backendsDir, requestBackendsDir),
+            input = std::move(input),
+            marginBytes]() {
+      auto options = MossSoundEffectModel::toEngineOptions(cfg);
+      options.backends_dir = backendsDir;
+      return FitOutcome{tts_cpp::moss::fit_params(
+          options, MossSoundEffectModel::toRequest(cfg, input), marginBytes)};
+    };
+  }
+  case EngineType::MossSpeech:
+    return unsupportedEngineFit("moss-speech");
   }
 
-  return unsupportedEngineResult(env, "unknown");
+  return unsupportedEngineFit("unknown");
+}
+
+/// Serialised: every fitter points tts-cpp's process-wide backend directory
+/// at its request before probing the devices.
+inline FitOutcome runFit(const FitWork& work) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+  return work();
+}
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  FitWork work = parseFitRequest(env, info);
+  return js::JsAsyncTask::run(
+      env, [work = std::move(work)]() { return runFit(work); }, fitResultToJs);
 }
 JSCATCH
 
@@ -737,6 +894,37 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
                 "reload: model is not a MossModel");
           }
           mtm->reloadWith(std::move(newCfg));
+        });
+  }
+
+  if (dynamic_cast<MossSpeechModel*>(&instance.addonCpp->model.get())) {
+    auto newCfg = adapter.buildMossSpeechConfig(configurationParams, env);
+    return js::JsAsyncTask::run(
+        env,
+        [addonCpp = instance.addonCpp, newCfg = std::move(newCfg)]() mutable {
+          auto* speech = dynamic_cast<MossSpeechModel*>(&addonCpp->model.get());
+          if (speech == nullptr) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InternalError,
+                "reload: model is not a MossSpeechModel");
+          }
+          speech->reloadWith(std::move(newCfg));
+        });
+  }
+
+  if (dynamic_cast<MossSoundEffectModel*>(&instance.addonCpp->model.get())) {
+    auto newCfg = adapter.buildMossSoundEffectConfig(configurationParams, env);
+    return js::JsAsyncTask::run(
+        env,
+        [addonCpp = instance.addonCpp, newCfg = std::move(newCfg)]() mutable {
+          auto* sfx =
+              dynamic_cast<MossSoundEffectModel*>(&addonCpp->model.get());
+          if (sfx == nullptr) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InternalError,
+                "reload: model is not a MossSoundEffectModel");
+          }
+          sfx->reloadWith(std::move(newCfg));
         });
   }
 

@@ -13,13 +13,13 @@ export type McpToolsResult = {
   handlers: ToolHandlerMap
 }
 
-const VALID_TYPES = ['string', 'number', 'integer', 'boolean', 'object', 'array'] as const
+const VALID_TYPES = ['string', 'number', 'integer', 'boolean', 'object', 'array', 'null'] as const
 
 type ValidType = (typeof VALID_TYPES)[number]
-type PropEntry = { type: ValidType; description?: string; enum?: string[] }
-type PropInput = { type?: unknown; description?: string; enum?: string[] }
+type ToolParameter = Tool['parameters']['properties'][string]
 
-function isValidType(value: unknown): value is ValidType {
+function isValidType(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0 && value.every(isValidType)
   return typeof value === 'string' && VALID_TYPES.includes(value as ValidType)
 }
 
@@ -28,17 +28,18 @@ function convertMcpToolToTool(mcpTool: {
   description?: string | undefined
   inputSchema: JsonSchema | Record<string, unknown>
 }): Tool {
-  const inputSchema = mcpTool.inputSchema as JsonSchema
+  // `$defs` and other top-level keywords stay, so a nested `$ref` still resolves.
+  const { $schema: _schema, title: _title, ...inputSchema } = mcpTool.inputSchema as JsonSchema
   const properties = inputSchema.properties ?? {}
   const required = inputSchema.required ?? []
 
-  const convertedProperties = mapValues(properties, (prop): PropEntry => {
-    const { type, description, enum: enumVal } = prop as PropInput
-    return {
-      type: isValidType(type) ? type : 'string',
-      ...(description && { description }),
-      ...(enumVal && { enum: enumVal })
-    }
+  // Only an unrecognised `type` is replaced; a missing one is left alone because
+  // `anyOf`/`oneOf` properties carry their types in the branches.
+  const convertedProperties = mapValues(properties, (prop): ToolParameter => {
+    const { type } = prop as { type?: unknown }
+    return type === undefined || isValidType(type)
+      ? (prop as ToolParameter)
+      : { ...(prop as ToolParameter), type: 'string' }
   })
 
   return {
@@ -46,6 +47,7 @@ function convertMcpToolToTool(mcpTool: {
     name: mcpTool.name,
     description: mcpTool.description ?? '',
     parameters: {
+      ...inputSchema,
       type: 'object',
       properties: convertedProperties,
       required: required.length > 0 ? required : undefined

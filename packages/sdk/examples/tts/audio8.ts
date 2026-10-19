@@ -12,6 +12,8 @@ import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './uti
 // primary modelSrc is the LM GGUF; the codec decoder loads via modelConfig.
 // For zero-shot voice cloning also pass audio8CodecEncoderModelSrc plus
 // referenceAudioSrc/referenceText (a recording and its exact transcript).
+// On macOS and iOS the decoder downloads with its Core ML bundle, which runs
+// the codec's synthesis stack; `stats.codecOnCoreml` reports whether it did.
 // Only a fallback: the engine reports the rate it actually produced, and
 // `outputSampleRate` (plus the LavaSR enhancer) can move it off this default.
 const AUDIO8_SAMPLE_RATE = 44100
@@ -46,7 +48,9 @@ try {
 
   const audioBuffer = await result.buffer
   const sampleRate = (await result.sampleRate) ?? AUDIO8_SAMPLE_RATE
+  const stats = await result.stats
   console.log(`▸ TTS complete. Total samples: ${audioBuffer.length}`)
+  console.log(`▸ Codec ran on ${stats?.codecOnCoreml === 1 ? 'Core ML' : 'ggml'}`)
 
   console.log('▸ Saving audio to file...')
   createWav(audioBuffer, sampleRate, 'audio8-output.wav')

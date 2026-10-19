@@ -1,1 +1,1 @@
-module.exports = require.addon()
+module.exports = require('#host-addon')

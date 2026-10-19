@@ -28,11 +28,16 @@ const OVERSIZED_WORDS = 600
 // context and never the prediction cap.
 const PREDICT = 512
 
-// The window is already full, so the follow-up only has to be non-empty.
-const CACHED_FOLLOW_UP = 'And then what happened?'
+// Sent after the cached filler turn. Small enough to fit in an empty window,
+// larger than the room the filler leaves.
+const CACHED_FOLLOW_UP_WORDS = 120
 
 function fillerPrompt() {
   return `${'word '.repeat(FILLER_WORDS)}\nNow repeat the word "again" over and over without stopping.`
+}
+
+function cachedFollowUp() {
+  return `${'word '.repeat(CACHED_FOLLOW_UP_WORDS)}\nAnd then what happened?`
 }
 
 function oversizedPrompt() {
@@ -84,7 +89,8 @@ module.exports = {
   FILLER_WORDS,
   OVERSIZED_WORDS,
   PREDICT,
-  CACHED_FOLLOW_UP,
+  CACHED_FOLLOW_UP_WORDS,
+  cachedFollowUp,
   fillerPrompt,
   oversizedPrompt,
   assertStoppedByFullContext,

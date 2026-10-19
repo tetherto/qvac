@@ -4,9 +4,9 @@ exports.WhisperDriver = void 0;
 const whisper_1 = require("./whisper");
 const configChecker_1 = require("./configChecker");
 const error_1 = require("../../lib/error");
-const backends_1 = require("../../lib/backends");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
+const driver_1 = require("../parakeet/driver");
 const MS_PER_SECOND = 1000;
 const DEFAULT_BYTE_FORMAT = "s16le";
 /** The native wire format is pinned; all input is normalized to f32. */
@@ -157,7 +157,8 @@ class WhisperDriver {
     getBackendInfo() {
         return this.addon?.getBackendInfo?.() ?? null;
     }
-    async run(audio) {
+    async run(audio, options = {}) {
+        (0, driver_1.assertNoRunOptions)(options, "whisper");
         const addon = this._requiredAddon();
         this._pendingJobId = await addon.append({
             type: "audio",
@@ -299,9 +300,9 @@ class WhisperDriver {
             // is pinned. The user-facing `audio_format` config key only selects
             // how raw Uint8Array bytes are interpreted at the JS boundary.
             audio_format: WIRE_AUDIO_FORMAT,
-            backendsDir: typeof this.params.backendsDir === "string"
-                ? this.params.backendsDir
-                : (0, backends_1.resolveBackendsDir)(),
+            ...(typeof this.params.backendsDir === "string"
+                ? { backendsDir: this.params.backendsDir }
+                : {}),
         };
     }
     _buildWhisperConfig(overrideWhisperConfig) {

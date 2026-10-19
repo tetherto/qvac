@@ -2,6 +2,8 @@
 
 This decoder library leverages FFmpeg for efficient audio decoding. It simplifies processing of input audio, particularly as a preprocessing step for other addons.
 
+The native `bare-ffmpeg` addon loads when `FFmpegDecoder.load()` runs. Importing the library alone does not load the native addon.
+
 ## Table of Contents
 
 - [Supported Platforms](#supported-platforms)

@@ -9,8 +9,15 @@ export function registerDoctorCommand(program: Command): void {
     .option('--json', 'Output the report as JSON')
     .option('-q, --quiet', 'Suppress human-readable output (only set exit code)')
     .option('-v, --verbose', 'Detailed output')
+    .option('--offline', 'Skip GitHub and npm registry lookups in the engines.bare check')
     .action(
-      async (options: { deep?: boolean; json?: boolean; quiet?: boolean; verbose?: boolean }) => {
+      async (options: {
+        deep?: boolean
+        json?: boolean
+        quiet?: boolean
+        verbose?: boolean
+        offline?: boolean
+      }) => {
         try {
           const { runDoctor } = await import('@/doctor/index')
           const report = await runDoctor({
@@ -18,7 +25,8 @@ export function registerDoctorCommand(program: Command): void {
             deep: options.deep,
             json: options.json,
             quiet: options.quiet,
-            verbose: options.verbose
+            verbose: options.verbose,
+            offline: options.offline
           })
           if (!report.ok) process.exit(1)
         } catch (error: unknown) {

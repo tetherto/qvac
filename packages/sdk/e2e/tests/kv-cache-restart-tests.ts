@@ -1,8 +1,7 @@
 import type { TestDefinition } from '@qvac/test-suite'
 
-// Its own id prefix: the executor is node-only because it inspects the worker
-// process, so neither the shared kv-cache executor nor the lifecycle one can
-// claim it.
+// Its own id prefix: the executor is node-only because it inspects the worker process, so neither
+// the shared kv-cache executor nor the lifecycle one can claim it.
 export const kvCacheWorkerRestart: TestDefinition = {
   testId: 'worker-restart-kv-cache-boundary',
   params: {

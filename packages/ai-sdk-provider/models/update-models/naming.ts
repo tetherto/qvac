@@ -345,12 +345,14 @@ function generateTtsName({
   modelName,
   tagExtra,
   tagType,
-  quantization
+  quantization,
+  tags
 }: BaseNameInput): string {
   const name = tagName || modelName || ''
   const language = tagExtra || ''
   const type = tagType || ''
-  const nameParts = [name, language, type, quantization].filter((p) => p && p !== '')
+  const variant = tags.includes('fused') ? 'fused' : ''
+  const nameParts = [name, language, type, variant, quantization].filter((p) => p && p !== '')
   let exportName = `TTS_${nameParts.map(cleanPart).join('_')}`
   if (filename.endsWith('.onnx.json') || filename.includes('config.json')) {
     exportName = exportName + '_CONFIG'
@@ -420,6 +422,10 @@ function isIndicConformer(filename: string, lowerPath: string) {
 function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInput): string {
   const lower = filename.toLowerCase()
   const family = isIndicConformer(filename, lowerPath) ? 'INDIC_CONFORMER' : ''
+
+  if (lower.includes('nemotron-3-diarization') && lower.endsWith('.gguf')) {
+    return `PARAKEET_NEMOTRON_3_DIARIZATION_${cleanPart(quantization)}`
+  }
 
   let variant = ''
   if (lower.includes('sortformer') || lower.includes('diar_streaming')) {

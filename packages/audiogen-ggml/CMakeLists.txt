@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
+# rather than qvac_addon_preproject() so overlay triplets and Android STL
+# stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
 option(ENABLE_CUDA "Enable CUDA GPU acceleration (needs nvcc on the build host)" OFF)
+qvac_addon_fuzz_manifest()
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -20,6 +26,7 @@ find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 project(audiogen-ggml CXX C)
 
@@ -33,6 +40,12 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
+
+# Fuzz-only configure (BUILD_FUZZING without BUILD_TESTING): build just the
+# fuzz targets and skip engine find_package() + the .bare module so pure
+# parse/transform drivers keep full ASan + LSan.
+qvac_addon_fuzz_only_return()
+
 find_package(audiogen-cpp CONFIG REQUIRED)
 # Pull ggml in directly (in addition to the transitive find via
 # audiogen-cppConfig) so GGML_AVAILABLE_BACKENDS / ggml::<backend> IMPORTED
@@ -48,10 +61,21 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
-# Per-host/per-module subdir for dynamically-loadable ggml backends
-# (same shape tts-ggml / transcription-parakeet use).
+# The module is named after the platform package that ships it,
+# qvac__audiogen-ggml-<suffix> (every iOS host shares `ios`), so that package
+# is an ordinary addon: require.addon(), bare-pack and bare-link all find
+# prebuilds/<host>/qvac__audiogen-ggml-<suffix>.bare there. The dynamically
+# loadable ggml backends install to <host>/<module name>, where the addon looks
+# next to itself (see ModuleBackendsDir.hpp); bare-link flattens them next to
+# the module in a mobile app instead. Keep the suffix in sync with
+# "#host-addon" in package.json and SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
+if(bare_target_value MATCHES "^ios-")
+  set(module_name "qvac__audiogen-ggml-ios")
+else()
+  set(module_name "qvac__audiogen-ggml-${bare_target_value}")
+endif()
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 
 set(BACKEND_DL_LIBS "")
@@ -80,12 +104,12 @@ if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
   endif()
 endif()
 
-add_bare_module(audiogen-ggml EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(audiogen-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
 
 if(BACKEND_DL_LOOSE_SOS)
   install(
     FILES ${BACKEND_DL_LOOSE_SOS}
-    DESTINATION ${bare_target_value}/${module_name}
+    DESTINATION ${BACKENDS_SUBDIR_VALUE}
   )
 endif()
 
@@ -127,7 +151,7 @@ target_link_libraries(
 
 target_compile_definitions(${audiogen-ggml} PUBLIC JS_LOGGER)
 target_compile_definitions(${audiogen-ggml} PRIVATE
-  BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+  QVAC_ADDON_MODULE_NAME="${module_name}")
 
 if(ANDROID)
   target_link_options(
@@ -178,3 +202,5 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     message(WARNING "audiogen-ggml: compiler-rt builtins not found at ${_clang_rt_builtins}")
   endif()
 endif()
+
+qvac_addon_add_fuzz_subdirectory()

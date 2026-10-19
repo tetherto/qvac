@@ -3,6 +3,7 @@ import type { TestDefinition } from '@qvac/test-suite'
 /**
  * Collect ResourceManager dep keys declared in test `metadata`:
  *   - `metadata.dependency: "llm"`             — single
+ *   - `metadata.dependency: "llm+ocr"`         — several, as `modelSetup` reads it
  *   - `metadata.dependencies: ["llm", "ocr"]`  — multi
  * The sentinel `"none"` (used by tests that intentionally pre-load nothing)
  * is dropped. Result is feed-ready for `downloadAllOnce({ allowedDeps })`.
@@ -14,8 +15,8 @@ export function collectTestDeps(tests: readonly TestDefinition[]): Set<string> {
     if (!meta) continue
 
     const single = meta['dependency']
-    if (typeof single === 'string' && single.length > 0 && single !== 'none') {
-      deps.add(single)
+    if (typeof single === 'string' && single !== 'none') {
+      for (const dep of single.split('+')) if (dep.length > 0) deps.add(dep)
     }
 
     const multi = meta['dependencies']

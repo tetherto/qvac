@@ -162,6 +162,13 @@ export interface QvacPlugin<
   addonPackage: string
   loadConfigSchema: z.ZodType
   createModel: (params: CreateModelParams) => PluginModelResult
+  /**
+   * The engine's own fitter. Carrying it here keeps every addon specifier
+   * inside the module graph of the plugin that owns it, so a bundler walking a
+   * host that ships one engine never resolves the others. It returns the
+   * engine's fit result or a Promise of it.
+   */
+  assessFit?: (request: never) => unknown
   handlers: Record<string, PluginHandlerDefinition>
   logging?: PluginLogging | undefined
   capabilities?: QvacPluginCapabilities | undefined
@@ -347,6 +354,12 @@ export const pluginDefinitionRuntimeSchema = z
 export const PLUGIN_LLM = '@qvac/inference/llamacpp-completion/plugin' as const
 
 /**
+ * Decision plugin (llama.cpp).
+ * Provides: typed choice, score, and noul answers about a state.
+ */
+export const PLUGIN_DECISION = '@qvac/inference/llamacpp-decision/plugin' as const
+
+/**
  * Text embedding plugin (llama.cpp).
  * Provides: vector embeddings for RAG and semantic search.
  */
@@ -425,6 +438,7 @@ export const PLUGIN_CLASSIFICATION = '@qvac/inference/ggml-classification/plugin
 export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_DECISION,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_PARAKEET,

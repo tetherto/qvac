@@ -16,6 +16,7 @@ const { spawnSync } = require('child_process')
 //                                                     -D FUZZTEST_FUZZING_MODE=ON build)
 //   node scripts/run-cpp-fuzz.js --continuous <Suite.Test>
 //   node scripts/run-cpp-fuzz.js --continuous --fuzz_for=30m   time-boxed
+//   node scripts/run-cpp-fuzz.js --continuous --fuzz_for 30m   same, separated value
 //
 // Bounded mode runs every FUZZ_TEST in the binary. Coverage-guided mode fuzzes
 // one at a time, so the second target needs an explicit selector:
@@ -25,6 +26,12 @@ const { spawnSync } = require('child_process')
 // forwarded verbatim to the fuzz binary, which is how FuzzTest/libFuzzer knobs
 // (--fuzz_for, --rss_limit_mb, --gtest_filter, ...) are reached. Through npm:
 //   npm run fuzz:continuous -- --fuzz_for=30m
+//
+// FuzzTest parses its flags with Abseil, which takes a non-boolean flag's value
+// from the next argument, so a forwarded `--flag value` pair stays a pair. The
+// runner cannot tell a boolean flag from the rest, so write booleans as
+// `--flag=true` (or put the Suite.Test selector before them); otherwise the
+// selector is forwarded as the boolean's value.
 const DEFAULT_FUZZ_TEST = 'VideoModelCapabilitiesFuzz.InspectNeverCrashes'
 const BINARY_NAME = 'video-model-capabilities-fuzz'
 
@@ -97,6 +104,11 @@ function parseArgs(argv) {
       // allowlist: the binary's own flag parser rejects what it doesn't know, so
       // a typo fails loudly instead of being dropped on the floor.
       fuzzerArgs.push(a)
+      const next = argv[i + 1]
+      if (!a.includes('=') && next !== undefined && !next.startsWith('-')) {
+        fuzzerArgs.push(next)
+        i++
+      }
     } else {
       rest.push(a)
     }

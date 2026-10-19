@@ -2,6 +2,8 @@
 
 This native C++ addon, built using the `Bare` Runtime, simplifies running text embedding models to enable efficient generation of high-quality contextual text embeddings. It provides an easy interface to load, execute, and manage embedding model instances.
 
+It also runs [Laya](https://github.com/NandhaKishorM/laya) decision models through `LayaDecisions`: typed questions (`choice`, `score`, `noul`) about a text, answered with probabilities in one forward pass per question. See [Laya decision models](#laya-decision-models).
+
 ## Table of Contents
 
 - [Supported platforms](#supported-platforms)
@@ -16,8 +18,9 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
   - [6. Generate embeddings for input sequence](#6-generate-embeddings-for-input-sequence)
   - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
+- [Laya decision models](#laya-decision-models)
 - [Assessing fit](#assessing-fit)
-- [IdMapIndex vector database](#idmapindex-vector-database)
+- [Vector index](#vector-index)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
 - [Benchmarking](#benchmarking)
@@ -31,13 +34,25 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
+| Linux | arm64, x64 | Ubuntu-22+ | Tier 1 | CUDA (NVIDIA), Vulkan |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
-| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
+| Windows | x64 | 10+ | Tier 1 | CUDA (NVIDIA), Vulkan |
+
+**Note on CUDA (Linux and Windows, NVIDIA):**
+The CUDA backend ships as a dynamically loaded module alongside Vulkan, and is preferred over
+Vulkan when an NVIDIA device is present. On Windows it needs a CUDA 13 install: the runtime DLLs
+are loaded from `%CUDA_PATH%\bin\x64`, not from `PATH`.
+
+- If the CUDA module, driver, or required runtime DLL is missing, the device never registers and selection
+  falls through to Vulkan, then CPU. Nothing needs configuring for that.
+- `backend: "vulkan"` forces Vulkan on an NVIDIA machine. Setting `CUDA_VISIBLE_DEVICES=-1` in the
+  environment has the same effect without touching the load config.
+- `main-gpu` as an integer indexes ggml's full device list, so adding CUDA shifts the indices an
+  existing config was written against.
 
 **Dependencies:**
 - inference-addon-cpp (≥1.1.2): C++ addon framework
-- @qvac/fabric (^0.18.0): Shared llama.cpp/ggml inference engine, including the vector-index API. The desktop runtime ships in the `@qvac/fabric-<host>` platform package that `@qvac/fabric` installs as an optional dependency, so install without `--omit=optional` and keep both present before `bare-make generate`/`build`. Android and iOS apps add `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as direct dependencies at the same exact version.
+- @qvac/fabric (^0.22.0): Shared llama.cpp/ggml inference engine. The desktop runtime ships in the `@qvac/fabric-<host>` platform package that `@qvac/fabric` installs as an optional dependency, so install without `--omit=optional` and keep both present before `bare-make generate`/`build`. Android and iOS apps add `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as direct dependencies at the same exact version.
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
 
@@ -137,11 +152,14 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `gpu_layers`     | string of integer                             | `"0"`         | Number of model layers to offload to GPU                                                 |
 | `batch_size`     | string of integer                             | `"2048"`      | Tokens processed per batch (input throughput)                                            |
 | `ctx_size`       | string of integer                             | model's trained context size (`n_ctx_train`) | Runtime context window in tokens (llama.cpp `n_ctx`); oversized values are capped to the model's trained context |
+| `poll`           | string of integer `"0"`–`"100"`             | `"0"`         | Main GGML threadpool busy-wait level. `"0"` sleeps while idle; higher values can reduce wake latency but consume CPU during GPU work |
+| `poll-batch`     | string of integer `"0"`–`"100"`             | `poll`          | Batch GGML threadpool busy-wait level                                                     |
 | `pooling`        | `"none"` \| `"mean"` \| `"cls"` \| `"last"` \| `"rank"` | model default | Pooling strategy used to collapse token embeddings into a single sequence vector        |
 | `attention`      | `"causal"` \| `"non-causal"`                  | model default | Attention type                                                                            |
 | `embd_normalize` | string of integer                             | `"2"`         | Embedding normalization (`-1` = none, `0` = max abs int16, `1` = taxicab, `2` = euclidean, `>2` = p-norm) |
 | `flash_attn`     | `"on"` \| `"off"` \| `"auto"`                 | `"auto"`      | Enable / disable flash attention                                                         |
 | `main-gpu`       | string of integer \| `"integrated"` \| `"dedicated"` | —      | GPU selection for multi-GPU systems                                                      |
+| `backend`        | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` |
 | `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | `"0"` | Native logging verbosity. The `addonLogging.setLogger` callback receives only messages at or above this threshold. Use `"2"` for llama.cpp INFO logs and `"3"` for DEBUG logs. The verbosity level is process-global and is updated each time a model is constructed, so the most recently constructed model's `config.verbosity` wins for all subsequent native log dispatch. |
 
 #### Native addon logging
@@ -228,6 +246,128 @@ A second `run()` while a job is active is serialized by `exclusiveRunQueue` — 
 
 **Cancellation API:** Prefer cancelling from the model: `await model.cancel()`. This cancels the current job and the Promise resolves when the job has actually stopped (future-based in C++). You can also call `await response.cancel()` on the value returned by `run()`; it is equivalent and targets the same job. Both are no-op when idle.
 
+## Laya decision models
+
+`LayaDecisions` answers typed questions about a text (the *state*) with [Laya](https://github.com/NandhaKishorM/laya) checkpoints: a ModernBERT or mmBERT encoder with a decision head. It does not generate text: every answer is a probability distribution over the question's options (yours for `choice` and `score`, true and false for `noul`), computed in one forward pass per question. The request and response are laya's own format (`Agent.predict` / `predict_batch`), and the answers match fabric's `llama-laya` tool for the same model.
+
+It needs a fabric runtime that includes Laya (`qvac-fabric` 10549.5.1 or later). On an older runtime, `load()` fails with `model initialization returned a null model/context`; embeddings are unaffected.
+
+### Usage
+
+```js
+const { LayaDecisions } = require('@qvac/embed-llamacpp')
+
+const laya = new LayaDecisions({
+  files: { model: ['/models/laya-multilingual-Q8_0.gguf'] },
+  config: { device: 'gpu', gpu_layers: '99' }
+})
+await laya.load()
+
+const response = await laya.run({
+  state: 'My payment failed twice and I was charged both times. Please refund the duplicate.',
+  questions: {
+    department: {
+      type: 'choice',
+      instructions: 'Which team should handle this ticket?',
+      criteria: { billing: 'payments, refunds, invoices', technical: 'bugs, outages, errors' }
+    },
+    urgency: { type: 'score', instructions: 'How urgent is this?', criteria: ['not urgent', 'somewhat urgent', 'very urgent'] },
+    refund: { type: 'noul', instructions: 'The customer asks for a refund.' }
+  }
+})
+const [result] = await response.await()
+
+result.answers.department.choice // 'billing'
+result.answers.urgency.score // about 1.5: the expected level on the 0-2 scale
+result.answers.refund.noul // about 0.98: the probability that the statement holds
+
+await laya.unload()
+```
+
+`load()`, `run()`, `cancel()` and `unload()` behave as in `GGMLBert`, including [API behavior by state](#api-behavior-by-state): one request at a time, and `cancel()` stops a running request.
+
+### Request
+
+| Field | Description |
+|-------|-------------|
+| `state` | The text to decide about: a string, a structured object (for example `{ customer, message }`), or a conversation as a list of turns. A conversation too long for the budget keeps its newest turns. |
+| `states` | A list of states instead of `state`, answered in one call. The response is then one result per state. |
+| `questions` | Question id → question. Each question is answered independently. |
+| `max_len`, `head_max_len` | Optional overrides of the checkpoint's token budgets: the whole sequence, and the question with its options. |
+
+Question types:
+
+| `type` | `criteria` | Answer |
+|--------|------------|--------|
+| `choice` | A list of labels, or label → description | `choice`, plus `probabilities` per label |
+| `score` | A list of level descriptions, lowest first | `score` (the expected level, Σ i·p(i)), `probabilities` per level and a `legend` |
+| `noul` | Optional `{ true, false }` descriptions | `noul`, the probability that the statement holds |
+
+Every question takes `instructions` (the question itself) and an optional `option_order`, a permutation of the option indices that changes the order the model sees the options in; answers still come back in your order. A `noul` question also takes `labels` (`{ false, true }`) to rename its two options.
+
+### Response
+
+`response.await()` resolves to `[result]` for `state`, and to `[[result, ...]]` for `states`. Each result is `{ model, answers, usage }`:
+
+- `answers.<id>` holds the answer fields above, plus `confidence`, `answer_confidence` (the probability of the reported answer) and `action.act_probability`. For `choice` and `score`, `confidence` is 1 − the normalized entropy of the option distribution; for `noul` it is the probability of the more likely side.
+- `usage` reports `input_tokens`, `state_tokens`, `state_tokens_dropped`, `truncated`, `truncated_questions`, and `options` for questions whose options collapsed under the token budget.
+
+### Config
+
+Only these keys are accepted, multi-word ones in either spelling (`batch_size` or `batch-size`); anything else fails at load with `InvalidConfiguration`, because pooling, context size and the other context settings are fixed by Laya's single-pass setup.
+
+| Key | Values | Default | Description |
+|-----|--------|---------|-------------|
+| `device` | `"gpu"` \| `"cpu"` | — (required) | Device to run on |
+| `gpu_layers` | string of integer | all layers, fewer if memory is short | Layers to offload to the GPU |
+| `batch_size` | string of integer | `"2048"` | Tokens per forward pass. Every sequence (one question over one state) must fit, and the cost of a pass grows with the square of the batch size, so raise it only for longer states |
+| `threads` | string of integer | one per physical core | CPU threads, at most the device's CPU count; `"0"` uses every CPU |
+| `threads-batch` | string of integer | `threads` | CPU threads for batch processing, which is all of Laya's work; same limit as `threads` |
+| `poll` | string of integer `"0"`–`"100"` | `"0"` | Main GGML threadpool busy-wait level |
+| `poll-batch` | string of integer `"0"`–`"100"` | `poll` | Batch GGML threadpool busy-wait level |
+| `flash_attn` | `"on"` \| `"off"` \| `"auto"` | `"auto"` | Flash attention |
+| `main-gpu`, `split-mode`, `tensor-split` | | | GPU selection and multi-GPU split, as in [`config`](#3-create-config) |
+| `verbosity`, `openclCacheDir` | | | As in [`config`](#3-create-config) |
+
+With `opts: { stats: true }`, `response.stats` holds `total_tokens`, `total_time_ms`, `sequences` (one per question and state), `forward_passes`, `batch_size`, `context_size` and `backendDevice`.
+
+### Errors
+
+`load()` rejects with an error whose `code` names the cause:
+
+| `code` | When |
+|--------|------|
+| `[ GTE :: InvalidArgument ]` | `device` is missing (`must specify a device`) |
+| `[ GTE :: InvalidConfiguration ]` | A key outside the list above, a thread count that is not a whole number or exceeds the CPU count, or a `batch_size` too small for even a short sequence |
+| `[ GTE :: UnsupportedModel ]` | The GGUF is not a Laya checkpoint (detected before its weights load), or its decision metadata is malformed |
+| `[ GTE :: UnableToLoadMetadata ]`, `[ GTE :: UnableToLoadModel ]` | The file cannot be read or loaded, including a Laya model on a fabric runtime without Laya |
+
+`run()` rejects with an error that carries only a `message`, naming the problem: an invalid request (`predict: question 'q': unknown type "pick"; use one of choice, noul, score`), a sequence longer than `batch_size` (`predict: a sequence of 928 tokens does not fit the batch size 512`), a failed forward pass (`predict: llama_decode failed`), or `Job cancelled` after `cancel()`.
+
+### Choosing a checkpoint
+
+| Checkpoint | Encoder | Use for |
+|------------|---------|---------|
+| `laya-multilingual` | mmBERT-base | Text in any language, including non-Latin scripts |
+| `laya` | ModernBERT-large | English text |
+| `laya-typed-decisions` | ModernBERT-large | English text in the workflows it was fine-tuned on (invoice processing, security incidents, customer service, agent traces) |
+
+Pick the checkpoint for the language of the state: the addon does not choose one for you. The English checkpoints give confident wrong answers on non-Latin scripts. Both f16 and Q8_0 files are supported.
+
+GGUF files are converted from the Hugging Face checkpoints with the converter and quantizer in [qvac-fabric-llm.cpp](https://github.com/tetherto/qvac-fabric-llm.cpp):
+
+```bash
+hf download convaiinnovations/laya-multilingual --local-dir laya-multilingual
+python convert_hf_to_gguf.py laya-multilingual --outtype f16 --outfile laya-multilingual-f16.gguf
+llama-quantize laya-multilingual-f16.gguf laya-multilingual-Q8_0.gguf Q8_0
+```
+
+### Limits
+
+- Questions with many options (more than about 20) lose accuracy at the default token budgets, since the options share `head_max_len`.
+- `confidence` and `answer_confidence` are not calibrated for `laya-multilingual`, which ships without calibration temperatures. Choose any threshold you act on from measurements on your own data.
+- laya's Python-only features are not part of this class: automatic checkpoint routing (`Router`), long documents (`predict_long`), `predict_shortlist`, schema-driven `decide`, hooks and per-language temperatures.
+
 ## Assessing fit
 
 `assessFit` projects a load against the memory free right now. It reads GGUF metadata and never weight data, so the registry's weightless copy of a model answers the same as the model itself and the projection can run before anything is downloaded.
@@ -235,9 +375,9 @@ A second `run()` while a job is active is serialized by `exclusiveRunQueue` — 
 ```js
 const EmbedLlamacpp = require('@qvac/embed-llamacpp')
 
-const fit = EmbedLlamacpp.assessFit({
+const fit = await EmbedLlamacpp.assessFit({
   modelPath: '/models/embed.gguf',
-  params: { 'batch-size': '1024' }
+  config: { device: 'gpu', 'batch-size': '1024' }
 })
 
 fit.status // 'fits' | 'does-not-fit' | 'error'
@@ -249,7 +389,7 @@ fit.deviceBytes // model, context and compute summed across the devices, host ex
 fit.hostBytes // the same, for the trailing host row
 ```
 
-`params` takes the load in llama's own CLI spelling without the leading `--`, exactly as the loader takes it: `gpu-layers`, `tensor-split`, `batch-size` and the rest. Each is dispatched through llama's argument table, so a placement pinned there reaches the projection. A setting llama does not recognise, or a flag asked to be off that can only assert itself, is `status: "error"` with `unsupported-config`.
+`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`. A setting left out takes llama's default.
 
 Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
 
@@ -257,51 +397,15 @@ The projection applies the embedding load's own normalization: the micro-batch f
 
 `minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device, defaulting to llama's `fit-target` of 1 GiB per device. `backendsDir` is where the dynamically-loaded ggml backends live.
 
-A model the fitter cannot read is `status: "error"`; only a broken request throws.
+`assessFit` returns a Promise. Concurrent calls run one at a time within this addon.
 
-## IdMapIndex vector database
+A model the fitter cannot read resolves to `status: "error"`; only a broken request rejects.
 
-`IdMapIndex` is a synchronous CPU vector index with stable unsigned 64-bit IDs. Vector-only consumers should use the subpath export so importing the index does not load the embedding-model runtime:
+## Vector index
 
-```javascript
-const IdMapIndex = require('@qvac/embed-llamacpp/idMapIndex')
-
-const index = new IdMapIndex({ dim: 768, storage: 'turbovec-q4' })
-try {
-  index.addWithIds(vectors, new BigUint64Array([1n, 2n]))
-  index.prepare()
-  const { ids, scores } = index.search(query, 2)
-} finally {
-  index.dispose()
-}
-```
-
-`vectors` contains row-major `Float32Array` data with one `dim`-sized row per ID. Queries use the same layout and may contain multiple rows. Search uses dot-product similarity; L2-normalize indexed vectors and queries first when cosine similarity is required. Results are ordered by descending score and then ascending ID.
-
-### Storage modes
-
-| Storage | Effective bits | Snapshot | Mmap | Delta log |
-|---------|---------------:|----------|------|-----------|
-| `f32` | 32 | v2 | Yes | Yes |
-| `q8` | 8 | v2 | Yes | Yes |
-| `q4` | 4 | v2 | Yes | Yes |
-| `turbovec-q4` | 4 | v3 | No | No |
-| `turbovec-q2` | 2 | v3 | No | No |
-
-The default storage is `q8`. `bitWidth: 2` selects `turbovec-q2`, while `bitWidth: 4` selects generic `q4`; use `storage: 'turbovec-q4'` explicitly for TurboVec Q4.
-
-TurboVec requires a 64-bit target and dimensions divisible by 8 and no greater than 1,024. It provides approximate rotated/quantized dot-product search. TurboVec snapshots support `write()` and `load()`, but reject mmap loading, delta-log loading, logged mutations, and delta compaction.
-
-### Operations and lifecycle
-
-- `addWithIds()`, `remove()`, `contains()`, and `compact()` mutate or inspect the index.
-- `search()`, `searchFiltered()`, and `prepareFilter()` perform full-scan retrieval.
-- `buildIvf()` enables approximate `searchIvf()` retrieval. IVF state is in-memory only and must be rebuilt after a mutation or snapshot load.
-- `write()` and `load()` persist all storage modes. Generic `f32`, `q8`, and `q4` additionally support `loadMmap()`, `loadWithDelta()`, `addLogged()`, `removeLogged()`, and `compactDelta()`.
-- Mutations invalidate prepared filters and IVF state.
-- Call `dispose()` on indexes and prepared filters when finished. Disposal is idempotent.
-
-See [RAG with TurboVec](./examples/ragWithTurboVec.js) for an end-to-end embedding and retrieval example.
+The `IdMapIndex` vector index, including TurboVec storage, lives in
+[`@qvac/turbovec-ggml`](https://github.com/tetherto/qvac/tree/main/packages/turbovec-ggml). Pair it with `GGMLBert`
+embeddings for retrieval; see [RAG with TurboVec](./examples/ragWithTurboVec.js).
 
 ## Quickstart Example
 
@@ -324,10 +428,14 @@ npm run quickstart
 
 - [Batch Inference](./examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
 - [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
-- [RAG with TurboVec](./examples/ragWithTurboVec.js) – Embeds document chunks, retrieves relevant context with `IdMapIndex`, and prepares it for an LLM.
+- [RAG with TurboVec](./examples/ragWithTurboVec.js) – Embeds document chunks, retrieves relevant context with `IdMapIndex` from `@qvac/turbovec-ggml`, and prepares it for an LLM.
+- [Laya Decisions](./examples/layaDecisions.js) – Answers `choice`, `score` and `noul` questions about a support ticket, then about several tickets in one call. Takes the path to a Laya GGUF: `bare examples/layaDecisions.js /path/to/laya-multilingual-Q8_0.gguf`.
 
-Run the TurboVec RAG retrieval example on a 64-bit desktop:
+Run the TurboVec RAG retrieval example on a 64-bit desktop. It imports
+`IdMapIndex` from `@qvac/turbovec-ggml`, a dev dependency here, so install it
+first when running the example outside this package's dev setup:
 ```bash
+npm install @qvac/turbovec-ggml
 bare examples/ragWithTurboVec.js
 ```
 
@@ -352,11 +460,11 @@ Results are continuously updated with new releases to ensure up-to-date performa
 
 ## Tests
 
-Integration tests are located in [`test/integration/`](./test/integration/) and cover core embed functionality: single-file model load → embed → unload, multi-instance concurrency (two embed instances running simultaneously, repeated load/unload cycles, unloading one instance while another processes), and the public `run()` / `cancel()` lifecycle. These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
+Integration tests are located in [`test/integration/`](./test/integration/) and cover core embed functionality: single-file model load → embed → unload, multi-instance concurrency (two embed instances running simultaneously, repeated load/unload cycles, unloading one instance while another processes), and the public `run()` / `cancel()` lifecycle. `laya.test.js` covers `LayaDecisions` end to end: every question type, batches, CPU and GPU, request errors, cancel, and load errors. It runs when `LAYA_TEST_MODEL` points at a Laya GGUF and is skipped otherwise, since no Laya GGUF is pinned in `models.manifest.json` yet. These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
 
-C++ unit tests live under [`addon/test/`](./addon/test/) and exercise the native components at a lower level, including backend selection, single-step inference, end-to-end embedding generation, and pooling. These tests validate the native implementation and help catch issues early in development.
+C++ unit tests live under [`test/unit/`](./test/unit/) and exercise the native components at a lower level, including backend selection, single-step inference, end-to-end embedding generation, pooling, and Laya decisions. These tests validate the native implementation and help catch issues early in development. The Laya tests that run a model need a Laya GGUF, from `LAYA_TEST_MODEL` or at `models/unit-test/laya-test.gguf`, and are skipped without one.
 
-> **Note:** This package is *embeddings only*. There is no tool-calling, multimodal, KV-cache, or chat-template support — those features belong to the LLM addon ([`@qvac/llm-llamacpp`](../llm-llamacpp/)).
+> **Note:** This package covers embeddings and Laya decision models. There is no text generation, tool-calling, multimodal, KV-cache, or chat-template support — those features belong to the LLM addon ([`@qvac/llm-llamacpp`](../llm-llamacpp/)).
 
 ## Glossary
 

@@ -112,34 +112,93 @@ const API_BARREL = path.join(REPO, "packages", "sdk", "src", "client", "api", "i
 const ROUTING_MAP = path.join(SKILL_DIR, "references", "routing-map.yaml");
 
 // ---------------------------------------------------------------------------
+// Documentation lines
+//
+// The SDK and the CLI are cut into one folder per published version. The
+// current line is the folder written in parentheses — Fumadocs reads that as a
+// group and drops it from the URL, so it is the line answering the version-less
+// addresses. Every other folder is a line already cut.
+//
+// Resolved at runtime rather than written down, because the folder changes at
+// every release and a stale constant would silently route the whole run at a
+// shipped version.
+// ---------------------------------------------------------------------------
+
+const LINE_GROUP_RE = /^\(v\d+\.\d+\)$/;
+
+function currentLineOf(collection: string): string {
+  const dir = path.join(DOCS_CONTENT, collection);
+  if (!fs.existsSync(dir)) {
+    console.error(`route-docs-targets: no collection at ${dir}`);
+    process.exit(2);
+  }
+  const groups = fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && LINE_GROUP_RE.test(e.name))
+    .map((e) => e.name);
+
+  if (groups.length !== 1) {
+    console.error(
+      `route-docs-targets: ${collection} has ${groups.length} current lines (${groups.join(", ") || "none"}); exactly one folder must be parenthesized`,
+    );
+    process.exit(2);
+  }
+  return groups[0]!;
+}
+
+const SDK_LINE = currentLineOf("sdk");
+const CLI_LINE = currentLineOf("cli");
+
+/** `sdk/<line>/…` -> `sdk/(v0.20)/…`, per collection. */
+function expandLine(glob: string): string {
+  return glob
+    .replace("sdk/<line>/", `sdk/${SDK_LINE}/`)
+    .replace("cli/<line>/", `cli/${CLI_LINE}/`);
+}
+
+// ---------------------------------------------------------------------------
 // Scope — mirrors references/docs-scope.md. Kept in code because the scope gate
 // has to run without a model in the loop; docs-scope.md is the prose that
 // explains it and the two must be changed together.
+//
+// Line-scoped on purpose. This skill documents the working tree, which is the
+// release not yet cut, so the current line is the only one whose pages describe
+// it. A cut line documents a release already shipped.
 // ---------------------------------------------------------------------------
 
 const ALLOWLIST_PREFIXES = [
-  "ai-capabilities/",
-  "cli/",
-  "configuration/",
-  "models/",
-  "p2p-capabilities/",
-  "runtime/",
+  `sdk/${SDK_LINE}/ai-capabilities/`,
+  `sdk/${SDK_LINE}/configuration/`,
+  `sdk/${SDK_LINE}/models/`,
+  `sdk/${SDK_LINE}/p2p-capabilities/`,
+  `sdk/${SDK_LINE}/runtime/`,
+  `cli/${CLI_LINE}/`,
 ];
 
 const ALLOWLIST_FILES = new Set([
-  "introduction.mdx",
-  "js-ts-sdk.mdx",
-  "python-sdk.mdx",
-  "system-requirements.mdx",
+  // The SDK collection overview — the page `introduction.mdx` became.
+  `sdk/${SDK_LINE}/index.mdx`,
+  `sdk/${SDK_LINE}/js-ts-sdk.mdx`,
+  `sdk/${SDK_LINE}/python-sdk.mdx`,
+  `sdk/${SDK_LINE}/system-requirements.mdx`,
 ]);
 
-/** Editable only as an append, and only in NEW_CAPABILITY_PAGE. */
-const RESTRICTED_FILES = new Set(["index.mdx"]);
+/**
+ * Editable only as an append, and only in NEW_CAPABILITY_PAGE: the home grid
+ * that links every capability, on the page the old site index became.
+ */
+const RESTRICTED_FILES = new Set(["ecosystem/index.mdx"]);
+
+/** `reference/` in any line: the API summary and release notes are generated. */
+function isGenerated(page: string): boolean {
+  return page.split("/").includes("reference");
+}
 
 function scopeOf(page: string): "allowed" | "restricted" | "denied" {
-  if (ALLOWLIST_PREFIXES.some((p) => page.startsWith(p))) return "allowed";
-  if (ALLOWLIST_FILES.has(page)) return "allowed";
+  if (isGenerated(page)) return "denied";
   if (RESTRICTED_FILES.has(page)) return "restricted";
+  if (ALLOWLIST_FILES.has(page)) return "allowed";
+  if (ALLOWLIST_PREFIXES.some((p) => page.startsWith(p))) return "allowed";
   return "denied";
 }
 
@@ -176,10 +235,10 @@ function loadPages(): Page[] {
       if (!entry.name.endsWith(".mdx")) continue;
 
       const rel = path.relative(DOCS_CONTENT, abs).split(path.sep).join("/");
-      // `reference/**` is generated; never a routing target. Skipping it here
-      // rather than at scope-check time keeps the ~2000-line API summary out of
-      // every grep.
-      if (rel.startsWith("reference/")) continue;
+      // A generated page is never a routing target, and skipping it before the
+      // scope check keeps the ~2000-line API summary — one per line — out of
+      // every grep below.
+      if (isGenerated(rel)) continue;
       if (scopeOf(rel) === "denied") continue;
 
       const lines = fs.readFileSync(abs, "utf-8").split("\n");
@@ -392,7 +451,8 @@ function runR1(pages: Page[], files: ChangedFile[]) {
 // R2 — symbol router
 //
 // packages/sdk/src/client/api/ holds one file per public function, kebab-cased.
-// Pages link those functions as `/reference/api#<symbol-lowercase>`.
+// Pages link those functions as `/sdk/reference/api#<symbol-lowercase>` — the
+// version-less address, which the current line answers.
 // ---------------------------------------------------------------------------
 
 function kebabToCamel(name: string): string {
@@ -470,7 +530,7 @@ function runR2(pages: Page[], files: ChangedFile[]) {
     const isExported = fromBarrel !== undefined;
 
     for (const symbol of symbols) {
-      const anchor = `/reference/api#${symbol.toLowerCase()}`;
+      const anchor = `/sdk/reference/api#${symbol.toLowerCase()}`;
       let hits = 0;
 
       for (const page of pages) {
@@ -486,7 +546,7 @@ function runR2(pages: Page[], files: ChangedFile[]) {
       //
       // The anchor is the primary binding, but it is not the only authored one.
       // `text-generation.mdx` writes
-      // [`batchCompletion()`](/ai-capabilities/batch-processing) and carries a
+      // [`batchCompletion()`](/sdk/ai-capabilities/batch-processing) and carries a
       // whole paragraph on how that function shares `parallel` slots — a claim
       // that goes stale like any other. Anchor-only matching misses it, and R3
       // never recovers the page: the fallback only picks up files the exact
@@ -541,8 +601,12 @@ function runR2(pages: Page[], files: ChangedFile[]) {
 // R4 — CLI command router (exact)
 //
 // packages/cli/src/ has one folder per command area, and each command has its
-// own `### `qvac <command>`` heading in cli/index.mdx.
+// own `### `qvac <command>`` heading in the CLI collection's index page, at its
+// current line.
 // ---------------------------------------------------------------------------
+
+const CLI_INDEX = `cli/${CLI_LINE}/index.mdx`;
+const CLI_HTTP_SERVER = `cli/${CLI_LINE}/http-server/`;
 
 /** Command folder -> the command line as written in the docs heading. */
 const CLI_COMMANDS: Record<string, string> = {
@@ -555,7 +619,7 @@ const CLI_COMMANDS: Record<string, string> = {
 };
 
 /**
- * Narrative sections of cli/index.mdx that describe a command outside the
+ * Narrative sections of the CLI index page that describe a command outside the
  * `## Reference` block. A behaviour change can invalidate a claim there while
  * the reference heading stays correct, so they route as extra candidates.
  */
@@ -568,7 +632,7 @@ const CLI_NARRATIVE_SECTIONS: Record<string, string[]> = {
 
 function runR4(pages: Page[], files: ChangedFile[]) {
   const cliFiles = files.filter((f) => f.bucket === "cli-command");
-  const cliIndex = pages.find((p) => p.rel === "cli/index.mdx");
+  const cliIndex = pages.find((p) => p.rel === CLI_INDEX);
 
   const folders = new Map<string, ChangedFile[]>();
   for (const file of cliFiles) {
@@ -600,7 +664,7 @@ function runR4(pages: Page[], files: ChangedFile[]) {
     const declaration = declaredUndocumented(`packages/cli/src/${folder}/`);
     if (declaration) {
       discarded.push({
-        page: "cli/index.mdx",
+        page: CLI_INDEX,
         source: `packages/cli/src/${folder}/`,
         via: "R4",
         reason: `routing-map.yaml declares ${declaration} as not documented`,
@@ -638,7 +702,7 @@ function runR4(pages: Page[], files: ChangedFile[]) {
           source: `packages/cli/src/${folder}/`,
           bucket: "cli-command",
           status: folderFiles[0]!.status,
-          reason: `no \`${command}\` heading in cli/index.mdx and no "## Reference" section to add one under`,
+          reason: `no \`${command}\` heading in ${CLI_INDEX} and no "## Reference" section to add one under`,
         });
       }
     }
@@ -660,8 +724,8 @@ function runR4(pages: Page[], files: ChangedFile[]) {
     // `serve` additionally owns a whole docs subtree.
     if (folder === "serve") {
       for (const page of pages) {
-        if (!page.rel.startsWith("cli/http-server/")) continue;
-        record(page, -1, "R4", representative, "cli/http-server/** owned by `qvac serve`");
+        if (!page.rel.startsWith(CLI_HTTP_SERVER)) continue;
+        record(page, -1, "R4", representative, `${CLI_HTTP_SERVER}** owned by \`qvac serve\``);
       }
     }
   }
@@ -704,7 +768,10 @@ function loadRoutingMap(): MapEntry[] {
       current.pages = pagesMatch[1]!
         .split(",")
         .map((s) => s.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        // The map writes `sdk/<line>/…` so a cut never has to edit it. Expand
+        // once, here, and every consumer below sees a real path.
+        .map(expandLine);
     }
   }
 

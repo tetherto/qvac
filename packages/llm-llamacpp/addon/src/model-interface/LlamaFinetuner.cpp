@@ -105,7 +105,7 @@ std::string LlamaFinetuner::finetune(
     if (model_.state_->cacheManager_.has_value() &&
         model_.state_->cacheManager_->hasActiveCache()) {
       try {
-        model_.state_->cacheManager_->saveCache();
+        model_.state_->cacheManager_->saveBeforeReset();
       } catch (...) {
         model_.resetState(false);
         model_.state_->cacheManager_->invalidate();

@@ -87,12 +87,6 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
-// model-fit has generated wrappers and its own on-merge-model-fit.yml, but that
-// workflow has never called the verify reusable. Pre-existing and outside the
-// consolidation; listed here so the gap is stated rather than hidden by whichever
-// definition of "gated" happens to exclude it.
-const KNOWN_UNGATED = new Set(['model-fit'])
-
 // The packages the consolidated pipeline publishes, read from its own push paths
 // so the list cannot drift from the workflow.
 function consolidatedPackages() {
@@ -165,7 +159,6 @@ test('every package that opts into the gate is covered by a pipeline', () => {
   // flag, so this cannot collapse to an empty filter.
   const published = new Set(consolidatedPackages())
   const offenders = gated.filter((pkg) => {
-    if (KNOWN_UNGATED.has(pkg)) return false
     if (consolidated && published.has(pkg)) return false
     return !pipelines.includes(`.github/workflows/on-merge-${pkg}.yml`)
   })
@@ -250,4 +243,31 @@ test('wrapper drift is still checked somewhere at PR time', () => {
   // the PR-time half would push every drift failure to after the merge.
   const sanityChecks = read('.github/actions/sanity-checks/action.yaml')
   assert.match(sanityChecks, /check:generated/)
+})
+
+test('decoder-audio integration runs after publishing, like the other speech packages', () => {
+  const speechPackages = ['decoder-audio', 'asr-ggml', 'bci-whispercpp', 'tts-ggml']
+  const source = withoutComments(read(CONSOLIDATED))
+  const jobs = eachJob(source)
+
+  for (const name of speechPackages) {
+    const project = JSON.parse(read(`packages/${name}/project.json`))
+    const config = project.targets['on-merge'].options.ci
+    assert.equal(config.testGateMode, 'post-publish-integration', name)
+    assert.equal(config.postIntegrationOnGpr, true, name)
+
+    const mobile = jobs.find((job) => job.name === `mobile-post-publish-${name}`)
+    assert.ok(mobile, `${name}: missing post-publish mobile job`)
+    assert.match(mobile.text, /needs: \[post-build-gate\]/)
+    assert.ok(ifExpression(mobile.text).includes("needs.post-build-gate.outputs.should_run_tests == 'true'"))
+    assert.ok(ifExpression(mobile.text).includes(`contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, '${name}')`))
+    assert.ok(mobile.text.includes(`uses: ./.github/workflows/integration-mobile-test-${name}.yml`))
+  }
+
+  assert.doesNotMatch(source, /mobile-gate-decoder-audio/)
+  for (const job of publishJobs(source)) {
+    const needs = job.text.match(/^ {4}needs:\n((?: {6}- .*\n)*)/m)
+    assert.ok(needs, `${job.name}: missing publish dependencies`)
+    assert.doesNotMatch(needs[1], /mobile|post-build-gate|post-publish/)
+  }
 })

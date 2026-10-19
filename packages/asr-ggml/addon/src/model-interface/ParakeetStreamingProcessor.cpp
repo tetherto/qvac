@@ -44,7 +44,7 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue,
     Config config)
     : model_(model), output_queue_(std::move(outputQueue)), config_(config) {
-  if (model_.isSortformer()) {
+  if (model_.isDiarization()) {
     pkt::SortformerStreamingOptions opts;
     opts.sample_rate = config_.sampleRate;
     opts.chunk_ms = config_.chunkMs;
