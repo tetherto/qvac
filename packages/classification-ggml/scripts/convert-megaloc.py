@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Convert the supported MegaLoc safetensors checkpoint to a local GGUF.
 
-Requires numpy, torch, safetensors and Fabric's gguf-py package. Mixed precision
+Requires numpy, safetensors and Fabric's gguf-py package. Mixed precision
 also needs --ggml-library pointing to a shared GGML core with Q6_K quantization.
 No model code is downloaded or executed, and no output is uploaded.
 """
@@ -43,12 +43,34 @@ def native_quantizer(path):
     return library, directory
 
 
+def position_embeddings(position):
+    import numpy as np
+
+    if position.shape != (1, 1370, 768):
+        raise ValueError("Unexpected positional embedding shape")
+    # Fixed-order float64 bicubic interpolation avoids CPU-specific FP32 fusion.
+    coordinates = (np.arange(23, dtype=np.float64) + 0.5) * (1.0 / (23.1 / 37)) - 0.5
+    indices = np.floor(coordinates).astype(np.int64)[:, None] + np.arange(-1, 3)
+    distance = np.abs(coordinates[:, None] - indices)
+    inner = ((1.25 * distance - 2.25) * distance) * distance + 1.0
+    outer = ((-0.75 * distance + 3.75) * distance - 6.0) * distance + 3.0
+    weights = np.where(distance <= 1, inner, np.where(distance < 2, outer, 0.0))
+    indices = np.clip(indices, 0, 36)
+    grid = position[0, 1:].reshape(37, 37, 768).astype(np.float64)
+    horizontal = np.zeros((37, 23, 768), dtype=np.float64)
+    for tap in range(4):
+        horizontal += grid[:, indices[:, tap], :] * weights[None, :, tap, None]
+    resized = np.zeros((23, 23, 768), dtype=np.float64)
+    for tap in range(4):
+        resized += horizontal[indices[:, tap], :, :] * weights[:, tap, None, None]
+    return np.concatenate((position[0, :1], resized.reshape(529, 768).astype(np.float32)))
+
+
 def convert(args):
     if args.gguf_py:
         sys.path.insert(0, str(args.gguf_py.resolve(strict=True)))
     import gguf
     import numpy as np
-    import torch
     from safetensors import safe_open
 
     if args.output.exists():
@@ -58,7 +80,6 @@ def convert(args):
     if digest != CHECKPOINT_SHA256:
         raise ValueError("Checkpoint does not match the supported MegaLoc revision and SHA256")
     library, directory = native_quantizer(args.ggml_library) if args.quant == "mixed" else (None, None)
-    torch.set_num_threads(8)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     # Build next to the destination so rename publishes only a complete file.
     descriptor, temporary = tempfile.mkstemp(prefix=args.output.name + ".", suffix=".tmp", dir=args.output.parent)
@@ -74,22 +95,17 @@ def convert(args):
         writer.add_string("megaloc.quantization", args.quant)
         writer.add_uint32("megaloc.image_size", 322)
         writer.add_uint32("megaloc.descriptor_length", 8448)
-        with safe_open(args.input, framework="pt", device="cpu") as checkpoint:
-            position = checkpoint.get_tensor("backbone.pos_embed").float()
-            if tuple(position.shape) != (1, 1370, 768):
-                raise ValueError("Unexpected positional embedding shape")
-            with torch.inference_mode():
-                grid = position[:, 1:].reshape(1, 37, 37, 768).permute(0, 3, 1, 2)
-                resized = torch.nn.functional.interpolate(grid, scale_factor=(23.1 / 37, 23.1 / 37),
-                                                          mode="bicubic", align_corners=False, antialias=False)
-                positions = torch.cat((position[:, :1], resized.permute(0, 2, 3, 1).reshape(1, 529, 768)), 1)
-            writer.add_tensor("megaloc.pos_embed", positions.squeeze(0).numpy())
+        writer.add_uint32("megaloc.converter.version", 1)
+        with safe_open(args.input, framework="np") as checkpoint:
+            writer.add_tensor("megaloc.pos_embed", position_embeddings(checkpoint.get_tensor("backbone.pos_embed")))
             for name in checkpoint.keys():
                 if name == "backbone.pos_embed":
                     continue
-                array = checkpoint.get_tensor(name).float().numpy()
-                if not np.isfinite(array).all():
-                    raise ValueError(f"Non-finite checkpoint tensor: {name}")
+                array = checkpoint.get_tensor(name).astype(np.float32, copy=False)
+                flat = array.reshape(-1)
+                for start in range(0, flat.size, 1024 * 1024):
+                    if not np.isfinite(flat[start:start + 1024 * 1024]).all():
+                        raise ValueError(f"Non-finite checkpoint tensor: {name}")
                 if name.endswith(".weight") and array.ndim == 4:
                     array = array.reshape(array.shape[0], -1)
                 elif name == "backbone.cls_token":

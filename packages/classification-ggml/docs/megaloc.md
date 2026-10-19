@@ -45,7 +45,7 @@ Obtain the original `model.safetensors` from
 The converter verifies the supported checkpoint revision and SHA256, uses the
 safetensors reader, and does not execute downloaded Python model code.
 
-Use Python 3.11 or newer with `numpy`, `torch`, `safetensors` and Fabric's
+Use Python 3.11 or newer with `numpy`, `safetensors` and Fabric's
 `gguf-py` package. These are converter tools, not addon runtime dependencies.
 F16 is the default:
 
@@ -64,6 +64,10 @@ is named `ggml-base.dll` on Windows and `libggml-base.dylib` on macOS builds tha
 produce that shared library. F16 conversion does not need this library.
 GGUF format names describe matrix storage; activations and reductions use F32.
 Small tensors and patch-projection weights remain F32 in both formats.
+Positional embeddings use fixed-order float64 bicubic interpolation followed by
+F32 storage, retaining the original coordinates and cubic kernel while avoiding
+platform-dependent FP32 rounding. PyTorch is needed only to regenerate the test
+reference fixtures, not for conversion or addon inference.
 The converter writes a complete temporary file before publishing the output
 path and refuses to overwrite an existing file.
 
@@ -93,6 +97,8 @@ upscaling, downscaling and unchanged dimensions. They also check repeated
 inference, decoding, error recovery, model coexistence and lifecycle behavior.
 
 `npm run test:cpp` includes preprocessing parity and malformed-model checks.
+Run `python scripts/test_convert_megaloc.py -v` with NumPy installed to check the
+converter's positional interpolation against stored original PyTorch references.
 Integration tests verify backend selection and record CPU fallback counts.
 Cross-platform CI and mobile tests need the model fixtures staged separately;
 test models are not included in the published npm package.
