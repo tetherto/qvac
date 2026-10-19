@@ -10944,7 +10944,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     poll: Annotated[
         int | None,
         Field(
-            description="Main CPU threadpool busy-wait level, from 0 to 100. Default 0 sleeps while idle. Higher values may reduce wake latency but consume more CPU during GPU work.",
+            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
             ge=0,
             le=100,
         ),
@@ -10953,7 +10953,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="poll-batch",
-            description="Batch CPU threadpool busy-wait level, from 0 to 100. Unset inherits poll, or 0 when neither is set.",
+            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
             ge=0,
             le=100,
         ),
@@ -12503,7 +12503,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
     poll: Annotated[
         int | None,
         Field(
-            description="Main CPU threadpool busy-wait level, from 0 to 100. Default 0 sleeps while idle. Higher values may reduce wake latency but consume more CPU during GPU work.",
+            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
             ge=0,
             le=100,
         ),
@@ -12512,7 +12512,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="pollBatch",
-            description="Batch CPU threadpool busy-wait level, from 0 to 100. Unset inherits poll, or 0 when neither is set.",
+            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
             ge=0,
             le=100,
         ),
@@ -12744,7 +12744,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     poll: Annotated[
         int | None,
         Field(
-            description="Main CPU threadpool busy-wait level, from 0 to 100. Default 0 sleeps while idle. Higher values may reduce wake latency but consume more CPU during GPU work.",
+            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
             ge=0,
             le=100,
         ),
@@ -12753,7 +12753,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="poll-batch",
-            description="Batch CPU threadpool busy-wait level, from 0 to 100. Unset inherits poll, or 0 when neither is set.",
+            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
             ge=0,
             le=100,
         ),

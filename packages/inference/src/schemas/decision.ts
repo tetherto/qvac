@@ -178,7 +178,7 @@ export const decisionConfigBaseSchema = z
       .max(100)
       .optional()
       .describe(
-        'Main CPU threadpool busy-wait level, from 0 to 100. Default 0 sleeps while idle. Higher values may reduce wake latency but consume more CPU during GPU work.'
+        'CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.'
       ),
     'poll-batch': z
       .number()
@@ -187,7 +187,7 @@ export const decisionConfigBaseSchema = z
       .max(100)
       .optional()
       .describe(
-        'Batch CPU threadpool busy-wait level, from 0 to 100. Unset inherits poll, or 0 when neither is set.'
+        'CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.'
       ),
     threads: z
       .number()
