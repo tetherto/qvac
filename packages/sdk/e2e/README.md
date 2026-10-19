@@ -327,8 +327,11 @@ model cache either, because it bootstraps a different set of models.
   [`tests/test-definitions.ts`](./tests/test-definitions.ts). Each entry is a `TestDefinition` with `testId`,
   `params`, `expectation`, optional `suites`, and `metadata`.
 - **Prefer a declarative body.** A definition with `steps` is run by the shared
-  step interpreter, so it runs on every client rather than only the JS ones. The
-  operations and what a client must do with them are specified in
+  step interpreter, so the Python client runs the same body as the JS one. A JS
+  consumer runs it only when its entry sets `executor.stepBindings`; on any other
+  the definition goes to the executors. Mobile has no interpreter, because the
+  bindings import `node:*`, so a step-only test needs a mobile executor or a
+  `mobile` skip. The operations and what a client must do with them are specified in
   [`@qvac/test-suite`'s conformance spec](../../test-suite/docs/conformance.md);
   the per-platform naming is in [`tests/platform-vocabulary.md`](./tests/platform-vocabulary.md)
   and the suite tags in [`tests/suite-tags.md`](./tests/suite-tags.md). An
@@ -374,8 +377,9 @@ model cache either, because it bootstraps a different set of models.
     [`mobile/executors/ocr-executor.ts`](./tests/mobile/executors/ocr-executor.ts).
 - Register new executors in [`tests/desktop/consumer.ts`](./tests/desktop/consumer.ts),
   [`tests/mobile/consumer.ts`](./tests/mobile/consumer.ts), and/or reuse those executors from
-  [`tests/electron/consumer.ts`](./tests/electron/consumer.ts) as applicable. Mobile platform skips go through
-  `SkipExecutor` at the top of the mobile consumer (first match wins).
+  [`tests/electron/consumer.ts`](./tests/electron/consumer.ts) as applicable; the Snap runs the Electron
+  consumer. Platform skips are data in [`tests/platform-skips.ts`](./tests/platform-skips.ts), not
+  executors.
 - **Smoke suite policy.** If a new feature introduces core functionality that has no existing smoke coverage,
   tag **1-2** tests with `suites: ["smoke"]` — preferring the most representative, fastest, least-flaky test.
   Verify it passes predictably on both desktop and mobile before tagging. Smoke must stay focused and fast; do
