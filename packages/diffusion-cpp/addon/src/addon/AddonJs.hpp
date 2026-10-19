@@ -91,6 +91,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.clipGPath = args.getMapEntry(1, "clipGPath");
   config.t5XxlPath = args.getMapEntry(1, "t5XxlPath");
   config.llmPath = args.getMapEntry(1, "llmPath");
+  config.llmVisionPath = args.getMapEntry(1, "llmVisionPath");
   config.vaePath = args.getMapEntry(1, "vaePath");
   config.clipVisionPath = args.getMapEntry(1, "clipVisionPath");
   config.esrganPath = args.getMapEntry(1, "esrganPath");
@@ -574,6 +575,7 @@ inline FitTask parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   config.clipGPath = args.getMapEntry(0, "clipGPath");
   config.t5XxlPath = args.getMapEntry(0, "t5XxlPath");
   config.llmPath = args.getMapEntry(0, "llmPath");
+  config.llmVisionPath = args.getMapEntry(0, "llmVisionPath");
   config.vaePath = args.getMapEntry(0, "vaePath");
   config.clipVisionPath = args.getMapEntry(0, "clipVisionPath");
   config.esrganPath = args.getMapEntry(0, "esrganPath");
