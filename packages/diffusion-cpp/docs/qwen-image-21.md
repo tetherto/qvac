@@ -125,6 +125,10 @@ content, explicitly describe an RGBA image with a transparent background in the
 prompt. Preserving an alpha channel does not guarantee that the model generates
 the transparency or edit requested by a particular prompt.
 
+ESRGAN accepts RGB images only. Qwen-Image-2.1's four-channel output cannot use
+`upscale: true`; the addon rejects that option before generation. Keep upscaling
+disabled to preserve the RGBA output.
+
 The initial backport covers regular text-to-image and reference editing. Turbo,
 prefix KV caching, and broad LoRA compatibility are not validated by this recipe.
 Hardware validation is limited to RTX 5090 CUDA; other ticket targets need

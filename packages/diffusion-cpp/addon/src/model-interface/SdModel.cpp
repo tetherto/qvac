@@ -821,6 +821,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
         general_error::InvalidArgument,
         "Unsupported mode: '" + gen.mode + "'. Supported: txt2img, img2img.");
 
+  if (gen.upscale) {
+    qvac_lib_inference_addon_sd::validateEsrganImageChannels(
+        sd_ctx_get_image_channels(sdCtx_.get()));
+  }
   if (gen.upscale && config_.esrganPath.empty()) {
     throw StatusError(
         general_error::InvalidArgument,

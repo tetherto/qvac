@@ -20,7 +20,10 @@ fetch() {
   if [[ -f "$OUT/$name" ]] && check_hash "$OUT/$name" "$hash"; then return; fi
   curl --fail --location --retry 5 --continue-at - \
     "$HF/$repo/resolve/$revision/$source" -o "$OUT/$name.part"
-  check_hash "$OUT/$name.part" "$hash"
+  if ! check_hash "$OUT/$name.part" "$hash"; then
+    rm -f -- "$OUT/$name.part"
+    return 1
+  fi
   mv "$OUT/$name.part" "$OUT/$name"
 }
 fetch leejet/Qwen-Image-2.1-GGUF cc11433936a06e9765f7c0c0b1f0436cfd2b9856 \

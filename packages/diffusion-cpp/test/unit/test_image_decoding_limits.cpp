@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 #include <stb_image.h>
 #include <stb_image_write.h>
 
@@ -33,6 +34,28 @@ std::vector<uint8_t> createValidPngHeader() {
 }
 
 class StbImageSecurityTest : public ::testing::Test {};
+
+TEST_F(StbImageSecurityTest, EsrganRejectsRgbaBeforeLoadingOrInference) {
+  using namespace qvac_lib_inference_addon_sd;
+  EXPECT_NO_THROW(validateEsrganImageChannels(3));
+  EXPECT_THROW(validateEsrganImageChannels(4), qvac_errors::StatusError);
+
+  // No ESRGAN weights: the channel guard must run before context creation.
+  EsrganUpscaler upscaler(EsrganUpscalerConfig{});
+  std::array<uint8_t, 4> pixels{10, 20, 30, 127};
+  sd_image_t rgba{1, 1, 4, pixels.data()};
+  try {
+    auto output = upscaler.upscaleImage(rgba, 1);
+    std::unique_ptr<uint8_t, image_codec::FreeDeleter> owner(output.data);
+    FAIL() << "Expected RGBA to be rejected before native ESRGAN inference";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(
+        std::string(error.what()).find("ESRGAN upscale supports only RGB"),
+        std::string::npos)
+        << error.what();
+  }
+  EXPECT_FALSE(upscaler.isLoaded());
+}
 
 std::vector<uint8_t> decodeBase64(std::string_view encoded) {
   std::vector<uint8_t> bytes;

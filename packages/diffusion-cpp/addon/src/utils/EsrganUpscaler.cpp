@@ -16,6 +16,15 @@ using namespace qvac_errors;
 
 namespace qvac_lib_inference_addon_sd {
 
+void validateEsrganImageChannels(int channels) {
+  if (channels != 3) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ESRGAN upscale supports only RGB images (3 channels); RGBA output "
+        "is not supported. Disable upscale for Qwen-Image-2.1.");
+  }
+}
+
 bool esrganOutputFitsLimits(
     uint32_t width, uint32_t height, uint32_t factor, int repeats,
     uint64_t pixelLimit) noexcept {
@@ -222,6 +231,7 @@ upscaler_ctx_t* EsrganUpscaler::ensureContextLocked() {
 sd_image_t EsrganUpscaler::upscaleImage(
     const sd_image_t& inputImage, int repeats,
     const std::function<bool()>& shouldCancel) {
+  validateEsrganImageChannels(static_cast<int>(inputImage.channel));
   if (repeats <= 0) {
     throw StatusError(
         general_error::InvalidArgument,
