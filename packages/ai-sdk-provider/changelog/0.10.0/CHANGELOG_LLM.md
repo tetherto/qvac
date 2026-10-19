@@ -104,10 +104,6 @@ import {
 } from '@qvac/ai-sdk-provider/models'
 ```
 
-## Bug Fixes
-
-MOSS GPU fields are validated against what the engine accepts, and CI catalog fixtures were repaired to match.
-
 ## Model Changes
 
 ### Added
