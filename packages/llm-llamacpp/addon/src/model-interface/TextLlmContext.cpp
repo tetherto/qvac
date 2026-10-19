@@ -54,7 +54,6 @@ TextLlmContext::TextLlmContext(
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
   initializeCommonState();
-  initializeOwnedThreadpools();
 }
 
 TextLlmContext::TextLlmContext(
@@ -196,60 +195,6 @@ void TextLlmContext::initializeCommonState() {
       antipromptTokens_.push_back(ids[0]);
     }
   }
-}
-
-void TextLlmContext::initializeOwnedThreadpools() {
-  auto* cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-  if (cpuDev == nullptr) {
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(NoCpuBackendFound), "no CPU backend found");
-  }
-
-  auto* reg = ggml_backend_dev_backend_reg(cpuDev);
-  void* procAddr =
-      ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_new");
-  if (procAddr == nullptr) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToCreateThreadPool),
-        "Failed to get ggml_threadpool_new function address");
-  }
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-  auto* ggmlThreadpoolNewFn =
-      reinterpret_cast<decltype(ggml_threadpool_new)*>(procAddr);
-
-  struct ggml_threadpool_params tppBatch =
-      ggml_threadpool_params_from_cpu_params(params_.cpuparams_batch);
-  struct ggml_threadpool_params tpp =
-      ggml_threadpool_params_from_cpu_params(params_.cpuparams_batch);
-
-  set_process_priority(params_.cpuparams_batch.priority);
-
-  if (!ggml_threadpool_params_match(&tpp, &tppBatch)) {
-    threadpoolBatch_.reset(ggmlThreadpoolNewFn(&tppBatch));
-    if (!threadpoolBatch_) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(UnableToCreateThreadPool),
-          "batch threadpool create failed");
-    }
-    tpp.paused = true;
-  }
-
-  threadpool_.reset(ggmlThreadpoolNewFn(&tpp));
-  if (!threadpool_) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToCreateThreadPool),
-        "threadpool create failed");
-  }
-  llama_attach_threadpool(
-      modelCtx_.lctx, threadpool_.get(), threadpoolBatch_.get());
-
-  QLOG_IF(Priority::DEBUG, [&]() {
-    return string_format(
-        "[TextLlm] %s\n", common_params_get_system_info(params_).c_str());
-  }());
 }
 
 bool TextLlmContext::checkAntiprompt() {

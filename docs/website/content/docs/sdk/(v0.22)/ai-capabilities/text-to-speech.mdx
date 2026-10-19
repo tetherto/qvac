@@ -566,9 +566,9 @@ const result = textToSpeech({
 
 Load a single sound-effect GGUF with `modelType: "tts-ggml"` and
 `modelConfig.ttsEngine: "moss-sfx"`. Pass `AUDIOGEN_MOSS_SFX_V2_Q8_0.src`
-as `modelSrc`: the full catalog descriptor selects the audiogen plugin. For TTS fit assessment, use a downloaded local file with explicit `modelType`
-and `ttsEngine`. The bare `.src` URL lacks registry coordinates for a weightless
-stub, and the audiogen descriptor/resource profile does not select the TTS engine.
+as `modelSrc`: the full catalog descriptor selects the audiogen plugin. To
+assess its fit, pass a downloaded local file with explicit `modelType` and
+`ttsEngine`.
 Use `textToSpeech({ modelId, text, stream: false })` with a sound description.
 The output is 48 kHz mono PCM.
 
@@ -583,7 +583,7 @@ candidate. MOSS-TTS/TTSD instead uses
 `ttsWorkload: { promptRows, referenceSamples, streaming }`, where `promptRows`
 covers the complete native prompt. These workloads are fit-only and do not
 belong in `loadModel` configuration. Missing workloads return `unknown`;
-MOSS-Speech has no native fitter in this release.
+MOSS-Speech has no native fitter.
 
 ### MOSS-Speech
 

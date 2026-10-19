@@ -199,7 +199,7 @@ for (const engine of ['parler', 'cosyvoice3']) {
     const reloaded = createModel(engine, { emotion: 'happy' })
     await reloaded.load()
     await reloaded.reload({ emotion: 'sad' })
-    t.is(reloaded._emotion, 'sad', 'reload() updates the emotion')
+    t.is(reloaded._setup.settings.emotion, 'sad', 'reload() updates the emotion')
     await reloaded.destroy()
 
     const binding = new RecordingBinding()
@@ -276,7 +276,7 @@ test('voice controls: supertonic still takes pace where it works', async (t) => 
   const reloaded = createModel('supertonic', { pace: 'slow' })
   await reloaded.load()
   await reloaded.reload({ pace: 'fast' })
-  t.is(reloaded._pace, 'fast', 'reload() updates the pace')
+  t.is(reloaded._setup.settings.pace, 'fast', 'reload() updates the pace')
   await reloaded.destroy()
 })
 
@@ -291,8 +291,8 @@ test('voice controls: a rejected reload does not retain the rejected value', asy
     /reload: conflicting conditioning controls/,
     'the conflict is reported against reload, not the constructor'
   )
-  t.is(model._emotion, 'happy', 'the accepted emotion survives')
-  t.absent(model._pace, 'the rejected pace is not retained')
+  t.is(model._setup.settings.emotion, 'happy', 'the accepted emotion survives')
+  t.absent(model._setup.settings.pace, 'the rejected pace is not retained')
 
   // Without the rollback this reload would be validated against pace="fast"
   // and fail, even though the caller never got that value accepted.
@@ -300,7 +300,7 @@ test('voice controls: a rejected reload does not retain the rejected value', asy
     model.reload({ emotion: 'sad' }),
     'a later partial reload is validated against the live state'
   )
-  t.is(model._emotion, 'sad', 'the later reload applied')
+  t.is(model._setup.settings.emotion, 'sad', 'the later reload applied')
   await model.destroy()
 })
 
@@ -313,7 +313,7 @@ test('voice controls: a rejected parler reload does not retain the template fiel
     /mutually exclusive/,
     'description plus a template field is rejected'
   )
-  t.absent(model._voice, 'the rejected voice is not retained')
+  t.absent(model._setup.settings.voice, 'the rejected voice is not retained')
   t.is(
     model._buildTtsParams().description,
     'A calm, clear voice.',

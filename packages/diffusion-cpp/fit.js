@@ -1,8 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
-const path = require("bare-path");
 const file_paths_1 = require("./file-paths");
 /**
  * Projects a load against the memory free right now, reading model metadata
@@ -38,9 +36,6 @@ async function assessFit(request) {
     // The native side reads the config sub-object as a string map, the same way
     // createInstance does.
     const merged = { ...request.config };
-    if (!merged.backendsDir) {
-        merged.backendsDir = path.join(__dirname, 'prebuilds');
-    }
     const config = Object.fromEntries(Object.entries(merged)
         .filter(([, value]) => value !== undefined)
         .map(([key, value]) => [key, String(value)]));

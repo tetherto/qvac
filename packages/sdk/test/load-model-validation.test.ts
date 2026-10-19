@@ -1,8 +1,40 @@
 import test from 'brittle'
 import { assertModelSrcMatchesModelType } from '@/utils/load-model-validation'
 import { ModelSrcTypeMismatchError } from '@/utils/errors-client'
-import { ModelType } from '@qvac/sdk'
+import { LAYA_MULTILINGUAL_322M_Q8_0, ModelType } from '@qvac/sdk'
+import { inferModelTypeFromModelSrc } from '@qvac/inference/surface'
 import { SDK_CLIENT_ERROR_CODES } from '@/schemas/sdk-errors-client'
+
+test('Laya constants infer the decision engine and accept the matching explicit type', (t) => {
+  t.is(inferModelTypeFromModelSrc(LAYA_MULTILINGUAL_322M_Q8_0), ModelType.llamacppDecision)
+  t.execution(() =>
+    assertModelSrcMatchesModelType(LAYA_MULTILINGUAL_322M_Q8_0, ModelType.llamacppDecision)
+  )
+})
+
+test('embedding descriptors reject decision loads despite sharing the addon', (t) => {
+  for (const descriptor of [
+    { src: 'registry://example/embedding.gguf', engine: ModelType.llamacppEmbedding },
+    { src: 'registry://example/embedding.gguf', engine: '@qvac/embed-llamacpp' },
+    { src: 'registry://example/embedding.gguf', addon: 'embeddings' }
+  ]) {
+    try {
+      assertModelSrcMatchesModelType(descriptor, ModelType.llamacppDecision)
+      t.fail('Expected ModelSrcTypeMismatchError')
+    } catch (error) {
+      t.ok(error instanceof ModelSrcTypeMismatchError)
+    }
+  }
+})
+
+test('decision descriptors reject embedding loads', (t) => {
+  try {
+    assertModelSrcMatchesModelType(LAYA_MULTILINGUAL_322M_Q8_0, ModelType.llamacppEmbedding)
+    t.fail('Expected ModelSrcTypeMismatchError')
+  } catch (error) {
+    t.ok(error instanceof ModelSrcTypeMismatchError)
+  }
+})
 
 test('assertModelSrcMatchesModelType: descriptor engine vs incompatible canonical modelType throws', (t) => {
   const llamaDescriptor = {
