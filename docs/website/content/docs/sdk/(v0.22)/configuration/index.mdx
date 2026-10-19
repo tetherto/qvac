@@ -121,6 +121,8 @@ LLM, embedding, and Laya decision models default to sleeping CPU workers between
 
 Set polling in `loadModel()`'s `modelConfig`, device defaults, or a served model's `config`. Values must be numbers representing integers from `0` to `100`. Higher values may reduce worker wake latency at the cost of CPU usage.
 
+Polling defaults are defined by the QVAC addons and may differ from upstream llama.cpp. See the CPU polling defaults for [`@qvac/llm-llamacpp`](/ecosystem/addons/llm-llamacpp#cpu-polling-defaults) and [`@qvac/embed-llamacpp`](/ecosystem/addons/embed-llamacpp#cpu-polling-defaults), which covers embeddings and decisions.
+
 ### `ServeConfig`
 
 | Field | Description | Type | Required | Default |
