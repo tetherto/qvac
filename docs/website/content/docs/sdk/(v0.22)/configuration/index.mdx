@@ -115,6 +115,12 @@ Model types (allowed keys): `llm` | `embeddings` | `whisper` | `parakeet` | `bci
 **Important:** for the exact config fields supported by each model type (key), see [`modelConfig` — `loadModel()` at `@qvac/sdk` API reference](/sdk/reference/api#loadmodel).
 </Callout>
 
+### CPU polling for llama.cpp models
+
+LLM, embedding, and Laya decision models default to sleeping CPU workers between graph operations. This avoids busy-spinning during GPU work. Leave polling unset unless measurements on your device justify a higher value.
+
+Set polling in `loadModel()`'s `modelConfig`, device defaults, or a served model's `config`. Values must be numbers representing integers from `0` to `100`. Higher values may reduce worker wake latency at the cost of CPU usage.
+
 ### `ServeConfig`
 
 | Field | Description | Type | Required | Default |

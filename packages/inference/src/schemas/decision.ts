@@ -171,6 +171,24 @@ export const decisionConfigBaseSchema = z
       .positive()
       .optional()
       .describe('Tokens per forward pass. Default 2048; each sequence must fit.'),
+    poll: z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe(
+        'Main CPU threadpool busy-wait level, from 0 to 100. Default 0 sleeps while idle. Higher values may reduce wake latency but consume more CPU during GPU work.'
+      ),
+    'poll-batch': z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe(
+        'Batch CPU threadpool busy-wait level, from 0 to 100. Unset inherits poll, or 0 when neither is set.'
+      ),
     threads: z
       .number()
       .int()
