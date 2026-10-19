@@ -35,6 +35,10 @@ export interface StartServerOptions {
   allowUnauthenticated?: boolean | undefined
   cors?: boolean | undefined
   corsOrigins?: string[] | undefined
+  /** Hostnames accepted in the Host header beyond loopback, IP literals and the bind host. */
+  allowedHosts?: string[] | undefined
+  /** Accept any Host header, turning off the DNS-rebinding check. */
+  allowAnyHost?: boolean | undefined
   publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
   /** Silence the logger entirely. Useful when capturing the OpenAPI spec or
@@ -117,6 +121,8 @@ async function buildServerParts(
     apiKey,
     docs: options.docs,
     corsOrigins: serveConfig.cors.origins,
+    allowedHosts: serveConfig.allowedHosts,
+    publicBaseUrl: serveConfig.publicBaseUrl,
     extensions
   })
 

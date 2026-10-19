@@ -38,6 +38,10 @@ class FileCursor {
     return this.chunk.subarray(start, start + length)
   }
 
+  async u8() {
+    return (await this.bytes(1))[0]
+  }
+
   async u32() {
     return (await this.bytes(4)).readUInt32LE(0)
   }

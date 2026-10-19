@@ -8,6 +8,7 @@
 #include <optional>
 #include <ranges>
 #include <sstream>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -189,6 +190,36 @@ parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
   return splitMode;
 }
 
+// Fabric stores poll levels in uint32_t without a range check, so "-1" wraps
+// to UINT32_MAX and workers effectively never sleep. Checked on the raw string
+// because a large enough value can also wrap back into 0-100.
+void requirePollLevelsInRange(
+    const std::unordered_map<std::string, std::string>& configFilemap) {
+  for (const std::string_view key : {"poll", "poll-batch", "poll_batch"}) {
+    const auto it = configFilemap.find(std::string(key));
+    if (it == configFilemap.end()) {
+      continue;
+    }
+    const std::string& value = it->second;
+    const bool inRange = !value.empty() && value.size() <= 3 &&
+                         std::ranges::all_of(
+                             value,
+                             [](unsigned char character) {
+                               return std::isdigit(character) != 0;
+                             }) &&
+                         std::stoi(value) <= 100;
+    if (!inRange) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: '%s' must be an integer from 0 to 100, got '%s'.\n",
+              __func__,
+              it->first.c_str(),
+              value.c_str()));
+    }
+  }
+}
+
 } // namespace
 
 LlamaModelSetup setupParams(
@@ -197,6 +228,22 @@ LlamaModelSetup setupParams(
   LlamaModelSetup result{};
   common_params& params = result.params;
   result.ctxSizeConfigured = hasContextSizeConfig(configFilemap);
+
+  // Fabric's native GGML workers busy-wait at the upstream polling default,
+  // including while GPU-offloaded inference is running. Match llm-llamacpp's
+  // sleeping default while preserving explicit main and batch overrides.
+  params.cpuparams.poll = 0;
+  params.cpuparams_batch.poll = 0;
+  requirePollLevelsInRange(configFilemap);
+  std::optional<std::string> explicitBatchPoll;
+  if (const auto iter = configFilemap.find("poll-batch");
+      iter != configFilemap.end()) {
+    explicitBatchPoll = iter->second;
+  } else if (
+      const auto iter = configFilemap.find("poll_batch");
+      iter != configFilemap.end()) {
+    explicitBatchPoll = iter->second;
+  }
 
   // Override default params
   std::vector<std::string> configVector;
@@ -439,6 +486,13 @@ LlamaModelSetup setupParams(
         toString(InvalidConfiguration),
         "Invalid configuration parameters.");
   }
+
+  // common_params_parse makes the batch role inherit the main role when its
+  // thread count is implicit, which can overwrite an explicit batch poll.
+  // Reapply the already-validated value; otherwise keep both pools aligned.
+  params.cpuparams_batch.poll = explicitBatchPoll.has_value()
+                                    ? std::stoul(*explicitBatchPoll)
+                                    : params.cpuparams.poll;
 
   return result;
 }

@@ -105,6 +105,14 @@ object QvacMethods {
         progressResponseType = null,
         progressCondition = null,
     )
+    val decide = QvacMethodDescriptor(
+        name = "decide",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "DecideRequest",
+        responseType = "DecideResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
     val deleteCache = QvacMethodDescriptor(
         name = "deleteCache",
         callShape = QvacCallShape.REQUEST_REPLY,
@@ -398,6 +406,7 @@ object QvacMethods {
         classify,
         completionOrchestrate,
         completionStream,
+        decide,
         deleteCache,
         diffusionStream,
         discoverRpcServers,
