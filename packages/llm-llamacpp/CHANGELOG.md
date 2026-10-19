@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.63.0] - 2026-10-19
 
 ### Added
 
@@ -12,14 +12,15 @@
   `draftTokens` and `draftAcceptedTokens`. `spec-draft-n-max` is lowered at
   load to fit one `ubatch-size` and each sequence's share of `batch-size`.
   Qwen3.6-27B-MTP decodes about 2.4x faster on a single sequence on a Radeon
-  8060S.
+  8060S ([#4849](https://github.com/tetherto/qvac/pull/4849)).
 - DFlash speculative decoding: `spec-type: 'draft-dflash'` with
   `spec-draft-model` (absolute local path, also `spec_draft_model`), as
   llama-server's `--spec-type draft-dflash -md <model>`. The DFlash model is
   loaded next to the model and placed like it (`device`, `gpu-layers`);
   drafting otherwise works as for MTP. The load's fit and `assessFit` pass it
   to fabric as an extra model, but fabric cannot measure a DFlash model yet,
-  so neither counts its memory.
+  so neither counts its memory
+  ([#4849](https://github.com/tetherto/qvac/pull/4849)).
 
 ## [0.62.0] - 2026-10-16
 
