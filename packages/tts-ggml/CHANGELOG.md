@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sentence streaming. `index.js` keeps the public `TTSGgml` class and its
   execution lifecycle; the public API, engine/file precedence, cancellation,
   exclusive execution and reload behaviour are unchanged.
+- `normalizeGgmlFiles` in `lib/modelFiles.js` is table-driven: one row per
+  canonical model-file key lists its aliases in precedence order, so adding an
+  alias is a one-line table change. Alias precedence, the skipping of empty
+  values and the normalized key set are unchanged.
 
 ### Fixed
 

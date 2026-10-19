@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.FILE_ALIAS_TABLE = void 0;
 exports.firstNonEmpty = firstNonEmpty;
 exports.fileExistsSafe = fileExistsSafe;
 exports.readDirSafe = readDirSafe;
@@ -63,43 +64,54 @@ function findQuantRankedGguf(modelDir, pattern) {
     matches.sort((left, right) => ggufQuantRank(left, pattern) - ggufQuantRank(right, pattern));
     return path.join(modelDir, matches[0]);
 }
+/**
+ * Alias table behind `normalizeGgmlFiles`: one row per `NormalizedFiles` key,
+ * the canonical key first and then its aliases in precedence order. The first
+ * non-empty value in a row wins, so the canonical key beats every alias and an
+ * earlier alias beats a later one.
+ */
+exports.FILE_ALIAS_TABLE = [
+    ["modelDir"],
+    ["pocketFlowModel"],
+    ["pocketMimiModel"],
+    ["pocketFrontend"],
+    ["pocketVoice"],
+    ["t3Model", "t3ModelPath", "t3"],
+    ["s3genModel", "s3genModelPath", "s3gen"],
+    ["supertonicModel", "supertonicModelPath", "supertonic"],
+    // CosyVoice3: either a dedicated modelDir of cosyvoice3-*.gguf files, or
+    // explicit per-component paths. Falls back to the shared `modelDir`.
+    ["cosyvoiceModelDir"],
+    ["cosyvoiceLlmModel", "cosyvoiceLlmModelPath"],
+    ["cosyvoiceFlowModel", "cosyvoiceFlowModelPath"],
+    ["cosyvoiceHiftModel", "cosyvoiceHiftModelPath"],
+    ["cosyvoiceS3tokModel", "cosyvoiceS3tokModelPath"],
+    ["cosyvoiceCampplusModel", "cosyvoiceCampplusModelPath"],
+    ["cosyvoiceVocab", "cosyvoiceVocabPath"],
+    ["cosyvoiceMerges", "cosyvoiceMergesPath"],
+    ["cosyvoiceVoiceModel", "cosyvoiceVoiceModelPath"],
+    ["parlerModel", "parlerModelPath", "parler"],
+    ["audio8Lm", "audio8LmPath"],
+    ["audio8CodecDecoder", "audio8CodecDecoderPath"],
+    ["audio8CodecEncoder", "audio8CodecEncoderPath"],
+    ["mossBackbone", "mossBackbonePath"],
+    ["mossCodecDecoder", "mossCodecDecoderPath"],
+    ["mossCodecEncoder", "mossCodecEncoderPath"],
+    ["mossSoundEffect", "mossSoundEffectPath"],
+    ["mossSpeechModel", "mossSpeechModelPath"],
+    ["mossSpeechCodec", "mossSpeechCodecPath"],
+    ["voicesDir"],
+    ["lavasrEnhancer"],
+    ["lavasrDenoiser"],
+    ["mecabDictDir", "mecabDictPath"],
+    ["cangjieTsvPath", "cangjieTsv"],
+];
 function normalizeGgmlFiles(files) {
     if (files == null || typeof files !== "object")
         return {};
-    return {
-        modelDir: firstNonEmpty(files.modelDir),
-        pocketFlowModel: firstNonEmpty(files.pocketFlowModel),
-        pocketMimiModel: firstNonEmpty(files.pocketMimiModel),
-        pocketFrontend: firstNonEmpty(files.pocketFrontend),
-        pocketVoice: firstNonEmpty(files.pocketVoice),
-        t3Model: firstNonEmpty(files.t3Model, files.t3ModelPath, files.t3),
-        s3genModel: firstNonEmpty(files.s3genModel, files.s3genModelPath, files.s3gen),
-        supertonicModel: firstNonEmpty(files.supertonicModel, files.supertonicModelPath, files.supertonic),
-        // CosyVoice3: either a dedicated modelDir of cosyvoice3-*.gguf files, or
-        // explicit per-component paths. Falls back to the shared `modelDir`.
-        cosyvoiceModelDir: firstNonEmpty(files.cosyvoiceModelDir),
-        cosyvoiceLlmModel: firstNonEmpty(files.cosyvoiceLlmModel, files.cosyvoiceLlmModelPath),
-        cosyvoiceFlowModel: firstNonEmpty(files.cosyvoiceFlowModel, files.cosyvoiceFlowModelPath),
-        cosyvoiceHiftModel: firstNonEmpty(files.cosyvoiceHiftModel, files.cosyvoiceHiftModelPath),
-        cosyvoiceS3tokModel: firstNonEmpty(files.cosyvoiceS3tokModel, files.cosyvoiceS3tokModelPath),
-        cosyvoiceCampplusModel: firstNonEmpty(files.cosyvoiceCampplusModel, files.cosyvoiceCampplusModelPath),
-        cosyvoiceVocab: firstNonEmpty(files.cosyvoiceVocab, files.cosyvoiceVocabPath),
-        cosyvoiceMerges: firstNonEmpty(files.cosyvoiceMerges, files.cosyvoiceMergesPath),
-        cosyvoiceVoiceModel: firstNonEmpty(files.cosyvoiceVoiceModel, files.cosyvoiceVoiceModelPath),
-        parlerModel: firstNonEmpty(files.parlerModel, files.parlerModelPath, files.parler),
-        audio8Lm: firstNonEmpty(files.audio8Lm, files.audio8LmPath),
-        audio8CodecDecoder: firstNonEmpty(files.audio8CodecDecoder, files.audio8CodecDecoderPath),
-        audio8CodecEncoder: firstNonEmpty(files.audio8CodecEncoder, files.audio8CodecEncoderPath),
-        mossBackbone: firstNonEmpty(files.mossBackbone, files.mossBackbonePath),
-        mossCodecDecoder: firstNonEmpty(files.mossCodecDecoder, files.mossCodecDecoderPath),
-        mossCodecEncoder: firstNonEmpty(files.mossCodecEncoder, files.mossCodecEncoderPath),
-        mossSoundEffect: firstNonEmpty(files.mossSoundEffect, files.mossSoundEffectPath),
-        mossSpeechModel: firstNonEmpty(files.mossSpeechModel, files.mossSpeechModelPath),
-        mossSpeechCodec: firstNonEmpty(files.mossSpeechCodec, files.mossSpeechCodecPath),
-        voicesDir: firstNonEmpty(files.voicesDir),
-        lavasrEnhancer: firstNonEmpty(files.lavasrEnhancer),
-        lavasrDenoiser: firstNonEmpty(files.lavasrDenoiser),
-        mecabDictDir: firstNonEmpty(files.mecabDictDir, files.mecabDictPath),
-        cangjieTsvPath: firstNonEmpty(files.cangjieTsvPath, files.cangjieTsv),
-    };
+    const normalized = {};
+    for (const row of exports.FILE_ALIAS_TABLE) {
+        normalized[row[0]] = firstNonEmpty(...row.map((key) => files[key]));
+    }
+    return normalized;
 }
