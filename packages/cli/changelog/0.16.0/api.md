@@ -217,8 +217,23 @@ curl "http://127.0.0.1:53127/qvac/identity?nonce=$NONCE"
 
 PR: [#4923](https://github.com/tetherto/qvac/pull/4923)
 
-```json
-{ "model": "qwen3.5-9b", "messages": [...], "tools": [...], "parallel_tool_calls": false }
+```bash
+curl -sS http://127.0.0.1:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "<alias>",
+    "messages": [{"role": "user", "content": "Weather in Paris and London?"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}
+      }
+    }],
+    "parallel_tool_calls": false
+  }'
 ```
+
+`POST /v1/responses` accepts the same field on a request that includes `tools`.
 
 ---

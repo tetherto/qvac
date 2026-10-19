@@ -712,6 +712,8 @@ The following Responses-API features are intentionally rejected with `400`: `con
 
 `tool_choice` is supported in the same shapes as chat completions, except that the object form is the Responses API's flattened `{ "type": "function", "name": "get_weather" }`.
 
+`parallel_tool_calls` (default `true`) lets one response carry several function-tool calls; set it to `false` to get at most one.
+
 #### `GET /v1/responses/:id`
 
 Retrieve a previously stored response by id.

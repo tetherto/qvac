@@ -292,10 +292,23 @@ curl "http://127.0.0.1:53127/qvac/identity?nonce=$NONCE"
 
 ### Forward `parallel_tool_calls`
 
-Chat completions and responses requests with `tools` pass `parallel_tool_calls` to the SDK, defaulting to `true`. Requests without tools are unchanged.
+`POST /v1/chat/completions` and `POST /v1/responses` requests with `tools` pass `parallel_tool_calls` to the SDK, defaulting to `true`. Requests without tools are unchanged. The SDK's own default is one call per response, so an OpenAI client that never sets the field used to get at most one.
 
-```json
-{ "model": "qwen3.5-9b", "messages": [...], "tools": [...], "parallel_tool_calls": false }
+```bash
+curl -sS http://127.0.0.1:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "<alias>",
+    "messages": [{"role": "user", "content": "Weather in Paris and London?"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}
+      }
+    }],
+    "parallel_tool_calls": false
+  }'
 ```
 
 ## Bug Fixes
