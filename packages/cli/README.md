@@ -421,6 +421,8 @@ See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request
 | `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                          |
 | `--cors`                         | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin.                                          |
 | `--cors-origin <origin>`         | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                                                           |
+| `--allowed-host <host>`          | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` covers subdomains (repeatable).    |
+| `--allow-any-host`               | Accept any `Host` header, turning off DNS-rebinding protection.                                                                     |
 | `--public-base-url <url>`        | Externally reachable origin required for image `response_format=url`.                                                               |
 | `--docs`                         | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                                                                |
 | `--no-lazy-load`                 | Disable lazy loading; a request for an unloaded model returns `503 model_not_loaded`.                                               |
@@ -440,6 +442,8 @@ qvac serve --openai --cors --cors-origin https://app.example.com
 Independently, `--docs` enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. `/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. Do not expose docs on a non-loopback bind unless public introspection is acceptable.
 
 A non-loopback `--host` refuses to start without `--api-key` or `--api-key-file`. `--allow-unauthenticated` downgrades that refusal to a warning.
+
+Every request, `/openapi.json` included, must carry a `Host` header naming a loopback host, an IP address, the bind host, the `--public-base-url` host or an `--allowed-host` entry; anything else gets `403 host_not_allowed`. This stops a web page that rebinds its own domain to `127.0.0.1` from calling the server. Behind a reverse proxy or under a LAN hostname, list that name with `--allowed-host` or `serve.allowedHosts` (a leading dot covers the domain and its subdomains); `--allow-any-host` or `"allowedHosts": true` turns the check off.
 
 `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file` reads it from an owner-only file instead; the CLI refuses a path that is not a regular file and warns when the file is readable beyond its owner.
 
