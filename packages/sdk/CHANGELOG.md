@@ -109,7 +109,7 @@ await loadModel({ modelSrc: PARAKEET_TDT_0_6B_V3_F16 })
 
 ### Split addons resolve `#host-addon` from the consumer manifest
 
-bare-link resolves `DT_NEEDED` replacements only from a package's own dependencies, so fabric platform packages must be declared on the consumer. `require('@qvac/fabric/backends')` is removed. A source-built fabric no longer serves its own `prebuilds/<host>`; run `npm run link:platform` to expose the build as `node_modules/@qvac/fabric-<suffix>`. `bundle` and `verify` accept both the previous and the current split-addon layouts.
+bare-link resolves `DT_NEEDED` replacements only from a package's own dependencies, so fabric platform packages must be declared on the native addon consumer (`llm-llamacpp`, `embed-llamacpp`, and the other engine addons), not on application manifests. `require('@qvac/fabric/backends')` is removed. A source-built fabric no longer serves its own `prebuilds/<host>`; run `npm run link:platform` to expose the build as `node_modules/@qvac/fabric-<suffix>`. `bundle` and `verify` accept both the previous and the current split-addon layouts.
 
 Native consumers stop passing `SUBDIR` into `qvac_addon_finalize` and load backends through fabric:
 
@@ -199,7 +199,7 @@ LoadModelSrcRequestGgmlVlaModelConfig(backend = "cpu")
 
 ### Fabric 0.22 addon set
 
-This cut ships the fabric 0.22 addon set. `@qvac/ggml-rpc-server` moves from `0.2.0` to `0.5.1`, and platform packages such as `@qvac/fabric-android-arm64` move to `0.22.0`.
+This cut ships the fabric 0.22 addon set. `@qvac/ggml-rpc-server` moves from `^0.1.2` (0.21.1) to `^0.5.1`.
 
 ## New APIs
 
@@ -504,7 +504,7 @@ The engine fitter now sees the same resolved load `loadModel` would run, includi
 
 `safe-fetch` calls the http and https request paths separately, so mixed-scheme downloads no longer share one handler.
 
-Concurrent `assessModelFit` / `loadModel` probes await the engine fitter and share in-flight fit markers, so two loads of the same candidate do not start two probes.
+Concurrent `assessModelFit` / `loadModel` probes await the engine fitter and share in-flight fit markers. Both probes still run; a `.running` marker this process holds is not treated as a crash.
 
 Python and Kotlin JVM workers authenticate on loopback TCP IPC. A worker whose `@qvac/sdk` `package.json` does not declare `"qvacIpcAuthentication": "token-v1"` is refused.
 
