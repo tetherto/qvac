@@ -90,3 +90,5 @@ minimumReleaseAgeExclude:
   - '@qvac/fabric@0.21.1 || 0.22.0'
   - '@qvac/ggml-rpc-server@0.5.0'
   - '@qvac/infer-base@0.8.0'
+  - '@qvac/inference@0.22.0'
+  - '@qvac/sdk@0.22.0'
