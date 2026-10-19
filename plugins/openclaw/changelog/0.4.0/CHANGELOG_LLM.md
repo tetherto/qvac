@@ -66,4 +66,4 @@ Installs now resolve:
 - `@qvac/ai-sdk-provider@^0.10.0` for the shared model catalog
 - `@qvac/cli@^0.16.0` for `qvac serve --openai --no-default` with `--port 0 --ready-fd 3`
 
-The `openclaw` host peer is unchanged at `>=2026.6.0`. The published plugin manifest version is now 0.4.0, matching the package; it had stayed at 0.2.1 through the 0.3 line.
+The `openclaw` host peer is unchanged at `>=2026.6.0`. The published plugin manifest version is now 0.4.0, matching the package.
