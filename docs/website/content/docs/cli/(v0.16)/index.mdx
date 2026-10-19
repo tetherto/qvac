@@ -132,11 +132,15 @@ Start the HTTP server. `qvac serve openai` is a deprecated alias for
 | `--allow-unauthenticated` | Permit binding to a non-loopback host without a key |
 | `--cors` | Compatibility validation switch; fails unless `--cors-origin` or `serve.cors.origins` supplies an explicit origin |
 | `--cors-origin <origin>` | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed) |
+| `--allowed-host <host>` | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` also covers subdomains (repeatable) |
+| `--allow-any-host` | Accept any `Host` header, turning off DNS-rebinding protection |
 | `--public-base-url <url>` | Externally reachable origin (required for image `response_format=url`) |
 | `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds same-port loopback origins to CORS, so it requires a fixed `--port`. |
 | `-v, --verbose` | Detailed output |
 
 A non-loopback `--host` requires `--api-key` or `--api-key-file`; the server refuses to start otherwise. Use `--allow-unauthenticated` to override that and start with a warning instead.
+
+Every request, including `/openapi.json`, must carry a `Host` header naming a loopback host, an IP address, the bind host, the `--public-base-url` host or an `--allowed-host` entry; anything else gets `403 host_not_allowed`. This stops a web page that rebinds its own domain to `127.0.0.1` from calling the server. Behind a reverse proxy or under a LAN hostname, list that name with `--allowed-host` or `serve.allowedHosts`.
 
 `--cors` does not enable CORS by itself. It only validates that at least one explicit origin was supplied by CLI or config; `--cors --docs` also fails without one because the docs defaults are not explicit origins. Independently, `--docs` trusts same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. Since those origins come from the configured port, `--docs --port 0` is rejected at startup instead of producing unusable `http://localhost:0` origins.
 
