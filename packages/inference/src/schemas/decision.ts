@@ -180,7 +180,7 @@ export const decisionConfigBaseSchema = z
       .describe(
         'CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.'
       ),
-    'poll-batch': z
+    pollBatch: z
       .number()
       .int()
       .min(0)

@@ -10,28 +10,25 @@ import { transformDecisionConfig } from '@/plugins/builtin/llamacpp-decision/hel
 const cases = [
   {
     modelType: ModelType.llamacppCompletion,
-    batchKey: 'poll-batch',
     transform: (config: Record<string, unknown>) =>
       transformLlmConfig(llmConfigSchema.parse(config))
   },
   {
     modelType: ModelType.llamacppEmbedding,
-    batchKey: 'pollBatch',
     transform: (config: Record<string, unknown>) =>
       transformEmbedConfig(embedConfigSchema.parse(config))
   },
   {
     modelType: ModelType.llamacppDecision,
-    batchKey: 'poll-batch',
     transform: (config: Record<string, unknown>) =>
       transformDecisionConfig(decisionConfigSchema.parse(config))
   }
 ]
 
-for (const { modelType, batchKey, transform } of cases) {
+for (const { modelType, transform } of cases) {
   test(`${modelType}: polling validates through public load and wire schemas`, (t) => {
     const base = { modelType, modelSrc: 'model.gguf' }
-    for (const key of ['poll', batchKey]) {
+    for (const key of ['poll', 'pollBatch']) {
       for (const value of [0, 1, 50, 100]) {
         const modelConfig = { [key]: value }
         const options = loadModelOptionsToRequestSchema.parse({ ...base, modelConfig })
@@ -57,11 +54,15 @@ for (const { modelType, batchKey, transform } of cases) {
     const inherited = transform({ poll: 50 })
     t.is(inherited.poll, '50')
     t.absent('poll-batch' in inherited)
-    const explicit = transform({ poll: 100, [batchKey]: 0 })
+    const explicit = transform({ poll: 100, pollBatch: 0 })
     t.is(explicit.poll, '100')
     t.is(explicit['poll-batch'], '0')
-    const batchOnly = transform({ [batchKey]: 100 })
+    t.absent('pollBatch' in explicit)
+    t.absent('poll_batch' in explicit)
+    const batchOnly = transform({ pollBatch: 100 })
     t.absent('poll' in batchOnly)
     t.is(batchOnly['poll-batch'], '100')
+    t.absent('pollBatch' in batchOnly)
+    t.absent('poll_batch' in batchOnly)
   })
 }

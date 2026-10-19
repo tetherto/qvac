@@ -10952,7 +10952,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     poll_batch: Annotated[
         int | None,
         Field(
-            alias="poll-batch",
+            alias="pollBatch",
             description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
             ge=0,
             le=100,
@@ -12752,7 +12752,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     poll_batch: Annotated[
         int | None,
         Field(
-            alias="poll-batch",
+            alias="pollBatch",
             description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
             ge=0,
             le=100,

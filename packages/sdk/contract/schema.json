@@ -12465,7 +12465,7 @@
                       "minimum": 0,
                       "maximum": 100
                     },
-                    "poll-batch": {
+                    "pollBatch": {
                       "description": "CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
                       "type": "integer",
                       "minimum": 0,
@@ -13883,7 +13883,7 @@
                       "minimum": 0,
                       "maximum": 100
                     },
-                    "poll-batch": {
+                    "pollBatch": {
                       "description": "CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
                       "type": "integer",
                       "minimum": 0,
