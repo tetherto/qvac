@@ -421,8 +421,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path .\test\model | Out-Null
           Copy-Item $model.FullName .\test\model\stable-diffusion-v2-1-Q8_0.gguf -Force
 
-      # embed-llamacpp unit-test GGUF (options.ci.needsEmbedModel). Found by path
-      # convention (models/unit-test/test-model.gguf), no env var.
+      # embed-llamacpp unit-test GGUFs (options.ci.needsEmbedModel). Found by path
+      # convention (models/unit-test/test-model.gguf, an embedding model, and
+      # models/unit-test/rerank-test.gguf, a reranker), no env var.
       - name: Download embed unit-test model
         if: matrix.needsEmbedModel
         working-directory: ${{ matrix.workdir }}
@@ -433,6 +434,9 @@ jobs:
           curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
             -o models/unit-test/test-model.gguf \
             "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf"
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
+            -o models/unit-test/rerank-test.gguf \
+            "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf"
 
       # --- asr-ggml: HuggingFace whisper models (curl, no cache) ---
       - name: Download whisper test models
