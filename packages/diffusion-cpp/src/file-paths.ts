@@ -16,6 +16,7 @@ const COMPANION_FILE_KEYS = [
   'clipG',
   't5Xxl',
   'llm',
+  'llmVision',
   'vae',
   'esrgan',
   'highNoiseDiffusionModel',
@@ -57,6 +58,7 @@ export interface DiffusionFilePaths {
   clipGPath: string
   t5XxlPath: string
   llmPath: string
+  llmVisionPath: string
   vaePath: string
   clipVisionPath: string
   esrganPath: string
@@ -85,6 +87,7 @@ export function toFilePaths(files: DiffusionFiles & DiffusionVideoFiles): Diffus
     clipGPath: files.clipG || '',
     t5XxlPath: files.t5Xxl || '',
     llmPath: files.llm || '',
+    llmVisionPath: files.llmVision || '',
     vaePath: files.vae || '',
     clipVisionPath: files.clipVision || '',
     esrganPath: files.esrgan || '',
