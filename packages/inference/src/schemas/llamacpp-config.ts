@@ -230,6 +230,24 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Largest image a vision model accepts, in millions of pixels (width × height). Checked against the image header before decoding; larger images are rejected. Vision models only. Default 50.'
     ),
+  poll: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe(
+      'CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.'
+    ),
+  pollBatch: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe(
+      'CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.'
+    ),
   threads: z
     .number()
     .int()
@@ -242,19 +260,19 @@ export const llmConfigBaseSchema = z.object({
     .int()
     .optional()
     .describe(
-      'CPU threads to use during batch and prompt processing. Setting it governs generation too and discards `threads` and `cpu-mask`; leave it unset for `threads` to apply to both.'
+      'CPU threads to use during batch and prompt processing. Applies to steps processing several tokens, including parallel decoding and speculative verification. Single-sequence generation uses `threads`.'
     ),
   'cpu-mask': z
     .string()
     .optional()
     .describe(
-      "CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Unset applies no affinity. Ignored when `threads-batch` is set."
+      "CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Applies to generation. Unset applies no affinity."
     ),
   'cpu-mask-batch': z
     .string()
     .optional()
     .describe(
-      'CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Honoured only alongside `threads-batch`; without it `cpu-mask` takes over.'
+      'CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Unset inherits `cpu-mask` when the batch thread count is also unset.'
     ),
   'override-tensor': z
     .string()
@@ -369,6 +387,24 @@ export type LlmConfig = z.infer<typeof llmConfigSchema>
 
 // Base schema - validates types, all fields optional (for input validation)
 export const embedConfigBaseSchema = z.object({
+  poll: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe(
+      'CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.'
+    ),
+  pollBatch: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe(
+      'CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.'
+    ),
   backend: z
     .array(z.enum(['cuda', 'vulkan', 'metal', 'opencl', 'auto']))
     .min(1)

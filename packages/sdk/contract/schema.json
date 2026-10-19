@@ -12459,6 +12459,18 @@
                       "minimum": 1,
                       "maximum": 18446744073709
                     },
+                    "poll": {
+                      "description": "CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "pollBatch": {
+                      "description": "CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
                     "threads": {
                       "description": "CPU threads to use during generation. Unset uses one thread per physical core; a value of 0 or below uses every logical CPU, which is a different and usually larger count.",
                       "type": "integer",
@@ -12466,17 +12478,17 @@
                       "maximum": 9007199254740991
                     },
                     "threads-batch": {
-                      "description": "CPU threads to use during batch and prompt processing. Setting it governs generation too and discards `threads` and `cpu-mask`; leave it unset for `threads` to apply to both.",
+                      "description": "CPU threads to use during batch and prompt processing. Applies to steps processing several tokens, including parallel decoding and speculative verification. Single-sequence generation uses `threads`.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "cpu-mask": {
-                      "description": "CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Unset applies no affinity. Ignored when `threads-batch` is set.",
+                      "description": "CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Applies to generation. Unset applies no affinity.",
                       "type": "string"
                     },
                     "cpu-mask-batch": {
-                      "description": "CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Honoured only alongside `threads-batch`; without it `cpu-mask` takes over.",
+                      "description": "CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Unset inherits `cpu-mask` when the batch thread count is also unset.",
                       "type": "string"
                     },
                     "override-tensor": {
@@ -13690,6 +13702,18 @@
                 "modelConfig": {
                   "type": "object",
                   "properties": {
+                    "poll": {
+                      "description": "CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "pollBatch": {
+                      "description": "CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
                     "backend": {
                       "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
                       "minItems": 1,
@@ -13852,6 +13876,18 @@
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "poll": {
+                      "description": "CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "pollBatch": {
+                      "description": "CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
                     },
                     "threads": {
                       "description": "CPU threads, at most the CPU count. Zero or below uses all logical CPUs.",
