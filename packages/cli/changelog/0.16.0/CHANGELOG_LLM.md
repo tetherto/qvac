@@ -2,7 +2,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.16.0
 
-QVAC CLI 0.16.0 depends on `@qvac/sdk@0.22.0`. `qvac serve` can prove it holds the API key before a client sends it, mount System One decisions at `/v1/systemone`, keep nested JSON Schema on tools, and replay past tool calls as structured history. Loads pick a per-alias `modelFitPolicy` and an ordered GPU backend list. Bundling needs Node `^22.21.0 || >=24.9.0`.
+QVAC CLI 0.16.0 depends on `@qvac/sdk@0.22.0`. `qvac serve` can prove it holds the API key before a client sends it, mount System One decisions at `/v1/systemone`, keep nested JSON Schema on tools, replay past tool calls as structured history, and default `parallel_tool_calls` to true on tool requests. Loads pick a per-alias `modelFitPolicy` and an ordered GPU backend list. Bundling needs Node `^22.21.0 || >=24.9.0`.
 
 Install `@qvac/cli@0.16.0` with `@qvac/sdk@^0.22.0`. The committed range is `^0.22.0`.
 
@@ -286,6 +286,14 @@ qvac serve --openai --api-key-file key --port 0 --ready-fd 3
 
 curl "http://127.0.0.1:53127/qvac/identity?nonce=$NONCE"
 # {"proof":"<base64url HMAC-SHA256(key, \"qvac-serve-identity-v1\\n53127\\n$NONCE\")>"}
+```
+
+### Forward `parallel_tool_calls`
+
+Chat completions and responses requests with `tools` pass `parallel_tool_calls` to the SDK, defaulting to `true`. Requests without tools are unchanged.
+
+```json
+{ "model": "qwen3.5-9b", "messages": [...], "tools": [...], "parallel_tool_calls": false }
 ```
 
 ## Bug Fixes

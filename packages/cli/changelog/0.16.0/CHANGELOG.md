@@ -16,6 +16,7 @@ Release Date: 2026-10-16
 - Expose TTS 0.11 MOSS engines and examples. (see PR [#4982](https://github.com/tetherto/qvac/pull/4982)) - See [API changes](./api.md)
 - Expose GPU backend selection for LLM, embeddings, and VLA. (see PR [#5005](https://github.com/tetherto/qvac/pull/5005)) - See [breaking changes](./breaking.md), [API changes](./api.md)
 - Let serve clients verify the listener before sending the key. (see PR [#5022](https://github.com/tetherto/qvac/pull/5022)) - See [API changes](./api.md)
+- Forward parallel_tool_calls from qvac serve. (see PR [#4923](https://github.com/tetherto/qvac/pull/4923)) - See [API changes](./api.md)
 
 ## 🐞 Fixes
 

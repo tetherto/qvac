@@ -212,3 +212,13 @@ curl "http://127.0.0.1:53127/qvac/identity?nonce=$NONCE"
 ```
 
 ---
+
+## Forward parallel_tool_calls from qvac serve
+
+PR: [#4923](https://github.com/tetherto/qvac/pull/4923)
+
+```json
+{ "model": "qwen3.5-9b", "messages": [...], "tools": [...], "parallel_tool_calls": false }
+```
+
+---
