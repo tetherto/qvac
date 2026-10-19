@@ -10941,6 +10941,23 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             le=18446744073709,
         ),
     ] = None
+    poll: Annotated[
+        int | None,
+        Field(
+            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    poll_batch: Annotated[
+        int | None,
+        Field(
+            alias="pollBatch",
+            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
     threads: Annotated[
         int | None,
         Field(
@@ -10953,7 +10970,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="threads-batch",
-            description="CPU threads to use during batch and prompt processing. Setting it governs generation too and discards `threads` and `cpu-mask`; leave it unset for `threads` to apply to both.",
+            description="CPU threads to use during batch and prompt processing. Applies to steps processing several tokens, including parallel decoding and speculative verification. Single-sequence generation uses `threads`.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
@@ -10962,14 +10979,14 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="cpu-mask",
-            description="CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Unset applies no affinity. Ignored when `threads-batch` is set.",
+            description="CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Applies to generation. Unset applies no affinity.",
         ),
     ] = None
     cpu_mask_batch: Annotated[
         str | None,
         Field(
             alias="cpu-mask-batch",
-            description="CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Honoured only alongside `threads-batch`; without it `cpu-mask` takes over.",
+            description="CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Unset inherits `cpu-mask` when the batch thread count is also unset.",
         ),
     ] = None
     override_tensor: Annotated[
@@ -12483,6 +12500,23 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
+    poll: Annotated[
+        int | None,
+        Field(
+            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    poll_batch: Annotated[
+        int | None,
+        Field(
+            alias="pollBatch",
+            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
     backend: Annotated[
         list[LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem] | None,
         Field(
@@ -12705,6 +12739,23 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
             description="Tokens per forward pass. Default 2048; each sequence must fit.",
             gt=0,
             le=9007199254740991,
+        ),
+    ] = None
+    poll: Annotated[
+        int | None,
+        Field(
+            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    poll_batch: Annotated[
+        int | None,
+        Field(
+            alias="pollBatch",
+            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+            ge=0,
+            le=100,
         ),
     ] = None
     threads: Annotated[

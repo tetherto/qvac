@@ -29,6 +29,13 @@
       "sha256": "0ad885ffd4bb022fc4f0d33a3308fa108ef8613159d3b3a67e23abca056b7a6c",
       "bytes": 811843840
     },
+    "Qwen3.5-0.8B-MTP-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/8fea620810c4afa23dd6443f999a48574c1611a3/Qwen3.5-0.8B-Q8_0.gguf"
+      ],
+      "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
+      "bytes": 833592096
+    },
     "Qwen3.5-0.8B-Q4_0.gguf": {
       "urls": [
         "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_0.gguf"
