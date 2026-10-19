@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.21.0",
+  "version": "0.21.1",
   "qvacIpcAuthentication": "token-v1",
   "license": "Apache-2.0",
   "repository": {
@@ -232,7 +232,7 @@
     "@qvac/embed-llamacpp": "^0.48.1",
     "@qvac/error": "^0.1.1",
     "@qvac/ggml-rpc-server": "^0.5.1",
-    "@qvac/inference": "^0.21.0",
+    "@qvac/inference": "^0.21.1",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.61.1",
     "@qvac/logging": "^0.1.0",
