@@ -15,15 +15,11 @@ Build from this package directory using the normal CUDA commands:
 npm run build:cuda
 ```
 
-No package-local port overlay or uncommitted native patch is needed. While
-[registry PR #432](https://github.com/tetherto/qvac-registry-vcpkg/pull/432) is
-pending, the registry entry for `stable-diffusion-cpp` uses
-`feature-stable-diffusion-qwen-image-21` at baseline
-`534efa7ced8c5104af11f9f00f0b4f78949a0a4a`. Other dependencies keep their existing
-registries and baselines. Merge the registry PR first, then change this entry's
-reference to `main` and baseline to the registry merge commit before merging
-the addon PR. The old overlay's local revision #8 was never a published registry
-version; registry revision #7 is the next revision after the published #6.
+No package-local port overlay or uncommitted native patch is needed.
+[Registry PR #432](https://github.com/tetherto/qvac-registry-vcpkg/pull/432)
+is merged. The manifest requires `stable-diffusion-cpp >= 2026-08-11#7`, resolved
+from the existing default QVAC registry on `main`. No separate registry entry
+is needed, and the existing registry baselines are retained.
 Existing binaries built with native port #6 do not provide the new context
 capability APIs; rebuild the addon with the updated registry configuration.
 
