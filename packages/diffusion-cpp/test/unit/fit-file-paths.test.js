@@ -26,3 +26,25 @@ test('an absent companion file is an empty path', (t) => {
   t.is(paths.embeddingsConnectorsPath, '')
   t.is(paths.clipVisionPath, '')
 })
+
+test('Qwen vision projector is distinct from CLIP vision for load and fit', async (t) => {
+  const files = {
+    model: '/models/qwen-image-21.gguf',
+    llm: '/models/qwen3vl.gguf',
+    llmVision: '/models/mmproj.gguf',
+    clipVision: '/models/clip-vision.gguf',
+    vae: '/models/qwen-image-21-vae.safetensors'
+  }
+  const paths = toFilePaths(files)
+  t.is(paths.path, '')
+  t.is(paths.diffusionModelPath, files.model)
+  t.is(paths.llmVisionPath, files.llmVision)
+  t.is(paths.clipVisionPath, files.clipVision)
+  t.is(toFilePaths({ model: '/models/sd.gguf' }).llmVisionPath, '')
+  const { assertFilePaths } = require('../../file-paths.js')
+  await t.exception.all(
+    () => assertFilePaths({ ...files, llmVision: 'relative.gguf' }),
+    /files.llmVision/
+  )
+  await t.exception.all(() => assertFilePaths({ ...files, llmVision: '' }), /files.llmVision/)
+})
