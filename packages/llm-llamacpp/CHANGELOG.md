@@ -16,8 +16,10 @@
 - DFlash speculative decoding: `spec-type: 'draft-dflash'` with
   `spec-draft-model` (absolute local path, also `spec_draft_model`), as
   llama-server's `--spec-type draft-dflash -md <model>`. The DFlash model is
-  loaded next to the model, placed like it (`device`, `gpu-layers`) and
-  counted by `assessFit`; drafting otherwise works as for MTP.
+  loaded next to the model and placed like it (`device`, `gpu-layers`);
+  drafting otherwise works as for MTP. The load's fit and `assessFit` pass it
+  to fabric as an extra model, but fabric cannot measure a DFlash model yet,
+  so neither counts its memory.
 
 ## [0.62.0] - 2026-10-16
 
