@@ -19,8 +19,7 @@ using qvac_lib_inference_addon_sd::VideoModelCapabilities;
 
 constexpr uint32_t K_GGUF_MAGIC = 0x46554747;
 
-template <typename T>
-void appendLe(std::vector<uint8_t>& out, T value) {
+template <typename T> void appendLe(std::vector<uint8_t>& out, T value) {
   uint8_t bytes[sizeof(T)];
   std::memcpy(bytes, &value, sizeof(T));
   out.insert(out.end(), bytes, bytes + sizeof(T));
@@ -62,8 +61,7 @@ FUZZ_TEST(VideoModelCapabilitiesFuzz, InspectNeverCrashes)
     });
 
 TEST(VideoModelCapabilitiesFuzzSeeds, EmptyBufferKeepsDefaults) {
-  const VideoModelCapabilities caps =
-      inspectVideoModelCapabilities(nullptr, 0);
+  const VideoModelCapabilities caps = inspectVideoModelCapabilities(nullptr, 0);
   EXPECT_EQ(caps.spatialAlignment, 16);
   EXPECT_FALSE(caps.isMiniMaxH3);
 }

@@ -255,8 +255,8 @@ inspectVideoModelCapabilities(const std::string& modelPath) {
   return inspectVideoModelCapabilities(input);
 }
 
-VideoModelCapabilities inspectVideoModelCapabilities(
-    const std::uint8_t* data, std::size_t size) {
+VideoModelCapabilities
+inspectVideoModelCapabilities(const std::uint8_t* data, std::size_t size) {
   if (data == nullptr || size == 0)
     return {};
   const auto* chars = reinterpret_cast<const char*>(data);
