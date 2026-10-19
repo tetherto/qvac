@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The JavaScript wrapper is split into modules under `lib/`: engine ids and
+  discovery, model-file normalization, per-engine configuration (`lib/engines/`),
+  option validation, native parameter building, per-call fields, reload and
+  sentence streaming. `index.js` keeps the public `TTSGgml` class and its
+  execution lifecycle; the public API, engine/file precedence, cancellation,
+  exclusive execution and reload behaviour are unchanged.
+
 ### Fixed
 
 - LavaSR denoising can use the Vulkan GPU on supported Android ARM Mali devices

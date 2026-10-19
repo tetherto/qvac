@@ -16,6 +16,7 @@ import {
   withToolChoice,
   parseToolCallArguments,
   nameToolResults,
+  withParallelToolCalls,
   UnsupportedImageContentError,
   type GenerationParams,
   type ResponseFormat,
@@ -30,6 +31,7 @@ export const chatCompletionsBody = z
     stream: z.boolean().optional(),
     tools: z.array(toolDef).optional(),
     tool_choice: toolChoice.optional(),
+    parallel_tool_calls: z.boolean().optional(),
     response_format: responseFormat.optional(),
     temperature: z.number().optional(),
     top_p: z.number().optional(),
@@ -226,9 +228,13 @@ export function toSdkChatArgs(body: ChatCompletionsBody): SdkChatArgs {
   return {
     history: openaiMessagesToHistory(body.messages as OpenAIMessage[]),
     tools,
-    generationParams: withToolChoice(
-      extractGenerationParams(body as Record<string, unknown>, 'max_completion_tokens'),
-      extractToolChoice(body as Record<string, unknown>, tools)
+    generationParams: withParallelToolCalls(
+      withToolChoice(
+        extractGenerationParams(body as Record<string, unknown>, 'max_completion_tokens'),
+        extractToolChoice(body as Record<string, unknown>, tools)
+      ),
+      body.parallel_tool_calls,
+      tools
     ),
     responseFormat: responseFmt,
     stream: Boolean(body.stream)
