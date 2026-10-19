@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
-import path = require('bare-path')
-/* eslint-enable @typescript-eslint/no-require-imports */
-
 export type AddonConfigValue = string | number | boolean | undefined
 export type AddonConfig = Record<string, AddonConfigValue>
 
@@ -217,10 +213,6 @@ export class SdInterface {
       configurationParams.config = {}
     }
 
-    if (!configurationParams.config.backendsDir) {
-      configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds')
-    }
-
     configurationParams.config = Object.fromEntries(
       Object.entries(configurationParams.config)
         .filter(([, value]) => value !== undefined)
@@ -351,10 +343,6 @@ export class EsrganUpscalerInterface {
       configurationParams.config = {}
     }
 
-    if (!configurationParams.config.backendsDir) {
-      configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds')
-    }
-
     configurationParams.config = Object.fromEntries(
       Object.entries(configurationParams.config)
         .filter(([, value]) => value !== undefined)
@@ -464,10 +452,6 @@ export class WorldSessionInterface {
 
     if (!configurationParams.config) {
       configurationParams.config = {}
-    }
-
-    if (!configurationParams.config.backendsDir) {
-      configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds')
     }
 
     configurationParams.config = Object.fromEntries(

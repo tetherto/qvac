@@ -10,7 +10,7 @@ export function registerConfigureCommand(program: Command): void {
     .option('-y, --yes', 'Non-interactive: write a sensible default starter (chat + transcription)')
     .option(
       '--modality <name>',
-      'Non-interactive: add a modality (repeatable) — chat|embedding|transcription|speech|image',
+      'Non-interactive: add a modality (repeatable) — chat|embedding|transcription|speech|image|decision',
       collect,
       []
     )

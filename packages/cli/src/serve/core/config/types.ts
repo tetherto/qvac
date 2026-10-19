@@ -27,6 +27,8 @@ export interface ServeConfig {
   cors: {
     origins: string[]
   }
+  /** Hostnames accepted in the Host header beyond loopback, IP literals and the bind host; `true` accepts any. */
+  allowedHosts: string[] | true
   /** Parsed `serve.<extension>` blocks, keyed by extension name. */
   extensions: Partial<ServeExtensionConfig>
 }

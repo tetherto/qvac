@@ -1826,6 +1826,22 @@ test('ggml-rpc-server keeps Device Farm runs on demand', () => {
   )
 });
 
+test('ggml-rpc-server validates the same devices it schedules', () => {
+  const path = '.github/workflows/integration-mobile-test-ggml-rpc-server.yml'
+  const source = read(path)
+  // Validation must approve exactly the devices the scheduler bills.
+  const devices =
+    "inputs.devices_custom != '' && inputs.devices_custom || (inputs.platform == 'Android' && inputs.android_device || inputs.ios_device)"
+  const validate = source.match(/^\s+devices: \$\{\{ (.+) \}\}$/m)
+  const schedule = source.match(/^\s+device-models: \$\{\{ (.+) \}\}$/m)
+  assert.equal(validate?.[1], devices, `${path}: validate-devices must resolve devices_custom over the dropdown`)
+  assert.equal(
+    schedule?.[1],
+    `inputs.platform != '' && (${devices}) || ''`,
+    `${path}: the scheduler must bill the same devices validation approved`,
+  )
+});
+
 test('ggml-rpc-server prebuild callers grant reusable workflow permissions', () => {
   for (const [path, jobName] of [
     ['.github/workflows/on-merge-ggml-rpc-server.yml', 'build'],

@@ -1,6 +1,7 @@
 name: CPP Tests (AudioGen GGML)
 
-# Cache the native build; addon-level C++ tests are still a stub.
+# Cache the native build. Addon-level C++ unit tests are still a stub.
+# After those caches are saved, this lane runs the bounded config-parse fuzz target.
 on:
   push:
     branches: [main]
@@ -224,3 +225,16 @@ jobs:
       - name: Show ccache statistics
         if: always() && !cancelled() && steps.cpp-build.outcome == 'success'
         run: ccache -s
+
+      # fuzz:build reconfigures the same tree, so it runs after the native
+      # build's caches are saved. Bounded unit-test mode. A failure fails the
+      # job that publishes qvac/cpp-tests-audiogen-ggml.
+      - name: Build fuzz targets
+        working-directory: ${{ matrix.workdir }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          node --test scripts/__tests__/run-cpp-fuzz.test.js
+          npm run fuzz:run
