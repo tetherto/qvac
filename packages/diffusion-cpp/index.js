@@ -181,8 +181,8 @@ class ImgStableDiffusion {
         const hasInitImages = Array.isArray(params.init_images) && params.init_images.length > 0;
         if (params.init_image != null && hasInitImages) {
             throw new Error('init_image and init_images are mutually exclusive — pick one. ' +
-                'Use init_images (with FLUX.2) for multi-reference "fusion" mode, ' +
-                'or init_image for single-image conditioning (SDEdit / FLUX.2 single-ref).');
+                'Use init_images for multi-reference editing, ' +
+                'or init_image for single-image conditioning.');
         }
         if (params.init_image != null) {
             params.init_image = coerceToUint8('init_image', params.init_image);
@@ -211,12 +211,6 @@ class ImgStableDiffusion {
         const prediction = this._config?.prediction;
         if (hasInitImages && params.init_images) {
             const isFlux2 = !!this._files?.llm && prediction === 'flux2_flow';
-            if (!isFlux2) {
-                throw new Error('init_images (multi-reference fusion) requires a FLUX.2 model. ' +
-                    "Load a FLUX.2 [klein] checkpoint with files.llm set and pass config.prediction: 'flux2_flow'. " +
-                    'Other architectures (SD1.x, SD2.x, SDXL, SD3, single-image FLUX.2) do not support ' +
-                    '@image1/@imageN in-context references.');
-            }
             if (params.increase_ref_index != null && typeof params.increase_ref_index !== 'boolean') {
                 throw new Error('increase_ref_index must be a boolean. Got: ' + typeof params.increase_ref_index);
             }
@@ -224,29 +218,31 @@ class ImgStableDiffusion {
                 typeof params.auto_resize_ref_image !== 'boolean') {
                 throw new Error('auto_resize_ref_image must be a boolean. Got: ' + typeof params.auto_resize_ref_image);
             }
-            const prompt = typeof params.prompt === 'string' ? params.prompt : '';
-            const mentioned = [];
-            const missing = [];
-            for (let i = 1; i <= params.init_images.length; i += 1) {
-                const tag = `@image${i}`;
-                if (prompt.includes(tag))
-                    mentioned.push(tag);
-                else
-                    missing.push(tag);
+            if (isFlux2) {
+                const prompt = typeof params.prompt === 'string' ? params.prompt : '';
+                const mentioned = [];
+                const missing = [];
+                for (let i = 1; i <= params.init_images.length; i += 1) {
+                    const tag = `@image${i}`;
+                    if (prompt.includes(tag))
+                        mentioned.push(tag);
+                    else
+                        missing.push(tag);
+                }
+                if (mentioned.length === 0) {
+                    this.logger.warn('If multiple images have been selected, you need to check the prompt to see ' +
+                        'if "@image1" and "@imageX" is mentioned at all so that the prompt makes sense. ' +
+                        `None of @image1…@image${params.init_images.length} were found in the prompt ` +
+                        '— FLUX2 will run but the references will have no effect.');
+                }
+                else if (missing.length > 0) {
+                    this.logger.warn(`Only ${mentioned.join(', ')} found in the prompt; ` +
+                        `missing ${missing.join(', ')}. Those reference images will be ignored by FLUX2.`);
+                }
+                this.logger.info(`stable-diffusion: entering "fusion" mode — ${params.init_images.length} reference images ` +
+                    '(FLUX2 in-context conditioning via ref_images). ' +
+                    'Generation will attend to every referenced @imageN in the prompt.');
             }
-            if (mentioned.length === 0) {
-                this.logger.warn('If multiple images have been selected, you need to check the prompt to see ' +
-                    'if "@image1" and "@imageX" is mentioned at all so that the prompt makes sense. ' +
-                    `None of @image1…@image${params.init_images.length} were found in the prompt ` +
-                    '— FLUX2 will run but the references will have no effect.');
-            }
-            else if (missing.length > 0) {
-                this.logger.warn(`Only ${mentioned.join(', ')} found in the prompt; ` +
-                    `missing ${missing.join(', ')}. Those reference images will be ignored by FLUX2.`);
-            }
-            this.logger.info(`stable-diffusion: entering "fusion" mode — ${params.init_images.length} reference images ` +
-                '(FLUX2 in-context conditioning via ref_images). ' +
-                'Generation will attend to every referenced @imageN in the prompt.');
         }
         if (params.increase_ref_index != null && !hasInitImages) {
             throw new Error('increase_ref_index is only valid with init_images (multi-reference fusion). ' +
@@ -266,14 +262,6 @@ class ImgStableDiffusion {
         }
         if (params.upscale != null && params.upscale !== false && !this._files.esrgan) {
             throw new Error('ESRGAN upscale requested but files.esrgan was not provided');
-        }
-        if (params.init_image && this._files.llm) {
-            if (prediction !== 'flux2_flow') {
-                throw new Error('FLUX img2img requires an explicit prediction type in config. ' +
-                    "Set prediction: 'flux2_flow' (FLUX.2). " +
-                    'Without this the addon silently falls back to the SD/SDEdit img2img branch ' +
-                    'instead of the FLUX in-context conditioning path.');
-            }
         }
         if (!this.addon) {
             throw new Error('Addon not initialized. Call load() first.');

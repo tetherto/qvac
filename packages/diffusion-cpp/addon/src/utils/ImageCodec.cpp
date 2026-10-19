@@ -382,7 +382,7 @@ std::vector<uint8_t> encodeToJpeg(const sd_image_t& image, int quality) {
 
 sd_image_t decodeImage(
     const std::vector<uint8_t>& imageBytes, uint64_t pixelLimit,
-    DecodeFailure* failure, uint64_t imagePixelLimit) {
+    DecodeFailure* failure, uint64_t imagePixelLimit, DecodeChannels channels) {
   if (failure != nullptr) {
     *failure = DecodeFailure::None;
   }
@@ -415,7 +415,10 @@ sd_image_t decodeImage(
   int decodedWidth = 0;
   int decodedHeight = 0;
   int sourceChannels = 0;
-  constexpr int desiredChannels = 3;
+  const int desiredChannels = static_cast<int>(channels);
+  if (desiredChannels != 3 && desiredChannels != 4) {
+    return reject(DecodeFailure::InvalidData);
+  }
   const int inputSize = static_cast<int>(imageBytes.size());
   if (stbi_info_from_memory(
           imageBytes.data(),

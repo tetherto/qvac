@@ -4448,7 +4448,8 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
   caa552d3369ea37f03fadf7d706cc4ad54660ba7ec7f18ce089c2635ef221ea5: {
     schemaVersion: 1,
     engine: 'tts-ggml',
-    artifactBytes: 794582720
+    artifactBytes: 1057658782,
+    assumptions: ['artifactBytes sums 6 companion-set files']
   },
   cad75f2c3eccb9545b571ca32f235e6ffaae6d8a77bfa808cf8068948c421f10: {
     schemaVersion: 1,
