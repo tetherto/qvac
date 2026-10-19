@@ -222,13 +222,13 @@ Enable debug logging to see detailed internal operations:
 LOG_LEVEL=debug node scripts/bin.js run
 ```
 
-This will output debug-level logs including:
+Routine swarm opens, closes, resets, duplicate connections, and isolated timeouts
+are logged at `debug`. A peer that times out three times in the preceding ten
+minutes produces a warning with the timeout count, at most once per ten minutes
+for that peer. Unexpected connection errors remain warnings.
 
-- Registry initialization steps
-- Corestore operations
-- Hyperswarm connection events
-- HyperDB operations
-- Model upload/download progress
+Logs use human-readable `pino-pretty` output in all environments, including
+production. `LOG_LEVEL` controls verbosity.
 
 Available log levels (in order of verbosity):
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- `binding.js` is now `module.exports = require('#host-addon')`, a specifier
+  the Bare module lexer can follow, so `bare-pack` bundles an app that
+  requires `@qvac/diffusion-cpp`. `#host-addon` maps each host to its platform
+  package alone, with no fallback.
+- The meta package is no longer an addon. Each platform package is an ordinary
+  one: its module is built as `qvac__diffusion-cpp-<suffix>` (every iOS host
+  shares `ios`) and sits at `prebuilds/<host>/qvac__diffusion-cpp-<suffix>.bare`,
+  with its ggml backends in `prebuilds/<host>/qvac__diffusion-cpp-<suffix>/`.
+- The addon finds its ggml backends itself, next to the loaded module. An
+  explicit `backendsDir` is now scanned as given rather than as a prebuilds
+  root under which `<host>/<module>` is appended. The JavaScript wrappers no
+  longer default `backendsDir` to the package `prebuilds/` directory.
+- A source build is loadable once `npm run link:platform` (part of
+  `build:native`, `build:vulkan`, and `build:cuda`) stages it as the host's
+  platform package in `node_modules/`.
+
 ## [0.30.0] - 2026-10-14
 
 ### Breaking
