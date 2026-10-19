@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
 
 type ParakeetDependency =
   | 'parakeet-tdt'
@@ -6,6 +6,60 @@ type ParakeetDependency =
   | 'parakeet-sortformer'
   | 'parakeet-indic-conformer'
   | 'parakeet-unified'
+
+/**
+ * One parakeet transcription. Same shape as the whisper ones; the difference is which model the
+ * test names, which the resource key already says.
+ */
+const parakeetSteps = (dependency: string): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  { asset: { kind: 'audio', file: '$params.audioFileName', form: 'path', as: 'audio' } },
+  {
+    call: {
+      method: 'transcribe',
+      params: { modelId: '$model', audioChunk: '$audio' },
+      as: 'run'
+    }
+  },
+  { project: { from: '$run', path: 'text', as: 'text' } },
+  { assert: { on: '$text', use: 'expectation' } }
+]
+
+/** A parakeet call the test expects to be refused. */
+const parakeetRejects = (dependency: string): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  { asset: { kind: 'audio', file: '$params.audioFileName', form: 'path', as: 'audio' } },
+  {
+    callError: {
+      method: 'transcribe',
+      params: { modelId: '$model', audioChunk: '$audio' },
+      as: 'err'
+    }
+  },
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  { assert: { on: '$message', use: 'expectation' } }
+]
+
+/** A metadata transcription. */
+const parakeetMetadataSteps = (dependency: string): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  { asset: { kind: 'audio', file: '$params.audioFileName', form: 'path', as: 'audio' } },
+  {
+    call: {
+      method: 'transcribe',
+      params: { modelId: '$model', audioChunk: '$audio', metadata: true },
+      as: 'run'
+    }
+  },
+  { project: { from: '$run', path: 'segments', as: 'segments' } },
+  {
+    assert: {
+      on: '$segments',
+      named: 'transcriptSegmentsShape',
+      with: { flags: ['isEndOfTurn', 'startsWord'] }
+    }
+  }
+]
 
 const createParakeetTest = (
   testId: string,
@@ -145,6 +199,19 @@ export const parakeetUnifiedWav = createParakeetTest(
   ['smoke']
 )
 
+// iOS-only: verifies that the registry GGUF and all five Core ML bundle
+// components land together in the device's cache before batch inference.
+export const parakeetUnifiedCoremlIos: TestDefinition = {
+  testId: 'parakeet-unified-coreml-ios',
+  params: { audioFileName: 'transcription-short-wav.wav' },
+  expectation: { validation: 'contains-all', contains: ['test', 'automation'] },
+  metadata: {
+    category: 'parakeet',
+    dependency: 'parakeet-unified',
+    estimatedDurationMs: 300000
+  }
+}
+
 export const parakeetUnifiedMp3 = createParakeetTest(
   'parakeet-unified-mp3',
   'parakeet-unified',
@@ -250,6 +317,7 @@ export const parakeetCtcTests = [
 
 export const parakeetUnifiedTests = [
   parakeetUnifiedWav,
+  parakeetUnifiedCoremlIos,
   parakeetUnifiedMp3,
   parakeetUnifiedSilence,
   parakeetUnifiedCorruptedWav
@@ -270,3 +338,21 @@ export const parakeetTests = [
   ...parakeetIndicConformerTests,
   ...parakeetSortformerTests
 ]
+
+/**
+ * Attach a body to every parakeet definition, branching exactly where the executor branched:
+ * metadata mode returns segments instead of a transcript, and a `throws-error` expectation asserts
+ * on the refusal instead of a result.
+ */
+for (const test of parakeetTests) {
+  if (test.steps) continue
+  const dependency = String(test.metadata?.dependency ?? 'parakeet-tdt')
+  if ((test.params as { metadata?: boolean }).metadata === true) {
+    test.steps = parakeetMetadataSteps(dependency)
+    continue
+  }
+  test.steps =
+    test.expectation.validation === 'throws-error'
+      ? parakeetRejects(dependency)
+      : parakeetSteps(dependency)
+}

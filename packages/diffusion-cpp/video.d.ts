@@ -29,9 +29,7 @@ export interface VideoStableDiffusionArgs {
         stats?: boolean;
     };
 }
-export interface VideoGenerationParams {
-    /** Required. Selects the generation branch. */
-    mode: VideoMode;
+export interface VideoGenerationBaseParams {
     prompt: string;
     negative_prompt?: string;
     /** LTX IC-LoRA adapter path. Unsupported by Wan video models. */
@@ -45,7 +43,7 @@ export interface VideoGenerationParams {
     /**
      * Wan 2.1 dimensions must be multiples of 16. Wan 2.2 TI2V, LTX-2, and
      * MiniMax-H3 use a 32-pixel spatial grid; native validation derives the
-     * actual requirement from the loaded GGUF instead of the filename.
+     * actual requirement from the loaded model metadata instead of the filename.
      */
     width?: number;
     height?: number;
@@ -67,7 +65,6 @@ export interface VideoGenerationParams {
     moe_boundary?: number;
     strength?: number;
     vace_strength?: number;
-    init_image?: Uint8Array;
     control_frames?: Uint8Array[];
     /** LTX IC-LoRA reference images as encoded PNG/JPEG bytes. */
     reference_images?: Uint8Array[];
@@ -85,6 +82,13 @@ export interface VideoGenerationParams {
     cache_preset?: string;
     cache_threshold?: number;
 }
+export type VideoGenerationParams = VideoGenerationBaseParams & ({
+    mode: 'txt2vid';
+    init_image?: never;
+} | {
+    mode: 'img2vid';
+    init_image: Uint8Array;
+});
 export interface VideoRuntimeStats {
     modelLoadMs: number;
     generationMs: number;

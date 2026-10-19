@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -19,9 +20,21 @@ const DEPENDENCY = '@qvac/inference'
 // 128 + signal number.
 const SIGNAL_EXIT_CODES = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }
 
+// `npm run` exports the parent's config as npm_config_* and the child npm
+// would honour it (an `--omit=dev` on the outer run would drop the SDK's
+// devDependencies), so those are stripped. npm is a .cmd shim on Windows,
+// which Node only spawns through a shell.
+function childEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('npm_config_'))
+  )
+}
+
 function run(command, args, cwd, capture = false) {
   return execFileSync(command, args, {
     cwd,
+    env: childEnv(),
+    shell: process.platform === 'win32',
     stdio: capture ? ['inherit', 'pipe', 'inherit'] : 'inherit',
     encoding: 'utf8'
   })
@@ -57,8 +70,8 @@ function packInference() {
   clearConsumerInferencePin()
   fs.rmSync(ARTIFACT_DIR, { recursive: true, force: true })
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true })
-  run('bun', ['install', '--ignore-scripts'], INFERENCE_DIR)
-  run('bun', ['run', 'build'], INFERENCE_DIR)
+  run('npm', ['install', '--ignore-scripts'], INFERENCE_DIR)
+  run('npm', ['run', 'build'], INFERENCE_DIR)
   const output = run(
     'npm',
     ['pack', '--ignore-scripts', '--json', '--pack-destination', ARTIFACT_DIR],
@@ -69,7 +82,11 @@ function packInference() {
   if (typeof filename !== 'string' || filename.length === 0) {
     throw new Error(`npm pack produced no inference tarball: ${output}`)
   }
-  return path.join(ARTIFACT_DIR, filename)
+  const packedPath = path.join(ARTIFACT_DIR, filename)
+  const hash = createHash('sha256').update(fs.readFileSync(packedPath)).digest('hex').slice(0, 12)
+  const fingerprintedPath = path.join(ARTIFACT_DIR, filename.replace(/\.tgz$/, `-${hash}.tgz`))
+  fs.renameSync(packedPath, fingerprintedPath)
+  return fingerprintedPath
 }
 
 const originalManifest = fs.readFileSync(SDK_MANIFEST, 'utf8')
@@ -115,8 +132,8 @@ try {
   console.log(`\n📦 ${DEPENDENCY}: ${previousSpec} -> ${path.relative(E2E_DIR, tarball)}`)
 
   step('Building packages/sdk')
-  run('bun', ['install'], SDK_DIR)
-  run('bun', ['run', 'build'], SDK_DIR)
+  run('npm', ['install', '--ignore-scripts'], SDK_DIR)
+  run('npm', ['run', 'build'], SDK_DIR)
 
   step('Installing and building e2e')
   // npm install alone won't notice the manifest swap above; see reconcile-e2e-inference.mjs.
@@ -133,6 +150,11 @@ try {
     ],
     E2E_DIR
   )
+  // The install above restores @qvac/test-suite from the registry, which is what
+  // the catalog is meant to build against: `package.json` pins the published
+  // range. Working on the framework itself is the exception, and `npm run
+  // sync:test-suite` is how you say so -- deliberately, rather than having every
+  // build silently prefer the source next door.
   run('npm', ['run', 'build'], E2E_DIR)
   run('npm', ['run', 'bundle:sdk'], E2E_DIR)
 

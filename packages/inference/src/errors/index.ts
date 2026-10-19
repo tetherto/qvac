@@ -153,6 +153,18 @@ export class ModelFileNotFoundInDirError extends QvacErrorBase {
   }
 }
 
+export class ModelFitRefusedError extends QvacErrorBase {
+  constructor(modelType: string, reason: string, detail?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        ERROR_CODES.MODEL_FIT_REFUSED,
+        detail === undefined ? [modelType, reason] : [modelType, reason, detail],
+        cause
+      )
+    )
+  }
+}
+
 export class ModelFileLocateFailedError extends QvacErrorBase {
   constructor(modelType: string, modelPath: string, cause?: unknown) {
     super(createErrorOptions(ERROR_CODES.MODEL_FILE_LOCATE_FAILED, [modelType, modelPath], cause))
@@ -497,6 +509,10 @@ export class InferenceCancelledError extends QvacErrorBase {
     super(createErrorOptions(ERROR_CODES.INFERENCE_CANCELLED, [requestId], cause))
     this.requestId = requestId
     this.partial = partial
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { requestId: this.requestId, partial: this.partial }
   }
 }
 
@@ -1042,5 +1058,18 @@ export class ModelRegistryQueryFailedError extends QvacErrorBase {
         cause
       )
     )
+  }
+}
+
+export class RpcServerOperationError extends QvacErrorBase {
+  readonly operation: string
+  readonly details: string
+  constructor(operation: string, details: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.RPC_SERVER_OPERATION_FAILED, [operation, details], cause))
+    this.operation = operation
+    this.details = details
+  }
+  toErrorResponseFields(): Record<string, unknown> {
+    return { operation: this.operation, details: this.details }
   }
 }

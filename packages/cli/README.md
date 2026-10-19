@@ -71,16 +71,18 @@ qvac doctor [options]
 
 **Options:**
 
-| Flag            | Description                                                   |
-| --------------- | ------------------------------------------------------------- |
-| `--deep`        | Start the installed SDK worker and verify its heartbeat.      |
-| `--json`        | Output the report as JSON.                                    |
-| `-q, --quiet`   | Suppress stdout — only set the exit code.                     |
-| `-v, --verbose` | Include bounded worker stdout/stderr when a deep check fails. |
+| Flag            | Description                                                       |
+| --------------- | ----------------------------------------------------------------- |
+| `--deep`        | Start the installed SDK worker and verify its heartbeat.          |
+| `--json`        | Output the report as JSON.                                        |
+| `-q, --quiet`   | Suppress stdout — only set the exit code.                         |
+| `-v, --verbose` | Include bounded worker stdout/stderr when a deep check fails.     |
+| `--offline`     | Skip GitHub and npm registry lookups in the `engines.bare` check. |
 
 **What it checks:**
 
-- **Runtime** — Node.js version (`>= 18`) and supported CLI host
+- **Runtime** — Node.js version (`^22.21.0 || >=24.9.0`; bundling needs Node
+  22.21+ on the 22 line or 24.9+) and supported CLI host
   (desktop platforms only; Android/iOS are SDK deploy targets reported
   separately below).
 - **Hardware** — total RAM, available RAM (via `os.availableMemory()` on
@@ -89,10 +91,17 @@ qvac doctor [options]
 - **Deploy targets (SDK)** — desktop target matrix, Android (`adb`), and
   iOS (`xcodebuild` on macOS). Missing mobile toolchains produce
   warnings, not failures.
-- **Optional tools** — `ffmpeg` (microphone/transcription), Bare runtime,
-  Bun.
+- **Optional tools** — `ffmpeg` (microphone/transcription) and the Bare
+  runtime.
 - **Project** — whether `@qvac/sdk` is resolvable from the current
-  working directory (works for hoisted monorepo installs too).
+  working directory (works for hoisted monorepo installs too), and whether
+  every package's `engines.bare` accepts the Bare version each target runs:
+  the one built into `react-native-bare-kit` for Android/iOS, `bare-runtime`
+  for the desktop host. Reads `qvac/worker.bundle.js` when present (exactly
+  what ships), otherwise `node_modules`. On a mismatch it fails and prints the
+  `react-native-bare-kit` release to upgrade to and, per package, an override
+  that pins a release that runs on the current Bare. See
+  [Bare runtime detection](#verify-bundle) for where versions come from.
 - **SDK runtime (`--deep`)** — starts the installed SDK in an isolated Node.js
   process, performs a worker heartbeat, and closes it. The probe is bounded to
   45 seconds and classifies common Bare, native library, CPU instruction,
@@ -126,7 +135,7 @@ capability (role, addon, quantization) — and on a wide terminal previews, for 
 highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
 its alias, set config parameters (guided by the SDK's config schema — each field shows its
 type and description and is validated on entry, for model types the SDK exposes a schema for;
-currently llama.cpp chat + embedding), and (with `$EDITOR`) tweak the entry and review the
+currently llama.cpp chat + embedding + decision), and (with `$EDITOR`) tweak the entry and review the
 result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C`
 aborts without writing. Existing entries are preserved; re-running is idempotent per model.
 
@@ -134,17 +143,18 @@ aborts without writing. Existing entries are preserved; re-running is idempotent
 qvac configure                 # interactive
 qvac configure --yes           # non-interactive: write a chat + transcription starter
 qvac configure --modality chat --modality image
+qvac configure --modality decision
 ```
 
-| Flag                  | Description                                                                                                 |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                            |
-| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                   |
-| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image`. |
-| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                         |
-| `-q, --quiet`         | Suppress output.                                                                                            |
+| Flag                  | Description                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                                         |
+| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                                |
+| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image` / `decision`. |
+| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                                      |
+| `-q, --quiet`         | Suppress output.                                                                                                         |
 
-Single-artifact modalities (chat, embedding, transcription, image) are runnable as written.
+Single-artifact modalities (chat, embedding, transcription, image, decision) are runnable as written.
 Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder —
 set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for
 non-TTY use `--yes` / `--modality`.
@@ -163,17 +173,21 @@ qvac bundle sdk [options]
 2. Resolves enabled plugins from the `plugins` array (defaults to all built-in plugins if omitted)
 3. Generates worker entry files with **static imports only**
 4. Bundles with `bare-pack --linked`
-5. Generates `addons.manifest.json` from the bundle graph
+5. Before bundling for mobile hosts (`android-arm64`, `ios-*`), adds any platform packages the installed split addons need (for example `@qvac/fabric-android-arm64` or `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version. A split addon's `binding.js` is `require('#host-addon')`, so bare-pack cannot bundle it for a host whose platform package is missing: if the packages cannot be installed, it prints the dependencies to add and the bundle fails with `HOST_PREBUILDS_MISSING`. Skip the install with `--no-install`.
+6. Generates `addons.manifest.json` from the bundle graph
+7. Checks every bundled package's `engines.bare` against the Bare runtime of each host and prints a warning with fixes on a mismatch (see [`verify bundle`](#verify-bundle))
 
 **Options:**
 
-| Flag                  | Description                                             |
-| --------------------- | ------------------------------------------------------- |
-| `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`) |
-| `--host <target>`     | Target host (repeatable, default: all platforms)        |
-| `--defer <module>`    | Defer a module (repeatable, for mobile targets)         |
-| `--quiet, -q`         | Minimal output                                          |
-| `--verbose, -v`       | Detailed output                                         |
+| Flag                  | Description                                                      |
+| --------------------- | ---------------------------------------------------------------- |
+| `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`)          |
+| `--host <target>`     | Target host (repeatable, default: all platforms)                 |
+| `--defer <module>`    | Defer a module (repeatable, for mobile targets)                  |
+| `--no-install`        | Do not install missing addon platform packages for mobile hosts  |
+| `--quiet, -q`         | Minimal output                                                   |
+| `--verbose, -v`       | Detailed output                                                  |
+| `--offline`           | Skip GitHub and npm registry lookups in the `engines.bare` check |
 
 **Examples:**
 
@@ -269,15 +283,16 @@ as `node_modules` trees.
 
 **Options:**
 
-| Flag                              | Description                                                                                                                                                                                                                                                                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--addons-source <path>`          | Required. Path to a `worker.bundle.js` or a `node_modules` directory.                                                                                                                                                                                                                                                                      |
-| `--host <target>`                 | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`.                                                                                                                                                                      |
-| `--bare-runtime-version <semver>` | Optional. Override the resolved Bare runtime version used for ABI checks. **Recommended for mobile / Expo CI**, where the BareKit-embedded runtime version is not currently exposed by `react-native-bare-kit` package metadata and auto-detection is unreliable. Also useful for Electron packaging where runtime inference is ambiguous. |
-| `--config, -c <path>`             | Optional. Path to a `qvac.config.*` file (default: auto-detect `qvac.config.{json,js,mjs,ts}` in the project root). Reads `bareRuntimeVersion` if present.                                                                                                                                                                                 |
-| `--project-root <path>`           | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd).                                                                                                                                                                                                                            |
-| `--json`                          | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling.                                                                                                                                                                                                      |
-| `--quiet, -q`                     | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set.                                                                                                                                                                                                                                      |
+| Flag                              | Description                                                                                                                                                                                                                                                             |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--addons-source <path>`          | Required. Path to a `worker.bundle.js` or a `node_modules` directory.                                                                                                                                                                                                   |
+| `--host <target>`                 | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`.                                                                                                   |
+| `--bare-runtime-version <semver>` | Optional. Override the resolved Bare runtime version used for ABI checks, for every host. It replaces the version read from `react-native-bare-kit` for mobile hosts, so use it for desktop builds only (e.g. Electron packaging where runtime inference is ambiguous). |
+| `--offline`                       | Optional. Make no network requests: no GitHub lookup for a `react-native-bare-kit` release newer than the built-in table, and no npm registry lookup for override suggestions.                                                                                          |
+| `--config, -c <path>`             | Optional. Path to a `qvac.config.*` file (default: auto-detect `qvac.config.{json,js,mjs,ts}` in the project root). Reads `bareRuntimeVersion` if present.                                                                                                              |
+| `--project-root <path>`           | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd).                                                                                                                                                         |
+| `--json`                          | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling.                                                                                                                                   |
+| `--quiet, -q`                     | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set.                                                                                                                                                                   |
 
 **Examples:**
 
@@ -298,17 +313,19 @@ qvac verify bundle \
   --addons-source dist/mac-arm64/MyApp.app/Contents/Resources/app.asar.unpacked/node_modules \
   --host darwin-arm64
 
-# Force a specific runtime version (e.g. CI)
-qvac verify bundle --addons-source qvac/worker.bundle.js \
-  --host android-arm64 --bare-runtime-version 1.15.2
+# Force the runtime version of a desktop build (e.g. an Electron app that
+# ships its own Bare). Do not pin mobile hosts: the pin replaces the version
+# read from react-native-bare-kit.
+qvac verify bundle --addons-source ./node_modules \
+  --host darwin-arm64 --bare-runtime-version 1.33.4
 
-# Pin via qvac.config.json (committed with the project)
+# Pin via qvac.config.json (committed with the project; same caveat)
 # {
 #   "plugins": ["llamacpp-completion"],
-#   "bareRuntimeVersion": "1.15.2"
+#   "bareRuntimeVersion": "1.33.4"
 # }
-qvac verify bundle --addons-source qvac/worker.bundle.js \
-  --host android-arm64
+qvac verify bundle --addons-source ./node_modules \
+  --host darwin-arm64
 
 # Structured output for CI consumers
 qvac verify bundle --addons-source qvac/worker.bundle.js \
@@ -326,9 +343,10 @@ qvac verify bundle --addons-source qvac/worker.bundle.js \
 
 | Code                       | Level   | Meaning                                                                                                                                                                                                                                                                                                                                 |
 | -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `missing-prebuild`         | error   | No `.bare` for the host: the addon's `<packageRoot>/prebuilds/<host>/` is missing or empty, and no per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) with `addon/prebuilds/<host>/*.bare` resolves from the addon's package root.                                                                           |
+| `missing-prebuild`         | error   | No `.bare` for the host. For an ordinary addon, `<packageRoot>/prebuilds/<host>/` is missing or empty; for a split addon (one with a `#host-addon` map), its per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) is not installed or has no `prebuilds/<host>/*.bare`.                                        |
 | `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the resolved runtime version.                                                                                                                                                                                                                                                |
-| `unknown-runtime-version`  | warning | At least one addon declares `engines.bare`, but no Bare runtime version could be auto-detected. Pass `--bare-runtime-version` to enable strict ABI verification.                                                                                                                                                                        |
+| `engines-mismatch`         | error   | A package that is not an addon declares an `engines.bare` range that does not include the resolved runtime version.                                                                                                                                                                                                                     |
+| `unknown-runtime-version`  | warning | At least one package declares `engines.bare`, but no Bare runtime version could be auto-detected. For mobile hosts install `react-native-bare-kit`; for a desktop build install `bare-runtime` or pass `--bare-runtime-version`.                                                                                                        |
 | `invalid-runtime-version`  | error   | The value passed via `--bare-runtime-version` or via the config `bareRuntimeVersion` field is not a valid semver. An invalid explicit version is rejected as an error (vs. auto-detection failure, which is only a warning) because the user opted into runtime verification. ABI resolution is skipped, but prebuild checks still run. |
 | `malformed-engines-bare`   | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer.                                                                                                                                        |
 | `invalid-package-json`     | warning | An addon `package.json` could not be parsed (malformed JSON, non-object root, missing `name` on an `addon: true` package). The package is treated as a non-addon and its prebuilds/ABI cannot be verified.                                                                                                                              |
@@ -340,22 +358,44 @@ qvac verify bundle --addons-source qvac/worker.bundle.js \
 
 Runtime resolution order:
 
-1. `--bare-runtime-version <semver>` (authoritative — user-provided).
-2. `bareRuntimeVersion` field in `qvac.config.{json,js,mjs,ts}` (auto-detected from `--project-root`, or supplied via `--config`). Committed and shared across the team.
-3. `<projectRoot>/node_modules/bare-runtime/package.json` — `version` field (Pear / Electron / desktop Node).
-4. `<projectRoot>/node_modules/bare/package.json` — `version` field (standalone Bare installs).
+1. `--bare-runtime-version <semver>` (authoritative — user-provided). Applies to every host, including mobile hosts, where it replaces the `react-native-bare-kit` detection below.
+2. `bareRuntimeVersion` field in `qvac.config.{json,js,mjs,ts}` (auto-detected from `--project-root`, or supplied via `--config`). Committed and shared across the team. Applies to every host, including mobile hosts, where it replaces the `react-native-bare-kit` detection below.
+3. Android and iOS hosts, when `react-native-bare-kit` is installed: the Bare version compiled into the bare-kit binaries it ships (see below).
+4. Desktop hosts, and mobile hosts without `react-native-bare-kit`: `<projectRoot>/node_modules/bare-runtime/package.json`, then `<projectRoot>/node_modules/bare/package.json` — `version` field.
 
-If neither installed package resolves, ABI checks emit a single
-`unknown-runtime-version` warning and the exit code stays `0`. Prebuild checks
-always run regardless of runtime detection.
+If no runtime resolves, ABI checks emit a single `unknown-runtime-version`
+warning and the exit code stays `0`. Prebuild checks always run regardless of
+runtime detection.
 
-**Mobile / Expo:** the BareKit-embedded runtime version is not currently
-exposed by `react-native-bare-kit` package metadata (no `engines.bare`,
-`bareVersion`, or equivalent field), so auto-detection cannot establish the
-on-device runtime version from a mobile dependency tree. **Pass
-`--bare-runtime-version <semver>` explicitly in mobile CI** to guarantee
-strict ABI verification; otherwise mobile bundles will emit
-`unknown-runtime-version` and skip the ABI check pass.
+**Mobile / Expo:** `react-native-bare-kit` records no Bare version in its
+`package.json`. The SDK finds it in this order, and says so before any step
+that uses the network:
+
+1. A built-in table of `react-native-bare-kit` → bare-kit → Bare versions,
+   read from each release's `CMakeLists.txt`.
+2. The installed `ios/BareKit.xcframework/.../Info.plist`, whose bundle
+   version is the bare-kit release, mapped to Bare with the same table. This
+   covers releases older than 0.13.3, which do not name their bare-kit
+   version in `CMakeLists.txt`.
+3. For a release newer than the table's newest entry: that release's
+   `CMakeLists.txt` and the matching bare-kit `CMakeLists.txt` on
+   `raw.githubusercontent.com` (two requests, 5 s timeout each). Skipped with
+   `--offline`.
+
+The table is regenerated with `npm run bare-kit-runtimes:generate` in
+`packages/sdk`, which only probes releases newer than its newest entries
+(`npm run bare-kit-runtimes:generate -- --full` rebuilds it).
+
+**Fix suggestions:** on an `abi-mismatch` or `engines-mismatch`, the summary
+names the oldest `react-native-bare-kit` release whose Bare satisfies every
+range, and for each failing package fetches its abbreviated package metadata from
+`registry.npmjs.org` (one request per package, 5 s timeout, skipped with
+`--offline`) to find the newest release that runs on the current Bare and that
+its dependents accept. The override is printed in the syntax of the project's
+package manager, detected the same way as for the addon platform-package
+install in `bundle sdk`: npm `overrides`, pnpm `pnpm.overrides`, yarn
+`resolutions`, or bun `overrides`. It is scoped to the
+accepting dependents when another dependent still requires the current version.
 
 ### `serve`
 
@@ -364,6 +404,9 @@ Run an HTTP server backed by locally configured QVAC models (`serve.models` in `
 ```bash
 qvac serve --openai [options]
 ```
+
+The OpenAI extension includes `POST /v1/decisions` for local typed decisions.
+See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request examples.
 
 `--no-default` leaves the QVAC surface out. `qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 
@@ -378,6 +421,8 @@ qvac serve --openai [options]
 | `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                          |
 | `--cors`                         | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin.                                          |
 | `--cors-origin <origin>`         | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                                                           |
+| `--allowed-host <host>`          | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` covers subdomains (repeatable).    |
+| `--allow-any-host`               | Accept any `Host` header, turning off DNS-rebinding protection.                                                                     |
 | `--public-base-url <url>`        | Externally reachable origin required for image `response_format=url`.                                                               |
 | `--docs`                         | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                                                                |
 | `--no-lazy-load`                 | Disable lazy loading; a request for an unloaded model returns `503 model_not_loaded`.                                               |
@@ -397,6 +442,8 @@ qvac serve --openai --cors --cors-origin https://app.example.com
 Independently, `--docs` enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. `/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. Do not expose docs on a non-loopback bind unless public introspection is acceptable.
 
 A non-loopback `--host` refuses to start without `--api-key` or `--api-key-file`. `--allow-unauthenticated` downgrades that refusal to a warning.
+
+Every request, `/openapi.json` included, must carry a `Host` header naming a loopback host, an IP address, the bind host, the `--public-base-url` host or an `--allowed-host` entry; anything else gets `403 host_not_allowed`. This stops a web page that rebinds its own domain to `127.0.0.1` from calling the server. Behind a reverse proxy or under a LAN hostname, list that name with `--allowed-host` or `serve.allowedHosts` (a leading dot covers the domain and its subdomains); `--allow-any-host` or `"allowedHosts": true` turns the check off.
 
 `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file` reads it from an owner-only file instead; the CLI refuses a path that is not a regular file and warns when the file is readable beyond its owner.
 
@@ -467,7 +514,7 @@ qvac doctor
 
 **Prerequisites:**
 
-- Node.js >= 18.0.0
+- Node.js `^22.21.0 || >=24.9.0`
 - npm
 
 ### Agent-stack test ownership
@@ -476,7 +523,7 @@ For tests that touch `qvac serve --openai`, `@qvac/ai-sdk-provider`, or agent-to
 [`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
 CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
 
-The CLI depends on the published `@qvac/sdk` (`^0.20.0`), which provides the
+The CLI depends on the published `@qvac/sdk` (`^0.21.0`), which provides the
 `./commands` subpath that `bundle`/`verify` re-export and the server runtime
 the `serve` commands use. A normal `npm install` pulls it from the registry —
 no local SDK build is required.
@@ -487,7 +534,7 @@ separate worktree):
 
 ```bash
 # Build the SDK first (from its packages/sdk directory)
-cd /path/to/qvac/packages/sdk && bun run build
+cd /path/to/qvac/packages/sdk && npm run build
 
 # Point the CLI at the sibling SDK (../sdk) instead of the registry copy
 cd packages/cli
@@ -504,7 +551,7 @@ npm run dev:unlink
 ```
 
 This runs `git checkout HEAD -- package.json` and re-installs, so the
-committed `@qvac/sdk` dependency (`^0.20.0`) is restored regardless of what you
+committed `@qvac/sdk` dependency (`^0.21.0`) is restored regardless of what you
 swapped in locally. `package-lock.json` is gitignored and is regenerated by the
 trailing `npm install`.
 

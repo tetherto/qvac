@@ -23,7 +23,7 @@ add_executable(
   test_sd_vid_gen_handlers.cpp
   test_sd_video_frames.cpp
   test_video_model_capabilities.cpp
-  test_stb_image_security.cpp
+  test_image_decoding_limits.cpp
   test_wan_video.cpp
   test_avi_writer.cpp
   test_world_session.cpp
@@ -70,19 +70,15 @@ target_include_directories(
 # Set C++20 standard for std::views support (required by inference-addon-cpp)
 target_compile_features(addon-test PRIVATE cxx_std_20)
 
-# Set macOS deployment target for C++20 std::format support
-if(APPLE AND NOT IOS)
-  set_target_properties(addon-test PROPERTIES
-    XCODE_ATTRIBUTE_MACOSX_DEPLOYMENT_TARGET "14.0"
-    OSX_DEPLOYMENT_TARGET "14.0"
-  )
-endif()
-
 # Define test binary directory path for runtime use
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
+# BackendLoader.cpp includes ModuleBackendsDir.hpp whenever ggml exports
+# GGML_BACKEND_DL (Linux and Android). That header requires the same module
+# name the addon target is built with; darwin and win32 leave the header out.
 target_compile_definitions(addon-test PRIVATE
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
   PROJECT_ROOT="${CMAKE_SOURCE_DIR}"
+  QVAC_ADDON_MODULE_NAME="${module_name}"
 )
 
 # Optional coverage instrumentation
@@ -130,3 +126,7 @@ add_test(NAME SdModelTests COMMAND addon-test)
 set_tests_properties(SdModelTests PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   TIMEOUT 900)  # 15 minutes
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set_tests_properties(SdModelTests PROPERTIES
+    ENVIRONMENT "LSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/test/unit/lsan-libdbus.supp")
+endif()

@@ -30,6 +30,10 @@ If the user doesn't specify, ask which SDK pod package they want to generate a c
 
 Package slugs match git tags (`sdk`, `inference`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
 
+**On a release train** (`qv-release-train`), run this once per train package;
+the changelogs land on the one train branch. Step 7 differs
+there.
+
 **`sdk` and `inference` are lockstep on major.minor.** Two changelogs, two
 releases, engine first: `--package=inference` for `release-inference-<x.y.z>`,
 then `--package=sdk` for `release-sdk-<x.y.z>`. Both notes for the same `x.y.z`
@@ -224,27 +228,28 @@ committed-file format check would later reject. Every SDK pod package uses prett
 (`[inference] format`, `[sdk] format`, …) loads holepunch; `--no-config` or a
 different parser (quote style, trailing commas) is the usual red we hit.
 
-`bunx prettier` fails with `Cannot find package 'prettier-config-holepunch'`
+`npx prettier` fails with `Cannot find package 'prettier-config-holepunch'`
 when that package is not resolvable, then either skips or formats with a
-fallback CI rejects. **Never `--no-config`.** Do not `bun install` in a package
+fallback CI rejects. **Never `--no-config`.** Do not `npm install` in a package
 whose range names an unpublished lockstep dep (e.g. sdk waiting on inference) —
-run `bunx` from a sibling that already has `node_modules`.
+run `npx prettier` from a sibling that already has `node_modules`.
 
 ```bash
 DIR=$(node -e "console.log(require('./scripts/sdk/package-paths.cjs').getPackageDir('<name>'))")
-bunx prettier --check "$DIR/changelog/<version>/**/*.md" "$DIR/CHANGELOG.md"
+npx prettier --check "$DIR/changelog/<version>/**/*.md" "$DIR/CHANGELOG.md"
 ```
 
 Scope those globs to **this package**. Do not run `changelog/**/*.md` from the
 repo root or another package cwd — that walks every historical version folder.
 
-If it reports problems, fix them — `bunx prettier --write` on the same paths, or
-`bun run format:fix` — and re-run the check until it passes clean. Do this before
+If it reports problems, fix them — `npx prettier --write` on the same paths, or
+`npm run format:fix` — and re-run the check until it passes clean. Do this before
 moving on so the release commit carries only prettier-clean markdown.
 
 **Downstream rendering note:** the docs site reads `CHANGELOG_LLM.md`
 **verbatim** and inlines it under a `### @qvac/<pkg>` subsection of the
-minor series page (one permanent `v<X.Y>.x.mdx` per minor line — see
+release-notes page of the SDK's current documentation line (one
+`reference/release-notes.mdx` per line — see
 `docs/website/docs-workflow.md`). Each headline you write becomes a
 section header on the public docs site (with two levels of demotion to
 fit the nesting), so phrase them as standalone reader-facing prose, not
@@ -309,6 +314,10 @@ release sets both and regenerates the Python client (`SDK_VERSION` and the other
 `_generated/` outputs). Skip this step for any other `--package` value — an
 `--package=inference` release does not touch the SDK.
 
+**On a release train** `nx release version` has already written the
+`@qvac/inference` range; only regenerate the Python client (Step 3 of
+`qv-sdk-inference-version`).
+
 Read and follow `.agents/skills/qv-sdk-inference-version/SKILL.md` (Steps 1–4).
 Short form:
 
@@ -338,6 +347,31 @@ Generation is **deterministic**: it runs the existing `docs/website` scripts
 involved in producing the API reference or release notes here — Step 4 already
 authored `CHANGELOG_LLM.md`, and this step only renders it into the site.
 
+**Precondition — the line is already cut (fail-stop):**
+
+The site publishes one **documentation line** per SDK minor: a folder under
+`content/docs/sdk/` holding a complete page tree. The current line's folder is
+parenthesised — `(v0.21)` — and answers the version-less paths; every older
+line's is plain. The line for the version you are releasing was cut by the
+documentation engineer right after the *previous* release deployed, so it
+already exists when you reach this step.
+
+The generators write into the current line, read from
+`docs/website/src/lib/versions.ts`. They refuse a version that is not that
+line's, before writing anything:
+
+```
+Refusing to write v0.21 pages into v0.20, the current line of /sdk.
+  v0.21 has no line yet. Cut it before documenting the release:
+    bun run scripts/cut-line.ts sdk v0.21
+```
+
+That message means the cut has not happened. **STOP and ask the documentation
+engineer to cut the line.** Do not run the cut inside a release PR, and do not
+work around the refusal — without it, the release notes of the version that
+already shipped are overwritten, and the build and the test suite both still
+pass.
+
 **Prerequisites:**
 
 - `docs/website` dependencies installed (`cd docs/website && npm install`).
@@ -347,28 +381,32 @@ authored `CHANGELOG_LLM.md`, and this step only renders it into the site.
   `CHANGELOG_REPO_ROOT` defaults to the repo root, so no override is needed
   when running inside the monorepo.
 
-**1. Generate the API reference + release notes (auto-detects minor vs patch):**
+**1. Generate the API reference + release notes.** Which commands depends on
+whether this is a minor or a patch.
+
+Minor (`X.Y.0`) — render both pages:
 
 ```bash
 cd docs/website
-bun run scripts/release-version.ts <version> --force-extract
+bun run scripts/generate-api-docs.ts <version> --force-extract
+bun run scripts/generate-release-notes.ts <version>
 ```
 
-This is the exact command the old workflow ran. The dispatcher reads the
-version and forwards to the minor (`X.Y.0`: generate the new series' MDX at
-`reference/{api,release-notes}/v<X.Y>.x.mdx`, rewrite both `index.mdx` shims
-to `<include>` the new series file, and rotate the managed alias block in
-`public/_redirects` so the new `v<X.Y>.x` URL 301s to the shim canonical)
-or patch (`X.Y.Z`, `Z >= 1`: insert the `## vX.Y.Z` section into the target
-series' `v<X.Y>.x.mdx`; for `patch-latest`, also mirror the refreshed
-description onto the release-notes shim) orchestrator. It writes only:
+Patch (`X.Y.Z`, `Z >= 1`) — append the `## vX.Y.Z` section and leave the API
+summary alone, because the public API is frozen at the minor boundary:
 
-- `docs/website/content/docs/reference/api/**` (API summary MDX)
-- `docs/website/content/docs/reference/release-notes/**` (release notes MDX)
-- `docs/website/src/lib/versions.ts` (version-switcher manifest)
-- `docs/website/public/_redirects` (**minor only** — the managed
-  `# ==== BEGIN latest-series alias (managed) ====` block; patches never
-  touch this file)
+```bash
+cd docs/website
+bun run scripts/generate-release-notes.ts <version> --append-patch
+```
+
+Either way it writes only, with `(v<X.Y>)` the current line's folder:
+
+- `docs/website/content/docs/sdk/(v<X.Y>)/reference/api.mdx` (**minor only**)
+- `docs/website/content/docs/sdk/(v<X.Y>)/reference/release-notes.mdx`
+
+Nothing else. `src/lib/versions.ts` and `public/_redirects` belong to the cut,
+not to a release — a release must leave both untouched.
 
 Those paths are generated here on release. Capability/CLI/config/runtime prose
 is `/qv-docs-update` on the feature PR. Do not hand-edit `reference/**`.
@@ -385,14 +423,14 @@ A clean build confirms nothing on the website broke. Treat a build failure as
 
 **Staging follows the same convention as the other steps.** Like every other
 step, this one only generates files — it never runs `git add` or `git commit`.
-The three surfaces above are part of the release commit (same as Step 7's
+The pages above are part of the release commit (same as Step 7's
 version files: "Include … in the release commit"), and every
 generation/build byproduct is gitignored — exactly like Step 5's
 `announcement-post.txt` — so a normal `git status` review shows only the
 committable files. Let the user review before committing. Generated + gitignored
 byproducts (do not `git add` them):
 
-- `docs/website/scripts/api-docs/api-data.json` (written by `release-version.ts`)
+- `docs/website/scripts/api-docs/api-data.json` (written by `generate-api-docs.ts`)
 - `docs/website/.next/`, `.source/`, `out/`, `dist/` (from `npm run build`)
 - `docs/website/next-env.d.ts`
 - `packages/sdk/dist/` (from the `prebuild:examples` build step)
@@ -428,16 +466,17 @@ Additionally:
 
 - `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest), preferring `CHANGELOG_LLM.md` (human-readable) from each version folder when available, falling back to `CHANGELOG.md`
 
-When `--package=sdk`, Step 8 also generates the documentation-site surfaces
-(commit these alongside the changelog):
+When `--package=sdk`, Step 8 also generates the documentation-site pages of the
+SDK's current documentation line (commit these alongside the changelog), with
+`(v<X.Y>)` its folder:
 
-- `docs/website/content/docs/reference/api/**` – API reference MDX
-- `docs/website/content/docs/reference/release-notes/**` – Release notes MDX
-- `docs/website/src/lib/versions.ts` – Version-switcher manifest
-- `docs/website/public/_redirects` – **minor releases only** — the managed
-  latest-series alias block (delimited by
-  `# ==== BEGIN latest-series alias (managed) ====` markers). Patch
-  releases never touch this file.
+- `docs/website/content/docs/sdk/(v<X.Y>)/reference/api.mdx` – API reference
+  MDX, **minor releases only**
+- `docs/website/content/docs/sdk/(v<X.Y>)/reference/release-notes.mdx` –
+  Release notes MDX
+
+Nothing else. The version manifest (`src/lib/versions.ts`) and the redirects
+(`public/_redirects`) belong to the line cut, which happens outside a release.
 
 ## Tag Format
 
@@ -456,7 +495,7 @@ push, and keep this list to things that are cheap to prevent:
 
 - **Prettier is holepunch, not stock.** `.prettierrc` is `"prettier-config-holepunch"`.
   Never `--no-config`. Resolve holepunch from a package that can install; do not
-  `bun install` against an unpublished lockstep dep. Quote style and trailing
+  `npm install` against an unpublished lockstep dep. Quote style and trailing
   commas on `CHANGELOG_LLM.md` are the usual fail.
 - **Lockstep: pass the floor.** Never run the generator unflagged for `sdk` /
   `inference`. Same `--base-commit` on both. When that floor is a patch, union
@@ -491,13 +530,13 @@ Before completing:
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
 - [ ] CHANGELOG_LLM.md authored from `changelog/<version>/` after the published-version audit (this package's name on the title/NPM line)
-- [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `bun install` against unpublished lockstep deps)
+- [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `npm install` against unpublished lockstep deps)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] Published-version audit done: `npm view "$PKG@<base-version>" gitHead` vs HEAD under `getPackageDir(<slug>)` (`$DIR`, not `package.json`) matches `api.md` / `breaking.md` / `models.md`
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
 - [ ] NOTICE updated; JS section not emptied by a failed install
 - [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
-- [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and `git status` shows only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` (and `public/_redirects` on **minor** releases — the managed latest-series alias block) as committable docs changes (byproducts gitignored)
+- [ ] When `--package=sdk`: the line for this version was already cut (no generator refusal), site docs generated via `generate-api-docs.ts` + `generate-release-notes.ts`, `npm run build` passed, and `git status` shows only that line's `reference/api.mdx` (minor) and `reference/release-notes.mdx` as committable docs changes — never `src/lib/versions.ts` or `public/_redirects` (byproducts gitignored)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions

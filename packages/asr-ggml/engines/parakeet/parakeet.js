@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ParakeetInterface = void 0;
 const error_1 = require("../../lib/error");
-const backends_1 = require("../../lib/backends");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
 const state = Object.freeze({
@@ -64,15 +63,8 @@ class ParakeetInterface {
         this._endStreamingInFlight = null;
         this._bufferedAudio = [];
         this._bufferedBytes = 0;
-        this._config = this._applyDefaults(configurationParams);
+        this._config = { ...configurationParams };
         this._createNativeInstance(this._config);
-    }
-    _applyDefaults(configurationParams) {
-        const out = { ...configurationParams };
-        if (!out.backendsDir) {
-            out.backendsDir = (0, backends_1.resolveBackendsDir)();
-        }
-        return out;
     }
     _setState(newState) {
         this._state = newState;
@@ -201,7 +193,7 @@ class ParakeetInterface {
     append(data) {
         try {
             if (data?.type === constants_1.END_OF_INPUT) {
-                return Promise.resolve(this._submitBufferedJob());
+                return Promise.resolve(this._submitBufferedJob(data.job));
             }
             if (data?.type === "audio") {
                 return Promise.resolve(this._bufferAudioChunk(data.data));
@@ -214,13 +206,13 @@ class ParakeetInterface {
             return Promise.reject(createParakeetError(error_1.ERR_CODES_PARAKEET.FAILED_TO_APPEND, normalized.message, error));
         }
     }
-    _submitBufferedJob() {
+    _submitBufferedJob(job = {}) {
         const currentJobId = this._nextJobId;
         const input = this._concatBufferedAudio();
         const previousState = this._state;
         let accepted = false;
         try {
-            accepted = this._binding.runJob(this._handle, { type: "audio", input });
+            accepted = this._binding.runJob(this._handle, { ...job, type: "audio", input });
         }
         catch (error) {
             this._setState(previousState);

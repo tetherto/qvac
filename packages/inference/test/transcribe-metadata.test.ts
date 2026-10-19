@@ -455,3 +455,57 @@ test('duplex metadata integration: line-delimited parser round-trips segment fra
   t.is(segments[1]!.text, 'second', 'second segment intact')
   t.ok(sawDone, 'done frame observed')
 })
+
+test('diarization metadata: preserves MOSS labels and timestamps over the wire', (t) => {
+  const segment = toTranscribeSegment({
+    text: 'Hello',
+    start: 1.25,
+    end: 2.5,
+    speaker: 'S01',
+    speakerId: 0
+  })
+  const wire = transcribeResponseSchema.parse({ type: 'transcribe', segment })
+  t.is(wire.segment?.speaker, 'S01')
+  t.is(wire.segment?.speakerId, 0)
+  t.is(wire.segment?.startMs, 1250)
+  t.is(wire.segment?.endMs, 2500)
+  t.execution(() => assertMetadataSupported('moss', ModelType.mossTranscribe, true))
+})
+
+test('MOSS request options: accepts boundaries and rejects oversized UTF-8 hotwords', (t) => {
+  const request = {
+    type: 'transcribe',
+    modelId: 'moss',
+    audioChunk: { type: 'filePath', value: '/tmp/audio.wav' }
+  }
+  t.ok(transcribeRequestSchema.safeParse({ ...request, hotwords: [], maxNewTokens: 0 }).success)
+  t.ok(transcribeRequestSchema.safeParse({ ...request, hotwords: ['é'.repeat(32)] }).success)
+  t.absent(transcribeRequestSchema.safeParse({ ...request, hotwords: ['é'.repeat(33)] }).success)
+  t.absent(transcribeRequestSchema.safeParse({ ...request, hotwords: [''] }).success)
+  t.absent(
+    transcribeRequestSchema.safeParse({ ...request, hotwords: Array(65).fill('test') }).success
+  )
+  t.absent(transcribeRequestSchema.safeParse({ ...request, maxNewTokens: -1 }).success)
+})
+
+test('Nemotron diarization preserves eight overlapping speaker turns in batch metadata', (t) => {
+  const speakerSegments = Array.from({ length: 8 }, (_, speakerId) => ({
+    speakerId,
+    start: 0.25,
+    end: 1.75
+  }))
+  const segment = toTranscribeSegment({ text: 'Speaker activity', speakerSegments })
+  const wire = transcribeResponseSchema.parse({ type: 'transcribe', segment })
+  t.alike(
+    wire.segment?.speakerSegments,
+    speakerSegments.map((turn) => ({ speakerId: turn.speakerId, startMs: 250, endMs: 1750 }))
+  )
+  t.absent(toTranscribeSegment({ text: 'ordinary ASR' }).speakerSegments)
+  t.alike(toTranscribeSegment({ text: '', speakerSegments: [] }).speakerSegments, [])
+  t.absent(
+    transcribeSegmentSchema.safeParse({
+      ...segment,
+      speakerSegments: [{ speakerId: -1, startMs: 0, endMs: 1 }]
+    }).success
+  )
+})

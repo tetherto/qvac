@@ -1,5 +1,168 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- `binding.js` is now `module.exports = require('#host-addon')`, a specifier
+  the Bare module lexer can follow, so `bare-pack` bundles an app that
+  requires `@qvac/diffusion-cpp`. `#host-addon` maps each host to its platform
+  package alone, with no fallback.
+- The meta package is no longer an addon. Each platform package is an ordinary
+  one: its module is built as `qvac__diffusion-cpp-<suffix>` (every iOS host
+  shares `ios`) and sits at `prebuilds/<host>/qvac__diffusion-cpp-<suffix>.bare`,
+  with its ggml backends in `prebuilds/<host>/qvac__diffusion-cpp-<suffix>/`.
+- The addon finds its ggml backends itself, next to the loaded module. An
+  explicit `backendsDir` is now scanned as given rather than as a prebuilds
+  root under which `<host>/<module>` is appended. The JavaScript wrappers no
+  longer default `backendsDir` to the package `prebuilds/` directory.
+- A source build is loadable once `npm run link:platform` (part of
+  `build:native`, `build:vulkan`, and `build:cuda`) stages it as the host's
+  platform package in `node_modules/`.
+
+## [0.30.0] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed
+  ([#5010](https://github.com/tetherto/qvac/pull/5010)). The fit runs on a worker thread so the JavaScript loop keeps
+  running, and concurrent calls run one at a time within the addon. A model
+  the fitter cannot read still resolves with `status: 'error'`; a malformed
+  request rejects instead of throwing. Change
+  `const fit = assessFit(request)` to `const fit = await assessFit(request)`.
+
+### Changed
+
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5069](https://github.com/tetherto/qvac/pull/5069)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+
+## [0.29.2] - 2026-10-13
+
+This patch reduces the size of the Windows native addon to address the npm
+package-size failure. It retains the existing model support and JavaScript API.
+
+## Bug Fixes
+
+Windows builds now export only Bare's registration entry points and optimize
+across the addon, ggml, and stable-diffusion libraries. The linker can discard
+unused code and shader data and combine identical sections, reducing the
+shipped binary without removing model or GPU features.
+
+The addon consumes the published ggml `2026-08-11#2` and stable-diffusion-cpp
+`2026-08-11#6` hotfixes while retaining the existing registry baseline. The
+logging include order also ensures libuv types are declared before the shared
+JavaScript logging headers are compiled.
+
+## Pull Requests
+
+- [#5007](https://github.com/tetherto/qvac/pull/5007) - Reduce diffusion Windows
+  binaries using registry hotfixes.
+
+## [0.29.1] - 2026-10-13
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+
+## [0.29.0] - 2026-10-12
+
+### Added
+
+- Metadata-only `assessFit` support for standalone ESRGAN (`mode: 'upscale'`)
+  and ABot-World (`mode: 'world'`), without loading model weights.
+- ABot-World fit estimates for a stated session length using
+  `workload.walkSteps`, with a default of 100 walk steps, including retained
+  latent history and the configured placement and streaming budgets.
+
+### Changed
+
+- Include ESRGAN weights, tiled computation, full-image buffers, and repeated
+  upscale passes in standalone and post-generation memory estimates.
+- Use checkpoint metadata to validate ESRGAN's actual output scale against
+  image limits, and account for shared host/GPU memory on Apple Silicon.
+- Build against the published `stable-diffusion-cpp` registry port
+  `2026-08-11#5` without a temporary engine overlay.
+
+### Pull Requests
+
+- [#4939](https://github.com/tetherto/qvac/pull/4939) - QVAC-26761 feat[api]:
+  add ESRGAN and ABot memory fit.
+
+## [0.28.1] - 2026-10-09
+
+### Fixed
+
+- Rebuild the Android addon and Vulkan/OpenCL backends with NDK r29
+  (`29.0.14206865`) to match the application's C++ runtime. The 0.28.0 npm
+  binaries were built with NDK r30 before the shared NDK selection fixes merged.
+
+### Pull Requests
+
+- [#4915](https://github.com/tetherto/qvac/pull/4915) - Pin the shared Android
+  build host to NDK r29.
+- [#4916](https://github.com/tetherto/qvac/pull/4916) - Update Android build
+  callers to use the pinned build host.
+- [#4933](https://github.com/tetherto/qvac/pull/4933) - Align Bare's NDK selector
+  with the pinned NDK used by vcpkg.
+
+## [0.28.0] - 2026-10-07
+
+### Added
+
+- MiniMax-H3 FL2VA ConvRot text-to-video and image-to-video examples with
+  synchronized audio, model download script, and FLUX.2-generated I2V keyframes.
+
+### Changed
+
+- Route H3 image-to-video first-frame conditioning through the native video job
+  and require the video VAE encoder for that mode.
+
+### Pull Requests
+
+- [#4789](https://github.com/tetherto/qvac/pull/4789) - QVAC-24827 feat:
+  MiniMax H3 text-to-video and image-to-video.
+
+## [0.27.0] - 2026-10-02
+
+### Added
+
+- Configurable `max_image_pixels` and `max_job_pixels` limits for image and
+  video models. Standalone ESRGAN accepts `max_image_pixels`; ABot-World
+  accepts `maxImagePixels`.
+
+### Changed
+
+- Decoded inputs default to 64 Mi pixels per image and 128 Mi pixels retained
+  by a multi-reference image or video job. Larger inputs and longer video
+  guidance sequences can raise the configured limits explicitly; independent
+  format, dimension, compressed-size, PNG inflate, and JPEG scan safeguards
+  remain in force.
+
+### Fixed
+
+- Validate PNG/JPEG input sizes, source-data budgets, inflated PNG data, and
+  progressive JPEG scans before full decoding, with specific errors for
+  invalid or over-limit inputs across image, video, ESRGAN, and ABot-World.
+- Check projected ESRGAN output against the per-image limit before generation
+  and each upscale pass.
+- Preserve compatibility with PNGs carrying bounded trailing inflated data
+  and JPEGs carrying padding before the frame header.
+
+### Pull Requests
+
+- [#4738](https://github.com/tetherto/qvac/pull/4738) - QVAC-25637 fix: bound
+  diffusion image decoding before allocation.
+
 ## [0.26.0] - 2026-09-28
 
 ### Added

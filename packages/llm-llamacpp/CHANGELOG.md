@@ -1,5 +1,299 @@
 # Changelog
 
+## [0.62.0] - 2026-10-16
+
+### Added
+
+- `poll` and `poll-batch` are now documented public JavaScript load options.
+  They control the main and batch GGML threadpool busy-wait levels; both
+  default to `0`, `poll-batch` inherits an explicit `poll` when omitted, and
+  values outside `0`–`100` are rejected
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+### Changed
+
+- Single-sequence generation now uses `threads`, `cpu-mask` and `prio`.
+  `threads-batch` and `cpu-mask-batch` apply only to steps that process
+  several tokens at once: prompt processing, batched decoding across parallel
+  sequences, and speculative verification. Previously an explicit
+  `threads-batch` also capped generation and `cpu-mask` was ignored
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+### Fixed
+
+- File-backed model loads now default both GGML threadpools to `poll=0`, so
+  GPU-offloaded inference no longer keeps CPU workers busy-spinning between
+  graph work. The addon also reuses the threadpools owned by Fabric's common
+  initialization instead of creating duplicates
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+## [0.61.1] - 2026-10-15
+
+### Fixed
+
+- On Windows, `assessFit` no longer fails with `0xC06D007E` when it is the
+  first fabric call in the process ([#5121](https://github.com/tetherto/qvac/pull/5121)). The addon now binds the
+  delay-loaded `@qvac/fabric` runtime when it loads, and loading throws an
+  error naming the fabric module if that fails.
+
+## [0.61.0] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed
+  ([#5010](https://github.com/tetherto/qvac/pull/5010)). The fit runs on a worker thread so the JavaScript loop keeps
+  running, and concurrent calls run one at a time within the addon. A model
+  the fitter cannot read still resolves with `status: 'error'`; a malformed
+  request rejects instead of throwing. Change
+  `const fit = LlmLlamacpp.assessFit(request)` to `const fit = await LlmLlamacpp.assessFit(request)`.
+
+### Added
+
+- `image-max-megapixels` config key (alias `image_max_megapixels`, default
+  `50`): the maximum reported image pixel count, in millions, checked before
+  mtmd decodes an image ([#4777](https://github.com/tetherto/qvac/pull/4777)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.21.1` -> `^0.22.0`, which carries
+  `qvac-fabric` `11018.1.0#1` -> `11018.2.0`
+  ([#5064](https://github.com/tetherto/qvac/pull/5064)). A caret on a `0.x`
+  version locks the minor, so `^0.21.1` would not have resolved `0.22.0` on
+  its own. `GGML_MAX_NAME` is now 128, so the native addon is rebuilt against
+  the 0.22.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.22.0` together.
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5071](https://github.com/tetherto/qvac/pull/5071)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+
+### Fixed
+
+- Oversized images are rejected before decoding instead of being decoded in
+  full: a crafted 16384 x 16384 PNG under 1 MB raised the inference worker's
+  RSS by about 1.6 GiB. Images whose dimensions cannot be read are rejected,
+  and only regular media files are accepted ([#4777](https://github.com/tetherto/qvac/pull/4777)).
+
+## [0.60.0] - 2026-10-14
+
+### Breaking
+
+- An explicit `backendsDir` is scanned as given. It is no longer a prebuilds
+  root with `<host>/qvac__fabric` appended. Omit it and `@qvac/fabric` locates
+  the backends it ships, next to its runtime.
+- `resolveBackendsDir()` is removed from `./addon.js`, which stays in
+  `exports`.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.2` -> `^0.21.1`, whose platform
+  packages are now ordinary addons. This package declares them itself: the
+  desktop ones as `optionalDependencies`, and `@qvac/fabric-android-arm64` and
+  `@qvac/fabric-ios` as optional `peerDependencies`.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.21.1` together.
+
+## [0.59.1] - 2026-10-13
+
+### Added
+
+- On hybrid and recurrent models (Qwen3.5 and later, Jamba, DeepSeek V4) the
+  `cacheKey` file also keeps the conversation's newest end-of-history
+  checkpoint. A conversation loaded from its file, including in a new
+  process, continues its next turn or a regenerate from that checkpoint
+  instead of reprocessing the whole conversation, which thinking templates
+  forced because they rewrite the previous answer. Older checkpoints stay in
+  memory only. Files written this way still load in earlier versions, which
+  ignore the checkpoint ([#4969](https://github.com/tetherto/qvac/pull/4969)).
+
+### Changed
+
+- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+  end-of-history checkpoints holding the window cells. A turn that diverges
+  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
+  regenerate after a long answer) restores one instead of reprocessing the
+  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
+  of MB on larger models; `cache_checkpoints: 0` turns them off
+  ([#4924](https://github.com/tetherto/qvac/pull/4924)).
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+
+### Fixed
+
+- Gemma 4 vision models cap an image at 280 tokens again when
+  `image_max_tokens` is unset. Since 0.56.0 the encoder's own cap of 1120
+  applied, so a large image took about four times the tokens and prefill: on
+  Android it ran the app out of memory or produced a wrong description.
+  Set `image_max_tokens` to raise the cap
+  ([#4989](https://github.com/tetherto/qvac/pull/4989)).
+
+## [0.59.0] - 2026-10-11
+
+### Added
+
+- Chat messages accept past tool calls: `tool_calls` (`id`, `name`,
+  `arguments` as an object or JSON object text) on an assistant turn, and
+  `tool_call_id` / `name` on a tool turn. The chat template renders them in
+  the model's own format instead of the caller writing them into `content`.
+  `content` may be `null` or omitted on an assistant turn that carries
+  `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
+  `InvalidInputFormat` ([#4876](https://github.com/tetherto/qvac/pull/4876)).
+
+### Fixed
+
+- A multimodal model that failed to load, for example out of GPU memory,
+  resolved `load()` instead of rejecting it, and the first request then
+  crashed the process. It now rejects with `UnableToLoadModel`, as a
+  text-only model does.
+
+## [0.58.0] - 2026-10-09
+
+### Breaking
+
+- Requests with a `cacheKey` must send the complete message history and tool
+  list every time. The addon reuses the longest prefix that matches its cache
+  and processes the rest. Cache files written by earlier versions are cold
+  misses. SDK releases that still send only the new messages are incompatible
+  until the SDK migrates.
+- `runOptions.saveCacheToDisk` is removed and throws a `TypeError`. A cached
+  conversation stays in memory and is written to its `cacheKey` file when it
+  is set aside for another key, evicted, reloaded or unloaded, or on
+  `saveCache(cacheKey)`.
+- `generationParams.remove_thinking_from_context` is removed and rejected as
+  an unknown key. Earlier reasoning stays in the cache until the chat template
+  drops it. `RuntimeStats.thinkingBlockDiscards` is removed.
+
+### Added
+
+- `saveCache(cacheKey)` writes a cached conversation to its file;
+  `discardCache(cacheKey)` drops it without writing.
+- `runOptions.ephemeral`: the conversation is never written automatically;
+  `saveCache()` still writes it.
+- `cache_ram_mib`: host-RAM budget in MiB for idle conversations, so a key
+  switch or slot eviction moves them to RAM instead of disk. Default `0` (off).
+- `cache_checkpoints` (default `1`, max `1024`) and
+  `cache_checkpoints_max_bytes`: checkpoints per sequence on hybrid, recurrent
+  and DeepSeek V4 models, so a follow-up turn whose template drops the last
+  answer's reasoning does not reprocess the whole conversation.
+- `cache_checkpoint_storage` (`memory` by default, or `disk`) and
+  `cache_checkpoint_dir`, required with `disk`.
+- CUDA backend on NVIDIA GPUs (Linux x64 and arm64, Windows x64). It is
+  preferred over Vulkan, and without a CUDA module, driver or device the load
+  falls back to Vulkan, then CPU.
+- `backend` load-config field: comma-separated GPU backend priority list
+  (`cuda`, `vulkan`, `metal`, `opencl`, or `auto`), e.g. `'cuda,vulkan'`.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.20.2`, the first release
+  that ships the CUDA module.
+- With `parallel >= 2`, a conversation stays in its scheduler slot between
+  requests, and requests on the same `cacheKey` run one at a time.
+- Cancelling after prefill keeps the prompt and the streamed tokens in the
+  cache; a cancel during prefill still rolls back.
+- Assistant messages may carry `reasoning_content`, and reasoning sent inline
+  in `content` is split out before rendering.
+- TurboQuant and PolarQuant KV-cache types are rejected on CUDA.
+- Split mode only spreads layers across GPUs of the selected backend.
+
+### Removed
+
+- The built-in Qwen3 chat template override: Qwen3 models use the template in
+  their GGUF.
+- The EOS-inside-reasoning recovery: that EOS now ends the response with
+  `stopReason: 'eos'`.
+
+### Fixed
+
+- A single-prompt cache load on a parallel model no longer truncates the
+  other sequences.
+- A `cacheKey` write that fails part-way (e.g. a full disk) no longer replaces
+  the last good file.
+- DeepSeek V4 vision models now roll back a failed or cancelled request
+  correctly.
+
+## [0.57.0] - 2026-10-06
+
+### Added
+
+- `generationParams.parallel_tool_calls` (boolean). `true` lets one response
+  carry several tool calls; unset or `false` keeps one
+  ([#4830](https://github.com/tetherto/qvac/pull/4830)).
+
+## [0.56.0] - 2026-10-06
+
+### Breaking
+
+- `assessFit` takes `config`, the map `loadModel` takes, in place of `params`,
+  and resolves it with the load's own code. `config` names a device, as every
+  load does ([#4841](https://github.com/tetherto/qvac/pull/4841)).
+
+  ```js
+  // before
+  LlmLlamacpp.assessFit({ modelPath, params: { 'ctx-size': '4096', 'gpu-layers': '0' } })
+  // after
+  LlmLlamacpp.assessFit({ modelPath, config: { device: 'gpu', 'ctx-size': '4096', 'gpu-layers': '0' } })
+  ```
+
+- `assessFit` byte figures can differ: with `flash-attn` unset the resolver
+  settles on `on`, which is what the load runs.
+- `main-gpu: 'dedicated'`, `rpc-servers`, `flash-attn: 'auto'`,
+  `prefetch-weights` and `tensor-read-lazy` now produce verdicts where they
+  answered `unsupported-config`, and a LoRA adapter, an mmproj or a `cpu`
+  device is refused.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.19.0` -> `^0.20.0`, which carries
+  `qvac-fabric` `10549.5.0` -> `11018.0.0`, the rebase onto upstream llama.cpp
+  b11018. This package consumes the shared runtime via npm rather than building
+  the vcpkg port, so the range bump is what picks up the new fabric. A caret on
+  a `0.x` version locks the minor, so `^0.19.0` would not have resolved `0.20.0`
+  on its own.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.20.0` together.
+
+### Fixed
+
+- The deprecated load flags `mmap`, `no-mmap`, `direct-io`, `no-direct-io`
+  and `mlock` keep working with qvac-fabric 11018, which no longer accepts
+  them. The addon maps them to `load-mode` for both loads and `assessFit`.
+
+## [0.55.1] - 2026-09-30
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.18.0` -> `^0.19.0`, which carries
+  `qvac-fabric` `10549.4.0` -> `10549.5.0` (CUDA and Metal fusion fixes, MoE
+  expert caching defaulting to CUDA only, GLM-5 Next support). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so
+  the range bump is what picks up the new fabric. A caret on a `0.x` version
+  locks the minor, so `^0.18.0` would not have resolved `0.19.0` on its own.
+  No API change.
+- MoE models on Metal and Vulkan no longer get an automatic expert cache.
+  Set `moe-cache-mib: auto` to opt back in on those backends.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.19.0` together.
+
+### Fixed
+
+- CPU tensor overrides now use the buffer type recognized by the shared model
+  loader. With GPU offload, pinned MoE expert weights use the backend's host
+  buffer instead of an ordinary CPU model buffer. No public API changes
+  ([#4762](https://github.com/tetherto/qvac/pull/4762)).
+- `assessFit` now honours `moe-cache-mib: auto` the way the load does. The
+  load's fit received that choice but the projection did not, so on Metal or
+  Vulkan a MoE model's projected `gpuLayers` and `deviceBytes` could differ
+  from the load.
+
 ## [0.55.0] - 2026-09-28
 
 ### Added

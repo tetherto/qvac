@@ -1,5 +1,7 @@
 {/*
-  Template for a new AI capability page — content/docs/ai-capabilities/<slug>.mdx
+  Template for a new AI capability page —
+  content/docs/sdk/<line>/ai-capabilities/<slug>.mdx, where <line> is the SDK's
+  current documentation line (the folder written in parentheses).
 
   Placeholders are `{like this}`. Resolve every one from the source: TSDoc, the
   example file, the model registry, tests. If a placeholder cannot be resolved
@@ -13,6 +15,7 @@
 
 ---
 title: {Capability name}
+icon: {Lucide export name — the same one the Ecosystem card renders}
 description: {One sentence, no trailing period, in the voice of the existing 18.}
 schemaType: HowTo
 ---
@@ -28,11 +31,11 @@ schemaType: HowTo
 ## Functions
 
 Use the following sequence of function calls:
-1. [`loadModel()`](/reference/api#loadmodel)
-2. [`{capabilityFn}()`](/reference/api#{capabilityfn})
-3. [`unloadModel()`](/reference/api#unloadmodel)
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`{capabilityFn}()`](/sdk/reference/api#{capabilityfn})
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
 
-For how to use each function, see [SDK — API reference](/reference/api/).
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 
 ## Models
 
@@ -40,7 +43,7 @@ Supported model families and their file layouts:
 
 - **{Model family}**: {file layout — single all-in-one `*.gguf`, or the set of files required}.
 
-For models available as constants, see [SDK — Models](/introduction#models).
+For models available as constants, see [SDK — Models](/sdk#models).
 
 ## Example
 
@@ -65,7 +68,7 @@ The following script {what the script does, in the present tense}:
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
 </Callout>
 
 {/*
@@ -79,7 +82,7 @@ The following script {what the script does, in the present tense}:
   both `{fn}()` and `{fn}Stream()`, and some capabilities need an extra call.
 
   Build the anchor by lowercasing the symbol and stripping the parentheses:
-  `assessModelFit()` -> `/reference/api#assessmodelfit`. Take the symbol from
+  `assessModelFit()` -> `/sdk/reference/api#assessmodelfit`. Take the symbol from
   packages/sdk/src/client/api/index.ts, not from the filename. The barrel is
   the authority, and `completion-stream.ts` exports `completion`.
 
@@ -100,7 +103,7 @@ The following script {what the script does, in the present tense}:
   footer tip, verbatim:
 
       <Callout type="info">
-      The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/python-sdk) for the API surface.
+      The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
       </Callout>
 
   ## Example vs Examples
@@ -122,11 +125,17 @@ The following script {what the script does, in the present tense}:
   a `<Callout type="info">` after the `## Models` list, as
   image-classification.mdx does.
 
+  ## Frontmatter icon
+  The icon draws the sidebar entry: a versioned collection composes navigation
+  from the content, so the page declares its own. Use the Lucide export name,
+  unaliased — `icon: Image`, even where the Ecosystem card has to write
+  `<ImageIcon>` to dodge the MDX global.
+
   ## The other three registration points
   Creating this file is one of FOUR append-only edits. The page alone leaves the
-  capability invisible in navigation and on the home page, and nothing in the
-  build will tell you. See the NEW_CAPABILITY_PAGE subprocedure in SKILL.md.
-  Verify with:
+  capability invisible in navigation and on the Ecosystem overview, and nothing
+  in the build will tell you. See the NEW_CAPABILITY_PAGE subprocedure in
+  SKILL.md. Verify with:
 
       bun run .agents/skills/qv-docs-update/scripts/check-capability-parity.ts
 */}

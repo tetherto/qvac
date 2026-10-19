@@ -50,13 +50,8 @@ test('generationParamsSchema: rejects reasoning_budget other values', (t) => {
   )
 })
 
-test('generationParamsSchema: accepts remove_thinking_from_context boolean', (t) => {
-  t.is(generationParamsSchema.safeParse({ remove_thinking_from_context: true }).success, true)
-  t.is(generationParamsSchema.safeParse({ remove_thinking_from_context: false }).success, true)
-})
-
-test('generationParamsSchema: rejects non-boolean remove_thinking_from_context', (t) => {
-  t.is(generationParamsSchema.safeParse({ remove_thinking_from_context: 1 }).success, false)
+test('generationParamsSchema: rejects remove_thinking_from_context', (t) => {
+  t.is(generationParamsSchema.safeParse({ remove_thinking_from_context: true }).success, false)
 })
 
 test('toolDialectSchema: accepts qwen35, gemma4 and dsml', (t) => {
@@ -132,6 +127,12 @@ test('generationParamsSchema: accepts tool_choice modes and a tool name, rejects
     false,
     'OpenAI object form is mapped by the caller, not accepted here'
   )
+})
+
+test('generationParamsSchema: accepts a boolean parallel_tool_calls only', (t) => {
+  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: true }).success, true)
+  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: false }).success, true)
+  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: 'true' }).success, false)
 })
 
 const weatherTool = {

@@ -11,10 +11,12 @@ export const ModelType = {
   whispercppTranscription: 'whispercpp-transcription',
   bciWhispercppTranscription: 'bci-whispercpp-transcription',
   llamacppEmbedding: 'llamacpp-embedding',
+  llamacppDecision: 'llamacpp-decision',
   nmtcppTranslation: 'nmtcpp-translation',
   onnxTts: 'onnx-tts',
   ttsGgml: 'tts-ggml',
   parakeetTranscription: 'parakeet-transcription',
+  mossTranscribe: 'moss-transcribe',
   ggmlOcr: 'ggml-ocr',
   sdcppGeneration: 'sdcpp-generation',
   audiogenGgml: 'audiogen-ggml',
@@ -182,6 +184,8 @@ export const parakeetModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.parakeet, ModelType.parakeetTranscription])
   .describe('Parakeet model type: "parakeet" (alias) or "parakeet-transcription" (canonical)')
 export type ParakeetModelTypeInput = z.infer<typeof parakeetModelTypeSchema>
+
+export const mossTranscribeModelTypeSchema = z.literal(ModelType.mossTranscribe)
 
 /**
  * Embeddings model type schema.

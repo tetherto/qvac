@@ -143,7 +143,8 @@ test('published files declare every external runtime module', () => {
 
   externalModules.forEach((moduleName) => assertModuleDeclared(packageJson, moduleName))
   assertPublishedTargetsExist(packageJson, packedPaths)
-  assert.ok(collectPublishedSpecifiers(packedFiles).includes('@qvac/fabric/backends'))
+  assert.ok(collectPublishedSpecifiers(packedFiles).includes('@qvac/fabric'))
+  assert.ok(!collectPublishedSpecifiers(packedFiles).includes('@qvac/fabric/backends'))
 })
 
 test('production tarball install includes promoted runtime modules', () => {

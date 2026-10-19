@@ -1,16 +1,13 @@
 import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { type Addon, type GGMLConfig } from "./addon";
-import type ActualIdMapIndex from "./idMapIndex";
-import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
 export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon, } from "./addon";
-export type { IdMapIndexBitWidth, IdMapIndexOptions, IdMapIndexSearchResult, IdMapIndexStorage, } from "./idMapIndex";
-export { BertInterface } from "./addon";
+export { BertInterface, pickPrimaryGgufPath } from "./addon";
+export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
+export type { LayaConfig, LayaRequest, LayaSingleRequest, LayaBatchRequest, LayaQuestion, LayaChoiceQuestion, LayaScoreQuestion, LayaNoulQuestion, LayaState, LayaCriterion, LayaResponse, LayaResult, LayaAnswer, LayaChoiceAnswer, LayaScoreAnswer, LayaNoulAnswer, LayaUsage, LayaDecisionsArgs, } from "./laya";
 export { assessFit } from "./fit";
 export type { EmbedFitDevice, EmbedFitRequest, EmbedFitResult, EmbedFitStatus } from "./fit";
 export type { QvacResponse };
-export declare const IdMapIndex: typeof ActualIdMapIndex;
-export declare const IdMapIndexFilter: typeof ActualIdMapIndexFilter;
 export interface GGMLBertArgs {
     files: {
         model: string[];
@@ -21,12 +18,6 @@ export interface GGMLBertArgs {
         stats?: boolean;
     };
 }
-/**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
- */
-export declare function pickPrimaryGgufPath(files: string[]): string;
 /** BERT client wrapping the native BertInterface for embedding generation. */
 export declare class GGMLBert {
     protected addon: Addon | null;

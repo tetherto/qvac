@@ -1,13 +1,14 @@
 # @qvac/asr-ggml
 
 Multi-engine automatic speech recognition for QVAC runtime applications on the
-[Bare](#glossary) runtime. One npm package and one native prebuild serve two
+[Bare](#glossary) runtime. One npm package and one native prebuild serve three
 ggml-based ASR engines behind a single class, `ASRGgml`:
 
 | Engine | Native library | Good for |
 | --- | --- | --- |
 | **Whisper** | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Multilingual offline transcription, translation, Silero-VAD-segmented live capture |
-| **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-fabric-speech.cpp) through the `speech-cpp` umbrella port (NVIDIA Parakeet / Sortformer) | Low-latency streaming ASR, native end-of-turn detection, 4-speaker diarization |
+| **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-fabric-speech.cpp) through the `speech-cpp` umbrella port (NVIDIA Parakeet / Sortformer / Nemotron) | Low-latency streaming ASR, native end-of-turn detection, up to 8-speaker diarization |
+| **MOSS-Transcribe-Diarize** | the same parakeet engine of `speech-cpp` (OpenMOSS MOSS-Transcribe-Diarize) | One-pass transcription of whole recordings with speaker labels, timestamps and per-request hotwords (Spanish and Chinese) |
 
 This package replaces `@qvac/transcription-whispercpp` and
 `@qvac/transcription-parakeet`. See [CHANGELOG.md](CHANGELOG.md) for the
@@ -24,6 +25,7 @@ breaking changes the merge introduced.
   - [Whisper — VAD streaming `runStreaming()`](#whisper--vad-streaming-runstreaming)
   - [Parakeet — batch `run()`](#parakeet--batch-run)
   - [Parakeet — duplex streaming `runStreaming()`](#parakeet--duplex-streaming-runstreaming)
+  - [MOSS-Transcribe-Diarize — batch `run()` with hotwords](#moss-transcribe-diarize--batch-run-with-hotwords)
 - [Engine Selection](#engine-selection)
 - [API Surface](#api-surface)
 - [Assessing fit](#assessing-fit)
@@ -80,6 +82,7 @@ GGUF metadata** — there is no `modelType` to pass.
 | **Indic Conformer CTC** (`indic-conformer-ctc`) | Indic aggregate | argmax CTC + language mask | ~701 MiB | Multilingual Indic; set `parakeetConfig.language` (e.g. `"hi"`) |
 | **Sortformer v1** (`sortformer-4spk-v1`) | n/a | Diarization head (sliding history) | ~141 MiB | 4-speaker. Default for **offline** diarization |
 | **Sortformer v2.1 + AOSC** (`diar_streaming_sortformer_4spk-v2.1`) | n/a | Diarization head + speaker cache | ~141 MiB | 4-speaker. Default for **streaming** diarization; AOSC anchors speaker slots across silence, auto-detected from GGUF metadata |
+| **Nemotron 3 Diarization** (`Nemotron-3-Diarization`) | n/a | Diarization head + speaker cache | ~102 MiB | Up to 8 speakers, 10 ms probabilities, offline and AOSC streaming; official q8_0 GGUF |
 
 On macOS and iOS, TDT, Unified, EOU, and Sortformer v2.1 can also run their
 encoder on an optional Core ML sidecar; CTC and Indic Conformer CTC cannot
@@ -89,6 +92,27 @@ with the pinned engine, and Sortformer v1 has no sidecar. See
 Upstream `.nemo` checkpoints are NVIDIA's; see the
 [Parakeet model cards](https://huggingface.co/collections/nvidia/parakeet-asr-models-66b50d5a37b9580ee4ba93c2)
 for the per-checkpoint NVIDIA Open Model License terms.
+
+### MOSS-Transcribe-Diarize (`engine: 'moss-transcribe'`)
+
+One `.gguf` holding a Whisper-shaped encoder, a 4x merge adaptor and a
+Qwen3-0.6B decoder, converted from
+[OpenMOSS-Team/MOSS-Transcribe-Diarize](https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize)
+(Apache-2.0). It transcribes a whole recording in one pass and returns
+timestamped segments labelled with the speaker (`S01`, `S02`, ...).
+
+| File | Size | Notes |
+|------|-----:|-------|
+| `moss-transcribe-diarize-q8_0.gguf` | ~0.98 GB | Recommended: the same WER/CER as f16 |
+| `moss-transcribe-diarize-f16.gguf` | ~1.8 GB | Reference precision |
+| `moss-transcribe-diarize-q5_0.gguf` | ~0.64 GB | Smallest; within 1.5 points of f16 |
+
+It is validated for Spanish (2.1-3.9 % WER) and Chinese (9.4-12.1 % CER) on
+2- to 30-minute files; English is not usable (the reference model itself
+skips whole spans). A GGUF sniffs as parakeet, so always pass
+`engine: 'moss-transcribe'`. On macOS and iOS its audio encoder can run on an
+optional Core ML sidecar; see
+[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
 
 ## Choosing a model
 
@@ -106,7 +130,9 @@ language coverage, translation, and diarization.
 | Fast English-only, no punctuation | `parakeet-ctc-0.6b` | Lowest decode cost in the Parakeet family; no PnC. |
 | Indic-language ASR (Hindi and other Indic ids) | `indic-conformer-ctc` | Pass `parakeetConfig.language` (e.g. `"hi"`). Same Parakeet engine; GGUF lives under `indic_conformer/` in the registry. |
 | Offline 4-speaker diarization | `sortformer-4spk-v1` | Default offline diarization head. |
+| Spanish or Chinese transcript with speakers and timestamps in one pass, spelling your names and terms | `moss-transcribe-diarize-q8_0.gguf` (`engine: 'moss-transcribe'`) | Whole recordings only (no streaming); `run(audio, { hotwords })` biases the spelling of proper nouns and domain terms per request. |
 | Streaming 4-speaker diarization | `diar_streaming_sortformer_4spk-v2.1` | AOSC keeps speaker slots across silence; prefer over v1 for live streams. |
+| Offline or streaming diarization with up to 8 speakers | `Nemotron-3-Diarization.q8_0.gguf` | Use the official GGUF with the Parakeet engine; the model type is detected automatically. |
 | Broadest language set + translate-to-English | `ggml-large-v3-turbo.bin` (or `ggml-small.bin` on edge) | Whisper: ~99 languages, translation, Silero-VAD live capture. Turbo is the accuracy/speed sweet spot; use `tiny`/`base` only when size dominates. |
 | Live capture with VAD segmentation (Whisper path) | Whisper ASR model + `ggml-silero-v5.1.2.bin` | Silero VAD is required for Whisper `runStreaming()`. |
 
@@ -136,6 +162,13 @@ SDK code — see [Engine Selection](#engine-selection).
 - `speech-cpp` — umbrella vcpkg port enabling the `whisper` and `parakeet` engine features plus each platform's GPU features
 - Bare runtime — see `engines.bare` in `package.json`
 - Linux requires Clang/LLVM 22 with libc++
+
+`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
+versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
+`@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
+`ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their ggml
+backends under the same file names, so an app that bundles several of them
+keeps one copy of each: use releases that record the same `ggml-speech`.
 
 ## Installation
 
@@ -169,11 +202,12 @@ package selected at install time through `os`/`cpu` filtered
 
 Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
-the platform package and fail at require time with an error naming the missing
-package; a locally built `prebuilds/` directory in the package root always
-takes precedence. Use `require('@qvac/asr-ggml').resolveBackendsDir()` to
-locate the directory holding the host's prebuilt binaries and dynamically
-loaded ggml backends.
+the platform package and fail at require time, and at `bare-pack` time, naming
+the missing package. Each platform package is an ordinary Bare addon whose
+`prebuilds/<host>/` holds the native module and, next to it, the dynamically
+loaded ggml backends the module finds on its own. A source build becomes
+loadable once `npm run link:platform` (run by `npm run build:native`) stages it
+as the host's platform package in `node_modules/`.
 
 Mobile targets are cross-built, so no install host ever matches their `os`,
 and `optionalDependencies` filtering can never select them. Mobile
@@ -346,6 +380,38 @@ await response
 Only one streaming session may be open per instance; a concurrent `run()` or
 `runStreaming()` throws `STREAMING_SESSION_ACTIVE` (6020).
 
+### MOSS-Transcribe-Diarize — batch `run()` with hotwords
+
+```javascript
+const model = new ASRGgml({
+  files: { model: './models/moss-transcribe-diarize-q8_0.gguf' },
+  config: {
+    engine: 'moss-transcribe',
+    mossTranscribeConfig: { useGPU: true, maxThreads: 4 }
+  }
+})
+
+await model.load()
+
+const response = await model.run(float32Samples, {   // Float32Array, 16 kHz mono
+  hotwords: ['Tether', 'QVAC', 'vcpkg', 'Parakeet']  // optional, per request
+})
+await response
+  .onUpdate((segments) => {
+    for (const s of segments) console.log(`[${s.start}-${s.end}] ${s.speaker}: ${s.text}`)
+  })
+  .await()
+```
+
+The whole recording is transcribed in one pass, so `runStreaming()` and
+`reload()` reject with `NOT_SUPPORTED` (6019). Per-call options:
+
+- `hotwords`: up to 64 names or terms of up to 64 UTF-8 bytes each, appended to
+  the model's default instruction, so they come out spelled as given;
+- `prompt`: replaces the default instruction (not combined with `hotwords`);
+- `maxNewTokens`: bounds the generated tokens (unset or 0 keeps the model
+  default).
+
 ## Engine Selection
 
 The engine is resolved **once, in the constructor**, from three sources in
@@ -370,8 +436,10 @@ Validation and sniffing both target the file the driver actually opens: for
 whisper that is `config.path` when set, otherwise `files.model`; parakeet only
 ever loads `files.model`.
 
-`getEngineType()` reports the resolved engine; `ASRGgml.ENGINE_WHISPER` and
-`ASRGgml.ENGINE_PARAKEET` are available as statics.
+`getEngineType()` reports the resolved engine; `ASRGgml.ENGINE_WHISPER`,
+`ASRGgml.ENGINE_PARAKEET` and `ASRGgml.ENGINE_MOSS_TRANSCRIBE` are available as
+statics. A MOSS-Transcribe-Diarize GGUF sniffs as parakeet, so pass
+`engine: 'moss-transcribe'` explicitly.
 
 ## API Surface
 
@@ -381,7 +449,7 @@ Every verb has one signature and one meaning regardless of engine.
 | --- | --- |
 | `new ASRGgml({ files, config?, engine?, enableStats?, logger?, exclusiveRun? })` | Resolves the engine, validates model files and the engine config vocabulary. Throws on any problem — nothing is deferred to `load()`. |
 | `load()` | Creates the native instance and activates the model. Calling it on a loaded instance unloads first. Throws `INSTANCE_DESTROYED` after `destroy()`. |
-| `run(audio)` | Batch transcription. Returns a `QvacResponse`; drain it with `onUpdate(cb)` (push) or `iterate()` (pull). |
+| `run(audio, options?)` | Batch transcription. Returns a `QvacResponse`; drain it with `onUpdate(cb)` (push) or `iterate()` (pull). `options` (`hotwords`, `prompt`, `maxNewTokens`) is moss-transcribe only; the other engines reject a non-empty object. |
 | `runStreaming(audio, opts?)` | Duplex/VAD-segmented streaming. Resolves once the native session is open; `opts` is the engine's streaming vocabulary. |
 | `reload(newConfig?)` | Applies an engine-scoped partial config in place where possible. Rejects with `NOT_SUPPORTED` (6019) on an engine whose driver has no native reload. |
 | `cancel(jobId?)` | Cancels the active job **and fails it**, so a draining `iterate()` throws. The native verb takes no id; `jobId` is accepted for source compatibility only. |
@@ -389,9 +457,9 @@ Every verb has one signature and one meaning regardless of engine.
 | `addon` | The native interface, or `undefined` before `load()` (not cleared by `unload()`, as in both pre-merge packages). Escape hatch for a native hard cancel that stops the decode *without* failing the job (what the SDK's model-wide `cancel` uses). Not otherwise part of the supported surface. |
 | `unload()` / `destroy()` | Release the model / retire the instance. |
 | `getState()` | `{ configLoaded, weightsLoaded, destroyed }`. |
-| `getEngineType()` | `'whisper'` \| `'parakeet'`. |
+| `getEngineType()` | `'whisper'` \| `'parakeet'` \| `'moss-transcribe'`. |
 | `getBackendInfo()` | `BackendInfo` or `null` before `load()`. |
-| `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). Neither engine implements a correct pause/resume. |
+| `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). No engine implements a correct pause/resume. |
 
 Constructor options:
 
@@ -429,15 +497,20 @@ Engine-specific segment fields:
   same data in structured form: a streamed diarization segment carries
   `speakerId`, and the offline transcript carries
   `speakerSegments: [{ speakerId, start, end }]`, one entry per text line.
+- MOSS-Transcribe-Diarize segments carry `speaker` (the model's `"S01"`,
+  `"S02"`, ... label) and `speakerId` (the same speaker, 0-based), with
+  `start`/`end` in seconds.
 
 ## Assessing fit
 
-`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. Parakeet is GGUF, so the registry's weightless copy of a parakeet model answers the same as the model itself and the projection can run before it is downloaded. Whisper ships as `.bin`, which the registry has no weightless form for, so a whisper projection needs the file. It is a module export, not an instance method — nothing is loaded to call it.
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The registry publishes a weightless copy of each model, and passing it answers the same as passing the model itself, so the projection can run before the model is downloaded: for parakeet a GGUF without its data, for whisper and its Silero VAD model a GGUF description of the `.bin` (its settings, vocabulary sizes and tensor list, tens of KB). It is a module export, not an instance method — nothing is loaded to call it.
+
+`assessFit` returns a Promise. Concurrent calls run one at a time. A model the fitter cannot read resolves with `status: 'error'`; only a broken request rejects.
 
 ```js
 const ASRGgml = require('@qvac/asr-ggml')
 
-const fit = ASRGgml.assessFit({
+const fit = await ASRGgml.assessFit({
   engine: 'whisper',
   modelPath: '/models/whisper.bin',
   vadModelPath: '/models/silero-vad.bin',
@@ -447,7 +520,7 @@ const fit = ASRGgml.assessFit({
 
 fit.status // 'fits' | 'does-not-fit' | 'error'
 fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
-fit.modelType // whisper: 'tiny' … 'large v3'; parakeet: 'ctc' | 'rnnt' | 'tdt' | 'eou' | 'nemotron' | 'sortformer'
+fit.modelType // whisper: 'tiny' … 'large v3'; parakeet: 'ctc' | 'rnnt' | 'tdt' | 'eou' | 'nemotron' | 'sortformer' | 'nemotron-diarization'
 fit.deviceName
 fit.deviceBytes
 fit.weightsBytes
@@ -455,20 +528,55 @@ fit.hostBytes
 fit.report
 ```
 
-`engine` picks the fitter and defaults to parakeet. Each engine fills its own breakdown on the result: whisper reports `kvBytes`, `computeBytes`, `vadBytes` and `hostOverflowBytes`; parakeet reports `encoderComputeBytes`, `decoderStateBytes` and `decoderComputeBytes`.
+`engine` picks the fitter and defaults to parakeet. Each engine fills its own breakdown on the result: whisper reports `kvBytes`, `computeBytes`, `vadBytes` and `hostOverflowBytes`; parakeet and MOSS report `encoderComputeBytes`, `decoderStateBytes` and `decoderComputeBytes`.
 
 | Option | Description |
 | --- | --- |
 | `modelPath` | **Required.** Absolute path to the model, or to the registry's weightless copy where one exists. |
-| `audioSeconds` | Longest single transcribe the projection must cover. Defaults to 300. |
-| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet projects on the CPU and whisper on the GPU, matching what each load does. |
-| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet. |
-| `backendsDir` | The prebuilds root. The backends are read from the per-target subdir under it, the same path a load reads. |
-| `vadModelPath` | Whisper: projected alongside the model. Omitted means no VAD. |
+| `audioSeconds` | Longest single transcribe the projection must cover. Required for MOSS; defaults to 300 for whisper and parakeet. |
+| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet and MOSS project on the CPU and whisper on the GPU, matching what each load does. |
+| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet and MOSS. |
+| `backendsDir` | Directory scanned as given for the ggml backends, the same path a load reads. Unset scans next to the loaded module. |
+| `vadModelPath` | Whisper: projected alongside the model; the VAD model or its weightless copy. Omitted means no VAD. |
 | `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
 | `threads`, `longFormWindowFrames`, `longFormContextFrames` | Parakeet: as the load takes them. |
 | `nemotronChunkMs` | Nemotron: the streaming operating point the projection must also cover. 0 projects the largest allowed one. |
+
+MOSS-Transcribe-Diarize uses an explicit duration and the same per-call options as `run`:
+
+```js
+const fit = await ASRGgml.assessFit({
+  engine: 'moss-transcribe',
+  modelPath: '/models/moss-transcribe-diarize-q8_0.gguf',
+  audioSeconds: 90,
+  hotwords: ['QVAC', 'Tether'],
+  maxNewTokens: 1024,
+  threads: 4,
+  gpuLayers: 1
+})
+console.log(fit.report)
+```
+
+`audioSeconds` is required and must be positive and finite. `threads` follows
+`maxThreads` at load time (0 or omitted keeps the existing engine default).
+`prompt`, `hotwords` and `maxNewTokens` follow the transcription rules, including
+prompt/hotword exclusion and 0 or omitted token allowance selecting the GGUF default.
+The projection reads GGUF metadata only and supports a metadata-only copy with the
+same tensor table and tokenizer. It measures the runtime encoder and decoder graphs,
+the aligned KV cache, and host buffers. A workload exceeding the model context returns
+`error` / `workload-too-large`.
+
+Encoder and decoder reuse one scheduler allocation: `decoderComputeBytes` is the
+additional compute above `encoderComputeBytes`, so their sum is the peak allocation.
+On CPU and unified-memory GPUs, host bytes also count against available device memory.
+This projection covers one batch transcription, matching MOSS's existing API.
+
+Run [`examples/moss-transcribe-fit.js`](examples/moss-transcribe-fit.js) with:
+
+```sh
+bare examples/moss-transcribe-fit.js /models/moss-transcribe-diarize-q8_0.gguf 90
+```
 
 A model the fitter cannot read is `status: "error"` with the engine's reason; only a broken request throws.
 
@@ -564,16 +672,17 @@ key is documented inline there, and any key outside it throws
 | Output | `captionEnabled`, `timestampsEnabled` |
 | Language | `language` — multilingual CTC id (e.g. `"hi"`); required for Indic Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on monolingual CTC |
 | Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, `streamingEnergyVadHangoverMs`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
-| Streaming (Sortformer) | `streamingHistoryMs`, `streamingSpeakerVad`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
-| Diarization (Sortformer, offline and streaming) | `diarizationThreshold` (0.641), `diarizationMinSegmentMs` (510) |
+| Streaming diarization | `streamingHistoryMs`, `streamingSpeakerVad`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
+| Diarization, offline and streaming | `diarizationThreshold`, `diarizationMinSegmentMs` (defaults: Sortformer 0.641 / 510 ms; Nemotron 3 0.5 / 200 ms) |
 | Engine | `prewarm`, `prewarmAudioSeconds`, `longFormWindowFrames`, `longFormContextFrames` |
 | Backends | `backendsDir`, `openclCacheDir` |
 
 The `streamingSpkCache*` / `streamingFifoLen` /
-`streamingChunk{Left,Right}ContextMs` defaults are the NeMo-port tuning
-parakeet-cpp ships — keep them unless you are A/B comparing AOSC against the
-v1 sliding-window path. There is no `modelType`: CTC / TDT / EOU / Sortformer,
-and Sortformer v1 vs v2.1+AOSC, are all detected from the GGUF metadata.
+`streamingChunk{Left,Right}ContextMs` defaults follow the loaded model's
+NeMo-port tuning. Omitted left context resolves to 80 ms for Sortformer and
+0 ms for Nemotron 3 Diarization; explicitly setting 80 ms retains one
+Nemotron encoder frame. There is no `modelType`: the ASR and diarization
+families, including Nemotron 3 Diarization, are detected from GGUF metadata.
 
 Parakeet `runStreaming(audio, opts)` options are per-call overrides of the same
 knobs without the `streaming` prefix: `chunkMs`, `historyMs`, `leftContextMs`,
@@ -588,7 +697,8 @@ the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron sessions
 (EOU models signal turns through `<EOU>` instead); the threshold is in dBFS
 (default -35) and the hangover is how long the audio must stay below it
 before the state returns to silence (default 200 ms).
-`streamingSpeakerVad` / `emitSpeakerVad` reports Sortformer speaker activity.
+`streamingSpeakerVad` / `emitSpeakerVad` reports speaker activity from either
+diarization model.
 
 `prewarm` runs one synthetic encoder pass while loading so the first request
 does not pay the GPU shader or kernel compile. `longFormWindowFrames` bounds
@@ -596,15 +706,41 @@ the offline encoder window (0 picks it from the model, a negative value
 always runs one pass), which keeps memory flat on long `run()` inputs;
 `cancel()` also takes effect between those windows.
 
-For streaming diarization, use the Sortformer v2.1 GGUF. Its metadata enables
-AOSC automatically; keep the speaker-cache defaults unless you are comparing
-against the v1 sliding-window path. Sortformer v1 remains the offline
-diarization default. The conversion scripts support both variants and read
-NVIDIA `.nemo` archives directly.
+For four-speaker streaming diarization, use the Sortformer v2.1 GGUF. For up to
+eight speakers, use Nemotron 3 Diarization. Both enable their speaker cache
+from GGUF metadata. Sortformer v1 remains the four-speaker offline default.
+
+For Nemotron 3 Diarization, `longFormWindowFrames` sets when offline input
+switches from one pass to the speaker cache in 30 s chunks. 0 picks 90 s; a
+negative value always runs one pass, which mixes up speakers past about two
+minutes and fails past 400 s. With `prewarm`, the load runs one offline pass
+and one streaming chunk.
+
+### MOSS-Transcribe-Diarize: `config.mossTranscribeConfig`
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `maxThreads` | `0` | CPU threads (0 lets the engine pick). |
+| `useGPU` | `false` | Select a GPU automatically when `backend` is `auto`. |
+| `backend` | `auto` | Native selector: `cpu`, `cuda`, `vulkan`, or an exact ggml device name such as `CUDA0` or `Vulkan0`. Explicit selection overrides `useGPU` and fails at load if unavailable. |
+| `backendsDir` | next to the loaded module | Directory scanned as given for the dynamically loaded ggml backends. |
+
+For example, `mossTranscribeConfig: { backend: 'cuda' }` requests CUDA even
+with the default `useGPU: false`; `{ backend: 'cpu', useGPU: true }` selects
+the CPU ggml backend. `auto` (or an empty selector) preserves automatic selection and fallback.
+Pass the same `backend` to `assessFit({ engine: 'moss-transcribe', ... })`
+to project on that device; it overrides `gpuLayers`. A missing explicit device
+returns a fit error instead of a CPU projection. `getBackendInfo()` reports
+the resolved backend after load. CUDA/Vulkan require compatible native
+`speech-cpp` libraries and the corresponding backend in the addon build.
+
+Any other key throws `INVALID_CONFIG` (24015). Prompt, hotwords and the token
+bound are per call; see
+[MOSS-Transcribe-Diarize — batch `run()` with hotwords](#moss-transcribe-diarize--batch-run-with-hotwords).
 
 ## Audio Input
 
-Both engines take **16 kHz mono** audio. `run()` and `runStreaming()` accept a
+Every engine takes **16 kHz mono** audio. `run()` and `runStreaming()` accept a
 stream, an iterable, a single chunk, or an array of chunks. A chunk's *class*
 decides how it is interpreted:
 
@@ -652,7 +788,7 @@ including CPU-only and non-NVIDIA machines — skip the module and fall back
 to Vulkan or CPU instead of failing to load the addon. CUDA is compiled
 *alongside* Vulkan rather than replacing it; ggml registers CUDA ahead of
 Vulkan, so a `use_gpu` / `useGPU` request lands on CUDA when a supported
-device is present and falls back to Vulkan otherwise. Both engines report
+device is present and falls back to Vulkan otherwise. Every engine reports
 the winner through `getBackendInfo()` as `backendId: 2` (`BackendId.CUDA`).
 
 On x64 a CUDA build's module targets **compute capability 7.5 and newer**,
@@ -671,8 +807,9 @@ nvcc's clang host-compiler setup lives in
 `vcpkg-overlays/toolchains/linux-clang.cmake`, shared by every addon that
 compiles the CUDA backend.
 
-Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
-parakeet needs `parakeetConfig.useGPU: true`.
+Every engine defaults to CPU: whisper needs `contextParams.use_gpu: true`,
+parakeet needs `parakeetConfig.useGPU: true` and moss-transcribe needs
+`mossTranscribeConfig.useGPU: true`.
 
 
 For Whisper GPU selection, set `contextParams['main-gpu']` (or the alias
@@ -699,22 +836,21 @@ This selector currently applies to the Whisper engine.
 encoder sidecar loaded; see
 [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)), and
 `modelType` (`'whisper'`, or the Parakeet family detected from the GGUF:
-`'ctc'`, `'tdt'`, `'rnnt'`, `'eou'`, `'nemotron'`, `'sortformer'`). Whisper
+`'ctc'`, `'tdt'`, `'rnnt'`, `'eou'`, `'nemotron'`, `'sortformer'`,
+`'nemotron-diarization'`). Whisper
 additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
 Two paths matter on Android and Linux:
 
-- **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — root directory
-  holding dynamically-loaded ggml backend libraries (CUDA, Vulkan, OpenCL,
-  per-arch CPU variants). Defaults to `resolveBackendsDir()`: the package's
-  own `prebuilds/` when present (local builds, mobile flatten), otherwise the
-  installed platform package (see [Platform packages](#platform-packages));
-  the native addon
-  appends `<bare-target>/<module-name>` before scanning. Pass an explicit path
-  when backend libraries ship elsewhere — e.g. Android's
-  `ApplicationInfo.nativeLibraryDir` when they are packaged inside the APK.
+- **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — directory
+  scanned, as given, for dynamically-loaded ggml backend libraries (CUDA,
+  Vulkan, OpenCL, per-arch CPU variants). Unset scans the addon's own: the
+  directory its native module was loaded from
+  (`prebuilds/<host>/qvac__asr-ggml-<suffix>/` in a platform package, the
+  app's native library directory after `bare-link`). Pass a path only when
+  backend libraries ship somewhere else.
   No-op on Apple, where backends are statically linked.
 - **`openclCacheDir`** (parakeet) — persistent directory for ggml-opencl's
   compiled program-binary cache. Android-only; pass the host app's cache
@@ -744,6 +880,7 @@ ggml.
 | CTC (`parakeet-ctc-0.6b`), Indic Conformer CTC | none in the pinned `speech-cpp` | — | always (the engine adds CTC sidecars from `speech-cpp` `2026-09-24`) |
 | Sortformer v1 | none | — | always |
 | Whisper | none: the `whisper` feature builds without `WHISPER_COREML` | — | always |
+| MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
 
 `getBackendInfo().encoderOnCoreml` (with `encoderBackend: 'coreml'`) and
 `RuntimeStats.encoderOnCoreml` report that a sidecar loaded at `load()`, not
@@ -763,6 +900,16 @@ tree at the ref `speech-cpp` pins; its
 has the per-model export commands. The
 [Core ML RTF lanes](#core-ml-apple-neural-engine-rtf-lanes) record what the
 TDT sidecar gains over Metal.
+
+MOSS-Transcribe-Diarize has its own switches: `MOSS_COREML_DISABLE=1` forces
+ggml, and `MOSS_COREML_COMPUTE_UNITS=cpu_and_gpu` keeps the encoder off the
+Neural Engine. The default placement runs the encoder 1.79x faster than Metal
+on an Apple M4, but on a large GPU the Neural Engine loses (0.57x on an M3
+Ultra, 1.11x with `cpu_and_gpu`); the decoder dominates a transcription, so a
+whole run gains about 5 % on the M4. Its placement is not reported in
+`getBackendInfo()` or `RuntimeStats`. Export it with
+`engines/parakeet/scripts/export-moss-transcribe-encoder-coreml.py`; see the
+[MOSS-Transcribe-Diarize guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/moss-transcribe.md#core-ml-encoder-sidecar).
 
 ## Staging Models
 
@@ -802,6 +949,20 @@ its own (`scripts/setup-venv.sh`, `scripts/parakeet-download-models.sh`,
 package, but it does need `sentencepiece` to decode the tokenizer (without it
 transcripts come out as raw token IDs). Full requirements:
 `scripts/requirements.txt`.
+
+**Nemotron 3 Diarization**, using the official GGUF:
+
+```bash
+python -m pip install huggingface_hub
+python <path-to-qvac-fabric-speech.cpp>/engines/parakeet/scripts/download_nemotron_diarization.py --model-dir models
+npm run example:parakeet:nemotron-diarize -- --model models/Nemotron-3-Diarization.q8_0.gguf --audio examples/parakeet-samples/diarization-sample-16k.wav
+```
+
+The source repository also provides `convert_nemotron_diarization.py` if you
+need to convert the original `.nemo` checkpoint. The native addon detects
+`nemotron-diarization` from GGUF metadata and returns `speakerSegments` with
+speaker IDs from 0 through 7. The default threshold is 0.5 and the minimum
+segment duration is 200 ms; both can be overridden through `parakeetConfig`.
 
 ## Error Codes
 
@@ -856,18 +1017,25 @@ npm run build          # build:ts (TypeScript) + build:native (bare-make)
 npm run build:cuda     # same, with the CUDA backend compiled in (needs nvcc)
 ```
 
-`build:native` runs `bare-make generate` → `bare-make build` →
-`bare-make install`. `build:native:cuda` is the same chain with
+`build:native` runs `bare-make generate`, `bare-make build`,
+`bare-make install` and `npm run link:platform`, which stages
+`prebuilds/<host>/` as `node_modules/@qvac/asr-ggml-<host>`: `#host-addon`
+only ever loads a platform package. `build:native:cuda` is the same chain with
 `-D ASR_CUDA=ON` on the generate step.
 
 ### Test
+
+The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
+compiler cache, and two build workers. C++ test failures block the merge guard.
+See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+for cache warming and resource settings.
 
 ```bash
 npm test                              # complete standard gate
 npm run test:all                      # same aggregate, named explicitly
 npm run test:unit
 npm run test:package                  # packed tarball and consumer contract
-npm run test:integration              # standard suites for both engines
+npm run test:integration              # standard suites for every engine
 npm run test:integration:whisper
 npm run test:integration:parakeet
 npm run test:cpp                      # native gtest suite
@@ -889,6 +1057,59 @@ are skipped when `NO_GPU=true`, as on the CPU-only CI rows.
 `test:integration:live-stream-simulation` runs only the long-lived Whisper
 stream test; the misspelled `test:integration:live-stream-simultion` remains
 as a temporary alias.
+
+The MOSS-Transcribe-Diarize integration test (`moss-transcribe.test.js`, part of
+`test:integration:parakeet`) runs when `QVAC_TEST_MOSS_TRANSCRIBE_GGUF` points
+at a GGUF and is skipped otherwise; the C++ suite transcribes a real recording
+when `QVAC_TEST_MOSS_TRANSCRIBE_GGUF` and `QVAC_TEST_MOSS_TRANSCRIBE_AUDIO`
+(16 kHz s16le raw) are set. To check a specific backend with the JS integration
+test, also set `QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=cuda` or `vulkan` (or an exact
+device name). It asserts the resolved backend before transcription; a missing
+requested backend fails instead of silently validating CPU. An explicit selector
+also fails if the model or audio fixture is missing; only the default `auto`
+mode permits optional-fixture skips. Selectors are case-sensitive, matching
+native device names. Run these model
+tests on provisioned hardware with sufficient memory. Mocked JS forwarding
+tests and the C++ option-mapping tests do not establish GPU execution.
+
+### OpenMOSS native dependency validation
+
+The package pins `speech-cpp` 2026-10-14 and `ggml-speech` 2026-10-07#1.
+The registry baseline remains `e31be272ecdf9f20970302ebf8a2943d47803001`.
+The `speech-cpp` override selects the merged native source
+`bd99d1e2233ad0ff8d314c93633cad84ca823e83` published by
+[registry PR #428](https://github.com/tetherto/qvac-registry-vcpkg/pull/428).
+This speech revision provides the explicit MOSS backend selector used by the
+addon; the selector and dependency pin must ship together.
+
+On a provisioned Linux NVIDIA host with CUDA 13, Vulkan drivers, sufficient
+memory, and package development dependencies installed, run from this package:
+
+```sh
+# Bound both dependency compilation and addon compilation.
+export VCPKG_MAX_CONCURRENCY=2 CMAKE_BUILD_PARALLEL_LEVEL=2
+npm run build:ts
+bare-make generate --build build-moss -D ASR_CUDA=ON -D BUILD_TESTING=OFF
+bare-make build --build build-moss --parallel 2
+bare-make install --build build-moss
+npm run link:platform
+
+# Stage the full MOSS GGUF and examples/samples/LastQuestion_long_ES.raw first.
+: "${QVAC_TEST_MOSS_TRANSCRIBE_GGUF:?Set this to the provisioned MOSS GGUF}"
+export QVAC_TEST_MOSS_TRANSCRIBE_GGUF
+node_modules/.bin/brittle -r test/integration/all.js test/integration/moss-transcribe.test.js
+QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=cuda INTEGRATION_TEST_TIMEOUT=1800 \
+  bash test/integration/parakeet-run-tests.sh
+QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=vulkan INTEGRATION_TEST_TIMEOUT=1800 \
+  bash test/integration/parakeet-run-tests.sh
+```
+
+For a Vulkan-only Linux host, generate with `-D ASR_CUDA=OFF` and run only the
+Vulkan command. These checks must execute both default-prompt and hotword
+transcription and assert the selected backend; an explicit backend run fails
+when a fixture is missing. Registry dry-runs, forwarding tests, and compilation
+alone do not validate packaged addon GPU inference. Run packaged validation on
+the same source revision and native dependencies that will be shipped.
 
 Typical loop: `npm install && npm run build && npm run test:integration`.
 
@@ -1014,10 +1235,16 @@ Parakeet:
 - [`examples/parakeet-unified-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-unified-transcribe.js) — batch transcription with `parakeet-unified-en-0.6b`
 - [`examples/parakeet-indic-conformer-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-indic-conformer-transcribe.js) — Indic Conformer transcription with the required `--language <id>` option
 - [`examples/parakeet-diarized-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
+- [`examples/nemotron-diarization.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/nemotron-diarization.js) — Nemotron 3 offline 8-speaker diarization
 - [`examples/parakeet-live-mic.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic.js) — live mic via the duplex streaming session
 - [`examples/parakeet-live-mic-diarized.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
 - [`examples/parakeet-live-mic-diarized-aosc.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags
 - [`examples/parakeet-decode-audio.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container
+
+MOSS-Transcribe-Diarize:
+
+- [`examples/moss-transcribe-fit.js`](examples/moss-transcribe-fit.js) — metadata-only memory preflight for a model and audio duration
+- [`examples/moss-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/moss-transcribe.js) — speaker-labelled transcript of a WAV or raw 16 kHz file, with optional `--hotwords "a,b"` and `--gpu`
 
 The npm tarball includes the dependency-clean Whisper quickstart. The other
 examples are repository examples. Run their matching commands from a source
@@ -1034,10 +1261,12 @@ npm run example:parakeet
 npm run example:parakeet:unified
 npm run example:parakeet:indic-conformer
 npm run example:parakeet:diarize
+npm run example:parakeet:nemotron-diarize
 npm run example:parakeet:mic
 npm run example:parakeet:mic-diarize
 npm run example:parakeet:mic-diarize-aosc
 npm run example:parakeet:decode-audio
+npm run example:moss-transcribe -- --model <gguf> --audio <file>
 ```
 
 The published quickstart uses the Bare global for arguments and exit handling

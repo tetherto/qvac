@@ -154,13 +154,13 @@ External mode (above) assumes you've already authored a `qvac.config.json` and h
 
 The serve is **shared and self-cleaning**: a second session (or a separate tool) asking for the same models attaches to the already-warm serve instead of paying another cold start, and the serve is torn down by a detached supervisor a few minutes after the last user goes away. You never have to babysit a process — see [Shared serves & lifecycle](#shared-serves--lifecycle).
 
-Managed mode generates a cryptographically random API key for each new serve fleet, stores it in the private managed registry record, and reuses that record's key when attaching to the same fleet. The provider owns this key: a caller-supplied `authorization` header is replaced with the resolved managed key.
+Managed mode generates a cryptographically random API key for each new serve fleet, stores it in the private managed registry record, and reuses that record's key when attaching to the same fleet. The provider owns this key: a caller-supplied `authorization` header is replaced with the resolved managed key. The key only goes to a listener that has proved it holds it: a new serve reports the port it bound on a pipe only the provider can read, and a reused serve must answer the CLI's `/qvac/identity` challenge first. This needs a `@qvac/cli` that supports `--ready-fd`; an older one fails with `CliUpgradeRequiredError`.
 
 Custom `fetch` wrappers receive requests after managed authorization has been applied. Treat the `Authorization` header as secret material and do not log request headers.
 
 ```bash
 # Managed mode needs the QVAC CLI available (optional peer dependency):
-npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli@^0.14.0
+npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli@^0.15.0
 ```
 
 ```ts
@@ -233,7 +233,7 @@ const res = await fetch(`${qvac.baseURL}/models`, {
 
 Treat it as secret material. The property is non-enumerable, so `{ ...provider }`, `Object.keys(provider)`, and object dumps never carry it; never log it or hand it to an untrusted process.
 
-Neither the detached runner nor the `qvac serve` it starts receives the key through argv: both read it from a one-shot `0600` file, so it cannot be recovered from `ps` or `/proc/<pid>/cmdline`. Every CLI in the supported `^0.14.0` peer range takes `--api-key-file`, so the argv fallback is reached only behind a `serveBinPath` override, whose version cannot be determined.
+Neither the detached runner nor the `qvac serve` it starts receives the key through argv: both read it from a one-shot `0600` file, so it cannot be recovered from `ps` or `/proc/<pid>/cmdline`. Every CLI in the supported `^0.15.0` peer range takes `--api-key-file`, so the argv fallback is reached only behind a `serveBinPath` override, whose version cannot be determined.
 
 ### Per-model configuration
 
@@ -273,7 +273,7 @@ Managed mode runs `qvac serve` as a **shared, self-cleaning daemon** so that ope
 - **Startup is gated on model preload.** `qvac serve` does not open its port until every preloaded model is ready, and a cold P2P download can take minutes — hence the generous default `serveStartTimeout`. Raise it for large models.
 - **External mode pays nothing.** The managed subsystem (and its `node:child_process` / `@qvac/cli` resolution) is dynamically imported only when `mode: 'managed'` is set.
 - **Node 22+ and Bun.** The managed subsystem uses only portable `node:` APIs — no Bun-specific calls.
-- **Typed errors.** Managed setup throws structured errors you can `instanceof`-check: `UnknownManagedModelError`, `DuplicateManagedModelError`, `MultipleDefaultManagedModelsError`, `CliNotFoundError`, `ServeStartTimeoutError`, `ServeSpawnFailedError`, `ServeExitedError`, and `PortAllocationFailedError` (all extending `QvacManagedModeError`, with a `.code` from `QvacManagedErrorCode`). They're exported from the package root.
+- **Typed errors.** Managed setup throws structured errors you can `instanceof`-check: `UnknownManagedModelError`, `DuplicateManagedModelError`, `MultipleDefaultManagedModelsError`, `CliNotFoundError`, `ServeStartTimeoutError`, `ServeSpawnFailedError`, `ServeExitedError`, and `CliUpgradeRequiredError` (all extending `QvacManagedModeError`, with a `.code` from `QvacManagedErrorCode`). They're exported from the package root.
 
 ---
 

@@ -9,12 +9,13 @@ export interface AudioGenConfigurationParams {
     inferenceSteps?: number;
     shift?: number;
     useGPU?: boolean;
+    /** MiniMax compute device ('cpu' | 'gpu' | 'auto'); overrides useGPU. */
+    device?: string;
     nGpuLayers?: number;
     threads?: number;
     /**
-     * Prebuilds root the native side scans (after appending the per-target
-     * BACKENDS_SUBDIR) for dlopen'd ggml backend modules. Required on arm64, where
-     * the CPU backend ships as per-microarch MODULE .so files.
+     * Directory the native side scans, as given, for dlopen'd ggml backend
+     * modules. Unset scans the addon's own, next to its native module.
      */
     backendsDir?: string;
 }
@@ -79,6 +80,7 @@ export interface AudioGenJobData {
     coverNoiseStrength?: number;
     maxFrames?: number;
     inferenceSteps?: number;
+    shift?: number;
     cfgScale?: number;
     editOperations?: AudioEditOperationJobData[];
 }

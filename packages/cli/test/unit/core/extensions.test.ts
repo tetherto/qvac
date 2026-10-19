@@ -104,6 +104,7 @@ describe('mounted surfaces', () => {
     const printed = await build(['openai'])
     assert.match(printed, /chat/)
     assert.match(printed, /embeddings/)
+    assert.match(printed, /decisions/)
     assert.ok(!printed.includes('/qvac/'))
   })
 })

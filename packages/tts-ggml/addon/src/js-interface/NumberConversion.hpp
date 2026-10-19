@@ -34,4 +34,11 @@ inline std::optional<float> floatFromJsNumber(double value) {
   return static_cast<float>(value);
 }
 
+inline std::optional<float> finiteFloatFromJsNumber(double value) {
+  if (!std::isfinite(value)) {
+    return std::nullopt;
+  }
+  return floatFromJsNumber(value);
+}
+
 } // namespace qvac::ttsggml

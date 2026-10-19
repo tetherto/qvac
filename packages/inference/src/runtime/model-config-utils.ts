@@ -7,20 +7,27 @@ import {
   type RuntimeContext
 } from '@/schemas/index'
 import { llmConfigSchema, embedConfigSchema } from '@/schemas/llamacpp-config'
-import { whisperConfigSchema, parakeetRuntimeConfigSchema } from '@/schemas/transcription-config'
+import {
+  whisperConfigSchema,
+  parakeetRuntimeConfigSchema,
+  mossTranscribeConfigSchema
+} from '@/schemas/transcription-config'
 import { bciConfigSchema } from '@/schemas/bci-config'
 import { ocrConfigSchema } from '@/schemas/ocr'
 import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { vlaConfigSchema } from '@/schemas/vla'
+import { decisionConfigSchema } from '@/schemas/decision'
 import { classificationConfigSchema } from '@/schemas/classification'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: 'llm',
   [ModelType.llamacppEmbedding]: 'embeddings',
+  [ModelType.llamacppDecision]: 'llamacpp-decision',
   [ModelType.whispercppTranscription]: 'whisper',
   [ModelType.bciWhispercppTranscription]: 'bci',
   [ModelType.parakeetTranscription]: 'parakeet',
+  [ModelType.mossTranscribe]: 'moss-transcribe',
   [ModelType.nmtcppTranslation]: 'nmt',
   [ModelType.onnxTts]: 'tts',
   [ModelType.ttsGgml]: 'tts',
@@ -34,9 +41,11 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
 export const MODEL_CONFIG_SCHEMAS: Partial<Record<CanonicalModelType, ZodSchema>> = {
   [ModelType.llamacppCompletion]: llmConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigSchema,
+  [ModelType.llamacppDecision]: decisionConfigSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
   [ModelType.bciWhispercppTranscription]: bciConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
+  [ModelType.mossTranscribe]: mossTranscribeConfigSchema,
   [ModelType.ggmlOcr]: ocrConfigSchema,
   [ModelType.sdcppGeneration]: sdcppConfigSchema,
   [ModelType.audiogenGgml]: audioGenConfigSchema,

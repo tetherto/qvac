@@ -1,11 +1,24 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { FLUX_2_KLEIN_4B_VAE, TTS_S3GEN_EN_CHATTERBOX, WHISPER_EN_TINY_Q8_0 } from '@qvac/sdk'
+import {
+  FLUX_2_KLEIN_4B_VAE,
+  TTS_S3GEN_EN_CHATTERBOX,
+  WHISPER_EN_TINY_Q8_0,
+  LAYA_MULTILINGUAL_322M_Q8_0
+} from '@qvac/sdk'
 import { parseServeConfig } from '@/serve/core/config'
 import { resolveExplicitServeModel, resolveModelConstant } from '@/serve/core/config/models'
 import { resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
 
 describe('resolveExplicitServeModel', () => {
+  it('routes the decisions model type to its own endpoint category', () => {
+    assert.deepEqual(resolveExplicitServeModel('llamacpp-decision', { device: 'gpu' }), {
+      sdkType: 'llamacpp-decision',
+      endpointCategory: 'decision',
+      config: { device: 'gpu' }
+    })
+  })
+
   it('maps whispercpp-audio-translation to whispercpp-transcription and audio-translation', () => {
     const r = resolveExplicitServeModel('whispercpp-audio-translation', {
       whisperConfig: { language: 'auto', n_threads: 4 }
@@ -47,13 +60,31 @@ describe('resolveExplicitServeModel', () => {
 })
 
 describe('resolveModelConstant', () => {
-  it('resolves a constant to its registry src and natural addon', () => {
+  it('resolves a constant to its registry src and canonical engine', () => {
     const r = resolveModelConstant('alias', { model: 'WHISPER_EN_TINY_Q8_0' })
     assert.equal(r.modelSrc, WHISPER_EN_TINY_Q8_0)
-    // The SDK constant's `addon` is the legacy `whisper` alias; the endpoint
-    // category is normalized to `transcription` via ENDPOINT_CATEGORY.
-    assert.equal(r.sdkType, WHISPER_EN_TINY_Q8_0.addon)
+    assert.equal(r.sdkType, WHISPER_EN_TINY_Q8_0.engine)
     assert.equal(r.endpointCategory, 'transcription')
+  })
+
+  it('uses the decision engine when a constant shares the embedding addon category', () => {
+    const r = resolveModelConstant('decision', { model: LAYA_MULTILINGUAL_322M_Q8_0.name })
+    assert.equal(r.modelSrc, LAYA_MULTILINGUAL_322M_Q8_0)
+    assert.equal(LAYA_MULTILINGUAL_322M_Q8_0.addon, 'embeddings')
+    assert.equal(r.sdkType, 'llamacpp-decision')
+    assert.equal(r.endpointCategory, 'decision')
+  })
+
+  it('falls back to the addon for a legacy constant without engine metadata', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(WHISPER_EN_TINY_Q8_0, 'engine')!
+    Object.defineProperty(WHISPER_EN_TINY_Q8_0, 'engine', { value: undefined })
+    try {
+      const r = resolveModelConstant('legacy', { model: WHISPER_EN_TINY_Q8_0.name })
+      assert.equal(r.sdkType, WHISPER_EN_TINY_Q8_0.addon)
+      assert.equal(r.endpointCategory, 'transcription')
+    } finally {
+      Object.defineProperty(WHISPER_EN_TINY_Q8_0, 'engine', descriptor)
+    }
   })
 
   it('honors a type override on a constant entry (whisper → audio-translation)', () => {
@@ -192,6 +223,31 @@ describe('parseServeConfig nested companions', () => {
     )
     assert.equal(cfg.models.get('lazy')!.preload, false)
     assert.equal(cfg.models.get('eager')!.preload, true)
+  })
+
+  it('carries a per-alias modelFitPolicy on both entry shapes', () => {
+    const cfg = parseServeConfig(
+      {
+        serve: {
+          models: {
+            constant: { model: 'WHISPER_EN_TINY_Q8_0', modelFitPolicy: 'refuse' },
+            explicit: { src: 'placeholder', type: 'sdcpp-video', modelFitPolicy: 'off' },
+            unset: { model: 'WHISPER_EN_TINY_Q8_0' }
+          }
+        }
+      },
+      {}
+    )
+    assert.equal(cfg.models.get('constant')!.modelFitPolicy, 'refuse')
+    assert.equal(cfg.models.get('explicit')!.modelFitPolicy, 'off')
+    assert.equal('modelFitPolicy' in cfg.models.get('unset')!, false)
+  })
+
+  it('rejects a modelFitPolicy that is not one of the policies', () => {
+    assert.throws(
+      () => resolveModelConstant('a', { model: 'WHISPER_EN_TINY_Q8_0', modelFitPolicy: 'warn' }),
+      /serve\.models\.a\.modelFitPolicy: expected one of "log", "refuse", "off", got "warn"/
+    )
   })
 
   it('leaves the ignored upscaler block unchanged for video entries', () => {

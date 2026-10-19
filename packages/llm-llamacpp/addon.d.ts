@@ -13,7 +13,7 @@ export interface AddonMessage {
      */
     generationParams?: GenerationParams;
     cacheKey?: string;
-    saveCacheToDisk?: boolean;
+    ephemeral?: boolean;
 }
 export interface AddonMediaMessage {
     type: "media";
@@ -74,6 +74,8 @@ export interface LlamaBinding {
     cancel(handle: unknown, savePauseCheckpoint: number): Promise<void> | void;
     cancelJob(handle: unknown, id: number): Promise<void> | void;
     finetune?(handle: unknown, params: FinetuneOptions): Promise<number | false> | number | false;
+    saveCache(handle: unknown, cacheKey: string): Promise<void>;
+    discardCache(handle: unknown, cacheKey: string): Promise<void>;
     runJob(handle: unknown, data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
     runJob(handle: unknown, data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
     destroyInstance(handle: unknown): void;
@@ -88,7 +90,6 @@ export type MappedAddonEvent = {
  * `FinetuneProgress`, or `null` to drop it.
  */
 export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedAddonEvent | null;
-export declare function resolveBackendsDir(): string;
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -127,6 +128,16 @@ export declare class LlamaInterface {
      * jobs running. Routes to MultiJobScheduler::cancel(id) -> cancelById(id).
      */
     cancelJob(id: number): Promise<void>;
+    /**
+     * Write the conversation kept in memory for `cacheKey` to its file (see
+     * `LlmLlamacpp.saveCache`).
+     */
+    saveCache(cacheKey: string): Promise<void>;
+    /**
+     * Drop the conversation kept in memory for `cacheKey` without writing it
+     * (see `LlmLlamacpp.discardCache`).
+     */
+    discardCache(cacheKey: string): Promise<void>;
     /**
      * Run finetuning when native binding provides support.
      */

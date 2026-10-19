@@ -1,5 +1,8 @@
 import type { ErrorResponse } from '@qvac/inference/surface'
 import {
+  RpcServerOperationError,
+  InferenceCancelledError,
+  type InferenceCancelledPartial,
   ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
@@ -120,14 +123,27 @@ type ErrorReconstructor = (response: ErrorResponse) => Error
  * be re-exported from `@qvac/sdk` so consumers can `import` it.
  * Forgetting either side means `instanceof` regresses for that class.
  *
- * Client-constructed typed errors (e.g. `InferenceCancelledError`
- * built in `client/api/completion-stream.ts` from the aggregated
- * partial state) are NOT registered here — they never round-trip the
- * envelope, and adding a reconstructor for one would create a
- * parallel construction path that fires whenever the server happens
- * to throw the same class name.
+ * Completion aggregators construct cancellation errors locally with partial
+ * output. RPC control operations also throw them in the worker, so cancellation
+ * errors support both paths.
  */
 const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
+  INFERENCE_CANCELLED: (response) => {
+    const partial = response.typedFields?.['partial']
+    return new InferenceCancelledError(
+      readStringField(response.typedFields, 'requestId', ''),
+      partial && typeof partial === 'object' && !Array.isArray(partial)
+        ? (partial as InferenceCancelledPartial)
+        : {},
+      response.cause
+    )
+  },
+  RPC_SERVER_OPERATION_FAILED: (response) =>
+    new RpcServerOperationError(
+      readStringField(response.typedFields, 'operation', 'rpcServer'),
+      readStringField(response.typedFields, 'details', response.message),
+      response.cause
+    ),
   REQUEST_ID_CONFLICT: (response) => {
     return new RequestIdConflictError(
       readStringField(response.typedFields, 'requestId', ''),

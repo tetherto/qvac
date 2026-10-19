@@ -69,10 +69,30 @@ export interface CosyvoiceFitRequest extends TtsFitCommon {
 export interface MossFitRequest extends TtsFitCommon {
     engineType: 'moss';
     mossBackbonePath: string;
-    mossCodecDecoderPath?: string;
+    mossCodecDecoderPath: string;
     mossCodecEncoderPath?: string;
+    /** Rows in the complete native prompt, including reference and dialogue rows. */
+    promptRows: number;
+    /** Total mono reference samples; use 0 for a voice without a reference. */
+    referenceSamples: number;
+    /** Project native chunk streaming when true, batch synthesis when false. */
+    streaming: boolean;
+    threads?: number;
+    streamChunkTokens?: number;
+    durationTokens?: number;
 }
-export type TtsFitRequest = SupertonicFitRequest | ParlerFitRequest | ChatterboxFitRequest | Audio8FitRequest | CosyvoiceFitRequest | MossFitRequest;
+export interface MossSoundEffectFitRequest extends TtsFitCommon {
+    engineType: 'moss-sfx';
+    mossSoundEffectPath: string;
+    prompt: string;
+    seconds: number;
+    negativePrompt?: string;
+    steps?: number;
+    guidance?: number;
+    shift?: number;
+    threads?: number;
+}
+export type TtsFitRequest = SupertonicFitRequest | ParlerFitRequest | ChatterboxFitRequest | Audio8FitRequest | CosyvoiceFitRequest | MossFitRequest | MossSoundEffectFitRequest;
 /** The voice engines a fit can be asked for, read off the request union. */
 export type TtsFitEngine = TtsFitRequest['engineType'];
 export type TtsFitStatus = 'fits' | 'does-not-fit' | 'error';
@@ -119,9 +139,9 @@ export interface TtsFitResult {
  *
  * `engineType` picks the fitter, the same key a load uses, and is required
  * here: a fit request carries none of the file keys a load is inferred from.
- * A model the engine cannot read comes back as `status: "error"`, as does a
+ * A model the engine cannot read resolves to `status: "error"`, as does a
  * voice with no fitter; a broken request, or a host with no native binding,
- * throws.
+ * rejects. Fits run one at a time within this addon.
  */
-export declare function assessFit(request: TtsFitRequest): TtsFitResult;
+export declare function assessFit(request: TtsFitRequest): Promise<TtsFitResult>;
 export {};

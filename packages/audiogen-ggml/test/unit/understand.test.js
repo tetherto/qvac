@@ -10,7 +10,8 @@ const UNDERSTAND_PAYLOAD = {
   keyscale: 'A minor',
   timesignature: '4/4',
   vocalLanguage: 'es',
-  audioCodes: new Int32Array([12095, 63487, 12741])
+  audioCodes: new Int32Array([12095, 63487, 12741]),
+  seed: 2718281828
 }
 
 function stereoPcm(samples, fill = 0.1) {
@@ -85,6 +86,7 @@ test('AudioGen.understand forwards the job and surfaces the description', async 
   t.is(understood.understand.timesignature, UNDERSTAND_PAYLOAD.timesignature)
   t.is(understood.understand.vocalLanguage, UNDERSTAND_PAYLOAD.vocalLanguage)
   t.is(understood.understand.audioCodes, UNDERSTAND_PAYLOAD.audioCodes)
+  t.is(understood.understand.seed, UNDERSTAND_PAYLOAD.seed, 'the resolved seed is surfaced')
 
   t.ok(stats.understand, 'stats repeat the description')
   t.is(stats.understand.caption, UNDERSTAND_PAYLOAD.caption)

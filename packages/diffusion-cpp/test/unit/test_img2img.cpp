@@ -165,6 +165,40 @@ protected:
 
 std::unique_ptr<SdModel> SdImg2ImgTest::model = nullptr;
 
+TEST(SdImageDecodeBudgetTest, RejectsMultiReferenceAboveBudget) {
+  const auto path = sd_test_helpers::getModelPath();
+  if (path.empty()) {
+    GTEST_SKIP() << "SD2.1 model not available";
+  }
+  SdCtxConfig config{};
+  config.modelPath = path;
+  config.prediction = V_PRED;
+  config.flux2Requested = true;
+  config.nThreads = sd_test_helpers::getTestThreads();
+  config.device = sd_test_helpers::getTestDevice();
+  SdModel model(std::move(config));
+  model.load();
+
+  auto png = img2img_helpers::makeSolidPng(8192, 8192, 0, 0, 0);
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "img2img", "prompt": "test", "width": 8192,
+    "height": 8192, "steps": 1
+  })";
+  job.initImagesBytes = {png, png, png};
+  try {
+    model.process(std::any(job));
+    FAIL() << "Expected the third reference to exceed the job budget";
+  } catch (const std::exception& error) {
+    EXPECT_NE(
+        std::string(error.what())
+            .find(
+                "img2img: failed to decode init_images[2]: image exceeds "
+                "remaining 128 Mi job pixel budget"),
+        std::string::npos);
+  }
+}
+
 // ── Diagnostic: print what stb_image sees for the headshot ───────────────────
 
 TEST(SdImg2ImgDiagnostics, PrintHeadshotDimensions) {

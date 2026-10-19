@@ -50,12 +50,64 @@ function gatedLoad(requestId: string) {
 const OPTS = { concurrency: 4, timeoutMs: null }
 
 describe('load-manager', () => {
+  it('forwards GPU backend priorities to SDK loads for LLM, embeddings, and VLA', async () => {
+    const reg = createModelRegistry()
+    const modelTypes = ['llamacpp-completion', 'llamacpp-embedding', 'ggml-vla']
+    for (const sdkType of modelTypes) {
+      reg.register(sdkType, {
+        modelSrc: `/models/${sdkType}.gguf`,
+        sdkType,
+        endpointCategory: sdkType === 'llamacpp-embedding' ? 'embedding' : 'chat',
+        config: { backend: ['cuda', 'vulkan'] }
+      })
+    }
+    const seen: Parameters<LoadModelFn>[0][] = []
+    const load: LoadModelFn = (opts) => {
+      seen.push(opts)
+      return Promise.resolve(`sdk-${seen.length}`)
+    }
+    const mgr = createLoadManager(reg, logger, OPTS, () => load)
+    for (const sdkType of modelTypes) await mgr.load(sdkType)
+    assert.deepEqual(
+      seen.map((opts) => ({ modelType: opts.modelType, modelConfig: opts.modelConfig })),
+      modelTypes.map((modelType) => ({ modelType, modelConfig: { backend: ['cuda', 'vulkan'] } }))
+    )
+  })
+
   it('loads an idle model to READY', async () => {
     const reg = registry('m')
     const mgr = createLoadManager(reg, logger, OPTS, () => () => Promise.resolve('sdk-1'))
     await mgr.load('m')
     assert.equal(reg.getEntry('m')?.state, reg.STATES.READY)
     assert.equal(reg.getEntry('m')?.sdkModelId, 'sdk-1')
+  })
+
+  it('forwards an alias modelFitPolicy to the SDK load, and omits it when unset', async () => {
+    const reg = createModelRegistry()
+    const base = {
+      sdkType: 'llamacpp',
+      endpointCategory: 'chat',
+      config: {}
+    }
+    reg.register('strict', {
+      ...base,
+      modelSrc: 'hyper://example.invalid/strict',
+      modelFitPolicy: 'refuse'
+    })
+    reg.register('plain', { ...base, modelSrc: 'hyper://example.invalid/plain' })
+
+    const seen: Parameters<LoadModelFn>[0][] = []
+    const load: LoadModelFn = (opts) => {
+      seen.push(opts)
+      return Promise.resolve(`sdk-${seen.length}`)
+    }
+    const mgr = createLoadManager(reg, logger, OPTS, () => load)
+
+    await mgr.load('strict')
+    await mgr.load('plain')
+
+    assert.equal(seen[0]?.modelFitPolicy, 'refuse')
+    assert.equal(seen[1] !== undefined && 'modelFitPolicy' in seen[1], false)
   })
 
   it('dedups concurrent loads of the same alias into one SDK load', async () => {

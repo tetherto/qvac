@@ -12,6 +12,13 @@ on:
       - ".github/actions/cache-models/**"
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
       - ".github/actions/run-mobile-integration-tests/setup/**"
+      - ".github/actions/run-mobile-integration-tests/build-mobile-app/**"
+      - ".github/actions/run-mobile-integration-tests/collect-and-upload-logs/**"
+      - ".github/actions/run-mobile-integration-tests/extract-addon-perf/**"
+      - ".github/actions/run-mobile-integration-tests/test/**"
+      - ".github/actions/select-prebuild-symbols-verifier/**"
+      # Holds one verify step per selector id, which the selector tests check.
+      - ".github/workflows/reusable-prebuilds.yml"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
       - "packages/ocr-ggml/.agent/setup.sh"
@@ -54,6 +61,18 @@ jobs:
       # manual run, or worse as a run that installed the wrong build.
       - name: Run mobile setup prebuild-run resolver unit tests
         run: node --test .github/actions/run-mobile-integration-tests/setup/test/*.test.mjs
+      # The installer copies the slicer's index source, name mangling, and
+      # cross-built hosts. scripts/ci/** is already a path above, so a slicer
+      # change runs this parity check too.
+      - name: Run mobile platform-package installer unit tests
+        run: node --test .github/actions/run-mobile-integration-tests/build-mobile-app/*.test.mjs
+      - name: Run mobile log collection tests
+        run: node --test .github/actions/run-mobile-integration-tests/test/*.test.mjs
+      # The selector decides which pinned symbol verifier a prebuild runs, and
+      # prebuilds only exercise it for the addons and versions they happen to
+      # build, so a wrong cutoff would first show up as a failed backport.
+      - name: Run prebuild symbols verifier selector unit tests
+        run: node --test .github/actions/select-prebuild-symbols-verifier/test/*.test.mjs
 
   # The per-addon benchmark aggregators are plain Node scripts shared by the
   # benchmark-performance-*.yml workflows, which only run on demand — so without

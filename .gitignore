@@ -66,3 +66,4 @@ docs/website/scripts/api-docs/api-data.json
 /tmp/
 
 .nx/
+.quality/

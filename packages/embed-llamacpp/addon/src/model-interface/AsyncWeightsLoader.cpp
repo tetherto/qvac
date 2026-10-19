@@ -41,7 +41,7 @@ void AsyncWeightsLoader::setWeightsForFile(
   }
 
   if (modelMetadata_ == nullptr || isFirstShard(filenamePath)) {
-    // This triggers BertModel::init().
+    // This triggers LlamaModelLoader::init().
     //
     // When using metadata, it should only start when the first shard is
     // available. Otherwise init can time out waiting for the first shard while

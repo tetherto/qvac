@@ -1,0 +1,8 @@
+**/.gradle/
+**/.kotlin/
+**/build/
+**/.cxx/
+/node_modules/
+/qvac/
+/local.properties
+**/__pycache__/

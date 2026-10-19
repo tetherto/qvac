@@ -11,6 +11,7 @@
 #include <inference-addon-cpp/RuntimeStats.hpp>
 #include <stable-diffusion.h>
 
+#include "utils/ImageCodec.hpp"
 #include "utils/LoggingMacros.hpp"
 
 namespace qvac_lib_inference_addon_sd {
@@ -46,6 +47,7 @@ struct WorldSessionConfig {
   // window the compile-time KV ring cannot hold.
   bool kvCache = false;
   bool profile = false; // per-stage timing logs from the native session
+  uint64_t maxImagePixels = image_codec::MAX_DECODED_PIXELS;
 };
 
 // Named bits for WorldSessionModel::WalkStepJob::actionMask (WASD move,
@@ -89,6 +91,9 @@ public:
   void load();
   [[nodiscard]] bool isLoaded() const noexcept;
 
+  [[nodiscard]] sd_fit_status_t assessFit(
+      int walkSteps, sd_fit_result_t& result, bool& unsupportedConfig) const;
+
   std::any process(const std::any& input) final;
   void cancel() const final;
 
@@ -118,6 +123,7 @@ public:
   };
 
 private:
+  [[nodiscard]] sd_abot_session_params_v2_t sessionParams() const;
   std::any processWalkStep(const WalkStepJob& job);
   std::any processSceneCreate(const SceneCreateJob& job);
 

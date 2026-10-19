@@ -1,6 +1,6 @@
 ---
 name: qv-sdk-inference-version
-description: Point @qvac/sdk at a published @qvac/inference version (shared major.minor) and regenerate tetherto-qvac-sdk, so an SDK release ships against an engine that is already on npm.
+description: Point @qvac/sdk at a published @qvac/inference version (shared major.minor) and regenerate the generated SDKs (tetherto-qvac-sdk and sdk-kotlin), so an SDK release ships against an engine that is already on npm.
 ---
 
 # SDK's @qvac/inference Version
@@ -10,8 +10,9 @@ and its `@qvac/inference` dependency range share a major and minor. Patch
 numbers are free on both sides — `@qvac/sdk` 0.19.4 may depend on
 `@qvac/inference` `^0.19.2`.
 
-`packages/sdk-python` (`tetherto-qvac-sdk`) is generated from `@qvac/sdk` and
-publishes at the SDK's version.
+`packages/sdk-python` (`tetherto-qvac-sdk`) and `packages/sdk-kotlin`
+(`qvac-sdk-kotlin-runtime`) are both generated from `@qvac/sdk` and track the
+SDK's version.
 
 ## The engine is published first
 
@@ -29,6 +30,9 @@ Moving to a new major.minor is two releases:
 A patch on either side is one release on its own. An SDK patch leaves its range
 alone; an engine patch is picked up by the existing range with no SDK release at
 all.
+
+**On a release train** (`qv-release-train`) skip Step 2: `nx release version`
+writes the range. Step 3 (`packages/sdk-python`) still applies.
 
 ## When to use this skill
 
@@ -101,11 +105,27 @@ python3 -m venv .venv
 set. Commit any updates under
 `packages/sdk-python/src/tetherto/qvac_sdk/_generated/`.
 
+### Step 3b: Sync `packages/sdk-kotlin` generated contract
+
+`checkVersionAlignment` requires the Kotlin runtime version, its `@qvac/sdk`
+range, and the generated `SDK_VERSION` to match. Set both `version` and the
+`@qvac/sdk` dependency in `packages/sdk-kotlin/package.json` to the new version,
+then regenerate:
+
+```bash
+python3 packages/sdk-kotlin/scripts/generate-contract.py
+python3 packages/sdk-kotlin/scripts/generate-contract.py --check
+```
+
+`SDK_VERSION` is stamped from `packages/sdk/package.json` (Step 2 set it). Commit
+the `package.json` repin and any updates under
+`packages/sdk-kotlin/src/commonMain/kotlin/io/tether/qvac/sdk/generated/`.
+
 ### Step 4: Verify
 
 ```bash
 cd packages/sdk
-bun run enforce-inference-versions
+npm run enforce-inference-versions
 ```
 
 This is the same check CI runs inside `lint`.
@@ -116,6 +136,7 @@ This is the same check CI runs inside `lint`.
 
 - `packages/sdk/package.json`
 - `packages/sdk-python/src/tetherto/qvac_sdk/_generated/**`
+- `packages/sdk-kotlin/package.json` + `packages/sdk-kotlin/src/commonMain/kotlin/io/tether/qvac/sdk/generated/**`
 
 Commit alongside the release changelog. When invoked from `/qv-sdk-changelog`,
 this is part of the release commit; when invoked from `/qv-sdk-pr-create`, part
@@ -142,7 +163,8 @@ range, the parent skill prompts to run this skill first. Opt out with
 - [ ] `packages/sdk` version and `@qvac/inference` range share a major.minor
 - [ ] Range operator is `^` below 1.0.0, `~` from 1.0.0 onwards
 - [ ] `packages/sdk-python` `generate.py --check` passes
-- [ ] `bun run enforce-inference-versions` passes in `packages/sdk`
+- [ ] `packages/sdk-kotlin` `generate-contract.py --check` passes and `./gradlew checkVersionAlignment` is green
+- [ ] `npm run enforce-inference-versions` passes in `packages/sdk`
 - [ ] Staged changes are only the version edits (+ the originating edit)
 - [ ] No CI auto-commits of this skill
 
@@ -151,6 +173,7 @@ range, the parent skill prompts to run this skill first. Opt out with
 - Version checks (addon ranges + shared major.minor):
   `packages/sdk/scripts/enforce-inference-versions.ts`
 - Python generator: `packages/sdk-python/scripts/generate.py`
+- Kotlin generator: `packages/sdk-kotlin/scripts/generate-contract.py`
 - Notice generator: `.agents/skills/qv-notice-generate/SKILL.md`
 - Publish: `.github/workflows/publish-inference.yml`,
   `.github/workflows/publish-sdk.yml`

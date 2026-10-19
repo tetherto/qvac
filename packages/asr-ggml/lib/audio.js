@@ -162,7 +162,7 @@ function mapChunkList(chunks, byteFormat) {
 }
 /**
  * Normalizes any public {@link AudioInput} shape into a stream of f32
- * chunks. Shared by both engine drivers; `byteFormat` is the driver's
+ * chunks. Shared by every engine driver; `byteFormat` is the driver's
  * interpretation of raw `Uint8Array` bytes.
  */
 function normalizeAudioStream(input, byteFormat) {

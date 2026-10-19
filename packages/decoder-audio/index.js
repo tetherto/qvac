@@ -1,10 +1,43 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FFmpegDecoder = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const QvacLogger = require("@qvac/logging");
-const ffmpeg = require("bare-ffmpeg");
 /* eslint-enable @typescript-eslint/no-require-imports */
+let ffmpegRuntime;
 const infer_base_1 = require("@qvac/infer-base");
 const error_1 = require("./utils/error");
 const DEFAULT_MAX_DECODED_BYTES = 64 * 1024 * 1024;
@@ -156,7 +189,6 @@ class FFmpegDecoder {
     /**
      * Load and initialize the decoder
      */
-    // eslint-disable-next-line @typescript-eslint/require-await -- preserves the established promise-returning API, so failures surface as rejections rather than synchronous throws.
     async load() {
         if (this.isLoaded) {
             this.logger.info("FFmpegDecoder already loaded");
@@ -166,10 +198,11 @@ class FFmpegDecoder {
             throw new RangeError("maxDecodedBytes must be a positive safe integer");
         }
         this.logger.info("Loading FFmpegDecoder with config:", this.config);
+        ffmpegRuntime = await Promise.resolve().then(() => __importStar(require("bare-ffmpeg")));
         // Initialize format constants
-        this.SUPPORTED_AUDIO_FORMATS.s16le.format = ffmpeg.constants.sampleFormats.S16;
-        this.SUPPORTED_AUDIO_FORMATS.f32le.format = ffmpeg.constants.sampleFormats.FLT;
-        this.OUTPUT_CHANNEL_LAYOUT = ffmpeg.constants.channelLayouts.MONO;
+        this.SUPPORTED_AUDIO_FORMATS.s16le.format = ffmpegRuntime.constants.sampleFormats.S16;
+        this.SUPPORTED_AUDIO_FORMATS.f32le.format = ffmpegRuntime.constants.sampleFormats.FLT;
+        this.OUTPUT_CHANNEL_LAYOUT = ffmpegRuntime.constants.channelLayouts.MONO;
         // Validate audio format
         if (!this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat]) {
             throw new error_1.QvacErrorDecoderAudio({
@@ -291,12 +324,12 @@ class FFmpegDecoder {
         const { format: OUTPUT_FORMAT, byteLength: OUTPUT_FORMAT_BYTE_LENGTH, channelLayout: OUTPUT_CHANNEL_LAYOUT, } = this._resolveOutputFormat();
         const OUTPUT_SAMPLE_RATE = this.config.sampleRate;
         while (decoder.receiveFrame(raw)) {
-            const output = new ffmpeg.Frame();
+            const output = new ffmpegRuntime.Frame();
             output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
             output.format = OUTPUT_FORMAT;
             output.sampleRate = OUTPUT_SAMPLE_RATE;
             output.nbSamples = raw.nbSamples;
-            const samples = new ffmpeg.Samples();
+            const samples = new ffmpegRuntime.Samples();
             samples.fill(output);
             const count = resampler.convert(raw, output);
             // Handle encoder delay by skipping initial samples
@@ -341,9 +374,9 @@ class FFmpegDecoder {
         // Track codec info in stats
         run.stats.codecName = stream.codec.name;
         run.stats.inputSampleRate = stream.codecParameters.sampleRate;
-        const packet = new ffmpeg.Packet();
-        const raw = new ffmpeg.Frame();
-        const resampler = new ffmpeg.Resampler(stream.codecParameters.sampleRate, stream.codecParameters.channelLayout, stream.codecParameters.format, OUTPUT_SAMPLE_RATE, OUTPUT_CHANNEL_LAYOUT, OUTPUT_FORMAT);
+        const packet = new ffmpegRuntime.Packet();
+        const raw = new ffmpegRuntime.Frame();
+        const resampler = new ffmpegRuntime.Resampler(stream.codecParameters.sampleRate, stream.codecParameters.channelLayout, stream.codecParameters.format, OUTPUT_SAMPLE_RATE, OUTPUT_CHANNEL_LAYOUT, OUTPUT_FORMAT);
         const decoder = stream.decoder();
         decoder.open();
         // Auto-detect encoder delay: lossy codecs need ~400ms skipped to remove artifacts
@@ -366,12 +399,12 @@ class FFmpegDecoder {
         }
         try {
             await this._processPacket(format, packet, raw, decoder, resampler, run);
-            const output = new ffmpeg.Frame();
+            const output = new ffmpegRuntime.Frame();
             output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
             output.format = OUTPUT_FORMAT;
             output.sampleRate = OUTPUT_SAMPLE_RATE;
             output.nbSamples = 1024;
-            const samples = new ffmpeg.Samples();
+            const samples = new ffmpegRuntime.Samples();
             samples.fill(output);
             let flushCount;
             while ((flushCount = resampler.flush(output)) > 0) {
@@ -414,7 +447,7 @@ class FFmpegDecoder {
         // Create FFmpeg IO context with the buffer
         const bufferSize = this._getBufferSize(this.config.inputBitrate);
         let bufferOffset = 0;
-        const io = new ffmpeg.IOContext(bufferSize, {
+        const io = new ffmpegRuntime.IOContext(bufferSize, {
             onread: (buffer, requestedLen) => {
                 const remainingBytes = audioBuffer.length - bufferOffset;
                 const bytesToRead = Math.min(requestedLen, remainingBytes);
@@ -453,7 +486,7 @@ class FFmpegDecoder {
             },
         });
         this.logger.debug("[FFmpegDecoder] IOContext created");
-        const format = new ffmpeg.InputFormatContext(io);
+        const format = new ffmpegRuntime.InputFormatContext(io);
         this.logger.debug("[FFmpegDecoder] InputFormatContext created");
         const streamIndex = this.config.streamIndex || 0;
         const stream = format.streams[streamIndex];

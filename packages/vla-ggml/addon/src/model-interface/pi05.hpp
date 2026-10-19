@@ -449,7 +449,8 @@ public:
   // ggml backend plugin shared libs (.so/.dylib/.dll).
   Pi05Model(
       const std::string& ggufPath, bool forceCpu,
-      const std::string& backendsDir);
+      const std::string& backendsDir,
+      const std::vector<std::string>& backendOverride = {});
 
   // Out-of-line because `Pi05ModelInternal` is forward-declared above;
   // unique_ptr's destructor needs the complete type, which lives in

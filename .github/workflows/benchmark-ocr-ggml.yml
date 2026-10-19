@@ -119,7 +119,7 @@ jobs:
           node-version: lts/*
 
       - name: Install global dependencies
-        run: npm install -g --force bare-make bare-runtime
+        run: npm install -g --force bare-make@1.8.0 bare-runtime
 
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV

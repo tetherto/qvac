@@ -48,6 +48,7 @@ import {
   writeShim,
 } from "./lib/release-shared.js";
 import * as path from "path";
+import { refuseRetiredScript } from "./lib/retired.js";
 
 export interface MinorOptions {
   forceExtract: boolean;
@@ -190,6 +191,8 @@ if (import.meta.main) {
     );
     process.exit(versionArg ? 0 : 1);
   }
+
+  refuseRetiredScript("release-version-minor.ts");
 
   releaseMinor(versionArg, { forceExtract }).catch((err) => {
     console.error(`❌ Release (minor) failed: ${err.message}`);

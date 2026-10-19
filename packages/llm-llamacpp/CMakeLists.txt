@@ -21,8 +21,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 
 # llama / ggml / mtmd / libcommon runtime is the shared @qvac/fabric prebuild
-# (dynamically linked, loaded once per process); sets qvac_fabric_target +
-# BACKENDS_SUBDIR_VALUE.
+# (dynamically linked, loaded once per process); sets qvac_fabric_target.
 qvac_addon_use_fabric()
 
 add_bare_module(inference-addon-llama EXPORTS)
@@ -33,9 +32,11 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/handlers/FinetuneParamHandlers.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
@@ -45,15 +46,13 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
 )
 
 target_sources(
@@ -77,7 +76,7 @@ target_link_libraries(
 )
 
 qvac_addon_link_fabric(${inference-addon-llama} ${qvac_fabric_target})
-qvac_addon_finalize(${inference-addon-llama} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+qvac_addon_finalize(${inference-addon-llama})
 
 # Option to build CLI
 option(BUILD_CLI "Build CLI tool example" FALSE)
@@ -88,9 +87,11 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
@@ -100,15 +101,13 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
   )
 
   target_include_directories(

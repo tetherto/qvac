@@ -19,6 +19,18 @@ const verbositySchema = z.enum(VERBOSITY)
 
 // Base schema - validates types, all fields optional (for input validation)
 export const llmConfigBaseSchema = z.object({
+  backend: z
+    .array(z.enum(['cuda', 'vulkan', 'metal', 'opencl', 'auto']))
+    .min(1)
+    .optional()
+    .describe(
+      "Ordered GPU backend names, such as ['cuda', 'vulkan']. " +
+        'Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. ' +
+        'If unset, uses the native default order. ' +
+        'If none of the specified names has a corresponding available device, selection falls back to the native default order. ' +
+        "Use device: 'cpu' for CPU. " +
+        "A GPU override cannot be combined with a split-mode other than 'none' or with devices."
+    ),
   ctx_size: z
     .number()
     .optional()
@@ -125,11 +137,29 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class."
     ),
+  'rpc-servers': z
+    .string()
+    .min(1)
+    .refine((value) => {
+      const endpoints = value.split(',').map((endpoint) => endpoint.trim())
+      return new Set(endpoints).size === endpoints.length
+    }, 'RPC server endpoints must be unique')
+    .optional()
+    .describe(
+      'Comma-separated unique native RPC host:port endpoints in device registration order for this load. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.'
+    ),
+  devices: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
+    ),
   'split-mode': z
     .enum(['none', 'layer', 'tensor'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
+      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
     ),
   'flash-attn': z
     .enum(['on', 'off', 'auto'])
@@ -190,6 +220,15 @@ export const llmConfigBaseSchema = z.object({
     .optional()
     .describe(
       'Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.'
+    ),
+  'image-max-megapixels': z
+    .number()
+    .int()
+    .min(1)
+    .max(18_446_744_073_709)
+    .optional()
+    .describe(
+      'Largest image a vision model accepts, in millions of pixels (width × height). Checked against the image header before decoding; larger images are rejected. Vision models only. Default 50.'
     ),
   threads: z
     .number()
@@ -330,6 +369,18 @@ export type LlmConfig = z.infer<typeof llmConfigSchema>
 
 // Base schema - validates types, all fields optional (for input validation)
 export const embedConfigBaseSchema = z.object({
+  backend: z
+    .array(z.enum(['cuda', 'vulkan', 'metal', 'opencl', 'auto']))
+    .min(1)
+    .optional()
+    .describe(
+      "Ordered GPU backend names, such as ['cuda', 'vulkan']. " +
+        'Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. ' +
+        'If unset, uses the native default order. ' +
+        'If none of the specified names has a corresponding available device, selection falls back to the native default order. ' +
+        "Use device: 'cpu' for CPU. " +
+        "A GPU override cannot be combined with splitMode: 'layer'."
+    ),
   gpuLayers: z
     .number()
     .int()

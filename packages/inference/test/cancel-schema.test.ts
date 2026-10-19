@@ -10,6 +10,7 @@ const ALL_REQUEST_KINDS: Record<RequestKind, true> = {
   completion: true,
   batchCompletion: true,
   embeddings: true,
+  decision: true,
   transcribe: true,
   translate: true,
   diffusion: true,
@@ -21,6 +22,8 @@ const ALL_REQUEST_KINDS: Record<RequestKind, true> = {
   loadModel: true,
   downloadAsset: true,
   rag: true,
+  rpcServer: true,
+  rpcDiscovery: true,
   world: true
 }
 

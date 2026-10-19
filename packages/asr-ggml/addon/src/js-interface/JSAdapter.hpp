@@ -10,6 +10,7 @@
 
 #include <js.h>
 
+#include "model-interface/moss/MossTranscribeConfig.hpp"
 #include "model-interface/parakeet/ParakeetConfig.hpp"
 #include "model-interface/whisper/WhisperConfig.hpp"
 
@@ -22,6 +23,7 @@ namespace qvac::asrggml {
 enum class EngineType {
   Whisper,
   Parakeet,
+  MossTranscribe,
 };
 
 class JSAdapter {
@@ -47,6 +49,14 @@ public:
   parakeet::ParakeetConfig buildParakeetConfig(
       qvac_lib_inference_addon_cpp::js::Object configurationParams,
       js_env_t* env);
+
+  moss::MossTranscribeConfig buildMossTranscribeConfig(
+      qvac_lib_inference_addon_cpp::js::Object configurationParams,
+      js_env_t* env);
+
+  // Per-call prompt / hotwords / maxNewTokens, read from the runJob object.
+  moss::MossTranscribeRequest readMossTranscribeRequest(
+      qvac_lib_inference_addon_cpp::js::Object job, js_env_t* env);
 
 private:
   void loadVadParams(

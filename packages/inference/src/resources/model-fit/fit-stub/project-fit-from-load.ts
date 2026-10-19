@@ -45,6 +45,8 @@ export async function projectFitFromLoad(
         modelType: load.modelType,
         modelPath: resolved.modelPath,
         modelConfig: resolved.modelConfig,
+        transcriptionWorkload: load.transcriptionWorkload,
+        ttsWorkload: load.ttsWorkload,
         artifacts: resolved.artifacts,
         // Nothing here assembles a shard set, so no load may claim the fitter
         // is looking at a split model.

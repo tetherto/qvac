@@ -5,9 +5,16 @@ import {
   ERR_CODES,
   QvacErrorAudioGen,
   RepaintMode,
+  assessFit,
   detectEngineType,
   type AudioGenEngine,
-  type AudiogenOutputChunk
+  type AudiogenFitRequest,
+  type AudiogenFitResult,
+  type AudiogenFitStatus,
+  type AudiogenGenerationMetadata,
+  type AudiogenMinimaxDevice,
+  type AudiogenOutputChunk,
+  type AudiogenStats
 } from '../../index'
 
 type InvalidEngineIsAllowed =
@@ -48,7 +55,47 @@ const editSession = audioGen
   })
 const operationType: AudioEditOperationType =
   AudioEditOperationType.FlowEdit
-const editResponse = editSession.run({ seed: 22883 })
+const editResponse = editSession.run({
+  seed: 22883,
+  referenceAudio: new Float32Array(2),
+  vocalLanguage: 'en',
+  bpm: 120,
+  keyscale: 'C major',
+  timesignature: '4/4',
+  augmentCaptionWithMetadata: true,
+  dcwEnabled: false,
+  dcwScaler: 0.05,
+  dcwHighScaler: 0.02,
+  inferenceSteps: 8,
+  shift: 3
+})
+const device: AudiogenMinimaxDevice = 'gpu'
+const strictMinimax = new AudioGen({
+  engine: ENGINE_MINIMAX,
+  files: { modelDir: '/models/minimax' },
+  config: { device }
+})
+const perRunSchedule = audioGen.run('lo-fi', { inferenceSteps: 12, shift: 2.5 })
+const minimaxFit: AudiogenFitRequest = {
+  engine: ENGINE_MINIMAX,
+  lmPath: '/models/mm3-lm.gguf',
+  synthPath: '/models/mm3-synth.gguf',
+  device,
+  maxFrames: 300,
+  promptTokens: 900
+}
+const pendingFit: Promise<AudiogenFitResult> = assessFit(minimaxFit)
+async function minimaxVerdict(): Promise<AudiogenFitStatus> {
+  return (await assessFit(minimaxFit)).status
+}
+// @ts-expect-error assessFit returns a Promise of the result.
+const unawaitedVerdict: AudiogenFitStatus = assessFit(minimaxFit).status
+function readMetadata(stats: AudiogenStats): number | undefined {
+  const metadata: AudiogenGenerationMetadata | undefined = stats.metadata
+  return metadata === undefined
+    ? stats.emittedFrames
+    : metadata.seed + metadata.beatsPerBar + metadata.codeFrames
+}
 
 void audioGen
 void errorCode
@@ -58,4 +105,10 @@ void output
 void invalidEngineIsAllowed
 void editSession
 void editResponse
+void strictMinimax
+void perRunSchedule
+void pendingFit
+void minimaxVerdict
+void unawaitedVerdict
+void readMetadata
 void operationType

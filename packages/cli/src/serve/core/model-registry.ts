@@ -1,4 +1,5 @@
 import type { ModelConstant } from '@qvac/sdk'
+import type { ModelFitPolicy } from '@qvac/sdk/schemas'
 
 const STATES = {
   IDLE: 'idle',
@@ -15,6 +16,7 @@ export interface ModelEntry {
   modelSrc: string | ModelConstant
   sdkType: string
   endpointCategory: string
+  modelFitPolicy?: ModelFitPolicy
   config: Record<string, unknown>
   state: ModelState
   createdAt: number
@@ -31,6 +33,7 @@ export interface ModelRegistry {
       modelSrc: string | ModelConstant
       sdkType: string
       endpointCategory: string
+      modelFitPolicy?: ModelFitPolicy
       config: Record<string, unknown>
     }
   ) => ModelEntry
@@ -53,6 +56,7 @@ export function createModelRegistry(): ModelRegistry {
       modelSrc: string | ModelConstant
       sdkType: string
       endpointCategory: string
+      modelFitPolicy?: ModelFitPolicy
       config: Record<string, unknown>
     }
   ): ModelEntry {
@@ -64,6 +68,7 @@ export function createModelRegistry(): ModelRegistry {
       modelSrc: opts.modelSrc,
       sdkType: opts.sdkType,
       endpointCategory: opts.endpointCategory,
+      ...(opts.modelFitPolicy !== undefined && { modelFitPolicy: opts.modelFitPolicy }),
       config: opts.config,
       state: STATES.IDLE,
       createdAt: Date.now(),

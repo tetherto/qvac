@@ -137,6 +137,15 @@ test('joinWithinBase: throws on null byte', function (t) {
 
 // ============== archive extraction (zip-slip) ==============
 
+test('extractTarStream: source read errors reject extraction', async function (t) {
+  const cwd = os.cwd()
+  const missingArchive = join(cwd, 'test', 'fixtures', 'missing-archive.tar')
+  const extractDir = join(cwd, 'test', 'fixtures', 'tmp-extract-missing')
+
+  await t.exception(extractTarStream(missingArchive, extractDir, false), /ENOENT/)
+  await t.exception(extractTarStream(missingArchive, extractDir, true), /ENOENT/)
+})
+
 test('extractTarStream: malicious entries do not escape extractDir', async function (t) {
   const cwd = os.cwd()
   const fixturePath = join(cwd, 'test', 'fixtures', 'malicious-zipslip.tar.gz')

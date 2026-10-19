@@ -17,6 +17,7 @@ export * from '@/schemas/heartbeat'
 export * from '@/schemas/model-ops'
 export * from '@/schemas/download-asset'
 export * from '@/schemas/embed'
+export * from '@/schemas/decision'
 export * from '@/schemas/finetune'
 export * from '@/schemas/load-model'
 export * from '@/schemas/reload-config'
@@ -76,6 +77,11 @@ export {
   type ProfilerResourceGauge
 } from '@/schemas/profiling'
 export { runtimeContextSchema, type RuntimeContext } from '@/schemas/runtime-context'
+export {
+  modelFitPolicySchema,
+  DEFAULT_MODEL_FIT_POLICY,
+  type ModelFitPolicy
+} from '@/schemas/model-fit-policy'
 export * from '@/schemas/model-info'
 export * from '@/schemas/system-resources'
 export * from '@/schemas/model-src-utils'
@@ -94,3 +100,4 @@ export * from '@/schemas/plugin'
 export * from '@/schemas/registry'
 export * from '@/schemas/model-resource-profile'
 export * from '@/schemas/assess-model-fit'
+export * from '@/schemas/rpc-server'

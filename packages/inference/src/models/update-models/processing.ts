@@ -1,5 +1,6 @@
 import type { QVACModelEntry } from '@qvac/registry-client'
-import { getAddonFromEngine, resolveCanonicalEngine } from '../../surface'
+import { getAddonFromEngine } from '../../surface'
+import { resolveRegistryEngine } from '../../schemas/engine-addon-map'
 import { detectShardedModel } from './shards'
 import { extractGgufFacts, parseGgufMetadata } from './gguf-facts'
 import type { ProcessedModel } from './types'
@@ -28,7 +29,7 @@ export function extractModelName(registryPath: string): string {
 }
 
 export function processRegistryModel(model: QVACModelEntry): ProcessedModel | null {
-  const engine = resolveCanonicalEngine(model.engine)
+  const engine = resolveRegistryEngine(model.engine, model.tags)
   if (!engine) {
     console.warn(`⚠️  Skipping model with unknown engine "${model.engine}": ${model.path}`)
     return null

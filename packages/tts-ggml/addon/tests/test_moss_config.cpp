@@ -13,6 +13,7 @@
 #include <tts-cpp/moss/engine.h>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/moss/MossConfig.hpp"
 #include "model-interface/moss/MossModel.hpp"
 
@@ -327,7 +328,7 @@ TEST(MossEngineOptions, UnsetDirectableFieldsKeepEngineDefaults) {
   const auto opts = MossModel::toEngineOptions(minimallyValidStubConfig());
   EXPECT_TRUE(opts.dialogue_reference_paths.empty());
   EXPECT_EQ(opts.duration_tokens, defaults.duration_tokens);
-  EXPECT_TRUE(opts.backends_dir.empty());
+  EXPECT_EQ(opts.backends_dir, qvac::ttsggml::defaultBackendsDir().string());
 }
 
 TEST(MossEngineOptions, ZeroThreadsKeepsTheEngineDefault) {
@@ -406,4 +407,29 @@ TEST(MossRealGguf, StreamingDeliversOrderedChunksThenOneLastMarker) {
   EXPECT_FALSE(stream.pcm.empty());
   EXPECT_EQ(stream.lastMarkers, 1);
   expectSequentialIndices(stream.chunkIndices);
+}
+
+TEST(MossFitConfig, ValidatesCountsWithoutOpeningModelsOrReferences) {
+  MossConfig cfg;
+  cfg.backbonePath = "/not-downloaded/moss.gguf";
+  cfg.codecDecoderPath = "/not-downloaded/decoder.gguf";
+  cfg.referenceAudio = "/not-recorded/reference.wav";
+  EXPECT_NO_THROW(MossModel::validateFitConfig(cfg));
+  cfg.threads = -1;
+  EXPECT_THROW(MossModel::validateFitConfig(cfg), StatusError);
+  cfg.threads = 0;
+  cfg.durationTokens = -1;
+  EXPECT_THROW(MossModel::validateFitConfig(cfg), StatusError);
+  cfg.durationTokens = 0;
+  cfg.streamChunkFrames = -1;
+  EXPECT_THROW(MossModel::validateFitConfig(cfg), StatusError);
+}
+
+TEST(MossFitConfig, RejectsConflictingGpuIntentLikeRuntime) {
+  MossConfig cfg;
+  cfg.useGpu = true;
+  cfg.nGpuLayers = 0;
+  EXPECT_THROW(MossModel::validateFitConfig(cfg), StatusError);
+  cfg.nGpuLayers = 1;
+  EXPECT_NO_THROW(MossModel::validateFitConfig(cfg));
 }

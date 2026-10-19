@@ -45,6 +45,7 @@ find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 project(inference-addon-sd C CXX)
 
@@ -75,10 +76,22 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
+# The module is named after the platform package that ships it,
+# qvac__diffusion-cpp-<suffix> (every iOS host shares `ios`), so that package
+# is an ordinary addon: require.addon(), bare-pack and bare-link all find
+# prebuilds/<host>/qvac__diffusion-cpp-<suffix>.bare there. cmake-bare installs
+# the dynamically loadable ggml backends to <host>/<module name>, the directory
+# the addon looks in next to itself (see ModuleBackendsDir.hpp); bare-link
+# flattens them next to the module in a mobile app instead. Keep the suffix in
+# sync with "#host-addon" in package.json and SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
-set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+if(bare_target_value MATCHES "^ios-")
+  set(module_name "qvac__diffusion-cpp-ios")
+else()
+  set(module_name "qvac__diffusion-cpp-${bare_target_value}")
+endif()
+message("Building inference-addon-sd module '${module_name}'")
 
 # On Android and desktop Linux with GGML_BACKEND_DL, install GPU backend .so
 # modules alongside the addon so ggml can dlopen them at runtime.  CPU
@@ -112,7 +125,7 @@ if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   endforeach()
 endif()
 
-add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
+add_bare_module(inference-addon-sd NAME ${module_name} EXPORTS ${BACKEND_DL_EXPORTS})
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
@@ -169,7 +182,37 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
 
 target_compile_features(${inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${inference-addon-sd} PUBLIC JS_LOGGER)
-target_compile_definitions(${inference-addon-sd} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+target_compile_definitions(${inference-addon-sd} PRIVATE
+  QVAC_ADDON_MODULE_NAME="${module_name}")
+
+if(WIN32)
+  # cmake-bare enables WINDOWS_EXPORT_ALL_SYMBOLS. Exporting addon internals
+  # makes them linker roots, preventing otherwise-unused code from being removed.
+  # This addon exposes its JS API through Bare's two registration entry points;
+  # no consumer links against its C++ implementation.
+  set_target_properties(${inference-addon-sd}_module PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+  target_sources(${inference-addon-sd}_module PRIVATE ${PROJECT_SOURCE_DIR}/addon/windows-exports.def)
+
+  if(MSVC)
+    # clang-cl and MSVC use the same COFF options. Preserve the existing compiler
+    # optimization level and debug settings; package functions/data separately
+    # so the release linker can discard unused sections and fold identical code.
+    target_compile_options(${inference-addon-sd} PRIVATE
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/Gy>"
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/Gw>")
+    target_link_options(${inference-addon-sd}_module PRIVATE
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:REF>"
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:ICF>")
+
+    # The registry ports enable upstream LTO for ggml and
+    # stable-diffusion. Optimize across those static-library boundaries at the
+    # final lld-link step, while retaining the existing optimization level.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+      target_compile_options(${inference-addon-sd} PRIVATE
+        "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-flto=thin>")
+    endif()
+  endif()
+endif()
 
 if(GGML_BACKEND_DL)
   target_compile_definitions(${inference-addon-sd} PRIVATE GGML_BACKEND_DL)

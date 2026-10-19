@@ -23,6 +23,7 @@ extension adds and the `serve.openai` config block it reads.
 | `GET`    | `/v1/responses/{id}`             | Retrieve a stored response                                                                                  |
 | `DELETE` | `/v1/responses/{id}`             | Delete a stored response                                                                                    |
 | `GET`    | `/v1/responses/{id}/input_items` | Paginate the original input items                                                                           |
+| `POST`   | `/v1/decisions`                  | Typed decisions with local text models. See [Decisions](#post-v1decisions).                                 |
 | `POST`   | `/v1/embeddings`                 | Embeddings                                                                                                  |
 | `POST`   | `/v1/audio/transcriptions`       | Speech-to-text (source language)                                                                            |
 | `POST`   | `/v1/audio/translations`         | Speech-to-text **into English** (Whisper translate task)                                                    |
@@ -240,7 +241,7 @@ Blocking response shape (single prompt):
 
 Same as `/v1/chat/completions`: `temperature`, `max_tokens`,
 `max_completion_tokens`, `top_p`, `seed`, `frequency_penalty`,
-`presence_penalty`, `reasoning_budget`, `remove_thinking_from_context`.
+`presence_penalty`, `reasoning_budget`.
 
 ### Ignored parameters (warning logged)
 
@@ -248,6 +249,8 @@ Same as `/v1/chat/completions`: `temperature`, `max_tokens`,
 `user`, `response_format`, and `n` when greater than `1`. Legacy OpenAI
 semantics for these (logprob distributions, prompt echo, best-of-N sampling,
 suffix insertion, multi-choice `n`) are not implemented.
+`remove_thinking_from_context` is also ignored: it is no longer a parameter,
+and the chat template decides how much earlier reasoning stays in the cache.
 
 ### Errors
 
@@ -301,6 +304,143 @@ curl -sS http://127.0.0.1:11434/v1/responses \
   -H "Content-Type: application/json" \
   -d '{"model":"<alias>","input":"and now?","previous_response_id":"resp_..."}'
 ```
+
+## `POST /v1/decisions`
+
+`qvac serve --openai` mounts `POST /v1/decisions`, backed by SDK `decide()`
+and a local Laya checkpoint. The request and response follow the
+[official OpenAI Decisions API reference](https://developers.openai.com/api/reference/resources/decisions/methods/create).
+See the [OpenAI Decisions guide](https://developers.openai.com/api/docs/guides/decisions)
+for question design and answer interpretation.
+
+### Loaded model
+
+Requires an alias whose endpoint category is `decision`. Register a Laya decision
+checkpoint in `serve.models` with SDK model type `llamacpp-decision`. An
+embedding-only checkpoint cannot answer decision questions.
+
+```bash
+qvac configure --modality decision
+qvac serve --openai --no-default
+```
+
+`configure` selects `LAYA_MULTILINGUAL_322M_Q8_0` and writes the following entry.
+The interactive Decision capability lists models with the decision engine,
+with this Laya checkpoint marked as recommended. The SDK defaults to GPU; set
+`device` to `cpu` in the parameter editor
+or configuration to run on CPU.
+
+```json
+{
+  "serve": {
+    "models": {
+      "laya-multilingual-322m-q8-0": {
+        "model": "LAYA_MULTILINGUAL_322M_Q8_0",
+        "type": "llamacpp-decision",
+        "preload": false
+      }
+    }
+  }
+}
+```
+
+The first request loads the model. Set `preload: true` or pass
+`--model laya-multilingual-322m-q8-0` to load it at startup.
+
+Choose another Laya checkpoint in interactive configuration. To use a local GGUF,
+replace `model` with `src` in the entry above and set it to the file path.
+Named model constants select their plugin from the canonical engine, including
+when added through "Search all models". An explicit `type` is needed for a local
+file path.
+
+### Request
+
+Send JSON with `model`, `input`, and `questions`:
+
+- `model` is a configured decision model alias. Use your local alias in place of
+  the hosted OpenAI model name.
+- `input` is a string or an ordered array of text conversation items. Messages
+  support user, developer, system, and assistant roles. System messages become
+  developer messages. Non-assistant messages use `input_text` parts; assistant
+  messages use `output_text` or `refusal` parts. String content is also accepted.
+  Function and custom tool calls and their matching outputs can be supplied as
+  evidence. Each output must refer to an earlier call of the same type.
+- `questions` is an array of 1 to 200 questions. Each has `instructions`, `type`,
+  and an optional `name`. Names need not be unique. Answers retain request order,
+  and unnamed questions return `name: null`.
+- `predicate` estimates the probability that a statement holds.
+- `choice` takes `choices`, an array of 2 to 255 distinct string or boolean
+  `value` fields with optional `description` fields. Boolean `true` and string
+  `"true"` are distinct values.
+- `score` takes ordered `levels`, each with a `label` and optional `description`.
+  Level values start at zero. The score is the probability-weighted level index.
+
+### Local model limits
+
+Laya accepts text only. Images, files, audio, and item references are rejected
+with HTTP 400 before model loading. Local models require nonempty instructions
+and at least two score levels. Tool items are evidence, and the server does not
+execute them.
+
+`safety_identifier` and `prompt_cache_key` are accepted as caller metadata and
+have no effect on local inference. Prompt caching is unavailable. Non-null
+`prompt_cache_options` and content `prompt_cache_breakpoint` fields are rejected.
+
+The route returns a complete JSON response. Streaming and batching are unsupported.
+Use SDK `decide()` directly for Laya token budgets or batch inputs.
+
+### Response
+
+`model` is the configured alias. `answers` is an array with one answer per
+question. Predicate answers contain `probability`. Choice answers contain the
+selected typed `choice`, `confidence`, and a `probabilities` array with each
+original `value`. Score answers contain `score`, `confidence`, and a
+`probabilities` array with each level's numeric `value` and original `label`.
+
+Confidence uses Laya's entropy-based confidence. These values come from the
+local checkpoint and are not calibrated to OpenAI's hosted model. The response
+schema includes OpenAI's `refusal` answer type, but Laya does not emit refusals.
+
+`usage` contains `input_tokens`, `output_tokens`, `total_tokens`,
+`input_tokens_details` with `cached_tokens` and `cache_write_tokens`, and
+`output_tokens_details` with `reasoning_tokens`. Cache and reasoning counts are
+zero. Laya's internal truncation, option, action, and answer-confidence fields
+are not included in the OpenAI response.
+
+A client disconnect cancels the SDK request. Each model runs one decision
+request at a time, with up to 64 requests waiting in a FIFO queue. Additional
+requests receive HTTP 429 with error type `rate_limit_error` and code
+`request_rejected_by_policy`.
+
+### Example
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/decisions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "laya-multilingual-322m-q8-0",
+    "input": "I was charged twice. Please refund.",
+    "questions": [
+      {
+        "type": "choice",
+        "name": "route",
+        "instructions": "Which queue should receive this ticket?",
+        "choices": [
+          {"value": "billing", "description": "Payment issues"},
+          {"value": "technical", "description": "Software bugs"}
+        ]
+      },
+      {
+        "type": "predicate",
+        "name": "urgent",
+        "instructions": "Does this require immediate human attention?"
+      }
+    ]
+  }'
+```
+
+Use an OpenAI client that supports Decisions, or send the request directly over
+HTTP with base URL `http://127.0.0.1:11434/v1` and your configured model alias.
 
 ## `POST /v1/images/generations` and `POST /v1/images/edits`
 
@@ -455,9 +595,11 @@ Transcribes audio in its source language using a transcription model.
   - `file` (required) — audio file
   - `model` (required) — a `serve.models` alias whose endpoint category is `transcription`
   - `prompt` (optional) — initial prompt where supported
+  - `hotwords` (optional, MOSS only) — JSON array of up to 64 nonempty terms, each at most 64 UTF-8 bytes; a nonempty array cannot be combined with `prompt` (an empty array is allowed)
+  - `max_new_tokens` (optional, MOSS only) — integer decoding limit; `0` uses the model default
   - `response_format` (optional) — `json` (default), `text`, `srt`, `vtt`, or `verbose_json`
-- `json` and `text` work with Whisper and Parakeet. The timed formats `srt`, `vtt`, and `verbose_json` require Whisper segment metadata. Requesting a timed format from Parakeet returns `400 unsupported_response_format`.
-- In partial `verbose_json`, `duration` is the end of the last transcribed segment, not the submitted audio length.
+- `json` and `text` work with Whisper, Parakeet, and MOSS. SRT and WebVTT require Whisper or MOSS segment metadata. Parakeet supports `verbose_json`, including Nemotron diarization. Requesting SRT or WebVTT from Parakeet returns `400 unsupported_response_format`.
+- In partial `verbose_json`, `duration` is the latest segment or speaker-turn end, not the submitted audio length. MOSS segments also include `speaker` and `speaker_id` when available. Parakeet offline diarization includes `speaker_segments` with zero-based `speaker_id` and start/end times in seconds; overlapping turns are preserved.
 - `language` is configured when the model loads; a per-request value is logged and ignored. `temperature` is also logged and ignored.
 
 ```bash
@@ -466,6 +608,14 @@ curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
   -F file=@./sample.wav \
   -F response_format=srt
 ```
+
+Configure MOSS with a catalog model such as `MOSS_TRANSCRIBE_DIARIZE_Q8_0`,
+or use `type: moss-transcribe` and a local GGUF `src`. Model `config` accepts
+`maxThreads`, `useGPU` for Metal, and `backendsDir`. MOSS processes whole
+recordings and does not support streaming or CoreML sidecars in this integration.
+For Nemotron diarization before registry models are available, configure
+`type: parakeet-transcription` and a local Nemotron 3 Diarization GGUF `src`,
+then request `verbose_json`.
 
 See [Audio transcription and translation timed responses](#audio-transcription-and-translation-timed-responses) for the shared SRT, WebVTT, and partial `verbose_json` examples, and [Audio transcription and translation errors](#audio-transcription-and-translation-errors) for timed-format failures.
 

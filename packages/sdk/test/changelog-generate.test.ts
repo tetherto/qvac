@@ -1,8 +1,12 @@
 import test from 'brittle'
 import { execFileSync } from 'child_process'
 import fs from 'fs'
+import { createRequire } from 'module'
 import path from 'path'
 import os from 'os'
+
+const require = createRequire(import.meta.url)
+const __dirname = import.meta.dirname
 
 // --- Generic script imports ---
 const GENERIC_SCRIPT_PATH = path.join(__dirname, '../../../scripts/generate-changelog-qvac.cjs')

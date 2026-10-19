@@ -10,8 +10,12 @@ import {
   extractGenerationParams,
   extractToolChoice,
   withToolChoice,
+  parseToolCallArguments,
+  nameToolResults,
+  withParallelToolCalls,
   type GenerationParams,
-  type ResponseFormat
+  type ResponseFormat,
+  type ToolTurnFields
 } from '@/serve/extensions/openai/schemas/common'
 
 export const responsesBody = z
@@ -55,7 +59,8 @@ export const RESPONSES_UNSUPPORTED_PARAMS = [
   'stop',
   'truncation',
   'service_tier',
-  'reasoning'
+  'reasoning',
+  'remove_thinking_from_context'
 ] as const
 
 export class UnsupportedToolTypeError extends Error {
@@ -158,23 +163,39 @@ function normalizeInputItemId(
   return { ...item, id: `item_${index}_${crypto.randomUUID()}` }
 }
 
-function responsesFunctionCallItemToAssistantContent(item: Record<string, unknown>): string {
-  const name = typeof item['name'] === 'string' ? item['name'] : ''
-  const rawArgs = item['arguments']
-  const argsStr =
-    typeof rawArgs === 'string'
-      ? rawArgs
-      : rawArgs !== null && rawArgs !== undefined
-        ? JSON.stringify(rawArgs)
-        : '{}'
-  let args: Record<string, unknown>
-  try {
-    args = JSON.parse(argsStr) as Record<string, unknown>
-  } catch {
-    args = {}
+export interface ResponsesHistoryItem extends ToolTurnFields {
+  role: string
+  content: string
+}
+
+// A `function_call` item joins the assistant turn right before it (its text, or
+// the calls made alongside it); otherwise it starts a new one.
+function pushFunctionCall(history: ResponsesHistoryItem[], item: Record<string, unknown>): void {
+  const call = {
+    ...(typeof item['call_id'] === 'string' && { id: item['call_id'] }),
+    name: typeof item['name'] === 'string' ? item['name'] : '',
+    arguments: parseToolCallArguments(item['arguments'] ?? {})
   }
-  const callObj = { name, arguments: args }
-  return `<tool_call>\n${JSON.stringify(callObj)}\n</tool_call>`
+  const last = history[history.length - 1]
+  if (last !== undefined && last.role === 'assistant') {
+    last.toolCalls = [...(last.toolCalls ?? []), call]
+    return
+  }
+  history.push({ role: 'assistant', content: '', toolCalls: [call] })
+}
+
+function pushFunctionCallOutput(
+  history: ResponsesHistoryItem[],
+  item: Record<string, unknown>
+): void {
+  const out = item['output']
+  const content =
+    typeof out === 'string' ? out : out !== null && out !== undefined ? JSON.stringify(out) : ''
+  history.push({
+    role: 'tool',
+    content,
+    ...(typeof item['call_id'] === 'string' && { toolCallId: item['call_id'] })
+  })
 }
 
 export function normalizeResponsesInputItemsForStorage(input: unknown): unknown[] {
@@ -222,8 +243,8 @@ export function normalizeResponsesInputItemsForStorage(input: unknown): unknown[
 export function openaiResponsesInputToHistory(
   input: unknown,
   instructions: string | undefined
-): Array<{ role: string; content: string }> {
-  const history: Array<{ role: string; content: string }> = []
+): ResponsesHistoryItem[] {
+  const history: ResponsesHistoryItem[] = []
 
   if (typeof instructions === 'string' && instructions.length > 0) {
     history.push({ role: 'system', content: instructions })
@@ -259,21 +280,15 @@ export function openaiResponsesInputToHistory(
       continue
     }
     if (t === 'function_call_output') {
-      const out = item['output']
-      const text =
-        typeof out === 'string' ? out : out !== null && out !== undefined ? JSON.stringify(out) : ''
-      history.push({ role: 'tool', content: text })
+      pushFunctionCallOutput(history, item)
       continue
     }
     if (t === 'function_call') {
-      history.push({
-        role: 'assistant',
-        content: responsesFunctionCallItemToAssistantContent(item)
-      })
+      pushFunctionCall(history, item)
     }
   }
 
-  return history
+  return nameToolResults(history)
 }
 
 function flattenResponsesContent(content: unknown): string {
@@ -303,8 +318,8 @@ export function historyPrefixFromStoredResponse(
   stored: StoredResponseLike,
   resolve?: (id: string) => StoredResponseLike | undefined,
   maxDepth: number = RESPONSES_HISTORY_MAX_DEPTH
-): Array<{ role: string; content: string }> {
-  const prefix: Array<{ role: string; content: string }> = []
+): ResponsesHistoryItem[] {
+  const prefix: ResponsesHistoryItem[] = []
 
   if (resolve && maxDepth > 0) {
     const prevId = stored.responseObject['previous_response_id']
@@ -326,12 +341,9 @@ export function historyPrefixFromStoredResponse(
       const text = typeof item['text'] === 'string' ? item['text'] : ''
       prefix.push({ role: 'user', content: text })
     } else if (item['type'] === 'function_call_output') {
-      const out = item['output']
-      const text =
-        typeof out === 'string' ? out : out !== null && out !== undefined ? JSON.stringify(out) : ''
-      prefix.push({ role: 'tool', content: text })
+      pushFunctionCallOutput(prefix, item)
     } else if (item['type'] === 'function_call') {
-      prefix.push({ role: 'assistant', content: responsesFunctionCallItemToAssistantContent(item) })
+      pushFunctionCall(prefix, item)
     }
   }
 
@@ -346,31 +358,17 @@ export function historyPrefixFromStoredResponse(
         const text = extractOutputTextFromMessage(o)
         prefix.push({ role: 'assistant', content: text })
       } else if (o['type'] === 'function_call') {
-        const name = typeof o['name'] === 'string' ? o['name'] : ''
-        const args =
-          typeof o['arguments'] === 'string' ? o['arguments'] : JSON.stringify(o['arguments'] ?? {})
-        prefix.push({
-          role: 'assistant',
-          content: `<tool_call>\n${JSON.stringify({ name, arguments: safeJsonParse(args) })}\n</tool_call>`
-        })
+        pushFunctionCall(prefix, o)
       }
     }
-    return prefix
+    return nameToolResults(prefix)
   }
 
   if (typeof outputText === 'string' && outputText.length > 0) {
     prefix.push({ role: 'assistant', content: outputText })
   }
 
-  return prefix
-}
-
-function safeJsonParse(s: string): Record<string, unknown> {
-  try {
-    return JSON.parse(s) as Record<string, unknown>
-  } catch {
-    return {}
-  }
+  return nameToolResults(prefix)
 }
 
 function extractOutputTextFromMessage(msg: Record<string, unknown>): string {
@@ -389,7 +387,7 @@ function extractOutputTextFromMessage(msg: Record<string, unknown>): string {
 export type ResponsesBody = z.infer<typeof responsesBody>
 
 export interface SdkResponsesArgs {
-  history: Array<{ role: string; content: string }>
+  history: ResponsesHistoryItem[]
   tools: Tool[] | undefined
   generationParams: GenerationParams | undefined
   responseFormat: ResponseFormat | undefined
@@ -428,9 +426,13 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
   return {
     history,
     tools,
-    generationParams: withToolChoice(
-      extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
-      extractToolChoice(body as Record<string, unknown>, tools)
+    generationParams: withParallelToolCalls(
+      withToolChoice(
+        extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
+        extractToolChoice(body as Record<string, unknown>, tools)
+      ),
+      parallelToolCalls,
+      tools
     ),
     responseFormat: responseFmt,
     storeEnabled,

@@ -1,22 +1,12 @@
 export interface LlamaFitRequest {
     /** Absolute path to the GGUF, or to the registry's weightless copy. */
     modelPath: string;
-    /**
-     * The load, in llama's own CLI spelling without the leading `--`, exactly as
-     * the loader takes it: `ctx-size`, `tensor-split`, `override-tensor`,
-     * `cpu-moe`, `no-kv-offload` and the rest. Each is dispatched through llama's
-     * argument table, so a placement pinned here reaches the projection.
-     *
-     * A setting llama does not recognise, or a flag asked to be off that can only
-     * assert itself, is `status: "error"` with `unsupported-config`.
-     */
-    params?: Record<string, string>;
-    /** Floor the fitter may not reduce the context below. */
+    /** The load, as `loadModel` takes it, resolved by the same code that load runs. */
+    config?: Record<string, string>;
+    /** Floor the fitter may not reduce an unpinned context below. */
     minCtxSize?: number;
-    /** Memory to leave free on every device. */
+    /** Memory to leave free on every device, held to against the load's own `fit-target`. */
     marginBytes?: number;
-    /** Where the dynamically-loaded ggml backends live. */
-    backendsDir?: string;
 }
 export type LlamaFitStatus = 'fits' | 'does-not-fit' | 'error';
 export type LlamaFitReason = 'fits' | 'does-not-fit' | 'model-unreadable' | 'no-backend-device' | 'unsupported-config';
@@ -48,16 +38,15 @@ export interface LlamaFitResult {
  * and never weight data. The registry's weightless copy of a model answers the
  * same as the model itself, so this can run before anything is downloaded.
  *
- * A model the fitter cannot read comes back as `status: "error"`; only a broken
- * request throws.
+ * A model the fitter cannot read resolves to `status: "error"`; only a broken
+ * request rejects.
  *
- * Runs synchronously on the calling thread and builds the model twice without
- * allocating weights, so a caller that must stay responsive runs it off its
- * own loop.
+ * Builds the model twice without allocating weights. Concurrent calls run one
+ * at a time.
  *
  * The projection reads the model's vocabulary, and llama asserts on a
  * vocabulary it finds inconsistent. An assert aborts rather than throwing, so
  * a corrupt file ends the process instead of returning a status: take the
  * model from a source you trust, or call this behind a process boundary.
  */
-export declare function assessFit(request: LlamaFitRequest): LlamaFitResult;
+export declare function assessFit(request: LlamaFitRequest): Promise<LlamaFitResult>;

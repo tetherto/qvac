@@ -6,9 +6,11 @@ import { initializeWorker, ensureRPCSetup } from '@/worker/lifecycle'
 import { getServerLogger } from '@/logging'
 import { registerPlugins } from '@qvac/inference/plugins'
 import { llmPlugin } from '@qvac/inference/llamacpp-completion/plugin'
+import { decisionPlugin } from '@qvac/inference/llamacpp-decision/plugin'
 import { embeddingsPlugin } from '@qvac/inference/llamacpp-embedding/plugin'
 import { whisperPlugin } from '@qvac/inference/whispercpp-transcription/plugin'
 import { bciPlugin } from '@qvac/inference/bci-whispercpp-transcription/plugin'
+import { mossTranscribePlugin } from '@qvac/inference/moss-transcribe/plugin'
 import { parakeetPlugin } from '@qvac/inference/parakeet-transcription/plugin'
 import { nmtPlugin } from '@qvac/inference/nmtcpp-translation/plugin'
 import { ttsPlugin } from '@qvac/inference/tts-ggml/plugin'
@@ -27,9 +29,11 @@ logger.info('🐻 Hello from Bare')
 registerPlugins([
   llmPlugin,
   embeddingsPlugin,
+  decisionPlugin,
   whisperPlugin,
   bciPlugin,
   parakeetPlugin,
+  mossTranscribePlugin,
   nmtPlugin,
   ttsPlugin,
   ocrPlugin,

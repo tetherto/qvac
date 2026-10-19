@@ -1,0 +1,115 @@
+{
+  "name": "@qvac/turbovec-ggml",
+  "version": "0.1.1",
+  "description": "CPU vector index with TurboVec quantization for qvac",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.24.0"
+  },
+  "scripts": {
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "check:generated": "npm run build:ts && npm run test:types:consumer && git diff --exit-code -- index.js index.d.ts test/types/consumer-cjs.test.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy turbovec-ggml prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy turbovec-ggml prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy turbovec-ggml prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "lint": "npm run lint:js && npm run lint:ts",
+    "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
+    "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
+    "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
+    "test:cpp:run": "node scripts/run-cpp-tests.js",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "test": "npm run test:types && npm run test:integration",
+    "test:types": "npm run typecheck && npm run test:types:consumer && npm run check:generated",
+    "test:types:consumer": "tsc -p test/types/tsconfig.cjs.json",
+    "test:dts": "npm run test:types",
+    "benchmarks:cpu": "bare benchmarks/performance/id-map-index-turbovec-cpu.js"
+  },
+  "files": [
+    "binding.js",
+    "index.js",
+    "index.mjs",
+    "index.d.ts",
+    "prebuilds",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/turbovec-ggml"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://qvac.tether.io",
+  "devDependencies": {
+    "@qvac/fabric-android-arm64": "0.22.0",
+    "@qvac/fabric-ios": "0.22.0",
+    "@types/node": "^24.2.1",
+    "bare-fs": "^4.5.1",
+    "bare-os": "^3.6.2",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "bare-url": "^2.1.6",
+    "brittle": "^3.4.0",
+    "cmake-bare": "^1.9.0",
+    "cmake-npm": "^1.1.0",
+    "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "lunte": "^1.8.4",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
+  },
+  "dependencies": {
+    "@qvac/fabric": "^0.22.0"
+  },
+  "optionalDependencies": {
+    "@qvac/fabric-linux-x64": "^0.22.0",
+    "@qvac/fabric-linux-arm64": "^0.22.0",
+    "@qvac/fabric-darwin-arm64": "^0.22.0",
+    "@qvac/fabric-darwin-x64": "^0.22.0",
+    "@qvac/fabric-win32-x64": "^0.22.0"
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.22.0",
+    "@qvac/fabric-ios": "^0.22.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs",
+      "default": "./index.js"
+    },
+    "./idMapIndex": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs",
+      "default": "./index.js"
+    },
+    "./idMapIndex.js": "./index.js",
+    "./binding.js": "./binding.js"
+  },
+  "main": "index.js",
+  "types": "index.d.ts"
+}

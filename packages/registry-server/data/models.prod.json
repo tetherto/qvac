@@ -2848,7 +2848,18 @@
     "notes": "Q8_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/nemotron/2026-10-09/Nemotron-3-Diarization.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/Nemotron-3-Diarization",
+    "description": "Nemotron 3 Diarization GGUF (up to 8 speakers, offline and streaming)",
+    "quantization": "q8_0",
+    "params": "99.2M",
+    "licenseId": "openmdw-1.1",
+    "tags": ["diarization", "parakeet", "nemotron", "streaming", "8spk", "gguf"],
+    "notes": "Q8_0 GGUF of nvidia/Nemotron-3-Diarization"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2859,7 +2870,7 @@
     "notes": "F16 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2870,7 +2881,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2893,7 +2904,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2905,7 +2916,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2917,7 +2928,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2928,7 +2939,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2972,7 +2983,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2983,7 +2994,7 @@
     "notes": "F16 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2992,6 +3003,28 @@
     "licenseId": "CC-BY-4.0",
     "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
     "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b",
+    "description": "Parakeet TDT 1.1B GGUF",
+    "quantization": "f16",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-1.1b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b",
+    "description": "Parakeet TDT 1.1B GGUF",
+    "quantization": "q8_0",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-1.1b"
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
@@ -3005,7 +3038,7 @@
     "notes": "F16 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -3016,7 +3049,7 @@
     "notes": "F16 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -3027,7 +3060,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -9034,6 +9067,61 @@
     "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/model.mil",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Audio8 codec encoder / analysis half for voice cloning (GGUF, multilingual)",
@@ -9122,7 +9210,7 @@
     "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -9133,7 +9221,7 @@
     "notes": "F16 GGUF conversion of ai4bharat/indic-conformer"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -9144,7 +9232,7 @@
     "notes": "Q4_0 GGUF conversion of ai4bharat/indic-conformer"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -9331,7 +9419,7 @@
     "link": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -9342,7 +9430,7 @@
     "notes": "F16 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -9353,7 +9441,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -9406,5 +9494,203 @@
     "tags": ["tts", "moss-tts", "delay", "llm", "multilingual", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PQ2_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2 27B PQ2_0 model",
+    "quantization": "pq2_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Ternary weights stored in 2-bit slots (2.13 bits/weight); faster prompt processing than PTQ1_0. Pair with the Q8_0 mmproj entry for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2 27B PTQ1_0 model",
+    "quantization": "ptq1_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Densely packed ternary weights (1.75 bits/weight); smallest footprint. Pair with the Q8_0 mmproj entry for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Ternary Bonsai 2 27B",
+    "quantization": "q8_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Required for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-sfx-v2-f16.gguf",
+    "engine": "@qvac/audiogen-ggml",
+    "description": "MOSS-SoundEffect v2 text-to-sound model (GGUF)",
+    "quantization": "f16",
+    "params": "1.3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["audio-generation", "sound-effects", "moss-sfx", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-sfx-v2-q8_0.gguf",
+    "engine": "@qvac/audiogen-ggml",
+    "description": "MOSS-SoundEffect v2 text-to-sound model (GGUF)",
+    "quantization": "q8_0",
+    "params": "1.3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["audio-generation", "sound-effects", "moss-sfx", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-bf16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-Speech speech-to-speech language model (GGUF)",
+    "quantization": "bf16",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["speech-to-speech", "moss-speech", "gguf"],
+    "notes": "Requires the MOSS-Speech codec GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Speech"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-codec-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-Speech codec for speech-to-speech replies (GGUF)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["speech-to-speech", "moss-speech", "codec", "gguf"],
+    "notes": "Pair with a MOSS-Speech language model GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Speech-Codec"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-Speech speech-to-speech language model (GGUF)",
+    "quantization": "q8_0",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["speech-to-speech", "moss-speech", "gguf"],
+    "notes": "Requires the MOSS-Speech codec GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Speech"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-f16.gguf",
+    "engine": "@qvac/asr-ggml",
+    "description": "MOSS-Transcribe-Diarize speech transcription with speaker labels (GGUF)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "diarization", "moss-transcribe", "gguf"],
+    "notes": "Select the moss-transcribe engine explicitly in asr-ggml.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q5_0.gguf",
+    "engine": "@qvac/asr-ggml",
+    "description": "MOSS-Transcribe-Diarize speech transcription with speaker labels (GGUF)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "diarization", "moss-transcribe", "gguf"],
+    "notes": "Select the moss-transcribe engine explicitly in asr-ggml.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q8_0.gguf",
+    "engine": "@qvac/asr-ggml",
+    "description": "MOSS-Transcribe-Diarize speech transcription with speaker labels (GGUF)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "diarization", "moss-transcribe", "gguf"],
+    "notes": "Select the moss-transcribe engine explicitly in asr-ggml.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-ttsd-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-TTSD multi-speaker dialogue backbone (GGUF)",
+    "quantization": "f16",
+    "params": "8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "moss-ttsd", "dialogue", "multilingual", "gguf"],
+    "notes": "Requires MOSS-TTS codec decoder and encoder GGUFs for dialogue synthesis.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-f16.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya English decision model: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "f16",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya"],
+    "notes": "F16 GGUF conversion of convaiinnovations/laya. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-Q8_0.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya English decision model: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "q8_0",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya"],
+    "notes": "Q8_0 GGUF conversion of convaiinnovations/laya. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-f16.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya multilingual decision model (100+ languages): answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "f16",
+    "params": "322M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-multilingual"],
+    "notes": "F16 GGUF conversion of convaiinnovations/laya-multilingual. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-Q8_0.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya multilingual decision model (100+ languages): answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "q8_0",
+    "params": "322M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-multilingual"],
+    "notes": "Q8_0 GGUF conversion of convaiinnovations/laya-multilingual. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-typed-decisions-f16.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya decision model fine-tuned on typed-decisions data: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "f16",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-typed-decisions"],
+    "notes": "F16 GGUF conversion of convaiinnovations/laya-typed-decisions. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-typed-decisions"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-typed-decisions-Q8_0.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya decision model fine-tuned on typed-decisions data: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "q8_0",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-typed-decisions"],
+    "notes": "Q8_0 GGUF conversion of convaiinnovations/laya-typed-decisions. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-typed-decisions"
   }
 ]

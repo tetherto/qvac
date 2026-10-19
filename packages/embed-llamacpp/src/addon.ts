@@ -1,9 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-import fs = require("bare-fs");
-import path = require("bare-path");
-import fabricBackends = require("@qvac/fabric/backends");
-/* eslint-enable @typescript-eslint/no-require-imports */
-
 export type NumericLike = `${number}`;
 
 export interface GGMLConfig {
@@ -11,11 +5,17 @@ export interface GGMLConfig {
   gpu_layers?: NumericLike;
   batch_size?: NumericLike;
   ctx_size?: NumericLike;
+  /** Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100 (maximum polling). Defaults to 0. */
+  poll?: NumericLike;
+  /** Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when neither option is set. */
+  "poll-batch"?: NumericLike;
   pooling?: "none" | "mean" | "cls" | "last" | "rank";
   attention?: "causal" | "non-causal";
   embd_normalize?: NumericLike;
   flash_attn?: "on" | "off" | "auto";
   "main-gpu"?: NumericLike | "integrated" | "dedicated";
+  /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, plus auto for no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use device 'cpu' to run on CPU. */
+  backend?: string;
   /** How to split the model across GPUs: 'none' pins one device, 'layer' distributes layers. 'row' is rejected at load; use 'layer'. */
   "split-mode"?: "none" | "layer";
   "tensor-split"?: string;
@@ -29,10 +29,9 @@ export interface AddonConfigurationParams {
   path: string;
   config: GGMLConfig;
   /**
-   * Root the native side searches for ggml compute backends, with
-   * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the root
-   * `@qvac/fabric/backends` resolves on desktop, falling back to this
-   * addon's own `prebuilds/` on mobile.
+   * Directory holding the ggml compute backend modules, overriding the ones
+   * @qvac/fabric ships. Empty (the default) lets fabric load its own, which
+   * it locates next to its runtime on every platform.
    */
   backendsDir?: string;
 }
@@ -131,20 +130,14 @@ export function mapAddonEvent(
   return null;
 }
 
-// The ggml compute backends ship next to the @qvac/fabric runtime
-// (<root>/<host>/qvac__fabric). We deliberately do not copy them into this
-// addon to avoid duplicating tens of MB per fabric consumer. On desktop,
-// @qvac/fabric/backends resolves that root in whichever package holds the
-// runtime. On mobile the package tree isn't resolvable at runtime (the worklet
-// runs from a packed bundle), so fall back to this addon's own prebuilds, where
-// the mobile packaging stages the backends. The native side appends
-// BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-export function resolveBackendsDir(): string {
-  // fabric's resolver only checks that the platform package resolves, not that
-  // its prebuilds are on disk.
-  const fabricRoot = fabricBackends.resolveBackendsDir();
-  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
-  return path.join(__dirname, "prebuilds");
+/**
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ */
+export function pickPrimaryGgufPath(files: string[]): string {
+  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
+  return files.find((p) => SHARD_REGEX.test(p)) || files[0];
 }
 
 /** An interface between the Bare C++ addon and the JS runtime. */
@@ -159,9 +152,8 @@ export class BertInterface implements Addon {
   ) {
     this._binding = binding as BertBinding;
 
-    if (!configurationParams.backendsDir) {
-      configurationParams.backendsDir = resolveBackendsDir();
-    }
+    // createInstance reads the key unconditionally.
+    configurationParams.backendsDir ??= "";
 
     this._handle = this._binding.createInstance(this, configurationParams, outputCb);
   }

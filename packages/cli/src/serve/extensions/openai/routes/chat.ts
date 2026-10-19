@@ -21,12 +21,10 @@ import {
 import {
   chatCompletionsBody,
   CHAT_UNSUPPORTED_PARAMS,
-  messagesHaveToolCalls,
   toSdkChatArgs,
   writeChatImages,
   type SdkChatArgs
 } from '@/serve/extensions/openai/schemas/chat'
-import { resolveToolDialect } from '@/serve/lib/tool-dialect'
 import {
   InvalidResponseFormatError,
   InvalidToolChoiceError,
@@ -47,23 +45,11 @@ interface PreparedRequest extends SdkChatArgs {
   modelAlias: string
 }
 
-async function prepare(
-  req: FastifyRequest,
-  body: Parameters<typeof toSdkChatArgs>[0]
-): Promise<PreparedRequest> {
+function prepare(req: FastifyRequest, body: Parameters<typeof toSdkChatArgs>[0]): PreparedRequest {
   const sdkModelId = req.qvacModel!.sdkModelId
-  // Only pay the dialect lookup when a prior assistant tool call must be
-  // replayed; the model's native dialect is what keeps the replayed frame from
-  // provoking a malformed tool call on the next turn.
-  const dialect = messagesHaveToolCalls(
-    body.messages as Parameters<typeof messagesHaveToolCalls>[0]
-  )
-    ? await resolveToolDialect(sdkModelId)
-    : 'hermes'
-
   let sdk: SdkChatArgs
   try {
-    sdk = toSdkChatArgs(body, dialect)
+    sdk = toSdkChatArgs(body)
   } catch (err) {
     if (err instanceof InvalidResponseFormatError) {
       throw new HttpError(400, 'invalid_response_format', err.message)
@@ -152,6 +138,9 @@ in place of the object form — is rejected with \`invalid_tool_choice\`. A tool
 that sets \`defer_loading\` cannot be named: its schema is not in the prompt, so
 there is nothing to constrain. Name \`tool_search\` instead.
 
+**\`parallel_tool_calls\`**: \`true\` (default) lets one response carry several
+tool calls; \`false\` limits it to one.
+
 **Deferred tools**: a \`tools[]\` entry may set \`defer_loading: true\` (and an
 optional \`group\`), keeping its parameter schema out of the prompt until the
 model asks for it. The model sees a compact catalog carried by a built-in
@@ -199,7 +188,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     async (req, reply) => {
       const body = req.body
-      const prepared = await prepare(req, body)
+      const prepared = prepare(req, body)
       const streaming = Boolean(body.stream)
 
       app.qvac.logger.info(

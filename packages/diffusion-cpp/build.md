@@ -106,7 +106,8 @@ If you want to build the addon from source instead of using pre-built packages, 
    This command runs the complete build pipeline:
    - `bare-make generate` - Generates build files and downloads/builds vcpkg dependencies (including `stable-diffusion.cpp` and `ggml`)
    - `bare-make build` - Compiles the native addon
-   - `bare-make install` - Installs the built addon into `prebuilds/`
+   - `bare-make install` - Installs the built addon into `prebuilds/<host>/` as `qvac__diffusion-cpp-<host>.bare`
+   - `npm run link:platform` - Stages that directory as `node_modules/@qvac/diffusion-cpp-<host>`, which is what `binding.js` loads
 
 > **First build note:** The vcpkg step clones and compiles `stable-diffusion.cpp` and `ggml` from source, which can take **5–15 minutes** depending on your machine and internet connection.
 
@@ -131,6 +132,14 @@ bare-make install
 # Build and run C++ unit tests
 npm run test:cpp
 ```
+
+On Linux, the native test runner uses `test/unit/lsan-libdbus.supp` to ignore
+the six allocations left by the system DBus reply during GPU backend probing.
+The same leak reproduces in a pre-H3 addon build. The suppression matches only
+`_dbus_message_loader_queue_messages`; LeakSanitizer remains enabled for addon
+allocations. CTest uses the same suppression. To run `addon-test` directly, set
+`LSAN_OPTIONS=suppressions=$PWD/test/unit/lsan-libdbus.supp` from this package
+directory.
 
 ## Building for Different Platforms
 

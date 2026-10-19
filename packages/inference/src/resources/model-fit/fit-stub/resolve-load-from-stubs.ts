@@ -1,19 +1,30 @@
 import fs from 'bare-fs'
 
-import type { ModelSrcInput } from '@/schemas/index'
-import type { CanonicalModelType } from '@/schemas/index'
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
+import {
+  ModelType,
+  type CanonicalModelType,
+  type ModelSrcInput,
+  type TranscriptionFitWorkload
+} from '@/schemas/index'
 import type { ResolveContext } from '@/schemas/plugin'
 import { getPlugin } from '@/plugins/registry'
 import { getRuntimeContext } from '@/runtime/state'
 import { formatZodError } from '@/utils/zod-error'
+import { getModelByPath } from '@/models/registry/index'
 import {
   fetchFitStub,
+  fetchFitStubSet,
   removeStub,
   type FitStubOptions,
+  type FitStubSet,
+  type FitStubSetMember,
   type FitStubUnavailableReason
 } from '@/resources/model-fit/fit-stub/fetch-fit-stub'
 
 export interface LoadDescription {
+  transcriptionWorkload?: TranscriptionFitWorkload | undefined
+  ttsWorkload?: TtsFitWorkload | undefined
   /** Absent for the loads `loadModel` also takes without one. */
   modelSrc?: ModelSrcInput | undefined
   modelType: CanonicalModelType
@@ -55,6 +66,34 @@ function stubRefFor(modelSrc: ModelSrcInput) {
   }
 }
 
+function stubSetFor(registryPath: string): FitStubSet | undefined {
+  const companionSet = getModelByPath(registryPath)?.companionSet
+  if (companionSet === undefined) return undefined
+
+  let primary: FitStubSetMember | undefined
+  const others: FitStubSetMember[] = []
+
+  for (const file of companionSet.files) {
+    const member: FitStubSetMember = {
+      name: file.targetName,
+      sha256Checksum: file.sha256Checksum,
+      registryPath: file.registryPath,
+      registrySource: file.registrySource,
+      targetName: file.targetName
+    }
+    if (file.key === companionSet.primaryKey) primary = member
+    else others.push(member)
+  }
+
+  return primary === undefined ? undefined : { primary, others }
+}
+
+/**
+ * Engines whose fitter sizes the files on disk and reads no registry
+ * description, so a stub would be answered for as if it were the model.
+ */
+const FILES_ONLY_ENGINES: ReadonlySet<CanonicalModelType> = new Set([ModelType.nmtcppTranslation])
+
 class NoStubError extends Error {
   reason: FitStubUnavailableReason
 
@@ -74,7 +113,7 @@ class NoStubError extends Error {
  * keys are the real load's.
  *
  * A source already on disk is read directly, since it describes the load more
- * exactly than a stub does.
+ * exactly than a stub does. A files-only engine reads only sources on disk.
  */
 export async function resolveLoadFromStubs(
   load: LoadDescription,
@@ -99,11 +138,14 @@ export async function resolveLoadFromStubs(
   const resolveModelPath = async (src: ModelSrcInput): Promise<string> => {
     const location = srcString(src)
     if (location !== '' && fs.existsSync(location)) return location
+    if (FILES_ONLY_ENGINES.has(load.modelType)) throw new NoStubError('files-only-engine')
 
     const ref = stubRefFor(src)
     if (ref === undefined) throw new NoStubError('unresolvable-ref', location)
 
-    const stub = await fetchFitStub(ref, options)
+    const set = stubSetFor(ref.registryPath)
+    const stub =
+      set === undefined ? await fetchFitStub(ref, options) : await fetchFitStubSet(set, options)
     if (stub.status !== 'ready') throw new NoStubError(stub.reason, stub.message)
 
     staged.push(stub.path)

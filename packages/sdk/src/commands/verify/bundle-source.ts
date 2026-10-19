@@ -7,7 +7,9 @@ import {
   extractPackedString
 } from '@/commands/bundle/manifest'
 import {
+  createLimiter,
   deduplicateAddons,
+  FS_CONCURRENCY,
   readAddonPackageJson,
   type CollectDiagnostics,
   type NativeAddon
@@ -88,19 +90,27 @@ export async function collectAddonsFromBundle(
     pathsByPackage
   })
 
+  const limit = createLimiter(FS_CONCURRENCY)
+  const lookups = [...pathsByPackage].flatMap(([pkgName, candidates]) =>
+    [...candidates].map((candidate) => ({ pkgName, candidate }))
+  )
+  const results = await Promise.all(
+    lookups.map(({ pkgName, candidate }) =>
+      limit(() => readAddonPackageJson({ packageJsonPath: candidate, expectedName: pkgName }))
+    )
+  )
+
   const addons: NativeAddon[] = []
-  for (const [pkgName, candidates] of pathsByPackage) {
-    for (const candidate of candidates) {
-      const result = await readAddonPackageJson({
-        packageJsonPath: candidate,
-        expectedName: pkgName
-      })
-      if (result.isAddon && result.addon) {
-        if (analysed !== null) result.addon.linkedHosts = analysed.get(candidate) ?? []
-        addons.push(result.addon)
-      } else if (result.invalid !== undefined && diagnostics !== undefined) {
-        diagnostics.invalidPackageJsons.push(result.invalid)
-      }
+  for (const [index, { candidate }] of lookups.entries()) {
+    const result = results[index]!
+    if (result.record !== undefined && diagnostics !== undefined) {
+      diagnostics.packages.push(result.record)
+    }
+    if (result.isAddon && result.addon) {
+      if (analysed !== null) result.addon.linkedHosts = analysed.get(candidate) ?? []
+      addons.push(result.addon)
+    } else if (result.invalid !== undefined && diagnostics !== undefined) {
+      diagnostics.invalidPackageJsons.push(result.invalid)
     }
   }
 

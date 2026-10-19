@@ -1,5 +1,3 @@
-import { resolveBackendsDir } from './backends'
-
 /**
  * Settings every voice takes, spelled as `createInstance` takes them. A fit
  * request is a load config plus the workload below, so the projection reads
@@ -77,8 +75,29 @@ export interface CosyvoiceFitRequest extends TtsFitCommon {
 export interface MossFitRequest extends TtsFitCommon {
   engineType: 'moss'
   mossBackbonePath: string
-  mossCodecDecoderPath?: string
+  mossCodecDecoderPath: string
   mossCodecEncoderPath?: string
+  /** Rows in the complete native prompt, including reference and dialogue rows. */
+  promptRows: number
+  /** Total mono reference samples; use 0 for a voice without a reference. */
+  referenceSamples: number
+  /** Project native chunk streaming when true, batch synthesis when false. */
+  streaming: boolean
+  threads?: number
+  streamChunkTokens?: number
+  durationTokens?: number
+}
+
+export interface MossSoundEffectFitRequest extends TtsFitCommon {
+  engineType: 'moss-sfx'
+  mossSoundEffectPath: string
+  prompt: string
+  seconds: number
+  negativePrompt?: string
+  steps?: number
+  guidance?: number
+  shift?: number
+  threads?: number
 }
 
 export type TtsFitRequest =
@@ -88,6 +107,7 @@ export type TtsFitRequest =
   | Audio8FitRequest
   | CosyvoiceFitRequest
   | MossFitRequest
+  | MossSoundEffectFitRequest
 
 /** The voice engines a fit can be asked for, read off the request union. */
 export type TtsFitEngine = TtsFitRequest['engineType']
@@ -128,7 +148,7 @@ export interface TtsFitResult {
 }
 
 interface FitBinding {
-  assessFit(request: TtsFitRequest & { backendsDir: string }): TtsFitResult
+  assessFit(request: TtsFitRequest): Promise<TtsFitResult>
 }
 
 /**
@@ -142,19 +162,13 @@ interface FitBinding {
  *
  * `engineType` picks the fitter, the same key a load uses, and is required
  * here: a fit request carries none of the file keys a load is inferred from.
- * A model the engine cannot read comes back as `status: "error"`, as does a
+ * A model the engine cannot read resolves to `status: "error"`, as does a
  * voice with no fitter; a broken request, or a host with no native binding,
- * throws.
+ * rejects. Fits run one at a time within this addon.
  */
-export function assessFit(request: TtsFitRequest): TtsFitResult {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+export async function assessFit(request: TtsFitRequest): Promise<TtsFitResult> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
   const binding = require('../binding.js') as FitBinding
 
-  return binding.assessFit({
-    ...request,
-    backendsDir:
-      typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-        ? request.backendsDir
-        : resolveBackendsDir()
-  })
+  return await binding.assessFit(request)
 }

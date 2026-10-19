@@ -74,6 +74,42 @@ test('parseArgs forwards unrecognized flags to the fuzz binary', () => {
   })
 })
 
+test('parseArgs keeps a separated flag value with its flag instead of selecting it', () => {
+  const parsed = parseArgs(['--continuous', '--fuzz_for', '30m'])
+  assert.deepEqual(parsed, {
+    continuous: true,
+    fuzzTest: DEFAULT_FUZZ_TEST,
+    buildDir: undefined,
+    fuzzerArgs: ['--fuzz_for', '30m']
+  })
+  assert.deepEqual(buildFuzzArgs(parsed), [`--fuzz=${DEFAULT_FUZZ_TEST}`, '--fuzz_for', '30m'])
+})
+
+test('parseArgs still finds the selector after a separated flag value', () => {
+  assert.deepEqual(parseArgs(['--continuous', '--fuzz_for', '30m', 'OtherSuite.OtherProperty']), {
+    continuous: true,
+    fuzzTest: 'OtherSuite.OtherProperty',
+    buildDir: undefined,
+    fuzzerArgs: ['--fuzz_for', '30m']
+  })
+})
+
+test('parseArgs does not take the selector as the value of an =-form flag', () => {
+  assert.deepEqual(parseArgs(['--continuous', '--fuzz_for=30m', 'OtherSuite.OtherProperty']), {
+    continuous: true,
+    fuzzTest: 'OtherSuite.OtherProperty',
+    buildDir: undefined,
+    fuzzerArgs: ['--fuzz_for=30m']
+  })
+})
+
+test('parseArgs does not pair a forwarded flag with a following flag', () => {
+  assert.deepEqual(parseArgs(['--continuous', '--fuzz_for', '--rss_limit_mb=4096']).fuzzerArgs, [
+    '--fuzz_for',
+    '--rss_limit_mb=4096'
+  ])
+})
+
 test('parseArgs does not forward its own flags to the fuzz binary', () => {
   const { fuzzerArgs } = parseArgs([
     '--continuous',

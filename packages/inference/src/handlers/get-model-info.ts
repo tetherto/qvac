@@ -12,6 +12,14 @@ import { promises as fsPromises } from 'bare-fs'
 import { getShardPath, getModelsCacheDir, getSingleFileCachePath } from '@/utils/cache/paths'
 import { validateAndJoinPath } from '@/utils/path-security'
 import { ModelNotFoundError } from '@/errors/index'
+import {
+  findCoremlCompanionSet,
+  findLocallyCachedCoremlCompanionSet,
+  getCoremlSidecarSpec,
+  getCoremlSetKey
+} from '@/handlers/load-model/coreml-sidecars'
+import { getRegistryClient } from '@/runtime/registry-client'
+import { getRuntimeContext } from '@/runtime/state'
 
 type CacheStatusResult = {
   cacheFiles: CacheFileInfo[]
@@ -45,11 +53,7 @@ export async function handleGetModelInfo(
             catalogEntry.registryPath,
             catalogEntry.addon
           )
-        : await handleSingleFileModel(
-            catalogEntry.registryPath,
-            catalogEntry.expectedSize,
-            catalogEntry.sha256Checksum
-          )
+        : await handleOptionalCoremlModel(catalogEntry)
 
   const { cacheFiles, isCached, actualSize, cachedAt, primaryPath } = cacheStatus
 
@@ -108,6 +112,36 @@ export async function handleGetModelInfo(
     type: 'getModelInfo',
     modelInfo
   }
+}
+
+async function handleOptionalCoremlModel(model: RegistryItem): Promise<CacheStatusResult> {
+  const platform = getRuntimeContext().platform
+  const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
+  if (spec) {
+    const cachedSet = await findLocallyCachedCoremlCompanionSet(model, platform)
+    if (cachedSet) {
+      const cachedStatus = await handleCompanionSetModel(cachedSet, model.registryPath, model.addon)
+      if (cachedStatus.isCached) return cachedStatus
+    }
+
+    try {
+      const filename = model.registryPath.split('/').pop() || model.registryPath
+      const primaryPath = validateAndJoinPath(
+        getModelsCacheDir(),
+        'sets',
+        getCoremlSetKey(model, spec),
+        filename
+      )
+      await fsPromises.access(primaryPath)
+      const set = await findCoremlCompanionSet(await getRegistryClient(), model, platform)
+      if (set) {
+        const status = await handleCompanionSetModel(set, model.registryPath, model.addon)
+        if (status.isCached) return status
+      }
+    } catch {}
+  }
+
+  return handleSingleFileModel(model.registryPath, model.expectedSize, model.sha256Checksum)
 }
 
 async function handleShardedModel(

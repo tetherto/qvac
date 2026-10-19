@@ -8,6 +8,15 @@ on desktop CPUs and GPUs and returns stereo 44.1 kHz audio.
 
 ## How it works
 
+The C++ CI carve-out builds the native addon on the Ubuntu 22.04 CPU runner,
+reusing vcpkg and compiler caches with two build workers. Addon-level C++ tests
+remain a stub. Only trusted default-branch builds save shared caches; pushes
+affecting AudioGen or its cache configuration, a schedule every 2 days, and
+manual dispatches warm them.
+Non-PR runs build the triggering commit and reject inputs selecting another
+repository or revision. PR events retain caller-selected PR-head checkouts.
+See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet).
+
 Under the hood the model runs a small pipeline, and the addon just drives it and
 hands you the audio:
 
@@ -57,11 +66,12 @@ platform package selected at install time through `os`/`cpu` filtered
 
 Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
-the platform package and fail at require time with an error naming the missing
-package; a locally built `prebuilds/` directory in the package root always
-takes precedence. Use `require('@qvac/audiogen-ggml').resolveBackendsDir()`
-to locate the directory holding the host's prebuilt binaries and dynamically
-loaded ggml backends.
+the platform package and fail at require time, and at `bare-pack` time, naming
+the missing package. Each platform package is an ordinary Bare addon whose
+`prebuilds/<host>/` holds the native module and, next to it, the dynamically
+loaded ggml backends the module finds on its own. A source build becomes
+loadable once `npm run link:platform` (run by `npm run build:native`) stages it
+as the host's platform package in `node_modules/`.
 
 Mobile targets are cross-built, so no install host ever matches their `os`,
 and `optionalDependencies` filtering can never select them. Mobile
@@ -148,7 +158,11 @@ controls such as BPM, DiT shift, frozen semantic codes, cover audio, and
 `nGpuLayers`. Set `config.useGPU: true` to run the whole model pair on a GPU
 backend (CUDA, Vulkan, Metal — ~22 GB of device memory for the f16 pair); the
 engine falls back to CPU when no usable GPU exists and `stats.backendDevice`
-reports the backend actually used. See
+reports the backend actually used. Pass `config.device: 'gpu'` instead to make
+`load()` fail when no GPU is usable rather than run on the CPU. The stats split
+the engine time into `arMs`, `conditionMs`, `flowMs` and `vocoderMs`, and
+`emittedFrames` counts the semantic frames generated: fewer than the cap when
+the song ended on its own. See
 [`examples/generate-music-minimax.js`](examples/generate-music-minimax.js).
 
 ### 1. Simplest case — an instrumental
@@ -188,6 +202,7 @@ const stats = await response.await()
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
 // lyricsScore + lrc: alignment confidence and LRC text, only with generateLrc
 // qualityScore:      [0, 1], present only when the run set computeQualityScore
+// metadata:          what the run rendered (see below), ACE-Step only
 
 await gen.destroy()
 ```
@@ -204,6 +219,24 @@ await gen.destroy()
 > every attempt to initialise it failed. Name it with
 > `audiogenGpuFallbackReason(stats.gpuFallbackReason)`.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
+
+An ACE-Step run also reports what it rendered once the LM filled in whatever
+the request left unset, on the PCM item and again as `stats.metadata`:
+
+```js
+// { caption, lyrics, bpm, keyscale, beatsPerBar, vocalLanguage, seed,
+//   codeFrames, qualityReport? }
+const { seed, lyrics } = stats.metadata
+```
+
+`seed` is the one the run used, so an unseeded take can be replayed by passing
+it back. Under Simple Mode or Query Rewriting, `caption` and `lyrics` are the
+LM-composed ones (with `augmentCaptionWithMetadata`, `caption` stays yours).
+`beatsPerBar` is the time-signature numerator (`4` for `4/4`), the only part
+the engine reports. `qualityReport` is the per-condition breakdown of
+`stats.qualityScore` and is present only with `computeQualityScore`. An edit
+run reports its base seed and prompt metadata; its `caption` is empty and
+`codeFrames` is 0.
 
 ### 2. A song with lyrics + rhythm
 
@@ -425,14 +458,15 @@ layout `sourceAudio` uses:
 const response = await gen.understand(pcm, { seed: 42 })
 const stats = await response.await()
 const heard = stats.understand
-// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes }
+// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes, seed }
 ```
 
 The description streams as an `understand` output item (progress ticks report
 the `source`, `tok`, and `understand` stages) and is repeated on the terminal
 stats. `audioCodes` are the recovered semantic codes — pass them back as a
 generation's `audioCodes` to re-synthesize or remix the clip. A
-`vocalLanguage` hint forces the language field instead of the LM's guess.
+`vocalLanguage` hint forces the language field instead of the LM's guess, and
+`seed` is the one the LM decode used.
 End to end from the repo (generates a clip, then describes it):
 
 ```bash
@@ -488,6 +522,12 @@ and span at least one latent frame (`1/25` s). Omitting `end` repaints through
 the end of the source. Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`) and
 changes musical/lyrical conditioning over its `nMin`/`nMax` diffusion window.
 Repainting an entire track is supported with `start: 0` and no `end`.
+
+`run()` also takes the conditioning shared by every operation: a timbre
+`referenceAudio` (same layout as the source), the `vocalLanguage` / `bpm` /
+`keyscale` / `timesignature` / `augmentCaptionWithMetadata` prompt metadata, the
+Repaint DCW sampler controls (`dcwEnabled`, `dcwScaler`, `dcwHighScaler`), and a
+per-run `inferenceSteps` / `shift`.
 
 ### Turning PCM into a file
 
@@ -578,11 +618,12 @@ runnable end-to-end script (`npm run example`).
 | Option | Meaning |
 |--------|---------|
 | `useGPU` | Run on GPU (Metal / CUDA / Vulkan, including Android Mali); falls back to CPU. |
-| `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
+| `device` | MiniMax only, instead of `useGPU`: `gpu` fails `load()` without a usable GPU, `auto` falls back to the CPU, `cpu` never uses a GPU. |
+| `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. `run()` can override both per call. |
 | `cfgScale` | Default MiniMax flow guidance scale; `0` uses the model default. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |
-| `backendsDir` | Advanced; override the prebuilds root scanned for dlopen'd ggml backend modules. Defaults to `resolveBackendsDir()`: the package's own `prebuilds/` when present, otherwise the installed platform package. Needed on arm64, where the CPU backend is a set of per-microarch module `.so`s. |
+| `backendsDir` | Advanced; directory scanned, as given, for dlopen'd ggml backend modules. Unset scans the addon's own, next to its native module, which is where the platform package and `bare-link` put them. |
 
 `logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
 wrapped by a level-gated `QvacLogger`.
@@ -599,7 +640,9 @@ wrapped by a level-gated `QvacLogger`.
 | `augmentCaptionWithMetadata` | Append BPM/tempo, time signature, and key guidance to the internal conditioning caption; defaults to `false`. |
 | `duration` | Target length in seconds; omit to let the LM decide. |
 | `maxFrames` | MiniMax semantic-frame cap; cannot be combined with `duration`. |
-| `inferenceSteps` / `cfgScale` | Per-run MiniMax flow controls. |
+| `inferenceSteps` | Per-run diffusion steps (`0`–`1000`); omit to keep `config.inferenceSteps`. |
+| `shift` | ACE-Step per-run DiT timestep shift; omit to keep `config.shift`. |
+| `cfgScale` | Per-run MiniMax flow guidance scale. |
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
@@ -666,10 +709,12 @@ answers the same as the file itself and the projection can run before anything
 is downloaded. It is a module export, not an instance method — nothing is
 loaded to call it.
 
+`assessFit` returns a Promise. Fits run one at a time within the addon.
+
 ```js
 const { assessFit } = require('@qvac/audiogen-ggml')
 
-const fit = assessFit({
+const fit = await assessFit({
   modelsDir: '/models/ace-step',
   durationSeconds: 30,
   textTokens: 256,
@@ -707,8 +752,37 @@ and `vaePath` name them individually and win over it.
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host
 bytes compete with device bytes.
 
+### MiniMax-Music3
+
+`engine: 'minimax'` projects a MiniMax-Music3 pair on desktop builds, with the
+same result shape. `modelsDir` holds the pair; `lmPath` and `synthPath` name the
+two GGUFs and win over it. The weights and the synthesis graphs stay resident
+between runs and the LM's cache is rebuilt by each run, so `deviceBytes` is the
+peak of repeated generations, and the `stages` rows are `lm`, `depth`, `cond`,
+`dit` and `vocoder`.
+
+```js
+const fit = await assessFit({
+  engine: 'minimax',
+  modelsDir: '/models/minimax-music3',
+  device: 'gpu',
+  durationSeconds: 120,
+  promptTokens: 900
+})
+```
+
+| Option | Description |
+| --- | --- |
+| `device` | `'cpu'`, `'gpu'` or `'auto'`, as `config.device` takes it. Without it, `gpuLayers` greater than 0 projects `'auto'` and anything else `'cpu'`. |
+| `durationSeconds`, `maxFrames` | The generation length, as `run()` takes it (25 frames per second); one or the other. Defaults to 300 frames. |
+| `promptTokens` | Tokenized prompt length: caption, lyrics and template. Defaults to 1024. A prompt above the checkpoint's limit, or one that leaves too little context for the frames, is `workload-too-large`. |
+| `threads`, `backendsDir`, `marginBytes` | As for ACE-Step. |
+
+On Android and iOS, where MiniMax-Music3 is unavailable, `engine: 'minimax'`
+comes back as `status: "error"` with `reason: "unsupported-engine"`.
+
 A model the engine cannot read is `status: "error"`; a broken request, or a
-host with no native binding, throws.
+host with no native binding, rejects.
 
 ## Lifecycle
 
@@ -753,6 +827,35 @@ dispatches to the corresponding `audiogen-cpp` engine.
 - `addon/src/model-interface/minimax/` — desktop-only `MinimaxModel`.
 - Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on the
   `speech-cpp[audiogen]` port.
+- `ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
+  versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
+  `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
+  `ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their
+  ggml backends under the same file names, so an app that bundles several of
+  them keeps one copy of each: use releases that record the same
+  `ggml-speech`.
+
+## Fuzzing
+
+The JS-adapter number parsers have a [Google FuzzTest][fuzztest] target,
+`audiogen-config-parse-fuzz`. Fuzzing is Linux-only: it needs clang with
+libFuzzer and AddressSanitizer, CMake 3.25 or newer, [vcpkg](https://vcpkg.io/)
+(set `VCPKG_ROOT`) and `bare-make`. The target does not link audiogen-cpp, so
+it runs with full ASan and LeakSanitizer.
+
+```bash
+npm install
+npm run fuzz                     # bounded run of every FUZZ_TEST, as Linux CI does
+npm run fuzz:continuous          # coverage-guided, one FUZZ_TEST at a time
+npm run fuzz:continuous -- AudiogenConfigParseFuzz.ParseFloatNeverCrashes --fuzz_for=30m
+```
+
+Flags other than `--continuous` and `--build-dir` go to the fuzz binary. See
+[`docs/architecture/ADDON-FUZZING.md`](../../docs/architecture/ADDON-FUZZING.md)
+for the fuzzing design, the vcpkg-supplied FuzzTest stack, and how to add a
+target.
+
+[fuzztest]: https://github.com/google/fuzztest
 
 ## Benchmarking
 

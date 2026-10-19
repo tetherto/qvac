@@ -12,6 +12,29 @@ const LLM_BASE = {
   modelSrc: 'model.gguf'
 }
 
+test('llmConfigSchema: preserves ordered RPC endpoints and device selection', (t) => {
+  for (const servers of ['10.0.0.2:50052', '10.0.0.3:50052,10.0.0.2:50052']) {
+    const config = llmConfigSchema.parse({ 'rpc-servers': servers, devices: 'RPC0' })
+    t.is(config['rpc-servers'], servers)
+    t.is(config.devices, 'RPC0')
+  }
+})
+
+test('llmConfigSchema: rejects duplicate RPC endpoints before native registration', (t) => {
+  for (const servers of [
+    '10.0.0.2:50052,10.0.0.2:50052,10.0.0.3:50052',
+    '10.0.0.2:50052,10.0.0.3:50052,10.0.0.2:50052',
+    '10.0.0.2:50052, 10.0.0.2:50052'
+  ]) {
+    const result = llmConfigSchema.safeParse({ 'rpc-servers': servers })
+    t.is(result.success, false)
+    if (!result.success) {
+      t.alike(result.error.issues[0]?.path, ['rpc-servers'])
+      t.is(result.error.issues[0]?.message, 'RPC server endpoints must be unique')
+    }
+  }
+})
+
 test('llmConfigBaseSchema: accepts supported split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'none' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'layer' }).success, true)
@@ -288,6 +311,39 @@ test('loadModelOptionsToRequestSchema: accepts mmproj-use-gpu for LLM', (t) => {
     loadModelOptionsToRequestSchema.safeParse({
       ...LLM_BASE,
       modelConfig: { 'mmproj-use-gpu': true }
+    }).success,
+    true
+  )
+})
+
+test('llmConfigBaseSchema: accepts a positive integer image-max-megapixels', (t) => {
+  const result = llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 20 })
+  t.is(result.success, true)
+  if (result.success) t.is(result.data['image-max-megapixels'], 20)
+})
+
+test('llmConfigBaseSchema: rejects invalid image-max-megapixels', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': '20' }).success, false)
+})
+
+test('llmConfigBaseSchema: bounds image-max-megapixels at the addon maximum', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 18_446_744_073_709 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 18_446_744_073_710 }).success, false)
+})
+
+test('llmConfigSchema: does not inject a default for image-max-megapixels', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.absent('image-max-megapixels' in result.data)
+})
+
+test('loadModelOptionsToRequestSchema: accepts image-max-megapixels for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { 'image-max-megapixels': 100 }
     }).success,
     true
   )

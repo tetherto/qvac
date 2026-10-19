@@ -5,6 +5,7 @@ interface CreateJobHandlerOptions {
 interface JobHandler {
     start(runOpts?: {
         signal?: QvacResponse.AbortSignalLike;
+        retainOutput?: boolean;
     }): QvacResponse;
     startWith(response: QvacResponse): QvacResponse;
     output(data: any): void;

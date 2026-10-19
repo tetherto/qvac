@@ -1,5 +1,6 @@
 import { ModelType } from '@/schemas/model-types'
 import {
+  ADDON_ASR,
   ADDON_AUDIOGEN,
   ADDON_BCI,
   ADDON_CLASSIFICATION,
@@ -26,11 +27,13 @@ export const ENGINE_TO_ADDON = {
   [ModelType.whispercppTranscription]: 'whisper',
   [ModelType.bciWhispercppTranscription]: 'bci',
   [ModelType.llamacppEmbedding]: 'embeddings',
+  [ModelType.llamacppDecision]: 'embeddings',
   [ModelType.nmtcppTranslation]: 'nmt',
   [ModelType.onnxTts]: 'tts',
   [ModelType.ttsGgml]: 'tts',
   [ModelType.ggmlOcr]: 'ocr',
   [ModelType.parakeetTranscription]: 'parakeet',
+  [ModelType.mossTranscribe]: 'moss-transcribe',
   [ModelType.sdcppGeneration]: 'diffusion',
   [ModelType.audiogenGgml]: 'audiogen',
   [ModelType.ggmlVla]: 'vla',
@@ -77,6 +80,15 @@ export const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   classification: ModelType.ggmlClassification
 }
 
+// Legacy shared package ids need metadata to identify their plugin. These rules
+// are exported with the engine contract so submission validation uses the same data.
+export const LEGACY_REGISTRY_ENGINE_RULES: Record<
+  string,
+  readonly { tag: string; engine: ModelRegistryEngine }[]
+> = {
+  [ADDON_ASR]: [{ tag: 'moss-transcribe', engine: ModelType.mossTranscribe }]
+}
+
 // Resolves any engine string (legacy or canonical) to a validated canonical engine.
 // Returns null if the engine is not recognized.
 export function resolveCanonicalEngine(engine: string): ModelRegistryEngine | null {
@@ -87,10 +99,28 @@ export function resolveCanonicalEngine(engine: string): ModelRegistryEngine | nu
     return direct.data
   }
 
-  const canonical = LEGACY_ENGINE_TO_CANONICAL[engine]
-  if (canonical) return canonical
+  if (Object.hasOwn(LEGACY_ENGINE_TO_CANONICAL, engine)) {
+    return LEGACY_ENGINE_TO_CANONICAL[engine] ?? null
+  }
 
   return null
+}
+
+// Canonical engine identity takes precedence over legacy tag hints. A shared
+// legacy package without a unique matching rule stays unresolved.
+export function resolveRegistryEngine(
+  engine: string,
+  tags: readonly string[] = []
+): ModelRegistryEngine | null {
+  const canonical = resolveCanonicalEngine(engine)
+  if (canonical) return canonical
+  if (!Object.hasOwn(LEGACY_REGISTRY_ENGINE_RULES, engine)) return null
+  const matches = new Set(
+    LEGACY_REGISTRY_ENGINE_RULES[engine]
+      ?.filter((rule) => tags.includes(rule.tag))
+      .map((rule) => rule.engine)
+  )
+  return matches.size === 1 ? (matches.values().next().value ?? null) : null
 }
 
 // Returns the addon type for a validated canonical engine.

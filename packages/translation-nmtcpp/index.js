@@ -1,9 +1,6 @@
 "use strict";
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-const fs = require("bare-fs");
-const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
-const fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const marian_1 = require("./marian");
@@ -19,21 +16,23 @@ const indic_processor_1 = require("./third-party/indic-processor");
 const BERGAMOT_TARGET_TOKEN_BY_PAIR = {
     "en:pt": ">>por<<",
 };
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
-// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
-// copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
-// package holds the runtime. On mobile the package tree isn't resolvable at
-// runtime (the worklet runs from a packed bundle), so fall back to this addon's
-// own prebuilds, where the mobile packaging stages the backends. The native side
-// appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-function resolveBackendsDir() {
-    // fabric's resolver only checks that the platform package resolves, not that
-    // its prebuilds are on disk.
-    const fabricRoot = fabricBackends.resolveBackendsDir();
-    if (fabricRoot !== null && fs.existsSync(fabricRoot))
-        return fabricRoot;
-    return path.join(__dirname, "prebuilds");
+function isAbsoluteModelPath(modelPath) {
+    return (modelPath.startsWith("/") ||
+        /^[A-Za-z]:[\\/]/.test(modelPath) ||
+        modelPath.startsWith("\\\\"));
+}
+function normalizeGpuAliases(config) {
+    for (const [canonical, alias] of [
+        ["use_gpu", "useGPU"],
+        ["gpu_backend", "gpuBackend"],
+        ["gpu_device", "gpuDevice"],
+        ["op_offload_min_batch", "opOffloadMinBatch"],
+    ]) {
+        if (config[canonical] === undefined && config[alias] !== undefined) {
+            config[canonical] = config[alias];
+        }
+        delete config[alias];
+    }
 }
 class QvacIndicTransResponse extends infer_base_1.QvacResponse {
     processor;
@@ -79,6 +78,45 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         IndicTrans: "IndicTrans",
         Bergamot: "Bergamot",
     };
+    static async assessFit(request) {
+        if (!request ||
+            !request.files ||
+            typeof request.files.model !== "string" ||
+            !isAbsoluteModelPath(request.files.model)) {
+            throw new TypeError("files.model must be an absolute path");
+        }
+        if (request.files.pivotModel && !isAbsoluteModelPath(request.files.pivotModel)) {
+            throw new TypeError("files.pivotModel must be an absolute path");
+        }
+        const modelType = request.config?.modelType;
+        if (modelType !== "IndicTrans" && modelType !== "Bergamot") {
+            throw new TypeError("config.modelType must be IndicTrans or Bergamot");
+        }
+        if (modelType === "IndicTrans" &&
+            (request.config["main-gpu"] !== undefined ||
+                request.config.main_gpu !== undefined)) {
+            return {
+                status: "error",
+                reason: "unsupported-config",
+                backend: "",
+                modelBytes: 0,
+                requiredBytes: 0,
+                freeBytes: 0,
+                report: "Fit with main-gpu selection is unavailable",
+            };
+        }
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily.
+        const binding = require("./binding");
+        if (typeof binding.assessFit !== "function") {
+            throw new Error("the translation-nmtcpp prebuild does not expose assessFit");
+        }
+        const config = { ...request.config };
+        normalizeGpuAliases(config);
+        return await binding.assessFit({
+            ...request,
+            config,
+        });
+    }
     opts;
     logger;
     addon;
@@ -277,28 +315,7 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         // expects snake_case (mirrors nmt_context_params field names), so we
         // translate camelCase → snake_case here. snake_case takes precedence
         // when both are present (explicit user choice wins over alias).
-        if (otherConfig.use_gpu === undefined && otherConfig.useGPU !== undefined) {
-            otherConfig.use_gpu = otherConfig.useGPU;
-        }
-        if (otherConfig.gpu_backend === undefined &&
-            otherConfig.gpuBackend !== undefined) {
-            otherConfig.gpu_backend = otherConfig.gpuBackend;
-        }
-        if (otherConfig.gpu_device === undefined &&
-            otherConfig.gpuDevice !== undefined) {
-            otherConfig.gpu_device = otherConfig.gpuDevice;
-        }
-        if (otherConfig.op_offload_min_batch === undefined &&
-            otherConfig.opOffloadMinBatch !== undefined) {
-            otherConfig.op_offload_min_batch = otherConfig.opOffloadMinBatch;
-        }
-        delete otherConfig.useGPU;
-        delete otherConfig.gpuBackend;
-        delete otherConfig.gpuDevice;
-        delete otherConfig.opOffloadMinBatch;
-        if (otherConfig.backendsDir === undefined) {
-            otherConfig.backendsDir = resolveBackendsDir();
-        }
+        normalizeGpuAliases(otherConfig);
         const configurationParams = {
             path: this._files.model,
             config: otherConfig,

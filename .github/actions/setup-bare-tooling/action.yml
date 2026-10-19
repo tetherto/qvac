@@ -25,4 +25,4 @@ runs:
 
     - name: Install global dependencies
       shell: ${{ inputs.shell_type }}
-      run: npm install -g --force bare-runtime bare-make ${{ inputs.extra-packages }}
+      run: npm install -g --force bare-runtime bare-make@1.8.0 ${{ inputs.extra-packages }}

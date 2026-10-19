@@ -57,8 +57,41 @@ describe('cli: bundle sdk → verify bundle (chain)', () => {
       { cwd: dir, timeoutMs: 120_000 }
     )
     assert.equal(verify.code, 0, `verify bundle failed:\n${verify.output}`)
-    // "passed" when strict ABI ran; otherwise it reports the addons it checked
+    // "passed" when strict ABI ran; otherwise it reports the packages it checked
     // with ABI skipped (Bare runtime version not auto-detected on this host).
-    assert.match(verify.output, /verification passed|ABI checks skipped for \d+ addons/)
+    assert.match(verify.output, /verification passed|ABI checks skipped for \d+ packages?/)
+  })
+})
+
+describe('cli: bundle sdk addon platform packages', () => {
+  // The throwaway project has no lockfile, so no package manager can be
+  // chosen and nothing is installed.
+  it('names the platform packages it cannot install and fails without them', async (t) => {
+    const dir = await project(t)
+
+    const bundle = await runCli(['bundle', 'sdk', '--host', 'android-arm64'], {
+      cwd: dir,
+      timeoutMs: 300_000
+    })
+
+    assert.notEqual(bundle.code, 0, 'a split addon cannot bundle without its platform package')
+    assert.match(bundle.output, /Cannot install the addon platform packages automatically/)
+    assert.match(bundle.output, /Bundling without installing them/)
+    assert.match(bundle.output, /HOST_PREBUILDS_MISSING|needs each mobile host's platform package/)
+    assert.match(bundle.output, /"@qvac\/tts-ggml-android-arm64": "\d+\.\d+\.\d+"/)
+    assert.ok(!(await exists(join(dir, 'package.json'))), 'package.json must not be created')
+  })
+
+  it('skips the install with --no-install and names the pins to add', async (t) => {
+    const dir = await project(t)
+
+    const bundle = await runCli(['bundle', 'sdk', '--host', 'android-arm64', '--no-install'], {
+      cwd: dir,
+      timeoutMs: 300_000
+    })
+
+    assert.notEqual(bundle.code, 0)
+    assert.doesNotMatch(bundle.output, /Cannot install the addon platform packages/)
+    assert.match(bundle.output, /"@qvac\/tts-ggml-android-arm64": "\d+\.\d+\.\d+"/)
   })
 })

@@ -31,7 +31,6 @@ export function handleGetLoadedModelInfo(
   const handlers = plugin ? Object.keys(plugin.handlers) : []
 
   const fitProbe = entry.local.fitProbe
-  const probeRan = fitProbe !== undefined && fitProbe.reason !== 'disabled'
 
   const info: LoadedModelInfo = {
     modelId: entry.id,
@@ -46,7 +45,7 @@ export function handleGetLoadedModelInfo(
     ...(handlers.includes('completionStream') && {
       toolDialect: detectToolDialectFromName(entry.local.name, entry.local.path)
     }),
-    ...(probeRan && { fitProbe })
+    ...(fitProbe !== undefined && { fitProbe })
   }
 
   return { type: 'getLoadedModelInfo', info }

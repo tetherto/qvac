@@ -46,7 +46,6 @@ test("mobile test files merge into a runnable lifecycle probe", async () => {
         return {
           startRpcServer: () =>
             Promise.resolve({
-              runtime: "in-process",
               host: "127.0.0.1",
               port: 50052,
               url: "127.0.0.1:50052",

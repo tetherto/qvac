@@ -1,10 +1,7 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
-import path = require('bare-path')
-/* eslint-enable @typescript-eslint/no-require-imports */
-
-import type { DiffusionFiles, SdConfig } from './index'
+import type { DiffusionFiles, EsrganFiles, EsrganUpscalerConfig, SdConfig } from './index'
 import type { DiffusionVideoFiles } from './file-paths'
-import { assertFilePaths, toFilePaths } from './file-paths'
+import { assertAbsolute, assertFilePaths, toFilePaths } from './file-paths'
+import type { WorldConfig, WorldFiles } from './world'
 
 export interface DiffusionFitWorkload {
   /** Token count drives the text-encoder memory; a default stands in when absent. */
@@ -18,21 +15,34 @@ export interface DiffusionFitWorkload {
   vaeTileSizeX?: number
   vaeTileSizeY?: number
   vaeTileOverlap?: number
+  /** Number of ESRGAN passes, each applying the checkpoint's scale factor. */
+  upscaleRepeats?: number
 }
 
 export interface DiffusionFitRequest {
+  mode?: 'diffusion'
   files: DiffusionFiles & DiffusionVideoFiles
   config?: SdConfig
   workload?: DiffusionFitWorkload
 }
 
+export interface EsrganFitRequest {
+  mode: 'upscale'
+  files: EsrganFiles
+  config?: EsrganUpscalerConfig
+  workload?: Pick<DiffusionFitWorkload, 'width' | 'height' | 'upscaleRepeats'>
+}
+
+export interface WorldFitRequest {
+  mode: 'world'
+  files: WorldFiles
+  config?: WorldConfig
+  workload?: { walkSteps?: number }
+}
+
 export type DiffusionFitStatus = 'fits' | 'does-not-fit' | 'error'
 
-export type DiffusionFitReason =
-  | 'fits'
-  | 'does-not-fit'
-  | 'model-unreadable'
-  | 'unsupported-config'
+export type DiffusionFitReason = 'fits' | 'does-not-fit' | 'model-unreadable' | 'unsupported-config'
 
 export interface DiffusionFitResult {
   status: DiffusionFitStatus
@@ -51,20 +61,36 @@ export interface DiffusionFitResult {
 }
 
 interface FitBinding {
-  assessFit(request: Record<string, unknown>): DiffusionFitResult
+  assessFit(request: Record<string, unknown>): Promise<DiffusionFitResult>
 }
 
 /**
  * Projects a load against the memory free right now, reading model metadata
  * and never weight data. A GGUF file set can be a weightless registry copy,
- * so the projection can run before anything is downloaded; a safetensors file
- * still needs its tensor data present.
+ * so the projection can run before anything is downloaded. Safetensors
+ * checkpoints can also contain only their tensor headers.
  *
- * A model the engine cannot read is `status: "error"`; only a broken request
- * throws.
+ * Concurrent calls run one at a time within this addon.
+ *
+ * A model the engine cannot read resolves to `status: "error"`; only a broken
+ * request rejects.
  */
-export function assessFit(request: DiffusionFitRequest): DiffusionFitResult {
-  assertFilePaths(request.files)
+export async function assessFit(
+  request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest
+): Promise<DiffusionFitResult> {
+  if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale' && request.mode !== 'world') {
+    throw new TypeError(`unsupported fit mode: ${String(request.mode)}`)
+  }
+  const standalone = request.mode === 'upscale'
+  if (standalone) assertAbsolute('esrgan', request.files.esrgan)
+  const files = standalone
+    ? { model: request.files.esrgan, esrgan: request.files.esrgan }
+    : request.files
+  assertFilePaths(files)
+  if (request.mode === 'world') {
+    assertAbsolute('taehv', request.files.taehv)
+    assertAbsolute('scene', request.files.scene)
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
   const binding = require('./binding.js') as Partial<FitBinding>
@@ -74,18 +100,20 @@ export function assessFit(request: DiffusionFitRequest): DiffusionFitResult {
 
   // The native side reads the config sub-object as a string map, the same way
   // createInstance does.
-  const merged = { ...request.config }
-  if (!merged.backendsDir) {
-    merged.backendsDir = path.join(__dirname, 'prebuilds')
-  }
+  const merged: SdConfig | EsrganUpscalerConfig | WorldConfig = { ...request.config }
   const config = Object.fromEntries(
     Object.entries(merged)
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [key, String(value)])
   )
 
-  return binding.assessFit({
-    ...toFilePaths(request.files),
+  return await binding.assessFit({
+    ...toFilePaths(files),
+    ...(request.mode === 'world' && {
+      taehvPath: request.files.taehv,
+      scenePath: request.files.scene
+    }),
+    mode: request.mode ?? 'diffusion',
     config,
     request: request.workload ?? {}
   })

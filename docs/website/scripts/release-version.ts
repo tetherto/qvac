@@ -24,6 +24,7 @@
  */
 
 import { parseVersion } from "./lib/release-shared.js";
+import { refuseRetiredScript } from "./lib/retired.js";
 import { releaseMinor } from "./release-version-minor.js";
 import { releasePatch } from "./release-version-patch.js";
 
@@ -60,6 +61,8 @@ if (!versionArg || args.includes("--help") || args.includes("-h")) {
   console.log("                    (minor only; ignored on patch).");
   process.exit(versionArg ? 0 : 1);
 }
+
+refuseRetiredScript("release-version.ts");
 
 dispatch(versionArg, forceExtract).catch((err) => {
   console.error(`❌ Release failed: ${err.message}`);

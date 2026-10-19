@@ -1,9 +1,14 @@
 #include <bare.h>
+#include <qvac-addon/fabric-bind.h>
 
 #include "../addon/AddonJs.hpp"
 
 js_value_t*
 qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
 
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
@@ -28,6 +33,8 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
   V("cancel", qvac_lib_inference_addon_llama::cancel)
   V("cancelJob", qvac_lib_inference_addon_cpp::JsInterface::cancel)
   V("finetune", qvac_lib_inference_addon_llama::finetune)
+  V("saveCache", qvac_lib_inference_addon_llama::saveCache)
+  V("discardCache", qvac_lib_inference_addon_llama::discardCache)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
