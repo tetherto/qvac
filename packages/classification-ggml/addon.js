@@ -57,7 +57,7 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
             return null;
         }
     }
-    if (Array.isArray(rawData)) {
+    if (Array.isArray(rawData) || rawData instanceof Float32Array) {
         return { type: "Output", data: rawData, error: null };
     }
     if (rawData && typeof rawData === "object") {

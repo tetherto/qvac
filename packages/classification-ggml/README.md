@@ -1,6 +1,24 @@
 # @qvac/classification-ggml
 
-GGML-powered image classification addon for QVAC. Runs a fine-tuned MobileNetV3-Small 3-class triage CNN on the CPU backend of `libggml` and exposes a small, stable JavaScript API. Now intended for a specific image triage, but can be easily adapted for other classification tasks.
+GGML-powered vision addon for QVAC. `ImageClassifier` runs the bundled MobileNetV3-Small triage model on CPU. `MegaLoc` produces visual place descriptors using a local GGUF on CPU or a Fabric GPU backend. The existing classifier API and default model are unchanged.
+
+## MegaLoc image embeddings
+
+```js
+const { MegaLoc } = require('@qvac/classification-ggml')
+
+const model = new MegaLoc({ modelPath: './megaloc-f16.gguf' })
+await model.load()
+const descriptor = await model.embed(jpegBuffer) // Float32Array(8448), L2-normalized
+await model.destroy()
+```
+
+**F16 is the default conversion format.** F16 body + Q6_K projection is the other
+supported format. MegaLoc weights are supplied separately; the package includes
+a local conversion script and does not download or redistribute these GGUFs.
+See [MegaLoc usage, conversion and tests](docs/megaloc.md).
+
+## MobileNet classification
 
 
 | Property      | Value                                           |

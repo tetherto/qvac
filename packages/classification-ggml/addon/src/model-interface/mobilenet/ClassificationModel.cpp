@@ -22,7 +22,7 @@
 #include <inference-addon-cpp/Logger.hpp>
 #include <qvac-fabric.h>
 
-#include "ImagePreprocessor.hpp"
+#include "model-interface/ImagePreprocessor.hpp"
 #include "MobileNetGraph.hpp"
 
 namespace classification_ggml {

@@ -9,6 +9,7 @@ async function runTests () {
 
   await import('./classify.test.js')
   await import('./error-cases.test.js')
+  await import('./megaloc.test.js')
 
   test.resume()
 }

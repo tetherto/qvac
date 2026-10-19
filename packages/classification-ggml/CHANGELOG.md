@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0] - 2026-10-19
+
+### Added
+
+- `MegaLoc` image embeddings using local F16 GGUF weights, or an F16 body with
+  a Q6_K final projection, on Fabric CPU and GPU backends.
+- Local safetensors-to-GGUF conversion with F16 as the default, plus preprocessing
+  and descriptor parity tests against original PyTorch FP32.
+
+### Changed
+
+- Model implementations live in separate native directories. The existing
+  `ImageClassifier` interface and bundled MobileNet default remain unchanged.
+- Generated-file checks run on Windows as well as Unix hosts.
+
 ## [0.31.1] - 2026-10-15
 
 ### Fixed

@@ -14,4 +14,5 @@ test/mobile/integration.auto.cjs
 *.d.ts
 index.js
 addon.js
+megaloc.js
 src

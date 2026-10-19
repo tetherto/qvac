@@ -14,20 +14,13 @@
 #include <inference-addon-cpp/RuntimeStats.hpp>
 
 #include "MobileNetGraph.hpp"
+#include "model-interface/ImageInput.hpp"
 
 namespace classification_ggml {
 
-struct RawRgbDims {
-  uint32_t width;
-  uint32_t height;
-  uint32_t channels;
-};
-
 /// Raw classify input. `rawRgb` present = caller-supplied RGB bytes;
 /// absent = encoded JPEG/PNG, dimensions come from the decoder.
-struct ClassifyInput {
-  std::vector<uint8_t> data;
-  std::optional<RawRgbDims> rawRgb;
+struct ClassifyInput : ImageInput {
   uint32_t topK = 0; // 0 = no topK filter
 };
 
