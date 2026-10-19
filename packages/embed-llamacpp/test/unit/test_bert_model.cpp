@@ -985,6 +985,34 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRowRejected) {
   }
 }
 
+// RANK pooling yields n_cls_out scores per sequence, not an n_embd vector, so
+// encoding read past the end of llama's output buffer. Rejected before the
+// weights load.
+TEST_F(BertModelTest, RankPoolingRejected) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["pooling"] = "rank";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  try {
+    model.waitForLoadInitialization();
+    FAIL() << "pooling 'rank' must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_EQ(error.codeString(), "[ GTE :: UnsupportedEmbeddings ]");
+    EXPECT_EQ(
+        std::string(error.what())
+            .rfind("configureParams: rank pooling returns classifier", 0),
+        0U)
+        << error.what();
+  }
+  EXPECT_FALSE(model.isLoaded());
+}
+
 TEST_F(BertModelTest, SplitDeviceSelectionPinsEligibleConsumerList) {
   common_params params;
   std::unordered_map<std::string, std::string> config;
