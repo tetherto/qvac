@@ -4,10 +4,10 @@ const test = require('brittle')
 const ImgStableDiffusion = require('../../index')
 const { EsrganUpscaler } = require('../../index')
 const { readImageDimensions } = require('../../addon')
-const { setupJsLogger, releaseJsLogger } = require('./utils')
+const { setupJsLogger, releaseJsLogger, ensureModelPath } = require('./utils')
 
-function nativeTest(name, fn) {
-  test(name, async (t) => {
+function nativeTest(name, fn, opts = {}) {
+  test(name, opts, async (t) => {
     setupJsLogger()
     try {
       await fn(t)
@@ -573,6 +573,50 @@ nativeTest('init_images | rejects combining init_image + init_images', async (t)
     t.ok(/mutually exclusive/.test(err.message), 'error mentions mutual exclusion')
   }
 })
+
+// Exercise the public response and real native capability check, without a
+// mock or a missing-model skip. ensureModelPath verifies/downloads the same SD2
+// fixture used by CI; CPU loading also covers runners without a GPU.
+for (const prediction of [undefined, 'flux2_flow']) {
+  nativeTest(
+    `init_images | loaded SD2 rejects references with prediction=${prediction}`,
+    async (t) => {
+      const modelPath = await ensureModelPath({
+        modelName: 'stable-diffusion-v2-1-Q8_0.gguf'
+      })
+      const model = new ImgStableDiffusion({
+        files: { model: modelPath },
+        config: { device: 'cpu', threads: 2, prediction },
+        logger: console
+      })
+
+      try {
+        await model.load()
+        // Repeat to ensure native rejection releases the active job.
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const response = await model.run({
+            prompt: 'combine @image1 and @image2',
+            init_images: [VALID_PNG_HEADER, VALID_PNG_HEADER],
+            width: 64,
+            height: 64,
+            steps: 1
+          })
+          let outputCount = 0
+          response.onUpdate(() => outputCount++)
+          await t.exception.all(
+            response.await(),
+            /img2img: init_images requires a model supporting reference editing \(FLUX\.2 or Qwen-Image-2\.1\)\./,
+            'the native capability error reaches the public response'
+          )
+          t.is(outputCount, 0, 'rejected references produce no output')
+        }
+      } finally {
+        await model.unload()
+      }
+    },
+    { timeout: 600000 }
+  )
+}
 
 for (const llm of [undefined, '/tmp/encoder.gguf']) {
   nativeTest(
