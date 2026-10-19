@@ -290,7 +290,7 @@ test(
         { dialogueReferences: references, seed: 7, files: { modelDir: path.resolve(modelDir) } },
         async (model) => {
           t.ok(
-            DIALOGUE_BACKBONE_RE.test(path.basename(model._mossBackbonePath)),
+            DIALOGUE_BACKBONE_RE.test(path.basename(model._setup.paths.mossBackbonePath)),
             'dialogue picks the TTSD backbone'
           )
           const started = Date.now()
