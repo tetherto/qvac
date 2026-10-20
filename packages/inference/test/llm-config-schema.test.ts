@@ -275,6 +275,11 @@ test('llmConfigBaseSchema: rejects checkpoint budget and storage values the addo
   t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_dir: '' }).success, false)
 })
 
+test('llmConfigBaseSchema: leaves the disk storage and directory pairing to the addon', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_storage: 'disk' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_dir: '/data/cache' }).success, true)
+})
+
 test('llmConfigBaseSchema: accepts cache_ram_mib from 0 to 1048576', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 0 }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 2048 }).success, true)
