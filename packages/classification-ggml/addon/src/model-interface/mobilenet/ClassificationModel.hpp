@@ -35,8 +35,7 @@ struct ClassifyOutput {
 };
 
 /// MobileNetV3-Small 3-class classifier on libggml's CPU backend.
-class ClassificationModel
-    : public qvac_lib_inference_addon_cpp::model::IModel {
+class ClassificationModel : public qvac_lib_inference_addon_cpp::model::IModel {
 public:
   explicit ClassificationModel(std::string modelPath);
   ~ClassificationModel() override;

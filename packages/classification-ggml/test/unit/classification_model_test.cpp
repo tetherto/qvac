@@ -1,10 +1,10 @@
-#include <gtest/gtest.h>
-
 #include <cstdlib>
 #include <filesystem>
 
-#include "model-interface/mobilenet/ClassificationModel.hpp"
+#include <gtest/gtest.h>
+
 #include "model-interface/ImagePreprocessor.hpp"
+#include "model-interface/mobilenet/ClassificationModel.hpp"
 #include "model-interface/mobilenet/MobileNetGraph.hpp"
 
 namespace qcc = classification_ggml;
