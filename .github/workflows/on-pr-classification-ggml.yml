@@ -27,7 +27,7 @@ on:
         description: "Base ref for C++ checks on a manual branch run"
         type: string
         required: false
-        default: "main"
+        default: "origin/main"
 
   workflow_call:
 
