@@ -10,6 +10,8 @@ on:
   #
   # Merge Guard does not run on the other branches, so they keep this direct
   # `pull_request` trigger: fork PRs get a read-only token and no secrets.
+  # A PR into a release-train-* branch is checked by release-train.yml, which
+  # calls this workflow for the train.
   # Fork PRs may fail to install private @tetherto/* GPR deps (acceptable —
   # coordinated inference work is internal same-repo PRs).
   #
@@ -25,6 +27,7 @@ on:
       - labeled
     branches:
       - release-*
+      - "!release-train-*"
       - feature-*
       - tmp-*
   workflow_dispatch:
@@ -97,7 +100,7 @@ jobs:
     # the 30-min default because this rollup runs up to 6 packages sequentially
     # (incl. the SDK build + bare/e2e tests and the two consumer installs). A
     # release train builds and checks every package in it.
-    timeout-minutes: ${{ (inputs.train != '' || startsWith(github.base_ref, 'release-train-')) && 100 || 45 }}
+    timeout-minutes: ${{ (inputs.train != '' || startsWith(github.base_ref, 'release-train-') || startsWith(github.head_ref, 'backmerge/release-train-')) && 100 || 45 }}
     steps:
       # Checkout the trusted base commit. The package config and the diff
       # baseline are read from here — never from the PR — so a PR cannot edit
@@ -118,6 +121,10 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           TRAIN_INPUT: ${{ inputs.train }}
           SOURCE_INPUT: ${{ inputs.source }}
         run: |
@@ -146,9 +153,13 @@ jobs:
 
           # A release train's packages are not on npm until it publishes, so a
           # train PR checks all of them with each train package installed from
-          # a tarball of this commit (the `train` source).
+          # a tarball of this commit (the `train` source). Its backmerge into
+          # the default branch carries the same versions, so it does the same.
           TRAIN="${TRAIN_INPUT:-}"
           if [ -z "$TRAIN" ] && [[ "${BASE_REF:-}" =~ ^release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            TRAIN="${BASH_REMATCH[1]}"
+          elif [ -z "$TRAIN" ] && [ "${BASE_REF:-}" = "$DEFAULT_BRANCH" ] && [ "${HEAD_REPO:-}" = "$REPOSITORY" ] \
+            && [[ "${HEAD_REF:-}" =~ ^backmerge/release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             TRAIN="${BASH_REMATCH[1]}"
           fi
           SOURCE=""

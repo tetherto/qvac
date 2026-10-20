@@ -82,8 +82,8 @@
     }
   },
   "dependencies": {
-    "@ai-sdk/provider": "^4.0.0",
-    "@ai-sdk/provider-utils": "^5.0.0"
+    "@ai-sdk/provider": "^4.0.10",
+    "@ai-sdk/provider-utils": "^5.0.35"
   },
   "devDependencies": {
     "@ai-sdk/openai-compatible": "^3.0",
