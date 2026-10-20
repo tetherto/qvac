@@ -48,6 +48,14 @@ struct Request {
   std::vector<llama_token> generatedTokens;
   llama_pos currentPos = 0;
   bool hasUnfedSample = false;
+  /// Speculative draft fed after the unfed sample in the next step
+  /// (`MultiRequestBatcher::setDraft`); empty without speculative decoding.
+  std::vector<llama_token> draftTokens;
+  /// Set by `fillBatch` when the step fed the sample plus `draftTokens`:
+  /// the batch index of the sample and its position. Consumed by
+  /// `verifyDrafted`.
+  int draftLogitStart = -1;
+  llama_pos draftBasePos = 0;
   StopReason stopReason = StopReason::None;
   unsigned maxTokensPerSequence;
   /// Observed wall-clock stamps for the per-request end-to-end stats: fixed by
@@ -112,7 +120,8 @@ public:
       unsigned maxChunkSize, unsigned maxTokensPerSequence, size_t batchSize)
       : maxChunkSize_(maxChunkSize),
         maxTokensPerSequence_(maxTokensPerSequence), slots_(batchSize),
-        lastLogitIndices_(batchSize, -1), chunkSizes_(batchSize, 0) {
+        lastLogitIndices_(batchSize, -1), chunkSizes_(batchSize, 0),
+        draftDropped_(batchSize, false) {
     unbudgeted_.reserve(batchSize);
   }
 
@@ -158,6 +167,32 @@ public:
   /// llama_decode() and before the next fillBatch(): the per-slot
   /// logit-index bookkeeping it relies on is refreshed by every fillBatch().
   void sampleAndAppendIdle(const SamplerFn& samplerFn);
+
+  /// Attaches a speculative draft to a slot whose sample is unfed; the next
+  /// `fillBatch` feeds the sample and the draft together, with logits on
+  /// each, or drops the draft (reported by `draftDropped`) when the batch
+  /// has no room for all of it.
+  void setDraft(uint32_t seqId, std::vector<llama_token> draft);
+  [[nodiscard]] bool draftDropped(uint32_t seqId) const noexcept;
+
+  /// Verification of a fed draft, returned by `VerifyFn`.
+  struct DraftOutcome {
+    /// The sequence was restored: feed the sample and `draft` again.
+    bool replay = false;
+    std::vector<llama_token> draft;
+    llama_pos newPos = 0;
+    /// Tokens streamed to the caller; the last one is the new unfed sample
+    /// unless the sequence finished.
+    std::vector<llama_token> tokens;
+    bool finished = false;
+    StopReason stopReason = StopReason::Finished;
+  };
+  using VerifyFn = std::function<DraftOutcome(
+      uint32_t seqId, int firstLogitIdx, llama_pos basePos)>;
+  /// Verifies every draft the last `fillBatch` fed. Must run after
+  /// `advance()` and before `sampleAndAppendIdle`, which then skips those
+  /// slots: they hold a new unfed sample, or are finished.
+  void verifyDrafted(const VerifyFn& verifyFn);
 
   bool markFinished(uint32_t seqId, StopReason reason = StopReason::Finished);
 
@@ -277,6 +312,8 @@ private:
   /// seqId. Zeroed at the top of every planChunksForActiveSeqs(), and per
   /// slot by releaseBudget() whenever a slot is freed.
   std::vector<unsigned> chunkSizes_;
+  /// Per slot: the last `fillBatch` dropped the slot's draft for lack of room.
+  std::vector<bool> draftDropped_;
 
   /// True between a fillBatch() that granted tokens and the advance() that
   /// commits them. Makes the fillBatch()/advance() pairing self-enforcing

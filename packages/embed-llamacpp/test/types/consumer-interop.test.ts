@@ -2,8 +2,11 @@ import {
   assessFit,
   LayaDecisions,
   type EmbedFitResult,
+  Reranker,
+  type GGMLConfig,
   type LayaResult,
-  type QvacResponse
+  type QvacResponse,
+  type RerankScores
 } from '@qvac/embed-llamacpp'
 
 type Equal<A, B> =
@@ -29,3 +32,16 @@ export function fitTypes() {
   const fitTyped: Equal<typeof fit, Promise<EmbedFitResult>> = true
   return fitTyped
 }
+
+// run() resolves to one score per document.
+export function rerankRunTypes(reranker: Reranker) {
+  const response = reranker.run({ query: 'q', documents: ['a', 'b'] })
+  const typed: Equal<Awaited<typeof response>, QvacResponse<RerankScores>> =
+    true
+  const scores: Equal<RerankScores, number[]> = true
+  return { typed, scores }
+}
+
+// GGMLBert has no rank pooling: it returns classifier scores, not embeddings.
+// @ts-expect-error 'rank' is not an embedding pooling
+export const rankPooling: GGMLConfig['pooling'] = 'rank'

@@ -69,6 +69,7 @@ export interface DiffusionFiles {
     clipG?: string;
     t5Xxl?: string;
     llm?: string;
+    llmVision?: string;
     vae?: string;
     esrgan?: string;
     highNoiseDiffusionModel?: string;

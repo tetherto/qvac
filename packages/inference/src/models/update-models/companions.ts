@@ -31,7 +31,9 @@ import { BERGAMOT_MODEL_RE } from '../../surface'
  *
  *   CosyVoice3 TTS sets (directory-based):
  *     Primary: `cosyvoice3-llm-*.gguf` under a `/cosy_voice/` path
- *     Companions in same directory: flow, HiFT, vocab.json, merges.txt, voice-en.gguf
+ *     Companions: flow, HiFT, vocab.json, merges.txt, voice-en.gguf.
+ *     The published Q4 set reuses the original tokenizer and baked English voice
+ *     across registry directories; weight variants are paired explicitly.
  *     `voice-en.gguf` is written as `voice.gguf` so the addon finds it next to the LLM.
  *     Companion files stay as standalone catalog entries (same as the original
  *     hand-patch); only the LLM primary carries `companionSet` for directory load.
@@ -334,7 +336,7 @@ function groupCosyvoiceCompanions(
 
     const dirPrefix = lastSep >= 0 ? model.registryPath.slice(0, lastSep + 1) : ''
     const source = model.registrySource
-    const companions = findCosyvoiceCompanions(source, dirPrefix, bySourcePath)
+    const companions = findCosyvoiceCompanions(source, dirPrefix, filename, bySourcePath)
     if (companions.length !== COSYVOICE_COMPANIONS.length) continue
 
     const setKey = shortHash(`${source}:${model.registryPath}`)
@@ -376,16 +378,34 @@ function groupCosyvoiceCompanions(
 function findCosyvoiceCompanions(
   source: string,
   dirPrefix: string,
+  filename: string,
   bySourcePath: Map<string, ProcessedModel>
 ): { key: string; targetName: string; model: ProcessedModel }[] {
   const found: { key: string; targetName: string; model: ProcessedModel }[] = []
 
+  // These releases share the Fun-CosyVoice3-0.5B-2512 tokenizer and baked
+  // voice. Pin the compatible asset directory instead of choosing an arbitrary
+  // same-named file from another release (or registry source).
+  const familyPrefix = dirPrefix.slice(
+    0,
+    dirPrefix.indexOf(COSYVOICE_DIR_MARKER) + COSYVOICE_DIR_MARKER.length
+  )
+  const isLightSet =
+    dirPrefix === `${familyPrefix}2026-09-21/` && filename === 'cosyvoice3-llm-q4_0.gguf'
+
   for (const companion of COSYVOICE_COMPANIONS) {
-    const model = bySourcePath.get(sourceKey(source, `${dirPrefix}${companion.filename}`))
+    const companionFilename = isLightSet
+      ? companion.filename.replace('flow-f32', 'flow-q4_0').replace('hift-f32', 'hift-f16')
+      : companion.filename
+    const assetDir =
+      isLightSet && ['vocabPath', 'mergesPath', 'voicePath'].includes(companion.key)
+        ? `${familyPrefix}2026-07-23/`
+        : dirPrefix
+    const model = bySourcePath.get(sourceKey(source, `${assetDir}${companionFilename}`))
     if (!model) return []
     found.push({
       key: companion.key,
-      targetName: companion.targetName,
+      targetName: companion.key === 'voicePath' ? companion.targetName : companionFilename,
       model
     })
   }

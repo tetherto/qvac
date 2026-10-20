@@ -19,14 +19,16 @@ per-package flow in `docs/gitflow.md`.
 
 ## Agent rules
 
-- Every train package moves. Ask the user for the bump of each when the work
-  does not make it clear.
+- Run `/qv-agent-stack-sync --plan` first and show the user its table. Every
+  train package moves; ask the user for the bump of each when the plan and the
+  work do not make it clear.
 - Before the version pass, set every range between train packages to the
   current workspace version, then run `pnpm install --lockfile-only`.
+- Generate the NOTICE files (`qv-sdk-changelog` Step 6) before the version
+  pass; `docs/ci/RELEASE-TRAIN.md` step 2 says why.
 - Show the user the `nx release version --dry-run` output before applying it.
-- Do not run `/qv-sdk-inference-version`: the version pass writes the
-  `@qvac/inference` range. Regenerate `packages/sdk-python` per
-  `qv-sdk-changelog` when `@qvac/sdk` moves.
+- Do not run Step 2 of `/qv-sdk-inference-version`: the version pass writes the
+  `@qvac/inference` range. Its Steps 3 and 3b still apply.
 - Open both PRs with `qv-sdk-pr-create`: one release PR, one backmerge, for the
   whole train.
 - Never approve the `npm` or `pypi` deployment; tell the user when each waits.

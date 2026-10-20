@@ -359,7 +359,7 @@ The projection covers the whisper model and the embedder. `embedderBytes` is the
 | `gpuDevice` | As the load takes it. |
 | `decoders` | Worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to whisper's own headroom. |
-| `backendsDir` | Where the dynamically-loaded ggml backends live. Defaults to the directory a real load uses, since the native side registers backends once per process. |
+| `backendsDir` | Directory scanned as given for the dynamically-loaded ggml backends. Unset scans next to the loaded module, the directory a real load uses, since the native side registers backends once per process. |
 
 `assessFit` returns a Promise. Concurrent calls run one at a time.
 
@@ -377,7 +377,7 @@ for cache warming and resource settings.
 | `npm run test:unit` | JS unit tests (`brittle-bare test/unit/*.test.js`) — no model required |
 | `npm run test:integration` | JS integration tests against the native addon — requires `WHISPER_MODEL_PATH` |
 | `npm run test:integration:smoke` | Only the addon suite (`test/integration/addon.test.js`); the darwin-x64 CI leg runs this instead of the full suite |
-| `npm run test:cpp` | C++ unit tests (GoogleTest); `bare-make` rebuilds the addon with `BUILD_TESTING=ON` |
+| `npm run test:cpp` | C++ unit tests (GoogleTest); builds only the test binary with `BUILD_TESTING=ON` and leaves `prebuilds/` untouched |
 | `npm run test:dts` | Type-checks the published `index.d.ts` |
 | `npm test` | Runs `test:unit` + `test:integration` |
 
@@ -456,7 +456,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `backendsDir` | string | `<addon>/prebuilds` | **Android and Linux.** Overrides the folder used to locate dynamically-loaded ggml backend `.so` modules; a no-op on static builds and other platforms. Defaults to the in-package `prebuilds/` directory so mobile builds work out of the box (parity with `transcription-whispercpp 0.9.0`). |
+| `backendsDir` | string | next to the loaded module | **Android and Linux.** Directory scanned as given for the dynamically-loaded ggml backend `.so` modules; a no-op on static builds and other platforms. Unset, the addon scans the directory its native module was loaded from: `prebuilds/<host>/qvac__bci-whispercpp/` in an npm install, or the module's own directory where bare-link or the SDK worker bundle put the backends beside it. |
 
 ### streamOpts (passed to `transcribeStream()`)
 

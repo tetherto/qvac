@@ -9,7 +9,7 @@ export interface GGMLConfig {
   poll?: NumericLike;
   /** Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when neither option is set. */
   "poll-batch"?: NumericLike;
-  pooling?: "none" | "mean" | "cls" | "last" | "rank";
+  pooling?: "none" | "mean" | "cls" | "last";
   attention?: "causal" | "non-causal";
   embd_normalize?: NumericLike;
   flash_attn?: "on" | "off" | "auto";

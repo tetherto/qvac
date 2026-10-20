@@ -184,7 +184,9 @@ SequenceStateSnapshot::SequenceStateSnapshot(
     SequenceStateSnapshot&& other) noexcept
     : nPast(other.nPast), filePath_(std::move(other.filePath_)),
       buffer_(std::move(other.buffer_)), bytes_(other.bytes_),
-      captured_(other.captured_), scope_(other.scope_) {
+      captured_(other.captured_), scope_(other.scope_),
+      draft_(std::move(other.draft_)) {
+  other.draft_.clear();
   other.filePath_.clear();
   other.buffer_.clear();
   other.bytes_ = 0;
@@ -203,6 +205,8 @@ SequenceStateSnapshot::operator=(SequenceStateSnapshot&& other) noexcept {
     nPast = other.nPast;
     captured_ = other.captured_;
     scope_ = other.scope_;
+    draft_ = std::move(other.draft_);
+    other.draft_.clear();
     other.filePath_.clear();
     other.buffer_.clear();
     other.bytes_ = 0;
@@ -222,6 +226,7 @@ void SequenceStateSnapshot::clear() noexcept {
   nPast = 0;
   captured_ = false;
   scope_ = SnapshotScope::Full;
+  draft_.clear();
 }
 
 void SequenceStateSnapshot::seedForTesting(
@@ -264,7 +269,9 @@ void SequenceStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
 
 // ---- Free functions ----
 
-bool snapshotSequenceState(
+namespace {
+
+bool snapshotTargetSequenceState(
     ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
     SequenceStateSnapshot& out, SnapshotStorage storage, SnapshotScope scope,
     const std::string& directory) {
@@ -365,6 +372,29 @@ bool snapshotSequenceState(
   return true;
 }
 
+bool restoreTargetSequenceState(
+    ::llama_context* lctx, llama_seq_id seqId,
+    const SequenceStateSnapshot& snapshot);
+
+} // namespace
+
+bool snapshotSequenceState(
+    ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
+    SequenceStateSnapshot& out, SnapshotStorage storage, SnapshotScope scope,
+    const std::string& directory) {
+  if (!snapshotTargetSequenceState(
+          lctx, seqId, nPastAt, out, storage, scope, directory)) {
+    return false;
+  }
+  // The draft side always stays in memory: the draft context (one MTP layer,
+  // or a small DFlash model) holds a small fraction of the target state.
+  if (nPastAt > 0) {
+    out.adoptDraft(
+        speculative::captureDraftSequenceState(lctx, seqId, flagsFor(scope)));
+  }
+  return true;
+}
+
 uint64_t estimateMaxSequenceStateBytes(
     ::llama_context* lctx, const ::llama_vocab* vocab, uint32_t perSeqTokens,
     SnapshotScope scope) {
@@ -445,6 +475,25 @@ uint64_t sequenceStateSnapshotFilesWritten() noexcept {
 bool restoreSequenceState(
     ::llama_context* lctx, llama_seq_id seqId,
     const SequenceStateSnapshot& snapshot) {
+  if (!restoreTargetSequenceState(lctx, seqId, snapshot)) {
+    return false;
+  }
+  if (!snapshot.empty()) {
+    speculative::restoreDraftSequenceState(
+        lctx,
+        seqId,
+        snapshot.draft(),
+        flagsFor(snapshot.scope()),
+        snapshot.scope() == SnapshotScope::Partial ? snapshot.nPast : -1);
+  }
+  return true;
+}
+
+namespace {
+
+bool restoreTargetSequenceState(
+    ::llama_context* lctx, llama_seq_id seqId,
+    const SequenceStateSnapshot& snapshot) {
   if (lctx == nullptr) {
     return false;
   }
@@ -515,6 +564,8 @@ bool restoreSequenceState(
   return loadedBytes != 0;
 }
 
+} // namespace
+
 bool streamPartialSnapshot(
     const SequenceStateSnapshot& snapshot, const SnapshotChunkSink& sink) {
   if (snapshot.empty() || snapshot.scope() != SnapshotScope::Partial) {
@@ -542,12 +593,12 @@ bool streamPartialSnapshot(
       break;
     }
     total += got;
-    if (total > snapshot.bytes()) {
+    if (total > snapshot.targetBytes()) {
       return false;
     }
     sink(chunk.data(), got);
   }
-  return !in.bad() && total != 0 && total == snapshot.bytes();
+  return !in.bad() && total != 0 && total == snapshot.targetBytes();
 }
 
 bool partialSnapshotFromStream(

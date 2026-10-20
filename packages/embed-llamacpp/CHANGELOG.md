@@ -1,6 +1,39 @@
 # Changelog
 
-## [0.49.0] - 2026-10-16
+## [0.51.0] - 2026-10-19
+
+### Breaking
+
+- `pooling: "rank"` is no longer a `GGMLBert` option, and a model whose GGUF
+  defaults to rank pooling no longer loads in `GGMLBert`
+  ([#4995](https://github.com/tetherto/qvac/pull/4995)). Rank pooling returns
+  one classifier score per sequence, not an embedding, so `GGMLBert` read past
+  the end of the result: the vectors were mostly zeros that changed on every
+  run, and the process could crash. The load now fails with
+  `UnsupportedEmbeddings` before the weights load. Load reranker models with
+  `Reranker`.
+
+### Added
+
+- `Reranker` scores documents by relevance to a query with a reranker
+  (cross-encoder) GGUF such as jina-reranker, bge-reranker or Qwen3-Reranker
+  ([#4995](https://github.com/tetherto/qvac/pull/4995)).
+  `run({ query, documents })` resolves to one score per document, in the
+  order given; higher is more relevant. The query is paired with each
+  document as llama-server's `/rerank` does, and the scores match fabric's
+  `llama-embedding --pooling rank`. A GGUF that declares another pooling or
+  has no classifier head is rejected before its weights load.
+
+## [Unreleased]
+
+### Added
+
+- Bounded FuzzTest coverage for `parseMainGpu` and
+  `preferredBackendTypeFromString`. Linux C++ CI runs the suite after unit
+  tests. The parsers compile without `@qvac/fabric`, so ASan and LeakSanitizer
+  stay at full strength. No public addon API changes.
+
+## [0.50.0] - 2026-10-16
 
 ### Breaking
 
@@ -211,7 +244,6 @@
   load's fit received that choice but the projection did not, so on Metal or
   Vulkan a MoE model's projected `gpuLayers` and `deviceBytes` could differ
   from the load.
-
 ## [0.43.0] - 2026-09-28
 
 ### Added

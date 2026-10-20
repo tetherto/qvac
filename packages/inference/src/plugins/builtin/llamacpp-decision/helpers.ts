@@ -14,14 +14,21 @@ import type {
 import { detectShardedModel, generateShardFilenames } from '@/utils/shard-utils'
 
 export function transformDecisionConfig(config: DecisionConfig): LayaConfig {
-  return {
+  const { pollBatch, ...nativeConfig } = config
+  const transformed: LayaConfig = {
     ...Object.fromEntries(
-      Object.entries(config)
+      Object.entries(nativeConfig)
         .filter(([, value]) => value !== undefined)
         .map(([key, value]) => [key, String(value)])
     ),
     device: config.device
   }
+
+  if (pollBatch !== undefined) {
+    transformed['poll-batch'] = `${pollBatch}`
+  }
+
+  return transformed
 }
 
 function transformDecisionQuestion(question: DecisionQuestion): NativeLayaQuestion {

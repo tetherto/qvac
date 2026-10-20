@@ -8,9 +8,19 @@ name: Release Train (nx)
 #
 # The per-package release workflows run their merge guard with strict-slug, so
 # a release-train-* branch cannot publish through them.
+#
+# A release PR into a train branch runs everything up to `pnpm publish
+# --dry-run` as a check. The dry run has its own job without an environment;
+# publishing, PyPI, tags and the GitHub release need the npm environment's
+# approval.
 
 on:
   push:
+    branches:
+      - release-train-*
+
+  pull_request:
+    types: [opened, synchronize, reopened]
     branches:
       - release-train-*
 
@@ -32,7 +42,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   fork-approval:
@@ -79,6 +89,7 @@ jobs:
       release_dir: ${{ steps.resolve.outputs.release_dir }}
       release_version: ${{ steps.resolve.outputs.release_version }}
       release_name: ${{ steps.resolve.outputs.release_name }}
+      dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run == true }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -95,17 +106,25 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       # Measured from the merge base with the default branch, so the push that
-      # creates a branch is checked too.
+      # creates a branch is checked too, and a fix PR into a train branch that
+      # has not published checks the whole train again. On a PR, npm must not
+      # have any moved version yet.
       - name: Resolve and check the train
         id: resolve
         shell: bash
         env:
+          EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
+          PR_BASE_REF: ${{ github.base_ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           BASE_SHA=$(git merge-base HEAD "origin/$DEFAULT_BRANCH")
-          node .github/scripts/release-train.mjs resolve "$REF_NAME" "$BASE_SHA" "$GITHUB_SHA"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            node .github/scripts/release-train.mjs resolve "$PR_BASE_REF" "$BASE_SHA" "$GITHUB_SHA" --check-npm
+          else
+            node .github/scripts/release-train.mjs resolve "$REF_NAME" "$BASE_SHA" "$GITHUB_SHA"
+          fi
 
   build:
     name: Build the train
@@ -222,7 +241,7 @@ jobs:
       source: train
       ref: ${{ github.sha }}
 
-  build-sdk-python:
+  sdk-python:
     name: Build tetherto-qvac-sdk (Python)
     needs:
       - fork-approval
@@ -291,25 +310,49 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # A check the train does not list is skipped; one it lists must succeed.
-  publish-npm:
-    name: Publish the train to npm
+  # The gate both publish jobs wait for: the build passed, and so did every
+  # check the train lists. A check the train does not list is skipped. Each
+  # check kind is the id of its job.
+  checks-passed:
+    name: Train checks passed
     needs:
-      - fork-approval
       - authorize
       - train
       - build
       - shared-runtime-libs
       - package-checks
-      - build-sdk-python
+      - sdk-python
     if: >-
-      always() &&
+      !cancelled() &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.train.result == 'success' &&
-      needs.build.result == 'success' &&
-      (needs.shared-runtime-libs.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'shared-runtime-libs')) &&
-      (needs.package-checks.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks')) &&
-      (needs.build-sdk-python.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'sdk-python')) &&
+      needs.train.outputs.moved != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the build and the train's checks
+        shell: bash
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          CHECKS: ${{ needs.train.outputs.checks }}
+        run: |
+          set -euo pipefail
+          FAILED=$(jq -r --argjson checks "$CHECKS" '
+            . as $needs
+            | (["build"] + $checks)[]
+            | select($needs[.].result != "success")
+            | "\(.): \($needs[.].result)"' <<<"$NEEDS")
+          if [ -n "$FAILED" ]; then
+            echo "::error::Did not pass:"
+            echo "$FAILED"
+            exit 1
+          fi
+
+  publish-npm:
+    name: Publish the train to npm
+    needs: [train, checks-passed]
+    if: >-
+      needs.train.outputs.dry_run != 'true' &&
       !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -358,13 +401,51 @@ jobs:
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           PNPM_CONFIG_PROVENANCE: "true"
           MOVED: ${{ needs.train.outputs.moved }}
-          DRY_RUN: ${{ inputs.dry_run == true }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          args=(--tarballs="$RUNNER_TEMP/train-tarballs")
-          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
-          node .github/scripts/release-train.mjs publish "$MOVED" "${args[@]}"
+        run: node .github/scripts/release-train.mjs publish "$MOVED" --tarballs="$RUNNER_TEMP/train-tarballs"
+
+  # The same publish with --dry-run, as a release PR check or a dispatch with
+  # dry_run. No environment and no id-token: it never needs to authenticate.
+  publish-npm-dry-run:
+    name: Publish the train to npm (dry run)
+    needs: [train, checks-passed]
+    if: needs.train.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "24.14.1"
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Download train dist artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: dist-${{ needs.train.outputs.name }}
+
+      - name: Download train tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: tarballs-${{ needs.train.outputs.name }}
+          path: ${{ runner.temp }}/train-tarballs
+
+      - name: Publish the train (dry run)
+        env:
+          PNPM_CONFIG_IGNORE_SCRIPTS: "true"
+          MOVED: ${{ needs.train.outputs.moved }}
+        run: node .github/scripts/release-train.mjs publish "$MOVED" --tarballs="$RUNNER_TEMP/train-tarballs" --dry-run
 
   served:
     name: Wait until npm serves the train
@@ -404,14 +485,14 @@ jobs:
       - fork-approval
       - authorize
       - train
-      - build-sdk-python
+      - sdk-python
       - publish-npm
       - published-checks
     if: >-
       always() &&
       github.repository == 'tetherto/qvac' &&
       needs.authorize.outputs.allowed == 'true' &&
-      needs.build-sdk-python.result == 'success' &&
+      needs.sdk-python.result == 'success' &&
       needs.train.outputs.release_version != '' &&
       (
         (
@@ -453,7 +534,6 @@ jobs:
     if: >-
       always() &&
       needs.publish-npm.result == 'success' &&
-      inputs.dry_run != true &&
       (needs.published-checks.result == 'success' || needs.publish-npm.outputs.published != 'true' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
