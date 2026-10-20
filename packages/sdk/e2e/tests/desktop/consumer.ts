@@ -1,3 +1,5 @@
+import { SpeakerAwareExecutor } from '../shared/executors/node/speaker-aware-executor.js'
+import { DecisionExecutor } from '../shared/executors/decision-executor.js'
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { createExecutor, type TestDefinition } from '@qvac/test-suite'
 import { createStepBindings } from '../shared/step-bindings.js'
@@ -47,7 +49,6 @@ import { SystemResourcesExecutor } from '../shared/executors/system-resources-ex
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
 import { KvCacheRestartExecutor } from '../shared/executors/node/kv-cache-restart-executor.js'
-import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
@@ -132,6 +133,8 @@ const stepBindings = createStepBindings(resources)
 
 export const executor = createExecutor({
   handlers: [
+    new SpeakerAwareExecutor(resources),
+    new DecisionExecutor(resources),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath
@@ -182,7 +185,6 @@ export const executor = createExecutor({
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
     new KvCacheRestartExecutor(resources),
-    new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
     new PluginExecutor(resources)
   ],

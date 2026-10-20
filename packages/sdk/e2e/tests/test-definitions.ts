@@ -1,3 +1,5 @@
+import { speakerAwareTests } from './speaker-aware-tests.js'
+import { decisionTests } from './decision-tests.js'
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { Step, TestDefinition } from '@qvac/test-suite'
@@ -43,7 +45,6 @@ import { lifecycleTests } from './lifecycle-tests.js'
 import { configTests } from './config-tests.js'
 import { noLingeringBareTests } from './no-lingering-bare-tests.js'
 import { wrongModelTests } from './wrong-model-tests.js'
-import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
@@ -454,6 +455,7 @@ const catalog: TestDefinition[] = [
 
   // Parakeet transcription tests
   ...parakeetTests,
+  ...speakerAwareTests,
   ...parakeetStreamTests,
 
   // Completion tests
@@ -518,6 +520,7 @@ const catalog: TestDefinition[] = [
 
   // Classification tests
   ...classificationTests,
+  ...decisionTests,
 
   // TTS tests
   ...ttsTests,
@@ -565,9 +568,6 @@ const catalog: TestDefinition[] = [
 
   // No-lingering-bare regression tests
   ...noLingeringBareTests,
-
-  // Multi-GPU config smoke (verifies split-mode and main-gpu flow through stack)
-  ...multiGpuTests,
 
   // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,

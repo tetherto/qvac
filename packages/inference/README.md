@@ -60,7 +60,7 @@ const run = completion({ modelId, history: [{ role: 'user', content: 'Hi' }] })
 Model operations require a registered model plugin. RPC discovery needs no model plugin or server provider; serving requires an explicitly registered server provider.
 
 The [Bare serving example](examples/rpc-server.ts)
-shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.2.0`.
+shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.5.1`.
 
 ## Capability to addon package
 
@@ -78,14 +78,15 @@ shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.2.0`.
 | `@qvac/inference/ggml-vla/plugin`                     | `@qvac/vla-ggml`                 |
 | `@qvac/inference/ggml-classification/plugin`          | `@qvac/classification-ggml`      |
 
-## TTS 0.11 engines and memory fit
+## MOSS engines and memory fit
 
-`@qvac/tts-ggml` 0.11 adds two desktop batch engines to `textToSpeech`.
+`@qvac/tts-ggml` carries two desktop batch engines for `textToSpeech`.
 Load MOSS-SoundEffect with `modelType: 'tts-ggml'` and
 `modelConfig: { ttsEngine: 'moss-sfx' }`; the primary source is its single
 GGUF. With an `AUDIOGEN_MOSS_SFX_V2_*` constant, pass its `.src` URL as
-`modelSrc`, because the full descriptor selects the audiogen plugin. This also applies to fit assessment: use explicit `modelType` and `ttsEngine`, and a downloaded local file for metadata-only TTS fit. The bare `.src` URL lacks checksum/registry coordinates for a weightless stub; the audiogen descriptor/resource profile does not identify the TTS engine. Use
-a text description, with optional `seconds`
+`modelSrc`, because the full descriptor selects the audiogen plugin. To assess
+its fit, pass a downloaded local file with explicit `modelType` and
+`ttsEngine`. Use a text description, with optional `seconds`
 (up to 30), `negativePrompt`, `steps`, `guidance` and `shift`. These controls
 can also be load defaults. The output is 48 kHz.
 
@@ -110,12 +111,13 @@ projections. Add `ttsWorkload` beside `modelConfig` on the assessment candidate:
 decoder; reference encoding also needs the codec encoder. Prompt rows must
 cover the complete native prompt, including dialogue and reference rows.
 Missing workloads return an unknown assessment rather than guessing.
-MOSS-Speech has no native fitter in this release and remains unknown. Workloads are fit-only; loading a MOSS model does not accept them and its automatic fit preflight remains unknown.
+MOSS-Speech has no native fitter and assesses as unknown. Workloads are
+fit-only: loading a MOSS model does not accept them, so the fit check before a
+MOSS load is unknown.
 
 The CLI configuration picker includes both engines. Their conversation and
 sound-effect request controls are library-only because the OpenAI speech
-endpoint cannot represent those requests. Native performance and backend fixes
-in the addon release are inherited without additional SDK controls.
+endpoint cannot represent those requests.
 
 ## Configuration
 

@@ -709,10 +709,12 @@ answers the same as the file itself and the projection can run before anything
 is downloaded. It is a module export, not an instance method — nothing is
 loaded to call it.
 
+`assessFit` returns a Promise. Fits run one at a time within the addon.
+
 ```js
 const { assessFit } = require('@qvac/audiogen-ggml')
 
-const fit = assessFit({
+const fit = await assessFit({
   modelsDir: '/models/ace-step',
   durationSeconds: 30,
   textTokens: 256,
@@ -760,7 +762,7 @@ peak of repeated generations, and the `stages` rows are `lm`, `depth`, `cond`,
 `dit` and `vocoder`.
 
 ```js
-const fit = assessFit({
+const fit = await assessFit({
   engine: 'minimax',
   modelsDir: '/models/minimax-music3',
   device: 'gpu',
@@ -780,7 +782,7 @@ On Android and iOS, where MiniMax-Music3 is unavailable, `engine: 'minimax'`
 comes back as `status: "error"` with `reason: "unsupported-engine"`.
 
 A model the engine cannot read is `status: "error"`; a broken request, or a
-host with no native binding, throws.
+host with no native binding, rejects.
 
 ## Lifecycle
 
@@ -832,6 +834,28 @@ dispatches to the corresponding `audiogen-cpp` engine.
   ggml backends under the same file names, so an app that bundles several of
   them keeps one copy of each: use releases that record the same
   `ggml-speech`.
+
+## Fuzzing
+
+The JS-adapter number parsers have a [Google FuzzTest][fuzztest] target,
+`audiogen-config-parse-fuzz`. Fuzzing is Linux-only: it needs clang with
+libFuzzer and AddressSanitizer, CMake 3.25 or newer, [vcpkg](https://vcpkg.io/)
+(set `VCPKG_ROOT`) and `bare-make`. The target does not link audiogen-cpp, so
+it runs with full ASan and LeakSanitizer.
+
+```bash
+npm install
+npm run fuzz                     # bounded run of every FUZZ_TEST, as Linux CI does
+npm run fuzz:continuous          # coverage-guided, one FUZZ_TEST at a time
+npm run fuzz:continuous -- AudiogenConfigParseFuzz.ParseFloatNeverCrashes --fuzz_for=30m
+```
+
+Flags other than `--continuous` and `--build-dir` go to the fuzz binary. See
+[`docs/architecture/ADDON-FUZZING.md`](../../docs/architecture/ADDON-FUZZING.md)
+for the fuzzing design, the vcpkg-supplied FuzzTest stack, and how to add a
+target.
+
+[fuzztest]: https://github.com/google/fuzztest
 
 ## Benchmarking
 

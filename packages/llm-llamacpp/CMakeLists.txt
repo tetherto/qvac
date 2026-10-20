@@ -36,6 +36,7 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
@@ -44,6 +45,8 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SpeculativeRuntime.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SpeculativeSequence.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
@@ -90,6 +93,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp

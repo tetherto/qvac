@@ -384,18 +384,28 @@ const MODEL_CONFIGS = {
       'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf',
     embeddingDimension: 1024,
     maxContextSize: 512
+  },
+  // A reranker (cross-encoder) for rerank.test.js, the one llama-server's
+  // rerank tests use. Not an embedding model: getModelConfigs() leaves it out.
+  'jina-reranker-v1-tiny-en-f16.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/models/resolve/main/jina-reranker-v1-tiny-en/ggml-model-f16.gguf',
+    reranker: true,
+    maxContextSize: 8192
   }
 }
 
 /**
- * Gets all available model configurations
+ * Gets the embedding model configurations (rerankers are left out)
  * @returns {Array<{modelName: string, config: Object}>}
  */
 function getModelConfigs() {
-  return Object.entries(MODEL_CONFIGS).map(([modelName, config]) => ({
-    modelName,
-    config
-  }))
+  return Object.entries(MODEL_CONFIGS)
+    .filter(([, config]) => !config.reranker)
+    .map(([modelName, config]) => ({
+      modelName,
+      config
+    }))
 }
 
 /**

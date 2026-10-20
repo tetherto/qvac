@@ -8,10 +8,10 @@ const process = require('bare-process')
 const TranslationNmtcpp = require('../../index.js')
 const { ensureIndicTransModel, ensureBergamotModel, TEST_TIMEOUT } = require('./utils')
 
-test('fit rejects a relative model path before native use', (t) => {
+test('fit rejects a relative model path before native use', async (t) => {
   let error
   try {
-    TranslationNmtcpp.assessFit({
+    await TranslationNmtcpp.assessFit({
       files: { model: 'model.bin' },
       config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans }
     })
@@ -22,8 +22,18 @@ test('fit rejects a relative model path before native use', (t) => {
   t.ok(error && error.message.includes('absolute path'))
 })
 
-test('fit reports a missing model without loading it', (t) => {
-  const result = TranslationNmtcpp.assessFit({
+test('a malformed native request rejects', async (t) => {
+  const promise = TranslationNmtcpp.assessFit({
+    files: { model: path.resolve(__dirname, 'missing-model.bin') },
+    config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
+    marginBytes: -1
+  })
+  t.ok(promise instanceof Promise)
+  await t.exception(promise, /marginBytes/)
+})
+
+test('fit reports a missing model without loading it', async (t) => {
+  const result = await TranslationNmtcpp.assessFit({
     files: { model: path.resolve(__dirname, 'missing-model.bin') },
     config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans }
   })
@@ -32,7 +42,7 @@ test('fit reports a missing model without loading it', (t) => {
   t.is(result.modelBytes, 0)
 })
 
-test('fit reads model, pivot, and vocab files below a Unicode directory', (t) => {
+test('fit reads model, pivot, and vocab files below a Unicode directory', async (t) => {
   const dir = path.join(os.tmpdir(), `nmt-fit-${process.pid}-${Date.now()}-módèles-日本語`)
   fs.mkdirSync(dir, { recursive: true })
   try {
@@ -46,7 +56,7 @@ test('fit reads model, pivot, and vocab files below a Unicode directory', (t) =>
     }
     for (const file of Object.values(files)) fs.writeFileSync(file, Buffer.alloc(64))
 
-    const fit = TranslationNmtcpp.assessFit({
+    const fit = await TranslationNmtcpp.assessFit({
       files,
       config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
     })
@@ -57,8 +67,36 @@ test('fit reads model, pivot, and vocab files below a Unicode directory', (t) =>
   }
 })
 
-function checkRealModelFit(t, request) {
-  const fit = TranslationNmtcpp.assessFit(request)
+test('queued fits keep their own requests and all settle', async (t) => {
+  const dir = path.join(os.tmpdir(), `nmt-fit-queue-${process.pid}-${Date.now()}`)
+  fs.mkdirSync(dir, { recursive: true })
+  try {
+    const files = {
+      model: path.join(dir, 'model.intgemm.bin'),
+      srcVocab: path.join(dir, 'src.spm'),
+      dstVocab: path.join(dir, 'dst.spm')
+    }
+    for (const file of Object.values(files)) fs.writeFileSync(file, Buffer.alloc(64))
+    const request = { files, config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot } }
+
+    const first = TranslationNmtcpp.assessFit(request)
+    request.files = { ...files, dstVocab: path.join(dir, 'missing.spm') }
+    const second = TranslationNmtcpp.assessFit(request)
+    const missing = TranslationNmtcpp.assessFit({
+      files: { model: path.join(dir, 'missing.bin') },
+      config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans }
+    })
+    const [a, b, c] = await Promise.all([first, second, missing])
+    t.is(a.modelBytes, 64 * 3, 'the first call owns its original files')
+    t.ok(b.report.includes('dstVocab'), 'the second call owns its changed files')
+    t.is(c.reason, 'model-unreadable', 'an error outcome does not strand queued callers')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+async function checkRealModelFit(t, request) {
+  const fit = await TranslationNmtcpp.assessFit(request)
   t.comment(`backend=${fit.backend} status=${fit.status} reason=${fit.reason}`)
   t.ok(fit.modelBytes > 0, 'model file bytes were inspected')
   if (fit.freeBytes === 0) {
@@ -78,7 +116,7 @@ function checkRealModelFit(t, request) {
 
   // The same real model cannot fit when the caller reserves every available
   // byte. This checks the capacity decision without assuming a runner's RAM.
-  const reserved = TranslationNmtcpp.assessFit({
+  const reserved = await TranslationNmtcpp.assessFit({
     ...request,
     marginBytes: Number.MAX_SAFE_INTEGER
   })
@@ -92,7 +130,7 @@ test(
   { timeout: TEST_TIMEOUT },
   async (t) => {
     const model = await ensureIndicTransModel()
-    checkRealModelFit(t, {
+    await checkRealModelFit(t, {
       files: { model },
       config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: false }
     })
@@ -106,8 +144,8 @@ test(
     const model = await ensureIndicTransModel()
     const files = { model }
     const config = { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: true }
-    const automatic = TranslationNmtcpp.assessFit({ files, config })
-    const conflicting = TranslationNmtcpp.assessFit({
+    const automatic = await TranslationNmtcpp.assessFit({ files, config })
+    const conflicting = await TranslationNmtcpp.assessFit({
       files,
       config: { ...config, gpu_backend: '', gpuBackend: 'no-such-backend' }
     })
@@ -129,7 +167,7 @@ test(
     t.ok(vocabName, 'Bergamot vocabulary is available')
     if (!modelName || !vocabName) return
 
-    checkRealModelFit(t, {
+    await checkRealModelFit(t, {
       files: {
         model: path.join(modelDir, modelName),
         srcVocab: path.join(modelDir, vocabName),
@@ -137,5 +175,63 @@ test(
       },
       config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
     })
+  }
+)
+
+// A fit that ran on the JS thread would settle every call before a timer could
+// fire, so a timer tick while fits are pending shows the loop stayed free.
+test('fitting keeps the event loop responsive', { timeout: TEST_TIMEOUT }, async (t) => {
+  const model = await ensureIndicTransModel()
+  const request = {
+    files: { model },
+    config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: false }
+  }
+  let pending = false
+  let ticks = 0
+  const timer = setInterval(() => {
+    if (pending) ticks++
+  }, 1)
+  try {
+    let fits = []
+    for (let round = 0; round < 50 && ticks === 0; round++) {
+      pending = true
+      fits = await Promise.all(
+        Array.from({ length: 16 }, () => TranslationNmtcpp.assessFit(request))
+      )
+      pending = false
+    }
+    t.ok(ticks > 0, 'timers ran before fitting settled')
+    t.ok(
+      fits.every((fit) => fit.modelBytes > 0),
+      'every queued fit measured the model'
+    )
+    t.comment(`${ticks} timer ticks before completion`)
+  } finally {
+    pending = false
+    clearInterval(timer)
+  }
+})
+
+test(
+  'a fit keeps the backend while a loaded model unloads',
+  { timeout: TEST_TIMEOUT },
+  async (t) => {
+    const modelPath = await ensureIndicTransModel()
+    const config = { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: false }
+    const model = new TranslationNmtcpp({
+      files: { model: modelPath },
+      params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+      config
+    })
+    try {
+      await model.load()
+      const fit = TranslationNmtcpp.assessFit({ files: { model: modelPath }, config })
+      await model.unload()
+      const result = await fit
+      t.ok(result.backend.length > 0, 'the backend name survives the model unloading')
+      t.not(result.reason, 'device-unavailable', 'the fit device stayed available')
+    } finally {
+      await model.destroy()
+    }
   }
 )

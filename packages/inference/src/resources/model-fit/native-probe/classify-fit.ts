@@ -60,7 +60,8 @@ function breakdown(
 /**
  * The parts of `deviceBytes` the engine separates. Audiogen reports a peak
  * across pipeline phases and diffusion a per-module table, neither of which
- * divides into these three, so both come back empty.
+ * divides into these three, so both come back empty. OCR sizes its weights
+ * alone and leaves the image-dependent memory uncounted.
  *
  * The llama rows are summed over the same devices the engine's own
  * `deviceBytes` covers, which is every row but `host`.
@@ -102,6 +103,10 @@ function breakdownFor(probe: FitProbeResult): Breakdown {
     )
   }
 
+  if (probe.engine === 'ocr-ggml') {
+    return breakdown(probe.result.weightsBytes, undefined, undefined)
+  }
+
   return {}
 }
 
@@ -134,10 +139,28 @@ function llamaProjection(probe: LlamaProbe): NativeProbeProjection {
   }
 }
 
+/**
+ * The translation fitter reports one allowance against the free memory of the
+ * device it ran on. Only the file bytes inside it are weights; the rest does
+ * not divide into context and compute.
+ */
+function nmtProjection(
+  result: Extract<FitProbeResult, { engine: 'translation-nmtcpp' }>['result']
+): NativeProbeProjection {
+  return {
+    deviceName: result.backend,
+    deviceBytes: result.requiredBytes,
+    deviceFreeBytes: result.freeBytes,
+    weightsBytes: result.modelBytes,
+    report: result.report
+  }
+}
+
 function projectionFor(probe: FitProbeResult): NativeProbeProjection {
   if (probe.engine === 'diffusion-cpp') {
     return { deviceName: probe.result.backend, report: probe.result.report }
   }
+  if (probe.engine === 'translation-nmtcpp') return nmtProjection(probe.result)
   if (isLlama(probe)) return llamaProjection(probe)
 
   const result = probe.result

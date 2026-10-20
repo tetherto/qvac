@@ -26,6 +26,7 @@ add_executable(
   test_generation_params_apply.cpp
   test_llm_parsers.cpp
   test_load_config_handlers.cpp
+  test_image_pixel_limit.cpp
   test_finetune_param_defaults.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
@@ -49,6 +50,7 @@ add_executable(
   test_image_token_budget.cpp
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
+  test_speculative.cpp
   test_continuous_batching_integration.cpp
   test_concurrent_process_by_id.cpp
   test_single_path_cancel_ownership.cpp
@@ -76,6 +78,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
@@ -84,6 +87,8 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SpeculativeRuntime.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SpeculativeSequence.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
@@ -124,6 +129,7 @@ get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
 target_compile_definitions(addon-test PRIVATE
   STANDALONE_TEST_BUILD
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
+  TEST_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media"
 )
 
 # Optional coverage instrumentation

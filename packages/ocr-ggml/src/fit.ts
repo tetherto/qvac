@@ -26,8 +26,10 @@ export interface OcrFitResult {
  * Assess loading the detector and recognizer weights from GGUF metadata.
  * This does not load weights or account for image-dependent inference memory.
  * `error` means no reliable capacity verdict was available.
+ *
+ * Concurrent calls run one at a time. An invalid request rejects.
  */
-export function assessFit(request: OcrFitRequest): OcrFitResult {
+export async function assessFit(request: OcrFitRequest): Promise<OcrFitResult> {
   for (const key of ["pathDetector", "pathRecognizer"] as const) {
     if (typeof request[key] !== "string" || !path.isAbsolute(request[key])) {
       throw new TypeError(`${key} must be an absolute path`);
@@ -43,7 +45,7 @@ export function assessFit(request: OcrFitRequest): OcrFitResult {
   // Resolve lazily so importing this package never loads the native binding.
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- native prebuild is resolved lazily.
   const binding = require("./binding") as {
-    assessFit(input: OcrFitRequest): OcrFitResult;
+    assessFit(input: OcrFitRequest): Promise<OcrFitResult>;
   };
-  return binding.assessFit(request);
+  return await binding.assessFit(request);
 }

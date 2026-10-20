@@ -198,7 +198,7 @@ bool appendCheckpointSection(
     }
     baseSize = size;
     const utils::SequenceStateSnapshot& state = checkpoint.state;
-    const uint64_t payloadSize = state.bytes();
+    const uint64_t payloadSize = state.targetBytes();
     if (payloadSize == 0) {
       throw std::runtime_error("the checkpoint has no payload");
     }

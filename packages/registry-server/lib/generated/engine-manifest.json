@@ -1,0 +1,61 @@
+{
+  "engineToAddon": {
+    "audiogen-ggml": "audiogen",
+    "bci-whispercpp-transcription": "bci",
+    "ggml-classification": "classification",
+    "ggml-ocr": "ocr",
+    "ggml-vla": "vla",
+    "llamacpp-completion": "llm",
+    "llamacpp-decision": "embeddings",
+    "llamacpp-embedding": "embeddings",
+    "moss-transcribe": "moss-transcribe",
+    "nmtcpp-translation": "nmt",
+    "onnx-tts": "tts",
+    "onnx-vad": "vad",
+    "parakeet-transcription": "parakeet",
+    "sdcpp-generation": "diffusion",
+    "tts-ggml": "tts",
+    "whispercpp-transcription": "whisper"
+  },
+  "legacyEngineToCanonical": {
+    "@qvac/audiogen": "audiogen-ggml",
+    "@qvac/audiogen-ggml": "audiogen-ggml",
+    "@qvac/bci-whispercpp": "bci-whispercpp-transcription",
+    "@qvac/classification-ggml": "ggml-classification",
+    "@qvac/diffusion-cpp": "sdcpp-generation",
+    "@qvac/embed-llamacpp": "llamacpp-embedding",
+    "@qvac/llm-llamacpp": "llamacpp-completion",
+    "@qvac/ocr-ggml": "ggml-ocr",
+    "@qvac/ocr-onnx": "ggml-ocr",
+    "@qvac/transcription-parakeet": "parakeet-transcription",
+    "@qvac/transcription-whispercpp": "whispercpp-transcription",
+    "@qvac/translation-llamacpp": "nmtcpp-translation",
+    "@qvac/translation-nmtcpp": "nmtcpp-translation",
+    "@qvac/tts": "tts-ggml",
+    "@qvac/tts-ggml": "tts-ggml",
+    "@qvac/tts-onnx": "tts-ggml",
+    "@qvac/vad-silero": "onnx-vad",
+    "@qvac/vla-ggml": "ggml-vla",
+    "audiogen": "audiogen-ggml",
+    "bci": "bci-whispercpp-transcription",
+    "classification": "ggml-classification",
+    "diffusion": "sdcpp-generation",
+    "embedding": "llamacpp-embedding",
+    "generation": "llamacpp-completion",
+    "ocr": "ggml-ocr",
+    "onnx-ocr": "ggml-ocr",
+    "transcription": "whispercpp-transcription",
+    "translation": "nmtcpp-translation",
+    "tts": "tts-ggml",
+    "vad": "onnx-vad",
+    "vla": "ggml-vla"
+  },
+  "legacyRegistryEngineRules": {
+    "@qvac/asr-ggml": [
+      {
+        "tag": "moss-transcribe",
+        "engine": "moss-transcribe"
+      }
+    ]
+  }
+}

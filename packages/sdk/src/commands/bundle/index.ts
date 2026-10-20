@@ -127,6 +127,7 @@ const AUDIO_PLUGINS = new Set([
   'whispercpp-transcription',
   'bci-whispercpp-transcription',
   'parakeet-transcription',
+  'moss-transcribe',
   'audiogen-ggml'
 ])
 

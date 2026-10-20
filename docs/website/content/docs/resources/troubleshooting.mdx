@@ -72,6 +72,32 @@ sudo apt install -y libatomic1
 
 Omit `sudo` when running as root inside a container. Restart the application after installing the library. See [system requirements](/sdk/system-requirements#linux) and [issue #4290](https://github.com/tetherto/qvac/issues/4290).
 
+## RPC server failure: missing libibverbs.so.1
+
+### Situation
+
+On Linux, an older RPC runtime can make `startRpcServer()` fail with:
+
+```text
+Handler execution failed: startRpcServer: RPC backend is not available; the RPC module may have failed to load because libibverbs.so.1 is missing
+```
+
+### Cause
+
+Fabric versions before `0.22.0` linked `libibverbs.so.1`, so a missing library prevented TCP startup too. Fabric `0.22.0` and newer load it at runtime. With the current RPC server, a missing library or RDMA device disables RDMA and the server uses TCP. Startup still rejects when `expectRdma: true` requires RDMA.
+
+### Solution
+
+Update the SDK and RPC server to releases using Fabric `0.22.0` or newer, keep their Fabric versions compatible, and rebuild any custom worker. For TCP-only serving, omit `expectRdma` or set it to `false`.
+
+For RDMA, install the verbs library and your NIC's provider package, ensure an RDMA device is available, and leave `GGML_RPC_NO_RDMA` unset. On Debian or Ubuntu:
+
+```bash
+sudo apt install -y libibverbs1 ibverbs-providers
+```
+
+Omit `sudo` as root. If you must keep an older runtime, installing `libibverbs1` also restores its TCP startup.
+
 ## Startup crash: requested module does not provide a default export
 
 ### Situation

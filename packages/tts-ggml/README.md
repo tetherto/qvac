@@ -675,6 +675,8 @@ Notes:
   engine runs its ggml graph on the GPU (falling back to the ggml CPU backend
   when no GPU backend initialises), a CPU engine keeps the scalar core.
   `denoiserBackendDevice` / `denoiserBackendId` in the stats report where it ran.
+- Android ARM Mali devices can use Vulkan for denoising with `config.useGPU: true`.
+  This path is validated on Pixel 9 Pro XL (Mali-G715).
 - The tts-cpp UL-UNAS forward is implemented in
   [qvac-fabric-speech.cpp#78](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/78)
   (scalar CPU port, validated bit-close to the ONNX reference); it requires a
@@ -1128,7 +1130,29 @@ case completes. Run both files together without test filters: a successful full
 run has 12 passing tests, including the two completion checks, and no skips.
 Preflight only checks asset presence; actual model loading and inference must
 also pass. These commands cover TTS, TTSD and Speech, not MOSS-SoundEffect (SFX).
-No addon CUDA/Vulkan hardware run has been completed for this test change yet.
+To validate the fresh packaged addons on the provisioned Linux GPU runner,
+dispatch the existing integration workflow on the branch being tested:
+
+```sh
+gh workflow run integration-test-nx.yml --repo tetherto/qvac --ref <branch> -f moss_packaged_gpu=true
+```
+
+This opt-in mode retains the `release` environment gate and builds both addons
+from the dispatch SHA with build concurrency capped at two. It stages the fresh
+platform packages through `link:platform`, verifies that both CUDA and Vulkan
+plugins are present, then runs CUDA and Vulkan sequentially. Each backend must
+pass the 12 TTS/TTSD/Speech tests above, two SFX tests (including exact backend
+and no-fallback assertions for both GPU clips), and the focused ASR Spanish
+transcription test with default and hotword prompts. Fixture skips fail the run.
+CPU control cases remain part of the TTS/SFX suites.
+
+The runner stages q8_0 TTS/TTSD/Speech/SFX backbones and q5_0 Transcribe, with
+the required codec precision preserved. TTS/TTSD q8_0 are generated on the
+runner from the source checkpoints using the pinned native quantizer. The
+artifacts retain source pins, model and prebuild hashes, the fresh prebuilds,
+and per-backend logs/results; model weights are removed and never uploaded.
+This mode does not publish. A dispatched or building run is not GPU validation:
+only passing case logs from both backends establish packaged-addon coverage.
 
 Without strict mode, developer behavior is unchanged: an unpinned run accepts
 the normal GPU cascade, missing model directories skip tests, and missing
@@ -1425,12 +1449,14 @@ const {
 
 `assessFit` projects a load against the memory free right now. It reads GGUF metadata and never weight data, so the registry's weightless copy of each file answers the same as the file itself and the projection can run before anything is downloaded. It is a module export, not an instance method: nothing is loaded to call it.
 
+`assessFit` returns a Promise. Fits run one at a time within this addon.
+
 A request is a `createInstance` config plus the workload, so it carries the same keys the load takes and the engine's own config builder reads it.
 
 ```js
 const TTSGgml = require('@qvac/tts-ggml')
 
-const fit = TTSGgml.assessFit({
+const fit = await TTSGgml.assessFit({
   engineType: 'supertonic',
   supertonicModelPath: '/models/supertonic.gguf',
   useGPU: true,
@@ -1470,7 +1496,7 @@ Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the 
 
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
 
-A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, throws.
+A model the engine cannot read resolves to `status: "error"`, as does a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, rejects.
 
 MOSS-TTS and MOSS-TTSD share the `moss` fitter. `promptRows` is the complete
 native prompt length, including special tokens, encoded speaker references and
@@ -1481,7 +1507,7 @@ The fitter does not open reference recordings. Use the TTSD backbone to assess
 dialogue, supplying its complete prompt and total reference workload.
 
 ```js
-const fit = TTSGgml.assessFit({
+const fit = await TTSGgml.assessFit({
   engineType: 'moss',
   mossBackbonePath: './moss-tts-delay-f16.gguf',
   mossCodecDecoderPath: './moss-codec-decoder-f16.gguf',
@@ -1503,7 +1529,7 @@ The supertonic fitter covers the fused graph path: a validated GPU, or a CPU wit
 ### MOSS-SoundEffect fit
 
 ```js
-const fit = TTSGgml.assessFit({
+const fit = await TTSGgml.assessFit({
   engineType: 'moss-sfx',
   mossSoundEffectPath: './moss-sfx-v2-q8_0.gguf',
   prompt: 'Rain falling on a tin roof.',

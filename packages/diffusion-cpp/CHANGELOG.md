@@ -1,5 +1,54 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Bounded FuzzTest coverage for GGUF video-capability inspection
+  (`inspectVideoModelCapabilities`), including a cap on untrusted GGUF string
+  lengths. Linux C++ CI runs the suite after unit tests. The inspector
+  compiles without stable-diffusion.cpp, so ASan and LeakSanitizer stay at
+  full strength. No public addon API changes.
+
+### Breaking
+
+- `binding.js` is now `module.exports = require('#host-addon')`, a specifier
+  the Bare module lexer can follow, so `bare-pack` bundles an app that
+  requires `@qvac/diffusion-cpp`. `#host-addon` maps each host to its platform
+  package alone, with no fallback.
+- The meta package is no longer an addon. Each platform package is an ordinary
+  one: its module is built as `qvac__diffusion-cpp-<suffix>` (every iOS host
+  shares `ios`) and sits at `prebuilds/<host>/qvac__diffusion-cpp-<suffix>.bare`,
+  with its ggml backends in `prebuilds/<host>/qvac__diffusion-cpp-<suffix>/`.
+- The addon finds its ggml backends itself, next to the loaded module. An
+  explicit `backendsDir` is now scanned as given rather than as a prebuilds
+  root under which `<host>/<module>` is appended. The JavaScript wrappers no
+  longer default `backendsDir` to the package `prebuilds/` directory.
+- A source build is loadable once `npm run link:platform` (part of
+  `build:native`, `build:vulkan`, and `build:cuda`) stages it as the host's
+  platform package in `node_modules/`.
+
+## [0.30.0] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed
+  ([#5010](https://github.com/tetherto/qvac/pull/5010)). The fit runs on a worker thread so the JavaScript loop keeps
+  running, and concurrent calls run one at a time within the addon. A model
+  the fitter cannot read still resolves with `status: 'error'`; a malformed
+  request rejects instead of throwing. Change
+  `const fit = assessFit(request)` to `const fit = await assessFit(request)`.
+
+### Changed
+
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5069](https://github.com/tetherto/qvac/pull/5069)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+
 ## [0.29.2] - 2026-10-13
 
 This patch reduces the size of the Windows native addon to address the npm

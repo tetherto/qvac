@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
-import path = require('bare-path')
-/* eslint-enable @typescript-eslint/no-require-imports */
-
 import type { DiffusionFiles, EsrganFiles, EsrganUpscalerConfig, SdConfig } from './index'
 import type { DiffusionVideoFiles } from './file-paths'
 import { assertAbsolute, assertFilePaths, toFilePaths } from './file-paths'
@@ -65,7 +61,7 @@ export interface DiffusionFitResult {
 }
 
 interface FitBinding {
-  assessFit(request: Record<string, unknown>): DiffusionFitResult
+  assessFit(request: Record<string, unknown>): Promise<DiffusionFitResult>
 }
 
 /**
@@ -74,12 +70,14 @@ interface FitBinding {
  * so the projection can run before anything is downloaded. Safetensors
  * checkpoints can also contain only their tensor headers.
  *
- * A model the engine cannot read is `status: "error"`; only a broken request
- * throws.
+ * Concurrent calls run one at a time within this addon.
+ *
+ * A model the engine cannot read resolves to `status: "error"`; only a broken
+ * request rejects.
  */
-export function assessFit(
+export async function assessFit(
   request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest
-): DiffusionFitResult {
+): Promise<DiffusionFitResult> {
   if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale' && request.mode !== 'world') {
     throw new TypeError(`unsupported fit mode: ${String(request.mode)}`)
   }
@@ -103,16 +101,13 @@ export function assessFit(
   // The native side reads the config sub-object as a string map, the same way
   // createInstance does.
   const merged: SdConfig | EsrganUpscalerConfig | WorldConfig = { ...request.config }
-  if (!merged.backendsDir) {
-    merged.backendsDir = path.join(__dirname, 'prebuilds')
-  }
   const config = Object.fromEntries(
     Object.entries(merged)
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [key, String(value)])
   )
 
-  return binding.assessFit({
+  return await binding.assessFit({
     ...toFilePaths(files),
     ...(request.mode === 'world' && {
       taehvPath: request.files.taehv,

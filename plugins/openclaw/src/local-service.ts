@@ -1,10 +1,19 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { closeSync, constants, fstatSync, openSync, readFileSync } from 'node:fs'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { createInterface } from 'node:readline'
+import type { Readable } from 'node:stream'
 
 import {
   DEFAULT_OPTIONS,
@@ -20,9 +29,11 @@ export interface LocalServiceOptions {
   readonly model: string
   readonly host: string
   readonly port: number
+  readonly cwd?: string | undefined
   readonly ctxSize: number
   readonly reasoningBudget: number
   readonly tools: boolean
+  readonly readyTimeoutMs: number
 }
 
 export interface LocalServiceServeConfig {
@@ -31,95 +42,13 @@ export interface LocalServiceServeConfig {
   }
 }
 
-const LOCAL_SERVICE_OPTIONS = new Set([
-  '--qvac-command',
-  '--api-key-file',
-  '--model',
-  '--host',
-  '--port',
-  '--ctx-size',
-  '--reasoning-budget',
-  '--tools'
-])
-
-function parseOptions(argv: readonly string[]): ReadonlyMap<string, string> {
-  const options = new Map<string, string>()
-  for (let index = 0; index < argv.length; index += 2) {
-    const name = argv[index]
-    const value = argv[index + 1]
-    if (name === undefined || !LOCAL_SERVICE_OPTIONS.has(name)) {
-      // The offending token is deliberately not echoed: a misaligned argv puts a
-      // *value* in this slot, and one of those values can be a credential.
-      throw new TypeError(
-        `Unknown local service option. Expected one of: ${[...LOCAL_SERVICE_OPTIONS].join(', ')}`
-      )
-    }
-    if (value === undefined || value.startsWith('--')) {
-      throw new TypeError(`${name} requires a value`)
-    }
-    if (options.has(name)) {
-      throw new TypeError(`${name} cannot be specified more than once`)
-    }
-    options.set(name, value)
-  }
-  return options
-}
-
 // openclaw 2026.8.1 moved plugin-contributed auth choices behind a
 // `provider-plugin:` prefix. The plugin supports openclaw >=2026.6.0, so
 // remediation text names both forms rather than one that fails on half the
 // supported range.
-const ONBOARD_COMMAND_HINT =
+export const ONBOARD_COMMAND_HINT =
   '`openclaw onboard --auth-choice provider-plugin:qvac` ' +
   '(on openclaw < 2026.8.1, `--auth-choice qvac`)'
-
-// A pre-auth OpenClaw install has `localService.args` persisted in openclaw.json
-// without `--api-key-file`. Failing closed is deliberate — the launcher must not
-// start an unauthenticated serve — so the message has to name the remedy.
-function requireApiKeyFile(options: ReadonlyMap<string, string>): string {
-  const value = options.get('--api-key-file')
-  if (value === undefined) {
-    throw new TypeError(
-      '--api-key-file requires a value. This QVAC provider entry was created before the managed ' +
-        'qvac serve required bearer authentication; re-run ' +
-        ONBOARD_COMMAND_HINT +
-        ' to regenerate it.'
-    )
-  }
-  return value
-}
-
-function parseNumberOption(name: string, value: string | undefined, fallback: number): number {
-  if (value === undefined) return fallback
-  const n = Number(value)
-  if (!Number.isFinite(n)) throw new TypeError(`${name} must be a finite number`)
-  return n
-}
-
-function parseBooleanOption(name: string, value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined) return fallback
-  if (value === 'true' || value === '1') return true
-  if (value === 'false' || value === '0') return false
-  throw new TypeError(`${name} must be a boolean`)
-}
-
-export function parseLocalServiceArgs(argv: readonly string[]): LocalServiceOptions {
-  const values = parseOptions(argv)
-  return {
-    qvacCommand: values.get('--qvac-command') ?? DEFAULT_OPTIONS.qvacCommand,
-    apiKeyFile: requireApiKeyFile(values),
-    model: values.get('--model') ?? DEFAULT_OPTIONS.model,
-    host: values.get('--host') ?? DEFAULT_OPTIONS.host,
-    port: parseNumberOption('--port', values.get('--port'), DEFAULT_OPTIONS.port),
-    ctxSize: parseNumberOption('--ctx-size', values.get('--ctx-size'), DEFAULT_OPTIONS.ctxSize),
-    reasoningBudget: parseNumberOption(
-      '--reasoning-budget',
-      values.get('--reasoning-budget'),
-      DEFAULT_OPTIONS.reasoningBudget
-    ),
-    tools: parseBooleanOption('--tools', values.get('--tools'), DEFAULT_OPTIONS.tools)
-  }
-}
 
 // POSIX-only; Windows resolves symlinks below the API and has no equivalent flag.
 const NO_FOLLOW = constants.O_NOFOLLOW ?? 0
@@ -167,9 +96,6 @@ export function createLocalServiceServeConfig(
       models: createQvacServeModels(
         resolveOptions({
           model: options.model,
-          host: options.host,
-          port: options.port,
-          qvacCommand: options.qvacCommand,
           ctxSize: options.ctxSize,
           reasoningBudget: options.reasoningBudget,
           tools: options.tools
@@ -181,6 +107,8 @@ export function createLocalServiceServeConfig(
 
 // First `@qvac/cli` able to take the key from a file instead of argv.
 const MIN_CLI_VERSION_API_KEY_FILE = '0.11.0'
+// First `@qvac/cli` able to report the port it bound on an inherited descriptor.
+export const MIN_CLI_VERSION_READY_FD = '0.16.0'
 
 function isAtLeast(version: string, minimum: string): boolean {
   const parts = (value: string): number[] =>
@@ -219,6 +147,7 @@ function cliVersionFor(entry: string): string | undefined {
 export interface ResolvedQvacCli {
   readonly command: string
   readonly baseArgs: readonly string[]
+  readonly version: string | undefined
   readonly supportsApiKeyFile: boolean
 }
 
@@ -233,6 +162,7 @@ export function resolveQvacCli(qvacCommand: string): ResolvedQvacCli {
   const onPath: ResolvedQvacCli = {
     command: qvacCommand,
     baseArgs: [],
+    version: undefined,
     supportsApiKeyFile: false
   }
   if (qvacCommand !== DEFAULT_OPTIONS.qvacCommand) return onPath
@@ -249,6 +179,7 @@ export function resolveQvacCli(qvacCommand: string): ResolvedQvacCli {
   return {
     command: process.execPath,
     baseArgs: [entry],
+    version,
     supportsApiKeyFile: version !== undefined && isAtLeast(version, MIN_CLI_VERSION_API_KEY_FILE)
   }
 }
@@ -258,12 +189,29 @@ export interface QvacLaunch {
   readonly args: string[]
 }
 
+// The serve writes its bound port to this inherited pipe. Only the child this
+// plugin spawned can write to it, so the port it names is never one another
+// local process claimed first.
+const READY_FD = 3
+const READY_PREFIX = 'QVAC_SERVE_READY '
+
+function cliUpgradeError(): TypeError {
+  return new TypeError(
+    `This @qvac/cli cannot report the port it bound (--ready-fd), so the QVAC plugin cannot ` +
+      `verify the local service before sending it a key. Install @qvac/cli ` +
+      `${MIN_CLI_VERSION_READY_FD} or newer.`
+  )
+}
+
 // `--no-default` is part of the pair, not an extra: bare `--openai` also mounts
 // the QVAC surface on the port, while the `serve openai` subcommand this
 // replaces exposed `/v1/*` alone. Keeping both preserves that and keeps the
 // extra surface off a port the plugin authenticates and owns.
 function qvacLaunch(options: LocalServiceOptions, configPath: string, apiKey: string): QvacLaunch {
   const cli = resolveQvacCli(options.qvacCommand)
+  if (cli.version !== undefined && !isAtLeast(cli.version, MIN_CLI_VERSION_READY_FD)) {
+    throw cliUpgradeError()
+  }
   return {
     command: cli.command,
     args: [
@@ -277,6 +225,8 @@ function qvacLaunch(options: LocalServiceOptions, configPath: string, apiKey: st
       options.host,
       '--port',
       String(options.port),
+      '--ready-fd',
+      String(READY_FD),
       '--model',
       options.model,
       ...(cli.supportsApiKeyFile ? ['--api-key-file', options.apiKeyFile] : ['--api-key', apiKey])
@@ -300,130 +250,192 @@ export function formatSpawnError(error: unknown, command: string): string {
   return `Failed to start QVAC service: code=${code} syscall=${syscall} command=${command}`
 }
 
-const CONFIG_ERROR_CODES = new Set(['EACCES', 'EISDIR', 'ENOENT', 'ENOTDIR', 'EPERM'])
-
-function sanitizeErrorMessage(message: string): string {
-  return message
-    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-export function formatLauncherError(error: unknown): string {
-  const code =
-    error instanceof Error && 'code' in error && typeof error.code === 'string'
-      ? error.code
-      : undefined
-  if (
-    error instanceof TypeError ||
-    (error instanceof Error && code && CONFIG_ERROR_CODES.has(code))
-  ) {
-    const message = sanitizeErrorMessage(error.message)
-    if (message) return `QVAC local service launcher failed: ${message}`
-  }
-  return 'QVAC local service launcher failed'
-}
-
-export function resolveLocalServiceExitCode(
-  code: number | null,
-  signal: NodeJS.Signals | null,
-  stopping: boolean
-): number | null {
-  if (signal !== null) return stopping ? 0 : null
-  return code ?? 1
-}
-
-async function writeConfig(
-  options: LocalServiceOptions
-): Promise<{ configPath: string; cleanup: () => Promise<void> }> {
-  const dir = await mkdtemp(join(tmpdir(), 'qvac-openclaw-'))
-  const configPath = join(dir, 'qvac.config.json')
-  await writeFile(
-    configPath,
-    `${JSON.stringify(createLocalServiceServeConfig(options), null, 2)}\n`,
-    'utf8'
-  )
-
-  return {
-    configPath,
-    cleanup: async () => {
-      await rm(dir, { recursive: true, force: true })
-    }
-  }
-}
-
 export interface PreparedLocalServiceLaunch {
   readonly configPath: string
   readonly command: string
   readonly args: string[]
-  cleanup: () => Promise<void>
+  cleanup: () => void
 }
 
 // Resolves the key *before* creating the temp config dir, so an unusable key file
 // cannot strand one, and unwinds the dir if anything after that throws. The key
 // is validated even when it travels to the child by path.
-export async function prepareLocalServiceLaunch(
+export function prepareLocalServiceLaunch(
   options: LocalServiceOptions
-): Promise<PreparedLocalServiceLaunch> {
+): PreparedLocalServiceLaunch {
   const apiKey = loadApiKey(options.apiKeyFile)
-  const generated = await writeConfig(options)
+  const dir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-'))
+  function cleanup(): void {
+    rmSync(dir, { recursive: true, force: true })
+  }
   try {
-    const launch = qvacLaunch(options, generated.configPath, apiKey)
-    return {
-      configPath: generated.configPath,
-      command: launch.command,
-      args: launch.args,
-      cleanup: generated.cleanup
-    }
+    const configPath = join(dir, 'qvac.config.json')
+    writeFileSync(
+      configPath,
+      `${JSON.stringify(createLocalServiceServeConfig(options), null, 2)}\n`,
+      'utf8'
+    )
+    const launch = qvacLaunch(options, configPath, apiKey)
+    return { configPath, command: launch.command, args: launch.args, cleanup }
   } catch (error) {
-    await generated.cleanup()
+    cleanup()
     throw error
   }
 }
 
-async function main(): Promise<void> {
-  const options = parseLocalServiceArgs(process.argv.slice(2))
-  const launch = await prepareLocalServiceLaunch(options)
+function formatHost(host: string): string {
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+}
 
-  let child: ChildProcess
-  try {
-    child = spawn(launch.command, launch.args, { stdio: 'inherit' })
-  } catch (error) {
-    await launch.cleanup()
-    throw error
+// Bounded tail of the serve's own output, so a startup failure can say why.
+function collectOutputTail(child: ChildProcess, maxChars = 4000): () => string {
+  let tail = ''
+  function append(chunk: Buffer): void {
+    tail = (tail + chunk.toString('utf8')).slice(-maxChars)
   }
+  child.stdout?.on('data', append)
+  child.stderr?.on('data', append)
+  return () => tail
+}
 
-  let stopping = false
-  async function stop(signal: NodeJS.Signals): Promise<void> {
-    if (stopping) return
-    stopping = true
-    child.kill(signal)
-    await launch.cleanup()
-  }
-
-  process.on('SIGINT', () => void stop('SIGINT'))
-  process.on('SIGTERM', () => void stop('SIGTERM'))
-
-  child.on('error', async (err) => {
-    console.error(formatSpawnError(err, launch.command))
-    await launch.cleanup()
-    process.exit(1)
-  })
-
-  child.on('exit', async (code, signal) => {
-    await launch.cleanup()
-    const exitCode = resolveLocalServiceExitCode(code, signal, stopping)
-    if (exitCode === null && signal !== null) {
-      process.kill(process.pid, signal)
+function waitForReady(
+  child: ChildProcess,
+  command: string,
+  timeoutMs: number,
+  getTail: () => string
+): Promise<number> {
+  const channel = child.stdio[READY_FD] as Readable | null | undefined
+  return new Promise((resolve, reject) => {
+    if (channel === null || channel === undefined) {
+      reject(new Error('QVAC local service has no ready channel'))
       return
     }
-    process.exit(exitCode)
+    const lines = createInterface({ input: channel })
+    const timer = setTimeout(() => {
+      settle(() =>
+        reject(new Error(`QVAC local service did not report its port within ${timeoutMs}ms`))
+      )
+    }, timeoutMs)
+    function settle(action: () => void): void {
+      clearTimeout(timer)
+      lines.close()
+      child.off('close', onClose)
+      child.off('error', onError)
+      action()
+    }
+    function onClose(code: number | null, signal: NodeJS.Signals | null): void {
+      const tail = getTail()
+      if (/unknown option '--ready-fd'/.test(tail)) {
+        settle(() => reject(cliUpgradeError()))
+        return
+      }
+      const status = signal === null ? `code ${String(code)}` : `signal ${signal}`
+      const detail = tail.trim() === '' ? '' : `\n${tail.trim()}`
+      settle(() =>
+        reject(new Error(`QVAC local service exited before it was ready (${status})${detail}`))
+      )
+    }
+    function onError(error: unknown): void {
+      settle(() => reject(new Error(formatSpawnError(error, command))))
+    }
+    // `close`, not `exit`: an older CLI's rejection must be in the tail first.
+    child.once('close', onClose)
+    child.once('error', onError)
+    lines.on('line', (line) => {
+      if (!line.startsWith(READY_PREFIX)) return
+      let signal: { port?: unknown; pid?: unknown }
+      try {
+        signal = JSON.parse(line.slice(READY_PREFIX.length)) as typeof signal
+      } catch {
+        return
+      }
+      if (typeof signal.port !== 'number' || signal.pid !== child.pid) return
+      const port = signal.port
+      settle(() => resolve(port))
+    })
   })
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  void main().catch((error: unknown) => {
-    console.error(formatLauncherError(error))
-    process.exit(1)
+export interface VerifiedQvacServe {
+  readonly baseUrl: string
+  readonly pid: number
+}
+
+interface RunningServe {
+  readonly fingerprint: string
+  readonly child: ChildProcess
+  readonly ready: Promise<VerifiedQvacServe>
+  stop(): void
+}
+
+let running: RunningServe | undefined
+let exitHookInstalled = false
+
+function stopRunning(): void {
+  running?.stop()
+  running = undefined
+}
+
+function installExitHook(): void {
+  if (exitHookInstalled) return
+  exitHookInstalled = true
+  process.once('exit', stopRunning)
+}
+
+function startServe(options: LocalServiceOptions, fingerprint: string): RunningServe {
+  const launch = prepareLocalServiceLaunch(options)
+  let child: ChildProcess
+  try {
+    child = spawn(launch.command, launch.args, {
+      stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
+      ...(options.cwd === undefined ? {} : { cwd: options.cwd })
+    })
+  } catch (error) {
+    launch.cleanup()
+    throw new Error(formatSpawnError(error, launch.command))
+  }
+  // OpenClaw one-shot commands must still exit when their turn is done; the
+  // exit hook then takes the serve down with them.
+  child.unref()
+  for (const stream of child.stdio) {
+    ;(stream as { unref?: () => void } | null)?.unref?.()
+  }
+  installExitHook()
+
+  const getTail = collectOutputTail(child)
+  const entry: RunningServe = {
+    fingerprint,
+    child,
+    ready: waitForReady(child, launch.command, options.readyTimeoutMs, getTail).then((port) => ({
+      baseUrl: `http://${formatHost(options.host)}:${port}/v1`,
+      pid: child.pid ?? 0
+    })),
+    stop() {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
+      launch.cleanup()
+    }
+  }
+  child.once('exit', () => {
+    launch.cleanup()
+    if (running === entry) running = undefined
   })
+  entry.ready.catch(() => {
+    entry.stop()
+    if (running === entry) running = undefined
+  })
+  return entry
+}
+
+// Starts `qvac serve` on a port only it can report, and hands back the URL the
+// key may be sent to. A serve this process already started is reused while its
+// launch options stay the same.
+export function ensureQvacServe(options: LocalServiceOptions): Promise<VerifiedQvacServe> {
+  const fingerprint = JSON.stringify(options)
+  if (running !== undefined && running.fingerprint !== fingerprint) stopRunning()
+  running ??= startServe(options, fingerprint)
+  return running.ready
+}
+
+export function stopQvacServe(): void {
+  stopRunning()
 }

@@ -5,7 +5,7 @@ import { loadModel, completion, unloadModel, QWEN3_600M_INST_Q4 } from '@qvac/sd
 // difference between free-form text, free-form JSON, and a strict JSON Schema.
 //
 // Usage:
-//   bun run examples/llamacpp-structured-output.ts
+//   npx tsx examples/llamacpp-structured-output.ts
 
 const PERSON_SCHEMA = {
   type: 'object',

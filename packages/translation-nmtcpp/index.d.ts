@@ -59,8 +59,11 @@ interface TranslationNmtcpp {
  */
 interface TranslationNmtcppConstructor {
     new (args: TranslationNmtcppArgs): TranslationNmtcpp;
-    /** Assess a model before loading it, using current device memory. */
-    assessFit(request: TranslationNmtcpp.FitRequest): TranslationNmtcpp.FitResult;
+    /**
+     * Assess a model before loading it, using current device memory. Concurrent
+     * calls run one at a time. A malformed request rejects.
+     */
+    assessFit(request: TranslationNmtcpp.FitRequest): Promise<TranslationNmtcpp.FitResult>;
     /**
      * Available model types for translation
      */

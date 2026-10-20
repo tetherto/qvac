@@ -1,9 +1,14 @@
-import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import type { AbortSignal } from 'bare-abort-controller'
 
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
-import type { CanonicalModelType, NativeProbeFit, NativeProbeVerdict } from '@/schemas/index'
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
+import type {
+  CanonicalModelType,
+  NativeProbeFit,
+  NativeProbeVerdict,
+  TranscriptionFitWorkload
+} from '@/schemas/index'
 import { classifyFit } from '@/resources/model-fit/native-probe/classify-fit'
 import { createFitRequest } from '@/resources/model-fit/native-probe/create-fit-request'
 import { runFit as runFitDefault } from '@/resources/model-fit/native-probe/run-fit'
@@ -47,6 +52,7 @@ export type AdvisoryFitVerdict = NativeProbeVerdict
 export type AdvisoryFitOutcome = NativeProbeFit
 
 export interface AdvisoryFitInput {
+  transcriptionWorkload?: TranscriptionFitWorkload | undefined
   ttsWorkload?: TtsFitWorkload | undefined
   modelId: string
   modelType: CanonicalModelType
@@ -289,13 +295,13 @@ export async function runAdvisoryFitCheck(
       (options.extraResidentBytes ?? 0)
     const residentReserveMiB = Math.ceil(residentBytes / BYTES_PER_MIB)
 
-    // Always sent, even with a zero reserve: relying on the engine default for
-    // the base margin would leave two sources of truth that match today and
-    // diverge silently if an engine default moves.
+    // Always sent, even with a zero reserve, so the base margin has one source
+    // and an engine default never decides it.
     const plan = createFitRequest({
       modelType: input.modelType,
       modelPath: input.modelPath,
       modelConfig: input.modelConfig,
+      transcriptionWorkload: input.transcriptionWorkload,
       ttsWorkload: input.ttsWorkload,
       artifacts: input.artifacts,
       isShardedModel: input.isShardedModel,

@@ -15,8 +15,43 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     root: Annotated[
         Any,
         Field(
-            description="Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
+            description="Generated from the SDK Zod schemas by `npm run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
             title="@qvac/sdk wire contract",
+        ),
+    ]
+
+
+class Hotword(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class AssessModelFitRequestModelsItemTranscriptionWorkload(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    prompt: str | None = None
+    hotwords: Annotated[
+        list[Hotword] | None,
+        Field(
+            description="MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+            max_length=64,
+        ),
+    ] = None
+    max_new_tokens: Annotated[
+        int | None,
+        Field(
+            alias="maxNewTokens",
+            description="MOSS generated-token limit; 0 uses the model default.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    audio_seconds: Annotated[
+        float,
+        Field(
+            alias="audioSeconds",
+            description="Longest whole recording to project.",
+            gt=0.0,
         ),
     ]
 
@@ -26,10 +61,12 @@ class AssessModelFitRequestModelsItemModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -130,10 +167,12 @@ class AssessModelFitRequestModelsItemModelType(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -204,6 +243,14 @@ class AssessModelFitRequestModelsItemModelConfig(RootModel[dict[str, Any]]):
 
 
 class AssessModelFitRequestModelsItem(GeneratedBaseModel):
+    transcription_workload: Annotated[
+        AssessModelFitRequestModelsItemTranscriptionWorkload | None,
+        Field(
+            alias="transcriptionWorkload",
+            description="MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.",
+            title="AssessModelFitRequestModelsItemTranscriptionWorkload",
+        ),
+    ] = None
     model_src: Annotated[
         str | AssessModelFitRequestModelsItemModelSrc | None,
         Field(
@@ -2905,6 +2952,15 @@ class BciTranscribeResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class BciTranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class BciTranscribeResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2914,6 +2970,25 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Zero-based speaker id for diarized transcription.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    speaker: Annotated[
+        str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[BciTranscribeResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
+    ] = None
     is_end_of_turn: Annotated[
         bool | None,
         Field(
@@ -3220,6 +3295,15 @@ class BciTranscribeStreamResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class BciTranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -3229,6 +3313,25 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Zero-based speaker id for diarized transcription.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    speaker: Annotated[
+        str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[BciTranscribeStreamResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
+    ] = None
     is_end_of_turn: Annotated[
         bool | None,
         Field(
@@ -3298,6 +3401,7 @@ class CancelRequestBroadKind(Enum):
     completion = "completion"
     batch_completion = "batchCompletion"
     embeddings = "embeddings"
+    decision = "decision"
     transcribe = "transcribe"
     translate = "translate"
     diffusion = "diffusion"
@@ -4668,10 +4772,12 @@ class ModelType(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -4682,8 +4788,10 @@ class ModelType(Enum):
 class PluginId(Enum):
     llm = "@qvac/sdk/llamacpp-completion/plugin"
     embedding = "@qvac/sdk/llamacpp-embedding/plugin"
+    decision = "@qvac/sdk/llamacpp-decision/plugin"
     whisper = "@qvac/sdk/whispercpp-transcription/plugin"
     bci = "@qvac/sdk/bci-whispercpp-transcription/plugin"
+    moss_transcribe = "@qvac/sdk/moss-transcribe/plugin"
     nmt = "@qvac/sdk/nmtcpp-translation/plugin"
     tts = "@qvac/sdk/tts-ggml/plugin"
     ocr = "@qvac/sdk/ggml-ocr/plugin"
@@ -4851,6 +4959,843 @@ class Verbosity(Enum):
     warn = 1
     info = 2
     debug = 3
+
+
+class DecideSingleRequestQuestionsValueChoiceInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueChoiceInstructions"),
+    ]
+
+
+class OptionOrderItem(RootModel[int]):
+    root: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class DecideSingleRequestQuestionsValueChoiceCriteriaValue(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueChoiceCriteriaValue"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueChoiceCriteria(
+    RootModel[
+        dict[
+            str,
+            str
+            | float
+            | bool
+            | DecideSingleRequestQuestionsValueChoiceCriteriaValue
+            | list[Any]
+            | None,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            str
+            | float
+            | bool
+            | DecideSingleRequestQuestionsValueChoiceCriteriaValue
+            | list[Any]
+            | None,
+        ],
+        Field(title="DecideSingleRequestQuestionsValueChoiceCriteria"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueChoice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueChoiceInstructions
+        | list[Any]
+    )
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
+    type: Literal["choice"] = "choice"
+    criteria: list[str | float | bool] | DecideSingleRequestQuestionsValueChoiceCriteria
+
+
+class DecideSingleRequestQuestionsValueScoreInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueScoreInstructions"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueScoreCriteriaItem(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueScoreCriteriaItem"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueScore(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueScoreInstructions
+        | list[Any]
+    )
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
+    type: Literal["score"] = "score"
+    criteria: list[
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueScoreCriteriaItem
+        | list[Any]
+    ]
+
+
+class DecideSingleRequestQuestionsValueNoulInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideSingleRequestQuestionsValueNoulInstructions")
+    ]
+
+
+class DecideSingleRequestQuestionsValueNoulCriteriaTrue(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideSingleRequestQuestionsValueNoulCriteriaTrue")
+    ]
+
+
+class DecideSingleRequestQuestionsValueNoulCriteriaFalse(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueNoulCriteriaFalse"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueNoulCriteria(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    true: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueNoulCriteriaTrue
+        | list[Any]
+        | None
+    ) = None
+    false: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueNoulCriteriaFalse
+        | list[Any]
+        | None
+    ) = None
+
+
+class DecideSingleRequestQuestionsValueNoulLabels(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    false: str
+    true: str
+
+
+class DecideSingleRequestQuestionsValueNoul(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueNoulInstructions
+        | list[Any]
+    )
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
+    type: Literal["noul"] = "noul"
+    criteria: DecideSingleRequestQuestionsValueNoulCriteria | None = None
+    labels: Annotated[
+        DecideSingleRequestQuestionsValueNoulLabels | None,
+        Field(title="DecideSingleRequestQuestionsValueNoulLabels"),
+    ] = None
+
+
+class DecideSingleRequestQuestions(
+    RootModel[
+        dict[
+            str,
+            DecideSingleRequestQuestionsValueChoice
+            | DecideSingleRequestQuestionsValueScore
+            | DecideSingleRequestQuestionsValueNoul,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            DecideSingleRequestQuestionsValueChoice
+            | DecideSingleRequestQuestionsValueScore
+            | DecideSingleRequestQuestionsValueNoul,
+        ],
+        Field(
+            description="Question ID to decision question.",
+            title="DecideSingleRequestQuestions",
+        ),
+    ]
+
+
+class DecideSingleRequestState(RootModel[dict[str, Any]]):
+    root: Annotated[dict[str, Any], Field(title="DecideSingleRequestState")]
+
+
+class DecideSingleRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    questions: Annotated[
+        DecideSingleRequestQuestions,
+        Field(
+            description="Question ID to decision question.",
+            title="DecideSingleRequestQuestions",
+        ),
+    ]
+    max_len: Annotated[
+        int | None,
+        Field(
+            alias="maxLen",
+            description="Token budget per sequence; unset uses the checkpoint budget.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    head_max_len: Annotated[
+        int | None,
+        Field(
+            alias="headMaxLen",
+            description="Token budget for each question and its options; unset uses the checkpoint budget.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    state: str | float | bool | DecideSingleRequestState | list[Any]
+    model_id: Annotated[str, Field(alias="modelId", min_length=1)]
+    type: Literal["decide"] = "decide"
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
+
+
+class DecideBatchRequestQuestionsValueChoiceInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideBatchRequestQuestionsValueChoiceInstructions"),
+    ]
+
+
+class DecideBatchRequestQuestionsValueChoiceCriteriaValue(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideBatchRequestQuestionsValueChoiceCriteriaValue"),
+    ]
+
+
+class DecideBatchRequestQuestionsValueChoiceCriteria(
+    RootModel[
+        dict[
+            str,
+            str
+            | float
+            | bool
+            | DecideBatchRequestQuestionsValueChoiceCriteriaValue
+            | list[Any]
+            | None,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            str
+            | float
+            | bool
+            | DecideBatchRequestQuestionsValueChoiceCriteriaValue
+            | list[Any]
+            | None,
+        ],
+        Field(title="DecideBatchRequestQuestionsValueChoiceCriteria"),
+    ]
+
+
+class DecideBatchRequestQuestionsValueChoice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueChoiceInstructions
+        | list[Any]
+    )
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
+    type: Literal["choice"] = "choice"
+    criteria: list[str | float | bool] | DecideBatchRequestQuestionsValueChoiceCriteria
+
+
+class DecideBatchRequestQuestionsValueScoreInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueScoreInstructions")
+    ]
+
+
+class DecideBatchRequestQuestionsValueScoreCriteriaItem(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueScoreCriteriaItem")
+    ]
+
+
+class DecideBatchRequestQuestionsValueScore(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueScoreInstructions
+        | list[Any]
+    )
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
+    type: Literal["score"] = "score"
+    criteria: list[
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueScoreCriteriaItem
+        | list[Any]
+    ]
+
+
+class DecideBatchRequestQuestionsValueNoulInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueNoulInstructions")
+    ]
+
+
+class DecideBatchRequestQuestionsValueNoulCriteriaTrue(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueNoulCriteriaTrue")
+    ]
+
+
+class DecideBatchRequestQuestionsValueNoulCriteriaFalse(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueNoulCriteriaFalse")
+    ]
+
+
+class DecideBatchRequestQuestionsValueNoulCriteria(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    true: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueNoulCriteriaTrue
+        | list[Any]
+        | None
+    ) = None
+    false: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueNoulCriteriaFalse
+        | list[Any]
+        | None
+    ) = None
+
+
+class DecideBatchRequestQuestionsValueNoulLabels(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    false: str
+    true: str
+
+
+class DecideBatchRequestQuestionsValueNoul(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueNoulInstructions
+        | list[Any]
+    )
+    option_order: Annotated[
+        list[OptionOrderItem] | None, Field(alias="optionOrder")
+    ] = None
+    type: Literal["noul"] = "noul"
+    criteria: DecideBatchRequestQuestionsValueNoulCriteria | None = None
+    labels: Annotated[
+        DecideBatchRequestQuestionsValueNoulLabels | None,
+        Field(title="DecideBatchRequestQuestionsValueNoulLabels"),
+    ] = None
+
+
+class DecideBatchRequestQuestions(
+    RootModel[
+        dict[
+            str,
+            DecideBatchRequestQuestionsValueChoice
+            | DecideBatchRequestQuestionsValueScore
+            | DecideBatchRequestQuestionsValueNoul,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            DecideBatchRequestQuestionsValueChoice
+            | DecideBatchRequestQuestionsValueScore
+            | DecideBatchRequestQuestionsValueNoul,
+        ],
+        Field(
+            description="Question ID to decision question.",
+            title="DecideBatchRequestQuestions",
+        ),
+    ]
+
+
+class DecideBatchRequestStatesItem(RootModel[dict[str, Any]]):
+    root: Annotated[dict[str, Any], Field(title="DecideBatchRequestStatesItem")]
+
+
+class DecideBatchRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    questions: Annotated[
+        DecideBatchRequestQuestions,
+        Field(
+            description="Question ID to decision question.",
+            title="DecideBatchRequestQuestions",
+        ),
+    ]
+    max_len: Annotated[
+        int | None,
+        Field(
+            alias="maxLen",
+            description="Token budget per sequence; unset uses the checkpoint budget.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    head_max_len: Annotated[
+        int | None,
+        Field(
+            alias="headMaxLen",
+            description="Token budget for each question and its options; unset uses the checkpoint budget.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    states: list[str | float | bool | DecideBatchRequestStatesItem | list[Any]]
+    model_id: Annotated[str, Field(alias="modelId", min_length=1)]
+    type: Literal["decide"] = "decide"
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
+
+
+class DecideResponseResultAnswersValueChoiceAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
+
+
+class DecideResponseResultAnswersValueChoiceProbabilities(RootModel[dict[str, float]]):
+    root: Annotated[
+        dict[str, float],
+        Field(title="DecideResponseResultAnswersValueChoiceProbabilities"),
+    ]
+
+
+class DecideResponseResultAnswersValueChoice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
+    confidence: float
+    action: Annotated[
+        DecideResponseResultAnswersValueChoiceAction,
+        Field(title="DecideResponseResultAnswersValueChoiceAction"),
+    ]
+    type: Literal["choice"] = "choice"
+    choice: str | float | bool
+    probabilities: Annotated[
+        DecideResponseResultAnswersValueChoiceProbabilities,
+        Field(title="DecideResponseResultAnswersValueChoiceProbabilities"),
+    ]
+
+
+class DecideResponseResultAnswersValueScoreAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
+
+
+class DecideResponseResultAnswersValueScoreLegend(RootModel[dict[str, str]]):
+    root: Annotated[
+        dict[str, str], Field(title="DecideResponseResultAnswersValueScoreLegend")
+    ]
+
+
+class DecideResponseResultAnswersValueScoreProbabilities(RootModel[dict[str, float]]):
+    root: Annotated[
+        dict[str, float],
+        Field(title="DecideResponseResultAnswersValueScoreProbabilities"),
+    ]
+
+
+class DecideResponseResultAnswersValueScore(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
+    confidence: float
+    action: Annotated[
+        DecideResponseResultAnswersValueScoreAction,
+        Field(title="DecideResponseResultAnswersValueScoreAction"),
+    ]
+    type: Literal["score"] = "score"
+    score: float
+    legend: Annotated[
+        DecideResponseResultAnswersValueScoreLegend,
+        Field(title="DecideResponseResultAnswersValueScoreLegend"),
+    ]
+    probabilities: Annotated[
+        DecideResponseResultAnswersValueScoreProbabilities,
+        Field(title="DecideResponseResultAnswersValueScoreProbabilities"),
+    ]
+
+
+class DecideResponseResultAnswersValueNoulAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
+
+
+class DecideResponseResultAnswersValueNoul(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
+    confidence: float
+    action: Annotated[
+        DecideResponseResultAnswersValueNoulAction,
+        Field(title="DecideResponseResultAnswersValueNoulAction"),
+    ]
+    type: Literal["noul"] = "noul"
+    noul: float
+
+
+class DecideResponseResultAnswers(
+    RootModel[
+        dict[
+            str,
+            DecideResponseResultAnswersValueChoice
+            | DecideResponseResultAnswersValueScore
+            | DecideResponseResultAnswersValueNoul,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            DecideResponseResultAnswersValueChoice
+            | DecideResponseResultAnswersValueScore
+            | DecideResponseResultAnswersValueNoul,
+        ],
+        Field(title="DecideResponseResultAnswers"),
+    ]
+
+
+class DecideResponseResultUsageOptionsValue(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    total: float
+    distinct: float
+    tokens_per_option: Annotated[float | None, Field(alias="tokensPerOption")]
+
+
+class DecideResponseResultUsageOptions(
+    RootModel[dict[str, DecideResponseResultUsageOptionsValue]]
+):
+    root: Annotated[
+        dict[str, DecideResponseResultUsageOptionsValue],
+        Field(title="DecideResponseResultUsageOptions"),
+    ]
+
+
+class DecideResponseResultUsage(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    input_tokens: Annotated[float, Field(alias="inputTokens")]
+    output_tokens: Annotated[float, Field(alias="outputTokens")]
+    state_tokens: Annotated[float, Field(alias="stateTokens")]
+    state_tokens_dropped: Annotated[float, Field(alias="stateTokensDropped")]
+    truncated: bool
+    truncated_questions: Annotated[list[str], Field(alias="truncatedQuestions")]
+    options: Annotated[
+        DecideResponseResultUsageOptions | None,
+        Field(title="DecideResponseResultUsageOptions"),
+    ] = None
+
+
+class DecideResponseResult(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model: str
+    answers: Annotated[
+        DecideResponseResultAnswers, Field(title="DecideResponseResultAnswers")
+    ]
+    usage: Annotated[
+        DecideResponseResultUsage, Field(title="DecideResponseResultUsage")
+    ]
+
+
+class DecideResponseResultItemAnswersValueChoiceAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
+
+
+class DecideResponseResultItemAnswersValueChoiceProbabilities(
+    RootModel[dict[str, float]]
+):
+    root: Annotated[
+        dict[str, float],
+        Field(title="DecideResponseResultItemAnswersValueChoiceProbabilities"),
+    ]
+
+
+class DecideResponseResultItemAnswersValueChoice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
+    confidence: float
+    action: Annotated[
+        DecideResponseResultItemAnswersValueChoiceAction,
+        Field(title="DecideResponseResultItemAnswersValueChoiceAction"),
+    ]
+    type: Literal["choice"] = "choice"
+    choice: str | float | bool
+    probabilities: Annotated[
+        DecideResponseResultItemAnswersValueChoiceProbabilities,
+        Field(title="DecideResponseResultItemAnswersValueChoiceProbabilities"),
+    ]
+
+
+class DecideResponseResultItemAnswersValueScoreAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
+
+
+class DecideResponseResultItemAnswersValueScoreLegend(RootModel[dict[str, str]]):
+    root: Annotated[
+        dict[str, str], Field(title="DecideResponseResultItemAnswersValueScoreLegend")
+    ]
+
+
+class DecideResponseResultItemAnswersValueScoreProbabilities(
+    RootModel[dict[str, float]]
+):
+    root: Annotated[
+        dict[str, float],
+        Field(title="DecideResponseResultItemAnswersValueScoreProbabilities"),
+    ]
+
+
+class DecideResponseResultItemAnswersValueScore(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
+    confidence: float
+    action: Annotated[
+        DecideResponseResultItemAnswersValueScoreAction,
+        Field(title="DecideResponseResultItemAnswersValueScoreAction"),
+    ]
+    type: Literal["score"] = "score"
+    score: float
+    legend: Annotated[
+        DecideResponseResultItemAnswersValueScoreLegend,
+        Field(title="DecideResponseResultItemAnswersValueScoreLegend"),
+    ]
+    probabilities: Annotated[
+        DecideResponseResultItemAnswersValueScoreProbabilities,
+        Field(title="DecideResponseResultItemAnswersValueScoreProbabilities"),
+    ]
+
+
+class DecideResponseResultItemAnswersValueNoulAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: Annotated[
+        float,
+        Field(
+            alias="actProbability",
+            description="Currently unreliable; do not use to trigger actions.",
+        ),
+    ]
+
+
+class DecideResponseResultItemAnswersValueNoul(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
+    confidence: float
+    action: Annotated[
+        DecideResponseResultItemAnswersValueNoulAction,
+        Field(title="DecideResponseResultItemAnswersValueNoulAction"),
+    ]
+    type: Literal["noul"] = "noul"
+    noul: float
+
+
+class DecideResponseResultItemAnswers(
+    RootModel[
+        dict[
+            str,
+            DecideResponseResultItemAnswersValueChoice
+            | DecideResponseResultItemAnswersValueScore
+            | DecideResponseResultItemAnswersValueNoul,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            DecideResponseResultItemAnswersValueChoice
+            | DecideResponseResultItemAnswersValueScore
+            | DecideResponseResultItemAnswersValueNoul,
+        ],
+        Field(title="DecideResponseResultItemAnswers"),
+    ]
+
+
+class DecideResponseResultItemUsageOptionsValue(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    total: float
+    distinct: float
+    tokens_per_option: Annotated[float | None, Field(alias="tokensPerOption")]
+
+
+class DecideResponseResultItemUsageOptions(
+    RootModel[dict[str, DecideResponseResultItemUsageOptionsValue]]
+):
+    root: Annotated[
+        dict[str, DecideResponseResultItemUsageOptionsValue],
+        Field(title="DecideResponseResultItemUsageOptions"),
+    ]
+
+
+class DecideResponseResultItemUsage(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    input_tokens: Annotated[float, Field(alias="inputTokens")]
+    output_tokens: Annotated[float, Field(alias="outputTokens")]
+    state_tokens: Annotated[float, Field(alias="stateTokens")]
+    state_tokens_dropped: Annotated[float, Field(alias="stateTokensDropped")]
+    truncated: bool
+    truncated_questions: Annotated[list[str], Field(alias="truncatedQuestions")]
+    options: Annotated[
+        DecideResponseResultItemUsageOptions | None,
+        Field(title="DecideResponseResultItemUsageOptions"),
+    ] = None
+
+
+class DecideResponseResultItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model: str
+    answers: Annotated[
+        DecideResponseResultItemAnswers, Field(title="DecideResponseResultItemAnswers")
+    ]
+    usage: Annotated[
+        DecideResponseResultItemUsage, Field(title="DecideResponseResultItemUsage")
+    ]
+
+
+class DecideResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["decide"] = "decide"
+    result: DecideResponseResult | list[DecideResponseResultItem]
 
 
 class DeleteCacheAllRequest(GeneratedBaseModel):
@@ -5994,6 +6939,7 @@ class GetModelInfoResponseModelInfoAddon(Enum):
     whisper = "whisper"
     bci = "bci"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     embeddings = "embeddings"
     nmt = "nmt"
     vad = "vad"
@@ -9527,6 +10473,14 @@ class LoadModelSrcRequestLlamacppCompletionModelFitPolicy(Enum):
     off = "off"
 
 
+class LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem(Enum):
+    cuda = "cuda"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
+    auto = "auto"
+
+
 class Predict(RootModel[int]):
     root: Annotated[
         int,
@@ -9624,10 +10578,12 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -9739,6 +10695,13 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(Enum):
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
+    backend: Annotated[
+        list[LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem] | None,
+        Field(
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+            min_length=1,
+        ),
+    ] = None
     ctx_size: Annotated[
         float | None,
         Field(
@@ -9969,6 +10932,32 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ] = None
+    image_max_megapixels: Annotated[
+        int | None,
+        Field(
+            alias="image-max-megapixels",
+            description="Largest image a vision model accepts, in millions of pixels (width × height). Checked against the image header before decoding; larger images are rejected. Vision models only. Default 50.",
+            ge=1,
+            le=18446744073709,
+        ),
+    ] = None
+    poll: Annotated[
+        int | None,
+        Field(
+            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    poll_batch: Annotated[
+        int | None,
+        Field(
+            alias="pollBatch",
+            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
     threads: Annotated[
         int | None,
         Field(
@@ -9981,7 +10970,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="threads-batch",
-            description="CPU threads to use during batch and prompt processing. Setting it governs generation too and discards `threads` and `cpu-mask`; leave it unset for `threads` to apply to both.",
+            description="CPU threads to use during batch and prompt processing. Applies to steps processing several tokens, including parallel decoding and speculative verification. Single-sequence generation uses `threads`.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
@@ -9990,14 +10979,14 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="cpu-mask",
-            description="CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Unset applies no affinity. Ignored when `threads-batch` is set.",
+            description="CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Applies to generation. Unset applies no affinity.",
         ),
     ] = None
     cpu_mask_batch: Annotated[
         str | None,
         Field(
             alias="cpu-mask-batch",
-            description="CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Honoured only alongside `threads-batch`; without it `cpu-mask` takes over.",
+            description="CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Unset inherits `cpu-mask` when the batch thread count is also unset.",
         ),
     ] = None
     override_tensor: Annotated[
@@ -10259,10 +11248,12 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -10836,10 +11827,12 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -11175,6 +12168,31 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
             pattern="^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$",
         ),
     ] = None
+    streaming_speaker_vad: Annotated[
+        bool | None,
+        Field(
+            alias="streamingSpeakerVad",
+            description="Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.",
+        ),
+    ] = None
+    diarization_threshold: Annotated[
+        float | None,
+        Field(
+            alias="diarizationThreshold",
+            description="Speaker-activity threshold; omit for the model default (0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    diarization_min_segment_ms: Annotated[
+        int | None,
+        Field(
+            alias="diarizationMinSegmentMs",
+            description="Shortest diarization turn in ms; omit for the model default (510 for Sortformer, 200 for Nemotron 3 Diarization).",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     streaming_spk_cache_enable: Annotated[
         bool | None,
         Field(
@@ -11204,7 +12222,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="streamingChunkLeftContextMs",
-            description="AOSC: encoder left-context window in ms. Default 80.",
+            description="Diarization encoder left-context window in ms. Default 80 for Sortformer, 0 for Nemotron 3 Diarization; explicit 80 is preserved.",
             ge=0,
             le=9007199254740991,
         ),
@@ -11328,10 +12346,116 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
     ] = None
 
 
+class LoadModelSrcRequestMossTranscribeModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
+
+
+class LoadModelSrcRequestMossTranscribeModelConfig(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    max_threads: Annotated[
+        int | None,
+        Field(
+            alias="maxThreads",
+            description="CPU threads; 0 lets the engine choose.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Enable the linked GPU backend, including Metal. Default false.",
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Directory containing dynamically loaded ggml backend libraries.",
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestMossTranscribe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["loadModel"] = "loadModel"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
+        ),
+    ]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
+    seed: bool | None = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
+    require_http_checksum: Annotated[
+        bool | None,
+        Field(
+            alias="requireHttpChecksum",
+            description="Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    require_secure_transport: Annotated[
+        bool | None,
+        Field(
+            alias="requireSecureTransport",
+            description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestMossTranscribeModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestMossTranscribeModelFitPolicy",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["moss-transcribe"], Field(alias="modelType")] = (
+        "moss-transcribe"
+    )
+    model_config_: Annotated[
+        LoadModelSrcRequestMossTranscribeModelConfig | None,
+        Field(
+            alias="modelConfig", title="LoadModelSrcRequestMossTranscribeModelConfig"
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestLlamacppEmbeddingModelFitPolicy(Enum):
     log = "log"
     refuse = "refuse"
     off = "off"
+
+
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem(Enum):
+    cuda = "cuda"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
+    auto = "auto"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice(Enum):
@@ -11376,6 +12500,30 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
+    poll: Annotated[
+        int | None,
+        Field(
+            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    poll_batch: Annotated[
+        int | None,
+        Field(
+            alias="pollBatch",
+            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    backend: Annotated[
+        list[LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem] | None,
+        Field(
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
+            min_length=1,
+        ),
+    ] = None
     gpu_layers: Annotated[
         int | None,
         Field(
@@ -11533,6 +12681,203 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     ]
 
 
+class LoadModelSrcRequestLlamacppDecisionModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfigDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn(Enum):
+    on = "on"
+    off = "off"
+    auto = "auto"
+
+
+class MainGpu2(RootModel[int]):
+    root: Annotated[
+        int, Field(description="GPU index or device class.", ge=0, le=9007199254740991)
+    ]
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu(Enum):
+    integrated = "integrated"
+    dedicated = "dedicated"
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode(Enum):
+    none = "none"
+    layer = "layer"
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    device: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelConfigDevice | None,
+        Field(
+            description="Compute device. Default 'gpu'.",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigDevice",
+        ),
+    ] = None
+    gpu_layers: Annotated[
+        int | None,
+        Field(
+            description="Layers to offload. Unset lets the addon choose placement.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    batch_size: Annotated[
+        int | None,
+        Field(
+            description="Tokens per forward pass. Default 2048; each sequence must fit.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    poll: Annotated[
+        int | None,
+        Field(
+            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    poll_batch: Annotated[
+        int | None,
+        Field(
+            alias="pollBatch",
+            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU threads, at most the CPU count. Zero or below uses all logical CPUs.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    threads_batch: Annotated[
+        int | None,
+        Field(
+            alias="threads-batch",
+            description="Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    flash_attn: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn | None,
+        Field(
+            description="Flash attention mode. Default auto.",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn",
+        ),
+    ] = None
+    verbosity: Annotated[
+        int | None,
+        Field(
+            description="Native log level: 0 error, 1 warn, 2 info, 3 debug.",
+            ge=0,
+            le=3,
+        ),
+    ] = None
+    main_gpu: Annotated[
+        MainGpu2 | LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu | None,
+        Field(alias="main-gpu", description="GPU index or device class."),
+    ] = None
+    split_mode: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode | None,
+        Field(
+            alias="split-mode",
+            description="Multi-GPU split mode.",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode",
+        ),
+    ] = None
+    tensor_split: Annotated[
+        str | None,
+        Field(alias="tensor-split", description="Per-GPU tensor split proportions."),
+    ] = None
+    opencl_cache_dir: Annotated[
+        str | None,
+        Field(
+            alias="openclCacheDir",
+            description="Writable OpenCL kernel cache directory, required on Android.",
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestLlamacppDecision(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["loadModel"] = "loadModel"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
+        ),
+    ]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
+    seed: bool | None = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
+    require_http_checksum: Annotated[
+        bool | None,
+        Field(
+            alias="requireHttpChecksum",
+            description="Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    require_secure_transport: Annotated[
+        bool | None,
+        Field(
+            alias="requireSecureTransport",
+            description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestLlamacppDecisionModelFitPolicy",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["llamacpp-decision"], Field(alias="modelType")] = (
+        "llamacpp-decision"
+    )
+    model_config_: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelConfig | None,
+        Field(
+            alias="modelConfig", title="LoadModelSrcRequestLlamacppDecisionModelConfig"
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
     log = "log"
     refuse = "refuse"
@@ -11662,10 +13007,12 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -11770,10 +13117,12 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -11884,10 +13233,12 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -11994,10 +13345,12 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12104,10 +13457,12 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12601,10 +13956,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12707,10 +14064,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12815,10 +14174,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12921,10 +14282,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -13027,10 +14390,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -13135,10 +14500,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -13500,10 +14867,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -13608,10 +14977,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -13902,10 +15273,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14010,10 +15383,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14399,10 +15774,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14507,10 +15884,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14615,10 +15994,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14723,10 +16104,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddo
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14833,10 +16216,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcA
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15097,10 +16482,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15205,10 +16592,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15313,10 +16702,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15545,10 +16936,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15653,10 +17046,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15761,10 +17156,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15867,10 +17264,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16171,10 +17570,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddo
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16437,10 +17838,12 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16711,7 +18114,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
     cpu = "cpu"
 
 
-class MainGpu2(RootModel[int]):
+class MainGpu3(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -16776,10 +18179,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16882,10 +18287,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16988,10 +18395,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17094,10 +18503,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17200,10 +18611,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17308,10 +18721,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17416,10 +18831,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17522,10 +18939,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17630,10 +19049,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17738,10 +19159,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17846,10 +19269,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17952,10 +19377,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -18169,10 +19596,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -18335,7 +19764,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
@@ -18351,7 +19780,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu2 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
+        MainGpu3 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
         Field(
             alias="main-gpu",
             description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
@@ -18510,14 +19939,14 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc | None,
         Field(
             alias="clipVisionModelSrc",
-            description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
+            description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 or MiniMax-H3 (their img2vid paths need no CLIP-vision projection).",
         ),
     ] = None
     audio_vae_model_src: Annotated[
         str | LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc | None,
         Field(
             alias="audioVaeModelSrc",
-            description="Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent LTX-2 video; unsupported by Wan.",
+            description="Audio VAE decoder model — optional for MiniMax-H3 and LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent video; unsupported by Wan.",
         ),
     ] = None
     embeddings_connectors_model_src: Annotated[
@@ -18633,10 +20062,12 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -18741,10 +20172,12 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -18847,10 +20280,12 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -18953,10 +20388,12 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -19152,10 +20589,12 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -19258,10 +20697,12 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -19501,9 +20942,16 @@ class LoadModelSrcRequestGgmlVlaModelFitPolicy(Enum):
     off = "off"
 
 
-class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
+class LoadModelSrcRequestGgmlVlaModelConfigBackendItem(Enum):
     auto = "auto"
     cpu = "cpu"
+    cuda = "cuda"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
+    hip = "hip"
+    rocm = "rocm"
+    sycl = "sycl"
 
 
 class Embodiment(RootModel[str]):
@@ -19555,10 +21003,10 @@ class LoadModelSrcRequestGgmlVlaModelConfigEmbodiment(GeneratedBaseModel):
 
 class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
     backend: Annotated[
-        LoadModelSrcRequestGgmlVlaModelConfigBackend | None,
+        list[LoadModelSrcRequestGgmlVlaModelConfigBackendItem] | None,
         Field(
-            description="Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
-            title="LoadModelSrcRequestGgmlVlaModelConfigBackend",
+            description="Ordered backend names, such as ['cuda', 'vulkan']. Omitted or ['auto'] uses the native default order. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. Names are tried in order; if none has an accepted device, selection falls back to the native default order. ['cpu'] forces CPU regardless of available accelerators and must be used on its own.",
+            min_length=1,
         ),
     ] = None
     verbosity: Annotated[
@@ -19809,7 +21257,9 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestWhispercppTranscription
         | LoadModelSrcRequestBciWhispercppTranscription
         | LoadModelSrcRequestParakeetTranscription
+        | LoadModelSrcRequestMossTranscribe
         | LoadModelSrcRequestLlamacppEmbedding
+        | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -19825,7 +21275,9 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestWhispercppTranscription
         | LoadModelSrcRequestBciWhispercppTranscription
         | LoadModelSrcRequestParakeetTranscription
+        | LoadModelSrcRequestMossTranscribe
         | LoadModelSrcRequestLlamacppEmbedding
+        | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -19921,10 +21373,12 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -20394,6 +21848,7 @@ class ModelRegistryGetModelResponseModelAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     diffusion = "diffusion"
     audiogen = "audiogen"
     vla = "vla"
@@ -20406,11 +21861,13 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
@@ -20532,6 +21989,7 @@ class ModelRegistryListResponseModelsItemAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     diffusion = "diffusion"
     audiogen = "audiogen"
     vla = "vla"
@@ -20544,11 +22002,13 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
@@ -20663,6 +22123,7 @@ class ModelRegistrySearchRequestAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     diffusion = "diffusion"
     audiogen = "audiogen"
     vla = "vla"
@@ -20691,6 +22152,7 @@ class ModelRegistrySearchResponseModelsItemAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     diffusion = "diffusion"
     audiogen = "audiogen"
     vla = "vla"
@@ -20703,11 +22165,13 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
@@ -21288,7 +22752,11 @@ class StartRpcServerRequest(GeneratedBaseModel):
     ] = None
     port: Annotated[
         int | None,
-        Field(description="TCP port. Omit to allocate a free port.", ge=1, le=65535),
+        Field(
+            description="TCP port. Omit to let the native server bind a free port.",
+            ge=1,
+            le=65535,
+        ),
     ] = None
     device: Annotated[
         Device | Device1 | None,
@@ -21305,7 +22773,7 @@ class StartRpcServerRequest(GeneratedBaseModel):
         bool | None,
         Field(
             alias="expectRdma",
-            description="Require an RDMA-capable native backend. Reject before startup if unavailable.",
+            description="Require runtime RDMA availability. On Linux, this needs a capable native backend, libibverbs, an RDMA device, and GGML_RPC_NO_RDMA unset. Reject before startup if unavailable.",
         ),
     ] = None
     allow_non_loopback_host: Annotated[
@@ -21345,7 +22813,7 @@ class StartRpcServerResponse(GeneratedBaseModel):
         bool,
         Field(
             alias="rdmaCapable",
-            description="Whether the native backend supports RDMA. It falls back to TCP for clients without RDMA.",
+            description="Whether the server will try RDMA. On Linux, this requires a capable native backend, libibverbs, an RDMA device, and GGML_RPC_NO_RDMA unset. Each connection can still fall back to TCP.",
         ),
     ]
     type: Literal["startRpcServer"] = "startRpcServer"
@@ -21879,6 +23347,22 @@ class TranscribeRequest(GeneratedBaseModel):
         TranscribeRequestAudioChunkBase64 | TranscribeRequestAudioChunkFilePath,
         Field(alias="audioChunk"),
     ]
+    hotwords: Annotated[
+        list[Hotword] | None,
+        Field(
+            description="MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+            max_length=64,
+        ),
+    ] = None
+    max_new_tokens: Annotated[
+        int | None,
+        Field(
+            alias="maxNewTokens",
+            description="MOSS generated-token limit; 0 uses the model default.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
     type: Literal["transcribe"] = "transcribe"
     request_id: Annotated[
         str | None,
@@ -21991,6 +23475,15 @@ class TranscribeResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class TranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class TranscribeResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -22000,6 +23493,25 @@ class TranscribeResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Zero-based speaker id for diarized transcription.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    speaker: Annotated[
+        str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[TranscribeResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
+    ] = None
     is_end_of_turn: Annotated[
         bool | None,
         Field(
@@ -22026,6 +23538,15 @@ class TranscribeResponseVad(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     speaking: bool
     probability: float
     source: Annotated[
@@ -22200,6 +23721,13 @@ class TranscribeStreamRequestParakeetStreamingConfig(GeneratedBaseModel):
     ] = None
     emit_partials: Annotated[bool | None, Field(alias="emitPartials")] = None
     emit_energy_vad: Annotated[bool | None, Field(alias="emitEnergyVad")] = None
+    emit_speaker_vad: Annotated[bool | None, Field(alias="emitSpeakerVad")] = None
+    diarization_threshold: Annotated[
+        float | None, Field(alias="diarizationThreshold", ge=0.0, le=1.0)
+    ] = None
+    diarization_min_segment_ms: Annotated[
+        int | None, Field(alias="diarizationMinSegmentMs", ge=0, le=9007199254740991)
+    ] = None
     spk_cache_enable: Annotated[bool | None, Field(alias="spkCacheEnable")] = None
     spk_cache_len: Annotated[
         int | None, Field(alias="spkCacheLen", gt=0, le=9007199254740991)
@@ -22354,6 +23882,15 @@ class TranscribeStreamResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class TranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class TranscribeStreamResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -22363,6 +23900,25 @@ class TranscribeStreamResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Zero-based speaker id for diarized transcription.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    speaker: Annotated[
+        str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[TranscribeStreamResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
+    ] = None
     is_end_of_turn: Annotated[
         bool | None,
         Field(
@@ -22389,6 +23945,15 @@ class TranscribeStreamResponseVad(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     speaking: bool
     probability: float
     source: Annotated[
@@ -23887,7 +25452,13 @@ class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
     ]
 
 
-class Request_2(
+class Request_2(RootModel[DecideSingleRequest | DecideBatchRequest]):
+    root: Annotated[
+        DecideSingleRequest | DecideBatchRequest, Field(title="DecideRequest")
+    ]
+
+
+class Request_3(
     RootModel[
         DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest
     ]
@@ -23898,7 +25469,7 @@ class Request_2(
     ]
 
 
-class Request_3(
+class Request_4(
     RootModel[FinetuneRunRequest | FinetuneGetStateRequest | FinetuneStopRequest]
 ):
     root: Annotated[
@@ -23907,13 +25478,13 @@ class Request_3(
     ]
 
 
-class Request_4(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
+class Request_5(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
     root: Annotated[
         LoadModelSrcRequest | ReloadConfigRequest, Field(title="LoadModelRequest")
     ]
 
 
-class Request_5(
+class Request_6(
     RootModel[
         RagRequestChunk
         | RagRequestIngest
@@ -23967,13 +25538,13 @@ class Response_1(
     ]
 
 
-class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
+class Request_7(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
     root: Annotated[
         TranslateNmtRequest | TranslateLlmRequest, Field(title="TranslateRequest")
     ]
 
 
-class Request_7(
+class Request_8(
     RootModel[
         VectorIndexRequestCreate
         | VectorIndexRequestLoad
@@ -24012,16 +25583,17 @@ class Request(
         | CompletionOrchestrateRequest
         | CompletionStreamRequest
         | Request_2
+        | Request_3
         | DiffusionStreamRequest
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | EmbedRequest
-        | Request_3
+        | Request_4
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
-        | Request_4
+        | Request_5
         | LoggingStreamRequest
         | ModelRegistryGetModelRequest
         | ModelRegistryListRequest
@@ -24029,7 +25601,7 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | Request_5
+        | Request_6
         | ResumeRequest
         | StartRpcServerRequest
         | StateRequest
@@ -24039,10 +25611,10 @@ class Request(
         | TextToSpeechStreamRequest
         | TranscribeRequest
         | TranscribeStreamRequest
-        | Request_6
+        | Request_7
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | Request_7
+        | Request_8
         | VideoStreamRequest
         | WorldSceneStreamRequest
         | WorldStepStreamRequest
@@ -24061,16 +25633,17 @@ class Request(
         | CompletionOrchestrateRequest
         | CompletionStreamRequest
         | Request_2
+        | Request_3
         | DiffusionStreamRequest
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | EmbedRequest
-        | Request_3
+        | Request_4
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
-        | Request_4
+        | Request_5
         | LoggingStreamRequest
         | ModelRegistryGetModelRequest
         | ModelRegistryListRequest
@@ -24078,7 +25651,7 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | Request_5
+        | Request_6
         | ResumeRequest
         | StartRpcServerRequest
         | StateRequest
@@ -24088,10 +25661,10 @@ class Request(
         | TextToSpeechStreamRequest
         | TranscribeRequest
         | TranscribeStreamRequest
-        | Request_6
+        | Request_7
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | Request_7
+        | Request_8
         | VideoStreamRequest
         | WorldSceneStreamRequest
         | WorldStepStreamRequest,
@@ -24140,6 +25713,7 @@ class Response(
         | ClassifyResponse
         | CompletionOrchestrateResponse
         | CompletionStreamResponse
+        | DecideResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
         | DiscoverRpcServersResponse
@@ -24193,6 +25767,7 @@ class Response(
         | ClassifyResponse
         | CompletionOrchestrateResponse
         | CompletionStreamResponse
+        | DecideResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
         | DiscoverRpcServersResponse

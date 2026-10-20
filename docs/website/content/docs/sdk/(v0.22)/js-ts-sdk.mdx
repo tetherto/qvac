@@ -16,7 +16,7 @@ QVAC capability through a unified, type-safe API.
 
 ## Requirements
 
-- Node.js `>= v22.17`
+- Node.js `>= v22.17` (bundling for mobile needs `^22.21.0 || >=24.9.0`)
 - npm `>= v10.9`
 - [Bare](https://bare.pears.com) `>= v1.30.3` (if targeting Bare)
 - [Expo](https://expo.dev) `>= v54` (if targeting mobile)
@@ -145,6 +145,15 @@ Or on [Bare](https://bare.pears.com) with `@qvac/inference` — see [Running on 
 </Step>
 
 </Steps>
+
+## Model engine identity
+
+A registry model's `engine` identifies the plugin that loads it, such as
+`llamacpp-completion` or `moss-transcribe`. Its `addon` is a category used for
+filtering and legacy metadata; it does not uniquely identify a plugin. Several
+plugins can share a native addon package. Use `engine` when selecting a model's
+capability or filtering registry results by plugin. Supported legacy registry
+identifiers remain readable.
 
 ## Running examples
 

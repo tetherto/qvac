@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } from '@qvac/sdk/commands'
 import link from 'bare-link'
+import { platformPackageForHost } from './platform-package.mjs'
 
 const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const sdkRoot = path.join(projectRoot, '..', 'sdk')
@@ -28,8 +29,10 @@ const includesClassification = (qvacConfig.plugins ?? []).includes(
 const pluginCapabilities = new Map([
   ['@qvac/sdk/llamacpp-completion/plugin', ['LLM']],
   ['@qvac/sdk/llamacpp-embedding/plugin', ['EMBEDDINGS']],
+  ['@qvac/sdk/llamacpp-decision/plugin', ['DECISION']],
   ['@qvac/sdk/whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/parakeet-transcription/plugin', ['TRANSCRIPTION']],
+  ['@qvac/sdk/moss-transcribe/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/bci-whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/nmtcpp-translation/plugin', ['TRANSLATION']],
   ['@qvac/sdk/tts-ggml/plugin', ['TTS']],
@@ -57,8 +60,13 @@ const classificationWeightsSource = classificationWeightsPath(modulesRoot)
 // each meta's version before bundling.
 await ensureHostPrebuilds('android-arm64', modulesRoot)
 
+// Resolve addons, prebuilds and the bundle from the tree the worker is built
+// from: the workspace SDK when present, else the installed @qvac/sdk. These
+// differ in the monorepo, where the worker comes from ../sdk but the Kotlin
+// runtime's own node_modules is a separate tree; for a standalone consumer they
+// are the same. ensureHostPrebuilds installs into this tree too.
 const bundle = await bundleSdk({
-  projectRoot,
+  projectRoot: modulesRoot,
   configPath,
   ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
   hosts: ['android-arm64'],
@@ -67,7 +75,7 @@ const bundle = await bundleSdk({
 })
 
 const verification = await verifyBundle({
-  projectRoot,
+  projectRoot: modulesRoot,
   addonsSource: bundle.bundlePath,
   hosts: ['android-arm64'],
   configPath
@@ -108,41 +116,19 @@ const sdkPackagePath = bundleSdkPath
   : path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json')
 const sdkPackage = JSON.parse(await fs.readFile(sdkPackagePath, 'utf8'))
 const addons = Array.isArray(manifest.addons) ? manifest.addons : []
-const packageFilter =
-  addons.length === 0
-    ? { name: 'qvac-kotlin-no-addons', version: '0.0.0', dependencies: {} }
-    : {
-        name: 'qvac-kotlin-addon-linker',
-        version: '0.0.0',
-        dependencies: Object.fromEntries(addons.map((name) => [name, '*']))
-      }
 
+// bare-link 4 links the addons the worker entry's module graph loads on the
+// host, resolving each meta's per-platform split package (installed above by
+// ensureHostPrebuilds) in one pass. It rewrites existing DT_NEEDED entries
+// rather than adding one per installed addon, so the split @qvac/fabric layout
+// links a single libqvac__fabric-android-arm64.
 const linkedResources = new Set()
-for await (const resource of link(
-  modulesRoot,
-  {
-    hosts: ['android-arm64'],
-    out: addonsDirectory
-  },
-  packageFilter
-)) {
+for await (const resource of link(bundle.entryPaths.worker, {
+  hosts: ['android-arm64'],
+  out: addonsDirectory
+})) {
   linkedResources.add(path.resolve(String(resource)))
   console.log(`Linked ${resource}`)
-}
-
-// A platform package that wraps an inner `addon` package is linked from it.
-for (const innerAddon of innerPlatformAddons(addons, 'android-arm64', modulesRoot)) {
-  for await (const resource of link(
-    innerAddon.dir,
-    {
-      hosts: ['android-arm64'],
-      out: addonsDirectory
-    },
-    innerAddon.pkg
-  )) {
-    linkedResources.add(path.resolve(String(resource)))
-    console.log(`Linked ${resource}`)
-  }
 }
 
 async function sha256(filePath) {
@@ -209,32 +195,6 @@ function ensureWorkspaceSdk(sdkDir) {
   return sdkDir
 }
 
-/** The inner `addon` packages of the given metas' platform packages for `host`. */
-function innerPlatformAddons(metaNames, host, modulesRoot) {
-  const found = []
-  for (const name of metaNames) {
-    let meta
-    try {
-      meta = JSON.parse(
-        fsSync.readFileSync(path.join(packageDir(modulesRoot, name), 'package.json'), 'utf8')
-      )
-    } catch {
-      continue
-    }
-    const platformPackage = platformPackageForHost(meta, host)
-    if (platformPackage === null) continue
-    const dir = path.join(packageDir(modulesRoot, platformPackage), 'addon')
-    let pkg
-    try {
-      pkg = JSON.parse(fsSync.readFileSync(path.join(dir, 'package.json'), 'utf8'))
-    } catch {
-      continue
-    }
-    if (pkg.addon === true) found.push({ dir, pkg })
-  }
-  return found
-}
-
 function packageDir(modulesRoot, name) {
   return path.join(modulesRoot, 'node_modules', ...name.split('/'))
 }
@@ -273,17 +233,6 @@ function platformPackageForInstalledMeta(metaName, host) {
   } catch {
     return null
   }
-}
-
-/** The platform prebuild package an addon's `#host-addon` map names for a host. */
-function platformPackageForHost(meta, host) {
-  const dash = host.indexOf('-')
-  const platform = host.slice(0, dash)
-  const arch = host.slice(dash + 1)
-  const hostMap = meta.imports?.['#host-addon']?.[platform]
-  const entry = typeof hostMap === 'string' || Array.isArray(hostMap) ? hostMap : hostMap?.[arch]
-  const candidate = Array.isArray(entry) ? entry[0] : entry
-  return typeof candidate === 'string' && candidate.startsWith(`${meta.name}-`) ? candidate : null
 }
 
 /**

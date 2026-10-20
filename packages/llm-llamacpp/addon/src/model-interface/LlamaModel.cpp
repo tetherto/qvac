@@ -29,8 +29,10 @@
 #include <picojson/picojson.h>
 
 #include "BatchEntryGuard.hpp"
+#include "ImagePixelLimit.hpp"
 #include "MediaLoadOrder.hpp"
 #include "MtmdLlmContext.hpp"
+#include "SpeculativeRuntime.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
 #include "handlers/LoadConfigHandlers.hpp"
@@ -46,6 +48,67 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
+
+namespace {
+
+// llama-server's `draft_n` / `draft_n_accepted` timings, reported only when
+// the model decodes speculatively, and its acceptance log lines.
+void appendSpeculativeStats(
+    qvac_lib_inference_addon_cpp::RuntimeStats& stats, bool enabled,
+    const qvac_lib_inference_addon_llama::speculative::SpeculativeStats&
+        speculative) {
+  if (!enabled) {
+    return;
+  }
+  stats.emplace_back(
+      "draftTokens", static_cast<int64_t>(speculative.draftTokens));
+  stats.emplace_back(
+      "draftAcceptedTokens", static_cast<int64_t>(speculative.draftAccepted));
+  if (speculative.draftTokens == 0) {
+    return;
+  }
+  // llama-server's "draft acceptance" and per-position rate lines.
+  const auto verifySteps = static_cast<double>(speculative.verifySteps);
+  std::string perPos;
+  for (size_t i = 0;
+       speculative.verifySteps > 0 && i < speculative.acceptedPerPos.size();
+       ++i) {
+    perPos += string_format(
+        "%s%.3f",
+        i > 0 ? ", " : "",
+        static_cast<double>(speculative.acceptedPerPos[i]) / verifySteps);
+  }
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "[Speculative] draft acceptance = %0.5f (%llu accepted / %llu "
+          "generated), mean len = %5.2f, acc per pos = (%s)\n",
+          static_cast<double>(speculative.draftAccepted) /
+              static_cast<double>(speculative.draftTokens),
+          static_cast<unsigned long long>(speculative.draftAccepted),
+          static_cast<unsigned long long>(speculative.draftTokens),
+          speculative.verifySteps > 0
+              ? 1.0 +
+                    static_cast<double>(speculative.draftAccepted) / verifySteps
+              : 1.0,
+          perPos.c_str()));
+}
+
+} // namespace
+
+static void preflightImagePixels(
+    const ParsedPromptPayload& parsed,
+    const std::vector<std::vector<uint8_t>>& media, uint64_t maxPixels) {
+  validateByteBufferCount(parsed.mediaPlan, media.size());
+  for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
+    if (step.source == MediaSource::ByteBuffer) {
+      const auto& bytes = media[step.byteIndex];
+      image_pixel_limit::checkBuffer(bytes.data(), bytes.size(), maxPixels);
+    } else {
+      image_pixel_limit::checkFile(step.path, maxPixels);
+    }
+  }
+}
 
 void LlamaModel::resolveShardPaths(
     GGUFShards& shards, const std::string& modelPath) {
@@ -67,6 +130,9 @@ LlamaModel::LlamaModel(
           std::move(modelPath),
           std::move(projectionPath),
           std::move(configFilemap)} {
+  // This is an addon admission limit, not a common_params load setting.
+  maxImagePixels_ =
+      image_pixel_limit::takeMaxPixels(constructionArgs_.configFilemap);
   setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
 }
 
@@ -234,7 +300,11 @@ void LlamaModel::init(bool acquireLock) {
   }
 
   // Addon-only knobs: consume them here so they are not forwarded to
-  // llama.cpp's argument parser, which would reject them as unknown.
+  // llama.cpp's argument parser, which would reject them as unknown. The
+  // speculative keys are llama-server flags that the parser only registers
+  // for the server and CLI examples.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeConfig
+      speculativeConfig;
   try {
     snap->cacheCheckpointPolicy_ =
         qvac_lib_inference_addon_llama::cache::parseCheckpointPolicy(
@@ -242,6 +312,11 @@ void LlamaModel::init(bool acquireLock) {
     snap->cacheRamBytes_ =
         qvac_lib_inference_addon_llama::cache::parseCacheRamBytes(
             configFilemap);
+    speculativeConfig =
+        qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
+            configFilemap);
+    qvac_lib_inference_addon_llama::speculative::requireDraftModelFile(
+        speculativeConfig);
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());
@@ -272,6 +347,13 @@ void LlamaModel::init(bool acquireLock) {
   runtimeBackendDevice_ = normalized.runtimeBackendDevice;
   common_params params = std::move(normalized.params);
   const bool isStreaming = snap->asyncWeightsLoader_.isStreaming();
+  try {
+    qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
+        speculativeConfig, params);
+  } catch (const std::invalid_argument& e) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument, e.what());
+  }
 
   // Match llama-server for every on-disk GGUF. llama_model_load_from_file
   // discovers the remaining split files from shard 0, while
@@ -305,11 +387,22 @@ void LlamaModel::init(bool acquireLock) {
     return;
   }
 
+  std::unique_ptr<
+      qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+      speculative;
+  if (llamaInit && llamaInit->model() != nullptr &&
+      llamaInit->context() != nullptr) {
+    speculative =
+        qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime::create(
+            params, llamaInit->model(), llamaInit->context());
+  }
+
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
-      std::move(llamaInit));
+      std::move(llamaInit),
+      std::move(speculative));
 
   if (snap->llmContext_) {
     snap->llmContext_->setCacheCheckpointPolicy(snap->cacheCheckpointPolicy_);
@@ -407,8 +500,9 @@ namespace {
 // future multimodal context is picked up without inheriting MtmdLlmContext.
 batching::DriverFactory buildDriverFactory(
     LlmModelContext shared, mtmd_context* sharedVision,
-    qvac_lib_inference_addon_llama::cache::CheckpointPolicy checkpointPolicy) {
-  return [shared, sharedVision, checkpointPolicy](
+    qvac_lib_inference_addon_llama::cache::CheckpointPolicy checkpointPolicy,
+    uint64_t maxImagePixels) {
+  return [shared, sharedVision, checkpointPolicy, maxImagePixels](
              const common_params& params,
              uint32_t seqId,
              llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
@@ -416,7 +510,7 @@ batching::DriverFactory buildDriverFactory(
     std::unique_ptr<SequenceDriver> driver;
     if (sharedVision != nullptr) {
       driver = std::make_unique<MtmdLlmContext>(
-          params, shared, sharedVision, sid, perSeqCtxCeiling);
+          params, shared, sharedVision, sid, perSeqCtxCeiling, maxImagePixels);
     } else {
       driver = std::make_unique<TextLlmContext>(
           params, shared, sid, perSeqCtxCeiling);
@@ -441,6 +535,7 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       .model = mdl,
       .lctx = ctx,
       .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
+      .speculative = state.llmContext_->getSpeculative(),
   };
   // The scheduler validates its own geometry (ctxTotalTokens / batchSize, and
   // batchCapacity >= batchSize) with std::invalid_argument, which would escape
@@ -457,7 +552,8 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
         buildDriverFactory(
             shared,
             state.llmContext_->visionContext(),
-            state.cacheCheckpointPolicy_));
+            state.cacheCheckpointPolicy_,
+            maxImagePixels_));
     scheduler->setRamTier(state.ramTier_);
     return scheduler;
   } catch (const std::invalid_argument& e) {
@@ -1059,6 +1155,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
     terminal.emplace_back(
         "stopReason", static_cast<int64_t>(*observed.stopReason));
   }
+  if (state_->llmContext_->getSpeculative() != nullptr) {
+    terminal.emplace_back("draftTokens", observed.draftTokens);
+    terminal.emplace_back("draftAcceptedTokens", observed.draftAcceptedTokens);
+  }
   return terminal;
 }
 
@@ -1089,6 +1189,14 @@ void LlamaModel::cancelById(qvac_lib_inference_addon_cpp::JobId id) const {
 LlamaModel::ResolvedPrompt
 LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
+  auto parseAndPreflight = [this, &prompt](const std::string& input) {
+    auto parsed = formatPrompt(input);
+    if (!state_->isTextLlm_) {
+      // handleCache mutates the active session after parsing.
+      preflightImagePixels(parsed, prompt.media, maxImagePixels_);
+    }
+    return parsed;
+  };
   // Load all prompt media (hoisted byte buffers and inline paths) in
   // prompt-marker order so each bitmap binds to its own MTMD marker.
   auto validateAndLoadPlannedMedia =
@@ -1125,9 +1233,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
         parsedPrompt,
         prompt.input,
-        [this](const std::string& inputPrompt) {
-          return this->formatPrompt(inputPrompt);
-        },
+        parseAndPreflight,
         prompt.cacheKey,
         prompt.ephemeral);
     validateAndLoadPlannedMedia(parsedPrompt);
@@ -1137,7 +1243,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
         state_->cacheManager_->isCacheDisabled() ||
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
-    ParsedPromptPayload parsedPrompt = formatPrompt(prompt.input);
+    ParsedPromptPayload parsedPrompt = parseAndPreflight(prompt.input);
     validateAndLoadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
@@ -1531,6 +1637,9 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: media requires a multimodal model");
     }
+    if (!state_->isTextLlm_) {
+      preflightImagePixels(parsed, prompt.media, maxImagePixels_);
+    }
     batching::SubmitRequest sr;
     sr.chatMsgs = std::move(parsed.chatMsgs);
     sr.tools = std::move(parsed.tools);
@@ -1603,7 +1712,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
   // races a mid-decode peer. The counters are cleared instead at the
   // batch-entry epoch boundary (processPromptBatchImpl), which is
   // exclusive with respect to the scheduler.
-  return {
+  qvac_lib_inference_addon_cpp::RuntimeStats result{
       {"TTFT", stats.prefillTimeMs()},
       {"TPS", stats.decodeTokensPerSecond()},
       {"ppTPS", stats.prefillTokensPerSecond()},
@@ -1616,6 +1725,11 @@ LlamaModel::batchRuntimeStatsLocked() const {
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
+  appendSpeculativeStats(
+      result,
+      state_->llmContext_->getSpeculative() != nullptr,
+      stats.speculative);
+  return result;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats
@@ -1643,7 +1757,7 @@ LlamaModel::singleRuntimeStatsLocked() const {
                              static_cast<double>(promptTokenCount)
                        : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
-  return {
+  qvac_lib_inference_addon_cpp::RuntimeStats stats{
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
       {"ppTPS", promptProcessingTPS},
@@ -1674,6 +1788,13 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
+  appendSpeculativeStats(
+      stats,
+      state_->llmContext_->getSpeculative() != nullptr,
+      wasPrefill
+          ? qvac_lib_inference_addon_llama::speculative::SpeculativeStats{}
+          : state_->llmContext_->speculativeStats());
+  return stats;
 }
 
 namespace {
@@ -1914,12 +2035,17 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result_ptr llamaInit) {
+    common_init_result_ptr llamaInit,
+    std::unique_ptr<
+        qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+        speculative) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
-    return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit));
+    return std::make_unique<MtmdLlmContext>(
+        params, std::move(llamaInit), maxImagePixels_, std::move(speculative));
   }
-  return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
+  return std::make_unique<TextLlmContext>(
+      params, std::move(llamaInit), std::move(speculative));
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

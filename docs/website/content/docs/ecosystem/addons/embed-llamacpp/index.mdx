@@ -1,17 +1,17 @@
 ---
 title: "@qvac/embed-llamacpp"
 titleStyle: code
-description: Vector embedding generation for semantic search, clustering, and retrieval that seamlessly supports retrieval-augmented generation workflow.
+description: Text embeddings for semantic search and retrieval, and typed decisions with Laya checkpoints.
 schemaType: APIReference
 ---
 
 ## Overview
 
-[Bare module](https://bare.pears.com) that adds support for text embeddings and RAG in QVAC using [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as the inference engine.
+[Bare module](https://bare.pears.com) that adds support for text embeddings, RAG, and Laya decisions in QVAC using [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as the inference engine. Use `GGMLBert` for embeddings and [`LayaDecisions`](#laya-decisions) for typed questions about a state.
 
 ## Models
 
-You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible embeddings model. Model file format: `*.gguf`.
+`GGMLBert` loads [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible embedding models in GGUF format. `LayaDecisions` requires a Laya decision checkpoint in GGUF format. An embedding-only model cannot answer decision questions.
 
 ## Requirement
 
@@ -170,6 +170,12 @@ bare index.js
 const GGMLBert = require('@qvac/embed-llamacpp')
 ```
 
+For decisions, import the named `LayaDecisions` class:
+
+```js
+const { LayaDecisions } = require('@qvac/embed-llamacpp')
+```
+
 ### 2. Create Local Model Paths
 
 The addon reads GGUF files directly from disk. Download the model, then pass absolute local paths to `files.model`.
@@ -206,31 +212,55 @@ The `args` obj contains the following properties:
 
 ### 4. Create `config`
 
-The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
-*All parameters must be strings.*
+All values in `args.config` must be strings. The following load options are
+shared by `GGMLBert` and `LayaDecisions`. Multi-word keys accept underscores or
+hyphens, such as `batch_size` and `batch-size`, except `openclCacheDir`, which
+keeps its spelling.
 
 ```js
-// an example of possible configuration
 const config = {
   device: 'gpu',
   gpu_layers: '99',
-  batch_size: '1024',
-  ctx_size: '512'
+  batch_size: '1024'
 }
 ```
 
 | Parameter         | Range / Type                                | Default                      | Description                                           |
 |-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
-| device            | `"gpu"` or `"cpu"`                          | `"gpu"`                      | Device to run inference on                            |
-| gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
+| device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
+| gpu_layers        | integer                                     | automatic                    | Number of layers to offload to GPU; unset fits available memory |
 | batch_size        | integer                                     | 2048                         | Tokens processed per batch                            |
-| ctx_size          | 0 – model-dependent                         | model default                | Runtime context window in tokens                      |
-| pooling           | `"none"`, `"mean"`, `"cls"`, `"last"`, or `"rank"` | model default        | Pooling type for embeddings                           |
+| threads           | integer                                     | one per physical core        | CPU threads; 0 uses every logical CPU                 |
+| threads-batch     | integer                                     | threads                      | CPU threads for batch processing                      |
+| poll              | integer 0 – 100                             | 0                            | CPU polling level                                     |
+| poll-batch        | integer 0 – 100                             | value of `poll`              | CPU polling level for batch processing                |
+| flash_attn        | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention; defaults to off on OpenCL |
+| main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| split-mode        | `"none"` or `"layer"`                       | `"none"`                     | Multi-GPU placement mode                              |
+| tensor-split      | comma-separated proportions, e.g. `"3,1"`   | —                            | GPU allocation proportions for multi-GPU placement    |
+| verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0 initially                  | Process-wide native logging verbosity; unset keeps the current level |
+| openclCacheDir    | directory path                              | —                            | Writable OpenCL kernel cache directory; set on Android for faster GPU startup |
+
+The following additional options apply to `GGMLBert`. Laya rejects them at load.
+
+| Parameter         | Range / Type                                | Default                      | Description                                           |
+|-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
+| ctx_size          | 0 – model-dependent                         | model default                | Runtime context window; capped to the model's trained context size |
+| pooling           | `"none"`, `"mean"`, `"cls"`, `"last"`, or `"rank"` | model default                | Pooling type for embeddings                           |
 | attention         | `"causal"` or `"non-causal"`                | model default                | Attention type for embeddings                         |
 | embd_normalize    | integer                                     | 2                            | Embedding normalization (-1=none, 0=max abs int16, 1=taxicab, 2=euclidean, >2=p-norm) |
-| flash_attn        | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention                        |
-| main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
+| backend           | comma-separated backend names               | automatic                    | GPU backend priority: cuda, vulkan, metal, opencl, or auto; cannot be combined with split-mode |
+
+The shared options have these additional constraints when `LayaDecisions` is used:
+
+| Parameter              | Laya behavior                                                                                         |
+|------------------------|-------------------------------------------------------------------------------------------------------|
+| batch_size             | Also sets context size. Every question over one state must fit in a forward pass; attention cost grows with the square of this value |
+| threads, threads-batch | Values must be whole numbers. Positive counts must not exceed the device's CPU count; 0 or below uses every logical CPU |
+
+#### CPU polling defaults
+
+For both embeddings and Laya decisions, this addon defaults `poll` to `0`, compared with `50` in upstream llama.cpp. If `poll-batch` is omitted, it inherits the value of `poll`, so both use `0` when neither is set. At `0`, CPU workers sleep while idle. Higher values may reduce wake latency but consume more CPU during GPU work.
 
 #### IGPU/GPU  selection logic:
 
@@ -248,6 +278,12 @@ const config = {
 const model = new GGMLBert(args)
 ```
 
+For a Laya GGUF, use the decision class with the same `args` object. See [Create `config`](#4-create-config) for its accepted load options:
+
+```js
+const model = new LayaDecisions(args)
+```
+
 ### 6. Load the model
 
 ```js
@@ -256,15 +292,66 @@ await model.load()
 
 `load()` reads the file(s) listed in `files.model` directly from disk and activates the model. The caller is responsible for ensuring the files already exist at those paths.
 
-### 7. Generate embeddings for input sequence
+### 7. Run inference
 
-The model outputs a vector for the input sequence.
+`GGMLBert` outputs a vector for the input sequence:
 
 ```js
 const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
 const response = await model.run(query)
 const embeddings = await response.await()
 ```
+
+#### Laya decisions
+
+`LayaDecisions.run()` answers typed questions about a state. It returns probabilities and typed answers without generating text. If you use the SDK, see [Decisions](/sdk/ai-capabilities/decisions) for `loadModel()` and `decide()` with `modelType: 'llamacpp-decision'`.
+
+```js
+const questions = {
+  department: {
+    type: 'choice',
+    instructions: 'Which team should handle this ticket?',
+    criteria: {
+      billing: 'payments, refunds, invoices',
+      technical: 'bugs, outages, errors'
+    }
+  },
+  urgency: {
+    type: 'score',
+    instructions: 'How urgent is this?',
+    criteria: ['not urgent', 'somewhat urgent', 'very urgent']
+  },
+  refund: {
+    type: 'noul',
+    instructions: 'The customer asks for a refund.'
+  }
+}
+
+const response = await model.run({
+  state: 'I was charged twice. Please refund the duplicate payment.',
+  questions
+})
+const [result] = await response.await()
+console.log(result.answers.department.choice)
+console.log(result.answers.urgency.score)
+console.log(result.answers.refund.noul)
+```
+
+| Parameter    | Type                                      | Description                                                                                        |
+|--------------|-------------------------------------------|----------------------------------------------------------------------------------------------------|
+| state        | String, number, boolean, object, or array | One state to evaluate. A conversation array has the newest turn last. Top-level `null` is rejected |
+| states       | Array of states                           | Several states to evaluate instead of `state`, with results in input order                         |
+| questions    | Object                                    | Questions keyed by your question IDs. Every question requires `type` and `instructions`            |
+| max_len      | Number                                    | Optional token budget per sequence, overriding the checkpoint's default                            |
+| head_max_len | Number                                    | Optional token budget for a question and its options, overriding the checkpoint's default          |
+
+| Question type | `criteria`                                               | Answer                                                                                                    |
+|---------------|----------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| choice        | Array of labels or object mapping labels to descriptions | `choice` and `probabilities` keyed by label                                                               |
+| score         | Array of level descriptions, lowest first                | Expected zero-based `score`, `probabilities`, and a `legend`. Three criteria give a score between 0 and 2 |
+| noul          | Optional object describing `true` and `false`            | `noul`, the probability that the statement holds, between 0 and 1                                         |
+
+Each question accepts `option_order`, a permutation of option indices that changes the order shown to the model. Answers still use your original order. A `noul` question also accepts `labels: { false: 'no', true: 'yes' }` to change the option labels.
 
 ### 8. Release Resources
 

@@ -519,7 +519,7 @@ jobs:
           # leave the dist-tag to be derived.
           tag: ${{ matrix.npmTagOverride || inputs.npm_tag || 'latest' }}
 
-      # asr/audiogen/tts/fabric ship one npm package per platform plus a meta
+      # asr/audiogen/tts/diffusion-cpp/fabric ship one npm package per platform plus a meta
       # with version-locked optionalDependencies. npm only; GPR stays unsliced.
       # prebuildExtraDirs (fabric's C++ SDK) stay in the meta.
       - name: Slice platform packages
