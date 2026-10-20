@@ -1,5 +1,4 @@
 import EmbedLlamacpp, { assessFit as embedAssessFit } from '@qvac/embed-llamacpp'
-import { IdMapIndex } from '@qvac/turbovec-ggml'
 import type { TurboVecIndexProvider } from '@qvac/rag'
 import {
   definePlugin,
@@ -20,13 +19,15 @@ import { forwardModelExecution } from '@/profiling/model-execution'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
+import { getIdMapIndex } from '@/plugins/builtin/llamacpp-embedding/turbovec.cjs'
 
 const turbovecIndexProvider: TurboVecIndexProvider = {
   create(options) {
+    const IdMapIndex = getIdMapIndex()
     return new IdMapIndex(options)
   },
   load(snapshotPath) {
-    return IdMapIndex.load(snapshotPath)
+    return getIdMapIndex().load(snapshotPath)
   }
 }
 
