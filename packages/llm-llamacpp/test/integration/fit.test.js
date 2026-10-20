@@ -172,8 +172,8 @@ test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
   t.is(fit.reason, 'unsupported-config')
 })
 
-// ggml-org's quant keeps the MTP layers; mobile pre-stages it only for the
-// speculative-decoding shards.
+// ggml-org's quant keeps the MTP layers.
+// prestage-ignore: Qwen3.5-0.8B-MTP-Q8_0.gguf — desktop-only; the test skips on mobile
 const MTP_MODEL = 'Qwen3.5-0.8B-MTP-Q8_0.gguf'
 
 test(
