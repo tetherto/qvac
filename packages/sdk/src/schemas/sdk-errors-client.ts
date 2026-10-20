@@ -211,8 +211,8 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_MISSING]: {
     name: 'HOST_PREBUILDS_MISSING',
     message: (dependencies: string) =>
-      "Bundling failed: split addons resolve their native code through `#host-addon`, which needs each mobile host's platform package installed." +
-      `\n\n  Add them to the dependencies in package.json, pinned to these exact versions, and reinstall (or bundle with installMissingPrebuilds):\n${dependencies}`
+      "Bundling failed: split addons resolve their native code through `#host-addon`, which needs each host's platform package installed." +
+      `\n\n  Add them to the dependencies in package.json, pinned to these exact versions, and reinstall. installMissingPrebuilds does this for phone hosts; npm installs another desktop host's package only with --force:\n${dependencies}`
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_TARGET_NOT_INSTALLED]: {
     name: 'BUNDLE_TARGET_NOT_INSTALLED',

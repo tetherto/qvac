@@ -2,7 +2,11 @@ import { promises as fsp } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { bundleSdk, type BundleSdkOptions, type BundleSdkResult } from '@/commands/bundle/index'
+import {
+  bundleSdkDeferringMissingPlatformPackages,
+  type BundleSdkOptions,
+  type BundleSdkResult
+} from '@/commands/bundle/index'
 import {
   acceptResourceCollectorPackaging,
   formatResourceCollectorAcceptanceReport,
@@ -54,7 +58,7 @@ export interface ResourceCollectorCliOptions {
 const DEFAULT_DEPENDENCIES: ResourceCollectorCheckDependencies = {
   createTemporaryProject,
   removeTemporaryProject,
-  bundleSdk,
+  bundleSdk: bundleSdkDeferringMissingPlatformPackages,
   acceptResourceCollectorPackaging,
   formatResourceCollectorAcceptanceReport,
   writeOutput(output) {
@@ -117,7 +121,8 @@ export async function runResourceCollectorPackagingCheck(
       projectRoot: temporaryProjectRoot,
       sdkPath: options.sdkPackageRoot,
       hosts,
-      quiet: true
+      quiet: true,
+      verify: false
     })
     const report = await dependencies.acceptResourceCollectorPackaging({
       projectRoot: temporaryProjectRoot,

@@ -28,7 +28,7 @@ import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import { TARGETS, type BundleTarget } from '@/commands/bundle/targets'
 import {
-  findMissingHostPrebuilds,
+  findMissingPlatformPackages,
   installMissingHostPrebuilds,
   resolveAddons,
   type HostPrebuildPackage
@@ -59,10 +59,11 @@ export interface BundleSdkOptions {
    * Install the addon platform packages that the split addons the bundle
    * reaches need for its mobile hosts, with the project's package manager
    * (see `ensureHostPrebuilds`), before bundling. Off by default: without it,
-   * bundling never changes package.json or node_modules, and a mobile host
-   * whose platform package is missing fails with `HostPrebuildsMissingError`,
-   * naming the exact pins. A refused install throws
-   * `HostPrebuildsInstallRefusedError` before anything is written.
+   * bundling never changes package.json or node_modules. A host whose
+   * platform package is missing fails with `HostPrebuildsMissingError`,
+   * naming the exact pins; desktop packages are never installed. A refused
+   * install throws `HostPrebuildsInstallRefusedError` before anything is
+   * written.
    */
   installMissingPrebuilds?: boolean | undefined
   /**
@@ -270,7 +271,22 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
   return bundlePath
 }
 
-export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleSdkResult> {
+export function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleSdkResult> {
+  return bundle(options, false)
+}
+
+// Only for the CI resource collector check, which bundles every desktop host on
+// one runner that has only its own hosts' platform packages. Not public API.
+export function bundleSdkDeferringMissingPlatformPackages(
+  options: BundleSdkOptions
+): Promise<BundleSdkResult> {
+  return bundle(options, true)
+}
+
+async function bundle(
+  options: BundleSdkOptions,
+  deferMissingPlatformPackages: boolean
+): Promise<BundleSdkResult> {
   const startTime = Date.now()
 
   const projectRoot = path.resolve(options.projectRoot ?? process.cwd())
@@ -360,7 +376,6 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const stowOptions = { projectRoot, entryPath, target, outputDir, hosts, imports, deferModules }
 
-  // Missing mobile platform packages are installed, or reported, before bundling.
   const addonsMissingPlatformPackages = () =>
     reachedAddonsMissingPlatformPackages({
       addons: async () =>
@@ -385,8 +400,12 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     })
 
   let installedPrebuilds: HostPrebuildPackage[] = []
+  let bundleDefer = deferModules
   const missingPlatformAddons = await addonsMissingPlatformPackages()
-  if (options.installMissingPrebuilds === true) {
+  if (deferMissingPlatformPackages) {
+    const missing = await findMissingPlatformPackages(missingPlatformAddons, hosts)
+    bundleDefer = [...deferModules, ...missing.map((pkg) => pkg.name)]
+  } else if (options.installMissingPrebuilds === true) {
     const { installed } = await installMissingHostPrebuilds({
       projectRoot,
       hosts,
@@ -395,11 +414,15 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
       logger
     })
     installedPrebuilds = installed
+    await throwIfPlatformPackagesMissing(
+      missingPlatformAddons,
+      hosts.filter((host) => !isMobileHost(host))
+    )
   } else {
     await throwIfPlatformPackagesMissing(missingPlatformAddons, hosts)
   }
 
-  const bundlePath = await stowBundle(stowOptions)
+  const bundlePath = await stowBundle({ ...stowOptions, deferModules: bundleDefer })
 
   const stats = await fsp.stat(bundlePath)
   const sizeKB = (stats.size / 1024).toFixed(1)
@@ -464,7 +487,7 @@ interface ReachedAddonsOptions {
 
 /**
  * The installed split addons that the bundle reaches and that are missing a
- * mobile platform package. Every installed addon is a candidate (`@qvac/sdk`
+ * platform package for one of the hosts. Every installed addon is a candidate (`@qvac/sdk`
  * depends on all of them), so a first bundling pass defers each missing
  * platform package: the bundle then records the reached ones as
  * `deferred:<package>` and never visits the rest. Empty when nothing is
@@ -476,7 +499,7 @@ async function reachedAddonsMissingPlatformPackages(
 ): Promise<NativeAddon[]> {
   const { hosts, scan, logger } = options
   const addons = await options.addons()
-  const missing = await findMissingHostPrebuilds(addons, hosts)
+  const missing = await findMissingPlatformPackages(addons, hosts)
   if (missing.length === 0) return []
 
   logger.debug(
@@ -509,13 +532,13 @@ function deferredSpecifiers(resolutions: unknown): Set<string> {
 }
 
 /**
- * Throws `HostPrebuildsMissingError` when split addons are missing mobile
- * platform packages, naming the exact pins.
+ * Throws `HostPrebuildsMissingError` when split addons are missing platform
+ * packages for `hosts`, naming the exact pins.
  */
 async function throwIfPlatformPackagesMissing(addons: NativeAddon[], hosts: string[]) {
   let missing: HostPrebuildPackage[]
   try {
-    missing = await findMissingHostPrebuilds(addons, hosts)
+    missing = await findMissingPlatformPackages(addons, hosts)
   } catch {
     return
   }
