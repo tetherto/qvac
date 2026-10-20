@@ -9,6 +9,7 @@ exports.emptyStreamAccumulator = emptyStreamAccumulator;
 exports.computeSentenceStreamStats = computeSentenceStreamStats;
 exports.resolveRunStreamingOptions = resolveRunStreamingOptions;
 exports.normalizeTextStream = normalizeTextStream;
+exports.requireStreamOutputText = requireStreamOutputText;
 exports.splitSentenceChunks = splitSentenceChunks;
 const error_1 = require("./error");
 const textChunker_1 = require("./textChunker");
@@ -165,6 +166,16 @@ function normalizeTextStream(textStream) {
         code: error_1.ERR_CODES.FAILED_TO_APPEND,
         adds: "runStreaming: expected string, array of strings, Iterable, or AsyncIterable",
     });
+}
+/** `run({ streamOutput: true })` splits its text, so it needs a non-empty string. */
+function requireStreamOutputText(input) {
+    if (typeof input !== "string" || input.trim().length === 0) {
+        throw new error_1.QvacErrorAddonTTSGgml({
+            code: error_1.ERR_CODES.FAILED_TO_APPEND,
+            adds: "run with streamOutput: non-empty string `input` is required",
+        });
+    }
+    return input;
 }
 /** The sentence chunks of `text`; an input that yields none is an error. */
 function splitSentenceChunks(text, options, language) {

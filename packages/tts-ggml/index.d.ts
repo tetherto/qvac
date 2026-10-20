@@ -34,14 +34,14 @@ declare class TTSGgml {
     addon: unknown;
     private readonly _job;
     private readonly _runExclusive;
+    private readonly _exclusiveStreams;
     /** Everything resolved from the constructor options; reload rewrites parts of it. */
     private readonly _setup;
     private readonly _sentenceStream;
-    private _ttsInferenceQueueWaiter;
+    private readonly _events;
+    /** The Pocket execution rules, or null for every other engine. */
+    private readonly _pocket;
     private _lazySessionLoading;
-    private _pocketJobPending;
-    private _pocketCancelPromise;
-    private _pocketLifecycleInProgress;
     constructor(options?: TTSGgmlOptions);
     getEngineType(): EngineType;
     getApiDefinition(): string;
@@ -69,33 +69,22 @@ declare class TTSGgml {
      * small streamed fragments are coalesced.
      */
     runStreaming(textStream: TextStreamInput, options?: RunStreamingOptions): Promise<QvacResponse<TTSOutputChunk & SentenceStreamChunkMeta>>;
-    private _enqueueExclusiveTtsResponse;
-    private _runTextStreamOrchestrator;
+    /** Streams line up behind each other under `exclusiveRun`; otherwise they start at once. */
+    private _startStream;
     private _runStreamOrchestrator;
-    /**
-     * Audio8 and MOSS report `tokensPerSecond` as codec frames per second, so
-     * the streaming aggregate has to count frames too rather than characters.
-     */
-    private _pacesOnFrames;
     private _load;
     private _buildTtsParams;
+    /** A native instance that reports through this wrapper's output callback. */
+    private _spawnAddon;
     private _createAddon;
     unload(): Promise<void>;
     private _unloadModel;
     destroy(): Promise<void>;
-    private _runInternal;
-    private _endJobWithStats;
-    private _addonOutputCallback;
-    private _handleAddonError;
-    private _handleAddonOutput;
-    private _handleAddonStats;
-    private _waitPocketCancel;
     private _withPocketLifecycle;
-    private _checkPocketReload;
-    private _checkPocketRequest;
+    private _runInternal;
+    private _addonOutputCallback;
     private _dispatchJob;
     cancel(): Promise<void>;
-    private _reloadPocket;
     reload(newConfig?: Record<string, unknown>): Promise<void>;
     static getModelKey(_params?: unknown): string;
     /**

@@ -39,6 +39,8 @@ export declare function emptyStreamAccumulator(): StreamAccumulator;
 export declare function computeSentenceStreamStats(chunks: string[], accumulator: StreamAccumulator, countsFrames: boolean): RuntimeStats;
 export declare function resolveRunStreamingOptions(textStream: TextStreamInput, options: RunStreamingOptions): Required<Pick<RunStreamingOptions, "accumulateSentences" | "sentenceDelimiterPreset" | "flushAfterMs">> & Pick<RunStreamingOptions, "maxBufferScalars" | "sentenceDelimiter">;
 export declare function normalizeTextStream(textStream: TextStreamInput): AsyncIterable<string>;
+/** `run({ streamOutput: true })` splits its text, so it needs a non-empty string. */
+export declare function requireStreamOutputText(input: unknown): string;
 /** The sentence chunks of `text`; an input that yields none is an error. */
 export declare function splitSentenceChunks(text: string, options: SentenceStreamOptions, language: string | undefined): string[];
 /** What the stream driver needs from the wrapper that owns the job handler. */
