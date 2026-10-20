@@ -34,6 +34,7 @@ const BUNDLE: BundleSdkResult = {
   bundlePath: '/tmp/project/qvac/worker/index.bundle',
   plugins: [],
   addons: ['bare-cpu-info', 'bare-gpu-info'],
+  addonModules: [],
   installedPrebuilds: [],
   linked: []
 }

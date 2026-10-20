@@ -17,7 +17,11 @@ import {
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { createSdkImportResolver, sdkImportsMap } from '@/commands/bundle/resolve-sdk-import'
-import { AUDIO_DECODER_ADDON, listBundledAddons } from '@/commands/bundle/addons'
+import {
+  AUDIO_DECODER_ADDON,
+  listBundledAddonModules,
+  listBundledAddons
+} from '@/commands/bundle/addons'
 import { linkAddons } from '@/commands/bundle/link'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
@@ -86,6 +90,7 @@ export interface BundleSdkResult {
   bundlePath: string
   plugins: string[]
   addons: string[]
+  addonModules: string[]
   /** Platform packages `installMissingPrebuilds` installed; empty when it is off. */
   installedPrebuilds: HostPrebuildPackage[]
   /** Paths the link step wrote. */
@@ -391,6 +396,12 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   logger.info(`   Size: ${sizeKB} KB`)
 
   const addons = await listBundledAddons({ bundlePath, projectRoot, logger, includeAudioDecoder })
+  const addonModules = await listBundledAddonModules({
+    bundlePath,
+    projectRoot,
+    logger,
+    includeAudioDecoder
+  })
   logger.info(`   Native addons (${addons.length}): ${addons.join(', ') || '(none)'}`)
 
   if (target === 'react-native' && options.checkEngines !== false) {
@@ -406,7 +417,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   let linked: string[] = []
   if (target === 'react-native' && options.link !== false) {
     logger.info('\n🔗 Linking native addons into react-native-bare-kit...')
-    linked = await linkAddons({ projectRoot, entryPath, hosts, logger })
+    linked = await linkAddons({ projectRoot, addonModules, hosts, logger })
     logger.info(`   Wrote ${linked.length} files`)
   }
 
@@ -426,6 +437,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     bundlePath,
     plugins: pluginSpecifiers,
     addons,
+    addonModules,
     installedPrebuilds,
     linked
   }

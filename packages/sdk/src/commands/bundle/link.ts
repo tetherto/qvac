@@ -13,17 +13,17 @@ const PLATFORMS = [
 
 export interface LinkAddonsOptions {
   projectRoot: string
-  entryPath: string
+  addonModules: string[]
   hosts: string[]
   logger: Logger
 }
 
 /**
- * Links the native addons the worker entry loads into react-native-bare-kit
- * for each phone platform in `hosts`, replacing what the platform had.
+ * Links the native addons the bundle loads into react-native-bare-kit for
+ * each phone platform in `hosts`, replacing what the platform had.
  */
 export async function linkAddons(options: LinkAddonsOptions): Promise<string[]> {
-  const { projectRoot, entryPath, hosts, logger } = options
+  const { projectRoot, addonModules, hosts, logger } = options
 
   const bareKitDir = findInAncestorNodeModules(projectRoot, 'react-native-bare-kit')
   if (bareKitDir === null) {
@@ -45,7 +45,7 @@ export async function linkAddons(options: LinkAddonsOptions): Promise<string[]> 
     await fsp.rm(out, { recursive: true, force: true })
     const platformWritten: string[] = []
     try {
-      for await (const resource of link(entryPath, { hosts: platformHosts, out })) {
+      for await (const resource of link(addonModules, { hosts: platformHosts, out })) {
         logger.debug(`Linked ${path.relative(projectRoot, resource)}`)
         platformWritten.push(resource)
       }
