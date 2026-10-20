@@ -275,7 +275,7 @@ test('Pocket rejected native dispatch clears its completion barrier', async (t) 
   }
   await model.load()
   await t.exception(model.run({ input: 'Native queue is busy.' }))
-  t.is(model._pocketJobPending, null)
+  t.is(model._pocket.jobPending, null)
   await model.cancel()
   await model.reload({ outputSampleRate: 44100 })
   t.is(model.state.weightsLoaded, true)
@@ -457,7 +457,7 @@ test('Pocket rejected dispatch settles both streaming APIs without unhandled rej
     const response = await model[method]('Hello.', { accumulateSentences: false })
     await t.exception(response.await(), /dispatch failed/)
     await new Promise((resolve) => setTimeout(resolve, 1))
-    t.is(model._pocketJobPending, null)
+    t.is(model._pocket.jobPending, null)
     t.is(model._sentenceStream.ctx, null)
     await model.destroy()
   }

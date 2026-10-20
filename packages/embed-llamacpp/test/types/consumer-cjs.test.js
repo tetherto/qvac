@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.pollingTypes = pollingTypes;
 exports.layaTypes = layaTypes;
+exports.rerankerTypes = rerankerTypes;
 const embed_llamacpp_1 = require("@qvac/embed-llamacpp");
 const rootConstructor = embed_llamacpp_1.default;
 void rootConstructor;
@@ -22,4 +23,19 @@ function layaTypes(model) {
     // @ts-expect-error config is required
     void new embed_llamacpp_1.LayaDecisions({ files: { model: [model] } });
     return laya;
+}
+// Reranker: config (with device) is required, and pooling is not an option.
+function rerankerTypes(model) {
+    const reranker = new embed_llamacpp_1.Reranker({
+        files: { model: [model] },
+        config: { device: 'gpu', gpu_layers: '99', batch_size: '512' }
+    });
+    // @ts-expect-error config is required
+    void new embed_llamacpp_1.Reranker({ files: { model: [model] } });
+    void new embed_llamacpp_1.Reranker({
+        files: { model: [model] },
+        // @ts-expect-error pooling is fixed to rank
+        config: { device: 'cpu', pooling: 'rank' }
+    });
+    return reranker;
 }

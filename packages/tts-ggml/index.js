@@ -42,19 +42,22 @@ const QvacLogger = typeof loggingExport === "function" ? loggingExport : logging
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const tts_1 = require("./tts");
+const addonEvents_1 = require("./lib/addonEvents");
 const errorModule = __importStar(require("./lib/error"));
 const fit_1 = require("./lib/fit");
-const pocketConfig_1 = require("./lib/pocketConfig");
 const textStreamAccumulator_1 = require("./lib/textStreamAccumulator");
 const engineIds_1 = require("./lib/engineIds");
 const engineParams_1 = require("./lib/engineParams");
 const audio8_1 = require("./lib/engines/audio8");
 const parler_1 = require("./lib/engines/parler");
+const exclusiveQueue_1 = require("./lib/exclusiveQueue");
 const jobFields_1 = require("./lib/jobFields");
+const pocketLifecycle_1 = require("./lib/pocketLifecycle");
 const reload_1 = require("./lib/reload");
 const sentenceStream_1 = require("./lib/sentenceStream");
 const setup_1 = require("./lib/setup");
 const streamingSupport_1 = require("./lib/streamingSupport");
+const voiceControls_1 = require("./lib/voiceControls");
 const { platform } = bareOs;
 const { ERR_CODES, QvacErrorAddonTTSGgml } = errorModule;
 /**
@@ -87,14 +90,14 @@ class TTSGgml {
     addon;
     _job;
     _runExclusive;
+    _exclusiveStreams = new exclusiveQueue_1.ExclusiveResponseQueue();
     /** Everything resolved from the constructor options; reload rewrites parts of it. */
     _setup;
     _sentenceStream;
-    _ttsInferenceQueueWaiter;
+    _events;
+    /** The Pocket execution rules, or null for every other engine. */
+    _pocket;
     _lazySessionLoading;
-    _pocketJobPending = null;
-    _pocketCancelPromise = null;
-    _pocketLifecycleInProgress = false;
     constructor(options = {}) {
         this.opts = options.opts || {};
         this.exclusiveRun = !!options.exclusiveRun;
@@ -105,26 +108,44 @@ class TTSGgml {
             destroyed: false,
         };
         this.addon = null;
-        this._ttsInferenceQueueWaiter = Promise.resolve();
         this._job = (0, infer_base_1.createJobHandler)({
-            cancel: () => this._setup.engineType === engineIds_1.ENGINE_POCKET
-                ? this.cancel()
-                : this._optionalAddon()?.cancel(),
+            cancel: () => this._pocket ? this.cancel() : this._optionalAddon()?.cancel(),
         });
-        this._runExclusive = this.exclusiveRun
-            ? (0, infer_base_1.exclusiveRunQueue)()
-            : async function runNow(callback) {
-                return callback();
-            };
+        this._runExclusive = (0, exclusiveQueue_1.resolveExclusiveRunner)(this.exclusiveRun);
         this._lazySessionLoading = (0, setup_1.resolveDefaultLazySessionLoading)(options.lazySessionLoading);
         this._setup = (0, setup_1.resolveEngineSetup)(options);
         this._sentenceStream = new sentenceStream_1.SentenceStreamer({
             startJob: () => this._job.start(),
             dispatchJob: (job) => this._dispatchJob(job),
-            endJob: (stats) => this._endJobWithStats(stats),
+            endJob: (stats) => this._events.endJob(stats),
             failJob: (error) => this._job.fail(error),
-            countsFrames: () => this._pacesOnFrames(),
+            // Audio8 and MOSS report `tokensPerSecond` as codec frames per second,
+            // so the streaming aggregate counts frames too rather than characters.
+            countsFrames: () => this._setup.engineType === engineIds_1.ENGINE_AUDIO8 ||
+                this._setup.engineType === engineIds_1.ENGINE_MOSS,
         });
+        this._events = new addonEvents_1.AddonEventRouter({
+            job: this._job,
+            stream: this._sentenceStream,
+            logger: () => this._getLogger(),
+            reportStats: () => !!this.opts.stats,
+        });
+        this._pocket =
+            this._setup.engineType === engineIds_1.ENGINE_POCKET
+                ? new pocketLifecycle_1.PocketLifecycle({
+                    setup: this._setup,
+                    state: this.state,
+                    logger: () => this._getLogger(),
+                    optionalAddon: () => this._optionalAddon(),
+                    setAddon: (addon) => {
+                        this.addon = addon;
+                    },
+                    createAddon: (params) => this._spawnAddon(params),
+                    unloadModel: () => this._unloadModel(),
+                    activeJob: () => this._job.active,
+                    failStream: (reason) => this._sentenceStream.fail(reason),
+                })
+                : null;
     }
     getEngineType() {
         return this._setup.engineType;
@@ -157,25 +178,14 @@ class TTSGgml {
         this.state.weightsLoaded = true;
     }
     async run(input) {
-        await this._waitPocketCancel();
-        this._checkPocketReload();
+        await this._pocket?.waitCancel();
+        this._pocket?.checkReload();
         if (input?.streamOutput === true && this._setup.engineType !== engineIds_1.ENGINE_POCKET) {
             (0, streamingSupport_1.assertSentenceStreamingAllowed)(this._setup, "run with streamOutput");
-            if (typeof input.input !== "string" ||
-                input.input.trim().length === 0) {
-                throw new QvacErrorAddonTTSGgml({
-                    code: ERR_CODES.FAILED_TO_APPEND,
-                    adds: "run with streamOutput: non-empty string `input` is required",
-                });
-            }
+            const text = (0, sentenceStream_1.requireStreamOutputText)(input.input);
             const jobFields = (0, jobFields_1.resolveJobFields)(this._setup, input, "run");
-            const runStream = () => this._runStreamOrchestrator(input.input, {
-                locale: input.locale,
-                maxChunkScalars: input.maxChunkScalars,
-            }, jobFields);
-            return this.exclusiveRun
-                ? this._enqueueExclusiveTtsResponse(runStream)
-                : runStream();
+            const { locale, maxChunkScalars } = input;
+            return this._startStream(() => this._runStreamOrchestrator(text, { locale, maxChunkScalars }, jobFields));
         }
         return this._runExclusive(() => this._runInternal(input));
     }
@@ -184,12 +194,11 @@ class TTSGgml {
      * `run({ input: text, streamOutput: true, ...options })`.
      */
     async runStream(text, options = {}) {
-        await this._waitPocketCancel();
-        this._checkPocketReload();
+        await this._pocket?.waitCancel();
+        this._pocket?.checkReload();
         const normalized = options == null || typeof options !== "object" ? {} : options;
         if (this._setup.engineType === engineIds_1.ENGINE_POCKET) {
-            const run = () => this._runStreamOrchestrator(text, normalized, (0, jobFields_1.resolveJobFields)(this._setup, normalized, "runStream"));
-            return this.exclusiveRun ? this._enqueueExclusiveTtsResponse(run) : run();
+            return this._startStream(() => this._runStreamOrchestrator(text, normalized, (0, jobFields_1.resolveJobFields)(this._setup, normalized, "runStream")));
         }
         return this.run({
             input: text,
@@ -211,8 +220,8 @@ class TTSGgml {
      * small streamed fragments are coalesced.
      */
     async runStreaming(textStream, options = {}) {
-        await this._waitPocketCancel();
-        this._checkPocketReload();
+        await this._pocket?.waitCancel();
+        this._pocket?.checkReload();
         (0, streamingSupport_1.assertSentenceStreamingAllowed)(this._setup, "runStreaming");
         const jobFields = (0, jobFields_1.resolveJobFields)(this._setup, options, "runStreaming");
         const streamOptions = (0, sentenceStream_1.resolveRunStreamingOptions)(textStream, options);
@@ -226,53 +235,24 @@ class TTSGgml {
                 language: this._setup.config.language,
             });
         }
-        const runStream = () => this._runTextStreamOrchestrator(normalized, jobFields);
-        return this.exclusiveRun
-            ? this._enqueueExclusiveTtsResponse(runStream)
-            : runStream();
-    }
-    async _enqueueExclusiveTtsResponse(run) {
-        const previous = this._ttsInferenceQueueWaiter;
-        let releaseSlot = () => { };
-        this._ttsInferenceQueueWaiter = new Promise((resolve) => {
-            releaseSlot = resolve;
+        return this._startStream(() => {
+            this._pocket?.checkRequest();
+            return this._sentenceStream.streamText(normalized, jobFields);
         });
-        await previous;
-        let response;
-        try {
-            response = run();
-        }
-        catch (error) {
-            releaseSlot();
-            throw error;
-        }
-        void response
-            .await()
-            .finally(releaseSlot)
-            .catch(() => { });
-        return response;
     }
-    _runTextStreamOrchestrator(source, jobFields) {
-        this._checkPocketRequest();
-        return this._sentenceStream.streamText(source, jobFields);
+    /** Streams line up behind each other under `exclusiveRun`; otherwise they start at once. */
+    _startStream(run) {
+        return this.exclusiveRun ? this._exclusiveStreams.enqueue(run) : run();
     }
     _runStreamOrchestrator(text, options, jobFields) {
-        this._checkPocketRequest();
+        this._pocket?.checkRequest();
         const chunks = (0, sentenceStream_1.splitSentenceChunks)(text, options, this._setup.config.language);
-        this._checkPocketRequest();
+        this._pocket?.checkRequest();
         return this._sentenceStream.streamChunks(chunks, jobFields);
-    }
-    /**
-     * Audio8 and MOSS report `tokensPerSecond` as codec frames per second, so
-     * the streaming aggregate has to count frames too rather than characters.
-     */
-    _pacesOnFrames() {
-        return (this._setup.engineType === engineIds_1.ENGINE_AUDIO8 ||
-            this._setup.engineType === engineIds_1.ENGINE_MOSS);
     }
     async _load() {
         this._getLogger().info("[TTSGgml] Language:", this._setup.config.language || "en");
-        const addon = this._createAddon(this._buildTtsParams(), this._addonOutputCallback.bind(this));
+        const addon = this._spawnAddon(this._buildTtsParams());
         this.addon = addon;
         try {
             await addon.activate();
@@ -289,6 +269,10 @@ class TTSGgml {
     }
     _buildTtsParams() {
         return (0, engineParams_1.buildNativeParams)(this._setup);
+    }
+    /** A native instance that reports through this wrapper's output callback. */
+    _spawnAddon(configuration) {
+        return this._createAddon(configuration, this._addonOutputCallback.bind(this));
     }
     _createAddon(configuration, outputCallback) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
@@ -320,38 +304,24 @@ class TTSGgml {
             this.state.destroyed = true;
         });
     }
+    async _withPocketLifecycle(action) {
+        return this._pocket ? this._pocket.withLifecycle(action) : action();
+    }
     async _runInternal(input) {
-        await this._waitPocketCancel();
-        this._checkPocketRequest();
+        await this._pocket?.waitCancel();
+        this._pocket?.checkRequest();
         const jobFields = (0, jobFields_1.resolveJobFields)(this._setup, input, "run");
         const signal = input?.signal;
-        const pocketSignal = this._setup.engineType === engineIds_1.ENGINE_POCKET && signal && !signal.aborted
-            ? signal
-            : undefined;
+        // Pocket keeps the signal to itself: the abort fails the response with
+        // the caller's reason and stops native work behind the completion barrier.
+        const pocketSignal = this._pocket && signal && !signal.aborted ? signal : undefined;
         const response = this._job.start({
             signal: pocketSignal ? undefined : signal,
         });
         if (signal?.aborted)
             return response;
-        if (pocketSignal) {
-            const onAbort = () => {
-                if (this._job.active !== response)
-                    return;
-                const reason = pocketSignal.reason;
-                const error = reason instanceof Error ? reason : new Error(typeof reason === "string" ? `Aborted: ${reason}` : "Aborted");
-                // Preserve the caller's reason while stopping native work. Cancellation
-                // retains the completion barrier until its terminal callback arrives.
-                try {
-                    response.failed(error);
-                }
-                finally {
-                    void this.cancel().catch((error) => this._getLogger().error("Pocket abort cancellation failed", error));
-                }
-            };
-            pocketSignal.addEventListener("abort", onAbort, { once: true });
-            const detach = () => pocketSignal.removeEventListener("abort", onAbort);
-            void response.await().then(detach, detach);
-        }
+        if (pocketSignal)
+            this._pocket?.attachAbort(response, pocketSignal);
         try {
             await this._dispatchJob({
                 type: input.type || "text",
@@ -365,185 +335,32 @@ class TTSGgml {
         }
         return response;
     }
-    _endJobWithStats(stats) {
-        if (this.opts.stats)
-            this._job.end(stats);
-        else
-            this._job.end();
-    }
     _addonOutputCallback(_addon, event, data, error) {
-        if (this._pocketJobPending && ((typeof error === "string" && error.length > 0) || (0, sentenceStream_1.isStatsEvent)(data))) {
-            const pending = this._pocketJobPending;
-            this._pocketJobPending = null;
-            pending.resolve();
-        }
-        if (typeof error === "string" && error.length > 0) {
-            this._handleAddonError(error);
-        }
-        else if ((0, sentenceStream_1.isAudioOutputEvent)(data)) {
-            this._handleAddonOutput(data);
-        }
-        else if ((0, sentenceStream_1.isStatsEvent)(data)) {
-            this._handleAddonStats(data);
-        }
-        else {
-            this._getLogger().debug(`Received TTS event: ${String(event)}`);
-        }
-    }
-    _handleAddonError(error) {
-        this._getLogger().error(`TTS job failed with error: ${error}`);
-        this._sentenceStream.rejectActiveChunk(new Error(error));
-        this._job.fail(error);
-    }
-    _handleAddonOutput(data) {
-        try {
-            this._getLogger().debug(`TTS job produced output: ${(0, sentenceStream_1.ttsOutputDebugString)(data)}`);
-        }
-        catch (error) {
-            if (error instanceof RangeError) {
-                this._getLogger().debug("TTS job produced output: [data too large]");
-            }
-            else {
-                throw error;
-            }
-        }
-        this._job.output(this._sentenceStream.ctx
-            ? this._sentenceStream.enrich(data)
-            : data);
-    }
-    _handleAddonStats(data) {
-        this._getLogger().info(`TTS job completed. Stats: ${JSON.stringify(data)}`);
-        if (!this._sentenceStream.onStats(data))
-            this._endJobWithStats(data);
-    }
-    async _waitPocketCancel() {
-        if (this._setup.engineType === engineIds_1.ENGINE_POCKET && this._pocketCancelPromise)
-            await this._pocketCancelPromise;
-    }
-    async _withPocketLifecycle(action) {
-        if (this._setup.engineType !== engineIds_1.ENGINE_POCKET)
-            return action();
-        await this._waitPocketCancel();
-        this._checkPocketReload();
-        this._pocketLifecycleInProgress = true;
-        try {
-            await action();
-        }
-        finally {
-            this._pocketLifecycleInProgress = false;
-        }
-    }
-    _checkPocketReload() {
-        if (this._pocketLifecycleInProgress)
-            throw new Error("Pocket lifecycle operation is already in progress");
-    }
-    _checkPocketRequest() {
-        if (this._setup.engineType === engineIds_1.ENGINE_POCKET) {
-            if (this.state.destroyed)
-                throw new Error("Pocket instance was destroyed");
-            if (!this.state.weightsLoaded || !this._optionalAddon())
-                throw new Error("Pocket model is not loaded");
-        }
-        if (this._setup.engineType === engineIds_1.ENGINE_POCKET && (this._job.active || this._pocketJobPending)) {
-            throw new Error("Pocket synthesis is already in progress");
-        }
-        this._checkPocketReload();
+        this._pocket?.onNativeEvent(data, error);
+        this._events.route(event, data, error);
     }
     async _dispatchJob(input) {
         const addon = this._requireAddon();
-        if (this._setup.engineType !== engineIds_1.ENGINE_POCKET)
-            return addon.runJob(input);
-        if (this._pocketJobPending)
-            throw new Error("Pocket native job is already in progress");
-        let resolve = () => { };
-        const promise = new Promise((done) => { resolve = done; });
-        const pending = { promise, resolve };
-        this._pocketJobPending = pending;
-        try {
-            await addon.runJob(input);
-        }
-        catch (error) {
-            if (this._pocketJobPending === pending)
-                this._pocketJobPending = null;
-            resolve();
-            throw error;
-        }
+        return this._pocket ? this._pocket.runJob(addon, input) : addon.runJob(input);
     }
     async cancel() {
+        if (this._pocket)
+            return this._pocket.cancel();
         const addon = this._optionalAddon();
-        if (this._setup.engineType !== engineIds_1.ENGINE_POCKET) {
-            if (addon?.cancel)
-                await addon.cancel();
-            return;
-        }
-        if (this._pocketCancelPromise)
-            return this._pocketCancelPromise;
-        const pending = this._pocketJobPending;
-        this._pocketCancelPromise = (async () => {
-            this._sentenceStream.fail("Synthesis cancelled");
-            if (addon?.cancel)
-                await addon.cancel();
-            // Joining the worker can precede delivery of its terminal callback.
-            if (pending)
-                await pending.promise;
-        })();
-        try {
-            await this._pocketCancelPromise;
-        }
-        finally {
-            this._pocketCancelPromise = null;
-        }
-    }
-    async _reloadPocket(newConfig) {
-        await this._waitPocketCancel();
-        this._checkPocketReload();
-        if (this.state.destroyed)
-            throw new Error("Pocket instance was destroyed");
-        const pocket = this._setup.pocket;
-        if (!pocket)
-            throw new Error("Pocket engine is not configured");
-        const options = { ...pocket.options, ...newConfig };
-        const config = { ...this._setup.config, ...newConfig };
-        const params = (0, pocketConfig_1.buildPocketParams)(pocket.files, options, config);
-        this._pocketLifecycleInProgress = true;
-        let replacement = null;
-        try {
-            // Drain native work and release its model before allocating another one.
-            // Failed activation leaves the instance unloaded with its last good config.
-            await this._unloadModel();
-            replacement = this._createAddon(params, this._addonOutputCallback.bind(this));
-            await replacement.activate();
-            this.addon = replacement;
-            replacement = null;
-            this._setup.pocket = { files: pocket.files, options, params };
-            this._setup.config.language = "en";
-            this._setup.config.useGPU = false;
-            this._setup.outputSampleRate = typeof params.outputSampleRate === "number" ? params.outputSampleRate : null;
-            this._setup.config.outputSampleRate = this._setup.outputSampleRate ?? undefined;
-            this.state.configLoaded = true;
-            this.state.weightsLoaded = true;
-        }
-        finally {
-            try {
-                if (replacement)
-                    await replacement.destroyInstance();
-            }
-            finally {
-                this._pocketLifecycleInProgress = false;
-            }
-        }
+        if (addon?.cancel)
+            await addon.cancel();
     }
     async reload(newConfig = {}) {
         this._getLogger().debug("Reloading addon with new configuration", newConfig);
-        if (this._setup.engineType === engineIds_1.ENGINE_POCKET)
-            return this._reloadPocket(newConfig);
+        if (this._pocket)
+            return this._pocket.reload(newConfig);
         const parameters = (0, reload_1.applyReloadableConfig)(this._setup, newConfig);
         await this.cancel();
         this._sentenceStream.fail("Model was reloaded");
         const existingAddon = this._optionalAddon();
         if (existingAddon)
             await existingAddon.destroyInstance();
-        this.addon = this._createAddon(parameters, this._addonOutputCallback.bind(this));
+        this.addon = this._spawnAddon(parameters);
         await this._requireAddon().activate();
     }
     static getModelKey(_params) {
@@ -559,19 +376,7 @@ class TTSGgml {
     static getVoiceControls() {
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
         const binding = require("./binding");
-        const native = binding.getVoiceControls();
-        const engines = {};
-        for (const [name, controls] of Object.entries(native.engines)) {
-            engines[engineIds_1.FABRIC_ENGINE_TYPES[name] ?? name] = {
-                emotions: [...controls.emotions],
-                paces: [...controls.paces],
-            };
-        }
-        return {
-            emotions: [...native.emotions],
-            paces: [...native.paces],
-            engines,
-        };
+        return (0, voiceControls_1.toVoiceControlsCatalog)(binding.getVoiceControls());
     }
     _requireAddon() {
         const addon = this._optionalAddon();
