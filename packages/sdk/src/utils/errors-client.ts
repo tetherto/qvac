@@ -116,10 +116,29 @@ export class WorkerCrashedError extends QvacErrorBase {
   }
 }
 
-/** A worker that failed before signalling ready; `cause` is the worker's own error. */
+/**
+ * A worker that failed before signalling ready; `cause` is the worker's own error.
+ * `exitCode` and `exitSignal` are set when the worker process exited without one.
+ */
 export class WorkerStartupError extends QvacErrorBase {
-  constructor(details: string, cause?: unknown) {
+  public readonly exitCode: number | null
+  public readonly exitSignal: NodeJS.Signals | null
+  /** The worker did not signal ready within the startup bound. */
+  public readonly timedOut: boolean
+
+  constructor(
+    details: string,
+    failure: {
+      exitCode: number | null
+      exitSignal: NodeJS.Signals | null
+      timedOut: boolean
+    },
+    cause?: unknown
+  ) {
     super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED, [details], cause))
+    this.exitCode = failure.exitCode
+    this.exitSignal = failure.exitSignal
+    this.timedOut = failure.timedOut
   }
 }
 

@@ -90,9 +90,10 @@ next request loads it again. There is no "load" endpoint — send a normal reque
 Model-load failures return `503 model_load_failed`. If the worker exits during
 startup, the response names its exit code or signal. If startup times out while
 the worker is still running, the response reports a startup timeout.
-Full diagnostics, including worker stderr, are written to the server's error log;
-the HTTP response contains only the startup summary. Check the terminal running
-`qvac serve` or your service's captured stderr for the cause.
+The full error is written to the server's error log, and the worker's own output
+goes to the server's stderr; the HTTP response contains only the startup summary.
+Check the terminal running `qvac serve` or your service's captured stderr for the
+cause.
 A per-load deadline set with `serve.load.timeoutMs` returns
 `503 model_load_timeout` instead.
 

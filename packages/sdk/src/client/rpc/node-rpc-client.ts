@@ -10,12 +10,12 @@ import { getClientLogger } from '@/logging'
 import {
   WorkerCrashedError,
   WorkerFileNotFoundError,
-  WorkerShutdownError,
-  WorkerStartupError
+  WorkerShutdownError
 } from '@/utils/errors-client'
 import type { RuntimeContext } from '@qvac/inference/surface'
 import { getPearRuntime, type PearRuntime } from './pear-runtime'
 import { start as startUnbundled } from './unbundled-harness'
+import { workerCrashed, workerStartupFailed } from './worker-failure'
 
 type WorkerIPC = InstanceType<typeof host.IPC>
 
@@ -184,11 +184,13 @@ async function launchWorker(source: WorkerSource): Promise<WorkerIPC> {
 }
 
 async function startWorker(source: WorkerSource): Promise<WorkerIPC> {
+  const started = Date.now()
   let ipc: WorkerIPC
   try {
     ipc = await launchWorker(source)
   } catch (error) {
-    throw new WorkerStartupError('Worker failed before signalling ready', error)
+    const bounded = !('pear' in source)
+    throw workerStartupFailed(error, bounded && Date.now() - started >= WORKER_READY_TIMEOUT_MS)
   }
   ipc.on('error', (error: unknown) => workerErrors.set(ipc, error))
   return ipc
@@ -203,7 +205,7 @@ function watchWorker(ipc: WorkerIPC, controller: AbortController) {
     if (controller.signal.aborted) return
     logger.info(`🪦 Bare worker ${exited ? 'exited' : 'closed'} unexpectedly`)
     if (workerLifeController === controller) resetModuleState()
-    controller.abort(new WorkerCrashedError(workerErrors.get(ipc)))
+    controller.abort(workerCrashed(workerErrors.get(ipc)))
   })
 }
 
@@ -267,7 +269,7 @@ async function ensureRPC(): Promise<RPC> {
 function rejectOnAbort(signal: AbortSignal): Promise<never> {
   return new Promise((_, reject) => {
     const fail = () =>
-      reject(signal.reason instanceof Error ? signal.reason : new WorkerCrashedError())
+      reject(signal.reason instanceof Error ? signal.reason : new WorkerCrashedError(null, null))
     if (signal.aborted) {
       fail()
       return
@@ -289,7 +291,7 @@ export function notifyChannelClosed(): void {
 
   const closed = worker
   resetModuleState()
-  controller.abort(new WorkerCrashedError(closed ? workerErrors.get(closed) : undefined))
+  controller.abort(workerCrashed(closed ? workerErrors.get(closed) : undefined))
   closed?.destroy()
 }
 
@@ -308,7 +310,8 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const lifeSignal = workerLifeController?.signal
   if (lifeSignal && !lifeSignal.aborted) {
     const onAbort = () => {
-      const err = lifeSignal.reason instanceof Error ? lifeSignal.reason : new WorkerCrashedError()
+      const err =
+        lifeSignal.reason instanceof Error ? lifeSignal.reason : new WorkerCrashedError(null, null)
       requestStream.destroy(err)
       responseStream.destroy(err)
     }
