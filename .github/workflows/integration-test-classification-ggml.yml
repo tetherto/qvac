@@ -267,6 +267,7 @@ jobs:
           '
 
       - name: Check production package excludes test models
+        if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
         working-directory: ${{ env.PKG_DIR }}
         run: npm run test:package
 
