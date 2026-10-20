@@ -241,7 +241,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.22.0
-        version: link:../fabric
+        version: 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: link:../infer-base
@@ -558,7 +558,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.22.0
-        version: link:../fabric
+        version: 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: link:../infer-base
@@ -698,7 +698,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.22.0
-        version: link:../fabric
+        version: 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1021,7 +1021,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.22.0
-        version: link:../fabric
+        version: 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: link:../infer-base
@@ -1147,7 +1147,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.22.0
-        version: link:../fabric
+        version: 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
       bare-fs:
         specifier: ^4.5.1
         version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1233,7 +1233,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.22.0
-        version: link:../fabric
+        version: 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: link:../infer-base
@@ -1946,7 +1946,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.22.0
-        version: link:../fabric
+        version: 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: link:../infer-base
@@ -2129,7 +2129,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.22.0
-        version: link:../fabric
+        version: 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
     devDependencies:
       '@qvac/fabric-android-arm64':
         specifier: 0.22.0
@@ -2215,7 +2215,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.22.0
-        version: link:../fabric
+        version: 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: link:../infer-base
