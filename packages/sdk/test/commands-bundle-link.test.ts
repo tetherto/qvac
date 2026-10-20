@@ -3,7 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createCommandLogger } from '@/commands/command-logger'
-import { linkAddons, warnOverwritten } from '@/commands/bundle/link'
+import {
+  assertReactNativeBareKitSupported,
+  linkAddons,
+  warnOverwritten
+} from '@/commands/bundle/link'
 import type { Logger } from '@/logging/types'
 
 const logger = createCommandLogger({ quiet: true })
@@ -19,14 +23,42 @@ function writeFile(file: string, content: string) {
   writeFileSync(file, content)
 }
 
-function installBareKit(projectRoot: string) {
+function installBareKit(projectRoot: string, version = '0.16.0') {
   const bareKitDir = join(projectRoot, 'node_modules', 'react-native-bare-kit')
   writeFile(
     join(bareKitDir, 'package.json'),
-    JSON.stringify({ name: 'react-native-bare-kit', version: '0.16.0' })
+    JSON.stringify({ name: 'react-native-bare-kit', version })
   )
   return bareKitDir
 }
+
+function writeSdk(projectRoot: string) {
+  const sdkPath = join(projectRoot, 'node_modules', '@qvac', 'sdk')
+  writeFile(
+    join(sdkPath, 'package.json'),
+    JSON.stringify({ name: '@qvac/sdk', peerDependencies: { 'react-native-bare-kit': '>=0.16.0' } })
+  )
+  return sdkPath
+}
+
+test('assertReactNativeBareKitSupported: rejects a release older than the SDK requires', async (t) => {
+  const projectRoot = createProject(t)
+  installBareKit(projectRoot, '0.15.1')
+
+  await t.exception(
+    () => assertReactNativeBareKitSupported(projectRoot, writeSdk(projectRoot)),
+    /needs react-native-bare-kit >=0\.16\.0; found 0\.15\.1/
+  )
+})
+
+test('assertReactNativeBareKitSupported: accepts a release in range, or none installed', async (t) => {
+  const supported = createProject(t)
+  installBareKit(supported, '0.16.0')
+  await t.execution(() => assertReactNativeBareKitSupported(supported, writeSdk(supported)))
+
+  const missing = createProject(t)
+  await t.execution(() => assertReactNativeBareKitSupported(missing, writeSdk(missing)))
+})
 
 test('linkAddons: links nothing when react-native-bare-kit is not installed', async (t) => {
   const projectRoot = createProject(t)

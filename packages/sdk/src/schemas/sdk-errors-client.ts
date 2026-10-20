@@ -43,6 +43,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   ADDON_LINK_FAILED: 50617,
   BARE_PACK_NODE_UNSUPPORTED: 50618,
   HOST_PREBUILDS_MISSING: 50619,
+  REACT_NATIVE_BARE_KIT_UNSUPPORTED: 50620,
   BUNDLE_FAILED: 50621,
   BUNDLE_TARGET_NOT_INSTALLED: 50622,
 
@@ -213,6 +214,12 @@ const clientErrorDefinitions: ErrorCodesMap = {
     message: (dependencies: string) =>
       "Bundling failed: split addons resolve their native code through `#host-addon`, which needs each host's platform package installed." +
       `\n\n  Add them to the dependencies in package.json, pinned to these exact versions, and reinstall. installMissingPrebuilds does this for phone hosts; npm installs another desktop host's package only with --force:\n${dependencies}`
+  },
+  [SDK_CLIENT_ERROR_CODES.REACT_NATIVE_BARE_KIT_UNSUPPORTED]: {
+    name: 'REACT_NATIVE_BARE_KIT_UNSUPPORTED',
+    message: (installedVersion: string, requiredRange: string) =>
+      `The react-native worker bundle needs react-native-bare-kit ${requiredRange}; found ${installedVersion}. ` +
+      'Upgrade react-native-bare-kit and run the bundle again.'
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_TARGET_NOT_INSTALLED]: {
     name: 'BUNDLE_TARGET_NOT_INSTALLED',

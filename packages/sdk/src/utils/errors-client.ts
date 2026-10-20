@@ -209,6 +209,18 @@ export class BundleTargetNotInstalledError extends QvacErrorBase {
   }
 }
 
+export class ReactNativeBareKitUnsupportedError extends QvacErrorBase {
+  constructor(installedVersion: string, requiredRange: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.REACT_NATIVE_BARE_KIT_UNSUPPORTED,
+        [installedVersion, requiredRange],
+        cause
+      )
+    )
+  }
+}
+
 export class InvalidPluginSpecifierError extends QvacErrorBase {
   constructor(specifiers: string[], cause?: unknown) {
     const list = specifiers.map((s) => `  - ${s}`).join('\n')

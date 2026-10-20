@@ -23,7 +23,7 @@ import {
   listBundledAddonModules,
   listBundledAddons
 } from '@/commands/bundle/addons'
-import { linkAddons } from '@/commands/bundle/link'
+import { assertReactNativeBareKitSupported, linkAddons } from '@/commands/bundle/link'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import { TARGETS, type BundleTarget } from '@/commands/bundle/targets'
@@ -357,6 +357,8 @@ async function bundle(
       )
     }
   }
+
+  if (target === 'react-native') await assertReactNativeBareKitSupported(projectRoot, sdkPath)
 
   await fsp.mkdir(qvacDir, { recursive: true })
 
