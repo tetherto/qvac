@@ -77,6 +77,7 @@
               "arch": "x64",
               "runner": "qvac-ubuntu2204-x64-gpu",
               "testEnv": { "TTS_CPP_GPU_BACKEND": "cuda" },
+              "modelEnv": { "INTEGRATION_TEST_TIMEOUT": "1800", "LD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}:/usr/local/cuda/lib64", "DYLD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}" },
               "benchmarkMatrixJson": [
                 {
                   "engine": "chatterbox",
