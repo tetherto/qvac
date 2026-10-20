@@ -47,12 +47,16 @@ export function createLlamaFitRequest(params: LlamaFitRequestParams): FitRequest
   }
 
   if (loadKind === 'completion') {
-    // The addon's fitter rejects both as unknown arguments, and neither changes
+    // The addon's fitter rejects these as unknown arguments, and none changes
     // what it projects: the image limit gates images at inference, and the
-    // checkpoint count sizes host-RAM state the fitter does not model.
+    // prompt-cache keys size host-RAM and disk state the fitter does not model.
     const {
       'image-max-megapixels': _imageMaxMegapixels,
       cache_checkpoints: _cacheCheckpoints,
+      cache_checkpoints_max_bytes: _cacheCheckpointsMaxBytes,
+      cache_checkpoint_storage: _cacheCheckpointStorage,
+      cache_checkpoint_dir: _cacheCheckpointDir,
+      cache_ram_mib: _cacheRamMib,
       ...fitConfig
     } = modelConfig
     const llm: LlmLlamacpp.FitRequest = {

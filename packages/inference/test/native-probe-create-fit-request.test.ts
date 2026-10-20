@@ -80,6 +80,24 @@ test('completion: the checkpoint count stays out of the fit request', (t) => {
   }
 })
 
+test('completion: the checkpoint budget, storage and RAM tier stay out of the fit request', (t) => {
+  const plan = completionRequest({
+    cache_checkpoints_max_bytes: 1073741824,
+    cache_checkpoint_storage: 'disk',
+    cache_checkpoint_dir: '/data/cache',
+    cache_ram_mib: 512
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
+  const config = plan.probe.request.config ?? {}
+  t.absent('cache_checkpoints_max_bytes' in config)
+  t.absent('cache_checkpoint_storage' in config)
+  t.absent('cache_checkpoint_dir' in config)
+  t.absent('cache_ram_mib' in config)
+  t.is(config['ctx_size'], '4096')
+})
+
 test('completion: the image limit stays out of the fit request', (t) => {
   const plan = completionRequest({ 'image-max-megapixels': 20 })
 

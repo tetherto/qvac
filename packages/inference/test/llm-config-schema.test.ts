@@ -254,6 +254,63 @@ test('loadModelOptionsToRequestSchema: accepts cache_checkpoints for LLM', (t) =
   )
 })
 
+test('llmConfigBaseSchema: accepts the checkpoint budget and storage keys', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: 0 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: 8589934592 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_storage: 'memory' }).success, true)
+  t.is(
+    llmConfigBaseSchema.safeParse({
+      cache_checkpoint_storage: 'disk',
+      cache_checkpoint_dir: '/data/cache'
+    }).success,
+    true
+  )
+})
+
+test('llmConfigBaseSchema: rejects checkpoint budget and storage values the addon refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: 0.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: '1024' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_storage: 'ram' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_dir: '' }).success, false)
+})
+
+test('llmConfigBaseSchema: accepts cache_ram_mib from 0 to 1048576', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 0 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 2048 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 1048576 }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects cache_ram_mib the addon refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 1048577 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: '2048' }).success, false)
+})
+
+test('llmConfigSchema: does not inject a default for the other prompt-cache keys', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) {
+    t.absent('cache_checkpoints_max_bytes' in result.data)
+    t.absent('cache_checkpoint_storage' in result.data)
+    t.absent('cache_checkpoint_dir' in result.data)
+    t.absent('cache_ram_mib' in result.data)
+  }
+})
+
+test('loadModelOptionsToRequestSchema: keeps the other prompt-cache keys for LLM', (t) => {
+  const modelConfig = {
+    cache_checkpoints_max_bytes: 1073741824,
+    cache_checkpoint_storage: 'disk',
+    cache_checkpoint_dir: '/data/cache',
+    cache_ram_mib: 512
+  }
+  const result = loadModelOptionsToRequestSchema.safeParse({ ...LLM_BASE, modelConfig })
+  t.is(result.success, true)
+  if (result.success) t.alike(result.data.modelConfig, modelConfig)
+})
+
 test('llmConfigBaseSchema: accepts valid image_tile_mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'disabled' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'batched' }).success, true)
