@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
+  the speech addons so they use the same source revision.
 - The JavaScript wrapper is split into modules under `lib/`: engine ids and
   discovery, model-file normalization, per-engine configuration (`lib/engines/`),
   option validation, native parameter building, per-call fields, reload and
