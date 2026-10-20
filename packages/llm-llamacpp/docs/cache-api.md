@@ -471,6 +471,41 @@ Generated reasoning is retained in the live cache immediately after a turn.
 If the next full-history render omits that reasoning, normal prefix
 reconciliation removes it; if the render preserves it, it remains reusable.
 
+### Prefill the system prompt and tools
+
+A prefill of only a system prompt and tools caches the part of the prompt that
+every later request with the same system prompt and tools shares. The next
+request then decodes only its user turn, on any model, including hybrid,
+recurrent and sliding-window models that cannot trim: the cached state ends
+exactly where the new prompt continues, so nothing has to be rolled back.
+
+```js
+const system = { role: 'system', content: 'You are a weather assistant.' }
+const tools = [{ type: 'function', name: 'get_weather', description: '...', parameters: { ... } }]
+
+await model.run([system, ...tools], { cacheKey: 'weather.bin', prefill: true })
+await model.saveCache('weather.bin')
+
+// Later, in this or another process: only the user turn is prefilled.
+await model.run([system, ...tools, { role: 'user', content: 'Weather in Paris?' }], { cacheKey: 'weather.bin' })
+```
+
+Some templates only render the tools once the conversation has a user message
+(Qwen3.8-27B and Qwen3.8-Flash-Next raise `No user query found in messages.`).
+For those, the prefill renders the conversation with a placeholder user message
+and caches only what comes before it: the system prompt and the tool block,
+ending at the user turn's header. Templates that render the tools without a user
+message (GLM-5.3-Flash, DeepSeek V4 Flash) cache their plain render. The
+placeholder is not used when the template puts the tools after the user's
+content, or when the request carries media; the prefill then caches the plain
+render, and `stats.toolDefinitionsDropped` reports whether it left the tools out.
+
+The next turn on the same `cacheKey` continues that conversation, and the file
+written for it afterwards holds the whole conversation, not the primed prefix.
+To start several conversations from one primed prefix, copy the saved file to a
+new `cacheKey` per conversation before its first request, or keep the
+conversations `ephemeral` so the primed file is never overwritten.
+
 > Migration note: this addon contract is intentionally incompatible with SDK
 > versions that still send delta messages/tools or expose
 > `remove_thinking_from_context`. Upgrade the SDK only after its full-history

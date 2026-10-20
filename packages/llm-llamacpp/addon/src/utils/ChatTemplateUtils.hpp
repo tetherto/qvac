@@ -209,6 +209,38 @@ std::optional<ReasoningTags> historyReasoningTags(
 /// without a model.
 using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
 
+/// True when any message has role `user` or `tool`.
+[[nodiscard]] bool
+hasUserTurn(const std::vector<common_chat_msg>& messages);
+
+/**
+ * @brief Renders a conversation without a user turn whose chat template only
+ * renders the tools once a user turn exists.
+ *
+ * Qwen3.5 / Qwen3.8 raise "No user query found" on system + tools alone, so
+ * `getPrompt` falls back to a render without the tools. Here the conversation
+ * is rendered with a placeholder user message instead, and only the text in
+ * front of the placeholder's content is kept: the part every later request
+ * with the same system prompt and tools starts with. A prefill of it leaves a
+ * cache that is an exact prefix of that request, so the request prefills only
+ * its own user turn.
+ *
+ * The cut is the common prefix of renders with several placeholder contents,
+ * so it holds wherever the template puts the tools, and it is moved back
+ * until its tokens are an exact prefix of every one of those renders' tokens.
+ *
+ * Returns `std::nullopt`, leaving the request to `getPrompt`, when:
+ * - `inputs` has a user or tool turn, no tools, or is not rendered by Jinja;
+ * - the template already renders the tools without a user turn;
+ * - a placeholder render fails, or its tools come after the user content.
+ *
+ * On success `prompt` is the cut text, `generationPrompt` is empty and
+ * `toolDefinitionsDropped` is false.
+ */
+[[nodiscard]] std::optional<PromptRenderResult> renderToolsWithoutUserTurn(
+    const struct common_chat_templates* tmpls,
+    const common_chat_templates_inputs& inputs, const Tokenizer& tokenize);
+
 /**
  * @brief Configures every template-derived sampling field in one pass: the
  * reasoning-budget fields and the tool-call grammar.
