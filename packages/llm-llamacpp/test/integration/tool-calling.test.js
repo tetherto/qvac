@@ -277,9 +277,9 @@ async function createToolModel(modelVariant, configOverrides = {}) {
   }
 }
 
-async function runPrompt(model, prompt) {
+async function runPrompt(model, prompt, runOptions) {
   const startTime = Date.now()
-  const response = await model.run(prompt)
+  const response = await model.run(prompt, runOptions)
   const collected = await collectResponse(response)
   return {
     ...collected,
@@ -306,8 +306,10 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
       // the loaded model so its TTFT/TPS reflect a warm follow-up
       // call. Keeping both rows in the report shows the cold-vs-warm
       // delta for the same model on the same device.
+      // A fixed seed makes prompt1's sampling (temp 0.1) repeat run to run,
+      // so a model that skips the tool call fails every time, not randomly.
       const firstPrompt = clonePrompt()
-      const firstRun = await runPrompt(model, firstPrompt)
+      const firstRun = await runPrompt(model, firstPrompt, { generationParams: { seed: 42 } })
       t.ok(firstRun.text.length > 0, `${label} prompt1: generated text`)
       t.ok(firstRun.generatedTokens > 0, `${label} prompt1: generated tokens tracked`)
       assertDeclaredToolCalls(t, firstRun.text, firstPrompt, `${label} prompt1`)
