@@ -1,6 +1,6 @@
 {
   "name": "@qvac/bci-whispercpp",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
   "addon": true,
   "qvac": {
@@ -29,7 +29,7 @@
     "test:integration": "npm run build:ts && brittle-bare test/integration/*.test.js",
     "test:integration:smoke": "npm run build:ts && brittle-bare test/integration/addon.test.js",
     "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target test-bci-core && bare-make install",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target test-bci-core",
     "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./test-bci-core --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "fuzz:build": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target neural-signal-fuzz",
