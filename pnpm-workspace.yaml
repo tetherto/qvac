@@ -3,6 +3,13 @@ packages:
   # ASR consumers need the published native platform packages. Build the local
   # addon separately with its package-owned tooling instead of workspace linking.
   - "!packages/asr-ggml"
+  # infer-base commits its .ts sources next to the generated .d.ts files, and
+  # TypeScript resolves `./src/QvacResponse` to the .ts source. Linked into the
+  # workspace, every package that compiles against it (inference through
+  # decoder-audio) type-checks those sources under its own compiler options and
+  # fails. Its dependents install the published package, which ships only the
+  # .d.ts files. infer-base installs and tests with npm in its own directory.
+  - "!packages/infer-base"
   # sdk-kotlin is a Gradle package; its package.json only declares the Android
   # BareKit npm deps, installed locally by Gradle. Keeping it out of the pnpm
   # workspace avoids an importer the root lockfile has no entry for, which would

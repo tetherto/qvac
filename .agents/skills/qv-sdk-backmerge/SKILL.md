@@ -23,10 +23,15 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 
 **On a release train** (`qv-release-train`), run it once for the whole train:
 read `release-train-<train>-<x.y.z>` wherever this skill says
-`release-<pkg>-<x.y.z>`. The source carries several manifests, changelogs and
-`pnpm-lock.yaml`; that is release metadata for Step 2's sanity check. Never
-carry a `.nx/version-plans/` file to `main`: if the cherry-pick brings one,
-`git rm` it before committing, or the next train applies it again.
+`release-<pkg>-<x.y.z>`, so the head is `backmerge/release-train-<train>-<x.y.z>`
+and the title names `release-train-<train>-<x.y.z>`. `pr-checks-sdk-pod.yml`
+recognises that head name and checks the backmerge against the train's
+tarballs, because npm does not have the new versions until the train publishes.
+The source carries several manifests, changelogs and `pnpm-lock.yaml`; that is
+release metadata for Step 2's sanity check. Never carry a `.nx/version-plans/`
+file to `main`: if the cherry-pick brings one, `git rm` it before committing, or
+the next train applies it again. `docs/ci/RELEASE-TRAIN.md` step 8 says when to
+merge it.
 
 ## Inputs (resolve in priority order)
 
@@ -61,7 +66,7 @@ In command examples below, `ORG_REMOTE` / `FORK_REMOTE` are placeholders — sub
 | Standalone with merged release PR     | The PR's merge/squash commit on `ORG_REMOTE/release-<pkg>-<x.y.z>` (`gh pr view <num> --json mergeCommit,headRefName`) |
 | Standalone with `--commit=<sha>`      | That single commit                                                                                               |
 
-**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and for `--package=sdk` the two generated reference pages under `docs/website/content/docs/sdk/`). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
+**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and for `--package=sdk` the two generated reference pages under `docs/website/content/docs/sdk/`, and the `packages/sdk-python` and `packages/sdk-kotlin` files `qv-sdk-inference-version` Steps 3 and 3b change). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
 
 ### Step 3: Detect no-op (main already aligned)
 
@@ -249,7 +254,7 @@ Print the new PR URL as a clickable hyperlink. When chained from `sdk-pr-create`
 
 Before completing:
 
-- [ ] Branch name is exactly `backmerge/release-<pkg>-<x.y.z>`
+- [ ] Branch name is exactly `backmerge/release-<pkg>-<x.y.z>` (`backmerge/release-train-<train>-<x.y.z>` on a train)
 - [ ] Title contains `[skiplog]` tag (combined as `[skiplog|notask]` if tickless)
 - [ ] Body links the companion release PR
 - [ ] Cherry-pick used `-x` (so the original SHA is recorded in commit messages)
