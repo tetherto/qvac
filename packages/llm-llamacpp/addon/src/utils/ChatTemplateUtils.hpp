@@ -210,8 +210,7 @@ std::optional<ReasoningTags> historyReasoningTags(
 using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
 
 /// True when any message has role `user` or `tool`.
-[[nodiscard]] bool
-hasUserTurn(const std::vector<common_chat_msg>& messages);
+[[nodiscard]] bool hasUserTurn(const std::vector<common_chat_msg>& messages);
 
 /**
  * @brief Renders a conversation without a user turn whose chat template only

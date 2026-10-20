@@ -5,7 +5,8 @@ namespace qvac_lib_inference_addon_llama::test {
 // The chat template of Qwen/Qwen3.8-27B and Qwen/Qwen3.8-Flash-Next
 // (identical `chat_template.jinja`). Raises "No user query found" on a
 // conversation without a user turn.
-inline constexpr const char* QWEN38_CHAT_TEMPLATE = R"jinja({%- set image_count = namespace(value=0) %}
+inline constexpr const char* QWEN38_CHAT_TEMPLATE =
+    R"jinja({%- set image_count = namespace(value=0) %}
 {%- set video_count = namespace(value=0) %}
 {%- macro render_content(content, do_vision_count, is_system_content=false) %}
     {%- if content is string %}
@@ -438,9 +439,10 @@ For each function call, output the function name and arguments within the follow
 )jinja";
 
 // The DeepSeek V4 Flash chat template bundled with llama.cpp
-// (models/templates/deepseek-ai-DeepSeek-V4-Flash-0731.jinja). Appends the tools
-// to the system prompt, with or without a user turn.
-inline constexpr const char* DEEPSEEK_V4_FLASH_CHAT_TEMPLATE = R"jinja({%- if not add_generation_prompt is defined -%}
+// (models/templates/deepseek-ai-DeepSeek-V4-Flash-0731.jinja). Appends the
+// tools to the system prompt, with or without a user turn.
+inline constexpr const char* DEEPSEEK_V4_FLASH_CHAT_TEMPLATE =
+    R"jinja({%- if not add_generation_prompt is defined -%}
   {%- set add_generation_prompt = false -%}
 {%- endif -%}
 {%- if not thinking is defined -%}

@@ -87,7 +87,8 @@ bool isTokenPrefixOf(const std::string& prefix, const std::string& full) {
   const auto prefixTokens = fakeTokenize(prefix);
   const auto fullTokens = fakeTokenize(full);
   return prefixTokens.size() <= fullTokens.size() &&
-         std::equal(prefixTokens.begin(), prefixTokens.end(), fullTokens.begin());
+         std::equal(
+             prefixTokens.begin(), prefixTokens.end(), fullTokens.begin());
 }
 
 const std::vector<std::string> QUESTIONS{
@@ -175,9 +176,8 @@ TEST(PrimeToolsPrefixTest, ConversationWithAUserTurnIsNotTouched) {
 
   common_chat_templates_inputs inputs = makeSystemAndTools();
   inputs.messages.push_back(makeMessage("user", "Hi"));
-  EXPECT_FALSE(
-      renderToolsWithoutUserTurn(tmpls.get(), inputs, FAKE_TOKENIZER)
-          .has_value());
+  EXPECT_FALSE(renderToolsWithoutUserTurn(tmpls.get(), inputs, FAKE_TOKENIZER)
+                   .has_value());
 }
 
 TEST(PrimeToolsPrefixTest, ConversationWithoutToolsIsNotTouched) {
@@ -187,9 +187,8 @@ TEST(PrimeToolsPrefixTest, ConversationWithoutToolsIsNotTouched) {
 
   common_chat_templates_inputs inputs = makeSystemAndTools();
   inputs.tools.clear();
-  EXPECT_FALSE(
-      renderToolsWithoutUserTurn(tmpls.get(), inputs, FAKE_TOKENIZER)
-          .has_value());
+  EXPECT_FALSE(renderToolsWithoutUserTurn(tmpls.get(), inputs, FAKE_TOKENIZER)
+                   .has_value());
 }
 
 // Tools rendered after the user content leave no tools prefix to cache.
@@ -247,6 +246,7 @@ TEST(PrimeToolsPrefixTest, CutBacksOffToATokenBoundary) {
 
 TEST(PrimeToolsPrefixTest, HasUserTurnCountsUserAndToolRoles) {
   EXPECT_FALSE(hasUserTurn({makeMessage("system", "s")}));
-  EXPECT_TRUE(hasUserTurn({makeMessage("system", "s"), makeMessage("user", "u")}));
+  EXPECT_TRUE(
+      hasUserTurn({makeMessage("system", "s"), makeMessage("user", "u")}));
   EXPECT_TRUE(hasUserTurn({makeMessage("tool", "r")}));
 }

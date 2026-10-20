@@ -354,9 +354,8 @@ void TextLlmContext::tokenizeChat(
       isPrefillOnlyRequest_
           ? renderToolsWithoutUserTurn(tmpls_.get(), inputs, tokenize)
           : std::nullopt;
-  PromptRenderResult rendered = primed.has_value()
-                                    ? std::move(*primed)
-                                    : getPrompt(tmpls_.get(), inputs);
+  PromptRenderResult rendered =
+      primed.has_value() ? std::move(*primed) : getPrompt(tmpls_.get(), inputs);
   prompt = std::move(rendered.prompt);
   if (rendered.toolDefinitionsDropped) {
     ++toolDefinitionsDropped_;

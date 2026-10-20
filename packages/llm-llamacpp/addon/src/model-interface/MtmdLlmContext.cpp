@@ -423,9 +423,8 @@ void MtmdLlmContext::tokenizeChat(
           : std::nullopt;
   // See TextLlmContext::tokenizeChat: not const so the prompt and stop list
   // move out instead of being copied per request.
-  PromptRenderResult rendered = primed.has_value()
-                                    ? std::move(*primed)
-                                    : getPrompt(tmpls_.get(), inputs);
+  PromptRenderResult rendered =
+      primed.has_value() ? std::move(*primed) : getPrompt(tmpls_.get(), inputs);
   formattedChat = std::move(rendered.prompt);
   if (rendered.toolDefinitionsDropped) {
     ++toolDefinitionsDropped_;

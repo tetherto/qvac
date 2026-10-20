@@ -574,8 +574,7 @@ std::optional<PromptRenderResult> renderToolsWithoutUserTurn(
   for (const std::string& prompt : prompts) {
     const auto mismatch = std::ranges::mismatch(prompts.front(), prompt);
     cut = std::min(
-        cut,
-        static_cast<size_t>(mismatch.in1 - prompts.front().begin()));
+        cut, static_cast<size_t>(mismatch.in1 - prompts.front().begin()));
   }
 
   // The tools must sit in front of the cut, or the cached prefix holds none
