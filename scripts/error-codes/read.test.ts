@@ -40,3 +40,64 @@ test('does not silently omit missing, dynamic or malformed definitions', () => {
     /Cyclic/
   )
 })
+
+for (const mutation of [
+  'definitions[999999] = {}',
+  'definitions = { 999999: {} }',
+  'Object.assign(definitions, { 999999: {} })',
+  'const alias = definitions; alias[999999] = {}'
+]) {
+  test(`rejects mutated registration definitions: ${mutation}`, () => {
+    const source = `
+      const CODES = { FIRST: 1001 }
+      let definitions = { [CODES.FIRST]: {} }
+      ${mutation}
+      addCodes(definitions)
+    `
+    assert.throws(() => referencedCodeMaps(source), /Mutated error/)
+  })
+}
+
+test('rejects mutation of a numeric map instead of reading its obsolete initializer', () => {
+  const source = 'const CODES = { FIRST: 1001 }; CODES.FIRST = 999999'
+  assert.throws(() => readCodeMap(source, 'CODES'), /Mutated error/)
+})
+
+test('rejects a function parameter shadowing a module code map', () => {
+  const source = `
+    const CODES = { FIRST: 1001 }
+    const register = (CODES) => addCodes({ [CODES.BAD]: {} })
+    register({ BAD: 999999 })
+  `
+  assert.throws(() => referencedCodeMaps(source), /module.scope/)
+})
+
+test('unrelated shadowed bindings do not mark module maps as mutated', () => {
+  const source = `
+    const CODES = { FIRST: 1001 }
+    function unrelated(CODES) { CODES.FIRST = 999999 }
+    function register() { addCodes({ [CODES.FIRST]: {} }) }
+    register()
+  `
+  assert.deepEqual(referencedCodeMaps(source), ['CODES'])
+  assert.deepEqual(readCodeMap(source, 'CODES'), { FIRST: 1001 })
+})
+
+test('copying a numeric property does not alias its code map', () => {
+  const source = `
+    const CODES = { FIRST: 1001 }
+    let code = CODES.FIRST
+    code = 2000
+  `
+  assert.deepEqual(readCodeMap(source, 'CODES'), { FIRST: 1001 })
+})
+
+test('copying a numeric constant does not alias it', () => {
+  const source = `
+    const FIRST = 1001
+    const CODES = { FIRST: FIRST }
+    let code = FIRST
+    code = 2000
+  `
+  assert.deepEqual(readCodeMap(source, 'CODES'), { FIRST: 1001 })
+})

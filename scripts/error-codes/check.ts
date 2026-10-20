@@ -24,7 +24,10 @@ export function checkCodeSources(
       .map(({ file }) => file.replace('/src/', '/').replace(/\.ts$/, '.js'))
   )
   const numbers = new Map<number, { name: string; file: string }>()
-  const names = new Map<string, { owner: string; code: number }[]>()
+  const names = new Map<
+    string,
+    { owner: string; name: string; definitions: { owner: string; code: number; file: string }[] }
+  >()
   for (const { owner, file, symbols } of sources) {
     const source = files.get(file)
     if (source === undefined) throw new Error(`Missing error source: ${file}`)
@@ -51,14 +54,22 @@ export function checkCodeSources(
           )
         }
         numbers.set(code, { name, file })
-        const block = allocation?.ranges.find(([start, end]) => code >= start && code <= end)
-        const key = `${allocation?.owner}:${block?.[0]}:${name}`
-        const previous = names.get(key) ?? []
-        if (previous.some((entry) => entry.owner !== owner && entry.code !== code)) {
-          throw new Error(`${name}: conflicting numbers in shared family (${file})`)
-        }
-        previous.push({ owner, code })
-        names.set(key, previous)
+        const key = `${allocation?.owner}:${name}`
+        const family = names.get(key) ?? { owner: allocation?.owner ?? owner, name, definitions: [] }
+        family.definitions.push({ owner, code, file })
+        names.set(key, family)
+      }
+    }
+  }
+  for (const { owner, name, definitions } of names.values()) {
+    const canonical = definitions.filter((entry) => entry.owner === owner)
+    for (const definition of definitions) {
+      // Owners can reuse names across maps; shared packages must mirror an owner's number.
+      const reference = canonical.length
+        ? canonical
+        : definitions.filter((entry) => entry.owner !== definition.owner)
+      if (reference.length && !reference.some((entry) => entry.code === definition.code)) {
+        throw new Error(`${name}: conflicting numbers in shared family (${definition.file})`)
       }
     }
   }

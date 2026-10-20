@@ -2,6 +2,21 @@ import ts from 'typescript'
 
 function parseSource(source: string) {
   const file = ts.createSourceFile('codes.ts', source, ts.ScriptTarget.Latest, true)
+  // Bind this file in isolation: resolve lexical scopes without loading dependencies.
+  const host: ts.CompilerHost = {
+    getSourceFile: (name) => (name === file.fileName ? file : undefined),
+    getDefaultLibFileName: () => '',
+    writeFile: () => {},
+    getCurrentDirectory: () => '',
+    getCanonicalFileName: (name) => name,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n',
+    fileExists: (name) => name === file.fileName,
+    readFile: (name) => (name === file.fileName ? source : undefined)
+  }
+  const checker = ts
+    .createProgram([file.fileName], { noLib: true, noResolve: true }, host)
+    .getTypeChecker()
   const declarations = new Map<string, ts.Expression>()
   for (const statement of file.statements) {
     if (!ts.isVariableStatement(statement)) continue
@@ -11,44 +26,94 @@ function parseSource(source: string) {
       }
     }
   }
-  return { file, declarations }
+  const checked = new Set<ts.Symbol>()
+  function assertUnmodified(identifier: ts.Identifier): void {
+    const binding = checker.getSymbolAtLocation(identifier)
+    if (!binding || checked.has(binding)) return
+    checked.add(binding)
+
+    function visit(node: ts.Node): void {
+      if (ts.isIdentifier(node) && checker.getSymbolAtLocation(node) === binding) {
+        let target: ts.Node = node
+        let readsProperty = false
+        while (
+          (ts.isPropertyAccessExpression(target.parent) ||
+            ts.isElementAccessExpression(target.parent) ||
+            ts.isParenthesizedExpression(target.parent) ||
+            ts.isAsExpression(target.parent)) &&
+          target.parent.expression === target
+        ) {
+          target = target.parent
+          if (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target)) {
+            readsProperty = true
+          }
+        }
+        const parent = target.parent
+        if (
+          (ts.isBinaryExpression(parent) &&
+            parent.left === target &&
+            parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+            parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment) ||
+          ((ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent)) &&
+            (parent.operator === ts.SyntaxKind.PlusPlusToken ||
+              parent.operator === ts.SyntaxKind.MinusMinusToken)) ||
+          ts.isDeleteExpression(parent) ||
+          (ts.isCallExpression(parent) &&
+            parent.arguments[0] === target &&
+            [
+              'Object.assign',
+              'Object.defineProperty',
+              'Object.defineProperties',
+              'Reflect.set',
+              'Reflect.defineProperty',
+              'Reflect.deleteProperty'
+            ].includes(parent.expression.getText(file)))
+        ) {
+          throw new Error(`Mutated error table is unsupported: ${identifier.text}`)
+        }
+        if (
+          ts.isVariableDeclaration(parent) &&
+          !readsProperty &&
+          !(checker.getTypeAtLocation(node).flags & ts.TypeFlags.NumberLike) &&
+          parent.initializer === target &&
+          ts.isIdentifier(parent.name)
+        ) {
+          assertUnmodified(parent.name)
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(file)
+  }
+  return { file, declarations, checker, assertUnmodified }
 }
 
 export function referencedCodeMaps(source: string): string[] {
-  const { file, declarations } = parseSource(source)
+  const { file, declarations, checker, assertUnmodified } = parseSource(source)
   const symbols = new Set<string>()
   const registrars = new Set(['addCodes'])
   const inspected = new Set<ts.Expression>()
 
   function definitionOf(identifier: ts.Identifier): ts.Expression | undefined {
-    let scope: ts.Node | undefined = identifier.parent
-    while (scope) {
-      if (ts.isBlock(scope)) {
-        const declaration = scope.statements
-          .filter(ts.isVariableStatement)
-          .flatMap((statement) => [...statement.declarationList.declarations])
-          .find((entry) => ts.isIdentifier(entry.name) && entry.name.text === identifier.text)
-        if (declaration?.initializer) return declaration.initializer
-      }
-      if (
-        ts.isFunctionDeclaration(scope) &&
-        scope.name &&
-        registrars.has(scope.name.text) &&
-        scope.parameters.some(
-          (parameter) => ts.isIdentifier(parameter.name) && parameter.name.text === identifier.text
-        )
-      ) {
-        return undefined
-      }
-      scope = scope.parent
+    const declaration = checker.getSymbolAtLocation(identifier)?.valueDeclaration
+    if (declaration && ts.isVariableDeclaration(declaration) && declaration.initializer) {
+      return declaration.initializer
     }
-    const definition = declarations.get(identifier.text)
-    if (!definition) throw new Error(`Unresolved error registration: ${identifier.text}`)
-    return definition
+    if (
+      declaration &&
+      ts.isParameter(declaration) &&
+      ts.isFunctionDeclaration(declaration.parent) &&
+      declaration.parent.name &&
+      registrars.has(declaration.parent.name.text)
+    ) {
+      return undefined
+    }
+    throw new Error(`Unresolved error registration: ${identifier.text}`)
   }
 
   function inspect(expression: ts.Expression): void {
     if (ts.isIdentifier(expression)) {
+      assertUnmodified(expression)
       const definition = definitionOf(expression)
       // Wrapper parameters are checked at the wrapper's call sites.
       if (definition && !inspected.has(definition)) {
@@ -76,7 +141,19 @@ export function referencedCodeMaps(source: string): string[] {
         ) {
           throw new Error(`Unsupported error definition key: ${key.getText(file)}`)
         }
-        symbols.add(key.expression.expression.text)
+        const map = key.expression.expression
+        const binding = checker.getSymbolAtLocation(map)
+        const declaration = binding?.valueDeclaration ?? binding?.declarations?.[0]
+        if (
+          declaration &&
+          (!ts.isVariableDeclaration(declaration) ||
+            declaration.initializer !== declarations.get(map.text))
+        ) {
+          throw new Error(
+            `Unlisted code table: ${map.text}; registered maps must resolve to a module-scope declaration`
+          )
+        }
+        symbols.add(map.text)
       }
       return
     }
@@ -132,7 +209,7 @@ export function referencedCodeMaps(source: string): string[] {
 
 // Evaluate only static code tables, never package imports or native addons.
 export function readCodeMap(source: string, symbol: string): Record<string, number> {
-  const { file, declarations } = parseSource(source)
+  const { file, declarations, assertUnmodified } = parseSource(source)
   const resolving = new Set<string>()
   type Value = number | { [key: string]: Value }
 
@@ -146,6 +223,7 @@ export function readCodeMap(source: string, symbol: string): Record<string, numb
       return evaluate(node.expression)
     }
     if (ts.isIdentifier(node)) {
+      assertUnmodified(node)
       const expression = declarations.get(node.text)
       if (!expression) throw new Error(`Missing code table or constant: ${node.text}`)
       if (resolving.has(node.text)) throw new Error(`Cyclic code constant: ${node.text}`)
@@ -183,7 +261,12 @@ export function readCodeMap(source: string, symbol: string): Record<string, numb
     throw new Error(`Unsupported numeric code expression: ${node.getText(file)}`)
   }
 
-  const value = evaluate(ts.factory.createIdentifier(symbol))
+  const expression = declarations.get(symbol)
+  if (!expression) throw new Error(`Missing code table or constant: ${symbol}`)
+  if (ts.isVariableDeclaration(expression.parent) && ts.isIdentifier(expression.parent.name)) {
+    assertUnmodified(expression.parent.name)
+  }
+  const value = evaluate(expression)
   if (typeof value !== 'object') throw new Error(`${symbol} must be a numeric code map`)
   const result: Record<string, number> = {}
   for (const [name, code] of Object.entries(value)) {

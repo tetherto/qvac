@@ -15,8 +15,11 @@ their allocations. These fields do not authorize unrelated errors sharing a code
 
 Add each numeric map's owner, file, and symbols to `sources`. Keep maps at module
 scope, using static literals, constant references, or `Object.freeze`.
-Unsupported expressions fail validation. The checker reads source without loading packages or native addons
-and ignores compiled JavaScript copies of listed TypeScript modules.
+Keep registration definitions static too; filter them with
+`Object.fromEntries(Object.entries(definitions).filter(...))` instead of mutating
+a map. Shadowed maps and mutations fail validation. The checker reads source
+without loading packages or native addons and ignores compiled JavaScript copies
+of listed TypeScript modules.
 
 Run `npm run errors:check`, `npm run errors:test`, and `npm run errors:typecheck`
 from the repository root. Merge Guard requires successful validation for

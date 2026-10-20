@@ -98,3 +98,56 @@ test('function-local definitions cannot hide an unlisted error map', () => {
   const files = new Map(sources.map(({ file }) => [file, source]))
   assert.throws(() => checkCodeSources(registry, sources, files), /Unlisted code table/)
 })
+
+test('rejects mutations to definitions before filtered registration', () => {
+  const source = `
+    const CODES = { FIRST: 1001 }
+    const definitions = { [CODES.FIRST]: { name: 'FIRST', message: 'first' } }
+    definitions[999999] = { name: 'BAD', message: 'bad' }
+    const filtered = Object.fromEntries(Object.entries(definitions).filter(() => true))
+    addCodes(filtered)
+  `
+  const files = new Map(sources.map(({ file }) => [file, source]))
+  assert.throws(() => checkCodeSources(registry, sources, files), /Mutated error/)
+})
+
+test('rejects a function-local code map shadowing a listed module map', () => {
+  const source = `
+    const CODES = { FIRST: 1001 }
+    function registerExtra() {
+      const CODES = { BAD: 999999 }
+      addCodes({ [CODES.BAD]: { name: 'BAD', message: 'bad' } })
+    }
+    registerExtra()
+  `
+  const files = new Map(sources.map(({ file }) => [file, source]))
+  assert.throws(() => checkCodeSources(registry, sources, files), /module.scope/)
+})
+
+test('shared names retain their numbers across every subrange of an allocation', () => {
+  const data: CodeRangeRegistry = {
+    version: 1,
+    allocations: [{ ...registry.allocations[0]!, ranges: [[1001, 1500], [1501, 2000]] }]
+  }
+  const files = new Map([
+    [sources[0]!.file, 'const CODES = { FIRST: 1001 }'],
+    [sources[1]!.file, 'const CODES = { FIRST: 1999 }']
+  ])
+  assert.throws(() => checkCodeSources(data, sources, files), /conflicting numbers/)
+})
+
+test('shared names may mirror either existing number when the owner reuses a name', () => {
+  const server = { owner: 'sdk', file: 'packages/sdk/src/server-errors.ts', symbols: ['CODES'] }
+  const data: CodeRangeRegistry = {
+    version: 1,
+    allocations: [{ ...registry.allocations[0]!, ranges: [[1001, 1500], [1501, 2000]] }]
+  }
+  const files = new Map([
+    [sources[0]!.file, 'const CODES = { AUDIO: 1001 }'],
+    [server.file, 'const CODES = { AUDIO: 1999 }'],
+    [sources[1]!.file, 'const CODES = { AUDIO: 1999 }']
+  ])
+  assert.doesNotThrow(() => checkCodeSources(data, [...sources, server], files))
+  files.set(sources[1]!.file, 'const CODES = { AUDIO: 1800 }')
+  assert.throws(() => checkCodeSources(data, [...sources, server], files), /conflicting numbers/)
+})
