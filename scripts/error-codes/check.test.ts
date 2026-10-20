@@ -72,3 +72,29 @@ test('an already listed module cannot hide a second code table or inline numeric
   )
   assert.throws(() => checkCodeSources(registry, sources, files), /Inline numeric/)
 })
+
+test('unrelated status maps and metadata do not become error registrations', () => {
+  const source = `
+    const CODES = { FIRST: 1001 }
+    const HTTP_STATUS_CODES = { BAD_REQUEST: 400 }
+    const HTTP_MESSAGES = { 400: 'Bad request' }
+    const metadata = { [Symbol.toStringTag]: 'Errors' }
+    addCodes({ [CODES.FIRST]: { name: 'FIRST', message: 'first' } })
+  `
+  const files = new Map(sources.map(({ file }) => [file, source]))
+  assert.doesNotThrow(() => checkCodeSources(registry, sources, files))
+})
+
+test('function-local definitions cannot hide an unlisted error map', () => {
+  const source = `
+    const CODES = { FIRST: 1001 }
+    function registerExtra() {
+      const EXTRA_ERROR_CODES = { BAD: 999999 }
+      const definitions = { [EXTRA_ERROR_CODES.BAD]: { name: 'BAD', message: 'bad' } }
+      addCodes(definitions)
+    }
+    registerExtra()
+  `
+  const files = new Map(sources.map(({ file }) => [file, source]))
+  assert.throws(() => checkCodeSources(registry, sources, files), /Unlisted code table/)
+})

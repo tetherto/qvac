@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { validateCodeRanges } from '../../packages/error/src/code-ranges.js'
@@ -42,7 +42,8 @@ function main(): void {
       (file) =>
         /\.(?:ts|js|mjs)$/.test(file) &&
         !file.endsWith('.d.ts') &&
-        !/(?:^|\/)(?:node_modules|dist|test|tests|examples|benchmarks|docs|scripts)\//.test(file)
+        !/(?:^|\/)(?:node_modules|dist|test|tests|examples|benchmarks|docs|scripts)\//.test(file) &&
+        existsSync(resolve(root, file))
     )
   const files = new Map(paths.map((file) => [file, readFileSync(resolve(root, file), 'utf8')]))
   checkCodeSources(registry, registry.sources, files)

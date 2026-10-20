@@ -1,39 +1,6 @@
 import ts from 'typescript'
 
-export function referencedCodeMaps(source: string): string[] {
-  const file = ts.createSourceFile('codes.ts', source, ts.ScriptTarget.Latest, true)
-  const symbols = new Set<string>()
-  function visit(node: ts.Node): void {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      /CODES(?:_|$)/.test(node.name.text)
-    ) {
-      symbols.add(node.name.text)
-    }
-    if (ts.isPropertyAssignment(node)) {
-      if (ts.isNumericLiteral(node.name)) {
-        throw new Error('Inline numeric error definitions are unsupported; use a listed code map')
-      }
-      if (ts.isComputedPropertyName(node.name)) {
-        const expression = node.name.expression
-        if (ts.isNumericLiteral(expression)) {
-          throw new Error('Inline numeric error definitions are unsupported; use a listed code map')
-        }
-        if (!ts.isPropertyAccessExpression(expression) || !ts.isIdentifier(expression.expression)) {
-          throw new Error(`Unsupported error definition key: ${expression.getText(file)}`)
-        }
-        symbols.add(expression.expression.text)
-      }
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(file)
-  return [...symbols]
-}
-
-// Evaluate only static code tables, never package imports or native addons.
-export function readCodeMap(source: string, symbol: string): Record<string, number> {
+function parseSource(source: string) {
   const file = ts.createSourceFile('codes.ts', source, ts.ScriptTarget.Latest, true)
   const declarations = new Map<string, ts.Expression>()
   for (const statement of file.statements) {
@@ -44,6 +11,128 @@ export function readCodeMap(source: string, symbol: string): Record<string, numb
       }
     }
   }
+  return { file, declarations }
+}
+
+export function referencedCodeMaps(source: string): string[] {
+  const { file, declarations } = parseSource(source)
+  const symbols = new Set<string>()
+  const registrars = new Set(['addCodes'])
+  const inspected = new Set<ts.Expression>()
+
+  function definitionOf(identifier: ts.Identifier): ts.Expression | undefined {
+    let scope: ts.Node | undefined = identifier.parent
+    while (scope) {
+      if (ts.isBlock(scope)) {
+        const declaration = scope.statements
+          .filter(ts.isVariableStatement)
+          .flatMap((statement) => [...statement.declarationList.declarations])
+          .find((entry) => ts.isIdentifier(entry.name) && entry.name.text === identifier.text)
+        if (declaration?.initializer) return declaration.initializer
+      }
+      if (
+        ts.isFunctionDeclaration(scope) &&
+        scope.name &&
+        registrars.has(scope.name.text) &&
+        scope.parameters.some(
+          (parameter) => ts.isIdentifier(parameter.name) && parameter.name.text === identifier.text
+        )
+      ) {
+        return undefined
+      }
+      scope = scope.parent
+    }
+    const definition = declarations.get(identifier.text)
+    if (!definition) throw new Error(`Unresolved error registration: ${identifier.text}`)
+    return definition
+  }
+
+  function inspect(expression: ts.Expression): void {
+    if (ts.isIdentifier(expression)) {
+      const definition = definitionOf(expression)
+      // Wrapper parameters are checked at the wrapper's call sites.
+      if (definition && !inspected.has(definition)) {
+        inspected.add(definition)
+        inspect(definition)
+      }
+      return
+    }
+    if (ts.isObjectLiteralExpression(expression)) {
+      for (const property of expression.properties) {
+        if (!ts.isPropertyAssignment(property)) {
+          throw new Error('Unsupported error definition property')
+        }
+        const key = property.name
+        if (
+          ts.isNumericLiteral(key) ||
+          (ts.isComputedPropertyName(key) && ts.isNumericLiteral(key.expression))
+        ) {
+          throw new Error('Inline numeric error definitions are unsupported; use a listed code map')
+        }
+        if (
+          !ts.isComputedPropertyName(key) ||
+          !ts.isPropertyAccessExpression(key.expression) ||
+          !ts.isIdentifier(key.expression.expression)
+        ) {
+          throw new Error(`Unsupported error definition key: ${key.getText(file)}`)
+        }
+        symbols.add(key.expression.expression.text)
+      }
+      return
+    }
+    if (ts.isCallExpression(expression)) {
+      if (
+        ['Object.fromEntries', 'Object.entries', 'Object.freeze'].includes(
+          expression.expression.getText(file)
+        )
+      ) {
+        const argument = expression.arguments[0]
+        if (argument) return inspect(argument)
+      }
+      if (
+        ts.isPropertyAccessExpression(expression.expression) &&
+        expression.expression.name.text === 'filter'
+      ) {
+        return inspect(expression.expression.expression)
+      }
+    }
+    throw new Error(`Unsupported error registration: ${expression.getText(file)}`)
+  }
+
+  function visit(node: ts.Node, onCall: (call: ts.CallExpression) => void): void {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      if (ts.isIdentifier(callee) || ts.isPropertyAccessExpression(callee)) {
+        const name = ts.isIdentifier(callee) ? callee.text : callee.name.text
+        if (registrars.has(name)) onCall(node)
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, onCall))
+  }
+  for (const statement of file.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name) {
+      const name = statement.name.text
+      visit(statement, () => registrars.add(name))
+    }
+    if (ts.isImportDeclaration(statement)) {
+      const bindings = statement.importClause?.namedBindings
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const binding of bindings.elements) {
+          if (binding.propertyName?.text === 'addCodes') registrars.add(binding.name.text)
+        }
+      }
+    }
+  }
+  visit(file, (call) => {
+    const argument = call.arguments[0]
+    if (argument) inspect(argument)
+  })
+  return [...symbols]
+}
+
+// Evaluate only static code tables, never package imports or native addons.
+export function readCodeMap(source: string, symbol: string): Record<string, number> {
+  const { file, declarations } = parseSource(source)
   const resolving = new Set<string>()
   type Value = number | { [key: string]: Value }
 

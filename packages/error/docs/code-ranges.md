@@ -13,9 +13,9 @@ their allocations. These fields do not authorize unrelated errors sharing a code
 
 ## Monorepo validation
 
-Add each numeric map's owner, file, and symbols to `sources`. Maps must use static
-literals, constant references, or `Object.freeze`; unsupported expressions fail
-validation. The checker reads source without loading packages or native addons
+Add each numeric map's owner, file, and symbols to `sources`. Keep maps at module
+scope, using static literals, constant references, or `Object.freeze`.
+Unsupported expressions fail validation. The checker reads source without loading packages or native addons
 and ignores compiled JavaScript copies of listed TypeScript modules.
 
 Run `npm run errors:check`, `npm run errors:test`, and `npm run errors:typecheck`

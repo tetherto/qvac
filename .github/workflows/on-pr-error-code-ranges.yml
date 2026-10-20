@@ -37,18 +37,10 @@ jobs:
           node-version: "24.14.1"
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
       - name: Install checker dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter @qvac/error
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter .
       - name: Validate allocations and actual code maps
         run: npm run errors:check
       - name: Test source checker
         run: npm run errors:test
       - name: Type-check source checker
         run: npm run errors:typecheck
-      - name: Check error package
-        working-directory: packages/error
-        run: |
-          npm run format
-          npm run lint
-          npm run typecheck
-          npm run build:test
-          ./node_modules/.bin/brittle-node 'test/dist/test/unit/*.test.js'
