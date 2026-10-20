@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/bci/BCIConfig.hpp"
 #include "model-interface/bci/BCIModel.hpp"
 #include "model-interface/bci/NeuralProcessor.hpp"
@@ -409,6 +410,24 @@ TEST(BCIConfig, BackendsDirRoundTrip) {
   BCIConfig copy = config;
   EXPECT_EQ(copy.backendsDir, "/tmp/some/prebuilds/path");
 }
+
+TEST(ModuleBackendsDir, ConfiguredDirIsScannedAsGiven) {
+  EXPECT_EQ(
+      resolveBackendsDir("/tmp/some/backends"),
+      std::filesystem::path("/tmp/some/backends"));
+}
+
+#if defined(__linux__)
+// This binary has no <module name>/ subdirectory next to it, which is the
+// flat layout of the SDK worker bundle: the backends sit beside the module.
+TEST(ModuleBackendsDir, UnconfiguredDirIsTheLoadedModulesOwn) {
+  const std::filesystem::path dir = resolveBackendsDir("");
+  ASSERT_FALSE(dir.empty());
+  EXPECT_TRUE(
+      std::filesystem::equivalent(
+          dir, std::filesystem::canonical("/proc/self/exe").parent_path()));
+}
+#endif
 
 namespace {
 
