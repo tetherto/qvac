@@ -20,10 +20,9 @@
 
 ### Fixed
 
-- CUDA: a ubatch without outputs no longer shrinks the reserved MoE graph, so
-  the next larger ubatch no longer re-reserves and aborts.
-- Metal: the channel-norm kernels keep their precision at a large shared
-  offset.
+- CUDA: a ubatch without outputs no longer drops a node from the MoE graph, so
+  the scheduler no longer re-reserves the compute buffer at that ubatch's size.
+  With `GGML_SCHED_DEBUG_REALLOC=1` the next larger ubatch aborted.
 
 ### Changed
 
@@ -42,7 +41,13 @@
   `SCALE_RESIDUAL`, `BIAS_GELU`, `PAD_REPLICATE_1D`, `GRU`, `ZERO_UPSAMPLE`,
   `CHANNEL_SHUFFLE`, `AFFINE_PRELU`, `SNAKE`, `LSTM_CELL`, `TDT_STEP` and
   `SIGLU`.
+- Metal kernels for `CONV_1D_DW_DIRECT`, `NORM_CHANNEL`, `SCALE_RESIDUAL`,
+  `BIAS_GELU`, `PAD_REPLICATE_1D`, `LSTM_CELL`, `TDT_STEP` and `SIGLU`.
 - Flash-attention backward on Vulkan and CUDA.
+- The `llama_batch_ext_*` batch API with `llama_process`, plus
+  `llama_get_causal_attn` and `llama_adapter_lora_init_from_file_ptr`.
+- EmbeddingGemma 2 (`gemma-embedding2`) models and the Ling3-VL vision
+  projector.
 
 ## [0.22.0] - 2026-10-14
 
