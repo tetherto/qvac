@@ -1074,13 +1074,11 @@ tests and the C++ option-mapping tests do not establish GPU execution.
 
 ### OpenMOSS native dependency validation
 
-The package pins `speech-cpp` 2026-10-14 and `ggml-speech` 2026-10-07#1.
-The registry baseline remains `e31be272ecdf9f20970302ebf8a2943d47803001`.
-The `speech-cpp` override selects the merged native source
-`bd99d1e2233ad0ff8d314c93633cad84ca823e83` published by
-[registry PR #428](https://github.com/tetherto/qvac-registry-vcpkg/pull/428).
-This speech revision provides the explicit MOSS backend selector used by the
-addon; the selector and dependency pin must ship together.
+The exact native dependency versions are declared in [vcpkg.json](vcpkg.json).
+The registry configuration is declared in
+[vcpkg-configuration.json](vcpkg-configuration.json).
+The native dependency provides the explicit MOSS backend selector used by the
+addon; validate the packaged addon against the checked-in manifests.
 
 On a provisioned Linux NVIDIA host with CUDA 13, Vulkan drivers, sufficient
 memory, and package development dependencies installed, run from this package:
