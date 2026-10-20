@@ -1,9 +1,41 @@
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import link from 'bare-link'
+import semver from 'semver'
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
-import { AddonLinkFailedError } from '@/utils/errors-client'
+import { AddonLinkFailedError, ReactNativeBareKitUnsupportedError } from '@/utils/errors-client'
 import type { Logger } from '@/logging/types'
+
+const REACT_NATIVE_BARE_KIT = 'react-native-bare-kit'
+
+interface PackageManifest {
+  version?: unknown
+  peerDependencies?: Record<string, unknown>
+}
+
+async function readManifest(dir: string): Promise<PackageManifest | null> {
+  try {
+    return JSON.parse(await fsp.readFile(path.join(dir, 'package.json'), 'utf8')) as PackageManifest
+  } catch {
+    return null
+  }
+}
+
+/** Checks the installed react-native-bare-kit against the SDK's peer range for it. */
+export async function assertReactNativeBareKitSupported(
+  projectRoot: string,
+  sdkPath: string
+): Promise<void> {
+  const bareKitDir = findInAncestorNodeModules(projectRoot, REACT_NATIVE_BARE_KIT)
+  if (bareKitDir === null) return
+
+  const required = (await readManifest(sdkPath))?.peerDependencies?.[REACT_NATIVE_BARE_KIT]
+  const installed = (await readManifest(bareKitDir))?.version
+  if (typeof required !== 'string' || typeof installed !== 'string') return
+  if (semver.satisfies(installed, required, { includePrerelease: true })) return
+
+  throw new ReactNativeBareKitUnsupportedError(installed, required)
+}
 
 /** Where react-native-bare-kit builds each platform's linked addons from. */
 const PLATFORMS = [
@@ -25,7 +57,7 @@ export interface LinkAddonsOptions {
 export async function linkAddons(options: LinkAddonsOptions): Promise<string[]> {
   const { projectRoot, addonModules, hosts, logger } = options
 
-  const bareKitDir = findInAncestorNodeModules(projectRoot, 'react-native-bare-kit')
+  const bareKitDir = findInAncestorNodeModules(projectRoot, REACT_NATIVE_BARE_KIT)
   if (bareKitDir === null) {
     logger.warn('react-native-bare-kit is not installed; the native addons were not linked.')
     return []

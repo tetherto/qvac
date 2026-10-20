@@ -254,6 +254,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("OCR_FAILED", reportedCode, message, payload)
     class ClientProfilerInvalidCapacity(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("PROFILER_INVALID_CAPACITY", reportedCode, message, payload)
+    class ClientReactNativeBareKitUnsupported(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("REACT_NATIVE_BARE_KIT_UNSUPPORTED", reportedCode, message, payload)
     class ClientRequestValidationFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("REQUEST_VALIDATION_FAILED", reportedCode, message, payload)
     class ClientRpcConnectionFailed(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -409,6 +411,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "MULTIPLE_SDK_INSTALLATIONS" && (code == null || code == 50607) -> QvacKnownException.ClientMultipleSdkInstallations(message, payload, code)
     name == "OCR_FAILED" && code == 50007 -> QvacKnownException.ClientOcrFailed(message, payload, code)
     name == "PROFILER_INVALID_CAPACITY" && (code == null || code == 50800) -> QvacKnownException.ClientProfilerInvalidCapacity(message, payload, code)
+    name == "REACT_NATIVE_BARE_KIT_UNSUPPORTED" && (code == null || code == 50620) -> QvacKnownException.ClientReactNativeBareKitUnsupported(message, payload, code)
     name == "REQUEST_VALIDATION_FAILED" && (code == null || code == 50010) -> QvacKnownException.ClientRequestValidationFailed(message, payload, code)
     name == "RPC_CONNECTION_FAILED" && (code == null || code == 50203) -> QvacKnownException.ClientRpcConnectionFailed(message, payload, code)
     name == "RPC_NO_HANDLER" && (code == null || code == 50200) -> QvacKnownException.ClientRpcNoHandler(message, payload, code)
