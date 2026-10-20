@@ -168,7 +168,7 @@ const gpuSupported =
     (platform === 'win32' && arch === 'x64'))
 
 const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter((c) => {
-  if (c.id === 'cpu') return true
+  if (c.id === 'cpu') return !gpuSupported || noGpu
   return gpuSupported && !noGpu
 })
 
@@ -463,8 +463,8 @@ function runImageRecognitionTest(testCase, deviceConfig) {
 
 /**
  * Runs `runImageRecognitionTest` for one image across every
- * configured backend (CPU + GPU on GPU-capable platforms, CPU only
- * on the rest). Used by the image-<name>.test.js entry points.
+ * configured backend (GPU on GPU-capable platforms, CPU on the rest
+ * or with NO_GPU). Used by the image-<name>.test.js entry points.
  */
 function runPerImageBackendTests(testCase) {
   for (const deviceConfig of DEVICE_CONFIGS) {
