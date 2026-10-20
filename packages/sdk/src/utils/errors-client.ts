@@ -197,6 +197,18 @@ export class BarePackNodeUnsupportedError extends QvacErrorBase {
   }
 }
 
+export class BundleTargetNotInstalledError extends QvacErrorBase {
+  constructor(target: string, packageName: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BUNDLE_TARGET_NOT_INSTALLED,
+        [target, packageName],
+        cause
+      )
+    )
+  }
+}
+
 export class InvalidPluginSpecifierError extends QvacErrorBase {
   constructor(specifiers: string[], cause?: unknown) {
     const list = specifiers.map((s) => `  - ${s}`).join('\n')
