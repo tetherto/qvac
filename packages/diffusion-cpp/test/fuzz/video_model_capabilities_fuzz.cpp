@@ -17,6 +17,7 @@ namespace {
 using qvac_lib_inference_addon_sd::inspectVideoModelCapabilities;
 using qvac_lib_inference_addon_sd::VideoModelCapabilities;
 
+// Magic number defined in ggml-org/ggml docs/gguf.md (gguf_header_t.magic).
 constexpr uint32_t K_GGUF_MAGIC = 0x46554747;
 
 template <typename T> void appendLe(std::vector<uint8_t>& out, T value) {
@@ -56,7 +57,7 @@ FUZZ_TEST(VideoModelCapabilitiesFuzz, InspectNeverCrashes)
           {emptyGguf()},
           {emptyGguf(2)},
           {hugeKvStringGguf()},
-          {{'G', 'G', 'U', 'F'}},
+          {{'G', 'G', 'U', 'F'}}, // truncated GGUF header
       };
     });
 
