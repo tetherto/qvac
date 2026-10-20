@@ -1,0 +1,165 @@
+---
+title: RAG
+icon: ScanSearch
+description: Out-of-the-box retrieval-augmented generation workflow.
+schemaType: HowTo
+---
+
+## Overview
+
+RAG (retrieval-augmented generation) uses [text embeddings](/sdk/ai-capabilities/text-embeddings): you embed (vectorize) documents, persist them in a vector store, and later retrieve the most relevant chunks for a query using similarity search.
+
+Compared to generating text embeddings only, the key differences are:
+- You must **persist embeddings** (vectors) alongside the original text (and optional metadata) in a vector store.
+- At query time, you **embed the query** and run **top‑K** vector search to fetch the most relevant documents/chunks.
+- You _typically_ pass the retrieved text to [`completion()`](/sdk/reference/api#completion) as context to ground the model's answer (this retrieval step is what makes it RAG).
+
+## Functions
+
+1. [`loadModel()`](/sdk/reference/api#loadmodel) (with `modelType: "embeddings"`)
+2. [`embed()`](/sdk/reference/api#embed) — generate vectors
+3. Use any combination of the RAG functions below as needed:
+   - [`ragChunk()`](/sdk/reference/api#ragchunk) — chunk documents
+   - [`ragIngest()`](/sdk/reference/api#ragingest) — embed and store (requires model)
+   - [`ragSaveEmbeddings()`](/sdk/reference/api#ragsaveembeddings) — save pre-computed vectors
+   - [`ragSearch()`](/sdk/reference/api#ragsearch) — query similar documents (requires model)
+   - [`ragReindex()`](/sdk/reference/api#ragreindex) — optimize search index
+   - [`ragDeleteEmbeddings()`](/sdk/reference/api#ragdeleteembeddings) — remove documents
+   - [`ragListWorkspaces()`](/sdk/reference/api#raglistworkspaces) — list workspaces
+   - [`ragCloseWorkspace()`](/sdk/reference/api#ragcloseworkspace) — release resources
+   - [`ragDeleteWorkspace()`](/sdk/reference/api#ragdeleteworkspace) — delete workspace and data
+   - [`createVectorIndex()`](/sdk/reference/api#createvectorindex) — build a TurboVec index over your own documents
+   - [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex) — reopen a saved TurboVec index
+4. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Pipeline
+
+Create your RAG pipeline using [text embeddings](/sdk/ai-capabilities/text-embeddings), the functions above, and [completion](/sdk/ai-capabilities/text-generation).
+
+Regarding vector storage, you may use:
+- **External vector DB:** use [`embed()`](/sdk/reference/api#embed) to generate vectors and store them wherever you want (e.g., MongoDB, LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
+- **Built-in TurboVec index with your own document store:** use [`embed()`](/sdk/reference/api#embed) for vectors and [`createVectorIndex()`](/sdk/reference/api#createvectorindex) for on-device nearest-neighbour search. QVAC indexes the vectors; your documents stay in whatever store you already have, and results come back as the ids you assigned. Snapshots can be saved and reopened with [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex).
+- **Built-in vector store:** use the RAG workspace functions ([`ragIngest()`](/sdk/reference/api#ragingest), [`ragSearch()`](/sdk/reference/api#ragsearch), etc.). QVAC persists the vectors for you, so this is the simplest path.
+
+<Callout type="warn">
+**Built-in vector store is not production grade** and is intended for prototypes only. For production workloads, use one of the external vector DB paths shown below (MongoDB, SQLite, LanceDB, Chroma, etc.).
+</Callout>
+
+<Callout type="info">
+**Important:** when using an external vector DB, make sure its schema matches the embedding dimensionality produced by your model (e.g., GTE Large embeddings used in the example are 1024‑dimensional).
+</Callout>
+
+## Examples
+
+### Built-in vector store
+
+<Callout type="warn">
+**Prototype only** — for production, prefer an external vector DB (below).
+</Callout>
+
+The following script shows how to ingest documents into a built-in RAG workspace with `ragIngest()` and query them with `ragSearch()`, without setting up an external vector DB:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-hyperdb/ingest.js title="rag-managed.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-hyperdb/ingest.ts title="rag-managed.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+**Swap the backend:** to store the vectors in a TurboVec index instead of the default HyperDB, set `"ragTurbovec": true` in `qvac.config.json`. The RAG API is the same. See [Configuration › `ragTurbovec`](/sdk/configuration#options) for details.
+</Callout>
+
+### TurboVec index with your own document store
+
+The following script keeps the documents in a plain `Map`, embeds them with `embed()`, and indexes the vectors in a TurboVec index created with `createVectorIndex()`. Search returns the ids you assigned, so the documents can live in any database. The index is saved with `write()` and reopened with `loadVectorIndex()`; only the vectors are stored, never the documents.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-turbovec.js title="rag-turbovec.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-turbovec.ts title="rag-turbovec.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+TurboVec quantises vectors (`VectorIndexStorage.TURBOVEC_Q4` by default, `TURBOVEC_Q2` for half the memory) and needs a dimension divisible by 8 and no greater than 1024. `GTE_LARGE_FP16` produces 1024-dimensional vectors and fits. Search uses dot products, so L2-normalise vectors when you need cosine similarity. The index lives in the SDK worker; after a worker restart, reopen it from the snapshot.
+</Callout>
+
+### External vector DB
+
+#### MongoDB
+
+The following script stores each document in MongoDB alongside its vector, builds a vector search index over it, and retrieves matches with a `$vectorSearch` aggregation that [pre-filters](https://www.mongodb.com/docs/vector-search/query/aggregation-stages/vector-search-stage/#pre-filter-search-data) by category:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-mongodb.js title="rag-mongodb.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-mongodb.ts title="rag-mongodb.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+#### SQLite
+
+The following script shows the same workflow using `embed()` plus a SQLite vector index:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-sqlite.js title="rag-sqlite.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-sqlite.ts title="rag-sqlite.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>
+
