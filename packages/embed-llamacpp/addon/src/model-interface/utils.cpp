@@ -246,13 +246,24 @@ void checkLoadOptions(
   }
 }
 
+int32_t unifiedSequenceLimit(const common_params& params) {
+  // A causal context caps its batch at the context size.
+  int64_t tokens = params.n_batch;
+  if (params.n_ctx > 0) {
+    tokens = std::min<int64_t>(tokens, params.n_ctx);
+  }
+  return static_cast<int32_t>(std::max<int64_t>(
+      1,
+      std::min<int64_t>(
+          static_cast<int64_t>(llama_max_parallel_sequences()), tokens)));
+}
+
 void configureSinglePassRankContext(common_params& params) {
   params.embedding = true;
   params.pooling_type = LLAMA_POOLING_TYPE_RANK;
   params.n_ctx = params.n_batch;
   params.n_ubatch = params.n_batch;
-  params.n_parallel = static_cast<int32_t>(std::min<int64_t>(
-      static_cast<int64_t>(llama_max_parallel_sequences()), params.n_batch));
+  params.n_parallel = unifiedSequenceLimit(params);
   params.kv_unified = true;
 }
 

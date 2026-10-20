@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Embedding loads with `n_parallel` 1 admit every prompt in a batch again on
+  fabric b11259, which no longer lifts the sequence limit for a unified KV
+  cache. The limit is `min(256, batch_size, ctx_size)`, so a `batch_size`
+  below 256 no longer aborts the process, and a batch of many short prompts
+  is split at the limit instead of failing to decode. The context reserves
+  one output row per sequence, so a short-query workload now holds up to
+  256 vocabulary-sized output rows.
+
 ## [0.51.0] - 2026-10-19
 
 ### Breaking
@@ -23,11 +35,6 @@
   document as llama-server's `/rerank` does, and the scores match fabric's
   `llama-embedding --pooling rank`. A GGUF that declares another pooling or
   has no classifier head is rejected before its weights load.
-
-## [Unreleased]
-
-### Added
-
 - Bounded FuzzTest coverage for `parseMainGpu` and
   `preferredBackendTypeFromString`. Linux C++ CI runs the suite after unit
   tests. The parsers compile without `@qvac/fabric`, so ASan and LeakSanitizer
