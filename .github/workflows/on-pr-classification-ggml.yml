@@ -22,6 +22,12 @@ on:
       # template-only change has to start this orchestrator itself.
       - "cmake/qvac-addon/**"
   workflow_dispatch:
+    inputs:
+      base-ref:
+        description: "Base ref for C++ checks on a manual branch run"
+        type: string
+        required: false
+        default: "main"
 
   workflow_call:
 
@@ -218,7 +224,7 @@ jobs:
       - resolve-fabric-prebuilds
     secrets: inherit
     with:
-      sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
+      sha: ${{ github.event.pull_request.base.sha || inputs.base-ref || github.event.before || 'HEAD~1' }}
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/classification-ggml
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
