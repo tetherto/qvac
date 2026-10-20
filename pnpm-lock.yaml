@@ -924,7 +924,7 @@ importers:
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: ^0.50.0
-        version: link:../embed-llamacpp
+        version: 0.50.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/ggml-rpc-server':
         specifier: ^0.5.1
         version: link:../ggml-rpc-server
@@ -1665,7 +1665,7 @@ importers:
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: ^0.50.0
-        version: link:../embed-llamacpp
+        version: 0.50.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
@@ -1733,8 +1733,8 @@ importers:
         specifier: ^3.6.2
         version: 3.9.3
       bare-pack:
-        specifier: ^2.0.1
-        version: 2.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        specifier: ^3.0.2
+        version: 3.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-path:
         specifier: ^3.0.1
         version: 3.1.1
@@ -4623,6 +4623,18 @@ packages:
       '@qvac/fabric-ios':
         optional: true
 
+  '@qvac/embed-llamacpp@0.50.0':
+    resolution: {integrity: sha512-rBo2AvyKPC/mgYMfam59RrmJpIIhPRpwA3xQeAtMu5Csov/6FbPjtDb7sXxOxz0155APeDtRbK/xaUzAzMe3sg==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.22.0
+      '@qvac/fabric-ios': ^0.22.0
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
+
   '@qvac/error@0.1.1':
     resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
 
@@ -5987,8 +5999,8 @@ packages:
       bare-url:
         optional: true
 
-  bare-module-traverse@2.4.4:
-    resolution: {integrity: sha512-zK4bDxqeD15Tvu/C5B1Mi/epl9PavjIhU3SVh5RhDb4Hpet6applPVX8Q9rinu7nT80yzgSSlBn0exzJaNXv0A==}
+  bare-module-traverse@2.5.9:
+    resolution: {integrity: sha512-cAkJxUYfdaBvYS1N8g8evHmNNDtJD+PbZYXLBxF9Plg8EantwmUMwFe2EGFw96+VcVo2ot/8aIX+4aedH44NCg==}
     peerDependencies:
       bare-buffer: '*'
       bare-url: '*'
@@ -5998,8 +6010,8 @@ packages:
       bare-url:
         optional: true
 
-  bare-module-traverse@2.5.9:
-    resolution: {integrity: sha512-cAkJxUYfdaBvYS1N8g8evHmNNDtJD+PbZYXLBxF9Plg8EantwmUMwFe2EGFw96+VcVo2ot/8aIX+4aedH44NCg==}
+  bare-module-traverse@2.7.2:
+    resolution: {integrity: sha512-cvVrB5vcIc7QakOq0oXhuu2l2yejff1pV59nA/rk21xsFSm2zMl3dC7opzRwowjisliawTUBP6VoakqBEKQUQA==}
     peerDependencies:
       bare-buffer: '*'
       bare-url: '*'
@@ -6043,8 +6055,8 @@ packages:
     resolution: {integrity: sha512-fF4Q7QsyKVF5Rj0qvI8BgUNjqzC2JvQlpTaPLjVJVxYVUX5Zr9un+y3w1HmA4nNKdFmRBT8z/WmrjvXzXVerKQ==}
     engines: {bare: '>=1.14.0'}
 
-  bare-pack@2.2.1:
-    resolution: {integrity: sha512-7w9tcotjBxT31Azwqr/gq5acO//8cMxiNwtNccLvIhu0ZmlEXvqrBsZfUJ9P3i+Nd13/7DOY1bLcq+4lCcqzqQ==}
+  bare-pack@2.2.3:
+    resolution: {integrity: sha512-wjfjKAXmhy3gjIBFVgQovyBgUqEi7zLxCwCbGTL7dSBEBe9admssLSZoUTki+0xyCBSh9dcfBT4TQwXgme9jSA==}
     hasBin: true
     peerDependencies:
       bare-buffer: ^3.6.0
@@ -6055,8 +6067,8 @@ packages:
       bare-url:
         optional: true
 
-  bare-pack@2.2.3:
-    resolution: {integrity: sha512-wjfjKAXmhy3gjIBFVgQovyBgUqEi7zLxCwCbGTL7dSBEBe9admssLSZoUTki+0xyCBSh9dcfBT4TQwXgme9jSA==}
+  bare-pack@3.0.2:
+    resolution: {integrity: sha512-wGwpPaXRuu5zE2SrEV4nZReh36q0Ul3C0JdMR/M7Du2Vc4IrgHr6/ok84bpeAGmB6iCAcDPztiPu5N8f9LeKaw==}
     hasBin: true
     peerDependencies:
       bare-buffer: ^3.6.0
@@ -14527,6 +14539,26 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
+  '@qvac/embed-llamacpp@0.50.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/fabric': 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+    optionalDependencies:
+      '@qvac/fabric-android-arm64': 0.22.0
+      '@qvac/fabric-darwin-arm64': 0.22.0
+      '@qvac/fabric-darwin-x64': 0.22.0
+      '@qvac/fabric-ios': 0.22.0
+      '@qvac/fabric-linux-arm64': 0.22.0
+      '@qvac/fabric-linux-x64': 0.22.0
+      '@qvac/fabric-win32-x64': 0.22.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
   '@qvac/error@0.1.1': {}
 
   '@qvac/fabric-android-arm64@0.22.0': {}
@@ -16282,22 +16314,22 @@ snapshots:
 
   bare-buffer@3.6.2: {}
 
-  bare-bundle-id@1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.10.0(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+  bare-bundle-id@1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
     dependencies:
       bare-buffer: 3.6.2
-      bare-bundle: 1.10.0(bare-buffer@3.6.2)(bare-url@2.4.6)
-      sodium-native: 5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+      bare-bundle: 1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4)
+      sodium-native: 5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-events
       - bare-url
       - react-native-b4a
 
-  bare-bundle-id@1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+  bare-bundle-id@1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.11.0(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
     dependencies:
       bare-buffer: 3.6.2
-      bare-bundle: 1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4)
-      sodium-native: 5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.4.6)
+      sodium-native: 5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-events
@@ -16313,6 +16345,11 @@ snapshots:
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-url: 2.5.4
+
+  bare-bundle@1.11.0(bare-buffer@3.6.2)(bare-url@2.4.6):
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-url: 2.4.6
 
   bare-bundle@1.11.0(bare-buffer@3.6.2)(bare-url@2.5.4):
     optionalDependencies:
@@ -16586,17 +16623,17 @@ snapshots:
 
   bare-mime@1.0.0: {}
 
-  bare-module-lexer@1.6.3(bare-buffer@3.6.2)(bare-url@2.4.6):
+  bare-module-lexer@1.6.3(bare-buffer@3.6.2)(bare-url@2.5.4):
     dependencies:
-      require-addon: 1.2.0(bare-url@2.4.6)
+      require-addon: 1.2.0(bare-url@2.5.4)
     optionalDependencies:
       bare-buffer: 3.6.2
     transitivePeerDependencies:
       - bare-url
 
-  bare-module-lexer@1.6.3(bare-buffer@3.6.2)(bare-url@2.5.4):
+  bare-module-lexer@1.7.0(bare-buffer@3.6.2)(bare-url@2.4.6):
     dependencies:
-      require-addon: 1.2.0(bare-url@2.5.4)
+      require-addon: 1.2.0(bare-url@2.4.6)
     optionalDependencies:
       bare-buffer: 3.6.2
     transitivePeerDependencies:
@@ -16622,16 +16659,6 @@ snapshots:
     optionalDependencies:
       bare-url: 2.5.4
 
-  bare-module-traverse@2.4.4(bare-buffer@3.6.2)(bare-url@2.4.6):
-    dependencies:
-      bare-addon-resolve: 1.10.1(bare-url@2.4.6)
-      bare-mime: 1.0.0
-      bare-module-lexer: 1.6.3(bare-buffer@3.6.2)(bare-url@2.4.6)
-      bare-module-resolve: 1.12.4(bare-url@2.4.6)
-    optionalDependencies:
-      bare-buffer: 3.6.2
-      bare-url: 2.4.6
-
   bare-module-traverse@2.5.9(bare-buffer@3.6.2)(bare-url@2.5.4):
     dependencies:
       bare-addon-resolve: 1.10.1(bare-url@2.5.4)
@@ -16641,6 +16668,17 @@ snapshots:
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-url: 2.5.4
+
+  bare-module-traverse@2.7.2(bare-buffer@3.6.2)(bare-url@2.4.6):
+    dependencies:
+      bare-addon-resolve: 1.10.1(bare-url@2.4.6)
+      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-mime: 1.0.0
+      bare-module-lexer: 1.7.0(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-module-resolve: 1.12.4(bare-url@2.4.6)
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-url: 2.4.6
 
   bare-module@5.0.3(bare-buffer@3.6.2):
     dependencies:
@@ -16689,23 +16727,6 @@ snapshots:
 
   bare-os@3.9.3: {}
 
-  bare-pack@2.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
-    dependencies:
-      bare-bundle: 1.10.0(bare-buffer@3.6.2)(bare-url@2.4.6)
-      bare-bundle-id: 1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.10.0(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-module-traverse: 2.4.4(bare-buffer@3.6.2)(bare-url@2.4.6)
-      bare-path: 3.1.1
-      paparam: 1.10.1
-      promaphore: 1.0.0
-    optionalDependencies:
-      bare-buffer: 3.6.2
-      bare-url: 2.4.6
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-events
-      - react-native-b4a
-
   bare-pack@2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
     dependencies:
       bare-bundle: 1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -16718,6 +16739,23 @@ snapshots:
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-url: 2.5.4
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-events
+      - react-native-b4a
+
+  bare-pack@3.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+    dependencies:
+      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-bundle-id: 1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.11.0(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-module-traverse: 2.7.2(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-path: 3.1.1
+      paparam: 1.10.1
+      promaphore: 1.0.0
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-url: 2.4.6
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-events
