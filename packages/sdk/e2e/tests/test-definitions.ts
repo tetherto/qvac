@@ -141,6 +141,64 @@ export const modelLoadLlmLegacyNoMmapRejected: TestDefinition = {
   }
 }
 
+// Memory storage keeps the test platform-neutral: disk storage needs a writable app directory.
+export const modelLoadLlmPromptCacheKeys: TestDefinition = {
+  testId: 'model-load-llm-prompt-cache-keys',
+  params: {
+    cacheCheckpoints: 2,
+    cacheCheckpointsMaxBytes: 1073741824,
+    cacheCheckpointStorage: 'memory',
+    cacheRamMib: 256
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  steps: loadsWithConfig('llm', {
+    verbosity: 0,
+    ctx_size: 2048,
+    cache_checkpoints: '$params.cacheCheckpoints',
+    cache_checkpoints_max_bytes: '$params.cacheCheckpointsMaxBytes',
+    cache_checkpoint_storage: '$params.cacheCheckpointStorage',
+    cache_ram_mib: '$params.cacheRamMib'
+  }),
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
+
+export const modelLoadLlmCacheCheckpointsOutOfRangeRejected: TestDefinition = {
+  testId: 'model-load-llm-cache-checkpoints-out-of-range-rejected',
+  params: { cacheCheckpoints: 1025 },
+  expectation: { validation: 'throws-error', errorContains: '50010' },
+  steps: [
+    { modelSource: { dep: 'llm', as: 'src' } },
+    {
+      callError: {
+        method: 'loadModel',
+        params: {
+          modelSrc: '$src.modelSrc',
+          modelType: '$src.modelType',
+          modelConfig: { cache_checkpoints: '$params.cacheCheckpoints' }
+        },
+        as: 'err'
+      }
+    },
+    // The addon's own range error would mean the value skipped SDK validation.
+    {
+      assert: {
+        on: '$err',
+        named: 'errorMatches',
+        with: { code: '50010', messageNotMatching: 'must be an integer between' }
+      }
+    }
+  ],
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 1000
+  }
+}
+
 export const modelLoadEmbedding: TestDefinition = {
   testId: 'model-load-embedding',
   params: {},
@@ -445,6 +503,8 @@ const catalog: TestDefinition[] = [
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
   modelLoadLlmLegacyNoMmapRejected,
+  modelLoadLlmPromptCacheKeys,
+  modelLoadLlmCacheCheckpointsOutOfRangeRejected,
   modelLoadEmbedding,
   modelLoadOcr,
   modelLoadOcrDoctr,
