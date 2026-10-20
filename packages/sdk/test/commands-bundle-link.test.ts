@@ -30,10 +30,8 @@ function installBareKit(projectRoot: string) {
 
 test('linkAddons: links nothing when react-native-bare-kit is not installed', async (t) => {
   const projectRoot = createProject(t)
-  const entryPath = join(projectRoot, 'qvac', 'worker.entry.mjs')
-  writeFile(entryPath, '')
 
-  t.alike(await linkAddons({ projectRoot, entryPath, hosts: ['android-arm64'], logger }), [])
+  t.alike(await linkAddons({ projectRoot, addonModules: [], hosts: ['android-arm64'], logger }), [])
 })
 
 test('linkAddons: replaces what react-native-bare-kit had for the platform', async (t) => {
@@ -41,10 +39,13 @@ test('linkAddons: replaces what react-native-bare-kit had for the platform', asy
   const bareKitDir = installBareKit(projectRoot)
   const stale = join(bareKitDir, 'android', 'src', 'main', 'addons', 'arm64-v8a', 'libold.so')
   writeFile(stale, '')
-  const entryPath = join(projectRoot, 'qvac', 'worker.entry.mjs')
-  writeFile(entryPath, '')
 
-  const linked = await linkAddons({ projectRoot, entryPath, hosts: ['android-arm64'], logger })
+  const linked = await linkAddons({
+    projectRoot,
+    addonModules: [],
+    hosts: ['android-arm64'],
+    logger
+  })
 
   t.alike(linked, [])
   t.absent(existsSync(stale), 'addons linked by an earlier prebuild are removed')
