@@ -10,7 +10,8 @@ fuzz helpers (`qvac_addon_fuzz_manifest`, `qvac_addon_fuzz_only_return`,
 `qvac_addon_add_fuzz_target`) are reused by unmigrated addons without a full
 CMake-template adoption. Bounded Linux CI coverage exists for
 `classification-ggml`, the `tts-ggml` and `audiogen-ggml` config-parse
-fronts, and the `asr-ggml` s16le PCM decoder. Fleet
+fronts, the `asr-ggml` s16le PCM decoder, the `bci-whispercpp`
+neural-signal parser, and the `embed-llamacpp` main-gpu config parsers. Fleet
 corpus/dictionary scale-up, scheduled continuous fuzzing, and optional
 OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
@@ -579,8 +580,10 @@ families that protect several addons at once.
   direct-ggml addon adopts the template, add its fuzz targets: the image family
   (`classification-ggml`, `ocr-ggml`, `vla-ggml`) and GGUF/weight-header
   parsers. Unmigrated addons reuse the same helpers without a template
-  migration. `tts-ggml` and `audiogen-ggml` config number parsers are in, and
-  `asr-ggml` fuzzes the s16le PCM decoder. Prefer the no-fabric link;
+  migration. `tts-ggml` and `audiogen-ggml` config number parsers are in,
+  `asr-ggml` fuzzes the s16le PCM decoder, `bci-whispercpp` fuzzes the
+  length-prefixed neural-signal parser, and `embed-llamacpp` fuzzes the
+  header-only main-gpu and device parsers. Prefer the no-fabric link;
   reserve `LINK_FABRIC` for header loaders that actually call ggml/gguf. Factor
   shared parsing helpers so one target covers multiple consumers where the code
   is genuinely shared.

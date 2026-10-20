@@ -1,7 +1,9 @@
+#include <atomic>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -244,4 +246,20 @@ TEST(LoadModeNameTest, NamesMatchLoadModeValues) {
   EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_MLOCK), "mlock");
   EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_MMAP_MLOCK), "mmap+mlock");
   EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_DIRECT_IO), "dio");
+}
+
+namespace {
+template <typename Flag>
+constexpr bool kAbortAcceptsFlag = requires(llama_context* ctx, Flag&& flag) {
+  abortDecodeWhen(ctx, std::forward<Flag>(flag));
+};
+} // namespace
+
+// The abort callback keeps the flag's address, so a temporary flag would
+// dangle once the call returns.
+TEST(UtilsTest, AbortDecodeWhenRejectsATemporaryFlag) {
+  static_assert(kAbortAcceptsFlag<std::atomic<bool>&>);
+  static_assert(kAbortAcceptsFlag<const std::atomic<bool>&>);
+  static_assert(!kAbortAcceptsFlag<std::atomic<bool>>);
+  SUCCEED();
 }

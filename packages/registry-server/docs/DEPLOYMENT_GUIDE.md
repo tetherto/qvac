@@ -456,7 +456,9 @@ Run it in batches. A filter is a case-sensitive substring match on the record pa
 
 `--force` re-fills records that already carry a pointer. It is for replacing descriptions built by older code, and the workflow rejects it without a filter or a limit.
 
-The workflow re-runs the selection as a dry run afterwards and fails when more records select than the fill skipped. That means the pointers did not persist, and the first thing to check is the schema version installed on the indexers: below 0.4.0 the record has no field to encode, so a fill reports success and writes nothing. The retries in that step exist because each run connects to a randomly chosen indexer and an appended pointer takes time to reach the view on the node that answers.
+A fill that leaves a selected record unfilled, because its reader could not parse the file or its download failed, logs the path and reason and exits with code 2; a fatal error exits with 1. The workflow fails such a run in its last step, which lists every skipped record in the job summary. Fix the cause and re-run with the same filter: skipped records carry no pointer, so they select again.
+
+The workflow also re-runs the selection as a dry run afterwards and fails when more records select than the fill skipped. That means the pointers did not persist, and the first thing to check is the schema version installed on the indexers: below 0.4.0 the record has no field to encode, so a fill reports success and writes nothing. The retries in that step exist because each run connects to a randomly chosen indexer and an appended pointer takes time to reach the view on the node that answers.
 
 ### Verifying Replication Health
 

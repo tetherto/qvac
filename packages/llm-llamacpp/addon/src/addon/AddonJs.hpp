@@ -34,6 +34,7 @@
 #include "handlers/GenerationParamHandlers.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/SpeculativeRuntime.hpp"
 #include "utils/ParallelLimits.hpp"
 #include "utils/ParseUnsigned.hpp"
 
@@ -646,6 +647,10 @@ inline FitResult runFit(FitRequest request) {
 
   common_params loadParams;
   try {
+    // Addon-only key, consumed before llama.cpp's parser sees it, as at load.
+    const auto speculativeConfig =
+        qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
+            configFilemap);
     ModelMetaData metadata;
     metadata.parse(modelPath, GGUFShards{}, false, ADDON_ID);
     auto normalized = load_fit_normalization::normalizeLoadForFit(
@@ -656,8 +661,20 @@ inline FitResult runFit(FitRequest request) {
         load_fit_normalization::productionDependencies(
             LlamaModel::llamaLogCallback));
     loadParams = std::move(normalized.params);
+    qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
+        speculativeConfig, loadParams);
   } catch (const std::exception&) {
     return errorResult("unsupported-config");
+  }
+  // The DFlash draft model is a second file the fit reads; probed like the
+  // target model above.
+  if (const std::string& draftPath = loadParams.speculative.draft.mparams.path;
+      !draftPath.empty()) {
+    if (std::FILE* file = std::fopen(draftPath.c_str(), "rb")) {
+      std::fclose(file);
+    } else {
+      return errorResult("model-unreadable");
+    }
   }
   loadParams.embedding = false;
 
@@ -721,6 +738,12 @@ inline FitResult runFit(FitRequest request) {
     return errorResult("unsupported-config");
   }
 
+  // A draft context (MTP, or a DFlash draft model) is fitted next to the
+  // model, as the load does.
+  const auto speculativeFit =
+      qvac_lib_inference_addon_llama::speculative::SpeculativeFitModel::create(
+          loadParams);
+
   common_params_fit_status status{};
   try {
     status = common_fit_params(
@@ -731,7 +754,7 @@ inline FitResult runFit(FitRequest request) {
         buftOverrides.data(),
         margins.data(),
         minCtx,
-        nullptr,
+        speculativeFit ? speculativeFit->extra() : nullptr,
         false,
         GGML_LOG_LEVEL_INFO,
         // The load's fit passes it too, so `moe-cache-mib: auto` sizes the
