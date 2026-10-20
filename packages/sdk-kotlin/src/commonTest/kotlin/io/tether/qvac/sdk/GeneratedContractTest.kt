@@ -42,7 +42,7 @@ class GeneratedContractTest {
 
     @Test
     fun generatedErrorRegistryPreservesCollidingNames() {
-        assertEquals(137, ErrorCodes.all.size)
+        assertEquals(138, ErrorCodes.all.size)
         assertEquals(52002, ErrorCodes.lookup("MODEL_NOT_FOUND", 52002))
         assertEquals(19003, ErrorCodes.lookup("MODEL_NOT_FOUND", 19003))
         assertEquals(null, ErrorCodes.lookup("MODEL_NOT_FOUND"))

@@ -214,6 +214,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("BARE_PACK_NODE_UNSUPPORTED", reportedCode, message, payload)
     class ClientBundleFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BUNDLE_FAILED", reportedCode, message, payload)
+    class ClientBundleTargetNotInstalled(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("BUNDLE_TARGET_NOT_INSTALLED", reportedCode, message, payload)
     class ClientBundleVerificationFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BUNDLE_VERIFICATION_FAILED", reportedCode, message, payload)
     class ClientConfigFileInvalid(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -386,7 +388,8 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "ADDON_LINK_FAILED" && (code == null || code == 50617) -> QvacKnownException.ClientAddonLinkFailed(message, payload, code)
     name == "BARE_IMPORTS_MAP_NOT_FOUND" && (code == null || code == 50613) -> QvacKnownException.ClientBareImportsMapNotFound(message, payload, code)
     name == "BARE_PACK_NODE_UNSUPPORTED" && (code == null || code == 50618) -> QvacKnownException.ClientBarePackNodeUnsupported(message, payload, code)
-    name == "BUNDLE_FAILED" && (code == null || code == 50611) -> QvacKnownException.ClientBundleFailed(message, payload, code)
+    name == "BUNDLE_FAILED" && (code == null || code == 50621) -> QvacKnownException.ClientBundleFailed(message, payload, code)
+    name == "BUNDLE_TARGET_NOT_INSTALLED" && (code == null || code == 50622) -> QvacKnownException.ClientBundleTargetNotInstalled(message, payload, code)
     name == "BUNDLE_VERIFICATION_FAILED" && (code == null || code == 50609) -> QvacKnownException.ClientBundleVerificationFailed(message, payload, code)
     name == "CONFIG_FILE_INVALID" && (code == null || code == 50603) -> QvacKnownException.ClientConfigFileInvalid(message, payload, code)
     name == "CONFIG_FILE_NOT_FOUND" && (code == null || code == 50602) -> QvacKnownException.ClientConfigFileNotFound(message, payload, code)

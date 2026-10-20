@@ -212,6 +212,7 @@ function defaultHosts(target: BundleTarget): string[] {
 }
 
 interface StowBundleOptions {
+  projectRoot: string
   entryPath: string
   target: BundleTarget
   outputDir: string
@@ -222,9 +223,10 @@ interface StowBundleOptions {
 
 /** Writes the bundle, the harness and the files the bundle loads, and returns the bundle's path. */
 async function stowBundle(options: StowBundleOptions): Promise<string> {
-  const { entryPath, target, outputDir, hosts, imports, deferModules } = options
+  const { projectRoot, entryPath, target, outputDir, hosts, imports, deferModules } = options
   const spec = TARGETS[target]
   const harnessPath = path.join(outputDir, spec.harness)
+  const stowTarget = await spec.load(projectRoot)
 
   assertNodeCanBundle()
   await fsp.rm(outputDir, { recursive: true, force: true })
@@ -242,7 +244,7 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
   try {
     for await (const artifact of stow(
       pathToFileURL(entryPath).href,
-      await spec.load(),
+      stowTarget,
       pathToFileURL(harnessPath).href,
       stowOptions
     )) {
@@ -349,7 +351,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
-  const stowOptions = { entryPath, target, outputDir, hosts, imports, deferModules }
+  const stowOptions = { projectRoot, entryPath, target, outputDir, hosts, imports, deferModules }
 
   // Missing mobile platform packages are installed, or reported, before bundling.
   const addonsMissingPlatformPackages = () =>
