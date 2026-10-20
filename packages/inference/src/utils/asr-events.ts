@@ -23,7 +23,8 @@ export function toVadStateEvent(event: ASRGgml.VadEvent) {
   return {
     speaking: event.speaking,
     probability: event.score,
-    source: event.source
+    source: event.source,
+    ...(event.speakerId !== undefined && { speakerId: event.speakerId })
   } satisfies VadStateEvent
 }
 

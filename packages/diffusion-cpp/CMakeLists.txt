@@ -1,7 +1,13 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
+# rather than qvac_addon_preproject() so overlay triplets and Android STL
+# stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+
 option(ANDROID_STL "Android STL linkage" c++_shared)
 option(BUILD_TESTING "Build tests" OFF)
+qvac_addon_fuzz_manifest()
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
@@ -63,6 +69,11 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
+# Fuzz-only configure (BUILD_FUZZING without BUILD_TESTING): build just the
+# fuzz targets and skip engine find_package() + the .bare module so pure
+# parse/transform drivers keep full ASan + LSan.
+qvac_addon_fuzz_only_return()
+
 # stable-diffusion.cpp – uses the CMake config installed by the registry port
 find_package(stable-diffusion-cpp CONFIG REQUIRED)
 
@@ -76,10 +87,22 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
+# The module is named after the platform package that ships it,
+# qvac__diffusion-cpp-<suffix> (every iOS host shares `ios`), so that package
+# is an ordinary addon: require.addon(), bare-pack and bare-link all find
+# prebuilds/<host>/qvac__diffusion-cpp-<suffix>.bare there. cmake-bare installs
+# the dynamically loadable ggml backends to <host>/<module name>, the directory
+# the addon looks in next to itself (see ModuleBackendsDir.hpp); bare-link
+# flattens them next to the module in a mobile app instead. Keep the suffix in
+# sync with "#host-addon" in package.json and SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
-set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+if(bare_target_value MATCHES "^ios-")
+  set(module_name "qvac__diffusion-cpp-ios")
+else()
+  set(module_name "qvac__diffusion-cpp-${bare_target_value}")
+endif()
+message("Building inference-addon-sd module '${module_name}'")
 
 # On Android and desktop Linux with GGML_BACKEND_DL, install GPU backend .so
 # modules alongside the addon so ggml can dlopen them at runtime.  CPU
@@ -113,7 +136,7 @@ if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   endforeach()
 endif()
 
-add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
+add_bare_module(inference-addon-sd NAME ${module_name} EXPORTS ${BACKEND_DL_EXPORTS})
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
@@ -170,7 +193,8 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
 
 target_compile_features(${inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${inference-addon-sd} PUBLIC JS_LOGGER)
-target_compile_definitions(${inference-addon-sd} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+target_compile_definitions(${inference-addon-sd} PRIVATE
+  QVAC_ADDON_MODULE_NAME="${module_name}")
 
 if(WIN32)
   # cmake-bare enables WINDOWS_EXPORT_ALL_SYMBOLS. Exporting addon internals
@@ -221,3 +245,5 @@ endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${inference-addon-sd}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
+
+qvac_addon_add_fuzz_subdirectory()

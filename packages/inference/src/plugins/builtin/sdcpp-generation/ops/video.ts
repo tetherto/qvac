@@ -125,10 +125,7 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     ctx.signal.removeEventListener('abort', onAbort)
   })
 
-  const response = await model.run({
-    ...(request.mode === 'img2vid'
-      ? { mode: 'img2vid' as const, init_image: Buffer.from(request.init_image!, 'base64') }
-      : { mode: 'txt2vid' as const }),
+  const runParams = {
     prompt: request.prompt,
     ...(request.negative_prompt !== undefined && {
       negative_prompt: request.negative_prompt
@@ -206,7 +203,16 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     ...(request.cache_threshold !== undefined && {
       cache_threshold: request.cache_threshold
     })
-  })
+  }
+  const response =
+    request.mode === 'img2vid'
+      ? await model.run({
+          ...runParams,
+          mode: 'img2vid',
+          // parseVideoRequest requires this field for image-to-video requests.
+          init_image: Buffer.from(request.init_image!, 'base64')
+        })
+      : await model.run({ ...runParams, mode: 'txt2vid' })
 
   let outputIndex = 0
 

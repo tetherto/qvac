@@ -54,8 +54,7 @@ import type { ModelResourceProfile } from "${catalogAliasSpecifier('schemas/mode
  * \`sha256Checksum\` — the same checksum a model constant carries.
  *
  * Facts only: on-disk bytes plus the GGUF transformer shape when the registry
- * captured it. Memory estimates are derived at call time by the estimators, so
- * a re-calibration never regenerates this file.
+ * captured it.
  */
 export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfile>> = {
 ${entries}

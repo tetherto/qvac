@@ -31,7 +31,7 @@ const height = Number(process.argv[7] || 480)
 if (!firstFramePath) {
   console.error('✖ first frame image path is required')
   console.error(
-    'Usage: bun run bare:example dist/examples/abot-world.js ' +
+    'Usage: node dist/examples/abot-world.js ' +
       '<firstFrameImage> [prompt] [outputDir] [blocks] [width] [height]'
   )
   process.exit(1)

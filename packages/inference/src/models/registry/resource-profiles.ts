@@ -8,8 +8,7 @@ import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
  * `sha256Checksum` — the same checksum a model constant carries.
  *
  * Facts only: on-disk bytes plus the GGUF transformer shape when the registry
- * captured it. Memory estimates are derived at call time by the estimators, so
- * a re-calibration never regenerates this file.
+ * captured it.
  */
 export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfile>> = {
   '002fe52ee02cef4e76f8114bfd810bb64aefb44a218666b01872a46e5c0349fc': {
@@ -249,6 +248,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
     artifactBytes: 43537450
+  },
+  '08456d9e22cd9a323c0364d98375f3746d6e68507ebb705cd46438c534c7a3a1': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 107012128
   },
   '089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae': {
     schemaVersion: 1,
@@ -1582,6 +1586,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 22864691,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '4a0b77c718c57f0cbb59841a47b0a18b3a249406646793ec10ce63f0d3fe8078': {
+    schemaVersion: 1,
+    engine: 'moss-transcribe',
+    artifactBytes: 1826866496
+  },
   '4a37286742244a130548b79823c9707bc0e56f373361e2cb56402f82e862c2b0': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -2221,6 +2230,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 3572436
+  },
+  '69b481694bc2933432a865c05b579db762f90f340a64d0c51e50464b867686f1': {
+    schemaVersion: 1,
+    engine: 'moss-transcribe',
+    artifactBytes: 641393984
   },
   '69f00c782198dc911062c9d1222fe39c85a6f954211a96796050aec3f0980ed7': {
     schemaVersion: 1,
@@ -4315,6 +4329,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'whispercpp-transcription',
     artifactBytes: 81768585
   },
+  c55e9e912a5e934f7fb9dc74e0d8b0e495c5fe6737bcffe0f325759417c4432c: {
+    schemaVersion: 1,
+    engine: 'moss-transcribe',
+    artifactBytes: 980100416
+  },
   c577b9a86e7e048a0b7eada054f4dd79a56bbfa911fbdacf900ac5b567cbb7d9: {
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
@@ -4429,7 +4448,8 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
   caa552d3369ea37f03fadf7d706cc4ad54660ba7ec7f18ce089c2635ef221ea5: {
     schemaVersion: 1,
     engine: 'tts-ggml',
-    artifactBytes: 794582720
+    artifactBytes: 1057658782,
+    assumptions: ['artifactBytes sums 6 companion-set files']
   },
   cad75f2c3eccb9545b571ca32f235e6ffaae6d8a77bfa808cf8068948c421f10: {
     schemaVersion: 1,

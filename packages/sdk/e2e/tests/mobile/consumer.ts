@@ -1,3 +1,5 @@
+import { DecisionExecutor } from '../shared/executors/decision-executor.js'
+import { MobileSpeakerAwareExecutor } from './executors/speaker-aware-executor.js'
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { Platform } from 'react-native'
 import { createExecutor } from '@qvac/test-suite/mobile'
@@ -203,6 +205,7 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    new MobileSpeakerAwareExecutor(resources),
     // Mobile platform policy -- which suites are off, and on which OS -- is declared in the catalog
     // now; see tests/platform-skips.ts.
 
@@ -215,6 +218,7 @@ export const executor = createExecutor({
     new MobileTranscriptionExecutor(resources),
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
+    new DecisionExecutor(resources),
     new MobileRagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),

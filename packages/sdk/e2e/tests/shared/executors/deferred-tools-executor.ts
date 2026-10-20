@@ -89,7 +89,13 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     'deferred-tools-search-then-call': this.searchThenCall.bind(this),
     'deferred-tools-repeat-search': this.repeatSearch.bind(this),
     'deferred-tools-reopened-chat': this.reopenedChat.bind(this),
-    'deferred-tools-kv-cache-isolation': this.kvCacheIsolation.bind(this)
+    'deferred-tools-kv-cache-isolation': this.kvCacheIsolation.bind(this),
+    'deferred-tools-warm-vs-cold-qwen35': this.warmVsCold.bind(this),
+    'deferred-tools-warm-follow-up-qwen35': this.warmFollowUp.bind(this),
+    'deferred-tools-search-then-call-qwen35': this.searchThenCall.bind(this),
+    'deferred-tools-prompt-cost-qwen35': this.promptCost.bind(this),
+    'deferred-tools-reopened-chat-qwen35': this.reopenedChat.bind(this),
+    'deferred-tools-kv-cache-isolation-qwen35': this.kvCacheIsolation.bind(this)
   }
 
   protected handlers = Object.fromEntries(
@@ -103,7 +109,7 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     modelId: string,
     history: ChatMessage[],
     p: DeferredToolsParams,
-    options: { tools?: DeferredToolDef[]; kvCache?: string; predict?: number } = {}
+    options: { tools?: DeferredToolDef[]; kvCache?: string | false; predict?: number } = {}
   ) {
     const result = completion({
       modelId,
@@ -114,7 +120,7 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
         ...DETERMINISTIC,
         ...(options.predict !== undefined && { predict: options.predict })
       },
-      ...(options.kvCache && { kvCache: options.kvCache }),
+      ...(options.kvCache !== undefined && { kvCache: options.kvCache }),
       ...(p.toolDialect && { toolDialect: p.toolDialect })
     })
     const text = await result.text
@@ -352,6 +358,75 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     } finally {
       await this.resetCache(loadedKey)
       await this.resetCache(freshKey)
+    }
+  }
+
+  async warmVsCold(params: unknown): Promise<TestResult> {
+    const p = params as DeferredToolsParams
+    const modelId = await this.resources.ensureLoaded(p.resourceKey ?? 'tools')
+    const cacheKey = 'deferred-tools-warm-vs-cold'
+    const history = this.withSearch(this.baseHistory(p), p, p.searchQuery!)
+
+    try {
+      await this.resetCache(cacheKey)
+      const warm = await this.run(modelId, history, p, { kvCache: cacheKey })
+      const warmResult = checkExpectedCall(warm.toolCalls, p.expectedToolCall)
+      if (!warmResult.passed) {
+        return { ...warmResult, output: `Warm pass: ${warmResult.output}` }
+      }
+
+      const cold = await this.run(modelId, history, p, { kvCache: false })
+      const coldResult = checkExpectedCall(cold.toolCalls, p.expectedToolCall)
+      if (!coldResult.passed) {
+        return { ...coldResult, output: `Cold pass: ${coldResult.output}` }
+      }
+      return {
+        passed: true,
+        output: `warm: ${describeCalls(warm.toolCalls)}; cold: ${describeCalls(cold.toolCalls)}`
+      }
+    } catch (error) {
+      return errorResult('Deferred tools warm vs cold', error)
+    } finally {
+      await this.resetCache(cacheKey)
+    }
+  }
+
+  async warmFollowUp(params: unknown): Promise<TestResult> {
+    const p = params as DeferredToolsParams
+    const modelId = await this.resources.ensureLoaded(p.resourceKey ?? 'tools')
+    const cacheKey = 'deferred-tools-warm-follow-up'
+    const history = this.withSearch(this.baseHistory(p), p, p.searchQuery!)
+
+    try {
+      await this.resetCache(cacheKey)
+      const first = await this.run(modelId, history, p, { kvCache: cacheKey })
+      const firstResult = checkExpectedCall(first.toolCalls, p.expectedToolCall)
+      if (!firstResult.passed) {
+        return { ...firstResult, output: `First turn: ${firstResult.output}` }
+      }
+
+      const followUp = [
+        ...history,
+        { role: 'assistant', content: first.rawText },
+        {
+          role: 'tool',
+          content: JSON.stringify({ horoscope: 'A good day to start something new.' })
+        },
+        { role: 'user', content: p.followUpPrompt! }
+      ]
+      const second = await this.run(modelId, followUp, p, { kvCache: cacheKey })
+      const secondResult = checkExpectedCall(second.toolCalls, p.expectedToolCall)
+      if (!secondResult.passed) {
+        return { ...secondResult, output: `Follow-up turn: ${secondResult.output}` }
+      }
+      return {
+        passed: true,
+        output: `first: ${describeCalls(first.toolCalls)}; follow-up: ${describeCalls(second.toolCalls)}`
+      }
+    } catch (error) {
+      return errorResult('Deferred tools warm follow-up', error)
+    } finally {
+      await this.resetCache(cacheKey)
     }
   }
 }

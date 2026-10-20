@@ -23,8 +23,8 @@ export interface FakePackageManagerBehaviour {
 /**
  * Writes an executable `name` into `<dir>/fake-bin` that answers `--version`
  * and, for an add, lays out each requested platform package the way the real
- * ones are built: an inner `addon/` package named after the meta addon,
- * holding a prebuild for every host the package covers. Put `binDir` first on
+ * ones are built: an ordinary addon holding a prebuild for every host the
+ * package covers. Put `binDir` first on
  * PATH with `withPath`.
  */
 export function installFakePackageManager(
@@ -55,23 +55,18 @@ for (const spec of args.filter((arg) => !arg.startsWith('-') && arg.includes('@'
   const name = spec.slice(0, at)
   const version = spec.slice(at + 1)
   const ios = name.endsWith('-ios')
-  const addon = ios ? name.slice(0, -'-ios'.length) : name.slice(0, -'-android-arm64'.length)
   const installRoot = ${JSON.stringify(behaviour.installRoot ?? null)} ?? process.cwd()
   const root = path.join(installRoot, 'node_modules', ...name.split('/'))
-  fs.mkdirSync(path.join(root, 'addon'), { recursive: true })
+  fs.mkdirSync(root, { recursive: true })
   fs.writeFileSync(
     path.join(root, 'package.json'),
-    JSON.stringify({ name, version, main: 'index.js' })
+    JSON.stringify({ name, version, addon: true, main: 'index.js' })
   )
-  fs.writeFileSync(path.join(root, 'index.js'), "module.exports = require.addon('./addon')\\n")
-  fs.writeFileSync(
-    path.join(root, 'addon', 'package.json'),
-    JSON.stringify({ name: addon, version, addon: true })
-  )
+  fs.writeFileSync(path.join(root, 'index.js'), 'module.exports = require.addon()\\n')
   for (const host of ios ? iosHosts : ['android-arm64']) {
-    const hostDir = path.join(root, 'addon', 'prebuilds', host)
+    const hostDir = path.join(root, 'prebuilds', host)
     fs.mkdirSync(hostDir, { recursive: true })
-    fs.writeFileSync(path.join(hostDir, 'addon.bare'), '')
+    fs.writeFileSync(path.join(hostDir, name.replace('@', '').replace('/', '__') + '.bare'), '')
   }
 }
 `

@@ -5,14 +5,15 @@ To cut that cost, they **no longer run automatically on PRs**. Instead you start
 them by hand, choosing exactly one platform, the device(s) to run on, and,
 where supported, a subset of tests.
 
-This applies to all 15 mobile addons: `asr-ggml`, `audiogen-ggml`,
+This applies to all 16 mobile addons: `asr-ggml`, `audiogen-ggml`,
 `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`,
 `embed-llamacpp`, `ggml-rpc-server`, `inference-addon-cpp`, `llm-llamacpp`,
-`model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `vla`.
+`model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml`,
+`vla`.
 
-Except for its dedicated section, the guidance below applies to the other 14
-addons. `ggml-rpc-server` has different device inputs and no test filter or
-package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
+Except for its dedicated section, the guidance below applies to the other 15
+addons. `ggml-rpc-server` has per-platform device dropdowns and no test filter
+or package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
 
 ## How to run a mobile test
 
@@ -26,10 +27,13 @@ package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
 
 ### ggml-rpc-server dispatch
 
-This workflow accepts `platform`, `android_device` or `ios_device`, `ref`,
-`workdir`, and `prebuild_run_id`. It does **not** accept `device`,
-`devices_custom`, `device_model_operator`, `tests`, or `package`. A run exercises
-its complete managed RPC lifecycle probe on the selected device.
+This workflow accepts `platform`, `android_device` or `ios_device`,
+`devices_custom`, `device_model_operator`, `ref`, `workdir`, and
+`prebuild_run_id`. It does **not** accept `device`, `tests`, or `package`. A run
+exercises its complete managed RPC lifecycle probe on each selected device.
+`devices_custom` takes a comma-separated list and overrides the platform's
+dropdown, so one dispatch covers the
+[supported devices](#which-devices-to-run-on), one Device Farm run per device.
 
 To test prebuilds already produced for your PR, find the run id as described in
 the [quick start below](#quick-start--test-your-own-pr-on-a-device), then dispatch:
@@ -38,21 +42,29 @@ the [quick start below](#quick-start--test-your-own-pr-on-a-device), then dispat
 PR=1234 # your PR number
 gh workflow run integration-mobile-test-ggml-rpc-server.yml --repo tetherto/qvac \
   --ref main -f ref="refs/pull/$PR/head" \
-  -f platform=Android -f android_device="Google Pixel 9" \
+  -f platform=Android \
+  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
+  -f device_model_operator=EQUALS \
   -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
 ```
 
 The workflow runs from upstream `main`; its `ref` input checks out your PR's
 head from the upstream pull-request ref, so your branch need not exist upstream.
-For iOS, use `-f platform=iOS -f ios_device="Apple iPhone 16 Pro"` instead of
-the Android platform and device inputs. Without `prebuild_run_id`, a standalone
-dispatch builds prebuilds from the selected ref in the same run before packaging
+For iOS, dispatch again after the Android run finishes, replacing the platform
+and device inputs with:
+
+```bash
+  -f platform=iOS \
+  -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
+```
+
+Without `prebuild_run_id`, a standalone dispatch builds prebuilds from the selected ref in the same run before packaging
 the device app. With a run id, it skips that build and installs the named run's
 artifact, failing if the artifact cannot be used.
 
 ### Quick start — test your own PR on a device
 
-For the other 14 addons, this is the common case end to end. A first run should
+For the other 15 addons, this is the common case end to end. A first run should
 cover every supported device and every test — see
 [Which devices to run on](#which-devices-to-run-on).
 The single-device, single-test form below is the follow-up shape: once you are
@@ -349,13 +361,18 @@ addon — it installs a **prebuilt** one. Sources are tried in this order:
 on the phone", so setting **both is an error** — the run fails and tells you to
 clear one, rather than picking for you.
 
-Some addons publish their `@qvac` release as a JS-only meta package plus
-per-platform packages (`@qvac/<addon>-ios`, `@qvac/<addon>-android-arm64`). For
-those you will see the setup step resolve twice — the meta package, then the
-platform package its `#host-addon` map names, at the same version — and the second
-`Verified:` line names the package the binaries actually came from. Nothing
-changes about what you pass; the `@tetherto` dev builds are published unsliced
-and always resolve in one step.
+Split addons (`@qvac/fabric` and the speech addons) publish their `@qvac`
+release as a JS-only meta package plus per-platform packages (`@qvac/<addon>-ios`,
+`@qvac/<addon>-android-arm64`); the meta's `binding.js` is just
+`require('#host-addon')`. For those you will see the setup step resolve twice —
+the meta package, then the platform package its `#host-addon` map names, at the
+same version — and the second `Verified:` line names the package the binaries
+actually came from. Nothing changes about what you pass. The `@tetherto` dev
+builds are published unsliced and resolve in one step; the app build's "Install
+mobile platform packages" step then assembles the platform package from the
+meta's own `prebuilds/<host>/`, and npm-installs the ones the app's other
+dependencies (every fabric consumer needs `@qvac/fabric-<host>`) name at their
+meta's version.
 
 ### Testing unmerged / unpublished native code
 
@@ -591,7 +608,7 @@ the pin did not arrive and you are testing the published release.
 
 | input | addons |
 |---|---|
-| `-f package=` | `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `vla` |
+| `-f package=` | `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `turbovec-ggml`, `vla` |
 | `-f package_spec=` | `asr-ggml`, `audiogen-ggml`, `tts-ggml` |
 | *(no such input)* | `inference-addon-cpp` |
 | `-f prebuild_run_id=` | every addon above **except** `decoder-audio` and `inference-addon-cpp` (see *Addons that need none of this*) |

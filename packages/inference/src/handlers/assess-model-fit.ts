@@ -8,6 +8,7 @@ import type {
 import { isCanonicalModelType, normalizeModelType, ModelType } from '@/schemas/index'
 import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
 import { ModelTypeRequiredError } from '@/errors/index'
+import type { FitStubUnavailableReason } from '@/resources/model-fit/fit-stub/fetch-fit-stub'
 import { projectFitFromLoad } from '@/resources/model-fit/fit-stub/project-fit-from-load'
 import type { SystemResources } from '@/schemas/system-resources'
 import { getResourceCollector } from '@/resources/instance'
@@ -58,6 +59,7 @@ function modelTypeOf(candidate: ModelFitCandidate): string {
 
 /** The audio engines, whose estimator sizes a load by its window rather than a context. */
 const AUDIO_ENGINES: readonly string[] = [
+  ModelType.mossTranscribe,
   'whispercpp-transcription',
   'parakeet-transcription',
   'bci-whispercpp-transcription'
@@ -92,11 +94,13 @@ function audiogenUsesGpu(config: Record<string, unknown>): boolean {
  * so a projection and a device never disagree. Only bci defaults to on.
  */
 const GPU_SWITCH: Record<string, (config: Record<string, unknown>) => boolean> = {
+  [ModelType.mossTranscribe]: (config) => config['useGPU'] === true,
   [ModelType.ttsGgml]: (config) => config['useGPU'] === true,
   [ModelType.audiogenGgml]: audiogenUsesGpu,
   [ModelType.parakeetTranscription]: (config) => config['useGPU'] === true,
   [ModelType.whispercppTranscription]: (config) => contextUsesGpu(config) === true,
-  [ModelType.bciWhispercppTranscription]: (config) => contextUsesGpu(config) !== false
+  [ModelType.bciWhispercppTranscription]: (config) => contextUsesGpu(config) !== false,
+  [ModelType.ggmlOcr]: (config) => (config['backendDevice'] ?? 'cpu') !== 'cpu'
 }
 
 /**
@@ -205,6 +209,12 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
   const contextTokens = config['ctx_size']
   const artifacts = companionRefs(config)
   const device = resolvedDevice(modelType, config)
+  const windowMs =
+    modelType === ModelType.mossTranscribe
+      ? candidate.transcriptionWorkload === undefined
+        ? undefined
+        : candidate.transcriptionWorkload.audioSeconds * 1000
+      : audioWindowMs(config)
 
   return {
     model: {
@@ -220,7 +230,7 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
     workload: AUDIO_ENGINES.includes(modelType)
       ? {
           kind: 'audio',
-          windowMs: audioWindowMs(config),
+          ...(windowMs !== undefined && { windowMs }),
           streaming: config['streaming'] === true
         }
       : {
@@ -245,6 +255,10 @@ async function resolveNativeFit(
   const outcome = await projectFitFromLoad(
     {
       modelType,
+      ...(candidate.transcriptionWorkload !== undefined && {
+        transcriptionWorkload: candidate.transcriptionWorkload
+      }),
+      ...(candidate.ttsWorkload !== undefined && { ttsWorkload: candidate.ttsWorkload }),
       ...(candidate.modelSrc !== undefined && { modelSrc: candidate.modelSrc }),
       ...(candidate.modelConfig !== undefined && { modelConfig: candidate.modelConfig })
     },
@@ -258,12 +272,17 @@ async function resolveNativeFit(
   if (outcome.status === 'projected') return { fit: outcome.fit }
   if (outcome.status === 'unsupported-load') return { unavailable: outcome.detail }
 
-  return {
-    unavailable:
-      outcome.message === undefined
-        ? `no registry description (${outcome.reason})`
-        : `no registry description (${outcome.reason}): ${outcome.message}`
+  return { unavailable: noStubDetail(outcome.reason, outcome.message) }
+}
+
+/** Why a load with no description staged for it has no engine verdict. */
+export function noStubDetail(reason: FitStubUnavailableReason, message?: string): string {
+  if (reason === 'files-only-engine') {
+    return 'the engine measures downloaded files only, and this model is not downloaded'
   }
+  return message === undefined
+    ? `no registry description (${reason})`
+    : `no registry description (${reason}): ${message}`
 }
 
 /** What a projection holds for the model's lifetime, the breakdown or the total. */

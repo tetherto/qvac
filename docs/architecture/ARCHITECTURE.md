@@ -212,7 +212,7 @@ The language-neutral SDK contract lives under `packages/sdk/contract/**`:
 - `manifest.json` lists every RPC method and call shape (`request-reply`, `server-stream`, `duplex`).
 - `models.json` contains the generated model constants catalog.
 
-`packages/sdk` owns contract generation via `bun run contract:export` and drift detection via `bun run contract:check`. `packages/sdk-python` consumes the contract to generate Pydantic models, typed method stubs, model type maps, error-code registries, model constants, and the pinned SDK version.
+`packages/sdk` owns contract generation via `npm run contract:export` and drift detection via `npm run contract:check`. `packages/sdk-python` consumes the contract to generate Pydantic models, typed method stubs, model type maps, error-code registries, model constants, and the pinned SDK version.
 
 The Python package provides:
 
@@ -317,6 +317,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
 | `rag` | `@qvac/rag` | RAG with HyperDB |
+| `turbovec-ggml` | `@qvac/turbovec-ggml` | CPU vector index (`IdMapIndex`, TurboVec quantization) |
 | `decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
 | `logging` | `@qvac/logging` | Logging utilities |
 | `error` | `@qvac/error` | Base error types |

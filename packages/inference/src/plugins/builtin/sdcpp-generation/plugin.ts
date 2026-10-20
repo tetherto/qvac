@@ -229,17 +229,15 @@ export const diffusionPlugin = definePlugin({
       )
     }
     // `t5XxlModelSrc` selects Wan and `llmModelSrc` is ignored for that layout.
-    // Without T5, `llmModelSrc` plus both VAEs selects MiniMax-H3. Reject the
+    // Without T5, `llmModelSrc` plus the video VAE selects MiniMax-H3. Reject the
     // companions H3 cannot consume before any of them is downloaded.
     if (
       cfg.mode === 'video' &&
       !embeddingsConnectorsModelSrc &&
       (audioVaeModelSrc || (llmModelSrc && !t5XxlModelSrc))
     ) {
-      if (!audioVaeModelSrc || !llmModelSrc || !vaeModelSrc) {
-        throw new ModelLoadFailedError(
-          'MiniMax-H3 requires llmModelSrc, vaeModelSrc and audioVaeModelSrc.'
-        )
+      if (!llmModelSrc || !vaeModelSrc) {
+        throw new ModelLoadFailedError('MiniMax-H3 requires llmModelSrc and vaeModelSrc.')
       }
       if (
         t5XxlModelSrc ||
@@ -417,7 +415,8 @@ export const diffusionPlugin = definePlugin({
       // via llm + video VAE + connectors, optional audio VAE —
       // `SdModel::isLtxModel_ = !embeddingsConnectorsPath.empty()`); without
       // them, an audio VAE (or an llm with no Wan T5) means MiniMax-H3
-      // (llm + video VAE + audio VAE); everything else is Wan via t5Xxl.
+      // (llm + video VAE, with an optional audio VAE); everything else is Wan
+      // via t5Xxl.
       // Native code verifies the model's tensors.
       const embeddingsConnectorsModelPath = artifacts?.['embeddingsConnectorsModelPath']
 
@@ -451,10 +450,8 @@ export const diffusionPlugin = definePlugin({
         artifacts['audioVaeModelPath'] ||
         (artifacts['llmModelPath'] && !artifacts['t5XxlModelPath'])
       ) {
-        if (!artifacts['audioVaeModelPath'] || !artifacts['llmModelPath']) {
-          throw new ModelLoadFailedError(
-            'MiniMax-H3 requires llmModelSrc, vaeModelSrc and audioVaeModelSrc.'
-          )
+        if (!artifacts['llmModelPath']) {
+          throw new ModelLoadFailedError('MiniMax-H3 requires llmModelSrc and vaeModelSrc.')
         }
         if (
           artifacts['t5XxlModelPath'] ||
@@ -471,7 +468,9 @@ export const diffusionPlugin = definePlugin({
           model: modelPath,
           vae: vaeModelPath,
           llm: artifacts['llmModelPath'],
-          audioVae: artifacts['audioVaeModelPath']
+          ...(artifacts['audioVaeModelPath'] && {
+            audioVae: artifacts['audioVaeModelPath']
+          })
         }
       } else {
         if (!artifacts['t5XxlModelPath']) {
@@ -519,7 +518,7 @@ export const diffusionPlugin = definePlugin({
         opts: { stats: true }
       })
       if (embeddingsConnectorsModelPath) markLtxVideoModel(model)
-      else if (files.audioVae) markH3VideoModel(model)
+      else if (files.llm) markH3VideoModel(model)
       if (files.highNoiseDiffusionModel) markMoeCapableVideoModel(model)
       return { model }
     }

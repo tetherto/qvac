@@ -4,7 +4,11 @@ export interface GGMLConfig {
     gpu_layers?: NumericLike;
     batch_size?: NumericLike;
     ctx_size?: NumericLike;
-    pooling?: "none" | "mean" | "cls" | "last" | "rank";
+    /** Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100 (maximum polling). Defaults to 0. */
+    poll?: NumericLike;
+    /** Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when neither option is set. */
+    "poll-batch"?: NumericLike;
+    pooling?: "none" | "mean" | "cls" | "last";
     attention?: "causal" | "non-causal";
     embd_normalize?: NumericLike;
     flash_attn?: "on" | "off" | "auto";
@@ -23,10 +27,9 @@ export interface AddonConfigurationParams {
     path: string;
     config: GGMLConfig;
     /**
-     * Root the native side searches for ggml compute backends, with
-     * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the root
-     * `@qvac/fabric/backends` resolves on desktop, falling back to this
-     * addon's own `prebuilds/` on mobile.
+     * Directory holding the ggml compute backend modules, overriding the ones
+     * @qvac/fabric ships. Empty (the default) lets fabric load its own, which
+     * it locates next to its runtime on every platform.
      */
     backendsDir?: string;
 }
@@ -89,7 +92,6 @@ export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawEr
  * in `GGUFShards::expandGGUFIntoShards`.
  */
 export declare function pickPrimaryGgufPath(files: string[]): string;
-export declare function resolveBackendsDir(): string;
 /** An interface between the Bare C++ addon and the JS runtime. */
 export declare class BertInterface implements Addon {
     private readonly _binding;

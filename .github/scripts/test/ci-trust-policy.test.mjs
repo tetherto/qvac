@@ -949,18 +949,19 @@ function rpcServerProject() {
   return JSON.parse(read("packages/ggml-rpc-server/project.json"));
 }
 
-// The RPC server smoke test loads Fabric's RPC backend, which needs the
-// libibverbs runtime on the GitHub-hosted linux-arm64 leg. The PR path builds
-// through prebuilds-nx from build.options.ci; the release path still calls
+// Fabric's RPC backend loads libibverbs at runtime, so the RPC server smoke test
+// must not install it: the GitHub-hosted linux-arm64 leg then checks that the
+// server starts over TCP without it. The PR path builds through prebuilds-nx
+// from build.options.ci; the release path still calls
 // prebuilds-ggml-rpc-server.yml.
-test("RPC server prebuilds install the Linux RDMA runtime dependency", () => {
+test("RPC server prebuilds smoke-test without the Linux RDMA runtime", () => {
   const prebuilds = read(".github/workflows/prebuilds-ggml-rpc-server.yml");
   const build = rpcServerProject().targets.build.options.ci;
 
   assert.match(prebuilds, /desktop-smoke-command:/);
-  assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs1$/m);
+  assert.doesNotMatch(prebuilds, /^\s+linux-extra-packages:.*libibverbs/m);
   assert.equal(build.desktopSmokeCommand, "node scripts/smoke-packaged.cjs");
-  assert.equal(build.linuxExtraPackages, "libibverbs1");
+  assert.equal(build.linuxExtraPackages, undefined);
 });
 
 // ci-router turns both routes on for a manual dispatch, so a dispatched run
@@ -1822,6 +1823,22 @@ test('ggml-rpc-server keeps Device Farm runs on demand', () => {
     mobileSource,
     /prebuild-manual:\n\s+if: inputs\.platform != ''/,
     `${mobilePath}: only a direct manual dispatch should build prebuilds`,
+  )
+});
+
+test('ggml-rpc-server validates the same devices it schedules', () => {
+  const path = '.github/workflows/integration-mobile-test-ggml-rpc-server.yml'
+  const source = read(path)
+  // Validation must approve exactly the devices the scheduler bills.
+  const devices =
+    "inputs.devices_custom != '' && inputs.devices_custom || (inputs.platform == 'Android' && inputs.android_device || inputs.ios_device)"
+  const validate = source.match(/^\s+devices: \$\{\{ (.+) \}\}$/m)
+  const schedule = source.match(/^\s+device-models: \$\{\{ (.+) \}\}$/m)
+  assert.equal(validate?.[1], devices, `${path}: validate-devices must resolve devices_custom over the dropdown`)
+  assert.equal(
+    schedule?.[1],
+    `inputs.platform != '' && (${devices}) || ''`,
+    `${path}: the scheduler must bill the same devices validation approved`,
   )
 });
 

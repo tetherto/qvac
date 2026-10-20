@@ -1,10 +1,14 @@
 #include <bare.h>
+#include <qvac-addon/fabric-bind.h>
 
 #include "addon/AddonJs.hpp"
 
-js_value_t* classification_ggml_exports(
-    js_env_t* env,
-    js_value_t* exports) { // NOLINT(readability-identifier-naming)
+// NOLINTNEXTLINE(readability-identifier-naming)
+js_value_t* classification_ggml_exports(js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \

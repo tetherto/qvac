@@ -22,6 +22,8 @@
 #include "ggml.h"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/ModuleBackendsDir.hpp"
+#include "model-interface/PcmDecode.hpp"
 
 namespace qvac::asrggml::parakeet {
 
@@ -175,26 +177,6 @@ template <typename Fn> int64_t measureMs(Fn&& fn) {
 // installNativeLogForwarderOnce() -- it covers both engines, so this file's
 // old line-buffered trampoline was deleted in the asr-ggml merge.
 
-constexpr float PCM_S16_SCALE = 1.0F / 32768.0F;
-
-float pcmS16ToFloat32(int16_t sample) {
-  return static_cast<float>(sample) * PCM_S16_SCALE;
-}
-
-int16_t readLittleEndianS16(uint8_t lo, uint8_t hi) {
-  return static_cast<int16_t>(lo | (hi << 8));
-}
-
-std::vector<float> decodeS16lePcm(const std::vector<uint8_t>& bytes) {
-  const size_t nSamples = bytes.size() / 2;
-  std::vector<float> out(nSamples);
-  for (size_t i = 0; i < nSamples; ++i) {
-    out[i] =
-        pcmS16ToFloat32(readLittleEndianS16(bytes[i * 2], bytes[i * 2 + 1]));
-  }
-  return out;
-}
-
 std::string formatSpeakerSegment(int speakerId, double startS, double endS) {
   std::ostringstream os;
   os << "Speaker " << speakerId << ": "
@@ -295,17 +277,7 @@ pkt::EngineOptions ParakeetModel::buildEngineOptions(
   eopts.n_gpu_layers = cfg.useGPU ? OFFLOAD_ALL_LAYERS_TO_GPU : 0;
   eopts.verbose = false;
   eopts.language = cfg.language;
-  // Compose the backends-scan dir from the host prebuilds root plus the
-  // cmake-bare per-target subdir (BACKENDS_SUBDIR). Empty -> ggml's default
-  // compile-time search path.
-  if (!cfg.backendsDir.empty()) {
-    fs::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath =
-        (backendsDirPath / fs::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-    eopts.backends_dir = backendsDirPath.string();
-  }
+  eopts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   // Empty -> leave $GGML_OPENCL_CACHE_DIR alone (Android-only, read once).
   eopts.opencl_cache_dir = cfg.openclCacheDir;
   eopts.prewarm = cfg.prewarm;
@@ -828,7 +800,7 @@ std::vector<float> ParakeetModel::preprocessAudioData(
         qvac_errors::general_error::InvalidArgument,
         "ParakeetModel::preprocessAudioData: only s16le PCM is supported");
   }
-  return decodeS16lePcm(audioData);
+  return qvac::asrggml::decodeS16lePcm(audioData);
 }
 
 std::string ParakeetModel::runAsrProcess(const Input& input) {

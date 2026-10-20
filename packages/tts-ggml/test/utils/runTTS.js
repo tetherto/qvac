@@ -58,7 +58,7 @@ async function runTTSWithSplit(model, params, expectation = {}, options = {}) {
     const splitLanguage =
       typeof params.splitLanguage === 'string' && params.splitLanguage.length > 0
         ? params.splitLanguage
-        : model?._config?.language || 'en'
+        : model?._setup?.config?.language || 'en'
     const splitOpts = {
       language: splitLanguage,
       mergeToMaxScalars: false,

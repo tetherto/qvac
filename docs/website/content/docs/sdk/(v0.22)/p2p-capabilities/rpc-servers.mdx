@@ -25,11 +25,15 @@ Serving requires `@qvac/ggml-rpc-server` and a worker rebuilt with this setting 
 
 Rebuild the worker with `qvac bundle sdk`. See [Configuration](/sdk/configuration) for the config file format.
 
+On Linux, the server uses TCP when libibverbs or an RDMA device is unavailable. RDMA requires `libibverbs.so.1` and your NIC's provider package. On Debian or Ubuntu, install them with `sudo apt install -y libibverbs1 ibverbs-providers`.
+
 Python callers must select the generated worker with `QVAC_WORKER_PATH` or `Client(worker_path=...)`. See [Python SDK RPC server setup](/sdk/python-sdk#rpc-servers) for installation, bundling, and run commands.
 
 ## Start and stop a server
 
-`startRpcServer()` defaults to `127.0.0.1` and allocates a free TCP port when `port` is omitted. It returns `serverId`, `url`, and `rdmaCapable`.
+`startRpcServer()` defaults to `127.0.0.1`. When `port` is omitted, the native server binds a free TCP port itself and returns its endpoint in `url`. The result also includes `serverId` and `rdmaCapable`.
+
+`rdmaCapable` reports whether the server will try RDMA. On Linux, this requires an RDMA-capable backend, `libibverbs.so.1`, an RDMA device, and `GGML_RPC_NO_RDMA` unset. Without the library or a device, the server runs over TCP. Each connection can still fall back to TCP when the client or link cannot use RDMA. Pass `expectRdma: true` to reject startup when runtime RDMA is unavailable, including hosts that have libibverbs but no RDMA device.
 
 To serve another machine, set `host` to your private IPv4 address and explicitly set `allowNonLoopbackHost: true`. Set `discoveryTopic` to advertise the ready endpoint under a shared topic.
 
@@ -40,6 +44,8 @@ Unload models using the endpoint before calling `stopRpcServer({ serverId })`. T
 `discoverRpcServers({ topic, timeoutMs })` returns candidates with a `url`, `rdmaAvailable`, and `devices`. Each device has an endpoint-local `index`, `freeMemory`, and `totalMemory`, with memory values in bytes. The search budget defaults to 5000 milliseconds, includes TCP probes, and is capped at 30000 milliseconds.
 
 `rdmaAvailable` describes the server's advertised RDMA availability. Actual transport depends on client support and negotiation.
+
+Discovery accepts only RPC protocol `111.0.x` and rejects incompatible servers with a diagnostic containing the received and supported versions. Native inference also requires matching protocol major versions. Keep the Fabric versions used by your model addon and RPC servers compatible.
 
 Choose and order the endpoints before calling `getRpcDeviceMap(selected)`. Pass those same endpoints, in the same order, as the comma-separated `modelConfig["rpc-servers"]` value to [`loadModel()`](/sdk/reference/api#loadmodel). The map assigns `RPC0`, `RPC1`, and subsequent aliases across every device in endpoint order. Aliases start at `RPC0` for each model load, including when you reuse a worker.
 

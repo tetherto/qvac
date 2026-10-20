@@ -15,6 +15,7 @@ export interface VideoDiffusionFiles {
     highNoiseDiffusionModel?: string;
     t5Xxl?: string;
     llm?: string;
+    llmVision?: string;
     vae?: string;
     clipVision?: string;
     audioVae?: string;

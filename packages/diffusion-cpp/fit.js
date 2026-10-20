@@ -1,8 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
-const path = require("bare-path");
 const file_paths_1 = require("./file-paths");
 /**
  * Projects a load against the memory free right now, reading model metadata
@@ -10,10 +8,12 @@ const file_paths_1 = require("./file-paths");
  * so the projection can run before anything is downloaded. Safetensors
  * checkpoints can also contain only their tensor headers.
  *
- * A model the engine cannot read is `status: "error"`; only a broken request
- * throws.
+ * Concurrent calls run one at a time within this addon.
+ *
+ * A model the engine cannot read resolves to `status: "error"`; only a broken
+ * request rejects.
  */
-function assessFit(request) {
+async function assessFit(request) {
     if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale' && request.mode !== 'world') {
         throw new TypeError(`unsupported fit mode: ${String(request.mode)}`);
     }
@@ -36,13 +36,10 @@ function assessFit(request) {
     // The native side reads the config sub-object as a string map, the same way
     // createInstance does.
     const merged = { ...request.config };
-    if (!merged.backendsDir) {
-        merged.backendsDir = path.join(__dirname, 'prebuilds');
-    }
     const config = Object.fromEntries(Object.entries(merged)
         .filter(([, value]) => value !== undefined)
         .map(([key, value]) => [key, String(value)]));
-    return binding.assessFit({
+    return await binding.assessFit({
         ...(0, file_paths_1.toFilePaths)(files),
         ...(request.mode === 'world' && {
             taehvPath: request.files.taehv,

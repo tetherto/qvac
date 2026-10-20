@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
-const backends_1 = require("./backends");
 const driver_1 = require("../engines/moss/driver");
 /**
  * Projects one model against the memory free right now, reading model metadata
@@ -18,23 +17,21 @@ const driver_1 = require("../engines/moss/driver");
  * each load does. `marginBytes` defaults to the engine's own headroom, which
  * is 256 MiB for parakeet.
  *
- * A model the fitter cannot read comes back as `status: "error"` with the
- * engine's reason. Only a broken request throws.
+ * A model the fitter cannot read resolves with `status: "error"` and the
+ * engine's reason. Only a broken request rejects.
+ *
+ * Concurrent calls run one at a time.
  */
-function assessFit(request) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+async function assessFit(request) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
     const binding = require('../binding.js');
     if (request.engine === 'moss-transcribe') {
+        (0, driver_1.mossTranscribeBackend)(request.backend);
         (0, driver_1.mossTranscribeJobFields)({
             prompt: request.prompt,
             hotwords: request.hotwords,
             maxNewTokens: request.maxNewTokens
         });
     }
-    return binding.assessFit({
-        ...request,
-        backendsDir: typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-            ? request.backendsDir
-            : (0, backends_1.resolveBackendsDir)()
-    });
+    return await binding.assessFit(request);
 }

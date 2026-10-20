@@ -11,7 +11,7 @@ const path = require('bare-path')
 // one table so a new entrypoint cannot be added without declaring its exports.
 const ENTRYPOINTS = [
   { file: 'index.js', named: ['pickPrimaryGgufPath', 'assessFit', 'QvacResponse'] },
-  { file: 'addon.js', named: ['LlamaInterface', 'mapAddonEvent', 'resolveBackendsDir'] },
+  { file: 'addon.js', named: ['LlamaInterface', 'mapAddonEvent'] },
   {
     file: 'batchHandler.js',
     named: ['RUN_BUSY_ERROR_MESSAGE', 'RUN_BUSY_ERROR_CODE', 'runBusyError']
@@ -49,6 +49,8 @@ test('ESM named bindings link and match the statics', async (t) => {
   t.is(typeof ns.QvacResponse, 'function', 'named QvacResponse binding links')
   t.is(ns.pickPrimaryGgufPath, ns.default.pickPrimaryGgufPath, 'named === static')
   t.is(ns.QvacResponse, ns.default.QvacResponse, 'named === static')
+  t.is(typeof ns.assessFit, 'function', 'named assessFit binding links')
+  t.is(ns.assessFit, ns.default.assessFit, 'named === static')
 })
 
 test('batchHandler ESM named bindings link', async (t) => {

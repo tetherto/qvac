@@ -45,9 +45,9 @@ function createMockedCosyvoiceModel({
 test('CosyVoice3: explicit engine option routes to cosyvoice3', (t) => {
   const model = createMockedCosyvoiceModel()
   t.is(model.getEngineType(), TTSGgml.ENGINE_COSYVOICE3, 'engine: cosyvoice3 detected')
-  t.is(model._cosyvoiceModelDir, './models/cosyvoice3')
-  t.absent(model._t3ModelPath, 'no chatterbox t3 path on cosyvoice3')
-  t.absent(model._supertonicModelPath, 'no supertonic path on cosyvoice3')
+  t.is(model._setup.paths.cosyvoiceModelDir, './models/cosyvoice3')
+  t.absent(model._setup.paths.t3ModelPath, 'no chatterbox t3 path on cosyvoice3')
+  t.absent(model._setup.paths.supertonicModelPath, 'no supertonic path on cosyvoice3')
 })
 
 test('CosyVoice3: cosyvoiceModelDir file input alone routes to cosyvoice3', (t) => {
@@ -83,7 +83,7 @@ test('CosyVoice3: modelDir auto-detects cosyvoice3-llm gguf', async (t) => {
       TTSGgml.ENGINE_COSYVOICE3,
       'modelDir with cosyvoice3-llm*.gguf detected'
     )
-    t.is(model._cosyvoiceModelDir, tmpRoot, 'cosyvoiceModelDir resolved from modelDir')
+    t.is(model._setup.paths.cosyvoiceModelDir, tmpRoot, 'cosyvoiceModelDir resolved from modelDir')
   } finally {
     try {
       fs.rmSync(tmpRoot, { recursive: true, force: true })

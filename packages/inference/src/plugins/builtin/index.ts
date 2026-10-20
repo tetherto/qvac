@@ -1,5 +1,6 @@
 export { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 export { embeddingsPlugin } from '@/plugins/builtin/llamacpp-embedding/plugin'
+export { decisionPlugin } from '@/plugins/builtin/llamacpp-decision/plugin'
 export { whisperPlugin } from '@/plugins/builtin/whispercpp-transcription/plugin'
 export { bciPlugin } from '@/plugins/builtin/bci-whispercpp-transcription/plugin'
 export { parakeetPlugin } from '@/plugins/builtin/parakeet-transcription/plugin'
@@ -10,3 +11,5 @@ export { diffusionPlugin } from '@/plugins/builtin/sdcpp-generation/plugin'
 export { vlaPlugin } from '@/plugins/builtin/ggml-vla/plugin'
 export { classificationPlugin } from '@/plugins/builtin/ggml-classification/plugin'
 export { audioGenPlugin } from '@/plugins/builtin/audiogen-ggml/plugin'
+
+export { mossTranscribePlugin } from '@/plugins/builtin/moss-transcribe/plugin'

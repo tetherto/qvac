@@ -14,9 +14,12 @@ import io.tether.qvac.sdk.QvacGenerationOptions
 import io.tether.qvac.sdk.QvacMessage
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.completion
-import io.tether.qvac.sdk.generated.LoadModelRequest
 import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
+import io.tether.qvac.sdk.generated.schema.LoadModelRequest
+import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequest
+import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlClassification
+import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlClassificationModelConfig
 import io.tether.qvac.sdk.embeddings
 import io.tether.qvac.sdk.loadModel
 import io.tether.qvac.sdk.models
@@ -27,9 +30,6 @@ import io.tether.qvac.sdk.vision
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.time.Duration.Companion.milliseconds
@@ -202,13 +202,17 @@ class FeatureLabRunner(
         var modelId: String? = null
         return try {
             val load = client.loadModel(
-                LoadModelRequest(
-                    modelConfig = buildJsonObject { put("modelPath", weights.absolutePath) },
-                    modelSrc = JsonPrimitive(""),
-                    modelType = "ggml-classification",
-                    seed = JsonPrimitive(false),
-                    type = "loadModel",
-                    withProgress = JsonPrimitive(false),
+                LoadModelRequest.LoadModelSrcRequest(
+                    LoadModelSrcRequest.GgmlClassification(
+                        LoadModelSrcRequestGgmlClassification(
+                            modelConfig = LoadModelSrcRequestGgmlClassificationModelConfig(
+                                modelPath = weights.absolutePath,
+                            ),
+                            modelSrc = "",
+                            seed = false,
+                            withProgress = false,
+                        ),
+                    ),
                 ),
             )
             check(load.success) { load.error ?: "Classification model failed to load" }
@@ -221,9 +225,7 @@ class FeatureLabRunner(
             )
             check(results.isNotEmpty()) { "Classification returned no labels" }
             val best = results.first()
-            val label = best.label ?: "unknown"
-            val confidence = best.score
-            "$label${confidence?.let { " · ${(it * 100).toInt()}%" }.orEmpty()}"
+            "${best.label} · ${(best.confidence * 100).toInt()}%"
         } finally {
             image.delete()
             weights.delete()

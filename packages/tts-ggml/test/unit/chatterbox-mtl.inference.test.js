@@ -42,8 +42,8 @@ function createMockedMtlModel({
 test('Chatterbox MTL: explicit MTL gguf paths route to chatterbox engine', (t) => {
   const model = createMockedMtlModel()
   t.is(model.getEngineType(), TTSGgml.ENGINE_CHATTERBOX, 'MTL gguf is still chatterbox')
-  t.is(model._t3ModelPath, './models/chatterbox-t3-mtl.gguf')
-  t.is(model._s3genModelPath, './models/chatterbox-s3gen-mtl.gguf')
+  t.is(model._setup.paths.t3ModelPath, './models/chatterbox-t3-mtl.gguf')
+  t.is(model._setup.paths.s3genModelPath, './models/chatterbox-s3gen-mtl.gguf')
 })
 
 test('Chatterbox MTL: language config is forwarded into ttsParams', async (t) => {
@@ -103,7 +103,7 @@ test('Chatterbox MTL: reload({ language }) swaps language without reloading weig
   await r1.await()
 
   await model.reload({ language: 'fr' })
-  t.is(model._config.language, 'fr', 'language updated to fr')
+  t.is(model._setup.config.language, 'fr', 'language updated to fr')
 
   const r2 = await model.run({ type: 'text', input: 'Bonjour' })
   await r2.await()
@@ -125,12 +125,12 @@ test('Chatterbox MTL: modelDir auto-detects MTL gguf when only MTL files are pre
       config: { language: 'es' }
     })
     t.is(
-      model._t3ModelPath,
+      model._setup.paths.t3ModelPath,
       path.join(tmpRoot, 'chatterbox-t3-mtl.gguf'),
       'MTL t3 wins when only MTL is present'
     )
     t.is(
-      model._s3genModelPath,
+      model._setup.paths.s3genModelPath,
       path.join(tmpRoot, 'chatterbox-s3gen-mtl.gguf'),
       'MTL s3gen wins when only MTL is present'
     )
@@ -157,12 +157,12 @@ test('Chatterbox MTL: modelDir prefers turbo over MTL when both are present', as
       config: { language: 'en' }
     })
     t.is(
-      model._t3ModelPath,
+      model._setup.paths.t3ModelPath,
       path.join(tmpRoot, 'chatterbox-t3-turbo.gguf'),
       'turbo t3 wins over MTL when both are on disk'
     )
     t.is(
-      model._s3genModelPath,
+      model._setup.paths.s3genModelPath,
       path.join(tmpRoot, 'chatterbox-s3gen.gguf'),
       'turbo s3gen wins over MTL when both are on disk'
     )

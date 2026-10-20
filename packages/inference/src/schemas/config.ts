@@ -1,8 +1,13 @@
 import { z } from 'zod'
 import { logLevelSchema } from '@/schemas/logging-stream'
+import { decisionConfigBaseSchema } from '@/schemas/decision'
 import { ModelType } from '@/schemas/model-types'
 import { llmConfigBaseSchema, embedConfigBaseSchema } from '@/schemas/llamacpp-config'
-import { whisperConfigSchema, parakeetConfigSchema } from '@/schemas/transcription-config'
+import {
+  whisperConfigSchema,
+  parakeetConfigSchema,
+  mossTranscribeConfigSchema
+} from '@/schemas/transcription-config'
 import { ocrConfigSchema } from '@/schemas/ocr'
 import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { vlaConfigSchema } from '@/schemas/vla'
@@ -49,8 +54,10 @@ export const deviceConfigDefaultsSchema = z
     // Canonical keys
     [ModelType.llamacppCompletion]: llmConfigBaseSchema.optional(),
     [ModelType.llamacppEmbedding]: embedConfigBaseSchema.optional(),
+    [ModelType.llamacppDecision]: decisionConfigBaseSchema.optional(),
     [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
     [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
+    [ModelType.mossTranscribe]: mossTranscribeConfigSchema.optional(),
     [ModelType.nmtcppTranslation]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.ttsGgml]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.ggmlOcr]: ocrConfigSchema.partial().optional(),

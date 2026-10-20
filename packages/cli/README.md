@@ -91,8 +91,8 @@ qvac doctor [options]
 - **Deploy targets (SDK)** — desktop target matrix, Android (`adb`), and
   iOS (`xcodebuild` on macOS). Missing mobile toolchains produce
   warnings, not failures.
-- **Optional tools** — `ffmpeg` (microphone/transcription), Bare runtime,
-  Bun.
+- **Optional tools** — `ffmpeg` (microphone/transcription) and the Bare
+  runtime.
 - **Project** — whether `@qvac/sdk` is resolvable from the current
   working directory (works for hoisted monorepo installs too), and whether
   every package's `engines.bare` accepts the Bare version each target runs:
@@ -135,7 +135,7 @@ capability (role, addon, quantization) — and on a wide terminal previews, for 
 highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
 its alias, set config parameters (guided by the SDK's config schema — each field shows its
 type and description and is validated on entry, for model types the SDK exposes a schema for;
-currently llama.cpp chat + embedding), and (with `$EDITOR`) tweak the entry and review the
+currently llama.cpp chat + embedding + decision), and (with `$EDITOR`) tweak the entry and review the
 result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C`
 aborts without writing. Existing entries are preserved; re-running is idempotent per model.
 
@@ -143,17 +143,18 @@ aborts without writing. Existing entries are preserved; re-running is idempotent
 qvac configure                 # interactive
 qvac configure --yes           # non-interactive: write a chat + transcription starter
 qvac configure --modality chat --modality image
+qvac configure --modality decision
 ```
 
-| Flag                  | Description                                                                                                 |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                            |
-| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                   |
-| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image`. |
-| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                         |
-| `-q, --quiet`         | Suppress output.                                                                                            |
+| Flag                  | Description                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                                         |
+| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                                |
+| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image` / `decision`. |
+| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                                      |
+| `-q, --quiet`         | Suppress output.                                                                                                         |
 
-Single-artifact modalities (chat, embedding, transcription, image) are runnable as written.
+Single-artifact modalities (chat, embedding, transcription, image, decision) are runnable as written.
 Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder —
 set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for
 non-TTY use `--yes` / `--modality`.
@@ -172,7 +173,7 @@ qvac bundle sdk [options]
 2. Resolves enabled plugins from the `plugins` array (defaults to all built-in plugins if omitted)
 3. Generates worker entry files with **static imports only**
 4. Bundles with `bare-pack --linked`
-5. For mobile hosts (`android-arm64`, `ios-*`), adds any addon platform packages the bundle needs (for example `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version, and bundles again. If it cannot install them, it prints the dependencies to add and continues without them. Skip this step with `--no-install`.
+5. Before bundling for mobile hosts (`android-arm64`, `ios-*`), adds any platform packages the installed split addons need (for example `@qvac/fabric-android-arm64` or `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version. A split addon's `binding.js` is `require('#host-addon')`, so bare-pack cannot bundle it for a host whose platform package is missing: if the packages cannot be installed, it prints the dependencies to add and the bundle fails with `HOST_PREBUILDS_MISSING`. Skip the install with `--no-install`.
 6. Generates `addons.manifest.json` from the bundle graph
 7. Checks every bundled package's `engines.bare` against the Bare runtime of each host and prints a warning with fixes on a mismatch (see [`verify bundle`](#verify-bundle))
 
@@ -342,7 +343,7 @@ qvac verify bundle --addons-source qvac/worker.bundle.js \
 
 | Code                       | Level   | Meaning                                                                                                                                                                                                                                                                                                                                 |
 | -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `missing-prebuild`         | error   | No `.bare` for the host: the addon's `<packageRoot>/prebuilds/<host>/` is missing or empty, and no per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) with `addon/prebuilds/<host>/*.bare` resolves from the addon's package root.                                                                           |
+| `missing-prebuild`         | error   | No `.bare` for the host. For an ordinary addon, `<packageRoot>/prebuilds/<host>/` is missing or empty; for a split addon (one with a `#host-addon` map), its per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) is not installed or has no `prebuilds/<host>/*.bare`.                                        |
 | `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the resolved runtime version.                                                                                                                                                                                                                                                |
 | `engines-mismatch`         | error   | A package that is not an addon declares an `engines.bare` range that does not include the resolved runtime version.                                                                                                                                                                                                                     |
 | `unknown-runtime-version`  | warning | At least one package declares `engines.bare`, but no Bare runtime version could be auto-detected. For mobile hosts install `react-native-bare-kit`; for a desktop build install `bare-runtime` or pass `--bare-runtime-version`.                                                                                                        |
@@ -381,9 +382,9 @@ that uses the network:
    `raw.githubusercontent.com` (two requests, 5 s timeout each). Skipped with
    `--offline`.
 
-The table is regenerated with `bun run bare-kit-runtimes:generate` in
+The table is regenerated with `npm run bare-kit-runtimes:generate` in
 `packages/sdk`, which only probes releases newer than its newest entries
-(`bun run bare-kit-runtimes:generate --full` rebuilds it).
+(`npm run bare-kit-runtimes:generate -- --full` rebuilds it).
 
 **Fix suggestions:** on an `abi-mismatch` or `engines-mismatch`, the summary
 names the oldest `react-native-bare-kit` release whose Bare satisfies every
@@ -404,6 +405,9 @@ Run an HTTP server backed by locally configured QVAC models (`serve.models` in `
 qvac serve --openai [options]
 ```
 
+The OpenAI extension includes `POST /v1/decisions` for local typed decisions.
+See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request examples.
+
 `--no-default` leaves the QVAC surface out. `qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 
 | Flag                             | Description                                                                                                                         |
@@ -417,6 +421,8 @@ qvac serve --openai [options]
 | `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                          |
 | `--cors`                         | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin.                                          |
 | `--cors-origin <origin>`         | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                                                           |
+| `--allowed-host <host>`          | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` covers subdomains (repeatable).    |
+| `--allow-any-host`               | Accept any `Host` header, turning off DNS-rebinding protection.                                                                     |
 | `--public-base-url <url>`        | Externally reachable origin required for image `response_format=url`.                                                               |
 | `--docs`                         | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                                                                |
 | `--no-lazy-load`                 | Disable lazy loading; a request for an unloaded model returns `503 model_not_loaded`.                                               |
@@ -436,6 +442,8 @@ qvac serve --openai --cors --cors-origin https://app.example.com
 Independently, `--docs` enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. `/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. Do not expose docs on a non-loopback bind unless public introspection is acceptable.
 
 A non-loopback `--host` refuses to start without `--api-key` or `--api-key-file`. `--allow-unauthenticated` downgrades that refusal to a warning.
+
+Every request, `/openapi.json` included, must carry a `Host` header naming a loopback host, an IP address, the bind host, the `--public-base-url` host or an `--allowed-host` entry; anything else gets `403 host_not_allowed`. This stops a web page that rebinds its own domain to `127.0.0.1` from calling the server. Behind a reverse proxy or under a LAN hostname, list that name with `--allowed-host` or `serve.allowedHosts` (a leading dot covers the domain and its subdomains); `--allow-any-host` or `"allowedHosts": true` turns the check off.
 
 `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file` reads it from an owner-only file instead; the CLI refuses a path that is not a regular file and warns when the file is readable beyond its owner.
 
@@ -515,7 +523,7 @@ For tests that touch `qvac serve --openai`, `@qvac/ai-sdk-provider`, or agent-to
 [`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
 CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
 
-The CLI depends on the published `@qvac/sdk` (`^0.21.0`), which provides the
+The CLI depends on the published `@qvac/sdk` (`^0.22.0`), which provides the
 `./commands` subpath that `bundle`/`verify` re-export and the server runtime
 the `serve` commands use. A normal `npm install` pulls it from the registry —
 no local SDK build is required.
@@ -526,7 +534,7 @@ separate worktree):
 
 ```bash
 # Build the SDK first (from its packages/sdk directory)
-cd /path/to/qvac/packages/sdk && bun run build
+cd /path/to/qvac/packages/sdk && npm run build
 
 # Point the CLI at the sibling SDK (../sdk) instead of the registry copy
 cd packages/cli
@@ -543,7 +551,7 @@ npm run dev:unlink
 ```
 
 This runs `git checkout HEAD -- package.json` and re-installs, so the
-committed `@qvac/sdk` dependency (`^0.21.0`) is restored regardless of what you
+committed `@qvac/sdk` dependency (`^0.22.0`) is restored regardless of what you
 swapped in locally. `package-lock.json` is gitignored and is regenerated by the
 trailing `npm install`.
 

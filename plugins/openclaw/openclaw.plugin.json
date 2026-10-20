@@ -2,7 +2,7 @@
   "id": "qvac",
   "name": "QVAC",
   "description": "Local QVAC provider for OpenClaw",
-  "version": "0.2.1",
+  "version": "0.4.0",
   "providers": ["qvac"],
   "modelSupport": {
     "modelPrefixes": ["qwen3.5-", "qwen3.6-", "gpt-oss-", "gemma4-"]
@@ -10,7 +10,7 @@
   "modelCatalog": {
     "providers": {
       "qvac": {
-        "baseUrl": "http://127.0.0.1:11434/v1",
+        "baseUrl": "http://qvac.invalid/v1",
         "api": "openai-completions",
         "models": [
           {
@@ -170,11 +170,11 @@
       },
       "port": {
         "type": "number",
-        "description": "Port for qvac serve."
+        "description": "Port for qvac serve; 0 (default) lets it bind any free port."
       },
       "baseUrl": {
         "type": "string",
-        "description": "OpenAI-compatible base URL exposed by qvac serve."
+        "description": "Ignored. The plugin connects to the port its own qvac serve reports."
       },
       "apiKey": {
         "type": "string",
@@ -185,7 +185,7 @@
       },
       "qvacCommand": {
         "type": "string",
-        "description": "Command or absolute path used by localService launcher to start qvac."
+        "description": "Command or absolute path used to start qvac serve."
       },
       "cwd": {
         "type": "string",
@@ -205,11 +205,11 @@
       },
       "readyTimeoutMs": {
         "type": "number",
-        "description": "Maximum wait for qvac serve to become healthy."
+        "description": "Maximum wait for qvac serve to report its port."
       },
       "idleStopMs": {
         "type": "number",
-        "description": "OpenClaw localService idle shutdown delay; 0 keeps serve alive until OpenClaw exits."
+        "description": "Ignored. qvac serve stops when OpenClaw exits."
       },
       "timeoutSeconds": {
         "type": "number",

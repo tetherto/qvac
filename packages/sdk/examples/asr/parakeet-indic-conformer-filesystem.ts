@@ -2,7 +2,7 @@
  * Indic Conformer CTC transcription from a WAV file.
  *
  * Usage:
- *   bun run examples/asr/parakeet-indic-conformer-filesystem.ts <wav-file> <language> [gguf]
+ *   npx tsx examples/asr/parakeet-indic-conformer-filesystem.ts <wav-file> <language> [gguf]
  *
  * Loads a single GGUF checkpoint (`PARAKEET_INDIC_CONFORMER_600M_Q8_0` by
  * default) and transcribes with the batch `transcribe` API. `language` is
@@ -17,7 +17,7 @@ const args = process.argv.slice(2)
 
 if (!args[0] || !args[1]) {
   console.error(
-    'Usage: bun run examples/asr/parakeet-indic-conformer-filesystem.ts ' +
+    'Usage: npx tsx examples/asr/parakeet-indic-conformer-filesystem.ts ' +
       '<wav-file> <language> [indic-conformer-gguf]'
   )
   console.error('\nExample: ... filesystem.ts speech.wav hi')

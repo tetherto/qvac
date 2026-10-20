@@ -57,11 +57,11 @@ export interface BciFitResult {
  *
  * Covers the whisper model and the embedder, from the files or from the
  * registry's weightless descriptions of them. A model or embedder the fitter
- * cannot read comes back as `status: "error"`; a broken request, or a host
- * with no native binding, throws.
+ * cannot read resolves to `status: "error"`; a broken request, or a host
+ * with no native binding, rejects. Concurrent calls run one at a time.
  *
  * The backend directory defaults to the one a real load uses. The native side
  * registers backends once per process, so a fit that let it fall back to the
  * default search path would fix that path for every later load too.
  */
-export declare function assessFit(request: BciFitRequest): BciFitResult;
+export declare function assessFit(request: BciFitRequest): Promise<BciFitResult>;
