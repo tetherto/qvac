@@ -1,4 +1,5 @@
-import EmbedLlamacpp, { IdMapIndex, assessFit as embedAssessFit } from '@qvac/embed-llamacpp'
+import EmbedLlamacpp, { assessFit as embedAssessFit } from '@qvac/embed-llamacpp'
+import { IdMapIndex } from '@qvac/turbovec-ggml'
 import type { TurboVecIndexProvider } from '@qvac/rag'
 import {
   definePlugin,

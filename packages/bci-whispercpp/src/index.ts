@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-import path = require("bare-path");
 import fs = require("bare-fs");
 import QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -98,10 +97,9 @@ export interface BCIWhispercppConfig {
     caption_enabled?: boolean;
   };
   /**
-   * Override the default prebuilds folder used to locate dynamically-
-   * loaded ggml backend `.so` modules on Android. When omitted the
-   * native side resolves to `<addon>/prebuilds`. Ignored on non-Android
-   * targets. Mirrors `transcription-whispercpp 0.9.0`.
+   * Directory scanned, as given, for the dynamically-loaded ggml backend
+   * `.so` modules on Android and Linux. When omitted the native addon scans
+   * next to the module it was loaded from. Ignored on other platforms.
    */
   backendsDir?: string;
 }
@@ -144,15 +142,6 @@ type NeuralStreamInput =
   | Iterable<unknown>
   | Uint8Array
   | Uint8Array[];
-
-// Default prebuilds folder for dynamically-loaded ggml backend `.so`
-// files. Consumed by the native addon on Android and Linux (no-op on
-// static builds and other platforms). The CMake build stages the
-// per-arch backends into
-// `<addon>/prebuilds/<bare_target>/<module_name>/`; the native side
-// joins `backendsDir` with the compile-time `BACKENDS_SUBDIR` before
-// calling `ggml_backend_load_all_from_path()`.
-const PREBUILDS_DIR = path.join(__dirname, "prebuilds");
 
 // Sliding-window streaming constants.
 //
@@ -323,17 +312,10 @@ export class BCIWhispercpp {
         caption_enabled: false,
         ...(this._config.miscConfig ?? {}),
       },
-      // Override-only key. Native side falls back to `ggml_backend_load_all()`
-      // (default search path) on Android when this is empty -- which fails
-      // inside an APK with the standard packaging options that compress
-      // native libs. Defaulting to the in-package prebuilds dir keeps
-      // mobile builds working out of the box, parity with transcription-
-      // whispercpp 0.9.0.
-      backendsDir:
-        typeof this._config.backendsDir === "string" &&
-        this._config.backendsDir.length > 0
-          ? this._config.backendsDir
-          : PREBUILDS_DIR,
+      ...(typeof this._config.backendsDir === "string" &&
+      this._config.backendsDir.length > 0
+        ? { backendsDir: this._config.backendsDir }
+        : {}),
     };
 
     if (this._config.bciConfig) {
