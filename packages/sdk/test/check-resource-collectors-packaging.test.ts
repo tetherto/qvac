@@ -140,7 +140,8 @@ describe('runResourceCollectorPackagingCheck', () => {
         projectRoot: '/tmp/project',
         sdkPath: '/repo/packages/sdk',
         hosts: ['linux-x64'],
-        quiet: true
+        quiet: true,
+        verify: false
       }
     ])
     assert.deepEqual(acceptanceCalls, [
