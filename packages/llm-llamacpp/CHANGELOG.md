@@ -2,6 +2,13 @@
 
 ## [0.64.0] - 2026-10-20
 
+### Added
+
+- Bounded FuzzTest coverage for `forLogMessage`, `toLowerAscii`, and
+  `matchesAnyStopString`. Linux C++ CI runs the suite after unit tests. The
+  targets compile without `@qvac/fabric`, so ASan and LeakSanitizer stay at
+  full strength. No public addon API changes.
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.23.0`, which carries
