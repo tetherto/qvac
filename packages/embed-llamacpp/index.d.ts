@@ -5,6 +5,8 @@ export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, A
 export { BertInterface, pickPrimaryGgufPath } from "./addon";
 export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type { LayaConfig, LayaRequest, LayaSingleRequest, LayaBatchRequest, LayaQuestion, LayaChoiceQuestion, LayaScoreQuestion, LayaNoulQuestion, LayaState, LayaCriterion, LayaResponse, LayaResult, LayaAnswer, LayaChoiceAnswer, LayaScoreAnswer, LayaNoulAnswer, LayaUsage, LayaDecisionsArgs, } from "./laya";
+export { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
+export type { RerankConfig, RerankRequest, RerankScores, RerankerArgs, } from "./rerank";
 export { assessFit } from "./fit";
 export type { EmbedFitDevice, EmbedFitRequest, EmbedFitResult, EmbedFitStatus } from "./fit";
 export type { QvacResponse };
