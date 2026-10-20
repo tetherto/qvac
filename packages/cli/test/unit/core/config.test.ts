@@ -59,6 +59,51 @@ describe('resolveExplicitServeModel', () => {
   })
 })
 
+describe('sdcpp-generation endpoint categories', () => {
+  for (const [mode, category] of [
+    [undefined, 'image'],
+    ['diffusion', 'image'],
+    ['video', 'video'],
+    ['upscale', 'upscale'],
+    ['world', 'world']
+  ] as const) {
+    it(`gives mode ${mode ?? '(unset)'} the ${category} category`, () => {
+      const config = mode === undefined ? {} : { mode }
+      for (const type of ['sdcpp-generation', 'diffusion']) {
+        assert.equal(resolveExplicitServeModel(type, config).endpointCategory, category)
+      }
+    })
+  }
+
+  it('resolves a model constant by its configured mode', () => {
+    const r = resolveModelConstant('upscaler', {
+      model: 'REALESRGAN_X4PLUS',
+      config: { mode: 'upscale' }
+    })
+    assert.equal(r.sdkType, 'sdcpp-generation')
+    assert.equal(r.endpointCategory, 'upscale')
+  })
+
+  it('leaves other model types alone when their config carries a mode', () => {
+    const r = resolveExplicitServeModel('llamacpp-completion', { mode: 'upscale' })
+    assert.equal(r.endpointCategory, 'chat')
+  })
+})
+
+describe('legacy model type aliases', () => {
+  for (const [alias, category] of [
+    ['bci', 'bci'],
+    ['audiogen', 'audiogen'],
+    ['vla', 'vla'],
+    ['classification', 'classification'],
+    ['ocr', 'ocr']
+  ] as const) {
+    it(`maps ${alias} to ${category}`, () => {
+      assert.equal(resolveExplicitServeModel(alias, {}).endpointCategory, category)
+    })
+  }
+})
+
 describe('resolveModelConstant', () => {
   it('resolves a constant to its registry src and canonical engine', () => {
     const r = resolveModelConstant('alias', { model: 'WHISPER_EN_TINY_Q8_0' })

@@ -2,7 +2,7 @@ import type { ModelConstant } from '@qvac/sdk'
 import { modelFitPolicySchema, type ModelFitPolicy } from '@qvac/sdk/schemas'
 import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from '@/serve/core/config/aliases/sdcpp-video'
-import { normalizeEndpointCategory } from '@/serve/core/config/endpoint-category'
+import { endpointCategoryFor } from '@/serve/core/config/endpoint-category'
 import { loadModelConstants } from '@/serve/core/config/constants'
 import { resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
 
@@ -67,7 +67,7 @@ export function resolveExplicitServeModel(
   if (type !== VIRTUAL_SDK_WHISPER_AUDIO_TRANSLATION) {
     return {
       sdkType: type,
-      endpointCategory: normalizeEndpointCategory(type),
+      endpointCategory: endpointCategoryFor(type, config),
       config: { ...config }
     }
   }
