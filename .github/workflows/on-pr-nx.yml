@@ -34,7 +34,7 @@ on:
         type: boolean
         default: true
       config_ref_override:
-        description: "Override the trusted config ref (e.g. pnpm-monorepo-foundation) for interim testing before foundation lands on main."
+        description: "Trusted config ref for package selection and desktop integration during manual testing."
         required: false
         type: string
         default: ''
@@ -390,6 +390,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      base-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref_override || github.event.repository.default_branch }}
       packages: ${{ needs.matrix.outputs.packages }}
       fabric-consumers: ${{ needs.matrix.outputs.fabricconsumers }}
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}

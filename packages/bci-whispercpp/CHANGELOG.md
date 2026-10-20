@@ -5,20 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.13.0] - 2026-10-20
+
+### Breaking
+
+- An explicit `backendsDir` is now scanned as given, as in `@qvac/asr-ggml`
+  and `@qvac/tts-ggml`, rather than as a prebuilds root under which
+  `<host>/<module>` is appended
+  ([#5235](https://github.com/tetherto/qvac/pull/5235)). Unset, the addon finds
+  its ggml backends itself, next to the loaded module, for loads and for
+  `assessFit`, so most callers should drop the option. A caller that keeps it
+  passes the backends directory itself: change
+  `backendsDir: '/app/prebuilds'` to
+  `backendsDir: '/app/prebuilds/linux-x64/qvac__bci-whispercpp'`.
 
 ### Added
 
 - Bounded FuzzTest coverage for the length-prefixed neural-signal parser
   (`readNeuralFeatures`), including the uint32×uint32×sizeof(float) overflow
-  class. Linux C++ CI runs the suite after unit tests. The parser compiles
-  without whisper, so ASan and LeakSanitizer stay at full strength. No public
-  addon API changes.
+  class ([#4605](https://github.com/tetherto/qvac/pull/4605)). Linux C++ CI
+  runs the suite after unit tests. The parser compiles without whisper, so
+  ASan and LeakSanitizer stay at full strength. No public addon API changes.
 
 ### Changed
 
-- Align the shared native `speech-cpp` source pin to `2026-10-14` across
-  the speech addons so they use the same source revision.
+- Align the shared native `speech-cpp` source pin to `2026-10-19` across
+  the speech addons so they use the same source revision
+  ([#5062](https://github.com/tetherto/qvac/pull/5062),
+  [#5194](https://github.com/tetherto/qvac/pull/5194)).
+
+### Fixed
+
+- On Linux, BCI no longer fails to register any ggml backend when loaded from
+  the SDK worker bundle ([#5235](https://github.com/tetherto/qvac/pull/5235)).
+  The JavaScript side used to point the addon at `<package>/prebuilds`, which
+  does not exist in the bundle, while the backends ship beside the native
+  module.
 
 ## [0.12.0] - 2026-10-14
 
