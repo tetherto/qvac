@@ -41,7 +41,7 @@
     "test:cpp:fuzz:build": "npm run test:cpp:fuzz:configure && npm run test:cpp:fuzz:build:tests && npm run test:cpp:fuzz:build:fuzz",
     "test:cpp:fuzz:run": "npm run test:scripts && node scripts/run-cpp-tests.js && node scripts/run-cpp-fuzz.js",
     "test:cpp:fuzz": "npm run test:cpp:fuzz:build && npm run test:cpp:fuzz:run",
-    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js scripts/__tests__/run-cpp-fuzz.test.js",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js scripts/__tests__/run-cpp-fuzz.test.js scripts/__tests__/copy-mobile-test-assets.test.js",
     "test:dts": "npm run test:types",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
@@ -57,6 +57,7 @@
     "scripts/convert-megaloc.py",
     "LICENSE-MegaLoc",
     "test/fixtures",
+    "!test/fixtures/*.gguf",
     "prebuilds",
     "weights/mobilenetv3_3class_v3_fp16.gguf",
     "test/mobile",

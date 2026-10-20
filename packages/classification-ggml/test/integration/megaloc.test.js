@@ -19,7 +19,8 @@ function asset(filename, modelEnv) {
   const local = path.join(__dirname, '..', 'fixtures', filename)
   if (fs.existsSync(local)) return local
   throw new Error(
-    `Required MegaLoc test asset missing: ${filename}${modelEnv ? ` (${modelEnv})` : ''}`
+    `Required MegaLoc test asset missing: ${filename}${modelEnv ? ` (${modelEnv})` : ''}. ` +
+      'Convert both models before testing; see docs/megaloc.md.'
   )
 }
 

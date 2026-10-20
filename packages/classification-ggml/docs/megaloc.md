@@ -41,27 +41,46 @@ operations to execute on CPU when a GPU backend does not support them.
 ## Local GGUF conversion
 
 Obtain the original `model.safetensors` from
-[MegaLoc on Hugging Face](https://huggingface.co/gberton/MegaLoc).
+[MegaLoc on Hugging Face](https://huggingface.co/gberton/MegaLoc/resolve/a0f34722c4297ff787e022433799250180860af7/model.safetensors).
 The converter verifies the supported checkpoint revision and SHA256, uses the
 safetensors reader, and does not execute downloaded Python model code.
 
-Use Python 3.11 or newer with `numpy`, `safetensors` and Fabric's
-`gguf-py` package. These are converter tools, not addon runtime dependencies.
-F16 is the default:
+Use Python 3.11 or newer. Install the converter tools and obtain the compatible
+Fabric sources; these are offline tools, not addon runtime dependencies:
 
 ```sh
-python scripts/convert-megaloc.py --input model.safetensors --output megaloc-f16.gguf --gguf-py /path/to/fabric/gguf-py
+python -m pip install numpy==2.4.4 safetensors==0.8.0 PyYAML==6.0.3 tqdm==4.68.4
+git clone --filter=blob:none --no-checkout https://github.com/tetherto/qvac-fabric-llm.cpp.git fabric
+git -C fabric checkout --detach d0a43e514c493b3655debf7e04f12a57931ca8e9
 ```
 
-For the second format, quantize only the final projection to Q6_K:
+From the addon directory, manually convert both test models. F16 is the default:
 
 ```sh
-python scripts/convert-megaloc.py --input model.safetensors --output megaloc-mixed.gguf --quant mixed --gguf-py /path/to/fabric/gguf-py --ggml-library /path/to/libggml-base.so
+python scripts/convert-megaloc.py --input model.safetensors --output test/fixtures/megaloc-f16.gguf --gguf-py fabric/gguf-py
+```
+
+For the second format, build the native core quantizer, then quantize only the
+final projection to Q6_K. This dependency build does not use a GPU; the embedded
+GGML sources do not contain the standalone tests/examples directories:
+
+```sh
+cmake -S fabric/ggml -B ggml-build -DBUILD_SHARED_LIBS=ON -DGGML_CPU=OFF -DGGML_METAL=OFF -DGGML_BLAS=OFF -DGGML_BUILD_TESTS=OFF -DGGML_BUILD_EXAMPLES=OFF
+cmake --build ggml-build --target ggml-base --config Release --parallel 4
+```
+
+On Linux with a single-configuration generator:
+
+```sh
+python scripts/convert-megaloc.py --input model.safetensors --output test/fixtures/megaloc-mixed.gguf --quant mixed --gguf-py fabric/gguf-py --ggml-library ggml-build/src/libggml-base.so
 ```
 
 The native quantizer must come from a compatible Fabric/GGML build. Its library
-is named `ggml-base.dll` on Windows and `libggml-base.dylib` on macOS builds that
-produce that shared library. F16 conversion does not need this library.
+is normally `ggml-build/bin/Release/ggml-base.dll` with Visual Studio on Windows
+(`ggml-build/bin/ggml-base.dll` with Ninja), and
+`ggml-build/src/libggml-base.dylib` on macOS with a single-configuration generator.
+Adjust the path to the actual build output. A Fabric `.bare` addon cannot be
+used as the quantizer library. F16 conversion does not need this library.
 GGUF format names describe matrix storage; activations and reductions use F32.
 Small tensors and patch-projection weights remain F32 in both formats.
 Positional embeddings use fixed-order float64 bicubic interpolation followed by
@@ -89,9 +108,11 @@ defaults to MobileNet; the `MegaLoc` wrapper explicitly selects `modelType:
 
 ## Tests
 
-Set `QVAC_MEGALOC_F16_MODEL_PATH` and `QVAC_MEGALOC_MIXED_MODEL_PATH` to local
-converted files before `npm run test:integration`. The tests require both
-formats. `QVAC_MEGALOC_BACKEND` selects the device for those tests and defaults
+Convert both files into `test/fixtures/` using the commands above before
+`npm run test:integration`. Alternatively, set `QVAC_MEGALOC_F16_MODEL_PATH` and
+`QVAC_MEGALOC_MIXED_MODEL_PATH` to your manually converted files elsewhere.
+The tests require both formats and report missing files as errors.
+`QVAC_MEGALOC_BACKEND` selects the device for those tests and defaults
 to CPU. Synthetic reference fixtures come from original PyTorch FP32 and cover
 upscaling, downscaling and unchanged dimensions. They also check repeated
 inference, decoding, error recovery, model coexistence and lifecycle behavior.
@@ -100,5 +121,7 @@ inference, decoding, error recovery, model coexistence and lifecycle behavior.
 Run `python scripts/test_convert_megaloc.py -v` with NumPy installed to check the
 converter's positional interpolation against stored original PyTorch references.
 Integration tests verify backend selection and record CPU fallback counts.
-Cross-platform CI and mobile tests need the model fixtures staged separately;
-test models are not included in the published npm package.
+For mobile tests, run `npm run mobile:copy-prebuilds` after conversion. It stages
+both model files and reference assets for the device using the same local paths
+and environment overrides. Converted MegaLoc GGUFs are ignored by Git and
+excluded from the published npm package, including staged mobile copies.

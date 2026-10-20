@@ -234,6 +234,39 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem prebuilds/
 
+      - name: Stage MegaLoc test models
+        uses: ./.github/actions/stage-integration-models
+        with:
+          workdir: ${{ env.PKG_DIR }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          s3-manifest: >-
+            [{"src":"qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf","dest":"test/fixtures/megaloc-f16.gguf"},
+             {"src":"qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf","dest":"test/fixtures/megaloc-mixed.gguf"}]
+
+      - name: Verify MegaLoc test models
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import { createHash } from "node:crypto";
+            import { createReadStream } from "node:fs";
+            const expected = {
+              "megaloc-f16.gguf": "f2519f42a826bb82f5d3bd6360e6017fb156ad3cb25f71d73163df01d26c6636",
+              "megaloc-mixed.gguf": "c1215bca09ed783f34e66ab372b0b02e75213733bea8105764557b58f2082575"
+            };
+            for (const [name, sha256] of Object.entries(expected)) {
+              const hash = createHash("sha256");
+              for await (const chunk of createReadStream("test/fixtures/" + name)) hash.update(chunk);
+              if (hash.digest("hex") !== sha256) throw new Error("Checksum mismatch: " + name);
+              console.log("Verified " + name);
+            }
+          '
+
+      - name: Check production package excludes test models
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm run test:package
+
       - name: Run JS integration tests
         working-directory: ${{ env.PKG_DIR }}
         env:
