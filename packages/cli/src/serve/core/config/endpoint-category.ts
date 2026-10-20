@@ -54,10 +54,22 @@ export function normalizeEndpointCategory(sdkType: string): string {
   return ENDPOINT_CATEGORY[sdkType] ?? sdkType
 }
 
-/** The category of a configured model, which for sdcpp-generation depends on its mode. */
+/**
+ * The category of a configured model, which for sdcpp-generation depends on
+ * its mode. Throws on a mode the SDK would reject at load, so a typo fails at
+ * startup instead of passing as `image`.
+ */
 export function endpointCategoryFor(sdkType: string, config: Record<string, unknown>): string {
   const category = normalizeEndpointCategory(sdkType)
   if (category !== 'image') return category
   const mode = config['mode']
-  return typeof mode === 'string' ? (SDCPP_MODE_CATEGORY[mode] ?? category) : category
+  if (mode === undefined) return category
+  const modeCategory = typeof mode === 'string' ? SDCPP_MODE_CATEGORY[mode] : undefined
+  if (modeCategory === undefined) {
+    const expected = Object.keys(SDCPP_MODE_CATEGORY)
+      .map((m) => `"${m}"`)
+      .join(', ')
+    throw new Error(`config.mode: expected one of ${expected}, got ${JSON.stringify(mode)}`)
+  }
+  return modeCategory
 }

@@ -123,7 +123,8 @@ its own category (`400 invalid_model_type` otherwise). `GET /v1/models/catalog` 
 | `sdcpp-video`                                                                                  | `video`             |
 
 An `sdcpp-generation` model serves one operation, chosen by `config.mode`: `diffusion` (the
-default) is `image`, and `video`, `upscale` and `world` are categories of the same name.
+default) is `image`, and `video`, `upscale` and `world` are categories of the same name. Any other
+`mode` fails at startup.
 
 ```json
 {

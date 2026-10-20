@@ -84,6 +84,36 @@ describe('sdcpp-generation endpoint categories', () => {
     assert.equal(r.endpointCategory, 'upscale')
   })
 
+  for (const mode of ['upscal', 'IMAGE', 5]) {
+    it(`refuses mode ${JSON.stringify(mode)} when the alias is resolved`, () => {
+      assert.throws(
+        () => resolveModelConstant('upscaler', { model: 'REALESRGAN_X4PLUS', config: { mode } }),
+        {
+          message:
+            'serve.models.upscaler.config.mode: expected one of "diffusion", "video", "upscale", ' +
+            `"world", got ${JSON.stringify(mode)}`
+        }
+      )
+    })
+  }
+
+  it('refuses an unknown mode on an explicit entry', () => {
+    assert.throws(
+      () =>
+        parseServeConfig(
+          {
+            serve: {
+              models: {
+                art: { src: '/m.gguf', type: 'sdcpp-generation', config: { mode: 'upscal' } }
+              }
+            }
+          },
+          {}
+        ),
+      /^Error: serve\.models\.art\.config\.mode: expected one of/
+    )
+  })
+
   it('leaves other model types alone when their config carries a mode', () => {
     const r = resolveExplicitServeModel('llamacpp-completion', { mode: 'upscale' })
     assert.equal(r.endpointCategory, 'chat')
