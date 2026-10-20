@@ -19,6 +19,7 @@ import {
   hasValidGGUFHeader
 } from '@/utils/index'
 import { safeFetch } from '@/handlers/load-model/safe-fetch'
+import { completeMarkerPath } from '@/utils/cache/paths'
 import {
   shouldEnforceSecureTransport,
   verifyHttpModelFile
@@ -90,8 +91,27 @@ function extractFilenameFromUrl(url: string): string {
   return sanitizePathComponent(cleanFilename)
 }
 
+// The marker holds the size of a verified download. Offline it is the only proof
+// a non-GGUF file (a whisper.cpp .bin, say) is whole.
+async function markDownloadComplete(modelPath: string, size: number): Promise<void> {
+  try {
+    await fsPromises.writeFile(completeMarkerPath(modelPath), String(size))
+  } catch (error) {
+    logger.warn('Failed to write download complete marker', { path: modelPath, error })
+  }
+}
+
+async function isMarkedComplete(modelPath: string, size: number): Promise<boolean> {
+  try {
+    const marker = await fsPromises.readFile(completeMarkerPath(modelPath), 'utf8')
+    return String(marker).trim() === String(size)
+  } catch {
+    return false
+  }
+}
+
 // A cache hit is served after a freshness check only — size against the server,
-// or a GGUF-header check when offline — and is not re-hashed (that would cost a
+// or, offline, a complete marker or GGUF header — and is not re-hashed (that would cost a
 // full-file SHA-256 on every load). Verification happens at download time, so a
 // cache entry from before this shipped, or one written down the warn-and-proceed
 // path, is served as-is: tightening requireHttpChecksum does not retroactively
@@ -134,6 +154,11 @@ async function validateCachedFile(
       logger.warn(
         `⚠️ HEAD request failed: ${headError instanceof Error ? headError.message : String(headError)}`
       )
+      if (await isMarkedComplete(modelPath, localSize)) {
+        logger.info(`✅ Offline - download marked complete, using cached file: ${modelPath}`)
+        return modelPath
+      }
+
       logger.info(`📴 Falling back to GGUF header validation...`)
 
       const hasValidHeader = await hasValidGGUFHeader(modelPath)
@@ -160,6 +185,8 @@ async function validateCachedFile(
       return null
     }
 
+    // Also marks files cached before the marker existed, so they load offline next time.
+    await markDownloadComplete(modelPath, localSize)
     logger.info(`✅ Using cached HTTP model: ${modelPath}`)
     return modelPath
   } catch (error) {
@@ -204,6 +231,8 @@ async function assertPartialCanResume(
 
 interface HttpDownloadMeta {
   hubSha256?: string | undefined
+  // The size the server announced, when it did.
+  totalBytes?: number | undefined
 }
 
 async function performHttpDownload(
@@ -330,6 +359,7 @@ async function performHttpDownload(
   }
 
   logger.info(`📏 Total size: ${totalBytes} bytes (${(totalBytes / 1024 / 1024).toFixed(2)} MB)`)
+  if (totalBytes > 0) meta.totalBytes = totalBytes
 
   // Create write stream (append if resuming)
   const writeStreamOptions =
@@ -562,6 +592,7 @@ async function downloadVerifyAndPublish(
   hooks?: DownloadHooks
 ): Promise<void> {
   const partialPath = partialDownloadPath(finalPath)
+  await fsPromises.unlink(completeMarkerPath(finalPath)).catch(() => {})
   const meta = await performHttpDownloadWithResume(
     url,
     partialPath,
@@ -571,7 +602,10 @@ async function downloadVerifyAndPublish(
     signal
   )
   await verifyHttpModelFile(url, partialPath, meta.hubSha256, requireChecksum, hooks)
+  // Unchecked sources can end early without an error, so the size must match too.
+  const { size } = await fsPromises.stat(partialPath)
   await publishDownload(finalPath)
+  if (size === meta.totalBytes) await markDownloadComplete(finalPath, size)
 }
 
 export async function downloadModelFromHttp(
