@@ -52,6 +52,17 @@ on:
           - Apple iPhone 16 Pro
           - Apple iPhone 15
         default: Apple iPhone 16 Pro
+      devices_custom:
+        description: "Comma-separated device model(s), e.g. 'Google Pixel 9 Pro, Samsung Galaxy S25 Ultra'. Overrides the platform's dropdown; use for the supported roster or several devices at once. Must match a Device Farm model (list + how to check: docs/ci/MOBILE-ON-DEMAND.md)."
+        type: string
+        required: false
+        default: ""
+      device_model_operator:
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value). EQUALS avoids billing a different/slower variant."
+        type: choice
+        required: false
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
       ref:
         description: Git ref to test; defaults to the dispatched ref
         type: string
@@ -117,12 +128,12 @@ jobs:
           path: validation-data
           persist-credentials: false
 
-      - name: Validate requested device
+      - name: Validate requested devices
         uses: ./.github/actions/run-mobile-integration-tests/validate-devices
         with:
           platform: ${{ inputs.platform }}
-          devices: ${{ inputs.platform == 'Android' && inputs.android_device || inputs.ios_device }}
-          device-model-operator: EQUALS
+          devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.platform == 'Android' && inputs.android_device || inputs.ios_device) }}
+          device-model-operator: ${{ inputs.device_model_operator }}
           runner-source-path: validation-data/packages/ggml-rpc-server/test/mobile/integration.auto.cjs
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
@@ -242,8 +253,8 @@ jobs:
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
           scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'single-pool' }}
-          device-models: ${{ inputs.platform == 'Android' && inputs.android_device || (inputs.platform == 'iOS' && inputs.ios_device || '') }}
-          device-model-operator: EQUALS
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.platform == 'Android' && inputs.android_device || inputs.ios_device)) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || 'EQUALS' }}
 
       - name: Monitor Device Farm test run
         id: monitor

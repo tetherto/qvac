@@ -1,5 +1,64 @@
 # Changelog
 
+## [0.51.0] - 2026-10-19
+
+### Breaking
+
+- `pooling: "rank"` is no longer a `GGMLBert` option, and a model whose GGUF
+  defaults to rank pooling no longer loads in `GGMLBert`
+  ([#4995](https://github.com/tetherto/qvac/pull/4995)). Rank pooling returns
+  one classifier score per sequence, not an embedding, so `GGMLBert` read past
+  the end of the result: the vectors were mostly zeros that changed on every
+  run, and the process could crash. The load now fails with
+  `UnsupportedEmbeddings` before the weights load. Load reranker models with
+  `Reranker`.
+
+### Added
+
+- `Reranker` scores documents by relevance to a query with a reranker
+  (cross-encoder) GGUF such as jina-reranker, bge-reranker or Qwen3-Reranker
+  ([#4995](https://github.com/tetherto/qvac/pull/4995)).
+  `run({ query, documents })` resolves to one score per document, in the
+  order given; higher is more relevant. The query is paired with each
+  document as llama-server's `/rerank` does, and the scores match fabric's
+  `llama-embedding --pooling rank`. A GGUF that declares another pooling or
+  has no classifier head is rejected before its weights load.
+
+## [Unreleased]
+
+### Added
+
+- Bounded FuzzTest coverage for `parseMainGpu` and
+  `preferredBackendTypeFromString`. Linux C++ CI runs the suite after unit
+  tests. The parsers compile without `@qvac/fabric`, so ASan and LeakSanitizer
+  stay at full strength. No public addon API changes.
+
+## [0.50.0] - 2026-10-16
+
+### Breaking
+
+- `IdMapIndex` and `IdMapIndexFilter` moved to the new `@qvac/turbovec-ggml`
+  addon, with the same API, error names and snapshot formats. The
+  `@qvac/embed-llamacpp/idMapIndex` subpath and the root `IdMapIndex` /
+  `IdMapIndexFilter` exports are gone, and the vector index is no longer
+  compiled into this addon. Replace
+  `require('@qvac/embed-llamacpp/idMapIndex')` with
+  `require('@qvac/turbovec-ggml/idMapIndex')`.
+
+### Added
+
+- `poll` and `poll-batch` are now documented public JavaScript load options.
+  They control the main and batch GGML threadpool busy-wait levels; both
+  default to `0`, `poll-batch` inherits an explicit `poll` when omitted, and
+  values outside `0`–`100` are rejected
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
+### Fixed
+
+- Both GGML threadpools now default to `poll=0`, so GPU-offloaded embedding no
+  longer keeps CPU workers busy-spinning between graph work
+  ([#5083](https://github.com/tetherto/qvac/pull/5083)).
+
 ## [0.48.1] - 2026-10-15
 
 ### Fixed
@@ -185,7 +244,6 @@
   load's fit received that choice but the projection did not, so on Metal or
   Vulkan a MoE model's projected `gpuLayers` and `deviceBytes` could differ
   from the load.
-
 ## [0.43.0] - 2026-09-28
 
 ### Added

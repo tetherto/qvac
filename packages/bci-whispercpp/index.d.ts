@@ -68,10 +68,9 @@ export interface BCIWhispercppConfig {
         caption_enabled?: boolean;
     };
     /**
-     * Override the default prebuilds folder used to locate dynamically-
-     * loaded ggml backend `.so` modules on Android. When omitted the
-     * native side resolves to `<addon>/prebuilds`. Ignored on non-Android
-     * targets. Mirrors `transcription-whispercpp 0.9.0`.
+     * Directory scanned, as given, for the dynamically-loaded ggml backend
+     * `.so` modules on Android and Linux. When omitted the native addon scans
+     * next to the module it was loaded from. Ignored on other platforms.
      */
     backendsDir?: string;
 }

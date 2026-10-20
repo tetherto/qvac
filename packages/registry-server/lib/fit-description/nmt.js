@@ -5,6 +5,7 @@ const { DescriptionWriter } = require('./gguf-writer')
 const {
   expectGgmlMagic,
   readInt32Fields,
+  readBoolFields,
   readCount,
   readTensorsToEnd,
   writeTensors
@@ -26,16 +27,15 @@ const NMT_HPARAMS = [
   'n_decoder_heads',
   'n_decoder_layers'
 ]
-const INDICTRANS_HPARAMS = [
-  'n_tgt_vocab',
+const INDICTRANS_TARGET_VOCAB = ['n_tgt_vocab']
+const INDICTRANS_FLAGS = [
   'encoder_normalize_before',
   'decoder_normalize_before',
   'layernorm_embedding',
   'scale_embedding',
-  'has_lm_head',
-  'encoder_ffn_dim',
-  'decoder_ffn_dim'
+  'has_lm_head'
 ]
+const INDICTRANS_FFN_DIMS = ['encoder_ffn_dim', 'decoder_ffn_dim']
 
 const NMT_MAX_VOCAB_SIZE = 1000000
 const NMT_MAX_VOCAB_TOKEN_LENGTH = 1024
@@ -49,6 +49,13 @@ async function readModelType(cursor) {
     throw new FormatError(`nmt model type ${modelType} is not IndicTrans`)
   }
   return modelType
+}
+
+async function readIndicTransHparams(cursor) {
+  const targetVocab = await readInt32Fields(cursor, INDICTRANS_TARGET_VOCAB)
+  const flags = await readBoolFields(cursor, INDICTRANS_FLAGS)
+  const ffnDims = await readInt32Fields(cursor, INDICTRANS_FFN_DIMS)
+  return { sizes: { ...targetVocab, ...ffnDims }, flags }
 }
 
 async function readEmbeddedSentencePiece(cursor) {
@@ -72,6 +79,12 @@ function writeInt32Fields(writer, fields) {
   }
 }
 
+function writeBoolFields(writer, fields) {
+  for (const [name, value] of Object.entries(fields)) {
+    writer.bool(`${NMT_ARCHITECTURE}.${name}`, value)
+  }
+}
+
 function writeVocab(writer, name, tokenLengths) {
   writer.i32(`${NMT_ARCHITECTURE}.${name}.n_tokens`, tokenLengths.length)
   writer.u32Array(`${NMT_ARCHITECTURE}.${name}.token_length_counts`, lengthHistogram(tokenLengths))
@@ -88,7 +101,8 @@ function writeNmtDescription(sourceSize, model) {
   writeInt32Fields(writer, model.hparams)
   writer.i32('nmt.model_type', model.modelType)
   writer.i32('nmt.ftype', model.ftype)
-  writeInt32Fields(writer, model.indicTrans)
+  writeInt32Fields(writer, model.indicTrans.sizes)
+  writeBoolFields(writer, model.indicTrans.flags)
   writeVocab(writer, 'src_vocab', model.sourceTokenLengths)
   writeEmbeddedSentencePiece(writer, 'src_spm', model.sourceSentencePiece)
   writeEmbeddedSentencePiece(writer, 'tgt_spm', model.targetSentencePiece)
@@ -102,7 +116,7 @@ async function describeIndicTrans(cursor) {
   const hparams = await readInt32Fields(cursor, NMT_HPARAMS)
   const modelType = await readModelType(cursor)
   const ftype = await cursor.i32()
-  const indicTrans = await readInt32Fields(cursor, INDICTRANS_HPARAMS)
+  const indicTrans = await readIndicTransHparams(cursor)
   const sourceTokenLengths = await readVocab(cursor, SOURCE_TOKEN_PREFIX_BYTES)
   const sourceSentencePiece = await readEmbeddedSentencePiece(cursor)
   const targetSentencePiece = await readEmbeddedSentencePiece(cursor)

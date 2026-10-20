@@ -130,7 +130,7 @@ qvac doctor --quiet || exit 1
 ### `configure`
 
 Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
-straight to `qvac serve --openai` or `qvac serve --systemone`. It searches the models the SDK provides — by name or by
+straight to `qvac serve --openai`. It searches the models the SDK provides — by name or by
 capability (role, addon, quantization) — and on a wide terminal previews, for the
 highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
 its alias, set config parameters (guided by the SDK's config schema — each field shows its
@@ -399,13 +399,14 @@ accepting dependents when another dependent still requires the current version.
 
 ### `serve`
 
-Run an HTTP server backed by locally configured QVAC models (`serve.models` in `qvac.config.*`), with optional **OpenAI-compatible** and **System One** extensions.
+Run an HTTP server backed by locally configured QVAC models (`serve.models` in `qvac.config.*`), with an optional **OpenAI-compatible** extension.
 
 ```bash
 qvac serve --openai [options]
-qvac serve --systemone [options]
-qvac serve --openai --systemone [options]
 ```
+
+The OpenAI extension includes `POST /v1/decisions` for local typed decisions.
+See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request examples.
 
 `--no-default` leaves the QVAC surface out. `qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 
@@ -415,12 +416,13 @@ qvac serve --openai --systemone [options]
 | `-p, --port <number>`            | Port to listen on (default: `11434`).                                                                                               |
 | `-H, --host <address>`           | Host to bind to (default: `127.0.0.1`).                                                                                             |
 | `--model <alias>`                | Force a model alias to preload at startup (repeatable; must be in config). Models not preloaded still load lazily on first request. |
-| `--systemone`                    | Mount `POST /v1/systemone` for typed decisions. See [System One](docs/serve/systemone.md).                                          |
 | `--api-key <key>`                | Require Bearer authentication. Recommended for every non-loopback bind.                                                             |
 | `--api-key-file <path>`          | Read the Bearer token from a file. Keeps it out of argv, which `/proc` exposes locally.                                             |
 | `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                          |
 | `--cors`                         | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin.                                          |
 | `--cors-origin <origin>`         | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                                                           |
+| `--allowed-host <host>`          | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` covers subdomains (repeatable).    |
+| `--allow-any-host`               | Accept any `Host` header, turning off DNS-rebinding protection.                                                                     |
 | `--public-base-url <url>`        | Externally reachable origin required for image `response_format=url`.                                                               |
 | `--docs`                         | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                                                                |
 | `--no-lazy-load`                 | Disable lazy loading; a request for an unloaded model returns `503 model_not_loaded`.                                               |
@@ -440,6 +442,8 @@ qvac serve --openai --cors --cors-origin https://app.example.com
 Independently, `--docs` enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. `/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. Do not expose docs on a non-loopback bind unless public introspection is acceptable.
 
 A non-loopback `--host` refuses to start without `--api-key` or `--api-key-file`. `--allow-unauthenticated` downgrades that refusal to a warning.
+
+Every request, `/openapi.json` included, must carry a `Host` header naming a loopback host, an IP address, the bind host, the `--public-base-url` host or an `--allowed-host` entry; anything else gets `403 host_not_allowed`. This stops a web page that rebinds its own domain to `127.0.0.1` from calling the server. Behind a reverse proxy or under a LAN hostname, list that name with `--allowed-host` or `serve.allowedHosts` (a leading dot covers the domain and its subdomains); `--allow-any-host` or `"allowedHosts": true` turns the check off.
 
 `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file` reads it from an owner-only file instead; the CLI refuses a path that is not a regular file and warns when the file is readable beyond its owner.
 
@@ -519,7 +523,7 @@ For tests that touch `qvac serve --openai`, `@qvac/ai-sdk-provider`, or agent-to
 [`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
 CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
 
-The CLI depends on the published `@qvac/sdk` (`^0.21.0`), which provides the
+The CLI depends on the published `@qvac/sdk` (`^0.22.0`), which provides the
 `./commands` subpath that `bundle`/`verify` re-export and the server runtime
 the `serve` commands use. A normal `npm install` pulls it from the registry —
 no local SDK build is required.
@@ -547,7 +551,7 @@ npm run dev:unlink
 ```
 
 This runs `git checkout HEAD -- package.json` and re-installs, so the
-committed `@qvac/sdk` dependency (`^0.21.0`) is restored regardless of what you
+committed `@qvac/sdk` dependency (`^0.22.0`) is restored regardless of what you
 swapped in locally. `package-lock.json` is gitignored and is regenerated by the
 trailing `npm install`.
 

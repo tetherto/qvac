@@ -43,6 +43,8 @@ void discarded;
 const config: LlmLlamacpp.LlamaConfig = {
   device: "gpu",
   parallel: 4,
+  poll: "0",
+  "poll-batch": "0",
   "split-mode": "layer",
 };
 void config;
@@ -178,6 +180,8 @@ const stats: LlmLlamacpp.RuntimeStats = {
   avgConcurrentSeq: 1,
   backendDevice: "gpu",
   stopReason: "eos",
+  draftTokens: 8,
+  draftAcceptedTokens: 6,
 };
 void stats;
 const numericLike: LlmLlamacpp.NumericLike = "42";

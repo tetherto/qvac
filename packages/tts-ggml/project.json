@@ -76,6 +76,7 @@
               "platform": "linux",
               "arch": "x64",
               "runner": "qvac-ubuntu2204-x64-gpu",
+              "testEnv": { "TTS_CPP_GPU_BACKEND": "cuda" },
               "benchmarkMatrixJson": [
                 {
                   "engine": "chatterbox",
@@ -238,6 +239,7 @@
               "platform": "linux",
               "arch": "x64",
               "runner": "qvac-ubuntu2404-x64-gpu",
+              "testEnv": { "TTS_CPP_GPU_BACKEND": "vulkan" },
               "benchmarkMatrixJson": [
                 {
                   "engine": "chatterbox",

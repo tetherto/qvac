@@ -135,6 +135,18 @@ Third-Party Model Licenses
     https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
   latin_g2
     https://www.jaided.ai/easyocr/modelhub/
+  laya-f16
+    https://huggingface.co/convaiinnovations/laya
+  laya-multilingual-f16
+    https://huggingface.co/convaiinnovations/laya-multilingual
+  laya-multilingual-Q8_0
+    https://huggingface.co/convaiinnovations/laya-multilingual
+  laya-Q8_0
+    https://huggingface.co/convaiinnovations/laya
+  laya-typed-decisions-f16
+    https://huggingface.co/convaiinnovations/laya-typed-decisions
+  laya-typed-decisions-Q8_0
+    https://huggingface.co/convaiinnovations/laya-typed-decisions
   LightOnOCR-2-1B-ocr-soup-GGUF
     https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF
   Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
@@ -153,8 +165,20 @@ Third-Party Model Licenses
     https://huggingface.co/OpenMOSS-Team/MOSS-TTS
   moss-codec-encoder-f16
     https://huggingface.co/OpenMOSS-Team/MOSS-TTS
+  moss-sfx-v2-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0
+  moss-speech-bf16
+    https://huggingface.co/OpenMOSS-Team/MOSS-Speech
+  moss-speech-codec-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-Speech-Codec
+  moss-speech-q8_0
+    https://huggingface.co/OpenMOSS-Team/MOSS-Speech
+  moss-transcribe-diarize-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize
   moss-tts-delay-f16
     https://huggingface.co/OpenMOSS-Team/MOSS-TTS
+  moss-ttsd-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0
   nb-tiny-ggml-model
     https://huggingface.co/NbAiLab/nb-whisper-tiny
   parler-indic-f16
@@ -707,6 +731,11 @@ Third-Party Model Licenses
   weight
     https://huggingface.co/nvidia/parakeet-unified-en-0.6b
 
+--- openmdw-1.1 ---
+
+  Nemotron-3-Diarization.q8_0
+    https://huggingface.co/nvidia/Nemotron-3-Diarization
+
 --- openrail ---
 
   supertonic
@@ -748,7 +777,8 @@ the underlying models.
 
 Source URLs for original weights are recorded in each model's
 metadata entry within the registry.
-=========================================================================
+
+====
 JavaScript Dependencies
 =========================================================================
 

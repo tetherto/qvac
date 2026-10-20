@@ -207,8 +207,26 @@ const DEFAULT_INDICTRANS_TENSORS = [
   { name: 'model.decoder.layer_norm.weight', type: GGML_TYPE_F32, ne: [8] }
 ]
 
+const DEFAULT_INDICTRANS_FLAGS = [1, 0, 1, 1, 0]
+
+function buildIndicTransHeader({
+  modelType = INDICTRANS_MODEL_TYPE,
+  flags = DEFAULT_INDICTRANS_FLAGS
+} = {}) {
+  return Buffer.concat([
+    u32(GGML_FILE_MAGIC),
+    i32s([6, 256, 8, 2, 1, 256, 8, 2, 1]),
+    i32(modelType),
+    i32(1),
+    i32(4),
+    Buffer.from(flags),
+    i32s([24, 16])
+  ])
+}
+
 function buildIndicTransBin({
   modelType = INDICTRANS_MODEL_TYPE,
+  header = buildIndicTransHeader({ modelType }),
   sourceTokens = DEFAULT_TOKENS,
   targetTokens = ['x', 'yz'],
   sourceSentencePiece = buildSentencePiece(),
@@ -216,11 +234,7 @@ function buildIndicTransBin({
   tensors = DEFAULT_INDICTRANS_TENSORS
 } = {}) {
   return Buffer.concat([
-    u32(GGML_FILE_MAGIC),
-    i32s([6, 256, 8, 2, 1, 256, 8, 2, 1]),
-    i32(modelType),
-    i32(1),
-    i32s([4, 1, 1, 1, 1, 0, 16, 16]),
+    header,
     i32(sourceTokens.length),
     ...sourceTokens.map(lengthPrefixed),
     embeddedSentencePiece(sourceSentencePiece),
@@ -297,6 +311,7 @@ module.exports = {
   buildWhisperVadBin,
   buildBciEmbedder,
   buildSentencePiece,
+  buildIndicTransHeader,
   buildIndicTransBin,
   buildMarianModel,
   buildMarianShortlist

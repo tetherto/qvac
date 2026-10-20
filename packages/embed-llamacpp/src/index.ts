@@ -21,8 +21,7 @@ import {
   type GGMLConfig,
 } from "./addon";
 import { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
-import type ActualIdMapIndex from "./idMapIndex";
-import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
+import { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
 
 export type {
   GGMLConfig,
@@ -31,12 +30,6 @@ export type {
   RuntimeStats,
   Addon,
 } from "./addon";
-export type {
-  IdMapIndexBitWidth,
-  IdMapIndexOptions,
-  IdMapIndexSearchResult,
-  IdMapIndexStorage,
-} from "./idMapIndex";
 export { BertInterface, pickPrimaryGgufPath } from "./addon";
 export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type {
@@ -59,6 +52,13 @@ export type {
   LayaUsage,
   LayaDecisionsArgs,
 } from "./laya";
+export { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
+export type {
+  RerankConfig,
+  RerankRequest,
+  RerankScores,
+  RerankerArgs,
+} from "./rerank";
 export { assessFit } from "./fit";
 export type {
   EmbedFitDevice,
@@ -71,14 +71,6 @@ export type { QvacResponse };
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
 
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
-
-function loadIdMapIndex() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
-  return require("./idMapIndex") as typeof ActualIdMapIndex;
-}
-
-export declare const IdMapIndex: typeof ActualIdMapIndex;
-export declare const IdMapIndexFilter: typeof ActualIdMapIndexFilter;
 
 export interface GGMLBertArgs {
   files: { model: string[] };
@@ -304,9 +296,10 @@ const cjsExports = GGMLBert as typeof GGMLBert & {
   LayaDecisions?: typeof LayaDecisions;
   LayaInterface?: typeof LayaInterface;
   mapLayaEvent?: typeof mapLayaEvent;
+  Reranker?: typeof Reranker;
+  RerankInterface?: typeof RerankInterface;
+  mapRerankEvent?: typeof mapRerankEvent;
   assessFit?: typeof assessFitImpl;
-  readonly IdMapIndex?: typeof IdMapIndex;
-  readonly IdMapIndexFilter?: typeof IdMapIndexFilter;
 };
 cjsExports.default = GGMLBert;
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
@@ -315,15 +308,8 @@ cjsExports.BertInterface = BertInterface;
 cjsExports.LayaDecisions = LayaDecisions;
 cjsExports.LayaInterface = LayaInterface;
 cjsExports.mapLayaEvent = mapLayaEvent;
+cjsExports.Reranker = Reranker;
+cjsExports.RerankInterface = RerankInterface;
+cjsExports.mapRerankEvent = mapRerankEvent;
 cjsExports.assessFit = assessFitImpl;
-Object.defineProperties(cjsExports, {
-  IdMapIndex: {
-    enumerable: true,
-    get: loadIdMapIndex,
-  },
-  IdMapIndexFilter: {
-    enumerable: true,
-    get: () => loadIdMapIndex().IdMapIndexFilter,
-  },
-});
 module.exports = cjsExports;

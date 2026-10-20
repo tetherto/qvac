@@ -25,6 +25,11 @@ export function transformLlmConfig(llmConfig: LlmConfig) {
     )
   ) as Record<string, string>
 
+  if ('poll_batch' in transformed) {
+    transformed['poll-batch'] = transformed['poll_batch']
+    delete transformed['poll_batch']
+  }
+
   if ('stop_sequences' in transformed) {
     transformed['reverse_prompt'] = transformed['stop_sequences']
     delete transformed['stop_sequences']

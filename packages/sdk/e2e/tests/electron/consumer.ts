@@ -14,6 +14,7 @@ import {
   startNodeMemoryPoller,
   type TestDefinition
 } from '@qvac/test-suite'
+import { createStepBindings } from '../shared/step-bindings.js'
 import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -146,6 +147,8 @@ export async function runSnapRefreshProbe() {
 // runs outside Snap.
 const snapStorageHandler = new SnapStorageExecutor()
 
+const stepBindings = createStepBindings(resources)
+
 export const executor = createExecutor({
   handlers: [
     new SpeakerAwareExecutor(resources),
@@ -203,6 +206,9 @@ export const executor = createExecutor({
     exportData: () => profiler.exportJSON()
   }
 })
+
+// A definition carrying `steps` is run by the shared interpreter instead of the executor above.
+executor.stepBindings = stepBindings
 
 export async function startElectronConsumer() {
   const runId = process.env['QVAC_TEST_RUN_ID']

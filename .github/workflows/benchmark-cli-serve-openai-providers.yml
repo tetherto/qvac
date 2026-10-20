@@ -50,9 +50,15 @@ env:
   CLI_DIR: packages/cli
 
 jobs:
+  # A release-train PR and its backmerge bump the CLI's @qvac/sdk to a version
+  # npm does not have until the train publishes. Their SDK pod checks run the
+  # CLI's test:unit, which includes these tests, against the train's tarballs.
   harness-unit:
     name: Harness unit tests
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' &&
+      !startsWith(github.base_ref, 'release-train-') &&
+      !startsWith(github.head_ref, 'backmerge/release-train-')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

@@ -46,12 +46,10 @@ const VALIDATION_MUST_PRECEDE_RPC_MODEL_ID = 'must-not-reach-audiogen-model-look
 export interface AudioGenExecutorOptions {
   /**
    * Maps a bundled `assets/audio` file name to an absolute path on this
-   * platform. Injected as an option rather than through a `resolveParams()`
-   * subclass override (the `NodeDiffusionExecutor` pattern) on purpose: only
-   * one string field needs resolving, AudioGen e2e is desktop-only today, and
-   * `audioGen()` takes file paths directly, so there is no per-platform byte
-   * loading to subclass for. Switch to the subclass pattern if a second
-   * platform starts running these tests.
+   * platform. An option rather than a `resolveParams()` subclass override (the
+   * `NodeDiffusionExecutor` pattern): only one string field needs resolving,
+   * AudioGen e2e runs on desktop only, and `audioGen()` takes file paths
+   * directly, so there is no per-platform byte loading to subclass for.
    */
   resolveAudioAsset?: (fileName: string) => string
 }

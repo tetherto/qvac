@@ -18,6 +18,7 @@ The package exposes four JS entry points:
 
 - [Supported Models](#supported-models)
 - [Supported Platforms](#supported-platforms)
+- [Platform packages](#platform-packages)
 - [Building From Source](#building-from-source)
 - [Downloading Models](#downloading-models)
 - [Examples](#examples)
@@ -56,6 +57,11 @@ The package exposes four JS entry points:
 | ABot-World                   | interactive world walk                 | Causal block-by-block generation under keyboard input; see [ABot-World guide](docs/abot-world.md) |
 | ESRGAN                       | upscale                                | Standalone or post-generation image upscale                                       |
 
+## Qwen-Image-2.1 integration
+
+See [Qwen-Image-2.1](docs/qwen-image-21.md) for the native registry port,
+pinned downloads, text-to-image, ordered reference editing, and RGBA handling.
+
 ## Supported Platforms
 
 | Platform | Architecture | Status | GPU backend    |
@@ -72,6 +78,40 @@ Dependencies:
 - `ggml`
 - Bare Runtime >= 1.24.0
 - CMake >= 3.25 and a C++20-capable compiler
+
+## Platform packages
+
+`@qvac/diffusion-cpp` is a meta package that ships the JavaScript wrapper only.
+The native prebuild for each desktop host lives in a version-locked platform
+package selected at install time through `os`/`cpu` filtered
+`optionalDependencies`:
+
+| Host | Package |
+| --- | --- |
+| linux-x64 (glibc) | `@qvac/diffusion-cpp-linux-x64` |
+| linux-arm64 (glibc) | `@qvac/diffusion-cpp-linux-arm64` |
+| darwin-arm64 | `@qvac/diffusion-cpp-darwin-arm64` |
+| darwin-x64 | `@qvac/diffusion-cpp-darwin-x64` |
+| win32-x64 | `@qvac/diffusion-cpp-win32-x64` |
+
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time, and at `bare-pack` time, naming
+the missing package. Each platform package is an ordinary Bare addon whose
+`prebuilds/<host>/` holds the native module and, next to it, the dynamically
+loaded ggml backends the module finds on its own. A source build becomes
+loadable once `npm run link:platform` (run by `npm run build`, `build:vulkan`,
+and `build:cuda`) stages it as the host's platform package in `node_modules/`.
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/diffusion-cpp` version:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/diffusion-cpp-android-arm64` |
+| ios (device + simulators) | `@qvac/diffusion-cpp-ios` |
 
 ## Building From Source
 
@@ -240,11 +280,11 @@ argument.
 | `params_backend`        | string                                    | runtime backend   | Parameter residency on a backend, CPU RAM, or disk                        |
 | `max_vram`              | number \| string                          | `0`               | VRAM budget in GiB for graph-cut segmented execution                      |
 | `stream_layers`         | boolean                                   | `false`           | Stream diffusion layers from CPU RAM when graph cutting is active         |
-| `prediction`            | prediction type                           | auto              | Required for FLUX img2img/fusion routing; use `'flux2_flow'` for FLUX.2   |
+| `prediction`            | prediction type                           | auto              | Recommended for FLUX.2 sizing and prompt warnings: `'flux2_flow'`; leave automatic for Qwen |
 | `flow_shift`            | number                                    | model default     | Flow-matching noise schedule shift                                        |
 | `diffusion_conv_direct` | boolean                                   | `true`            | Use direct convolution in diffusion model                                 |
 | `vae_conv_direct`       | boolean                                   | `true`            | Use direct convolution in VAE                                             |
-| `backendsDir`           | string                                    | package prebuilds | Custom ggml backend directory                                             |
+| `backendsDir`           | string                                    | beside the loaded module | Directory of ggml backend modules, scanned as given                  |
 | `lora_apply_mode`       | string                                    | auto              | LoRA application mode                                                     |
 | `upscaler_tile_size`    | number                                    | `128`             | ESRGAN tile size                                                          |
 | `max_image_pixels`      | positive integer                          | `67108864`        | Maximum decoded input or ESRGAN output pixels per image                  |
@@ -358,7 +398,24 @@ unset unless you know the model family requires an override.
   `strength` and denoised with the prompt.
 
 For FLUX.2 img2img, load the context with `files.llm` and
-`config.prediction: 'flux2_flow'`.
+keep `config.prediction: 'flux2_flow'` for the full FLUX.2 convenience behavior.
+Native model detection selects reference conditioning even when prediction is
+omitted or `'auto'`. However, the single-reference size fallback (replacing
+512×512 with the reference dimensions) still requires `'flux2_flow'`, and the
+JavaScript `@imageN` prompt warnings require both `files.llm` and that setting.
+Without it, pass explicit output dimensions and check reference tags yourself.
+Leave prediction automatic for Qwen-Image-2.1.
+
+Reference-validation compatibility: `init_images` on SD1/SD2/SDXL is now
+rejected by the loaded native model after job submission, rather than by the
+JavaScript file/prediction checks. Await the response's `.await()` promise to
+handle the error. The native message is
+`img2img: init_images requires a model supporting reference editing (FLUX.2 or Qwen-Image-2.1).`
+Callers matching the former JavaScript error text must update their handling.
+The former rejection of `init_image` with `files.llm` but no explicit
+`'flux2_flow'` prediction is also removed; native model capabilities determine
+the conditioning path. JavaScript still validates input types, empty arrays,
+and mutual exclusion of `init_image` and `init_images` before submission.
 
 ```js
 const inputImage = require('bare-fs').readFileSync('assets/source.jpg')
@@ -376,8 +433,8 @@ const response = await model.run({
 ```
 
 FLUX.2 multi-reference fusion uses `init_images`, an array of PNG/JPEG buffers.
-It is mutually exclusive with `init_image` and requires
-`config.prediction: 'flux2_flow'`.
+It is mutually exclusive with `init_image`. Keep
+`config.prediction: 'flux2_flow'` for the convenience behavior described above.
 
 ```js
 const response = await model.run({
@@ -824,7 +881,8 @@ The projection runs in the calling process and shares its engine state: the GPU 
   stable-diffusion.cpp auto-detection for model-specific defaults.
 - `diffusion_fa` defaults to true and is important for FLUX/LTX memory use.
 - For FLUX.2 img2img/fusion, set `config.prediction: 'flux2_flow'` so the JS
-  wrapper and native layer select the in-context conditioning path.
+  prompt warnings and single-reference size fallback remain enabled. Native
+  model detection selects the conditioning path independently of this setting.
 - Wan I2V requires `files.clipVision`; LTX and MiniMax-H3 img2vid do not.
 - Wan 2.1 dimensions must be multiples of 16; LTX and H3 dimensions must be multiples of 32.
 - Wan frame counts use `(4*k + 1)`; LTX uses `(8*k + 1)` and H3 uses `(17*k + 5)`.
