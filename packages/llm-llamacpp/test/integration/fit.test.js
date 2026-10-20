@@ -206,12 +206,12 @@ test('draft-mtp on a model without MTP layers is refused', { timeout: 600_000 },
 
 test('an invalid speculative config is refused', { timeout: 600_000 }, async (t) => {
   const fit = await assess(await modelPath(), {
-    'spec-type': 'draft-mtp',
+    'spec-type': 'none',
     'spec-draft-model': path.join(os.tmpdir(), 'draft.gguf')
   })
 
   t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config', 'a draft model belongs to draft-dflash only')
+  t.is(fit.reason, 'unsupported-config', 'a draft model needs a speculative type')
 })
 
 test('a draft model that is not a file is unreadable', { timeout: 600_000 }, async (t) => {

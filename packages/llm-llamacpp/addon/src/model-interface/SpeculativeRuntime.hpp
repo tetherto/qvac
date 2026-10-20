@@ -41,8 +41,8 @@ struct SpeculativeConfig {
   std::optional<int32_t> draftNMax;
   std::optional<int32_t> draftNMin;
   std::optional<float> draftPMin;
-  /// The draft model file (`spec-draft-model`, llama-server's `-md`). Set
-  /// for `draft-dflash` only.
+  /// The draft model file (`spec-draft-model`, llama-server's `-md`): the
+  /// DFlash model, or an external MTP head for `draft-mtp`.
   std::string draftModelPath;
 
   [[nodiscard]] bool enabled() const {
@@ -52,11 +52,13 @@ struct SpeculativeConfig {
 
 /// Consumes the speculative keys from the load config. `spec-type` accepts
 /// `none`, `draft-mtp`, which drafts with the target model's own
-/// next-token heads, and `draft-dflash`, which drafts with the DFlash model
+/// next-token heads or with the external MTP head given as
+/// `spec-draft-model`, and `draft-dflash`, which drafts with the DFlash model
 /// given as `spec-draft-model`. Throws std::invalid_argument for an unknown
 /// type, a malformed or out-of-range value, both spellings of one key, draft
-/// options without a type, `draft-dflash` without an absolute local
-/// `spec-draft-model` path, or a `spec-draft-model` with another type.
+/// options without a type, `draft-dflash` without `spec-draft-model`, a
+/// `spec-draft-model` that is not an absolute local path, or one without a
+/// type.
 SpeculativeConfig
 parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config);
 
@@ -86,6 +88,11 @@ public:
   static std::unique_ptr<SpeculativeFitModel>
   create(const common_params& params);
   [[nodiscard]] const common_fit_extra_model* extra() const { return &extra_; }
+  /// The draft context is an MTP context, on the target's own MTP layers or
+  /// on an external MTP head.
+  [[nodiscard]] bool isMtp() const {
+    return cparams_.ctx_type == LLAMA_CONTEXT_TYPE_MTP;
+  }
 
   /// Adds the draft side's memory at context `nCtx` to `breakdown`, the rows
   /// `common_get_device_memory_data` returned for the target on `devices`,

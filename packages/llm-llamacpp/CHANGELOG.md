@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- External MTP heads: `spec-type: 'draft-mtp'` accepts `spec-draft-model`, as
+  llama-server's `--spec-type draft-mtp -md <head>`, to draft for a model
+  without MTP layers. The head is placed like the model, and the load's fit
+  and `assessFit` count its weights and context.
+
 ### Fixed
 
 - `assessFit` with `spec-type: 'draft-mtp'` now counts the MTP draft context

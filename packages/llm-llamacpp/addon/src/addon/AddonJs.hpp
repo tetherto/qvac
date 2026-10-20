@@ -810,11 +810,12 @@ inline FitResult runFit(FitRequest request) {
   }
   // The verdict counted the draft context next to the target; so do the
   // per-device figures. A DFlash model fabric cannot measure stays out of
-  // both. An MTP context it cannot create, on a model without MTP layers,
-  // fails the load, so the projection is refused like any such load.
+  // both. An MTP context it cannot create, on a model or an external head
+  // without MTP layers, fails the load, so the projection is refused like
+  // any such load.
   if (measured && speculativeFit &&
       !speculativeFit->addMemory(cparams.n_ctx, devices, breakdown) &&
-      speculativeFit->extra()->shares_model) {
+      speculativeFit->isMtp()) {
     return errorResult("unsupported-config");
   }
 

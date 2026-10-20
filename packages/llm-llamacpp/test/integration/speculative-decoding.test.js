@@ -3,7 +3,8 @@
 // MTP speculative decoding (`spec-type: 'draft-mtp'`) on the single-prompt,
 // multimodal, cached and continuous-batching paths. The model is ggml-org's
 // Qwen3.5-0.8B quant, which keeps the `blk.*.nextn.*` MTP layers that the
-// unsloth quants used elsewhere strip.
+// unsloth quants used elsewhere strip. The external-head tests attach that
+// quant as `spec-draft-model` to unsloth's, which has no MTP layers.
 //
 // DFlash (`spec-type: 'draft-dflash'`) shares the drafting, verification,
 // rollback, batching and cache code with MTP; only its load-time validation
@@ -250,5 +251,37 @@ safeTest('draft-mtp fails to load a model without MTP layers', { timeout: 300_00
     logger: null
   })
   await t.exception(model.load(), /failed to create the MTP context/)
+  await model.unload().catch(() => {})
+})
+
+safeTest(
+  'an external MTP head drafts for a model without MTP layers',
+  { timeout: 600_000 },
+  async (t) => {
+    const model = new LlmLlamacpp({
+      files: { model: [await modelPath(NO_MTP_MODEL)] },
+      config: baseConfig({ 'spec-draft-model': await modelPath(MTP_MODEL) }),
+      logger: null,
+      opts: { stats: true }
+    })
+    await model.load()
+    try {
+      const { output, stats } = await runOnce(model, PROMPT)
+      t.ok(output.length > 0, 'produced output')
+      t.is(stats.generatedTokens, 96, 'speculation keeps the exact token budget')
+      assertDrafted(t, stats, 'external head')
+    } finally {
+      await model.unload()
+    }
+  }
+)
+
+safeTest('an external head without MTP layers fails to load', { timeout: 300_000 }, async (t) => {
+  const model = new LlmLlamacpp({
+    files: { model: [await modelPath(NO_MTP_MODEL)] },
+    config: baseConfig({ 'spec-draft-model': await modelPath(NO_MTP_MODEL) }),
+    logger: null
+  })
+  await t.exception(model.load(), /failed to create the MTP context; '.*' has no MTP layers/)
   await model.unload().catch(() => {})
 })

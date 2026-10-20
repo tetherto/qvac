@@ -69,6 +69,21 @@ TEST(SpeculativeConfigTest, ParsesDraftDflashWithItsDraftModel) {
   EXPECT_TRUE(config.empty());
 }
 
+TEST(SpeculativeConfigTest, ParsesDraftMtpWithAnExternalHead) {
+  const std::string headPath = absoluteModelPath("mtp-head.gguf");
+  ConfigMap config{{"spec-type", "draft-mtp"}, {"spec_draft_model", headPath}};
+  const SpeculativeConfig parsed = parseSpeculativeConfig(config);
+  EXPECT_EQ(parsed.type, COMMON_SPECULATIVE_TYPE_DRAFT_MTP);
+  EXPECT_EQ(parsed.draftModelPath, headPath);
+  EXPECT_TRUE(config.empty());
+  // The head is optional for MTP: without one the model's own layers draft.
+  EXPECT_TRUE(parse({{"spec-type", "draft-mtp"}}).draftModelPath.empty());
+  // It is held to the same path rules as a DFlash model.
+  EXPECT_THROW(
+      parse({{"spec-type", "draft-mtp"}, {"spec-draft-model", "mtp.gguf"}}),
+      std::invalid_argument);
+}
+
 TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
   EXPECT_THROW(parse({{"spec-type", "draft-dflash"}}), std::invalid_argument);
   EXPECT_THROW(
@@ -78,12 +93,12 @@ TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
   EXPECT_THROW(
       parse({{"spec-type", "draft-dflash"}, {"spec_draft_model", ""}}),
       std::invalid_argument);
-  // A draft model belongs to draft-dflash only.
-  EXPECT_THROW(
-      parse({{"spec-type", "draft-mtp"}, {"spec-draft-model", "/m/d.gguf"}}),
-      std::invalid_argument);
+  // A draft model needs a speculative type.
   EXPECT_THROW(
       parse({{"spec-draft-model", "/m/d.gguf"}}), std::invalid_argument);
+  EXPECT_THROW(
+      parse({{"spec-type", "none"}, {"spec-draft-model", "/m/d.gguf"}}),
+      std::invalid_argument);
   // Network shares and device paths are not local files.
   EXPECT_THROW(
       parse(
@@ -310,6 +325,30 @@ TEST(SpeculativeConfigTest, FitCountsTheDflashModelOnItsOwn) {
   EXPECT_FALSE(extra->shares_model);
   EXPECT_STREQ(extra->path_model, "/models/dflash.gguf");
   EXPECT_NE(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
+  EXPECT_FALSE(fit->isMtp());
+  EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
+}
+
+TEST(SpeculativeConfigTest, FitCountsAnExternalMtpHeadOnItsOwn) {
+  common_params params;
+  params.model.path = "/models/target.gguf";
+  params.n_gpu_layers = 12;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP,
+          .draftModelPath = "/models/mtp-head.gguf"},
+      params);
+  // Placed like the target, as llama-server's -md.
+  EXPECT_EQ(params.speculative.draft.mparams.path, "/models/mtp-head.gguf");
+  EXPECT_EQ(params.speculative.draft.n_gpu_layers, 12);
+  const auto fit = SpeculativeFitModel::create(params);
+  ASSERT_NE(fit, nullptr);
+  const common_fit_extra_model* extra = fit->extra();
+  // An MTP context on the head's own weights, as fabric's load fits it.
+  EXPECT_FALSE(extra->shares_model);
+  EXPECT_STREQ(extra->path_model, "/models/mtp-head.gguf");
+  EXPECT_EQ(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
+  EXPECT_TRUE(fit->isMtp());
   EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
 }
 

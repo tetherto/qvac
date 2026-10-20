@@ -101,9 +101,12 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
   }
   if (const auto draftModel = takeConfigKey(
           config, SPEC_DRAFT_MODEL_KEY, SPEC_DRAFT_MODEL_KEY_DASHED)) {
-    if (result.type != COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) {
+    // A DFlash model, or an external MTP head (llama-server's
+    // `--spec-type draft-mtp -md`).
+    if (!result.enabled()) {
       throw std::invalid_argument(
-          draftModel->first + " requires spec-type \"draft-dflash\"");
+          draftModel->first +
+          " requires spec-type \"draft-mtp\" or \"draft-dflash\"");
     }
     const std::string& path = draftModel->second;
     const auto isSeparator = [](char c) { return c == '/' || c == '\\'; };
@@ -331,15 +334,19 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
     }
     runtime->ctxDft_ = runtime->specInit_->context();
     if (runtime->ctxDft_ == nullptr) {
+      const bool isMtp =
+          hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP);
+      std::string message = "[Speculative] failed to create the draft context";
+      if (isMtp && params.speculative.has_dft()) {
+        message = "[Speculative] failed to create the MTP context; '" +
+                  paramsDft.model.path +
+                  "' has no MTP layers or they could not be loaded";
+      } else if (isMtp) {
+        message = "[Speculative] failed to create the MTP context; the model "
+                  "has no MTP layers or they could not be loaded";
+      }
       throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(UnableToLoadModel),
-          params.speculative.has_dft()
-              ? std::string(
-                    "[Speculative] failed to create the draft context\n")
-              : std::string(
-                    "[Speculative] failed to create the MTP context; the model "
-                    "has no MTP layers or they could not be loaded\n"));
+          ADDON_ID, toString(UnableToLoadModel), message + "\n");
     }
     params.speculative.draft.ctx_tgt = ctxTgt;
     params.speculative.draft.ctx_dft = runtime->ctxDft_;
