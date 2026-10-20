@@ -1111,7 +1111,7 @@ tests and the C++ option-mapping tests do not establish GPU execution.
 The package pins `speech-cpp` 2026-10-20#2 and `ggml-speech` 2026-10-07#1.
 The registry baseline remains `e31be272ecdf9f20970302ebf8a2943d47803001`.
 The `speech-cpp` override selects the native source
-`ec9b1e65c49396cc739f871b90d3604eb9d7d703` published by
+`5695511ddf094653676ad83bcaf755b2705d4b65` published by
 [registry PR #440](https://github.com/tetherto/qvac-registry-vcpkg/pull/440).
 This speech revision adds TranscribePsy with its model-recommended long-form
 window and its Core ML encoder and decoder sidecars, bounds the long-form
