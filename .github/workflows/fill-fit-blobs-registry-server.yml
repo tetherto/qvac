@@ -5,6 +5,10 @@
 # fitBlobBinding on the model row. The work happens on the indexer; this job is
 # only the RPC client.
 #
+# A run that leaves a selected record unfilled fails. The script exits with
+# RECORDS_SKIPPED_EXIT for those, the job still verifies the records that were
+# filled, and the last step lists each skipped path with its reason.
+#
 # Dispatch requires write access on the repository, and the release environment
 # holds the writer secrets.
 
@@ -120,6 +124,7 @@ jobs:
         run: npm install
 
       - name: Fill
+        id: fill
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         env:
@@ -127,6 +132,7 @@ jobs:
           LIMIT: ${{ inputs.limit }}
           DRY_RUN: ${{ inputs.dry_run }}
           FORCE: ${{ inputs.force }}
+          RECORDS_SKIPPED_EXIT: "2"
         run: |
           set -euo pipefail
           args=()
@@ -134,17 +140,25 @@ jobs:
           if [ -n "$LIMIT" ]; then args+=(--limit "$LIMIT"); fi
           if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
           if [ "$FORCE" = "true" ]; then args+=(--force); fi
-          node scripts/fill-fit-blobs.js "${args[@]}" 2>&1 | tee fill.log
+          status=0
+          node scripts/fill-fit-blobs.js "${args[@]}" 2>&1 | tee fill.log || status=$?
 
           # The peer that answered. The verify step queries this same node.
           grep -A1 'Connected to server' fill.log |
             grep -oE '[a-z0-9]{40,}' |
             head -1 > "$RUNNER_TEMP/fill-peer" || true
 
+          if [ "$status" -eq "$RECORDS_SKIPPED_EXIT" ]; then
+            echo "records_skipped=true" >> "$GITHUB_OUTPUT"
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+
       # An indexer on a schema older than 0.4.0 encodes no fitBlobBinding, so a
       # fill against one reports every record filled and persists none. A record
       # the fill skipped carries no pointer either and re-selects exactly once,
-      # which is the allowance.
+      # which is the allowance here; "Fail on skipped records" fails the run for
+      # those.
       #
       # QVAC_INDEXER_KEYS holds only the peer that served the fill:
       # connectToRegistry dials one key at random out of whatever the list
@@ -195,6 +209,24 @@ jobs:
           done
 
           echo "::error::$remaining records still select against the $skipped the fill skipped. Check the schema version on the indexers and the fill log for per-record errors."
+          exit 1
+
+      - name: Fail on skipped records
+        if: ${{ !cancelled() && steps.fill.outputs.records_skipped == 'true' }}
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        env:
+          SKIPPED_LINE: '\[WARN\] +skipped '
+        run: |
+          set -euo pipefail
+          skipped=$(grep -E "$SKIPPED_LINE" fill.log | sed -E "s/^.*${SKIPPED_LINE}//" || true)
+          count=$(printf '%s\n' "$skipped" | grep -c . || true)
+          {
+            echo "### $count selected records were not filled"
+            echo
+            printf '%s\n' "$skipped" | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$skipped" | sed 's/^/::error::not filled: /'
           exit 1
 
       - name: Scrub indexer keys from the logs

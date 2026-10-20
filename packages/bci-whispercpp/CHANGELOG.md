@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Bounded FuzzTest coverage for the length-prefixed neural-signal parser
+  (`readNeuralFeatures`), including the uint32×uint32×sizeof(float) overflow
+  class. Linux C++ CI runs the suite after unit tests. The parser compiles
+  without whisper, so ASan and LeakSanitizer stay at full strength. No public
+  addon API changes.
+
 ### Changed
 
 - Align the shared native `speech-cpp` source pin to `2026-10-14` across

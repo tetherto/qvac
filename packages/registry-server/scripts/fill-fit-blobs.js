@@ -4,6 +4,10 @@ const RegistryConfig = require('../lib/config')
 const logger = require('../lib/logger')
 const { connectToRegistry } = require('./utils/rpc-client')
 
+const EXIT_OK = 0
+const EXIT_FATAL = 1
+const EXIT_RECORDS_SKIPPED = 2
+
 function parseArgs(args) {
   const options = { filter: null, limit: null, dryRun: false, force: false }
   let storage
@@ -33,7 +37,7 @@ async function fillFitBlobs() {
 
   if (options.limit !== null && !(Number.isInteger(options.limit) && options.limit > 0)) {
     logger.error('--limit must be a positive integer')
-    process.exit(1)
+    process.exit(EXIT_FATAL)
   }
 
   logger.info('Filling fit blobs', options)
@@ -50,6 +54,7 @@ async function fillFitBlobs() {
     logger.info(`Replaced:   ${report.replaced}`)
     logger.info(`Unchanged:  ${report.unchanged}`)
     logger.info(`Downloaded: ${report.downloaded}`)
+    logger.info(`Skipped:    ${report.skipped.length}`)
 
     if (report.paths) {
       for (const path of report.paths) {
@@ -60,6 +65,8 @@ async function fillFitBlobs() {
     for (const skip of report.skipped) {
       logger.warn(`  skipped ${skip.path}: ${skip.reason}`)
     }
+
+    return { options, report }
   } catch (err) {
     logger.error('Failed to fill fit blobs:', err)
     throw err
@@ -68,12 +75,26 @@ async function fillFitBlobs() {
   }
 }
 
-if (require.main === module) {
-  // lunte-disable-next-line require-await
-  fillFitBlobs().catch(async (err) => {
-    logger.error('Fatal error:', err)
-    process.exit(1)
-  })
+function exitCodeFor(options, report) {
+  if (options.dryRun || report.skipped.length === 0) return EXIT_OK
+  return EXIT_RECORDS_SKIPPED
 }
 
-module.exports = { fillFitBlobs }
+function finishRun({ options, report }) {
+  const exitCode = exitCodeFor(options, report)
+  if (exitCode === EXIT_RECORDS_SKIPPED) {
+    logger.error(`${report.skipped.length} of ${report.selected} selected records were not filled`)
+  }
+  process.exitCode = exitCode
+}
+
+if (require.main === module) {
+  fillFitBlobs()
+    .then(finishRun)
+    .catch((err) => {
+      logger.error('Fatal error:', err)
+      process.exit(EXIT_FATAL)
+    })
+}
+
+module.exports = { fillFitBlobs, exitCodeFor, EXIT_OK, EXIT_RECORDS_SKIPPED }

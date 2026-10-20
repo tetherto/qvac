@@ -232,6 +232,8 @@ const config = {
 | batch_size        | integer                                     | 2048                         | Tokens processed per batch                            |
 | threads           | integer                                     | one per physical core        | CPU threads; 0 uses every logical CPU                 |
 | threads-batch     | integer                                     | threads                      | CPU threads for batch processing                      |
+| poll              | integer 0 – 100                             | 0                            | CPU polling level                                     |
+| poll-batch        | integer 0 – 100                             | value of `poll`              | CPU polling level for batch processing                |
 | flash_attn        | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention; defaults to off on OpenCL |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
 | split-mode        | `"none"` or `"layer"`                       | `"none"`                     | Multi-GPU placement mode                              |
@@ -255,6 +257,10 @@ The shared options have these additional constraints when `LayaDecisions` is use
 |------------------------|-------------------------------------------------------------------------------------------------------|
 | batch_size             | Also sets context size. Every question over one state must fit in a forward pass; attention cost grows with the square of this value |
 | threads, threads-batch | Values must be whole numbers. Positive counts must not exceed the device's CPU count; 0 or below uses every logical CPU |
+
+#### CPU polling defaults
+
+For both embeddings and Laya decisions, this addon defaults `poll` to `0`, compared with `50` in upstream llama.cpp. If `poll-batch` is omitted, it inherits the value of `poll`, so both use `0` when neither is set. At `0`, CPU workers sleep while idle. Higher values may reduce wake latency but consume more CPU during GPU work.
 
 #### IGPU/GPU  selection logic:
 
