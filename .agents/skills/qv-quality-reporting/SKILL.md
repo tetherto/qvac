@@ -41,12 +41,9 @@ underlying findings without explicit approval.
      `.quality/triage.json`'s deterministically ranked `candidates` array. Merged
      groups take the best contributing rank; split groups share their source
      rank. Break remaining ties by `groupKey` in ascending lexical order.
-   - Generate provisional proposals from that ordered queue in pages, reconcile
-     each page read-only, discard exact-existing and unchanged outcomes, and
-     continue until ten actionable proposals remain or candidates are exhausted.
-     Ambiguous matches count as actionable decisions. Backfill from the same
-     ordered queue and preserve its order in the final batch. Never cap the
-     source candidates before grouping, ranking, and reconciliation.
+   - Take the first ten groups from that ordered queue as the batch, or all of
+     them when fewer remain. Never cap the source candidates before grouping
+     and ranking.
 
    Write the final machine batch to `.quality/proposals.json`. Retain unreviewed
    candidates for later pages; do not discard them.
