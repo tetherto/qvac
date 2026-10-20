@@ -23,7 +23,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Align the shared native `speech-cpp` source pin to `2026-10-14` across
+- Align the shared native `speech-cpp` source pin to `2026-10-19` across
   the speech addons so they use the same source revision.
 
 ## [0.10.0] - 2026-10-14

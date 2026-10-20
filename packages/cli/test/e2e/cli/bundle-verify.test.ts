@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import type { TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
-import { mkdir, symlink, access } from 'node:fs/promises'
+import { mkdir, symlink, access, readdir, lstat, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runCli } from '../helpers/cli.js'
 import { tempDir } from '../helpers/tmp.js'
@@ -22,12 +22,47 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-// A throwaway project with @qvac/sdk installed, the way a user's project looks.
+// A throwaway project with the resolved SDK and its addons, and no lockfile so
+// bundle cannot pick a package manager. Do not `npm install` here: that writes
+// package.json / lockfile and the platform-package tests assert neither exists.
+//
+// Workspace `file:../sdk` nests addons under the SDK; npm `@qvac/sdk` hoists
+// them next to it. Link both layouts so published e2e sees the same addons a
+// user `npm install @qvac/sdk` would.
 async function project(t: TestContext): Promise<string> {
   const dir = await tempDir(t, 'qvac-bundle-')
-  await mkdir(join(dir, 'node_modules', '@qvac'), { recursive: true })
-  await symlink(INSTALLED_SDK, join(dir, 'node_modules', '@qvac', 'sdk'))
+  const destScope = join(dir, 'node_modules', '@qvac')
+  await mkdir(destScope, { recursive: true })
+  await linkInstalledQvacScope(INSTALLED_SDK, destScope)
   return dir
+}
+
+async function linkInstalledQvacScope(sdkPath: string, destScope: string) {
+  const seen = new Set<string>()
+  const linkScope = async (scopeDir: string) => {
+    let names: string[]
+    try {
+      names = await readdir(scopeDir)
+    } catch {
+      return
+    }
+    for (const name of names) {
+      if (name.startsWith('.') || seen.has(name)) continue
+      const from = join(scopeDir, name)
+      let st
+      try {
+        st = await lstat(from)
+      } catch {
+        continue
+      }
+      if (!st.isDirectory() && !st.isSymbolicLink()) continue
+      seen.add(name)
+      await symlink(from, join(destScope, name))
+    }
+  }
+
+  await linkScope(join(sdkPath, '..'))
+  await linkScope(join(await realpath(sdkPath), 'node_modules', '@qvac'))
 }
 
 describe('cli: bundle sdk → verify bundle (chain)', () => {
