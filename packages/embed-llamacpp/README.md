@@ -164,6 +164,16 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `backend`        | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` |
 | `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | `"0"` | Native logging verbosity. The `addonLogging.setLogger` callback receives only messages at or above this threshold. Use `"2"` for llama.cpp INFO logs and `"3"` for DEBUG logs. The verbosity level is process-global and is updated each time a model is constructed, so the most recently constructed model's `config.verbosity` wins for all subsequent native log dispatch. |
 
+These keys apply with [`files.projectionModel`](#embed-images-and-audio), with the names and spellings `@qvac/llm-llamacpp` uses (each also accepts its underscore form, e.g. `image_max_tokens`):
+
+| Key                    | Range / Type                         | Default | Description |
+|------------------------|--------------------------------------|---------|-------------|
+| `image-max-tokens`     | string of positive integer           | projector default (1120 for EmbeddingGemma 2) | Largest per-image token budget of a dynamic-resolution vision encoder. Lower it to embed larger or more images per input within `batch_size`, or to save compute on phones |
+| `image-min-tokens`     | string of positive integer           | projector default (70 for EmbeddingGemma 2) | Smallest per-image token budget. Must not exceed `image-max-tokens` |
+| `mmproj-no-audio`      | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | `"false"` | Skip loading the projector's audio encoder, for image-only use. Audio input is then rejected with `UnsupportedMedia` |
+| `mmproj-use-gpu`       | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto | Run the projector on the GPU. Unset, it follows the model, except on Android GPUs below Adreno 800 (Mali, older Adreno), where it runs on the CPU, as in `@qvac/llm-llamacpp`. Ignored with a warning when the model runs on the CPU |
+| `image-max-megapixels` | string of positive integer           | `"50"`  | Largest image accepted, read from its header before decoding. A larger one is rejected with `UnsupportedMedia` |
+
 #### Native addon logging
 
 `@qvac/embed-llamacpp/addonLogging` exposes the native C++ logger:
@@ -260,7 +270,8 @@ Notes:
 
 * Inputs without media use the text path, so a model loaded with a projection model still embeds plain text as before.
 * Media input without `files.projectionModel` is rejected.
-* Each multimodal input is decoded in one pass, so its text and media tokens together must fit in `batch_size` (which is also the micro-batch size). A larger image or a longer clip needs a larger `batch_size`.
+* Each multimodal input is decoded in one pass, so its text and media tokens together must fit in `batch_size` (which is also the micro-batch size). With EmbeddingGemma 2 a large image takes up to 1120 tokens, so two of them in one input need a larger `batch_size` or a lower `image-max-tokens` (see the projector options under [Create `config`](#3-create-config)).
+* Images: the formats stb_image reads (JPEG, PNG including 16-bit, grayscale and alpha, BMP, GIF's first frame, TGA, PSD, HDR, PNM). Audio: WAV, MP3 and FLAC, resampled to the model's rate. TIFF, HEIC, JPEG 2000, WebP, AAC/M4A, AIFF and Ogg are rejected with `UnsupportedMedia`.
 * Task prompts such as `task: search result | query: ` are plain text. Add them as the model's documentation describes.
 * Video input is not supported.
 

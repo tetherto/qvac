@@ -140,6 +140,15 @@ inline FitResult runFit(FitRequest request) {
   const std::string backendsDir = takeConfig("backendsDir");
   const std::string openclCacheDir = takeConfig("openclCacheDir");
 
+  // The projector options, which the parser below does not accept for an
+  // embedding load, are taken out as BertModel takes them. The fitter does
+  // not count a projector, so they do not change the projection.
+  try {
+    takeMultimodalOptions(configFilemap);
+  } catch (const std::exception&) {
+    return errorResult("unsupported-config");
+  }
+
   // `common_fit_params` reads ggml's global device registry and loads nothing
   // itself, so whatever is registered here is its whole view of the machine.
   // The handle holds the reference count for the call: a model unloading on

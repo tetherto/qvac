@@ -2,13 +2,37 @@
 
 #include <atomic>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <llama-cpp.h>
 #include <llama/common/common.h>
 #include <llama/mtmd/mtmd.h>
+
+#include "ImagePixelLimit.hpp"
+
+/// @brief Projector options of a load config, with @qvac/llm-llamacpp's keys.
+struct MultimodalOptions {
+  /// image-min-tokens / image-max-tokens: per-image token budget of
+  /// dynamic-resolution vision encoders; -1 keeps the projector's default.
+  int imageMinTokens = -1;
+  int imageMaxTokens = -1;
+  /// mmproj-no-audio: skip loading the audio encoder.
+  bool noAudio = false;
+  /// mmproj-use-gpu: run the projector on the GPU; unset picks per device.
+  std::optional<bool> useGpu;
+  /// image-max-megapixels: largest image accepted, checked before decoding.
+  uint64_t maxImagePixels = image_pixel_limit::DEFAULT_MAX_PIXELS;
+};
+
+/// @brief Reads and erases the projector options from @p config: fabric's
+/// argument parser does not accept them for embedding loads.
+/// @throws qvac_errors::StatusError(InvalidConfiguration) on an invalid value.
+MultimodalOptions
+takeMultimodalOptions(std::unordered_map<std::string, std::string>& config);
 
 /// @brief One part of a multimodal input, in prompt order: text, or the bytes
 /// of a media file that mtmd decodes (an image, or wav/mp3/flac audio).
@@ -32,11 +56,13 @@ using MultimodalInput = std::vector<MultimodalPart>;
 /// llama-server's add_prompt_mixed() does for memory-less models.
 class MultimodalEmbedder {
 public:
-  /// @param useGpu Whether the projector runs on the GPU, as the text model.
+  /// @param modelOnGpu Whether the text model runs on the GPU; the projector
+  /// can only run there when it does.
   /// @throws qvac_errors::StatusError when the projector cannot be loaded.
   MultimodalEmbedder(
       const std::string& projectionPath, llama_model* model, llama_context* ctx,
-      const common_params& params, bool useGpu);
+      const common_params& params, bool modelOnGpu,
+      const MultimodalOptions& options);
 
   MultimodalEmbedder(const MultimodalEmbedder&) = delete;
   MultimodalEmbedder& operator=(const MultimodalEmbedder&) = delete;
@@ -54,6 +80,7 @@ public:
 private:
   llama_model* model_;
   llama_context* ctx_;
+  uint64_t maxImagePixels_;
   mtmd::context_ptr mctx_;
   llama_batch_ext_ptr batch_;
 };

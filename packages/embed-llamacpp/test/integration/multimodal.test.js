@@ -86,10 +86,61 @@ function norm(v) {
   return Math.sqrt(v.reduce((sum, x) => sum + x * x, 0))
 }
 
-async function withModel(t, device, fn) {
+// The same pixels as solidBmp, as a binary PPM (P6).
+function solidPpm([r, g, b], size = 32) {
+  const header = Uint8Array.from(`P6\n${size} ${size}\n255\n`, (c) => c.charCodeAt(0))
+  const buf = new Uint8Array(header.length + size * size * 3)
+  buf.set(header)
+  for (let i = header.length; i < buf.length; i += 3) buf.set([r, g, b], i)
+  return buf
+}
+
+// The same pixels as solidBmp, as an uncompressed 24-bit TGA.
+function solidTga([r, g, b], size = 32) {
+  const buf = new Uint8Array(18 + size * size * 3)
+  const view = new DataView(buf.buffer)
+  buf[2] = 2 // uncompressed true-color
+  view.setUint16(12, size, true)
+  view.setUint16(14, size, true)
+  buf[16] = 24
+  buf[17] = 0x20 // top-left origin
+  for (let i = 18; i < buf.length; i += 3) buf.set([b, g, r], i)
+  return buf
+}
+
+// The tone of sineWav as 32-bit float PCM.
+function sineWavF32(frequency = 440, seconds = 1, sampleRate = 16000) {
+  const n = sampleRate * seconds
+  const buf = new Uint8Array(44 + n * 4)
+  const view = new DataView(buf.buffer)
+  buf.set([0x52, 0x49, 0x46, 0x46], 0) // "RIFF"
+  view.setUint32(4, buf.length - 8, true)
+  buf.set([0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20], 8) // "WAVEfmt "
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 3, true) // IEEE float
+  view.setUint16(22, 1, true) // mono
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 4, true)
+  view.setUint16(32, 4, true)
+  view.setUint16(34, 32, true)
+  buf.set([0x64, 0x61, 0x74, 0x61], 36) // "data"
+  view.setUint32(40, n * 4, true)
+  for (let i = 0; i < n; i++) {
+    // Rounded as sineWav rounds, so both carry the same samples.
+    const s16 = Math.round(0.5 * 32767 * Math.sin((2 * Math.PI * frequency * i) / sampleRate))
+    view.setFloat32(44 + i * 4, s16 / 32768, true)
+  }
+  return buf
+}
+
+function deviceConfig(device) {
+  return device === 'gpu' ? { device: 'gpu', gpu_layers: '99' } : { device: 'cpu' }
+}
+
+async function withModel(t, device, fn, extraConfig = {}) {
   const model = new GGMLBert({
     files: { model: [path.resolve(MODEL)], projectionModel: path.resolve(MMPROJ) },
-    config: device === 'gpu' ? { device: 'gpu', gpu_layers: '99' } : { device: 'cpu' },
+    config: { ...deviceConfig(device), ...extraConfig },
     opts: { stats: true }
   })
   try {
@@ -181,7 +232,107 @@ for (const device of DEVICES) {
       t.ok(cosine(viaText, vectors[0]) > 0.999, `cosine ${cosine(viaText, vectors[0]).toFixed(6)}`)
     })
   })
+
+  safeTest(`[${device}] the same media in other formats embeds the same`, { skip }, async (t) => {
+    await withModel(t, device, async (model) => {
+      const prefix = 'title: none | text: '
+      const [bmp, ppm, tga, s16, f32] = await embed(model, {
+        inputs: [
+          [prefix, { media: RED }],
+          [prefix, { media: solidPpm([255, 0, 0]) }],
+          [prefix, { media: solidTga([255, 0, 0]) }],
+          [prefix, { media: sineWav() }],
+          [prefix, { media: sineWavF32() }]
+        ]
+      })
+      t.ok(cosine(bmp, ppm) > 0.9999, `ppm vs bmp ${cosine(bmp, ppm).toFixed(6)}`)
+      t.ok(cosine(bmp, tga) > 0.9999, `tga vs bmp ${cosine(bmp, tga).toFixed(6)}`)
+      t.ok(cosine(s16, f32) > 0.9999, `f32 vs s16 wav ${cosine(s16, f32).toFixed(6)}`)
+    })
+  })
 }
+
+// The projector options. Each loads its own instance, on the GPU where the
+// runner has one.
+const OPTIONS_DEVICE = DEVICES[DEVICES.length - 1]
+const BIG = solidBmp([0, 128, 255], 1024) // 1024 x 1024, about 1.05 MP
+
+async function imageTokens(model, image) {
+  const response = await model.run([{ media: image }])
+  await response.await()
+  return response.stats.total_tokens
+}
+
+safeTest('image-max-tokens bounds the tokens of a large image', { skip }, async (t) => {
+  const byDefault = await withModel(t, OPTIONS_DEVICE, (model) => imageTokens(model, BIG))
+  const capped = await withModel(t, OPTIONS_DEVICE, (model) => imageTokens(model, BIG), {
+    'image-max-tokens': '280'
+  })
+  t.comment(`tokens: default ${byDefault}, image-max-tokens 280 -> ${capped}`)
+  // BOS and EOS around the image tokens.
+  t.ok(capped <= 282, `capped image uses at most 280 tokens (${capped})`)
+  t.ok(capped < byDefault, 'the cap lowers the default budget')
+})
+
+safeTest('mmproj-no-audio rejects audio and keeps images', { skip }, async (t) => {
+  await withModel(
+    t,
+    OPTIONS_DEVICE,
+    async (model) => {
+      const [image] = await embed(model, [{ media: RED }])
+      t.is(image.length, 768, 'images still embed')
+      await t.exception.all(embed(model, [{ media: sineWav() }]), /no audio encoder loaded/)
+    },
+    { 'mmproj-no-audio': 'true' }
+  )
+})
+
+safeTest('image-max-megapixels rejects a larger image before decoding', { skip }, async (t) => {
+  await withModel(
+    t,
+    OPTIONS_DEVICE,
+    async (model) => {
+      await t.exception.all(embed(model, [{ media: BIG }]), /exceeds the 1 MP limit/)
+      const [small] = await embed(model, [{ media: RED }])
+      t.is(small.length, 768, 'a smaller image still embeds')
+    },
+    { 'image-max-megapixels': '1' }
+  )
+})
+
+safeTest('media whose format cannot be decoded is rejected', { skip }, async (t) => {
+  await withModel(t, OPTIONS_DEVICE, async (model) => {
+    // A WebP header (decoded only through ffmpeg) and bytes of no format.
+    const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])
+    await t.exception.all(embed(model, [{ media: webp }]), /Unsupported or corrupt image/)
+    await t.exception.all(
+      embed(model, [{ media: new Uint8Array(64).fill(7) }]),
+      /Unsupported or corrupt image/
+    )
+  })
+})
+
+safeTest(
+  'mmproj-use-gpu off runs the projector on the CPU',
+  { skip: skip || OPTIONS_DEVICE !== 'gpu' },
+  async (t) => {
+    const input = ['title: none | text: ', { media: RED }]
+    const [onGpu] = await withModel(t, 'gpu', (model) => embed(model, input))
+    const [onCpu] = await withModel(t, 'gpu', (model) => embed(model, input), {
+      'mmproj-use-gpu': 'false'
+    })
+    t.ok(cosine(onGpu, onCpu) > 0.999, `same embedding: ${cosine(onGpu, onCpu).toFixed(6)}`)
+  }
+)
+
+safeTest('an invalid projector option fails the load', {}, async (t) => {
+  // Options are checked before the model file is read, so no model is needed.
+  const model = new GGMLBert({
+    files: { model: ['/nonexistent/model.gguf'], projectionModel: '/nonexistent/mmproj.gguf' },
+    config: { device: 'cpu', 'image-max-tokens': 'many' }
+  })
+  await t.exception.all(model.load(), /image-max-tokens must be a positive integer/)
+})
 
 safeTest(
   'media without files.projectionModel is rejected before reaching the model',

@@ -1,7 +1,12 @@
 #include "MultimodalEmbedder.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <charconv>
+#include <initializer_list>
+#include <regex>
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 
 #include <common/common.h>
@@ -13,8 +18,137 @@
 #include "logging.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
+using qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback;
 
 namespace {
+
+using ConfigMap = std::unordered_map<std::string, std::string>;
+
+[[noreturn]] void throwInvalidOption(const std::string& message) {
+  throw qvac_errors::StatusError(
+      ADDON_ID, toString(InvalidConfiguration), message);
+}
+
+/// Erases and returns the value of the one of @p keys that is set (a key and
+/// its underscore alias); nullopt when neither is.
+std::optional<std::string>
+takeOption(ConfigMap& config, std::initializer_list<const char*> keys) {
+  std::optional<std::string> value;
+  const char* found = nullptr;
+  for (const char* key : keys) {
+    auto it = config.find(key);
+    if (it == config.end()) {
+      continue;
+    }
+    if (found != nullptr) {
+      throwInvalidOption(
+          string_format("Set only one of %s and %s", found, key));
+    }
+    found = key;
+    value = it->second;
+    config.erase(it);
+  }
+  return value;
+}
+
+bool parseBool(const std::string& name, const std::string& raw) {
+  std::string val = raw;
+  std::transform(val.begin(), val.end(), val.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  if (val == "1" || val == "on" || val == "true") {
+    return true;
+  }
+  if (val == "0" || val == "off" || val == "false") {
+    return false;
+  }
+  throwInvalidOption(string_format(
+      "%s must be 0/off/false or 1/on/true, got: %s",
+      name.c_str(),
+      raw.c_str()));
+}
+
+int parsePositiveInt(const std::string& name, const std::string& raw) {
+  int value = 0;
+  const auto* end = raw.data() + raw.size();
+  const auto result = std::from_chars(raw.data(), end, value);
+  if (result.ec != std::errc{} || result.ptr != end || value <= 0) {
+    throwInvalidOption(string_format(
+        "%s must be a positive integer, got: %s", name.c_str(), raw.c_str()));
+  }
+  return value;
+}
+
+#ifdef __ANDROID__
+/// The Adreno tier in a GPU description such as "Adreno (TM) 830", as
+/// @qvac/llm-llamacpp's backend selection parses it.
+std::optional<int> parseAdrenoVersion(const std::string& gpuDescription) {
+  static const std::regex adrenoRegex(R"(dreno.*?(\d+))");
+  std::smatch matches;
+  if (std::regex_search(gpuDescription, matches, adrenoRegex) &&
+      matches.size() > 1) {
+    try {
+      return std::stoi(matches[1].str());
+    } catch (const std::exception&) {
+      return std::nullopt;
+    }
+  }
+  return std::nullopt;
+}
+#endif
+
+/// Whether the projector runs on the GPU. It follows the text model, as
+/// @qvac/llm-llamacpp's projector default does (QVAC-21867): on Android only
+/// Adreno 800+ encodes faster on the GPU, so every other Android GPU keeps the
+/// projector on the CPU. mmproj-use-gpu overrides it.
+bool resolveProjectorGpu(
+    bool modelOnGpu, std::optional<bool> useGpu,
+    [[maybe_unused]] ggml_backend_dev_t device) {
+  if (!modelOnGpu) {
+    if (useGpu.value_or(false)) {
+      llamaLogCallback(
+          GGML_LOG_LEVEL_WARN,
+          "[BertModel] mmproj-use-gpu ignored: the model runs on the CPU, "
+          "running the multimodal projector on CPU\n",
+          nullptr);
+    }
+    return false;
+  }
+  bool onGpu = true;
+  const char* reason = "auto-default";
+#ifdef __ANDROID__
+  constexpr int kAdrenoMmprojGpuThreshold = 800;
+  std::string description =
+      device != nullptr ? ggml_backend_dev_description(device) : "";
+  std::transform(
+      description.begin(),
+      description.end(),
+      description.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::optional<int> adreno = parseAdrenoVersion(description);
+  onGpu = adreno.has_value() && *adreno >= kAdrenoMmprojGpuThreshold;
+  reason =
+      onGpu
+          ? "auto-default, Adreno 800+"
+          : (description.find("mali") != std::string::npos
+                 ? "auto-default, Mali GPU"
+                 : (adreno.has_value() ? "auto-default, Adreno <800"
+                                       : "auto-default, non-Adreno-800+ GPU"));
+#endif
+  if (useGpu.has_value()) {
+    onGpu = *useGpu;
+    reason = "mmproj-use-gpu override";
+  }
+  llamaLogCallback(
+      GGML_LOG_LEVEL_INFO,
+      string_format(
+          "[BertModel] multimodal projector backend: %s (%s)\n",
+          onGpu ? "GPU" : "CPU",
+          reason)
+          .c_str(),
+      nullptr);
+  return onGpu;
+}
 
 void throwIfCancelled(const std::atomic<bool>& cancelled) {
   if (cancelled.load()) {
@@ -23,7 +157,32 @@ void throwIfCancelled(const std::atomic<bool>& cancelled) {
 }
 
 mtmd::bitmap decodeMedia(
-    const mtmd_context* mctx, const MultimodalPart& part, std::size_t index) {
+    const mtmd_context* mctx, const MultimodalPart& part, std::size_t index,
+    uint64_t maxImagePixels) {
+  // Say which encoder is missing before mtmd-helper, which would only report
+  // that it could not read the media.
+  const bool isAudio =
+      image_pixel_limit::isMtmdAudio(part.media.data(), part.media.size());
+  if (isAudio && !mtmd_support_audio(mctx)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnsupportedMedia),
+        string_format(
+            "media part %zu: audio, but the projection model has no audio "
+            "encoder loaded (mmproj-no-audio, or a vision-only projector)",
+            index));
+  }
+  if (!isAudio && !mtmd_support_vision(mctx)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnsupportedMedia),
+        string_format(
+            "media part %zu: an image, but the projection model has no vision "
+            "encoder",
+            index));
+  }
+  image_pixel_limit::checkBuffer(
+      part.media.data(), part.media.size(), maxImagePixels);
   mtmd_helper_bitmap_wrapper wrapper = mtmd_helper_bitmap_init_from_buf(
       mctx,
       part.media.data(),
@@ -47,26 +206,7 @@ mtmd::bitmap decodeMedia(
             "bmp, gif, ...) or wav/mp3/flac audio",
             index));
   }
-  mtmd::bitmap bitmap(wrapper.bitmap);
-
-  const bool isAudio = mtmd_bitmap_is_audio(bitmap.ptr.get());
-  if (isAudio && !mtmd_support_audio(mctx)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnsupportedMedia),
-        string_format(
-            "media part %zu: the projection model has no audio encoder",
-            index));
-  }
-  if (!isAudio && !mtmd_support_vision(mctx)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnsupportedMedia),
-        string_format(
-            "media part %zu: the projection model has no vision encoder",
-            index));
-  }
-  return bitmap;
+  return mtmd::bitmap(wrapper.bitmap);
 }
 
 /// Splits @p input into mtmd chunks in @p output: text chunks carry tokens,
@@ -74,7 +214,7 @@ mtmd::bitmap decodeMedia(
 /// input.
 void tokenize(
     const mtmd_context* mctx, const MultimodalInput& input,
-    mtmd_input_chunks* output) {
+    uint64_t maxImagePixels, mtmd_input_chunks* output) {
   std::vector<mtmd::bitmap> bitmaps;
   std::vector<mtmd_input_text> texts;
   bitmaps.reserve(input.size());
@@ -85,7 +225,7 @@ void tokenize(
   std::size_t mediaIndex = 0;
   for (const MultimodalPart& part : input) {
     if (part.isMedia) {
-      bitmaps.push_back(decodeMedia(mctx, part, mediaIndex++));
+      bitmaps.push_back(decodeMedia(mctx, part, mediaIndex++, maxImagePixels));
       parts.push_back({.text = nullptr, .bitmap = bitmaps.back().ptr.get()});
     } else if (!part.text.empty()) {
       texts.push_back(
@@ -119,23 +259,54 @@ void tokenize(
 
 } // namespace
 
+MultimodalOptions takeMultimodalOptions(ConfigMap& config) {
+  MultimodalOptions options;
+  if (auto raw = takeOption(config, {"image-min-tokens", "image_min_tokens"})) {
+    options.imageMinTokens = parsePositiveInt("image-min-tokens", *raw);
+  }
+  if (auto raw = takeOption(config, {"image-max-tokens", "image_max_tokens"})) {
+    options.imageMaxTokens = parsePositiveInt("image-max-tokens", *raw);
+  }
+  if (options.imageMinTokens > 0 && options.imageMaxTokens > 0 &&
+      options.imageMinTokens > options.imageMaxTokens) {
+    throwInvalidOption(string_format(
+        "image-min-tokens (%d) must not exceed image-max-tokens (%d)",
+        options.imageMinTokens,
+        options.imageMaxTokens));
+  }
+  if (auto raw = takeOption(config, {"mmproj-no-audio", "mmproj_no_audio"})) {
+    options.noAudio = parseBool("mmproj-no-audio", *raw);
+  }
+  if (auto raw = takeOption(config, {"mmproj-use-gpu", "mmproj_use_gpu"})) {
+    options.useGpu = parseBool("mmproj-use-gpu", *raw);
+  }
+  options.maxImagePixels = image_pixel_limit::takeMaxPixels(config);
+  return options;
+}
+
 MultimodalEmbedder::MultimodalEmbedder(
     const std::string& projectionPath, llama_model* model, llama_context* ctx,
-    const common_params& params, bool useGpu)
-    : model_(model), ctx_(ctx) {
-  mtmd_helper_log_set(
-      qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback, nullptr);
+    const common_params& params, bool modelOnGpu,
+    const MultimodalOptions& options)
+    : model_(model), ctx_(ctx), maxImagePixels_(options.maxImagePixels) {
+  mtmd_helper_log_set(llamaLogCallback, nullptr);
 
+  ggml_backend_dev_t modelDevice =
+      params.devices.empty() ? nullptr : params.devices.front();
   mtmd_context_params mparams = mtmd_context_params_default();
-  mparams.use_gpu = useGpu;
+  mparams.use_gpu =
+      resolveProjectorGpu(modelOnGpu, options.useGpu, modelDevice);
   // Co-locate the projector with the text model, on its first device.
-  if (useGpu && !params.devices.empty()) {
-    mparams.device = params.devices.front();
+  if (mparams.use_gpu) {
+    mparams.device = modelDevice;
   }
   mparams.print_timings = false;
   mparams.n_threads = params.cpuparams.n_threads;
   mparams.flash_attn_type = params.flash_attn_type;
   mparams.warmup = params.warmup;
+  mparams.image_min_tokens = options.imageMinTokens;
+  mparams.image_max_tokens = options.imageMaxTokens;
+  mparams.skip_audio = options.noAudio;
 
   mctx_.reset(mtmd_init_from_file(projectionPath.c_str(), model_, mparams));
   if (!mctx_) {
@@ -153,7 +324,7 @@ void MultimodalEmbedder::embed(
     const MultimodalInput& input, std::span<float> out, int embdNormalize,
     const std::atomic<bool>& cancelled) {
   mtmd::input_chunks chunks(mtmd_input_chunks_init());
-  tokenize(mctx_.get(), input, chunks.ptr.get());
+  tokenize(mctx_.get(), input, maxImagePixels_, chunks.ptr.get());
 
   // A memory-less model sees the whole input in one ubatch: the text tokens
   // and the media embeddings must fit together.

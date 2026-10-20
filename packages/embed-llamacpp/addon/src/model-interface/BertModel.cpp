@@ -312,6 +312,16 @@ rankPoolingUnsupported(const char* func, const std::string& scores) {
           scores.c_str()));
 }
 
+/// @brief A copy of @p config without the projector options, which are
+/// stored in @p options: llama.cpp's argument parser rejects them for an
+/// embedding load.
+std::unordered_map<std::string, std::string> withoutMultimodalOptions(
+    std::unordered_map<std::string, std::string> config,
+    MultimodalOptions& options) {
+  options = takeMultimodalOptions(config);
+  return config;
+}
+
 } // namespace
 
 BertEmbeddings::BertEmbeddings(
@@ -335,7 +345,9 @@ BertModel::BertModel(
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0),
       projectionPath_(projectionPath),
-      loader_("BertModel", loadHooks(), modelGgufPath, config, backendsDir) {}
+      loader_(
+          "BertModel", loadHooks(), modelGgufPath,
+          withoutMultimodalOptions(config, multimodalOptions_), backendsDir) {}
 
 BertModel::BertModel(BertModelSetup& setup, const std::string& projectionPath)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
@@ -453,7 +465,8 @@ void BertModel::onLoaded(llama_model* model, llama_context* ctx) {
         model_,
         ctx_,
         loader_.params(),
-        loader_.runtimeBackendDevice() == 1);
+        loader_.runtimeBackendDevice() == 1,
+        multimodalOptions_);
   }
 }
 

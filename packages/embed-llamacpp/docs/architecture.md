@@ -983,8 +983,9 @@ EmbeddingGemma 2 (upstream llama.cpp #30054) embeds text, images and audio into 
 ### Trade-offs
 - ✅ One embedding API for text, images and audio
 - ✅ Text-only use and models without a projection model are unaffected
+- ✅ The projector options of `@qvac/llm-llamacpp` (`image-max-tokens`, `image-min-tokens`, `mmproj-no-audio`, `mmproj-use-gpu` with its Android default, `image-max-megapixels`), with the same keys. The addon takes them out of the config itself, because llama.cpp's argument parser rejects them for an embedding load. Unlike llm, audio loads by default and the image budget is the projector's own (1120 tokens for EmbeddingGemma 2, not llm's 280), so results match llama-server.
 - ❌ Needs fabric 11259.0.0 (`@qvac/fabric` 0.23.0) or later: `llama_batch_ext` with mixed entries (upstream #29622), `llama_process()` and the current mtmd helpers. Earlier fabric does not build this addon.
-- ❌ A multimodal input must fit in one ubatch (`batch_size`). The image-token budget is the projector's default, not capped to the batch as llama-server does, because the API to read it (`mtmd_get_memory_usage`) is marked unstable.
+- ❌ A multimodal input must fit in one ubatch (`batch_size`). The image-token budget is not capped to the batch automatically, as llama-server does, because the API to read the projector's default (`mtmd_get_memory_usage`) is marked unstable; callers lower it with `image-max-tokens`.
 - ❌ Multimodal inputs are decoded one at a time, not packed into one batch
 - ❌ No video input. mtmd reads video only through ffmpeg.
 

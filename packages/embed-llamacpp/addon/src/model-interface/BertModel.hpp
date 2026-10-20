@@ -224,6 +224,8 @@ private:
   void onLoaded(llama_model* model, llama_context* ctx);
 
   std::string projectionPath_;
+  /// Projector options taken out of the load config.
+  MultimodalOptions multimodalOptions_;
   /// Set in onLoaded when a projection model is given.
   std::unique_ptr<MultimodalEmbedder> multimodal_;
 

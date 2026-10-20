@@ -21,6 +21,16 @@ export interface GGMLConfig {
     verbosity?: NumericLike;
     /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
     openclCacheDir?: string;
+    /** With `files.projectionModel`: largest per-image token budget of a dynamic-resolution vision encoder. Unset keeps the projector's default (1120 for EmbeddingGemma 2). Alias: `image_max_tokens`. */
+    "image-max-tokens"?: NumericLike;
+    /** With `files.projectionModel`: smallest per-image token budget. Unset keeps the projector's default. Alias: `image_min_tokens`. */
+    "image-min-tokens"?: NumericLike;
+    /** With `files.projectionModel`: skip loading the audio encoder, for image-only use. Defaults to off (audio loads). Alias: `mmproj_no_audio`. */
+    "mmproj-no-audio"?: "true" | "false" | "on" | "off" | "1" | "0";
+    /** With `files.projectionModel`: run the projector on the GPU. Unset follows the model, except on Android GPUs below Adreno 800, where it runs on the CPU. Ignored when the model runs on the CPU. Alias: `mmproj_use_gpu`. */
+    "mmproj-use-gpu"?: "true" | "false" | "on" | "off" | "1" | "0";
+    /** With `files.projectionModel`: largest image accepted, in megapixels, checked before decoding. Defaults to 50. Alias: `image_max_megapixels`. */
+    "image-max-megapixels"?: NumericLike;
     [key: string]: string | number | boolean | string[] | undefined;
 }
 export interface AddonConfigurationParams {
