@@ -1090,20 +1090,16 @@ The combined desktop CUDA/Vulkan speech changes in
 [Vulkan #308](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/308),
 including [CUDA #321](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/321),
 merged to native master at `84b02694001cfea863167776dbc185474a816656`.
-This checkout consumes the merged [registry #423](https://github.com/tetherto/qvac-registry-vcpkg/pull/423)
-at `e31be272ecdf9f20970302ebf8a2943d47803001`: `speech-cpp` 2026-10-12#1
-pins that merged revision, and `ggml-speech` 2026-10-07#1 pins
-`06f1b66806626a635904f31db6914ad2d0e71197`. The earlier native `f4d4c257`
+The exact native dependency versions are declared in [vcpkg.json](vcpkg.json),
+and the registry configuration is declared in
+[vcpkg-configuration.json](vcpkg-configuration.json). The earlier native `f4d4c257`
 passed ten smaller-model CUDA/Vulkan cases; those results do not establish GPU
 validation of the final native revision or the packaged addon. Rebuild the addon
 before running its GPU tests. Native desktop results also do not establish
 Android support or speech-quality signoff.
 
-The registry `baseline` is the main commit containing #423. The shared exact
-`speech-cpp` overrides and backend implementation are already on qvac main.
-This baseline update completes the TTS registry configuration; packaged-addon
-CUDA/Vulkan inference still requires validation on provisioned GPU hosts before
-claiming a validated release.
+Packaged-addon CUDA/Vulkan inference still requires validation on provisioned
+GPU hosts before claiming a validated release.
 
 From `packages/tts-ggml`, resolve the checked-in manifest without building or
 downloading models (with `VCPKG_ROOT` set):
@@ -1759,5 +1755,10 @@ OpenCL; Xclipse and Mali use Vulkan).
 Apache-2.0.  See [LICENSE](./LICENSE).
 
 ## Pocket TTS
+
+The native `speech-cpp` dependency includes Pocket Metal, CUDA, Vulkan and
+OpenCL support in the native library. The JavaScript Pocket API continues
+to require `config.useGPU: false`; updating the native dependency does not
+remove that addon validation.
 
 See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.

@@ -34,7 +34,7 @@ on:
         type: boolean
         default: true
       config_ref_override:
-        description: "Override the trusted config ref (e.g. pnpm-monorepo-foundation) for interim testing before foundation lands on main."
+        description: "Trusted config ref for package selection and desktop integration during manual testing."
         required: false
         type: string
         default: ''
