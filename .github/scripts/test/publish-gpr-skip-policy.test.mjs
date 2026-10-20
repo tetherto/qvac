@@ -251,9 +251,9 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
     }
   })
 
-  // Fixing publish-gpr must not switch merge-time integration tests on: they
-  // already run on the PR, and the PR's merge-guard consumes their result
-  // before the merge is allowed.
+  // Fixing publish-gpr must not switch merge-time integration tests on.
+  // Desktop integration remains available on PRs via run-desktop-addon-tests;
+  // publishing does not require that opt-in run.
   //
   // Matched on co-occurrence rather than one exact spelling: the point is that
   // publish-gpr's result must not gate this step at all, however it is written
@@ -278,8 +278,7 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
         ci.postIntegrationOnGpr,
         true,
         `${slug} must not set postIntegrationOnGpr: a GPR dev publish must not ` +
-          're-run its integration tests, they already ran on the PR and ' +
-          'merge-guard gated on them (#4175).',
+          'launch integration tests during publishing.',
       )
       return
     }

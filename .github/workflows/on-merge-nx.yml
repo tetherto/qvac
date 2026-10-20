@@ -186,12 +186,12 @@ jobs:
             root=$(git show "${CONFIG_REF}:${pj}" | jq -r '.root')
             has_build=$(git show "${CONFIG_REF}:${pj}" | jq -r 'if .targets.build then "true" else "false" end')
 
-            # Detect generated wrappers from package.json. An explicit false in
-            # trusted on-merge config opts out; current packages retain this gate.
+            # Derive the wrapper gate from the trusted package manifest.
+            # Package CI configuration cannot disable an existing wrapper check.
             has_check=$(git show "${CONFIG_REF}:packages/${pkg}/package.json" 2>/dev/null \
               | jq -r 'if .scripts["check:generated"] then "true" else "false" end' || echo false)
 
-            # Missing verifyGenerated keeps automatic script detection enabled.
+            # The derived value overrides any verifyGenerated field in project.json.
             row=$(jq -n \
               --arg pkg "$pkg" \
               --arg workdir "$root" \
@@ -200,7 +200,7 @@ jobs:
               --argjson onmerge "$onmerge" \
               '{package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds}
                + $onmerge
-               + {verifyGenerated: ($verifyGenerated and ($onmerge.verifyGenerated != false))}')
+               + {verifyGenerated: $verifyGenerated}')
             rows=$(echo "$rows" | jq -c --argjson r "$row" '. + [$r]')
           done
 
