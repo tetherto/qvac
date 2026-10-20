@@ -17,8 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Align the shared native `speech-cpp` source pin to `2026-10-14` across
+- Align the shared native `speech-cpp` source pin to `2026-10-19` across
   the speech addons so they use the same source revision.
+- The addon finds its ggml backends itself, next to the loaded module, for
+  loads and for `assessFit`, as `@qvac/asr-ggml` and `@qvac/tts-ggml` do. An
+  explicit `backendsDir` is now scanned as given rather than as a prebuilds
+  root under which `<host>/<module>` is appended.
+
+### Fixed
+
+- On Linux, BCI no longer fails to register any ggml backend when loaded from
+  the SDK worker bundle. The JavaScript side used to point the addon at
+  `<package>/prebuilds`, which does not exist in the bundle, while the
+  backends ship beside the native module.
 
 ## [0.12.0] - 2026-10-14
 

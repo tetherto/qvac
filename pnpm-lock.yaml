@@ -60,18 +60,18 @@ importers:
   packages/ai-sdk-provider:
     dependencies:
       '@ai-sdk/provider':
-        specifier: ^4.0.0
-        version: 4.0.3
+        specifier: ^4.0.10
+        version: 4.0.29
       '@ai-sdk/provider-utils':
-        specifier: ^5.0.0
-        version: 5.0.12(zod@4.4.3)
+        specifier: ^5.0.35
+        version: 5.0.62(zod@4.6.5)
       '@qvac/cli':
-        specifier: ^0.15.0
+        specifier: ^0.16.0
         version: link:../cli
     devDependencies:
       '@ai-sdk/openai-compatible':
         specifier: ^3.0
-        version: 3.0.14(zod@4.4.3)
+        version: 3.0.71(zod@4.6.5)
       '@qvac/registry-client':
         specifier: ^0.5.0
         version: 0.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)(corestore@7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperblobs@2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperswarm@4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
@@ -80,7 +80,7 @@ importers:
         version: 24.13.3
       ai:
         specifier: ^7.0
-        version: 7.0.37(zod@4.4.3)
+        version: 7.0.143(zod@4.6.5)
       lunte:
         specifier: ^1.8.2
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -104,7 +104,7 @@ importers:
         version: 0.1.1
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -128,8 +128,8 @@ importers:
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       bare-pack:
-        specifier: ^2.2.3
-        version: 2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+        specifier: ^3.0.0
+        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       brittle:
         specifier: ^3.17.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -174,7 +174,7 @@ importers:
         version: 0.1.1
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -244,7 +244,7 @@ importers:
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -347,8 +347,8 @@ importers:
         specifier: 8.5.2
         version: 8.5.2(@types/node@25.9.5)
       '@qvac/sdk':
-        specifier: ^0.21.0
-        version: 0.21.1(379c922b2b01276001c44042f1ac8eb3)
+        specifier: ^0.22.0
+        version: link:../sdk
       close-with-grace:
         specifier: ^2.1.0
         version: 2.5.0
@@ -412,7 +412,7 @@ importers:
         version: 0.1.1
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -476,7 +476,7 @@ importers:
     dependencies:
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -561,7 +561,7 @@ importers:
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -768,46 +768,6 @@ importers:
         specifier: ^0.22.0
         version: 0.22.0
 
-  packages/infer-base:
-    dependencies:
-      bare-abort-controller:
-        specifier: ^1.1.2
-        version: 1.1.2
-      bare-events:
-        specifier: ^2.9.1
-        version: 2.9.1(bare-abort-controller@1.1.2)
-      bare-os:
-        specifier: ^3.2.0
-        version: 3.9.3
-    devDependencies:
-      brittle:
-        specifier: ^3.15.0
-        version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
-      eslint:
-        specifier: ^9.39.4
-        version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
-      eslint-import-resolver-typescript:
-        specifier: ^4.4.5
-        version: 4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
-      eslint-plugin-import:
-        specifier: ^2.32.0
-        version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
-      lunte:
-        specifier: ^1.8.0
-        version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      prettier:
-        specifier: ^3.6.2
-        version: 3.9.6
-      prettier-config-holepunch:
-        specifier: ^2.0.0
-        version: 2.0.0(prettier@3.9.6)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      typescript-eslint:
-        specifier: ^8.63.0
-        version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
-
   packages/inference:
     dependencies:
       '@qvac/error':
@@ -923,8 +883,8 @@ importers:
         specifier: ^0.30.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
-        specifier: ^0.48.2
-        version: 0.48.2(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.50.0
+        version: 0.50.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/ggml-rpc-server':
         specifier: ^0.5.1
         version: link:../ggml-rpc-server
@@ -943,6 +903,9 @@ importers:
       '@qvac/tts-ggml':
         specifier: ^0.13.0
         version: link:../tts-ggml
+      '@qvac/turbovec-ggml':
+        specifier: ^0.1.1
+        version: link:../turbovec-ggml
       '@qvac/vla-ggml':
         specifier: ^0.32.2
         version: link:../vla-ggml
@@ -1021,7 +984,7 @@ importers:
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -1233,7 +1196,7 @@ importers:
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -1661,8 +1624,8 @@ importers:
         specifier: ^0.30.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
-        specifier: ^0.48.2
-        version: 0.48.2(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.50.0
+        version: 0.50.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
@@ -1690,6 +1653,9 @@ importers:
       '@qvac/tts-ggml':
         specifier: ^0.13.0
         version: link:../tts-ggml
+      '@qvac/turbovec-ggml':
+        specifier: ^0.1.1
+        version: link:../turbovec-ggml
       '@qvac/vla-ggml':
         specifier: ^0.32.2
         version: link:../vla-ggml
@@ -1728,7 +1694,7 @@ importers:
         version: 3.9.3
       bare-pack:
         specifier: ^2.0.1
-        version: 2.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-path:
         specifier: ^3.0.1
         version: 3.1.1
@@ -1943,7 +1909,7 @@ importers:
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -2038,7 +2004,7 @@ importers:
         version: 0.1.1
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/langdetect-text':
         specifier: ^0.1.2
         version: link:../langdetect-text
@@ -2212,7 +2178,7 @@ importers:
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
-        version: link:../infer-base
+        version: 0.8.0
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -2303,10 +2269,10 @@ importers:
   plugins/openclaw:
     dependencies:
       '@qvac/ai-sdk-provider':
-        specifier: ^0.9.0
+        specifier: ^0.10.0
         version: link:../../packages/ai-sdk-provider
       '@qvac/cli':
-        specifier: ^0.15.0
+        specifier: ^0.16.0
         version: link:../../packages/cli
     devDependencies:
       '@types/node':
@@ -2335,16 +2301,16 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: ^3.0.0
-        version: 3.0.14(zod@4.4.3)
+        version: 3.0.71(zod@4.4.3)
       '@qvac/ai-sdk-provider':
-        specifier: ^0.9.0
+        specifier: ^0.10.0
         version: link:../../packages/ai-sdk-provider
       '@qvac/cli':
-        specifier: ^0.15.0
+        specifier: ^0.16.0
         version: link:../../packages/cli
       ai:
         specifier: ^7.0.0
-        version: 7.0.37(zod@4.4.3)
+        version: 7.0.143(zod@4.4.3)
     devDependencies:
       '@opencode-ai/plugin':
         specifier: ^1.16.0
@@ -2383,20 +2349,20 @@ packages:
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
-  '@ai-sdk/gateway@4.0.28':
-    resolution: {integrity: sha512-ee9TsNO3mkgHDWmTmJ8Fvltr6PFh52zhrV2+FaKJY3F3iu7kWZi5tCRJCR1HVhhlpj6lHniUb28nLQdPHkA/1Q==}
+  '@ai-sdk/gateway@4.0.116':
+    resolution: {integrity: sha512-YK2As2GpxmyHi5w6R4FLepiLcs6MbIMxh6nyTMgHaoHKoM5aWEXvKDe/JqdMQ1ivOy3EPJiEBgRI677YTGxfHQ==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai-compatible@3.0.14':
-    resolution: {integrity: sha512-nUl7dBHUDTqcnuWGnEbKMwDDqL94BxRfibLwYv8uWp+kZn8Zqdxy7tUBt4sv2hpHQi+S2P6bUyqW18xmbykErw==}
+  '@ai-sdk/openai-compatible@3.0.71':
+    resolution: {integrity: sha512-8uvAsESbfoiUUa3DEXnM6bcpwObpsDrbv+6DgmkaiBJsONL0sBhglJhC61+X9yIxEuwE0YXwiQ7hfitxyzuFDQ==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider-utils@5.0.12':
-    resolution: {integrity: sha512-bbhlOgHeYwrIGheLkM6fhS8hVger8uFPmcOLg+kxc9EFh7y30XYorWhthlYAgpadO3SJhFZrIcEknN7qEqEVvA==}
+  '@ai-sdk/provider-utils@5.0.62':
+    resolution: {integrity: sha512-//6sHa6QNQdM2KHOg5pxp1UMFQB4U8cqdw/kSm9BMr0DLeaFgG3TXZfxhpwRZmxgBpOrzMVZ/gwLXH309+Ortw==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -2405,8 +2371,8 @@ packages:
     resolution: {integrity: sha512-oGMAgGoQdBXbZqNG0Ze56CHjDZ1IDYOwGYxYjO5KLSlz5HiNQ9udIXsPZ61VWaHGZ5XW/jyjmr6t2xz2jGVwbQ==}
     engines: {node: '>=18'}
 
-  '@ai-sdk/provider@4.0.3':
-    resolution: {integrity: sha512-e0CpNWJUY7OxAFAnCZkw+ri9QOHWwTs1tXP42782KFGCU07qt8NiXCrCVowyCB5dP2r5/Uls+g2oPd8kOJn9dw==}
+  '@ai-sdk/provider@4.0.29':
+    resolution: {integrity: sha512-nV7UpLADtKn9f0xfnxVZAeFEKuNkScJv5rOpHL7qeWe2EwEEBa3pd6P0QVK6D6coCJ0E8FyCgoM50AffTYrzDQ==}
     engines: {node: '>=22'}
 
   '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.239':
@@ -4570,40 +4536,12 @@ packages:
       '@qvac/asr-ggml-ios':
         optional: true
 
-  '@qvac/asr-ggml@0.7.1':
-    resolution: {integrity: sha512-Rr266S/S4BkH9KXHJIRbD0zdqK3y0V077IeUQBEM9qvMmtqpL6eOTXhKCZFLIkhdS1QN9m3/ACAr/2kugO81/Q==}
-    engines: {bare: '>=1.20.0'}
-
   '@qvac/asr-ggml@0.8.1':
     resolution: {integrity: sha512-0z6FRBHpEsG4dSK+EhUuEA5YEKM2t5jGBooSH7dwoWeKR2KRHk/ChApoV+5Mjy5rLkoKNH1sJNiYmuT2bYKDXQ==}
     engines: {bare: '>=1.20.0'}
 
-  '@qvac/audiogen-ggml@0.5.2':
-    resolution: {integrity: sha512-+/Nyg9QDrMMNvcP0kL43N2ws3v/M5/QyHE3cvjdNP/0qPblDYKMhmQedIPnNni0P0uF4HF8i9oiiTOWIt+5rFQ==}
-    engines: {bare: '>=1.19.0'}
-    hasBin: true
-
-  '@qvac/bci-whispercpp@0.10.2':
-    resolution: {integrity: sha512-oUVT8pcAs+E/dy5mYSgYBrzCrqnPa0zHSi6kx2PH5SFFvgivAsZgiQnVPVxHMhLQS688/Bk7+GOFKPZWdVNSyQ==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/classification-ggml@0.28.2':
-    resolution: {integrity: sha512-5ETY3K8aVZaXa9JPQi3SgjDL10OIMEOij+Cx6N9g7TAsdu8e/2+r7OKMTB/V+na/BdF5ZnBI04D8bCHOGj68Gg==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/decoder-audio@0.7.0':
-    resolution: {integrity: sha512-Dg6YuJ74tELqJha95gJ/vK2fb/54MYgDdry7WCiKzGF84BsTFm9v/+Qf5CLub4NWT/FStJCGgc5yzuy/u0ltLA==}
-
   '@qvac/diagnostics@0.1.2':
     resolution: {integrity: sha512-rpNekTUH3uIHPFqRRWcWXEHzW2CZbJJodLfCecVSkzvVXCOm5SLnlP2sxGVTWL7Q/umD68jnTiHMr4h6tP+jUw==}
-
-  '@qvac/diffusion-cpp@0.26.1':
-    resolution: {integrity: sha512-jDDRi0jck1kh5ZHIrhcful74EyY4Fhcc3Ag9R9b0+a3rc3+4H6Np7vaO5MP3b8PORlynHTddTdimajJYqkRoTw==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/embed-llamacpp@0.43.2':
-    resolution: {integrity: sha512-snm0Dpc9bRAWHbdvG3DehkNFyMHnaK9vWJJsjCb580mhQ/iHpsH16qhByjwvfFT3lfiaaagdCMbXbT815C6ehw==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/embed-llamacpp@0.48.1':
     resolution: {integrity: sha512-szSjbiuUy/M/GRc7Ii8WqaGlIVkGAZtPunCFCdip/FWHwVAaREYRjHzfv7E4aUX9ho7MOhl0z4nco0G6qWVEdw==}
@@ -4617,8 +4555,8 @@ packages:
       '@qvac/fabric-ios':
         optional: true
 
-  '@qvac/embed-llamacpp@0.48.2':
-    resolution: {integrity: sha512-JDJI0UOXPNl35Hr8qB1zvhDGPNhDFIU6Y7FurRB3vt43iURtIQQP2J4pMfuDrwqqsT+jXlHImLyUQAbV7bXx3w==}
+  '@qvac/embed-llamacpp@0.50.0':
+    resolution: {integrity: sha512-rBo2AvyKPC/mgYMfam59RrmJpIIhPRpwA3xQeAtMu5Csov/6FbPjtDb7sXxOxz0155APeDtRbK/xaUzAzMe3sg==}
     engines: {bare: '>=1.24.0'}
     peerDependencies:
       '@qvac/fabric-android-arm64': ^0.22.0
@@ -4636,22 +4574,10 @@ packages:
     resolution: {integrity: sha512-FKcr7EdDVsyRyu74+uSg7Fs2xnNqxqbNUKjkBhrs8z3At4KZmaMQZXlclLqXdOPW0XQoYEtGI7HOMYtFAS62Lg==}
     engines: {bare: '>=1.24.0'}
 
-  '@qvac/fabric-darwin-arm64@0.19.0':
-    resolution: {integrity: sha512-Gltbg+zhWPeXFMwQucxQQ9dgNisTZOFnTt9u23bAtp6HYwkSXDfLPxqfC4yEaS4z0x6QCyR84LzTCVIz2PMwZA==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [arm64]
-    os: [darwin]
-
   '@qvac/fabric-darwin-arm64@0.22.0':
     resolution: {integrity: sha512-VveZlg8vEg02tT6fP9va6yojgyENyvAgOzWh+H8my444wGWUQtk+F1h82F/F/wSPeTFxsJaC29BsztJWM5Rk6A==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
-    os: [darwin]
-
-  '@qvac/fabric-darwin-x64@0.19.0':
-    resolution: {integrity: sha512-0joPe+Z2dhb3YvV5MKScM3zmbkE/Lz5Ai4kzy9lY9hSVt0CH5kpDNPkxLlNipHbadn0gMqbnd8uRU3dVZx126w==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
     os: [darwin]
 
   '@qvac/fabric-darwin-x64@0.22.0':
@@ -4664,24 +4590,10 @@ packages:
     resolution: {integrity: sha512-JSjz82zfR0jkJdJhxcpwEutZ5WEw3VZUvgMrhYPawZHD1pgN9SQDsdMgu9shay5mA0Kfc4M7jyOAw6/LR8ATOw==}
     engines: {bare: '>=1.24.0'}
 
-  '@qvac/fabric-linux-arm64@0.19.0':
-    resolution: {integrity: sha512-pHZDqBWfm5v5vOiLgSmWmid+GxfDkO9S8HEWS4AD52VSwuZ2qBClHgM8xYFRkvWKextqSz5MjgSZ8Pn0W91K2Q==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
   '@qvac/fabric-linux-arm64@0.22.0':
     resolution: {integrity: sha512-mK3KWupBjCoPqTivyq5LUr2NnBOpy/2owt9SQJS9xn5At06/+FIQ2YnCFjbbkguKvG7UR3RIk77UlocA6aG4iQ==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/fabric-linux-x64@0.19.0':
-    resolution: {integrity: sha512-jr8NFCw8Lr4yC93p2urTLvhmjA0J+hXG2C7gAkq0/KniTsG05ECM57DNMm5bA7FlCx5rWGvY7//SdDuXeX8PqA==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
     os: [linux]
     libc: [glibc]
 
@@ -4692,21 +4604,11 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@qvac/fabric-win32-x64@0.19.0':
-    resolution: {integrity: sha512-l9vDBniKIiJCbpybq+q0PGnxKQkuyhmY4k20fcWmWrZXOW1uQZidBaY3wMLUAR+wqbKLly8QmHNkpI4S7Bpatg==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [win32]
-
   '@qvac/fabric-win32-x64@0.22.0':
     resolution: {integrity: sha512-6z73O2CJNffTzcOTBrSb2NSCbzE6nh5EgkHie/5gVWVLDlLmXMBVH/+t+RX7siBW6/rYx0xfLi8L7yHuiflTew==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [win32]
-
-  '@qvac/fabric@0.19.0':
-    resolution: {integrity: sha512-QFs0VhKOumLu7pdfdBDHMyoX2iDzrAbYQVQmX0ALVhQN7ay24aA5Cnv9xuq2yjNjHilbm8thUS8wNpXGqVqEMA==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/fabric@0.22.0':
     resolution: {integrity: sha512-5pQaEAyNzhVZm1pDOfJpYxe2muNF17vZiNBH67qyWV2Sx6JoYVz5Z2SPeaHs0jF/62HFoc4nBMzN6ehPgQX2cg==}
@@ -4720,10 +4622,6 @@ packages:
       '@qvac/fabric-ios':
         optional: true
 
-  '@qvac/ggml-rpc-server@0.1.2':
-    resolution: {integrity: sha512-GqppQR19mwemt0KpcbHJNScGlEJYx9IdyeVpwMduLdaw2NhrLSspzrxRc6bjCnjzpgEOwGhz0NEto0hfV9tSsA==}
-    engines: {bare: '>=1.24.0'}
-
   '@qvac/infer-base@0.4.2':
     resolution: {integrity: sha512-Vm5V/3a0oMBdxjfUpZxXrV+xRMLHeXrnKjKwOJSh+y85nRi7Ux+8Iakj4QAsfbrsERWkSTxUQM34KlE9Rb4PdA==}
 
@@ -4732,61 +4630,6 @@ packages:
 
   '@qvac/infer-base@0.8.0':
     resolution: {integrity: sha512-Z0dZXXQ56UsfgjXUFKCH6hU8Gs2BYCIXWB6q0cJkZ7MGXl3KX+Q/nIJ0OwfDf4m4z/ZgWItjVRnLYbpG0ssDNQ==}
-
-  '@qvac/inference@0.21.1':
-    resolution: {integrity: sha512-2Vq5xcpKI6lhZzlvCeWINTixDhECP3IOLVLvTOnieOFXvJFw/pk3ytw+r3oO4UKm8xytMx3rMX6wWAavcQI6wA==}
-    engines: {bare: '>=1.30.3'}
-    peerDependencies:
-      '@qvac/asr-ggml': ^0.7.1
-      '@qvac/audiogen-ggml': ^0.5.2
-      '@qvac/bci-whispercpp': ^0.10.2
-      '@qvac/classification-ggml': ^0.28.2
-      '@qvac/decoder-audio': ^0.7.0
-      '@qvac/diffusion-cpp': ^0.26.1
-      '@qvac/embed-llamacpp': ^0.43.2
-      '@qvac/ggml-rpc-server': ^0.1.2
-      '@qvac/langdetect-text': ^0.1.2
-      '@qvac/llm-llamacpp': ^0.55.2
-      '@qvac/ocr-ggml': ^0.26.2
-      '@qvac/translation-nmtcpp': ^0.18.2
-      '@qvac/tts-ggml': ^0.10.2
-      '@qvac/vla-ggml': ^0.29.2
-    peerDependenciesMeta:
-      '@qvac/asr-ggml':
-        optional: true
-      '@qvac/audiogen-ggml':
-        optional: true
-      '@qvac/bci-whispercpp':
-        optional: true
-      '@qvac/classification-ggml':
-        optional: true
-      '@qvac/decoder-audio':
-        optional: true
-      '@qvac/diffusion-cpp':
-        optional: true
-      '@qvac/embed-llamacpp':
-        optional: true
-      '@qvac/ggml-rpc-server':
-        optional: true
-      '@qvac/langdetect-text':
-        optional: true
-      '@qvac/llm-llamacpp':
-        optional: true
-      '@qvac/ocr-ggml':
-        optional: true
-      '@qvac/translation-nmtcpp':
-        optional: true
-      '@qvac/tts-ggml':
-        optional: true
-      '@qvac/vla-ggml':
-        optional: true
-
-  '@qvac/langdetect-text@0.1.2':
-    resolution: {integrity: sha512-V6ntqPNBmz+49eIaY8jYdpgyx8MzSk9/bNp9ibSn+Xwx1D/8Mca8RNfn7/gHWsuACMvkvvJmNzZGGLu1eOW3og==}
-
-  '@qvac/llm-llamacpp@0.55.2':
-    resolution: {integrity: sha512-UknauZW8NkwmwFLTbeWhEStk0MemXW3UfW9l/kjV0QhQ8zH0XjRzrOGh/64ekMHaG8UzWKma74XhzVnCtlUaGA==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/llm-llamacpp@0.61.2':
     resolution: {integrity: sha512-WUsgaKCI7vI2Rp9+rhK8tLQ00nWti4KqFvwQdqYGboLonZ3zFE8RRSA3+kyu4ossmwmEXXA7oCKvkUecHn/JsQ==}
@@ -4802,13 +4645,6 @@ packages:
 
   '@qvac/logging@0.1.1':
     resolution: {integrity: sha512-un8/b8JZBXRW/ljezFj3VGPxALhMvONeD62F/NHaU3TGs4SmdXWDcG65Aot+Bi4rIjaKQS5iY1P4WYGKU6Chew==}
-
-  '@qvac/ocr-ggml@0.26.2':
-    resolution: {integrity: sha512-BI7uvbAoeg67OHQEwECfCdGd43Tb7s1ZFj2MuxlLt4PeWA471fJwMTrPwSC6uNvVxx7nsxuPsYWOWzfbGhe1eA==}
-    engines: {bare: '>=1.19.0'}
-
-  '@qvac/rag@0.8.1':
-    resolution: {integrity: sha512-Le7irUg030ujUPgTDRs7VZea5rqtQKgaNut3X0VPUinxWlaw0reCiwp8oUfLZ48kDLXx+swy7fSZCUEamG9QAw==}
 
   '@qvac/registry-client@0.4.1':
     resolution: {integrity: sha512-BZz/7HASD1Wth/r8f7NpWF1bAihND04xKaRjJ2s31ujnQPHO0m04daM/PEiffzPPKYDHQTSGkecOh13451imlw==}
@@ -4827,10 +4663,6 @@ packages:
     resolution: {integrity: sha512-7bpiHGCYCZEomWXFy9Q8xjVT0Rzh3x32ioD8gRexlVkpw2kpBtOeRnzOahbfRJa/cig1qrzrJYzsKd7Rb70KEg==}
     hasBin: true
 
-  '@qvac/registry-client@0.7.0':
-    resolution: {integrity: sha512-NQyeM2tWYEVYd03rJwc1IEnUYvqan1Yv3/negxrd1tQS24tZwSM70H6XyqSVdspv90VmonFw1MsVTNSga1Qnag==}
-    hasBin: true
-
   '@qvac/registry-schema@0.1.2':
     resolution: {integrity: sha512-Dc+unexganrAr86y3vWLejpr0a+DyByBclSS53S4TEIpQjn70pZQ8kKGRtXhlAg1oqGqsgcxR2BYKc/w9isT8A==}
 
@@ -4842,60 +4674,8 @@ packages:
   '@qvac/registry-schema@0.3.0':
     resolution: {integrity: sha512-U5+oNXh34ngCnyTRCf1cjSjZcoacM3xixsPTwXv7jTQQUdvtEownb3mb+nClb7nEc/SlJDffPEy5kFj5D2Zxjg==}
 
-  '@qvac/registry-schema@0.4.0':
-    resolution: {integrity: sha512-COFGzCQe0FklBYYTZs3fmonjOsUYps6efumTLp+9sFlibJ9olmAxoarelSBJHcIQN4Oi8l+TBfhsHIrFAs1PGA==}
-
   '@qvac/response@0.1.2':
     resolution: {integrity: sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA==}
-
-  '@qvac/sdk@0.21.1':
-    resolution: {integrity: sha512-oNTFCfE3oyc2EpmsVG/FeMHExXcCjm9cq4+o8wQWDC8LXDwAmlfiV0GN+7wyvsaNePuF+sQMa14/jZ1jxXQKVg==}
-    peerDependencies:
-      '@electron-forge/plugin-base': ^7.11.1
-      bare-link: '>=3.0.0'
-      expo-build-properties: '>=0.12.0'
-      expo-device: '>=8.0.0'
-      expo-file-system: '>=19.0.0'
-      expo-modules-core: '>=3.0.0'
-      pear-pipe: '>=1.0.0'
-      react-native-bare-kit: '*'
-      tsx: '*'
-    peerDependenciesMeta:
-      '@electron-forge/plugin-base':
-        optional: true
-      bare-link:
-        optional: true
-      expo-build-properties:
-        optional: true
-      expo-device:
-        optional: true
-      expo-file-system:
-        optional: true
-      expo-modules-core:
-        optional: true
-      pear-pipe:
-        optional: true
-      react-native-bare-kit:
-        optional: true
-      tsx:
-        optional: true
-
-  '@qvac/translation-nmtcpp@0.18.2':
-    resolution: {integrity: sha512-VCsYG7450f7wX4vR/8I7d0hbXGqZImenb/rfM30xKGA/+Izoq/rOKuebwiOOvCfuriO1miRNmBD7DwF8ppHRhg==}
-    engines: {bare: '>=1.19.0'}
-    peerDependencies:
-      bare-fetch: ^3.0.1
-    peerDependenciesMeta:
-      bare-fetch:
-        optional: true
-
-  '@qvac/tts-ggml@0.10.2':
-    resolution: {integrity: sha512-A/EazO8G9lJ/L4LcvfQsfThKeLJLt/2L7R2RenBPr00/atb5ICEJ+lLTI8r2XvEGXiwKbbGg5rzMw0OSbzedlQ==}
-    engines: {bare: '>=1.19.0'}
-
-  '@qvac/vla-ggml@0.29.2':
-    resolution: {integrity: sha512-0v8/hA1/JAEUdvs3xkl3bzZjIpZpEOlFU6DBweurtAtWpU8g/u6a2QOkHcbbK6llsb2+J6Tsy0LFZt2tfrJPhA==}
-    engines: {bare: '>=1.24.0'}
 
   '@react-native/assets-registry@0.86.0':
     resolution: {integrity: sha512-nIaXbm2jX1OTYp0qbviJ3O6KZivoE8z3BnhUQ2LsqfZSWRoOK/n1qsiAr6oALiNKWnXY3j2KPwtYORnZzp8xew==}
@@ -5520,8 +5300,8 @@ packages:
     resolution: {integrity: sha512-4I7Td01quW/RpocfNayFdFVk1qSuoh0E7JrbRJ16nH01HhKFQ88INq9Sd+nd72zqRySlr9BmDA8xlEJ6vJMrYA==}
     engines: {node: '>=8'}
 
-  ai@7.0.37:
-    resolution: {integrity: sha512-stF+SEQJgKY3Qfe3FwNzqUrehHviOp2l7LemoI8YMOa0Zk5PxKsRNgUk3cHXz0RAue9RRyCAis2fz6LSCP6EKw==}
+  ai@7.0.143:
+    resolution: {integrity: sha512-y9QNgCK9QRHRCcHEUNoU2vemJ+q2zFX5M9T7xHCMZutfcWCqZPckkAfDbp+KHwqZDiJs5AqoKazj64cb20m5PA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -5993,8 +5773,8 @@ packages:
       bare-url:
         optional: true
 
-  bare-module-traverse@2.4.4:
-    resolution: {integrity: sha512-zK4bDxqeD15Tvu/C5B1Mi/epl9PavjIhU3SVh5RhDb4Hpet6applPVX8Q9rinu7nT80yzgSSlBn0exzJaNXv0A==}
+  bare-module-traverse@2.5.9:
+    resolution: {integrity: sha512-cAkJxUYfdaBvYS1N8g8evHmNNDtJD+PbZYXLBxF9Plg8EantwmUMwFe2EGFw96+VcVo2ot/8aIX+4aedH44NCg==}
     peerDependencies:
       bare-buffer: '*'
       bare-url: '*'
@@ -6004,8 +5784,8 @@ packages:
       bare-url:
         optional: true
 
-  bare-module-traverse@2.5.9:
-    resolution: {integrity: sha512-cAkJxUYfdaBvYS1N8g8evHmNNDtJD+PbZYXLBxF9Plg8EantwmUMwFe2EGFw96+VcVo2ot/8aIX+4aedH44NCg==}
+  bare-module-traverse@2.7.1:
+    resolution: {integrity: sha512-3QLnK7ubagLQLKjnZ0GyS2mg2j7M5GJhMX/jf6kKZ7Gb5vhey4gHum/w0MMsXzboBxWNrDVTaUExiGsA2IEzvg==}
     peerDependencies:
       bare-buffer: '*'
       bare-url: '*'
@@ -6049,8 +5829,8 @@ packages:
     resolution: {integrity: sha512-fF4Q7QsyKVF5Rj0qvI8BgUNjqzC2JvQlpTaPLjVJVxYVUX5Zr9un+y3w1HmA4nNKdFmRBT8z/WmrjvXzXVerKQ==}
     engines: {bare: '>=1.14.0'}
 
-  bare-pack@2.2.1:
-    resolution: {integrity: sha512-7w9tcotjBxT31Azwqr/gq5acO//8cMxiNwtNccLvIhu0ZmlEXvqrBsZfUJ9P3i+Nd13/7DOY1bLcq+4lCcqzqQ==}
+  bare-pack@2.2.3:
+    resolution: {integrity: sha512-wjfjKAXmhy3gjIBFVgQovyBgUqEi7zLxCwCbGTL7dSBEBe9admssLSZoUTki+0xyCBSh9dcfBT4TQwXgme9jSA==}
     hasBin: true
     peerDependencies:
       bare-buffer: ^3.6.0
@@ -6061,8 +5841,8 @@ packages:
       bare-url:
         optional: true
 
-  bare-pack@2.2.3:
-    resolution: {integrity: sha512-wjfjKAXmhy3gjIBFVgQovyBgUqEi7zLxCwCbGTL7dSBEBe9admssLSZoUTki+0xyCBSh9dcfBT4TQwXgme9jSA==}
+  bare-pack@3.0.0:
+    resolution: {integrity: sha512-OaARWXWwJq3FcdlQ3H2UeqwFyNXf+cAL7yGLnECnZtuwk5GftYs+zY3FreAN6bNR31ft4PZgR6lfZ3M/2A2q+Q==}
     hasBin: true
     peerDependencies:
       bare-buffer: ^3.6.0
@@ -6189,10 +5969,6 @@ packages:
 
   bare-semver@1.1.0:
     resolution: {integrity: sha512-1Hw5qJ7hXdVt3uPUqjeFTuxyvBUJauvz5A1I2jk8gzjZMHp04n//6nV9MDbG9CMw78JHY2lGV0w6s//LrASm2w==}
-
-  bare-signals@4.2.0:
-    resolution: {integrity: sha512-fNHMOdQIlYuTvMB3Oh9Apk99hLKn351+Ir8vz+khiPTcOqIyGG4uWWjdLTzxWdYGsA0eT+We3y0K74hjj2nq7A==}
-    engines: {bare: '>=1.7.0'}
 
   bare-signals@5.0.0:
     resolution: {integrity: sha512-8Gn8bBFUh2AUCJ9wWWFjSGWIo1HIUSIQnXRJGSm/f7GCDMqsuJhRmR1dT+HtDaDBkeu2l8Koxt2JLurfJ5yHVw==}
@@ -11325,32 +11101,55 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
-  '@ai-sdk/gateway@4.0.28(zod@4.4.3)':
+  '@ai-sdk/gateway@4.0.116(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 4.0.3
-      '@ai-sdk/provider-utils': 5.0.12(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.29
+      '@ai-sdk/provider-utils': 5.0.62(zod@4.4.3)
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
-  '@ai-sdk/openai-compatible@3.0.14(zod@4.4.3)':
+  '@ai-sdk/gateway@4.0.116(zod@4.6.5)':
     dependencies:
-      '@ai-sdk/provider': 4.0.3
-      '@ai-sdk/provider-utils': 5.0.12(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.29
+      '@ai-sdk/provider-utils': 5.0.62(zod@4.6.5)
+      '@vercel/oidc': 3.2.0
+      zod: 4.6.5
+
+  '@ai-sdk/openai-compatible@3.0.71(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.29
+      '@ai-sdk/provider-utils': 5.0.62(zod@4.4.3)
       zod: 4.4.3
 
-  '@ai-sdk/provider-utils@5.0.12(zod@4.4.3)':
+  '@ai-sdk/openai-compatible@3.0.71(zod@4.6.5)':
     dependencies:
-      '@ai-sdk/provider': 4.0.3
+      '@ai-sdk/provider': 4.0.29
+      '@ai-sdk/provider-utils': 5.0.62(zod@4.6.5)
+      zod: 4.6.5
+
+  '@ai-sdk/provider-utils@5.0.62(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.29
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.0
+      undici: 7.29.0
       zod: 4.4.3
+
+  '@ai-sdk/provider-utils@5.0.62(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.29
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.0
+      undici: 7.29.0
+      zod: 4.6.5
 
   '@ai-sdk/provider@3.0.8':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/provider@4.0.3':
+  '@ai-sdk/provider@4.0.29':
     dependencies:
       json-schema: 0.4.0
 
@@ -14398,20 +14197,6 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/asr-ggml@0.7.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.5.4
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
   '@qvac/asr-ggml@0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
       '@qvac/error': 0.1.1
@@ -14426,92 +14211,11 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/audiogen-ggml@0.5.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-ffmpeg: 1.5.0
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-os: 3.9.3
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
-  '@qvac/bci-whispercpp@0.10.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
-  '@qvac/classification-ggml@0.28.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))':
-    dependencies:
-      '@qvac/fabric': 0.19.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-env: 3.0.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-os: 3.9.3
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.5.4
-      brittle: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-pipe
-      - bare-tcp
-      - react-native-b4a
-
-  '@qvac/decoder-audio@0.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-ffmpeg: 1.5.0
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-      bare-url: 2.5.4
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
   '@qvac/diagnostics@0.1.2':
     dependencies:
       bare-os: 3.9.3
       which-runtime: 1.4.0
     optional: true
-
-  '@qvac/diffusion-cpp@0.26.1(bare-abort-controller@1.1.2)':
-    dependencies:
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-
-  '@qvac/embed-llamacpp@0.43.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/fabric': 0.19.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
 
   '@qvac/embed-llamacpp@0.48.1(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
@@ -14533,7 +14237,7 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/embed-llamacpp@0.48.2(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+  '@qvac/embed-llamacpp@0.50.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
       '@qvac/fabric': 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
       '@qvac/infer-base': 0.8.0
@@ -14557,13 +14261,7 @@ snapshots:
 
   '@qvac/fabric-android-arm64@0.22.0': {}
 
-  '@qvac/fabric-darwin-arm64@0.19.0':
-    optional: true
-
   '@qvac/fabric-darwin-arm64@0.22.0':
-    optional: true
-
-  '@qvac/fabric-darwin-x64@0.19.0':
     optional: true
 
   '@qvac/fabric-darwin-x64@0.22.0':
@@ -14571,31 +14269,14 @@ snapshots:
 
   '@qvac/fabric-ios@0.22.0': {}
 
-  '@qvac/fabric-linux-arm64@0.19.0':
-    optional: true
-
   '@qvac/fabric-linux-arm64@0.22.0':
-    optional: true
-
-  '@qvac/fabric-linux-x64@0.19.0':
     optional: true
 
   '@qvac/fabric-linux-x64@0.22.0':
     optional: true
 
-  '@qvac/fabric-win32-x64@0.19.0':
-    optional: true
-
   '@qvac/fabric-win32-x64@0.22.0':
     optional: true
-
-  '@qvac/fabric@0.19.0':
-    optionalDependencies:
-      '@qvac/fabric-darwin-arm64': 0.19.0
-      '@qvac/fabric-darwin-x64': 0.19.0
-      '@qvac/fabric-linux-arm64': 0.19.0
-      '@qvac/fabric-linux-x64': 0.19.0
-      '@qvac/fabric-win32-x64': 0.19.0
 
   '@qvac/fabric@0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)':
     optionalDependencies:
@@ -14606,16 +14287,6 @@ snapshots:
       '@qvac/fabric-linux-arm64': 0.22.0
       '@qvac/fabric-linux-x64': 0.22.0
       '@qvac/fabric-win32-x64': 0.22.0
-
-  '@qvac/ggml-rpc-server@0.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/fabric': 0.19.0
-      bare-net: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
 
   '@qvac/infer-base@0.4.2(bare-abort-controller@1.1.2)':
     dependencies:
@@ -14642,76 +14313,6 @@ snapshots:
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
       bare-os: 3.9.3
 
-  '@qvac/inference@0.21.1(22d44fb645888aa4867ea1d652142a0c)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/logging': 0.1.1
-      '@qvac/rag': 0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
-      '@qvac/registry-client': 0.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      bare-abort-controller: 1.1.2
-      bare-buffer: 3.6.2
-      bare-cpu-info: 0.1.1
-      bare-crypto: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-env: 3.0.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-gpu-info: 0.1.1
-      bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
-      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
-      bare-net: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-os: 3.9.3
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-rpc: 1.3.8(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-runtime: 1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-url: 2.5.4
-      bare-zlib: 1.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      compact-encoding: 3.3.0
-      corestore: 7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      fast-safe-stringify: 2.1.1
-      hyperdrive: 13.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperswarm: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      semver: 7.8.5
-      tar-stream: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      which-runtime: 1.4.0
-      zod: 4.6.5
-    optionalDependencies:
-      '@qvac/asr-ggml': 0.7.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/audiogen-ggml': 0.5.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/bci-whispercpp': 0.10.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/classification-ggml': 0.28.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      '@qvac/decoder-audio': 0.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/diffusion-cpp': 0.26.1(bare-abort-controller@1.1.2)
-      '@qvac/embed-llamacpp': 0.43.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/ggml-rpc-server': 0.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/langdetect-text': 0.1.2
-      '@qvac/llm-llamacpp': 0.55.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/ocr-ggml': 0.26.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      '@qvac/translation-nmtcpp': 0.18.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))
-      '@qvac/tts-ggml': 0.10.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      '@qvac/vla-ggml': 0.29.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-    transitivePeerDependencies:
-      - bare-events
-      - bare-pipe
-      - react-native-b4a
-      - sodium-javascript
-
-  '@qvac/langdetect-text@0.1.2':
-    dependencies:
-      tinyld: 1.3.4
-
-  '@qvac/llm-llamacpp@0.55.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/fabric': 0.19.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
   '@qvac/llm-llamacpp@0.61.2(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
       '@qvac/fabric': 0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)
@@ -14735,50 +14336,6 @@ snapshots:
   '@qvac/logging@0.1.1':
     dependencies:
       bare-env: 3.0.1
-
-  '@qvac/ocr-ggml@0.26.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/fabric': 0.19.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fetch: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-os: 3.9.3
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.5.4
-      brittle: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-pipe
-      - bare-tcp
-      - react-native-b4a
-
-  '@qvac/rag@0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/logging': 0.1.1
-      bare-crypto: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-fetch: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-      hyperdb: 6.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperdht: 6.33.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperschema: 1.21.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      llm-splitter: 0.2.0
-      ready-resource: 1.2.0(bare-abort-controller@1.1.2)
-      zod: 4.6.5
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-pipe
-      - bare-url
-      - react-native-b4a
-      - sodium-javascript
 
   '@qvac/registry-client@0.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)':
     dependencies:
@@ -14882,31 +14439,6 @@ snapshots:
       - react-native-b4a
       - sodium-javascript
 
-  '@qvac/registry-client@0.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/registry-schema': 0.4.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      b4a: 1.8.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-os: 3.9.3
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      corestore: 7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperblobs: 2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hypercore-id-encoding: 1.3.0
-      hypercore-stats: 2.4.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperswarm: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperswarm-stats: 1.3.1
-      paparam: 1.10.1
-      ready-resource: 1.2.0(bare-abort-controller@1.1.2)
-      tiny-byte-size: 1.1.0
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-url
-      - react-native-b4a
-      - sodium-javascript
-
   '@qvac/registry-schema@0.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)':
     dependencies:
       hyperdb: 4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -14956,139 +14488,9 @@ snapshots:
       - react-native-b4a
       - sodium-javascript
 
-  '@qvac/registry-schema@0.4.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)':
-    dependencies:
-      hyperdb: 6.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperdispatch: 1.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      hyperschema: 1.21.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      ready-resource: 1.2.0(bare-abort-controller@1.1.2)
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-url
-      - react-native-b4a
-      - sodium-javascript
-
   '@qvac/response@0.1.2':
     dependencies:
       bare-events: 2.4.2
-
-  '@qvac/sdk@0.21.1(379c922b2b01276001c44042f1ac8eb3)':
-    dependencies:
-      '@qvac/asr-ggml': 0.7.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/audiogen-ggml': 0.5.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/bci-whispercpp': 0.10.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/classification-ggml': 0.28.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      '@qvac/decoder-audio': 0.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/diffusion-cpp': 0.26.1(bare-abort-controller@1.1.2)
-      '@qvac/embed-llamacpp': 0.43.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/error': 0.1.1
-      '@qvac/ggml-rpc-server': 0.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/inference': 0.21.1(22d44fb645888aa4867ea1d652142a0c)
-      '@qvac/langdetect-text': 0.1.2
-      '@qvac/llm-llamacpp': 0.55.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      '@qvac/logging': 0.1.1
-      '@qvac/ocr-ggml': 0.26.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      '@qvac/translation-nmtcpp': 0.18.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))
-      '@qvac/tts-ggml': 0.10.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      '@qvac/vla-ggml': 0.29.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-abort-controller: 1.1.2
-      bare-buffer: 3.6.2
-      bare-cpu-info: 0.1.1
-      bare-crypto: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-env: 3.0.1
-      bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-gpu-info: 0.1.1
-      bare-net: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-os: 3.9.3
-      bare-pack: 2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
-      bare-path: 3.1.1
-      bare-rpc: 1.3.8(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-runtime: 1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      bare-signals: 4.2.0(bare-abort-controller@1.1.2)
-      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-zlib: 1.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      compact-encoding: 3.3.0
-      corestore: 7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      fast-safe-stringify: 2.1.1
-      hyperdrive: 13.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperswarm: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      semver: 7.8.5
-      tar-stream: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      which-runtime: 1.4.0
-      zod: 4.6.5
-    optionalDependencies:
-      '@electron-forge/plugin-base': 7.11.2(bluebird@3.7.2)(supports-color@8.1.1)
-      bare-link: 4.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      expo-build-properties: 57.0.7(expo@54.0.36(@babel/core@7.29.7(supports-color@8.1.1))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1)(typescript@5.9.3))
-      expo-device: 8.0.10(expo@54.0.36(@babel/core@7.29.7(supports-color@8.1.1))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1)(typescript@5.9.3))
-      expo-file-system: 19.0.23(expo@54.0.36(@babel/core@7.29.7(supports-color@8.1.1))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1)(typescript@5.9.3))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))
-      expo-modules-core: 3.0.30(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
-      pear-pipe: 1.0.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      react-native-bare-kit: 0.16.0(bare-abort-controller@1.1.2)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
-      tsx: 4.23.1
-    transitivePeerDependencies:
-      - bare-fetch
-      - bare-pipe
-      - bare-tcp
-      - bare-url
-      - react-native-b4a
-      - sodium-javascript
-
-  '@qvac/translation-nmtcpp@0.18.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/fabric': 0.19.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-os: 3.9.3
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.5.4
-    optionalDependencies:
-      bare-fetch: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
-  '@qvac/tts-ggml@0.10.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/langdetect-text': 0.1.2
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
-      bare-os: 3.9.3
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-subprocess: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.5.4
-      brittle: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-pipe
-      - bare-tcp
-      - react-native-b4a
-
-  '@qvac/vla-ggml@0.29.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/fabric': 0.19.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
 
   '@react-native/assets-registry@0.86.0': {}
 
@@ -15887,12 +15289,19 @@ snapshots:
       clean-stack: 2.2.0
       indent-string: 4.0.0
 
-  ai@7.0.37(zod@4.4.3):
+  ai@7.0.143(zod@4.4.3):
     dependencies:
-      '@ai-sdk/gateway': 4.0.28(zod@4.4.3)
-      '@ai-sdk/provider': 4.0.3
-      '@ai-sdk/provider-utils': 5.0.12(zod@4.4.3)
+      '@ai-sdk/gateway': 4.0.116(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.29
+      '@ai-sdk/provider-utils': 5.0.62(zod@4.4.3)
       zod: 4.4.3
+
+  ai@7.0.143(zod@4.6.5):
+    dependencies:
+      '@ai-sdk/gateway': 4.0.116(zod@4.6.5)
+      '@ai-sdk/provider': 4.0.29
+      '@ai-sdk/provider-utils': 5.0.62(zod@4.6.5)
+      zod: 4.6.5
 
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:
@@ -16330,6 +15739,17 @@ snapshots:
       - bare-url
       - react-native-b4a
 
+  bare-bundle-id@1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.11.0(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+    dependencies:
+      bare-buffer: 3.6.2
+      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.5.4)
+      sodium-native: 5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-events
+      - bare-url
+      - react-native-b4a
+
   bare-bundle@1.10.0(bare-buffer@3.6.2)(bare-url@2.4.6):
     optionalDependencies:
       bare-buffer: 3.6.2
@@ -16648,7 +16068,7 @@ snapshots:
     optionalDependencies:
       bare-url: 2.5.4
 
-  bare-module-traverse@2.4.4(bare-buffer@3.6.2)(bare-url@2.4.6):
+  bare-module-traverse@2.5.9(bare-buffer@3.6.2)(bare-url@2.4.6):
     dependencies:
       bare-addon-resolve: 1.10.1(bare-url@2.4.6)
       bare-mime: 1.0.0
@@ -16663,6 +16083,17 @@ snapshots:
       bare-addon-resolve: 1.10.1(bare-url@2.5.4)
       bare-mime: 1.0.0
       bare-module-lexer: 1.6.3(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-module-resolve: 1.12.4(bare-url@2.5.4)
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-url: 2.5.4
+
+  bare-module-traverse@2.7.1(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      bare-addon-resolve: 1.10.1(bare-url@2.5.4)
+      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-mime: 1.0.0
+      bare-module-lexer: 1.7.0(bare-buffer@3.6.2)(bare-url@2.5.4)
       bare-module-resolve: 1.12.4(bare-url@2.5.4)
     optionalDependencies:
       bare-buffer: 3.6.2
@@ -16715,12 +16146,12 @@ snapshots:
 
   bare-os@3.9.3: {}
 
-  bare-pack@2.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+  bare-pack@2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
     dependencies:
       bare-bundle: 1.10.0(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-bundle-id: 1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.10.0(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-module-traverse: 2.4.4(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-module-traverse: 2.5.9(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-path: 3.1.1
       paparam: 1.10.1
       promaphore: 1.0.0
@@ -16738,6 +16169,23 @@ snapshots:
       bare-bundle-id: 1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-module-traverse: 2.5.9(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-path: 3.1.1
+      paparam: 1.10.1
+      promaphore: 1.0.0
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-url: 2.5.4
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-events
+      - react-native-b4a
+
+  bare-pack@3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+    dependencies:
+      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-bundle-id: 1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.11.0(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-module-traverse: 2.7.1(bare-buffer@3.6.2)(bare-url@2.5.4)
       bare-path: 3.1.1
       paparam: 1.10.1
       promaphore: 1.0.0
@@ -17063,13 +16511,6 @@ snapshots:
       - react-native-b4a
 
   bare-semver@1.1.0: {}
-
-  bare-signals@4.2.0(bare-abort-controller@1.1.2):
-    dependencies:
-      bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-os: 3.9.3
-    transitivePeerDependencies:
-      - bare-abort-controller
 
   bare-signals@5.0.0(bare-abort-controller@1.1.2):
     dependencies:
