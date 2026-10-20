@@ -234,7 +234,9 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem prebuilds/
 
+      # Keep current MobileNet-only source compatible before MegaLoc lands.
       - name: Stage MegaLoc test models
+        if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
         uses: ./.github/actions/stage-integration-models
         with:
           workdir: ${{ env.PKG_DIR }}
@@ -245,6 +247,7 @@ jobs:
              {"src":"qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf","dest":"test/fixtures/megaloc-mixed.gguf"}]
 
       - name: Verify MegaLoc test models
+        if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: |

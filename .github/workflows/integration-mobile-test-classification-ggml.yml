@@ -237,7 +237,9 @@ jobs:
           # resolves empty, leaving the artifact-first path untouched.
           prebuild-run-id: ${{ inputs.prebuild_run_id }}
 
+      # Keep current MobileNet-only source compatible before MegaLoc lands.
       - name: Stage MegaLoc test models
+        if: hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
         uses: ./addon/.github/actions/stage-integration-models
         with:
           workdir: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
@@ -248,6 +250,7 @@ jobs:
              {"src":"qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf","dest":"test/fixtures/megaloc-mixed.gguf"}]
 
       - name: Verify MegaLoc test models
+        if: hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
         working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
         shell: bash
         run: |
