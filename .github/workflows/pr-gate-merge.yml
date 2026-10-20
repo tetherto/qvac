@@ -300,6 +300,7 @@ jobs:
   error-code-ranges:
     needs: [authorize, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
+    cache-mode: none
     permissions:
       contents: read
     uses: ./.github/workflows/on-pr-error-code-ranges.yml
