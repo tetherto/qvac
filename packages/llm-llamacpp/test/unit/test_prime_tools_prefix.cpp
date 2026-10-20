@@ -74,10 +74,16 @@ common_chat_templates_inputs makeSystemAndTools() {
   return inputs;
 }
 
-// What a later request with the same system prompt and tools renders.
-std::string renderWithQuestion(
-    const common_chat_templates* tmpls, const std::string& question) {
+common_chat_templates_inputs makeSystemOnly() {
   common_chat_templates_inputs inputs = makeSystemAndTools();
+  inputs.tools.clear();
+  return inputs;
+}
+
+// What a later request with the messages and tools of @p inputs renders.
+std::string renderWithQuestion(
+    const common_chat_templates* tmpls, const std::string& question,
+    common_chat_templates_inputs inputs = makeSystemAndTools()) {
   inputs.messages.push_back(makeMessage("user", question));
   inputs.add_generation_prompt = true;
   return common_chat_templates_apply(tmpls, inputs).prompt;
@@ -117,8 +123,8 @@ TEST(PrimeToolsPrefixTest, Qwen38CachesSystemAndToolsUpToTheUserContent) {
       common_chat_templates_init(nullptr, fixtures::QWEN38_CHAT_TEMPLATE);
   ASSERT_NE(tmpls, nullptr);
 
-  const std::optional<PromptRenderResult> primed = renderToolsWithoutUserTurn(
-      tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER);
+  const std::optional<PromptRenderResult> primed =
+      renderWithoutUserTurn(tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER);
   ASSERT_TRUE(primed.has_value());
 
   EXPECT_NE(primed->prompt.find("get_weather"), std::string::npos)
@@ -140,10 +146,61 @@ TEST(PrimeToolsPrefixTest, Qwen38CachesSystemAndToolsUpToTheUserContent) {
   }
 }
 
-// GLM-5.3-Flash and DeepSeek V4 Flash render the tools without a user turn,
-// so the request keeps the plain render, which is already a token prefix of
-// the next request.
-TEST(PrimeToolsPrefixTest, TemplatesThatRenderToolsAloneAreLeftAsTheyAre) {
+// Without tools Qwen3.8 raises too, and `getPrompt` falls back to the legacy
+// renderer, whose system block lacks the reasoning instructions the Jinja
+// render puts there.
+TEST(PrimeToolsPrefixTest, Qwen38SystemPromptAloneFallsBackToTheLegacyRender) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, fixtures::QWEN38_CHAT_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeSystemOnly();
+  const PromptRenderResult plain = getPrompt(tmpls.get(), inputs);
+  EXPECT_FALSE(plain.renderedByJinja)
+      << "precondition: Qwen3.8 raises without a user turn: " << plain.prompt;
+  const std::string full =
+      renderWithQuestion(tmpls.get(), QUESTIONS.front(), makeSystemOnly());
+  EXPECT_FALSE(isTokenPrefixOf(plain.prompt, full))
+      << "plain: " << plain.prompt << "\nfull: " << full;
+}
+
+TEST(PrimeToolsPrefixTest, Qwen38CachesASystemPromptAloneUpToTheUserContent) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, fixtures::QWEN38_CHAT_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  const std::optional<PromptRenderResult> primed =
+      renderWithoutUserTurn(tmpls.get(), makeSystemOnly(), FAKE_TOKENIZER);
+  ASSERT_TRUE(primed.has_value());
+
+  EXPECT_NE(
+      primed->prompt.find("Reasoning effort is set to xhigh."),
+      std::string::npos)
+      << primed->prompt;
+  EXPECT_NE(
+      primed->prompt.find("You are a weather assistant."), std::string::npos)
+      << primed->prompt;
+  EXPECT_EQ(primed->prompt.find("<tools>"), std::string::npos)
+      << primed->prompt;
+  EXPECT_TRUE(primed->prompt.ends_with("<|im_start|>user\n")) << primed->prompt;
+  EXPECT_TRUE(primed->generationPrompt.empty());
+  EXPECT_FALSE(primed->toolDefinitionsDropped);
+  EXPECT_TRUE(primed->renderedByJinja);
+
+  for (const std::string& question : QUESTIONS) {
+    const std::string full =
+        renderWithQuestion(tmpls.get(), question, makeSystemOnly());
+    EXPECT_TRUE(isTokenPrefixOf(primed->prompt, full))
+        << "question: " << question << "\nprimed: " << primed->prompt
+        << "\nfull: " << full;
+  }
+}
+
+// GLM-5.3-Flash and DeepSeek V4 Flash render a system prompt, and its tools,
+// without a user turn, so the request keeps the plain render, which is already
+// a token prefix of the next request.
+TEST(
+    PrimeToolsPrefixTest, TemplatesThatRenderWithoutAUserTurnAreLeftAsTheyAre) {
   for (const char* source :
        {fixtures::GLM53_FLASH_CHAT_TEMPLATE,
         fixtures::DEEPSEEK_V4_FLASH_CHAT_TEMPLATE}) {
@@ -151,20 +208,26 @@ TEST(PrimeToolsPrefixTest, TemplatesThatRenderToolsAloneAreLeftAsTheyAre) {
         common_chat_templates_init(nullptr, source);
     ASSERT_NE(tmpls, nullptr);
 
-    EXPECT_FALSE(renderToolsWithoutUserTurn(
-                     tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER)
-                     .has_value());
+    for (const common_chat_templates_inputs& base :
+         {makeSystemAndTools(), makeSystemOnly()}) {
+      EXPECT_FALSE(
+          renderWithoutUserTurn(tmpls.get(), base, FAKE_TOKENIZER).has_value());
 
-    common_chat_templates_inputs inputs = makeSystemAndTools();
-    const PromptRenderResult plain = getPrompt(tmpls.get(), inputs);
-    EXPECT_FALSE(plain.toolDefinitionsDropped) << plain.prompt;
-    EXPECT_NE(plain.prompt.find("get_weather"), std::string::npos)
-        << plain.prompt;
-    for (const std::string& question : QUESTIONS) {
-      const std::string full = renderWithQuestion(tmpls.get(), question);
-      EXPECT_TRUE(isTokenPrefixOf(plain.prompt, full))
-          << "question: " << question << "\nplain: " << plain.prompt
-          << "\nfull: " << full;
+      common_chat_templates_inputs inputs = base;
+      const PromptRenderResult plain = getPrompt(tmpls.get(), inputs);
+      EXPECT_TRUE(plain.renderedByJinja) << plain.prompt;
+      EXPECT_FALSE(plain.toolDefinitionsDropped) << plain.prompt;
+      EXPECT_EQ(
+          plain.prompt.find("get_weather") != std::string::npos,
+          !base.tools.empty())
+          << plain.prompt;
+      for (const std::string& question : QUESTIONS) {
+        const std::string full =
+            renderWithQuestion(tmpls.get(), question, base);
+        EXPECT_TRUE(isTokenPrefixOf(plain.prompt, full))
+            << "question: " << question << "\nplain: " << plain.prompt
+            << "\nfull: " << full;
+      }
     }
   }
 }
@@ -176,19 +239,26 @@ TEST(PrimeToolsPrefixTest, ConversationWithAUserTurnIsNotTouched) {
 
   common_chat_templates_inputs inputs = makeSystemAndTools();
   inputs.messages.push_back(makeMessage("user", "Hi"));
-  EXPECT_FALSE(renderToolsWithoutUserTurn(tmpls.get(), inputs, FAKE_TOKENIZER)
-                   .has_value());
+  EXPECT_FALSE(
+      renderWithoutUserTurn(tmpls.get(), inputs, FAKE_TOKENIZER).has_value());
 }
 
-TEST(PrimeToolsPrefixTest, ConversationWithoutToolsIsNotTouched) {
+// A template that cannot render the conversation with a user message either
+// leaves the request to `getPrompt`.
+TEST(PrimeToolsPrefixTest, TemplateRejectingThePlaceholderIsLeftToGetPrompt) {
+  constexpr const char* kNeedsThreeMessagesTemplate =
+      "{%- if messages|length < 3 %}"
+      "{{ raise_exception('needs a longer conversation') }}{%- endif %}"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}";
   common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, fixtures::QWEN38_CHAT_TEMPLATE);
+      common_chat_templates_init(nullptr, kNeedsThreeMessagesTemplate);
   ASSERT_NE(tmpls, nullptr);
 
-  common_chat_templates_inputs inputs = makeSystemAndTools();
-  inputs.tools.clear();
-  EXPECT_FALSE(renderToolsWithoutUserTurn(tmpls.get(), inputs, FAKE_TOKENIZER)
-                   .has_value());
+  for (const common_chat_templates_inputs& inputs :
+       {makeSystemAndTools(), makeSystemOnly()}) {
+    EXPECT_FALSE(
+        renderWithoutUserTurn(tmpls.get(), inputs, FAKE_TOKENIZER).has_value());
+  }
 }
 
 // Tools rendered after the user content leave no tools prefix to cache.
@@ -206,9 +276,9 @@ TEST(PrimeToolsPrefixTest, ToolsAfterTheUserContentAreRejected) {
       common_chat_templates_init(nullptr, kToolsAfterUserTemplate);
   ASSERT_NE(tmpls, nullptr);
 
-  EXPECT_FALSE(renderToolsWithoutUserTurn(
-                   tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER)
-                   .has_value());
+  EXPECT_FALSE(
+      renderWithoutUserTurn(tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER)
+          .has_value());
 }
 
 // Content is not trimmed, so a question starting with a newline merges with
@@ -230,8 +300,8 @@ TEST(PrimeToolsPrefixTest, CutBacksOffToATokenBoundary) {
       common_chat_templates_init(nullptr, kUserGuardedToolsTemplate);
   ASSERT_NE(tmpls, nullptr);
 
-  const std::optional<PromptRenderResult> primed = renderToolsWithoutUserTurn(
-      tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER);
+  const std::optional<PromptRenderResult> primed =
+      renderWithoutUserTurn(tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER);
   ASSERT_TRUE(primed.has_value());
   EXPECT_EQ(
       primed->prompt,

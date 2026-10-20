@@ -1894,16 +1894,18 @@ std::unique_ptr<LlamaModel> loadHybridToolsModel(
   return model;
 }
 
-/// The system prompt and tools every request below shares, followed by a
-/// user question when @p withQuestion is set.
-std::string systemAndToolsInput(bool withQuestion) {
+/// The system prompt, and the tools when @p withTools is set, every request
+/// below shares, followed by a user question when @p withQuestion is set.
+std::string systemAndToolsInput(bool withQuestion, bool withTools = true) {
   std::string input =
-      R"([{"role": "system", "content": "You are a weather assistant."},)"
-      R"( {"type": "function", "name": "getWeather",)"
-      R"(  "description": "Get the weather forecast for a city",)"
-      R"(  "parameters": {"type": "object",)"
-      R"(   "properties": {"city": {"type": "string"}},)"
-      R"(   "required": ["city"]}})";
+      R"([{"role": "system", "content": "You are a weather assistant."})";
+  if (withTools) {
+    input += R"(, {"type": "function", "name": "getWeather",)"
+             R"(  "description": "Get the weather forecast for a city",)"
+             R"(  "parameters": {"type": "object",)"
+             R"(   "properties": {"city": {"type": "string"}},)"
+             R"(   "required": ["city"]}})";
+  }
   if (withQuestion) {
     input +=
         R"(, {"role": "user", "content": "What is the weather in Paris?"})";
@@ -1932,26 +1934,28 @@ KeyedRun runKeyed(
       .toolDefinitionsDropped = getStatValue(stats, "toolDefinitionsDropped")};
 }
 
-/// Primes @p primedFile with the system prompt and tools, then asks a
-/// question on it, and checks that the question decodes only what follows
-/// the primed tokens: the full prompt, measured cold on @p coldFile, minus
-/// them. Qwen3.5's template renders no tools without a user turn, and the
-/// hybrid model cannot trim, so a prefix that diverged would decode it all.
+/// Primes @p primedFile with the system prompt, and the tools when
+/// @p withTools is set, then asks a question on it, and checks that the
+/// question decodes only what follows the primed tokens: the full prompt,
+/// measured cold on @p coldFile, minus them. Qwen3.5's template renders
+/// nothing without a user turn, and the hybrid model cannot trim, so a prefix
+/// that diverged would decode it all.
 void expectPrimedSystemAndToolsAreReused(
-    LlamaModel& model, const fs::path& coldFile, const fs::path& primedFile) {
+    LlamaModel& model, const fs::path& coldFile, const fs::path& primedFile,
+    bool withTools = true) {
   const KeyedRun cold =
-      runKeyed(model, systemAndToolsInput(true), coldFile, false);
+      runKeyed(model, systemAndToolsInput(true, withTools), coldFile, false);
   ASSERT_GT(cold.promptTokens, 0);
 
   const KeyedRun primed =
-      runKeyed(model, systemAndToolsInput(false), primedFile, true);
+      runKeyed(model, systemAndToolsInput(false, withTools), primedFile, true);
   EXPECT_EQ(primed.toolDefinitionsDropped, 0)
       << "the prefill left the tool definitions out";
   ASSERT_GT(primed.cacheTokens, 0);
   ASSERT_LT(primed.cacheTokens, cold.promptTokens);
 
   const KeyedRun question =
-      runKeyed(model, systemAndToolsInput(true), primedFile, false);
+      runKeyed(model, systemAndToolsInput(true, withTools), primedFile, false);
   EXPECT_EQ(question.promptTokens, cold.promptTokens - primed.cacheTokens)
       << "the question did not continue from the primed system prompt and "
          "tools";
@@ -1974,6 +1978,29 @@ TEST(PrimeSystemAndToolsTest, PrefillIsReusedByTheFirstQuestion) {
   fs::remove(primedFile);
 
   expectPrimedSystemAndToolsAreReused(*model, coldFile, primedFile);
+
+  model.reset();
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+}
+
+TEST(
+    PrimeSystemAndToolsTest,
+    SystemPromptAlonePrefillIsReusedByTheFirstQuestion) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridToolsModel(modelPath, "1");
+  ASSERT_TRUE(model->isLoaded());
+
+  const fs::path coldFile = "prime_system_cold_cache.bin";
+  const fs::path primedFile = "prime_system_primed_cache.bin";
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+
+  expectPrimedSystemAndToolsAreReused(
+      *model, coldFile, primedFile, /* withTools = */ false);
 
   model.reset();
   fs::remove(coldFile);

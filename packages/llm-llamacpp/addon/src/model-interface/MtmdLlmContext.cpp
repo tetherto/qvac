@@ -419,7 +419,7 @@ void MtmdLlmContext::tokenizeChat(
   // bitmaps, so a request carrying media keeps the full render.
   std::optional<PromptRenderResult> primed =
       isPrefillOnlyRequest_ && bitmaps_.entries.empty()
-          ? renderToolsWithoutUserTurn(tmpls_.get(), inputs, tokenize)
+          ? renderWithoutUserTurn(tmpls_.get(), inputs, tokenize)
           : std::nullopt;
   // See TextLlmContext::tokenizeChat: not const so the prompt and stop list
   // move out instead of being copied per request.

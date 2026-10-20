@@ -366,7 +366,7 @@ bool jinjaRenderOmittedTools(
 }
 
 // Single export point for every render path (`getPrompt` and
-// `renderToolsWithoutUserTurn`). Takes ownership: every caller hands over a
+// `renderWithoutUserTurn`). Takes ownership: every caller hands over a
 // local it no longer reads, and the payload carries several strings plus
 // three vectors.
 PromptRenderResult exportParams(
@@ -483,7 +483,7 @@ PromptRenderResult getPrompt(
 
 namespace {
 
-// Placeholder user contents for `renderToolsWithoutUserTurn`. Differing first
+// Placeholder user contents for `renderWithoutUserTurn`. Differing first
 // characters, and leading whitespace, keep the cut in front of any token the
 // template's text merges with the start of the content.
 inline constexpr std::array<std::string_view, 6> PLACEHOLDER_USER_CONTENTS{
@@ -512,14 +512,15 @@ size_t previousUtf8Boundary(const std::string& text, size_t pos) {
   return pos;
 }
 
-// Whether rendering `inputs` as they are leaves the tool definitions out:
-// the template raises on them, or supplying them changes nothing.
-bool renderDropsTools(
+// Whether the Jinja render of `inputs` as they are cannot be cached for a
+// later request: the template raises on them, or leaves the tools out.
+bool plainRenderFallsShort(
     const struct common_chat_templates* tmpls,
     const common_chat_templates_inputs& inputs) {
   try {
     const auto params = common_chat_templates_apply(tmpls, inputs);
-    return jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
+    return !inputs.tools.empty() &&
+           jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
   } catch (...) {
     return true;
   }
@@ -533,11 +534,11 @@ bool hasUserTurn(const std::vector<common_chat_msg>& messages) {
   });
 }
 
-std::optional<PromptRenderResult> renderToolsWithoutUserTurn(
+std::optional<PromptRenderResult> renderWithoutUserTurn(
     const struct common_chat_templates* tmpls,
     const common_chat_templates_inputs& inputs, const Tokenizer& tokenize) {
-  if (!inputs.use_jinja || inputs.tools.empty() ||
-      hasUserTurn(inputs.messages) || !renderDropsTools(tmpls, inputs)) {
+  if (!inputs.use_jinja || hasUserTurn(inputs.messages) ||
+      !plainRenderFallsShort(tmpls, inputs)) {
     return std::nullopt;
   }
 
@@ -562,8 +563,8 @@ std::optional<PromptRenderResult> renderToolsWithoutUserTurn(
     QLOG_IF(
         Priority::WARNING,
         string_format(
-            "[ChatTemplateUtils] chat template cannot render the tools with a "
-            "placeholder user message either: %s\n",
+            "[ChatTemplateUtils] chat template cannot render this "
+            "conversation with a placeholder user message either: %s\n",
             forLogMessage(e.what(), K_MAX_LOG_DIAGNOSTIC).c_str()));
     return std::nullopt;
   } catch (...) {
@@ -577,29 +578,31 @@ std::optional<PromptRenderResult> renderToolsWithoutUserTurn(
         cut, static_cast<size_t>(mismatch.in1 - prompts.front().begin()));
   }
 
-  // The tools must sit in front of the cut, or the cached prefix holds none
-  // of them. Rendering the first placeholder without the tools tells: the
-  // text in front of the cut must differ.
-  try {
-    common_chat_templates_inputs withUserNoTools = inputs;
-    common_chat_msg placeholder;
-    placeholder.role = "user";
-    placeholder.content = std::string(PLACEHOLDER_USER_CONTENTS.front());
-    withUserNoTools.messages.push_back(std::move(placeholder));
-    withUserNoTools.add_generation_prompt = false;
-    withUserNoTools.tools.clear();
-    const auto noTools =
-        common_chat_templates_apply(tmpls, withUserNoTools).prompt;
-    if (noTools.compare(0, cut, prompts.front(), 0, cut) == 0) {
-      QLOG_IF(
-          Priority::WARNING,
-          "[ChatTemplateUtils] chat template renders the tools after the user "
-          "message; there is no tools prefix to cache\n");
-      return std::nullopt;
+  // Tools must sit in front of the cut, or the cached prefix holds none of
+  // them. Rendering the first placeholder without the tools tells: the text
+  // in front of the cut must differ.
+  if (!inputs.tools.empty()) {
+    try {
+      common_chat_templates_inputs withUserNoTools = inputs;
+      common_chat_msg placeholder;
+      placeholder.role = "user";
+      placeholder.content = std::string(PLACEHOLDER_USER_CONTENTS.front());
+      withUserNoTools.messages.push_back(std::move(placeholder));
+      withUserNoTools.add_generation_prompt = false;
+      withUserNoTools.tools.clear();
+      const auto noTools =
+          common_chat_templates_apply(tmpls, withUserNoTools).prompt;
+      if (noTools.compare(0, cut, prompts.front(), 0, cut) == 0) {
+        QLOG_IF(
+            Priority::WARNING,
+            "[ChatTemplateUtils] chat template renders the tools after the "
+            "user message; there is no tools prefix to cache\n");
+        return std::nullopt;
+      }
+    } catch (...) {
+      // A template that requires tools: they are in front of the cut, since
+      // nothing renders without them.
     }
-  } catch (...) {
-    // A template that requires tools: they are in front of the cut, since
-    // nothing renders without them.
   }
 
   std::vector<std::vector<llama_token>> variantTokens;
@@ -627,8 +630,8 @@ std::optional<PromptRenderResult> renderToolsWithoutUserTurn(
           Priority::INFO,
           string_format(
               "[ChatTemplateUtils] chat template needs a user message to "
-              "render the tools; rendered with a placeholder and kept the %zu "
-              "tokens in front of it\n",
+              "render this conversation; rendered with a placeholder and kept "
+              "the %zu tokens in front of it\n",
               cutTokens.size()));
       return out;
     }
@@ -637,7 +640,7 @@ std::optional<PromptRenderResult> renderToolsWithoutUserTurn(
   QLOG_IF(
       Priority::WARNING,
       "[ChatTemplateUtils] placeholder renders share no token-safe prefix; "
-      "rendering without the tools\n");
+      "using the plain render\n");
   return std::nullopt;
 }
 

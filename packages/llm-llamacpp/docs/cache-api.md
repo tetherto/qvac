@@ -473,8 +473,8 @@ reconciliation removes it; if the render preserves it, it remains reusable.
 
 ### Prefill the system prompt and tools
 
-A prefill of only a system prompt and tools caches the part of the prompt that
-every later request with the same system prompt and tools shares. The next
+A prefill of only a system prompt, with or without tools, caches the part of the
+prompt that every later request with the same system prompt and tools shares. The next
 request then decodes only its user turn, on any model, including hybrid,
 recurrent and sliding-window models that cannot trim: the cached state ends
 exactly where the new prompt continues, so nothing has to be rolled back.
@@ -490,12 +490,13 @@ await model.saveCache('weather.bin')
 await model.run([system, ...tools, { role: 'user', content: 'Weather in Paris?' }], { cacheKey: 'weather.bin' })
 ```
 
-Some templates only render the tools once the conversation has a user message
-(Qwen3.8-27B and Qwen3.8-Flash-Next raise `No user query found in messages.`).
-For those, the prefill renders the conversation with a placeholder user message
-and caches only what comes before it: the system prompt and the tool block,
-ending at the user turn's header. Templates that render the tools without a user
-message (GLM-5.3-Flash, DeepSeek V4 Flash) cache their plain render. The
+Some templates only render the conversation once it has a user message
+(Qwen3.5, Qwen3.8-27B and Qwen3.8-Flash-Next raise `No user query found in
+messages.`, with or without tools). For those, the prefill renders the
+conversation with a placeholder user message and caches only what comes before
+it: the system prompt and the tool block, if any, ending at the user turn's
+header. Templates that render a system prompt and tools without a user message
+(GLM-5.3-Flash, DeepSeek V4 Flash) cache their plain render. The
 placeholder is not used when the template puts the tools after the user's
 content, or when the request carries media; the prefill then caches the plain
 render, and `stats.toolDefinitionsDropped` reports whether it left the tools out.

@@ -348,11 +348,12 @@ void TextLlmContext::tokenizeChat(
   const Tokenizer tokenize = [this](const std::string& text) {
     return ::common_tokenize(modelCtx_.lctx, text, false, true);
   };
-  // A prefill of a system prompt and tools alone, on a template that renders
-  // the tools only once a user turn exists, caches what precedes that turn.
+  // A prefill of a system prompt alone, with or without tools, on a template
+  // that renders it, or its tools, only once a user turn exists, caches what
+  // precedes that turn.
   std::optional<PromptRenderResult> primed =
       isPrefillOnlyRequest_
-          ? renderToolsWithoutUserTurn(tmpls_.get(), inputs, tokenize)
+          ? renderWithoutUserTurn(tmpls_.get(), inputs, tokenize)
           : std::nullopt;
   PromptRenderResult rendered =
       primed.has_value() ? std::move(*primed) : getPrompt(tmpls_.get(), inputs);

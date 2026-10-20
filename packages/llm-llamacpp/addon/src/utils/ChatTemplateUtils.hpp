@@ -213,11 +213,12 @@ using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
 [[nodiscard]] bool hasUserTurn(const std::vector<common_chat_msg>& messages);
 
 /**
- * @brief Renders a conversation without a user turn whose chat template only
- * renders the tools once a user turn exists.
+ * @brief Renders a conversation without a user turn, with or without tools,
+ * whose chat template only renders it, or its tools, once a user turn exists.
  *
- * Qwen3.5 / Qwen3.8 raise "No user query found" on system + tools alone, so
- * `getPrompt` falls back to a render without the tools. Here the conversation
+ * Qwen3.5 / Qwen3.8 raise "No user query found" on a system prompt alone,
+ * with or without tools, so `getPrompt` falls back to a render without the
+ * tools, or to the legacy renderer when there are none. Here the conversation
  * is rendered with a placeholder user message instead, and only the text in
  * front of the placeholder's content is kept: the part every later request
  * with the same system prompt and tools starts with. A prefill of it leaves a
@@ -229,14 +230,15 @@ using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
  * until its tokens are an exact prefix of every one of those renders' tokens.
  *
  * Returns `std::nullopt`, leaving the request to `getPrompt`, when:
- * - `inputs` has a user or tool turn, no tools, or is not rendered by Jinja;
- * - the template already renders the tools without a user turn;
+ * - `inputs` has a user or tool turn, or is not rendered by Jinja;
+ * - the template already renders the conversation, and its tools, without a
+ *   user turn;
  * - a placeholder render fails, or its tools come after the user content.
  *
  * On success `prompt` is the cut text, `generationPrompt` is empty and
  * `toolDefinitionsDropped` is false.
  */
-[[nodiscard]] std::optional<PromptRenderResult> renderToolsWithoutUserTurn(
+[[nodiscard]] std::optional<PromptRenderResult> renderWithoutUserTurn(
     const struct common_chat_templates* tmpls,
     const common_chat_templates_inputs& inputs, const Tokenizer& tokenize);
 
