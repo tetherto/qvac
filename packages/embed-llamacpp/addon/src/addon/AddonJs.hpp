@@ -8,6 +8,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -436,7 +437,8 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 /// Creates the JS instance of a @p ModelT whose outputs @p OutputHandlerT
-/// delivers. Args: [jsHandle, { path, config, backendsDir }, outputCallback].
+/// delivers. Args: [jsHandle, { path, config, backendsDir }, outputCallback],
+/// plus `projectionPath` for a BertModel.
 template <typename ModelT, typename OutputHandlerT>
 js_value_t* createModelInstance(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
@@ -444,10 +446,19 @@ js_value_t* createModelInstance(js_env_t* env, js_callback_info_t* info) {
 
   JsArgsParser args(env, info);
 
-  auto model = make_unique<ModelT>(
-      args.getMapEntry(1, "path"),
-      args.getSubmap(1, "config"),
-      args.getMapEntry(1, "backendsDir"));
+  unique_ptr<ModelT> model;
+  if constexpr (is_same_v<ModelT, BertModel>) {
+    model = make_unique<BertModel>(
+        args.getMapEntry(1, "path"),
+        args.getSubmap(1, "config"),
+        args.getMapEntry(1, "backendsDir"),
+        args.getMapEntry(1, "projectionPath"));
+  } else {
+    model = make_unique<ModelT>(
+        args.getMapEntry(1, "path"),
+        args.getSubmap(1, "config"),
+        args.getMapEntry(1, "backendsDir"));
+  }
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<OutputHandlerT>());
@@ -528,6 +539,54 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     return sequences;
   };
 
+  // [[{type: 'text', text} | {type: 'media', data: Uint8Array}, ...], ...]
+  auto parseMultimodal =
+      [&](js::Object inputObj) -> std::vector<MultimodalInput> {
+    if (!js::is<js::Array>(env, inputObj)) {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "Expected array of inputs for multimodal type"};
+    }
+    js::Array inputsArr{env, inputObj};
+    std::vector<MultimodalInput> inputs(inputsArr.size(env));
+    for (size_t i = 0; i < inputs.size(); i++) {
+      auto partsObj = inputsArr.get<js::Object>(env, i);
+      if (!js::is<js::Array>(env, partsObj)) {
+        throw StatusError{
+            general_error::InvalidArgument,
+            "Expected array of parts for multimodal input"};
+      }
+      js::Array partsArr{env, partsObj};
+      size_t nParts = partsArr.size(env);
+      inputs[i].reserve(nParts);
+      for (size_t j = 0; j < nParts; j++) {
+        auto partObj = partsArr.get<js::Object>(env, j);
+        auto partType =
+            js::String(env, partObj.getProperty<js::String>(env, "type"))
+                .as<std::string>(env);
+        MultimodalPart part;
+        if (partType == "text") {
+          part.text =
+              js::String(env, partObj.getProperty<js::String>(env, "text"))
+                  .as<std::string>(env);
+        } else if (partType == "media") {
+          part.isMedia = true;
+          part.media =
+              js::TypedArray<uint8_t>(
+                  env,
+                  partObj.getProperty<js::TypedArray<uint8_t>>(env, "data"))
+                  .as<std::vector<uint8_t>>(env);
+        } else {
+          throw StatusError(
+              general_error::InvalidArgument,
+              "Unknown multimodal part type: " + partType);
+        }
+        inputs[i].push_back(std::move(part));
+      }
+    }
+    return inputs;
+  };
+
   JsArgsParser args(env, info);
   any input;
   {
@@ -536,6 +595,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
       input = js::String(env, jsInput).as<std::string>(env);
     } else if (type == "sequences") {
       input = parseSequences(js::Object(env, jsInput));
+    } else if (type == "multimodal") {
+      input = parseMultimodal(js::Object(env, jsInput));
     } else {
       throw StatusError(
           general_error::InvalidArgument, "Unknown input type: " + type);

@@ -26,6 +26,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/RerankModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultimodalEmbedder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/logging.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/utils.cpp
 )

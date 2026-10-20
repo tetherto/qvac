@@ -107,6 +107,7 @@ const args = {
 The `args` obj contains the following properties:
 
 * `files.model`: An array of absolute paths to the model file(s) on disk. For sharded models, provide all shard paths.
+* `files.projectionModel` (optional): Absolute path to the projection model (mmproj) of a multimodal embedding model such as EmbeddingGemma 2. With it, `run()` also embeds images and audio (see [Embed images and audio](#embed-images-and-audio)).
 * `config`: A dictionary of hyper-parameters used to tweak the behaviour of the model (see [Create `config`](#3-create-config) below).
 * `logger`: This property is used to create a [`QvacLogger`](../logging) instance, which handles all logging functionality.
 * `opts.stats`: This flag determines whether to calculate inference stats.
@@ -219,6 +220,49 @@ const embeddings = await response.await()
 ```
 
 When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `total_tokens`, `total_time_ms`, `tokens_per_second`, `context_size`, `trained_context_size`, and `backendDevice` (`"cpu"` or `"gpu"`). `context_size` is the active runtime llama context size, while `trained_context_size` is the model's trained context size. `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+
+#### Embed images and audio
+
+A multimodal embedding model, such as EmbeddingGemma 2, maps text, images and audio into one vector space. Load it with its projection model, then pass each input as an array of parts in order: strings for text, and `{ media: Uint8Array }` for the bytes of an image (jpg, png, bmp, gif, ...) or of wav/mp3/flac audio.
+
+```js
+const model = new GGMLBert({
+  files: { model: [modelPath], projectionModel: mmprojPath },
+  config: { device: 'gpu', gpu_layers: '99' }
+})
+await model.load()
+
+// One input with text and an image: one embedding
+const response = await model.run(['title: none | text: ', { media: imageBytes }])
+const [[embedding]] = await response.await()
+
+// Several inputs, each a string or an array of parts: one embedding each
+const batch = await model.run({
+  inputs: [
+    'task: search result | query: waterproof trail running shoes',
+    ['title: none | text: ', { media: imageBytes }],
+    [{ media: audioBytes }]
+  ]
+})
+const [embeddings] = await batch.await()
+```
+
+`run()` takes:
+
+| Input | Embeddings |
+|-------|------------|
+| `string` | one |
+| `string[]` | one per string |
+| an array with at least one `{ media }` part | one, for all its parts together |
+| `{ inputs: [...] }` | one per input |
+
+Notes:
+
+* Inputs without media use the text path, so a model loaded with a projection model still embeds plain text as before.
+* Media input without `files.projectionModel` is rejected.
+* Each multimodal input is decoded in one pass, so its text and media tokens together must fit in `batch_size` (which is also the micro-batch size). A larger image or a longer clip needs a larger `batch_size`.
+* Task prompts such as `task: search result | query: ` are plain text. Add them as the model's documentation describes.
+* Video input is not supported.
 
 ### 7. Release Resources
 

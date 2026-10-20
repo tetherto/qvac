@@ -34,11 +34,119 @@ export interface AddonConfigurationParams {
    * it locates next to its runtime on every platform.
    */
   backendsDir?: string;
+  /**
+   * Projection model (mmproj) that lets the model embed images and audio.
+   * Empty (the default) loads the model for text only.
+   */
+  projectionPath?: string;
 }
 
+/**
+ * Media in a multimodal input: the bytes of an image (jpg, png, bmp, gif, ...)
+ * or of wav/mp3/flac audio. Needs `files.projectionModel`.
+ */
+export interface EmbedMediaPart {
+  media: Uint8Array;
+}
+
+/** One part of a multimodal input: text, or media. */
+export type EmbedInputPart = string | EmbedMediaPart;
+
+/** One input given as ordered parts. It yields one embedding. */
+export type EmbedMultimodalInput = EmbedInputPart[];
+
+/** Several inputs, each a string or ordered parts: one embedding per input. */
+export interface EmbedBatchInput {
+  inputs: Array<string | EmbedMultimodalInput>;
+}
+
+/**
+ * Input of `GGMLBert.run()`:
+ *   - a string: one embedding;
+ *   - a string array: one embedding per string;
+ *   - an array with at least one media part: one input whose parts go to the
+ *     model in order, one embedding;
+ *   - `{ inputs }`: one embedding per input.
+ */
+export type EmbedRunInput = string | string[] | EmbedMultimodalInput | EmbedBatchInput;
+
+/** A multimodal input part as the native addon receives it. */
+export type AddonMultimodalPart =
+  | { type: "text"; text: string }
+  | { type: "media"; data: Uint8Array };
+
 export interface BertJobInput {
-  type: "text" | "sequences";
-  input?: string | string[];
+  type: "text" | "sequences" | "multimodal";
+  input?: string | string[] | AddonMultimodalPart[][];
+}
+
+function isMediaPart(part: unknown): part is EmbedMediaPart {
+  return (
+    part !== null &&
+    typeof part === "object" &&
+    (part as { media?: unknown }).media instanceof Uint8Array
+  );
+}
+
+/** Maps ordered parts to native parts, merging adjacent text. */
+function toAddonParts(parts: unknown[], where: string): AddonMultimodalPart[] {
+  const result: AddonMultimodalPart[] = [];
+  for (const [i, part] of parts.entries()) {
+    if (typeof part === "string") {
+      const last = result[result.length - 1];
+      if (last?.type === "text") {
+        last.text += part;
+      } else {
+        result.push({ type: "text", text: part });
+      }
+    } else if (isMediaPart(part)) {
+      result.push({ type: "media", data: part.media });
+    } else {
+      throw new TypeError(`${where}[${i}] must be a string or { media: Uint8Array }`);
+    }
+  }
+  return result;
+}
+
+/**
+ * Maps a `GGMLBert.run()` input to the native job. Inputs without media take
+ * the text path (`text` / `sequences`), so they need no projection model.
+ */
+export function toBertJobInput(input: EmbedRunInput): BertJobInput {
+  if (typeof input === "string") {
+    return { type: "text", input };
+  }
+  if (Array.isArray(input)) {
+    if (input.every((part) => typeof part === "string")) {
+      return { type: "sequences", input: input as string[] };
+    }
+    return { type: "multimodal", input: [toAddonParts(input, "input")] };
+  }
+  if (
+    input !== null &&
+    typeof input === "object" &&
+    Array.isArray((input as Partial<EmbedBatchInput>).inputs)
+  ) {
+    const inputs = input.inputs.map((item, i): AddonMultimodalPart[] => {
+      if (typeof item === "string") {
+        return [{ type: "text", text: item }];
+      }
+      if (Array.isArray(item)) {
+        return toAddonParts(item, `inputs[${i}]`);
+      }
+      throw new TypeError(`inputs[${i}] must be a string or an array of parts`);
+    });
+    if (inputs.every((parts) => parts.every((part) => part.type === "text"))) {
+      return {
+        type: "sequences",
+        input: inputs.map((parts) =>
+          parts.map((part) => (part as { text: string }).text).join(""),
+        ),
+      };
+    }
+    return { type: "multimodal", input: inputs };
+  }
+  throw new TypeError("input must be a string, an array or { inputs: [...] }");
 }
 
 export interface LoadWeightsData {
@@ -152,8 +260,9 @@ export class BertInterface implements Addon {
   ) {
     this._binding = binding as BertBinding;
 
-    // createInstance reads the key unconditionally.
+    // createInstance reads the keys unconditionally.
     configurationParams.backendsDir ??= "";
+    configurationParams.projectionPath ??= "";
 
     this._handle = this._binding.createInstance(this, configurationParams, outputCb);
   }
@@ -168,6 +277,7 @@ export class BertInterface implements Addon {
    * Processes new input.
    *   - `type: 'text'` for a single string input
    *   - `type: 'sequences'` for a string-array input
+   *   - `type: 'multimodal'` for inputs of ordered text and media parts
    * Resolves `true` if the job was accepted, `false` if busy.
    */
   async runJob(data: BertJobInput): Promise<boolean> {
