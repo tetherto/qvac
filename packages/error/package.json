@@ -10,7 +10,12 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./code-ranges": {
+      "types": "./dist/code-ranges.d.ts",
+      "import": "./dist/code-ranges.js"
+    },
+    "./code-ranges.json": "./code-ranges.json"
   },
   "scripts": {
     "format": "prettier --check .",
@@ -47,6 +52,7 @@
   "homepage": "https://qvac.tether.io",
   "files": [
     "dist",
+    "code-ranges.json",
     "LICENSE",
     "NOTICE"
   ]

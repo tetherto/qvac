@@ -1,0 +1,74 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { checkCodeSources } from './check.js'
+import type { CodeRangeRegistry } from '../../packages/error/src/code-ranges.js'
+
+const registry: CodeRangeRegistry = {
+  version: 1,
+  allocations: [{ owner: 'sdk', sharedWith: ['engine'], ranges: [[1001, 2000]], status: 'active' }]
+}
+const sources = [
+  { owner: 'sdk', file: 'packages/sdk/src/errors.ts', symbols: ['CODES'] },
+  { owner: 'engine', file: 'packages/engine/src/errors.ts', symbols: ['CODES'] }
+]
+
+test('checks real source tables, accepts shared codes and ignores compiled copies', () => {
+  const files = new Map([
+    [sources[0]!.file, 'const CODES = { FIRST: 1001 }'],
+    [sources[1]!.file, 'const CODES = { FIRST: 1001, SECOND: 1002 }'],
+    ['packages/engine/errors.js', "const { addCodes } = require('@qvac/error')"]
+  ])
+  assert.doesNotThrow(() => checkCodeSources(registry, sources, files))
+  files.set(sources[1]!.file, 'const CODES = { WRONG: 1001 }')
+  assert.throws(() => checkCodeSources(registry, sources, files), /conflicting names/)
+  files.set(sources[1]!.file, 'const CODES = { FIRST: 1002 }')
+  assert.throws(() => checkCodeSources(registry, sources, files), /conflicting numbers/)
+  files.set(sources[1]!.file, 'const CODES = { FIRST: 3000 }')
+  assert.throws(() => checkCodeSources(registry, sources, files), /outside/)
+})
+
+test('new registration modules and missing registered sources fail', () => {
+  const files = new Map([
+    [sources[0]!.file, 'const CODES = { FIRST: 1001 }'],
+    [sources[1]!.file, 'const CODES = { FIRST: 1001 }'],
+    ['packages/new/errors.js', "const { addCodes } = require('@qvac/error')"]
+  ])
+  assert.throws(() => checkCodeSources(registry, sources, files), /Unlisted/)
+  files.delete(sources[1]!.file)
+  assert.throws(() => checkCodeSources(registry, sources, files), /Missing/)
+})
+
+test('a historical name alias permits only its explicitly listed names and code', () => {
+  const data: CodeRangeRegistry = {
+    version: 1,
+    allocations: [{ ...registry.allocations[0]!, aliases: { '1001': ['FIRST', 'OLD_FIRST'] } }]
+  }
+  const files = new Map([
+    [sources[0]!.file, 'const CODES = { FIRST: 1001 }'],
+    [sources[1]!.file, 'const CODES = { OLD_FIRST: 1001 }']
+  ])
+  assert.doesNotThrow(() => checkCodeSources(data, sources, files))
+  files.set(sources[1]!.file, 'const CODES = { OLD_FIRST: 1002 }')
+  assert.throws(() => checkCodeSources(data, sources, files), /alias/)
+  files.set(sources[1]!.file, 'const CODES = { OTHER: 1001 }')
+  assert.throws(() => checkCodeSources(data, sources, files), /conflicting names/)
+})
+
+test('an already listed module cannot hide a second code table or inline numeric registration', () => {
+  const files = new Map([
+    [sources[0]!.file, 'const CODES = { FIRST: 1001 }'],
+    [
+      sources[1]!.file,
+      `const CODES = { FIRST: 1001 }
+      const EXTRA_ERROR_CODES = { BAD: 999999 }
+      addCodes({ [EXTRA_ERROR_CODES.BAD]: { name: 'BAD', message: 'bad' } })`
+    ]
+  ])
+  assert.throws(() => checkCodeSources(registry, sources, files), /Unlisted code table/)
+  files.set(
+    sources[1]!.file,
+    `const CODES = { FIRST: 1001 }
+    addCodes({ 999999: { name: 'BAD', message: 'bad' } })`
+  )
+  assert.throws(() => checkCodeSources(registry, sources, files), /Inline numeric/)
+})
