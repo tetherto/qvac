@@ -416,3 +416,62 @@ test('llmConfigSchema: an explicit gpu_layers is kept', (t) => {
   t.is(llmConfigSchema.parse({ gpu_layers: 20 }).gpu_layers, 20)
   t.is(llmConfigSchema.parse({ fit: true, gpu_layers: 20 }).gpu_layers, 20)
 })
+
+test('llmConfigBaseSchema: accepts every spec_type value', (t) => {
+  for (const value of ['none', 'draft-mtp', 'draft-dflash']) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_type: value }).success, true)
+  }
+  t.is(llmConfigBaseSchema.safeParse({ spec_type: 'draft-eagle' }).success, false)
+})
+
+test('llmConfigBaseSchema: bounds the speculative draft limits at the addon ranges', (t) => {
+  for (const value of [1, 64]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_max: value }).success, true)
+  }
+  for (const value of [0, 65, 2.5]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_max: value }).success, false)
+  }
+  for (const value of [0, 64]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_min: value }).success, true)
+  }
+  for (const value of [-1, 65, 1.5]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_min: value }).success, false)
+  }
+  for (const value of [0, 0.75, 1]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_p_min: value }).success, true)
+  }
+  for (const value of [-0.1, 1.1]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_p_min: value }).success, false)
+  }
+})
+
+test('llmConfigBaseSchema: leaves the n_min / n_max relation to the addon', (t) => {
+  t.is(
+    llmConfigBaseSchema.safeParse({
+      spec_type: 'draft-mtp',
+      spec_draft_n_max: 2,
+      spec_draft_n_min: 5
+    }).success,
+    true
+  )
+})
+
+test('llmConfigSchema: injects no speculative defaults', (t) => {
+  const result = llmConfigSchema.parse({})
+  t.absent('spec_type' in result)
+  t.absent('spec_draft_n_max' in result)
+})
+
+test('loadModelOptionsToRequestSchema: accepts draft-dflash with a draftModelSrc for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: {
+        spec_type: 'draft-dflash',
+        spec_draft_n_max: 7,
+        draftModelSrc: 'https://example.com/dflash.gguf'
+      }
+    }).success,
+    true
+  )
+})

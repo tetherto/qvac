@@ -337,10 +337,47 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Reasoning-channel token budget. `-1` (default) unrestricted, `0` disables it, any positive integer caps the reasoning channel at that many tokens (the closing think tag is force-emitted once the budget is spent).'
     ),
+  spec_type: z
+    .enum(['none', 'draft-mtp', 'draft-dflash'])
+    .optional()
+    .describe(
+      "Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head; the model must ship its MTP layers, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, which it requires. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`."
+    ),
+  spec_draft_n_max: z
+    .number()
+    .int()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe(
+      "Longest draft per step (1–64, default 3). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+    ),
+  spec_draft_n_min: z
+    .number()
+    .int()
+    .min(0)
+    .max(64)
+    .optional()
+    .describe(
+      "Shortest draft worth verifying (0–64, default 0, at most `spec_draft_n_max`); shorter drafts are dropped. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+    ),
+  spec_draft_p_min: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      "Minimum draft-head probability for a token to extend the draft (0–1, default 0). Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+    ),
   projectionModelSrc: modelSrcInputSchema
     .optional()
     .describe(
       'Multimodal projection (mmproj / vision encoder) model source; multimodal models only.'
+    ),
+  draftModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      "DFlash draft model source, as llama-server's `--spec-draft-model`. Required by, and only accepted with, `spec_type: 'draft-dflash'`. Placed like the model (`device`, `gpu_layers`). Model fit checks do not count its memory yet, so leave room for it."
     ),
   image_tile_mode: z
     .enum(['disabled', 'batched', 'sequential'])

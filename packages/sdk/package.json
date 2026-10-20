@@ -234,7 +234,7 @@
     "@qvac/ggml-rpc-server": "^0.5.1",
     "@qvac/inference": "^0.22.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.61.2",
+    "@qvac/llm-llamacpp": "^0.63.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.29.1",
     "@qvac/translation-nmtcpp": "^0.21.1",

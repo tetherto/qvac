@@ -50,10 +50,11 @@ export function createLlamaFitRequest(params: LlamaFitRequestParams): FitRequest
     // The image limit gates images at inference and does not change load
     // memory. The addon's fitter rejects it as an unknown argument.
     const { 'image-max-megapixels': _imageMaxMegapixels, ...fitConfig } = modelConfig
-    const llm: LlmLlamacpp.FitRequest = {
-      ...request,
-      config: transformLlmConfig(fitConfig as LlmConfig)
-    }
+    const config = transformLlmConfig(fitConfig as LlmConfig)
+    // The fit reads the DFlash draft model like the load does.
+    const draftModelPath = params.artifacts?.['draftModelPath']
+    if (draftModelPath) config['spec_draft_model'] = draftModelPath
+    const llm: LlmLlamacpp.FitRequest = { ...request, config }
     return { supported: true, probe: { engine: 'llm-llamacpp', request: llm } }
   }
 
