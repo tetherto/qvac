@@ -87,9 +87,11 @@ GGUF metadata** — there is no `modelType` to pass.
 
 On macOS and iOS, TDT, Unified, EOU, and Sortformer v2.1 can also run their
 encoder on an optional Core ML sidecar, and TranscribePsy's published Core ML
-distribution runs its encoder and TDT decoder on the Neural Engine; CTC and
-Indic Conformer CTC cannot with the pinned engine, and Sortformer v1 has no
-sidecar. See [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
+distribution runs its encoder and TDT decoder on the Neural Engine. Nemotron 3
+Diarization and Sortformer v2.1 can run their whole network on Core ML
+diarizer sidecars. CTC and Indic Conformer CTC cannot use a sidecar with the
+pinned engine, and Sortformer v1 has none. See
+[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
 
 TranscribePsy is published ready to run by
 [QVAC on Hugging Face](https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf);
@@ -530,6 +532,7 @@ fit.deviceName
 fit.deviceBytes
 fit.weightsBytes
 fit.hostBytes
+fit.coremlBytes // parakeet on macOS and iOS: Core ML diarizer sidecars the workload can load
 fit.report
 ```
 
@@ -886,11 +889,22 @@ ggml.
 | Unified (`parakeet-unified-en-0.6b`) | `<stem>-encoder.mlmodelc` | `run()`, padded or windowed like TDT | `runStreaming()`, which uses the cache-aware encoder |
 | TranscribePsy (`transcribepsy-250m-eu-sub-coreml.gguf`, the encoder-less GGUF of the Core ML distribution) | `<stem>-encoder.mlmodelc` and `<stem>-decoder.mlmodelc` | any length: 15 s Neural Engine windows with 1.28 s of seam context; the TDT decoder runs on the Neural Engine as well | never: without its encoder sidecar that GGUF fails to load, since it carries no encoder weights. The full `transcribepsy-250m-eu-sub.gguf` behaves like TDT |
 | EOU (`parakeet-eou-120m-v1`) | `<stem>-encoder.mlmodelc` | inputs of exactly the compiled mel length | every other length, including streaming windows of a different length |
-| Sortformer v2.1 + AOSC | `<stem>-encoder.mlmodelc` (batch), `<stem>-encoder-bypass-pre-encode.mlmodelc` (AOSC) | batch: exactly the compiled length; AOSC: slabs up to the masked capacity (410 encoder frames for the default geometry) | other batch lengths, larger AOSC slabs; the speaker head always |
+| Sortformer v2.1 + AOSC, whole network | `<stem>-diarizer-<frames>.mlmodelc`, one fixed capacity per bundle (410 frames covers the default AOSC slab and batch inputs up to 32.8 s) | batch inputs and AOSC steps of up to its capacity: the conformer encoder, speaker transformer and head run on Core ML, the smallest capacity that fits is used and padded rows are masked | longer batch inputs, and every call if the bundle fails |
+| Sortformer v2.1 + AOSC, encoder only | `<stem>-encoder.mlmodelc` (batch), `<stem>-encoder-bypass-pre-encode.mlmodelc` (AOSC) | used when no diarizer bundle covers the call. Batch: exactly the compiled length; AOSC: slabs up to the masked capacity (410 encoder frames for the default geometry) | other batch lengths, larger AOSC slabs; the speaker head always |
+| Nemotron 3 Diarization (`Nemotron-3-Diarization`) | `<stem>-diarizer-<frames>.mlmodelc`, one fixed capacity per bundle (358 frames covers offline inputs up to 28.6 s and the default live chunk, 745 the 30 s long-form blocks and offline inputs up to 59.6 s) | offline, long-form and live calls of up to a capacity: the whole network runs on Core ML, with the smallest capacity that fits | calls above every capacity, and every call if the bundle fails |
 | CTC (`parakeet-ctc-0.6b`), Indic Conformer CTC | none in the pinned `speech-cpp` | — | always (the engine adds CTC sidecars from `speech-cpp` `2026-09-24`) |
 | Sortformer v1 | none | — | always |
 | Whisper | none: the `whisper` feature builds without `WHISPER_COREML` | — | always |
 | MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
+
+Diarizer bundles load on first use, and each capacity costs 190-220 MiB of
+weights. `PARAKEET_COREML_DIARIZER_DISABLE=1` ignores them and keeps the
+encoder-only sidecars. `assessFit` charges the bundles a workload can load as
+`coremlBytes`. Diarizer bundles are not in the model registry yet: export them
+with `engines/parakeet/scripts/export-nemotron-diarization-coreml.py` and
+`export-sortformer-diarizer-coreml.py`. The
+[Parakeet backends guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/backends.md#core-ml-diarizer-sidecars)
+gives the commands and the measured speedups.
 
 `getBackendInfo().encoderOnCoreml` (with `encoderBackend: 'coreml'`) and
 `RuntimeStats.encoderOnCoreml` report that a sidecar loaded at `load()`, not
@@ -1094,16 +1108,18 @@ tests and the C++ option-mapping tests do not establish GPU execution.
 
 ### OpenMOSS native dependency validation
 
-The package pins `speech-cpp` 2026-10-20#1 and `ggml-speech` 2026-10-07#1.
+The package pins `speech-cpp` 2026-10-20#2 and `ggml-speech` 2026-10-07#1.
 The registry baseline remains `e31be272ecdf9f20970302ebf8a2943d47803001`.
-The `speech-cpp` override selects the merged native source
-`303198cf7a6e7c46c0e6b1be2add68468026793b` published by
-[registry PR #439](https://github.com/tetherto/qvac-registry-vcpkg/pull/439).
+The `speech-cpp` override selects the native source
+`ec9b1e65c49396cc739f871b90d3604eb9d7d703` published by
+[registry PR #440](https://github.com/tetherto/qvac-registry-vcpkg/pull/440).
 This speech revision adds TranscribePsy with its model-recommended long-form
 window and its Core ML encoder and decoder sidecars, bounds the long-form
 encoder's memory, balances automatic windows and runs the TDT decoder on the
-CPU backend under OpenCL. It keeps the explicit MOSS backend selector the
-addon uses; the selector and dependency pin must ship together.
+CPU backend under OpenCL. It also adds the Nemotron 3 Diarization and
+Sortformer v2.1 Core ML diarizer sidecars and their `assessFit` charge, and it
+loads Nemotron 3 Diarization again. It keeps the explicit MOSS backend selector
+the addon uses; the selector and dependency pin must ship together.
 
 On a provisioned Linux NVIDIA host with CUDA 13, Vulkan drivers, sufficient
 memory, and package development dependencies installed, run from this package:
