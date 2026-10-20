@@ -16,7 +16,7 @@ import {
 } from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
-import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
+import { createSdkImportResolver, sdkImportsMap } from '@/commands/bundle/resolve-sdk-import'
 import { AUDIO_DECODER_ADDON, listBundledAddons } from '@/commands/bundle/addons'
 import { linkAddons } from '@/commands/bundle/link'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
@@ -35,8 +35,6 @@ import { verifyBundle } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
 import type { Logger } from '@/logging/types'
-
-const require = createRequire(import.meta.url)
 
 export interface BundleSdkOptions {
   projectRoot?: string | undefined
@@ -101,14 +99,10 @@ function resolveSdkPath(projectRoot: string, explicitSdkPath?: string): string {
       : path.join(projectRoot, explicitSdkPath)
   }
 
-  try {
-    const pkgJsonPath = require.resolve('@qvac/sdk/package.json', {
-      paths: [projectRoot]
-    })
-    return path.dirname(pkgJsonPath)
-  } catch {
-    return path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
-  }
+  return (
+    findInAncestorNodeModules(projectRoot, DEFAULT_SDK_NAME) ??
+    path.join(projectRoot, 'node_modules', DEFAULT_SDK_NAME)
+  )
 }
 
 function realpath(dir: string): string {
@@ -211,13 +205,15 @@ function defaultHosts(target: BundleTarget): string[] {
   return [`${process.platform}-${process.arch}`]
 }
 
+type ImportsMap = NonNullable<stow.StowOptions['imports']>
+
 interface StowBundleOptions {
   projectRoot: string
   entryPath: string
   target: BundleTarget
   outputDir: string
   hosts: string[]
-  imports: Record<string, unknown>
+  imports: ImportsMap
   deferModules: string[]
 }
 
@@ -231,14 +227,9 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
   assertNodeCanBundle()
   await fsp.rm(outputDir, { recursive: true, force: true })
 
-  // bare-module-traverse types its options from bare-addon-resolve, which lacks
-  // the `imports` and `defer` that bare-module-resolve takes. With no base,
-  // bare-stow keys the bundle from the closest folder holding every module.
-  const stowOptions: stow.StowOptions & { imports: Record<string, unknown>; defer: string[] } = {
-    imports,
-    defer: deferModules,
-    hosts
-  }
+  // With no base, bare-stow keys the bundle from the closest folder holding
+  // every module.
+  const stowOptions: stow.StowOptions = { imports, defer: deferModules, hosts }
 
   const written: string[] = []
   try {
@@ -296,18 +287,18 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   logger.debug(`   Path: ${sdkPath}`)
 
   const importsMapPath = resolveImportsMapPath(sdkPath, sdkName)
-  const imports = JSON.parse(await fsp.readFile(importsMapPath, 'utf8')) as Record<string, unknown>
+  const imports = JSON.parse(await fsp.readFile(importsMapPath, 'utf8')) as ImportsMap
 
-  // The bundler resolves the SDK's dependencies from the path it reaches the
-  // SDK by, without following links. An SDK installed in node_modules is
-  // imported by name; one linked in, as pnpm installs it, or outside the
-  // project is imported by its real path, and so is its bare-stow, which the
+  // An SDK the project installs is imported by name. One outside the project is
+  // imported by its real path, and so is its bare-stow runtime, which the
   // generated shim imports.
-  const sdkByName = findInAncestorNodeModules(projectRoot, sdkName) === sdkPath
+  const installedSdk = findInAncestorNodeModules(projectRoot, sdkName)
+  const sdkByName = installedSdk !== null && realpath(installedSdk) === sdkPath
   const resolveImport = sdkByName ? undefined : createSdkImportResolver(sdkPath, sdkName)
   if (!sdkByName) {
     const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
-    imports['bare-stow/protocol'] = pathToFileURL(sdkRequire.resolve('bare-stow/protocol')).href
+    Object.assign(imports, sdkImportsMap(sdkPath, sdkName))
+    imports['bare-stow/runtime'] = pathToFileURL(sdkRequire.resolve('bare-stow/runtime')).href
   }
 
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
