@@ -32,6 +32,8 @@ export interface GGMLConfig {
   "mmproj-use-gpu"?: "true" | "false" | "on" | "off" | "1" | "0";
   /** With `files.projectionModel`: largest image accepted, in megapixels, checked before decoding. Defaults to 50. Alias: `image_max_megapixels`. */
   "image-max-megapixels"?: NumericLike;
+  /** With `files.projectionModel`: longest audio accepted, in seconds, read from its headers before decoding. Defaults to 600. Alias: `audio_max_seconds`. */
+  "audio-max-seconds"?: NumericLike;
   [key: string]: string | number | boolean | string[] | undefined;
 }
 

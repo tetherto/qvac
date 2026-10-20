@@ -173,6 +173,7 @@ These keys apply with [`files.projectionModel`](#embed-images-and-audio), with t
 | `mmproj-no-audio`      | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | `"false"` | Skip loading the projector's audio encoder, for image-only use. Audio input is then rejected with `UnsupportedMedia` |
 | `mmproj-use-gpu`       | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto | Run the projector on the GPU. Unset, it follows the model, except on Android GPUs below Adreno 800 (Mali, older Adreno), where it runs on the CPU, as in `@qvac/llm-llamacpp`. Ignored with a warning when the model runs on the CPU |
 | `image-max-megapixels` | string of positive integer           | `"50"`  | Largest image accepted, read from its header before decoding. A larger one is rejected with `UnsupportedMedia` |
+| `audio-max-seconds`    | string of positive integer           | `"600"` | Longest audio accepted, read from its headers (WAV, FLAC) or frames (MP3) before decoding, which bounds the decoded samples. Longer audio, or audio whose length cannot be read (e.g. FLAC without a sample count), is rejected with `UnsupportedMedia`. Not in `@qvac/llm-llamacpp` |
 
 #### Native addon logging
 
@@ -512,6 +513,8 @@ fit.devices // one row per device the model was assigned to, then a `host` row
 fit.deviceBytes // model, context and compute summed across the devices, host excluded
 fit.hostBytes // the same, for the trailing host row
 ```
+
+A multimodal load is refused with `unsupported-config`: pass its `projectionModel` (or projector options in `config`), and the projection does not count the projector's weights and buffers, so it would otherwise answer for the text model alone.
 
 `config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`. A setting left out takes llama's default.
 

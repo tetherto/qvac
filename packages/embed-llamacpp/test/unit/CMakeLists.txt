@@ -29,6 +29,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultimodalEmbedder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AudioLengthLimit.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/logging.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/utils.cpp
 )

@@ -46,6 +46,7 @@ namespace qvac_lib_inference_addon_embed {
 
 struct FitRequest {
   std::string modelPath;
+  std::string projectionModel;
   std::unordered_map<std::string, std::string> config;
   std::optional<double> minCtxSize;
   std::optional<double> marginBytes;
@@ -87,6 +88,10 @@ inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   FitRequest parsed;
   parsed.modelPath =
       request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+  parsed.projectionModel = request
+                               .getOptionalPropertyAs<js::String, std::string>(
+                                   env, "projectionModel")
+                               .value_or("");
 
   auto number = [&](const char* name) -> std::optional<double> {
     auto value = request.getOptionalProperty<js::Number>(env, name);
@@ -140,11 +145,19 @@ inline FitResult runFit(FitRequest request) {
   const std::string backendsDir = takeConfig("backendsDir");
   const std::string openclCacheDir = takeConfig("openclCacheDir");
 
-  // The projector options, which the parser below does not accept for an
-  // embedding load, are taken out as BertModel takes them. The fitter does
-  // not count a projector, so they do not change the projection.
+  // A projector is a second resident file, with its own compute buffers, that
+  // the fitter does not count: a multimodal load would be projected as if it
+  // were text only, so it is refused, as @qvac/llm-llamacpp refuses an mmproj.
+  // Projector options in the config mark such a load too.
+  if (!request.projectionModel.empty()) {
+    return errorResult("unsupported-config");
+  }
   try {
+    const size_t keys = configFilemap.size();
     takeMultimodalOptions(configFilemap);
+    if (configFilemap.size() != keys) {
+      return errorResult("unsupported-config");
+    }
   } catch (const std::exception&) {
     return errorResult("unsupported-config");
   }

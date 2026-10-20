@@ -3,6 +3,12 @@ export interface EmbedFitRequest {
     modelPath: string;
     /** The load, as `loadModel` takes it, resolved by the same code that load runs. */
     config?: Record<string, string>;
+    /**
+     * The load's `files.projectionModel`, if any. The projection does not count
+     * a projector, so a multimodal load is refused with `unsupported-config`
+     * rather than projected as if it were text only.
+     */
+    projectionModel?: string;
     /** Floor the fitter may not reduce the context below. */
     minCtxSize?: number;
     /** Memory to leave free on every device, held to against the load's own `fit-target`. */

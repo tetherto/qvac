@@ -300,6 +300,29 @@ safeTest('image-max-megapixels rejects a larger image before decoding', { skip }
   )
 })
 
+safeTest('audio-max-seconds rejects longer audio before decoding', { skip }, async (t) => {
+  await withModel(
+    t,
+    OPTIONS_DEVICE,
+    async (model) => {
+      await t.exception.all(embed(model, [{ media: sineWav(440, 2) }]), /exceeds the 1 s limit/)
+      const [short] = await embed(model, [{ media: sineWav(440, 1) }])
+      t.is(short.length, 768, 'audio within the limit still embeds')
+    },
+    { 'audio-max-seconds': '1' }
+  )
+})
+
+safeTest('a WAV that declares more samples than it holds is rejected', { skip }, async (t) => {
+  await withModel(t, OPTIONS_DEVICE, async (model) => {
+    // A 44-byte header declaring ~4 GB of 8 kHz samples (about 75 hours):
+    // mtmd-helper would size its decode by the declared length.
+    const wav = sineWav(440, 0, 8000)
+    new DataView(wav.buffer).setUint32(40, 0xfffffff0, true)
+    await t.exception.all(embed(model, [{ media: wav }]), /exceeds the 600 s limit/)
+  })
+})
+
 safeTest('media whose format cannot be decoded is rejected', { skip }, async (t) => {
   await withModel(t, OPTIONS_DEVICE, async (model) => {
     // A WebP header (decoded only through ffmpeg) and bytes of no format.

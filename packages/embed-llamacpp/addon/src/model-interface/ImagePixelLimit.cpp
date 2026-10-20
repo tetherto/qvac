@@ -32,19 +32,22 @@ constexpr std::string_view CONFIG_KEY = "image-max-megapixels";
 }
 
 void checkDimensions(int width, int height, uint64_t maxPixels) {
-  if (width <= 0 || height <= 0) {
+  if (width == 0 || height == 0) {
     throwUnsupportedMedia(
         "[ImagePixelLimit] Unsupported or corrupt image: cannot determine "
         "dimensions before decoding.");
   }
+  // A top-down BMP stores a negative height.
+  const auto absWidth = width < 0 ? -int64_t{width} : int64_t{width};
+  const auto absHeight = height < 0 ? -int64_t{height} : int64_t{height};
   const auto pixels =
-      static_cast<uint64_t>(width) * static_cast<uint64_t>(height);
+      static_cast<uint64_t>(absWidth) * static_cast<uint64_t>(absHeight);
   if (pixels <= maxPixels) {
     return;
   }
   throwUnsupportedMedia(
-      "[ImagePixelLimit] Image " + std::to_string(width) + " x " +
-      std::to_string(height) + " exceeds the " +
+      "[ImagePixelLimit] Image " + std::to_string(absWidth) + " x " +
+      std::to_string(absHeight) + " exceeds the " +
       std::to_string(maxPixels / PIXELS_PER_MEGAPIXEL) +
       " MP limit. Increase image-max-megapixels to allow larger images.");
 }

@@ -12,6 +12,7 @@
 #include <llama/common/common.h>
 #include <llama/mtmd/mtmd.h>
 
+#include "AudioLengthLimit.hpp"
 #include "ImagePixelLimit.hpp"
 
 /// @brief Projector options of a load config, with @qvac/llm-llamacpp's keys.
@@ -26,6 +27,8 @@ struct MultimodalOptions {
   std::optional<bool> useGpu;
   /// image-max-megapixels: largest image accepted, checked before decoding.
   uint64_t maxImagePixels = image_pixel_limit::DEFAULT_MAX_PIXELS;
+  /// audio-max-seconds: longest audio accepted, checked before decoding.
+  uint64_t maxAudioSeconds = audio_length_limit::DEFAULT_MAX_SECONDS;
 };
 
 /// @brief Reads and erases the projector options from @p config: fabric's
@@ -81,6 +84,7 @@ private:
   llama_model* model_;
   llama_context* ctx_;
   uint64_t maxImagePixels_;
+  uint64_t maxAudioSeconds_;
   mtmd::context_ptr mctx_;
   llama_batch_ext_ptr batch_;
 };

@@ -156,9 +156,15 @@ void throwIfCancelled(const std::atomic<bool>& cancelled) {
   }
 }
 
+/// The size limits a media part is checked against before it is decoded.
+struct MediaLimits {
+  uint64_t maxImagePixels;
+  uint64_t maxAudioSeconds;
+};
+
 mtmd::bitmap decodeMedia(
     const mtmd_context* mctx, const MultimodalPart& part, std::size_t index,
-    uint64_t maxImagePixels) {
+    const MediaLimits& limits) {
   // Say which encoder is missing before mtmd-helper, which would only report
   // that it could not read the media.
   const bool isAudio =
@@ -181,8 +187,15 @@ mtmd::bitmap decodeMedia(
             "encoder",
             index));
   }
-  image_pixel_limit::checkBuffer(
-      part.media.data(), part.media.size(), maxImagePixels);
+  // mtmd-helper decodes the whole input at once, sized by its headers, so
+  // both are bounded first.
+  if (isAudio) {
+    audio_length_limit::checkBuffer(
+        part.media.data(), part.media.size(), limits.maxAudioSeconds);
+  } else {
+    image_pixel_limit::checkBuffer(
+        part.media.data(), part.media.size(), limits.maxImagePixels);
+  }
   mtmd_helper_bitmap_wrapper wrapper = mtmd_helper_bitmap_init_from_buf(
       mctx,
       part.media.data(),
@@ -214,7 +227,7 @@ mtmd::bitmap decodeMedia(
 /// input.
 void tokenize(
     const mtmd_context* mctx, const MultimodalInput& input,
-    uint64_t maxImagePixels, mtmd_input_chunks* output) {
+    const MediaLimits& limits, mtmd_input_chunks* output) {
   std::vector<mtmd::bitmap> bitmaps;
   std::vector<mtmd_input_text> texts;
   bitmaps.reserve(input.size());
@@ -225,7 +238,7 @@ void tokenize(
   std::size_t mediaIndex = 0;
   for (const MultimodalPart& part : input) {
     if (part.isMedia) {
-      bitmaps.push_back(decodeMedia(mctx, part, mediaIndex++, maxImagePixels));
+      bitmaps.push_back(decodeMedia(mctx, part, mediaIndex++, limits));
       parts.push_back({.text = nullptr, .bitmap = bitmaps.back().ptr.get()});
     } else if (!part.text.empty()) {
       texts.push_back(
@@ -281,6 +294,7 @@ MultimodalOptions takeMultimodalOptions(ConfigMap& config) {
     options.useGpu = parseBool("mmproj-use-gpu", *raw);
   }
   options.maxImagePixels = image_pixel_limit::takeMaxPixels(config);
+  options.maxAudioSeconds = audio_length_limit::takeMaxSeconds(config);
   return options;
 }
 
@@ -288,7 +302,8 @@ MultimodalEmbedder::MultimodalEmbedder(
     const std::string& projectionPath, llama_model* model, llama_context* ctx,
     const common_params& params, bool modelOnGpu,
     const MultimodalOptions& options)
-    : model_(model), ctx_(ctx), maxImagePixels_(options.maxImagePixels) {
+    : model_(model), ctx_(ctx), maxImagePixels_(options.maxImagePixels),
+      maxAudioSeconds_(options.maxAudioSeconds) {
   mtmd_helper_log_set(llamaLogCallback, nullptr);
 
   ggml_backend_dev_t modelDevice =
@@ -324,7 +339,13 @@ void MultimodalEmbedder::embed(
     const MultimodalInput& input, std::span<float> out, int embdNormalize,
     const std::atomic<bool>& cancelled) {
   mtmd::input_chunks chunks(mtmd_input_chunks_init());
-  tokenize(mctx_.get(), input, maxImagePixels_, chunks.ptr.get());
+  tokenize(
+      mctx_.get(),
+      input,
+      MediaLimits{
+          .maxImagePixels = maxImagePixels_,
+          .maxAudioSeconds = maxAudioSeconds_},
+      chunks.ptr.get());
 
   // A memory-less model sees the whole input in one ubatch: the text tokens
   // and the media embeddings must fit together.

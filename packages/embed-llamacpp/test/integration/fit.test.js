@@ -127,6 +127,20 @@ test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
   t.is(fit.reason, 'unsupported-config')
 })
 
+// The fitter does not count a projector, so a multimodal load would be
+// projected as if it were text only.
+test('a multimodal load is refused', { timeout: 600_000 }, async (t) => {
+  const model = await modelPath()
+
+  const withProjector = await assess(model, {}, { projectionModel: '/models/mmproj.gguf' })
+  t.is(withProjector.status, 'error')
+  t.is(withProjector.reason, 'unsupported-config', 'a projection model is refused')
+
+  const withOptions = await assess(model, { 'image-max-tokens': '280' })
+  t.is(withOptions.status, 'error')
+  t.is(withOptions.reason, 'unsupported-config', 'projector options are refused')
+})
+
 test('fitting keeps the event loop responsive', { timeout: 600_000 }, async (t) => {
   const file = await modelPath()
   let pending = true
