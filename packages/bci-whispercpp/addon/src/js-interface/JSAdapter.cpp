@@ -116,7 +116,7 @@ BCIConfig JSAdapter::loadFromJSObject(Object jsObject, js_env_t* env) {
   // `loadMap` / handler dispatch) because routing it through any of the
   // sub-section maps would either throw on an unrecognised key or pollute
   // a config namespace the BCI handlers don't own. Consumed by
-  // `BCIModel::load()` on Android only; ignored on other platforms.
+  // `BCIModel::load()` on Android and Linux; ignored on other platforms.
   auto backendsDirJs = jsObject.getOptionalProperty<String>(env, "backendsDir");
   if (backendsDirJs.has_value()) {
     config.backendsDir = backendsDirJs.value().as<std::string>(env);
