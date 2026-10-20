@@ -165,7 +165,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
     name: 'BUNDLE_VERIFICATION_FAILED',
     message: (bundlePath: string) =>
-      `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`
+      `Native addon verification failed for ${bundlePath}. The cause lists the failing addons and hosts; resolve them before shipping.`
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_FAILED]: {
     name: 'BUNDLE_FAILED',

@@ -12,6 +12,7 @@ import { createCommandLogger } from '@/commands/command-logger'
 import {
   BareImportsMapNotFoundError,
   BundleFailedError,
+  BundleVerificationFailedError,
   HostPrebuildsMissingError
 } from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
@@ -35,7 +36,7 @@ import {
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import type { NativeAddon } from '@/commands/verify/addon-source'
 import { isMobileHost } from '@/commands/verify/prebuilds'
-import { verifyBundle } from '@/commands/verify/index'
+import { formatVerifyBundleResult, verifyBundle } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
 import type { Logger } from '@/logging/types'
@@ -65,13 +66,13 @@ export interface BundleSdkOptions {
    */
   installMissingPrebuilds?: boolean | undefined
   /**
-   * For the `react-native` target, check the bundled packages' engines.bare
-   * against the Bare runtime in react-native-bare-kit and warn on a mismatch.
-   * Defaults to true; callers that run `verifyBundle` on the result can turn
-   * it off.
+   * Run `verifyBundle` on the bundle and fail with
+   * `BundleVerificationFailedError` on its errors. An engines.bare mismatch
+   * against the Bare runtime in react-native-bare-kit only warns. Defaults to
+   * true; callers that run `verifyBundle` on the result can turn it off.
    */
-  checkEngines?: boolean | undefined
-  /** Allow network lookups during the engines check. Defaults to true. */
+  verify?: boolean | undefined
+  /** Allow network lookups during verification. Defaults to true. */
   network?: boolean | undefined
   /**
    * For the `react-native` target, link the native addons for the phone hosts
@@ -144,7 +145,7 @@ function resolveImportsMapPath(sdkPath: string, sdkName: string): string {
   throw new BareImportsMapNotFoundError(sdkName, importsMapPath)
 }
 
-interface CheckBundleEnginesOptions {
+interface VerifyOutputOptions {
   projectRoot: string
   bundlePath: string
   hosts: string[]
@@ -168,10 +169,10 @@ function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
   })
 }
 
-async function checkBundleEngines(options: CheckBundleEnginesOptions) {
+async function verifyOutput(options: VerifyOutputOptions) {
   const { projectRoot, bundlePath, hosts, network, logger } = options
 
-  logger.info('\n🔎 Checking engines.bare against the Bare runtime in react-native-bare-kit...')
+  logger.info('\n🔎 Verifying the bundle...')
   const result = await verifyBundle({
     projectRoot,
     addonsSource: bundlePath,
@@ -179,6 +180,16 @@ async function checkBundleEngines(options: CheckBundleEnginesOptions) {
     ...(network !== undefined ? { network } : {}),
     onProgress: (message) => logger.info(`   ${message}`)
   })
+
+  const blocking = result.issues.filter(
+    (issue) => issue.level === 'error' && !ENGINES_ISSUE_CODES.has(issue.code)
+  )
+  if (blocking.length > 0) {
+    throw new BundleVerificationFailedError(
+      bundlePath,
+      new Error(formatVerifyBundleResult({ ...result, issues: blocking }))
+    )
+  }
 
   const label = hosts.join(', ')
   if (result.runtime === null) return
@@ -404,8 +415,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   })
   logger.info(`   Native addons (${addons.length}): ${addons.join(', ') || '(none)'}`)
 
-  if (target === 'react-native' && options.checkEngines !== false) {
-    await checkBundleEngines({
+  if (options.verify !== false) {
+    await verifyOutput({
       projectRoot,
       bundlePath,
       hosts,
