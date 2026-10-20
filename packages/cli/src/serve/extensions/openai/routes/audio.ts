@@ -47,6 +47,9 @@ import { openaiState, type OpenAIState } from '@/serve/extensions/openai/state'
 
 type SpeechMatchMode = 'voice_map' | 'hyphen' | 'model'
 
+// The SDK's textToSpeechStream session rejects these engines.
+const BATCH_ONLY_TTS_ENGINES = new Set(['moss-sfx', 'moss-speech'])
+
 const SUPPORTED_TRANSCRIPTION_FORMATS = new Set(['json', 'text', 'srt', 'vtt', 'verbose_json'])
 
 const descriptions = {
@@ -126,12 +129,15 @@ values return \`400 invalid_response_format\`.
 \`speech.audio.done\`. \`usage\` token counts are always 0. \`sse\` supports
 \`wav\` (a streaming header with unknown length) and \`pcm\` only; other
 formats return \`400 unsupported_response_format\`. Unknown values return
-\`400 invalid_stream_format\`. Errors before the first audio chunk return JSON
+\`400 invalid_stream_format\`. MOSS-SoundEffect and MOSS-Speech aliases
+(\`ttsEngine\` \`moss-sfx\` / \`moss-speech\`) are batch-only and return
+\`400 unsupported_stream_format\` with \`sse\`. Errors before the first audio chunk return JSON
 as usual; a failure after it arrives as a final \`{ "error": ... }\` event.
 
 **Error codes:** \`400\` \`missing_input\`, \`input_too_long\`,
 \`missing_voice\`, \`invalid_response_format\`, \`invalid_stream_format\`,
-\`unsupported_response_format\`, \`invalid_model_type\`; \`404\`
+\`unsupported_response_format\`, \`unsupported_stream_format\`,
+\`invalid_model_type\`; \`404\`
 \`model_not_found\`; \`502\` \`speech_empty\`, \`transcode_failed\`; \`503\`
 \`transcode_unavailable\`, \`model_not_ready\`.
 
@@ -436,6 +442,19 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           400,
           'invalid_model_type',
           `Model "${modelName}" does not support speech synthesis.`
+        )
+      }
+
+      const ttsEngine = modelEntry.config?.['ttsEngine']
+      if (
+        streamFormat === 'sse' &&
+        typeof ttsEngine === 'string' &&
+        BATCH_ONLY_TTS_ENGINES.has(ttsEngine)
+      ) {
+        throw new HttpError(
+          400,
+          'unsupported_stream_format',
+          `Model "${modelName}" (ttsEngine "${ttsEngine}") is batch-only. Use stream_format "audio".`
         )
       }
 

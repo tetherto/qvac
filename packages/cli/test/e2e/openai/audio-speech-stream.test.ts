@@ -80,6 +80,34 @@ interface SpeechEvent {
   error?: { code: string }
 }
 
+describe('serve: speech stream_format=sse with a batch-only engine', () => {
+  for (const ttsEngine of ['moss-sfx', 'moss-speech']) {
+    it(`${ttsEngine} returns 400 unsupported_stream_format before loading`, async (t) => {
+      let loads = 0
+      const app = await createServer(t, {
+        config: {
+          serve: {
+            models: {
+              'test-moss': { model: 'TTS_EN_SUPERTONIC_Q4_0', type: 'tts', config: { ttsEngine } }
+            }
+          }
+        },
+        loadModelOverride: () => {
+          loads++
+          return Promise.resolve('mock-model-id')
+        }
+      })
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/audio/speech',
+        payload: { model: 'test-moss', input: 'Rain on a tin roof.', stream_format: 'sse' }
+      })
+      assertStatusAndError(res, 400, 'unsupported_stream_format')
+      assert.equal(loads, 0)
+    })
+  }
+})
+
 describe('serve: speech stream_format=sse', () => {
   it('pcm: one delta per audio frame, then done with usage', async (t) => {
     const stream = stubStream([

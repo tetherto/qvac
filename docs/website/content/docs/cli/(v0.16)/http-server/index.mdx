@@ -1154,6 +1154,7 @@ data: {"type":"speech.audio.done","usage":{"input_tokens":0,"output_tokens":0,"t
 
 - Text is split into sentences, and each synthesized chunk arrives as one `speech.audio.delta` event.
 - `response_format` must be `pcm` or `wav`; other formats return `400 unsupported_response_format`. With `wav`, the first delta starts with a RIFF header whose size fields are `0xFFFFFFFF` (unknown length).
+- MOSS-SoundEffect and MOSS-Speech aliases (`ttsEngine` `moss-sfx` / `moss-speech`) are batch-only and return `400 unsupported_stream_format`.
 - `X-Audio-Sample-Rate`, `X-Audio-Channels` and `X-Audio-Bits-Per-Sample` describe the PCM in the deltas.
 - `usage` token counts are always `0`.
 - Errors raised before the first audio chunk return the usual JSON error and status code. A failure after that ends the stream with a final `{"error":{...}}` event and no `speech.audio.done`.

@@ -751,6 +751,7 @@ You normally use the **same** underlying weights for both transcription and tran
 | 400  | `unsupported_param`              | `language` is present on a translation request                                                               |
 | 400  | `invalid_response_format`        | Format is not `json`, `text`, `srt`, `vtt`, or `verbose_json`                                                |
 | 400  | `unsupported_response_format`    | `srt`, `vtt`, or `verbose_json` requested from a model without Whisper segment metadata (including Parakeet) |
+| 400  | `unsupported_stream_format`      | `stream_format: "sse"` with a MOSS-SoundEffect or MOSS-Speech alias                                          |
 | 400  | `invalid_model_type`             | Alias does not match the endpoint category (`transcription` or `audio-translation`)                          |
 | 404  | `model_not_found`                | Unknown alias                                                                                                |
 | 503  | `model_not_ready`                | Model not loaded yet                                                                                         |
@@ -882,6 +883,7 @@ data: {"type":"speech.audio.done","usage":{"input_tokens":0,"output_tokens":0,"t
 
 - Text is split into sentences, and each synthesized chunk arrives as one `speech.audio.delta` event.
 - `response_format` must be `pcm` or `wav`; other formats return `400 unsupported_response_format`. With `wav`, the first delta starts with a RIFF header whose size fields are `0xFFFFFFFF` (unknown length).
+- MOSS-SoundEffect and MOSS-Speech aliases (`ttsEngine` `moss-sfx` / `moss-speech`) are batch-only and return `400 unsupported_stream_format`.
 - `X-Audio-Sample-Rate`, `X-Audio-Channels` and `X-Audio-Bits-Per-Sample` describe the PCM in the deltas.
 - `usage` token counts are always `0`.
 - Errors raised before the first audio chunk return the usual JSON error and status code. A failure after that ends the stream with a final `{"error":{...}}` event and no `speech.audio.done`.
