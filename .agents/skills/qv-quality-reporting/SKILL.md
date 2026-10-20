@@ -14,28 +14,40 @@ underlying findings or mutate Asana without explicit approval.
 1. Run `pnpm quality:reporting` from the repository root.
 2. Stop if the command fails, any detector reports diagnostics, or resolutions
    are withheld. Explain the incomplete evidence instead of proposing progress.
-3. Read `.quality/triage.json`,
-   [`references/triage-config.json`](references/triage-config.json), and only the
-   source or architecture files needed to understand the leading candidates.
-4. Form cohesive remediation groups. Start with deterministic candidates, then:
+3. Read `.quality/triage.json` and
+   [`references/triage-config.json`](references/triage-config.json). Establish the
+   eligible candidate set: all candidates for an initial backlog review; on
+   recurring runs, candidates with `new`, worsened `changed`, or `resolved`
+   lifecycle evidence. Examine this lifecycle evidence before unchanged debt,
+   regardless of severity. On recurring runs, include improved-only and unchanged
+   debt only when the user asks for backlog review, after lifecycle work.
+4. Form cohesive remediation groups across the eligible candidate set. Read only
+   the source or architecture files needed to judge those groups, then:
    - combine candidates only when they share one root cause and fit one focused PR;
    - split a candidate when it contains independent remediations;
    - preserve every covered finding fingerprint;
    - apply approved merge/split overrides from the config before new judgment.
+
+   On recurring runs, apply lifecycle eligibility again after grouping so
+   improved-only and unchanged subgroups enter only a requested backlog review.
 5. Assign ownership and P1-P4 priority using the config plus evidence in the
    triage report. Never derive priority from finding count alone.
 6. Build the review batch using [`references/ticket-template.md`](references/ticket-template.md):
-   - On the initial backlog review, begin with the deterministically ranked
-     candidates.
-   - On recurring runs, examine all `new`, worsened `changed`, and `resolved`
-     lifecycle evidence before unchanged existing debt, regardless of severity.
-     Skip improved-only and unchanged groups unless the user asks for backlog
-     review.
-   - Generate provisional proposals in pages, reconcile each page read-only,
-     discard exact-existing and unchanged outcomes, and continue until ten
-     actionable proposals remain or candidates are exhausted. Ambiguous matches
-     count as actionable decisions. Never cap the source candidates before this
-     backfill step.
+   - Complete grouping and priority assignment for the full eligible set before
+     selecting a page. Rank contextual groups by P1, P2, P3, then P4. On recurring
+     backlog reviews, keep lifecycle work ahead of improved-only and unchanged
+     debt, applying priority order within each set.
+   - Break priority ties by the earliest contributing candidate's position in
+     `.quality/triage.json`'s deterministically ranked `candidates` array. Merged
+     groups take the best contributing rank; split groups share their source
+     rank. Break remaining ties by `groupKey` in ascending lexical order.
+   - Generate provisional proposals from that ordered queue in pages, reconcile
+     each page read-only, discard exact-existing and unchanged outcomes, and
+     continue until ten actionable proposals remain or candidates are exhausted.
+     Ambiguous matches count as actionable decisions. Backfill from the same
+     ordered queue and preserve its order in the final batch. Never cap the
+     source candidates before grouping, ranking, and reconciliation.
+
    Write the final machine batch to `.quality/proposals.json`. Retain unreviewed
    candidates for later pages; do not discard them.
 7. Reconcile each provisional page read-only with:
@@ -68,6 +80,9 @@ underlying findings or mutate Asana without explicit approval.
    Never infer approval for proposals the user did not name.
 
 ## Review Shape
+
+Introduce the batch with its review mode and selection order: lifecycle
+eligibility, P1-P4 priority, then deterministic source rank.
 
 For each proposal, show:
 
