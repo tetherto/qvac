@@ -77,7 +77,7 @@
     "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:benchmark:rtf:parakeet": "npm run build:ts && brittle-bare test/benchmark/parakeet-rtf-benchmark.test.js",
     "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target asr_ggml_tests && bare-make install",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target asr_ggml_tests",
     "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./asr_ggml_tests --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "fuzz:build": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target pcm-decode-fuzz",
