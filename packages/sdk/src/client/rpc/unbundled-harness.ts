@@ -18,7 +18,9 @@ export async function start(
   options: { timeout?: number } = {}
 ): Promise<{ ipc: WorkerIPC }> {
   const { default: Sidecar } = await import('bare-sidecar')
-  const ipc = new host.IPC(new Sidecar(unbundledShim(), [entry], { stdio: 'inherit' }), options)
+  const sidecar = new Sidecar(unbundledShim(), [entry], { stdio: 'inherit' })
+  const ipc = host.wrap(sidecar, { ...options, kill: () => sidecar.kill('SIGKILL') })
+  sidecar.on('exit', (code, signal) => ipc.exited(code, signal))
   await ipc.ready
   return { ipc }
 }

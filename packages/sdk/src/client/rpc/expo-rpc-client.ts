@@ -91,7 +91,7 @@ function dropWorker(reason: Error): WorkerIPC | null {
 
 export function notifyChannelClosed(): void {
   if (!workerLifeController || workerLifeController.signal.aborted) return
-  void dropWorker(new WorkerCrashedError())?.terminate()
+  void dropWorker(new WorkerCrashedError(null, null))?.terminate()
 }
 
 async function ensureRPC(): Promise<RPC> {
@@ -117,13 +117,13 @@ async function ensureRPC(): Promise<RPC> {
     ipc.once('close', () => {
       if (workerIpc !== ipc) return
       logger.info('🪦 Bare worklet closed unexpectedly')
-      dropWorker(new WorkerCrashedError(workerError))
+      dropWorker(new WorkerCrashedError(null, null, workerError))
     })
 
     const rpc = new RPC(ipc, () => {})
     await initializeConfig(rpc, resolveConfig, await getRuntimeContext(), await getHomeDir())
     if (startGeneration !== generation) throw new WorkerShutdownError()
-    if (workerIpc !== ipc) throw new WorkerCrashedError(workerError)
+    if (workerIpc !== ipc) throw new WorkerCrashedError(null, null, workerError)
 
     rpcInstance = rpc
     return rpc
@@ -135,7 +135,9 @@ async function ensureRPC(): Promise<RPC> {
   } catch (error) {
     logger.error(`Failed to initialize RPC: ${String(error)}`)
     if (startGeneration === generation) {
-      void dropWorker(error instanceof Error ? error : new WorkerCrashedError(error))?.terminate()
+      void dropWorker(
+        error instanceof Error ? error : new WorkerCrashedError(null, null, error)
+      )?.terminate()
     }
     throw error
   } finally {

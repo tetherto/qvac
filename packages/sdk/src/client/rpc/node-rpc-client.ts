@@ -194,6 +194,15 @@ async function startWorker(source: WorkerSource): Promise<WorkerIPC> {
   return ipc
 }
 
+function workerCrashed(cause: unknown): WorkerCrashedError {
+  const exit = cause as { exitCode?: number | null; signalCode?: string | null } | undefined
+  return new WorkerCrashedError(
+    exit?.exitCode ?? null,
+    (exit?.signalCode ?? null) as NodeJS.Signals | null,
+    cause
+  )
+}
+
 function watchWorker(ipc: WorkerIPC, controller: AbortController) {
   let exited = false
   ipc.on('exit', () => {
@@ -203,7 +212,7 @@ function watchWorker(ipc: WorkerIPC, controller: AbortController) {
     if (controller.signal.aborted) return
     logger.info(`🪦 Bare worker ${exited ? 'exited' : 'closed'} unexpectedly`)
     if (workerLifeController === controller) resetModuleState()
-    controller.abort(new WorkerCrashedError(workerErrors.get(ipc)))
+    controller.abort(workerCrashed(workerErrors.get(ipc)))
   })
 }
 
@@ -267,7 +276,7 @@ async function ensureRPC(): Promise<RPC> {
 function rejectOnAbort(signal: AbortSignal): Promise<never> {
   return new Promise((_, reject) => {
     const fail = () =>
-      reject(signal.reason instanceof Error ? signal.reason : new WorkerCrashedError())
+      reject(signal.reason instanceof Error ? signal.reason : new WorkerCrashedError(null, null))
     if (signal.aborted) {
       fail()
       return
@@ -289,7 +298,7 @@ export function notifyChannelClosed(): void {
 
   const closed = worker
   resetModuleState()
-  controller.abort(new WorkerCrashedError(closed ? workerErrors.get(closed) : undefined))
+  controller.abort(workerCrashed(closed ? workerErrors.get(closed) : undefined))
   closed?.destroy()
 }
 
@@ -308,7 +317,8 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const lifeSignal = workerLifeController?.signal
   if (lifeSignal && !lifeSignal.aborted) {
     const onAbort = () => {
-      const err = lifeSignal.reason instanceof Error ? lifeSignal.reason : new WorkerCrashedError()
+      const err =
+        lifeSignal.reason instanceof Error ? lifeSignal.reason : new WorkerCrashedError(null, null)
       requestStream.destroy(err)
       responseStream.destroy(err)
     }
