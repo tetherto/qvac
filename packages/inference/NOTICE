@@ -821,7 +821,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-env
   bare-events@2.9.2
     https://github.com/holepunchto/bare-events
-  bare-fetch@3.4.0
+  bare-fetch@3.4.1
     https://github.com/holepunchto/bare-fetch
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
@@ -877,7 +877,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-subprocess
   bare-tcp@2.6.1
     https://github.com/holepunchto/bare-tcp
-  bare-tls@3.1.11
+  bare-tls@3.1.12
     https://github.com/holepunchto/bare-tls
   bare-tty@5.2.1
     https://github.com/holepunchto/bare-tty
@@ -1057,7 +1057,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/signal-promise
   signed-varint@2.0.1
     https://github.com/dominictarr/signed-varint
-  sodium-native@5.1.1
+  sodium-native@5.2.0
     https://github.com/holepunchto/sodium-native
   sodium-secretstream@1.2.0
     https://github.com/mafintosh/sodium-secretstream
