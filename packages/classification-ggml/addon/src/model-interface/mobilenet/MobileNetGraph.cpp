@@ -14,7 +14,6 @@
 #include <ggml-backend.h>
 #include <ggml.h>
 #include <gguf.h>
-
 #include <inference-addon-cpp/Errors.hpp>
 
 namespace classification_ggml::graph {
@@ -71,9 +70,7 @@ struct ggml_tensor* cloneAsFp32(
 }
 
 // torchvision same-padding: p = (k - 1) / 2.
-constexpr int samePadding(int kernel) {
-  return (kernel - 1) / 2;
-}
+constexpr int samePadding(int kernel) { return (kernel - 1) / 2; }
 
 /// Read a GGUF tensor (FP16 or FP32) into an FP32 vector.
 std::vector<float> loadVector1d(
@@ -98,8 +95,8 @@ std::vector<float> loadVector1d(
 
 /// Folded BN: `x * scale + shift`, scale/shift pre-reshaped to [1,1,C,1].
 struct ggml_tensor* applyFoldedBn(
-    struct ggml_context* ctx, struct ggml_tensor* x,
-    struct ggml_tensor* scale, struct ggml_tensor* shift) {
+    struct ggml_context* ctx, struct ggml_tensor* x, struct ggml_tensor* scale,
+    struct ggml_tensor* shift) {
   struct ggml_tensor* scaled = ggml_mul(ctx, x, scale);
   return ggml_add(ctx, scaled, shift);
 }
@@ -129,8 +126,8 @@ struct GraphBuilder {
     const int pad = samePadding(kernel);
     struct ggml_tensor* conv =
         ggml_conv_2d(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
-    struct ggml_tensor* bn =
-        applyFoldedBn(ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
+    struct ggml_tensor* bn = applyFoldedBn(
+        ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
     if (!activate) {
       return bn;
     }
@@ -145,25 +142,32 @@ struct GraphBuilder {
     const int pad = samePadding(kernel);
     struct ggml_tensor* conv =
         ggml_conv_2d_dw(ctx, kernelT, x, stride, stride, pad, pad, 1, 1);
-    struct ggml_tensor* bn =
-        applyFoldedBn(ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
+    struct ggml_tensor* bn = applyFoldedBn(
+        ctx, conv, t(bnPrefix + ".scale"), t(bnPrefix + ".shift"));
     return activate(bn, useHardswish);
   }
 
   /// SE: avgpool → 1x1 reduce + ReLU → 1x1 expand + HardSigmoid → mul.
-  struct ggml_tensor* seBlock(
-      struct ggml_tensor* x, const std::string& sePrefix, int spatialHw) {
+  struct ggml_tensor*
+  seBlock(struct ggml_tensor* x, const std::string& sePrefix, int spatialHw) {
     struct ggml_tensor* pooled = ggml_pool_2d(
-        ctx, x, GGML_OP_POOL_AVG, spatialHw, spatialHw, spatialHw, spatialHw,
-        0, 0);
+        ctx,
+        x,
+        GGML_OP_POOL_AVG,
+        spatialHw,
+        spatialHw,
+        spatialHw,
+        spatialHw,
+        0,
+        0);
 
     struct ggml_tensor* fc1 = ggml_conv_2d(
         ctx, t(sePrefix + ".fc1.weight"), pooled, 1, 1, 0, 0, 1, 1);
     fc1 = ggml_add(ctx, fc1, t(sePrefix + ".fc1.bias_br"));
     fc1 = ggml_relu(ctx, fc1);
 
-    struct ggml_tensor* fc2 = ggml_conv_2d(
-        ctx, t(sePrefix + ".fc2.weight"), fc1, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* fc2 =
+        ggml_conv_2d(ctx, t(sePrefix + ".fc2.weight"), fc1, 1, 1, 0, 0, 1, 1);
     fc2 = ggml_add(ctx, fc2, t(sePrefix + ".fc2.bias_br"));
 
     struct ggml_tensor* gate = ggml_hardsigmoid(ctx, fc2);
@@ -184,8 +188,13 @@ struct GraphBuilder {
 
     if (hasExpand) {
       y = convBnAct(
-          y, base + ".block.0.0", base + ".block.0.1",
-          /*stride=*/1, /*kernel=*/1, /*activate=*/true, cfg.useHardswish);
+          y,
+          base + ".block.0.0",
+          base + ".block.0.1",
+          /*stride=*/1,
+          /*kernel=*/1,
+          /*activate=*/true,
+          cfg.useHardswish);
       dwBlockIdx = 1;
       if (cfg.useSe) {
         seBlockIdx = 2;
@@ -205,7 +214,11 @@ struct GraphBuilder {
 
     const std::string dwPrefix = base + ".block." + std::to_string(dwBlockIdx);
     y = dwConvBnAct(
-        y, dwPrefix + ".0", dwPrefix + ".1", cfg.stride, cfg.depthwiseKernel,
+        y,
+        dwPrefix + ".0",
+        dwPrefix + ".1",
+        cfg.stride,
+        cfg.depthwiseKernel,
         cfg.useHardswish);
     if (cfg.stride == 2) {
       spatial = (spatial + 1) / 2;
@@ -220,8 +233,13 @@ struct GraphBuilder {
     const std::string projPrefix =
         base + ".block." + std::to_string(projBlockIdx);
     y = convBnAct(
-        y, projPrefix + ".0", projPrefix + ".1",
-        /*stride=*/1, /*kernel=*/1, /*activate=*/false, cfg.useHardswish);
+        y,
+        projPrefix + ".0",
+        projPrefix + ".1",
+        /*stride=*/1,
+        /*kernel=*/1,
+        /*activate=*/false,
+        cfg.useHardswish);
 
     if (cfg.stride == 1 && cfg.inputChannels == cfg.outputChannels) {
       y = ggml_add(ctx, y, x);
@@ -235,8 +253,7 @@ struct GraphBuilder {
 WeightsBundle::~WeightsBundle() { reset(); }
 
 WeightsBundle::WeightsBundle(WeightsBundle&& other) noexcept
-    : ctx(std::move(other.ctx)),
-      tensors(std::move(other.tensors)),
+    : ctx(std::move(other.ctx)), tensors(std::move(other.tensors)),
       backendBuffer(other.backendBuffer) {
   other.backendBuffer = nullptr;
 }
@@ -264,11 +281,8 @@ void WeightsBundle::reset() {
 ComputeGraph::~ComputeGraph() { reset(); }
 
 ComputeGraph::ComputeGraph(ComputeGraph&& other) noexcept
-    : ctx(std::move(other.ctx)),
-      graph(other.graph),
-      input(other.input),
-      output(other.output),
-      backendBuffer(other.backendBuffer) {
+    : ctx(std::move(other.ctx)), graph(other.graph), input(other.input),
+      output(other.output), backendBuffer(other.backendBuffer) {
   other.graph = nullptr;
   other.input = nullptr;
   other.output = nullptr;
@@ -312,7 +326,8 @@ WeightsBundle loadWeights(
   if (gguf == nullptr) {
     raiseInvalid("Failed to open GGUF file: " + ggufPath);
   }
-  std::unique_ptr<gguf_context, decltype(&gguf_free)> ggufGuard(gguf, gguf_free);
+  std::unique_ptr<gguf_context, decltype(&gguf_free)> ggufGuard(
+      gguf, gguf_free);
   std::unique_ptr<struct ggml_context, decltype(&ggml_free)> ggufCtxGuard(
       ggufCtx, ggml_free);
 
@@ -369,7 +384,8 @@ WeightsBundle loadWeights(
   };
 
   auto addConvWeight = [&](const std::string& name) {
-    struct ggml_tensor* t = cloneRaw(bundle.ctx.get(), gguf, ggufCtx, name.c_str());
+    struct ggml_tensor* t =
+        cloneRaw(bundle.ctx.get(), gguf, ggufCtx, name.c_str());
     registerTensor(t);
   };
 
@@ -382,29 +398,32 @@ WeightsBundle loadWeights(
 
     const int64_t shape4d[4] = {1, 1, channels, 1};
     const std::string brName = name + "_br";
-    struct ggml_tensor* br = cloneAsFp32(bundle.ctx.get(), brName.c_str(), 4, shape4d);
+    struct ggml_tensor* br =
+        cloneAsFp32(bundle.ctx.get(), brName.c_str(), 4, shape4d);
     tensors.emplace(brName, br);
   };
 
   // Fold BN at load time: replaces ~34 per-inference sqrt + 4-op chains.
   auto addFoldedBn = [&](const std::string& bnPrefix, int channels) {
     const int64_t shape4d[4] = {1, 1, channels, 1};
-    struct ggml_tensor* scale =
-        cloneAsFp32(bundle.ctx.get(), (bnPrefix + ".scale").c_str(), 4, shape4d);
-    struct ggml_tensor* shift =
-        cloneAsFp32(bundle.ctx.get(), (bnPrefix + ".shift").c_str(), 4, shape4d);
+    struct ggml_tensor* scale = cloneAsFp32(
+        bundle.ctx.get(), (bnPrefix + ".scale").c_str(), 4, shape4d);
+    struct ggml_tensor* shift = cloneAsFp32(
+        bundle.ctx.get(), (bnPrefix + ".shift").c_str(), 4, shape4d);
     tensors.emplace(bnPrefix + ".scale", scale);
     tensors.emplace(bnPrefix + ".shift", shift);
   };
 
   auto addFcWeightFp32 = [&](const std::string& name, int in, int out) {
     const int64_t shape[2] = {in, out};
-    struct ggml_tensor* t = cloneAsFp32(bundle.ctx.get(), name.c_str(), 2, shape);
+    struct ggml_tensor* t =
+        cloneAsFp32(bundle.ctx.get(), name.c_str(), 2, shape);
     tensors.emplace(name, t);
   };
   auto addFcBiasFp32 = [&](const std::string& name, int out) {
     const int64_t shape[1] = {out};
-    struct ggml_tensor* t = cloneAsFp32(bundle.ctx.get(), name.c_str(), 1, shape);
+    struct ggml_tensor* t =
+        cloneAsFp32(bundle.ctx.get(), name.c_str(), 1, shape);
     tensors.emplace(name, t);
   };
 
@@ -496,10 +515,8 @@ WeightsBundle loadWeights(
   };
 
   auto foldBn = [&](const std::string& bnPrefix) {
-    std::vector<float> w =
-        loadVector1d(gguf, ggufCtx, bnPrefix + ".weight");
-    std::vector<float> b =
-        loadVector1d(gguf, ggufCtx, bnPrefix + ".bias");
+    std::vector<float> w = loadVector1d(gguf, ggufCtx, bnPrefix + ".weight");
+    std::vector<float> b = loadVector1d(gguf, ggufCtx, bnPrefix + ".bias");
     std::vector<float> m =
         loadVector1d(gguf, ggufCtx, bnPrefix + ".running_mean");
     std::vector<float> v =
@@ -587,8 +604,13 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
   GraphBuilder gb{ctx, weights.tensors};
 
   struct ggml_tensor* x = gb.convBnAct(
-      cg.input, "features.0.0", "features.0.1", /*stride=*/2, /*kernel=*/3,
-      /*activate=*/true, /*useHardswish=*/true);
+      cg.input,
+      "features.0.0",
+      "features.0.1",
+      /*stride=*/2,
+      /*kernel=*/3,
+      /*activate=*/true,
+      /*useHardswish=*/true);
 
   int spatial = INPUT_HW / 2;
 
@@ -600,20 +622,24 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
   }
 
   x = gb.convBnAct(
-      x, "features.12.0", "features.12.1", /*stride=*/1, /*kernel=*/1,
-      /*activate=*/true, /*useHardswish=*/true);
+      x,
+      "features.12.0",
+      "features.12.1",
+      /*stride=*/1,
+      /*kernel=*/1,
+      /*activate=*/true,
+      /*useHardswish=*/true);
 
   struct ggml_tensor* pooled = ggml_pool_2d(
       ctx, x, GGML_OP_POOL_AVG, spatial, spatial, spatial, spatial, 0, 0);
   struct ggml_tensor* flat = ggml_reshape_1d(ctx, pooled, TAIL_OUT_CHANNELS);
 
-  struct ggml_tensor* fc0 = ggml_mul_mat(
-      ctx, gb.t("classifier.0.weight"), flat);
+  struct ggml_tensor* fc0 =
+      ggml_mul_mat(ctx, gb.t("classifier.0.weight"), flat);
   fc0 = ggml_add(ctx, fc0, gb.t("classifier.0.bias"));
   fc0 = ggml_hardswish(ctx, fc0);
 
-  struct ggml_tensor* fc3 = ggml_mul_mat(
-      ctx, gb.t("classifier.3.weight"), fc0);
+  struct ggml_tensor* fc3 = ggml_mul_mat(ctx, gb.t("classifier.3.weight"), fc0);
   fc3 = ggml_add(ctx, fc3, gb.t("classifier.3.bias"));
 
   cg.output = fc3;

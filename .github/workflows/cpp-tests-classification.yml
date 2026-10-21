@@ -35,6 +35,39 @@ permissions:
   contents: read
 
 jobs:
+  test-converter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      WORKDIR: ${{ inputs.workdir || 'packages/classification-ggml' }}
+    steps:
+      - name: Setup Python for converter tests
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install converter test dependency
+        env:
+          NUMPY_REQUIREMENT: numpy==2.4.4 --hash=sha256:81f4a14bee47aec54f883e0cad2d73986640c1590eb9bfaaba7ad17394481e6e
+        run: |
+          printf '%s\n' "$NUMPY_REQUIREMENT" > "$RUNNER_TEMP/converter-requirements.txt"
+          python -m pip install --no-cache-dir --only-binary=:all: --require-hashes -r "$RUNNER_TEMP/converter-requirements.txt"
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      - name: Test MegaLoc converter mathematics
+        if: hashFiles(format('{0}/scripts/test_convert_megaloc.py', env.WORKDIR)) != ''
+        working-directory: ${{ env.WORKDIR }}
+        run: python -B scripts/test_convert_megaloc.py -v
+
   runner_names:
     permissions:
       contents: read
