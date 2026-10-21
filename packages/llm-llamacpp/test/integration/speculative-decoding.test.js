@@ -14,6 +14,10 @@
 //   - QVAC_RUN_SPECULATIVE_27B=1: MTP on the model's own layers, an external
 //     MTP head and a DFlash2 drafter on Qwen3.8-27B (about 21 GB of models).
 //
+// QVAC_SPECULATIVE_TOLERATE_DIVERGENCE=1 lets greedy output differ from plain
+// decoding and between runs, for GPU backends (e.g. RADV Vulkan) whose batched
+// verification flips near-ties. Off by default: CI requires identical output.
+//
 // prestage-ignore: Qwen3-4B-Q4_K_M.gguf — opt-in via QVAC_RUN_SPECULATIVE_DFLASH=1, desktop-only
 // prestage-ignore: Qwen3-4B-DFlash-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_DFLASH=1, desktop-only
 // prestage-ignore: Qwen3.8-27B-UD-Q4_K_XL.gguf — opt-in via QVAC_RUN_SPECULATIVE_27B=1, desktop-only
@@ -41,7 +45,6 @@ function safeTest(name, opts, fn) {
   integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
 }
 
-// os.getEnv() is what makes the variable settable on Device Farm.
 function readEnv(key) {
   if (typeof os.getEnv === 'function') return os.getEnv(key) || ''
   if (typeof process !== 'undefined' && process.env) return process.env[key] || ''
@@ -60,6 +63,7 @@ const MMPROJ = 'mmproj-Qwen3.5-0.8B-F16.gguf'
 const LARGE_TARGET = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
 const skipDflash = optIn('QVAC_RUN_SPECULATIVE_DFLASH', 'DFlash on Qwen3-4B')
 const skipLarge = optIn('QVAC_RUN_SPECULATIVE_27B', 'Speculative decoding on Qwen3.8-27B')
+const tolerateDivergence = readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '1'
 
 // `draft` is the `spec-draft-model`. The 27B variants download their models
 // on first use, so their tests get room for that.
@@ -185,11 +189,9 @@ for (const variant of VARIANTS) {
         t.is(first.stats.generatedTokens, 96, 'speculation keeps the exact token budget')
         assertDrafted(t, first.stats, 'single prompt')
 
-        // Greedy speculative decoding is deterministic run to run. On the 27B
-        // target a near-tie can flip between runs on some GPU backends (RADV
-        // Vulkan), so there a rerun only has to keep the same budget.
+        // Greedy speculative decoding is deterministic run to run.
         const second = await runOnce(model, PROMPT)
-        if (target === LARGE_TARGET) {
+        if (tolerateDivergence) {
           t.is(second.stats.generatedTokens, 96, 'second greedy run keeps the token budget')
           if (second.output !== first.output) {
             const at = commonPrefixLength(second.output, first.output)
@@ -236,28 +238,29 @@ for (const variant of VARIANTS) {
         'antiprompt',
         'speculative decoding stopped on the stop word'
       )
-      // Not an exact match on purpose. Speculative decoding verifies several
-      // drafted tokens in one batch, and some GPU backends round a batch
-      // slightly differently from one-token decoding. On RADV Vulkan (Radeon
-      // 8060S) that flips near-ties, such as "Let me think" vs "I should",
-      // so the two greedy outputs can take different but equally valid paths
-      // before the stop and reach the stop word at different points. CPU and
-      // NVIDIA Vulkan produce identical outputs. What this test guards is
-      // stop handling, so each run must stop at its own first match, and
-      // while the outputs agree they must stop at the same place with the
-      // same token count.
-      assertStopsAtFirstMatch(t, plain.output, stopWord, 'plain')
-      assertStopsAtFirstMatch(t, speculative.output, stopWord, 'speculative')
-      const a = speculative.output
-      const b = plain.output
-      t.ok(
-        a === b || !(a.startsWith(b) || b.startsWith(a)),
-        'speculative decoding stops where plain decoding does on the same text'
-      )
-      if (a === b) {
-        t.is(speculative.stats.generatedTokens, plain.stats.generatedTokens, 'same token count')
+      if (tolerateDivergence) {
+        // Outputs may diverge before the stop; each must still stop at its own
+        // first match, and where one contains the other they must be equal.
+        assertStopsAtFirstMatch(t, plain.output, stopWord, 'plain')
+        assertStopsAtFirstMatch(t, speculative.output, stopWord, 'speculative')
+        const a = speculative.output
+        const b = plain.output
+        t.ok(
+          a === b || !(a.startsWith(b) || b.startsWith(a)),
+          'speculative decoding stops where plain decoding does on the same text'
+        )
+        if (a === b) {
+          t.is(speculative.stats.generatedTokens, plain.stats.generatedTokens, 'same token count')
+        } else {
+          t.comment(`outputs diverged at character ${commonPrefixLength(a, b)} before the stop`)
+        }
       } else {
-        t.comment(`outputs diverged at character ${commonPrefixLength(a, b)} before the stop`)
+        t.is(
+          speculative.output,
+          plain.output,
+          'speculative output matches plain output up to the stop'
+        )
+        t.is(speculative.stats.generatedTokens, plain.stats.generatedTokens, 'same token count')
       }
       assertDrafted(t, speculative.stats, 'stop string')
     }
@@ -451,8 +454,8 @@ safeTest('an external head without MTP layers fails to load', { timeout: 300_000
   await model.unload().catch(() => {})
 })
 
-// Qwen3 has another vocabulary, which fabric does not check for MTP, and its
-// hidden width is asserted on, aborting the process.
+// A head for another model is refused before fabric loads it; fabric itself
+// aborts on a width mismatch and does not check the vocabulary.
 // prestage-ignore: Qwen3-0.6B-Q8_0.gguf — desktop-only; the test skips on mobile
 safeTest(
   'an external head for another model fails to load',
