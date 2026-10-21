@@ -9727,6 +9727,28 @@
     "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF"
   },
   {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 0.8B with MTP layers",
+    "quantization": "f16",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 0.8B with MTP layers",
+    "quantization": "bf16",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/Qwen3.5-2B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Qwen 3.5 2B multimodal model with MTP layers",
@@ -9760,6 +9782,28 @@
     "link": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF"
   },
   {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 2B with MTP layers",
+    "quantization": "f16",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 2B with MTP layers",
+    "quantization": "bf16",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF/resolve/86835bf9949e4d14d6860f7910b1340ad4f271a9/Qwen3.5-4B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Qwen 3.5 4B multimodal model with MTP layers",
@@ -9782,6 +9826,28 @@
     "link": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF"
   },
   {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF/resolve/86835bf9949e4d14d6860f7910b1340ad4f271a9/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 4B with MTP layers",
+    "quantization": "f16",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF/resolve/86835bf9949e4d14d6860f7910b1340ad4f271a9/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 4B with MTP layers",
+    "quantization": "bf16",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/Qwen3.5-9B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Qwen 3.5 9B multimodal model with MTP layers",
@@ -9801,6 +9867,28 @@
     "licenseId": "Apache-2.0",
     "tags": ["generation", "mtp", "qwen3.5", "instruct"],
     "notes": "Keeps the multi-token-prediction (MTP) layers, so it can load with spec_type draft-mtp for speculative decoding. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 9B with MTP layers",
+    "quantization": "f16",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 9B with MTP layers",
+    "quantization": "bf16",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "",
     "link": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF"
   },
   {
