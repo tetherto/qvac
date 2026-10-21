@@ -1,6 +1,6 @@
 import QvacLogger = require("@qvac/logging");
 import { QvacResponse } from "@qvac/infer-base";
-import { assessFit as assessFitImpl, type LlamaFitDevice, type LlamaFitRequest, type LlamaFitResult, type LlamaFitStatus } from "./fit";
+import { assessFit as assessFitImpl, type LlamaFitDevice, type LlamaFitRequest, type LlamaFitResult, type LlamaFitStats, type LlamaFitStatus } from "./fit";
 import type * as AddonModule from "./addon";
 type BareEventMap = Record<string | symbol, unknown[]>;
 /** Aliases: inside the namespace, `QvacResponse` resolves to its own member. */
@@ -788,5 +788,6 @@ declare namespace LlmLlamacpp {
     type FitResult = LlamaFitResult;
     type FitStatus = LlamaFitStatus;
     type FitDevice = LlamaFitDevice;
+    type FitStats = LlamaFitStats;
 }
 export = LlmLlamacpp;

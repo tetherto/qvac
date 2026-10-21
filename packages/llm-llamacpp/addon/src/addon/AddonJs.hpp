@@ -3,6 +3,7 @@
 #include <any>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <functional>
 #include <future>
@@ -15,6 +16,13 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#include <os/proc.h>
+#endif
+#endif
 
 #include <common/arg.h>
 #include <common/common.h>
@@ -36,6 +44,7 @@
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/SpeculativeRuntime.hpp"
+#include "utils/AppMemoryBudget.hpp"
 #include "utils/ParallelLimits.hpp"
 #include "utils/ParseUnsigned.hpp"
 
@@ -513,8 +522,10 @@ JSCATCH
 // Projects one model against the memory free right now. Args: [request].
 // Returns a Promise of the result.
 //
-// Takes no instance and loads nothing: the fitter reads GGUF metadata only. A
-// model it cannot read resolves to an "error" status.
+// Takes no instance and loads nothing: the fitter reads GGUF metadata only.
+// Resolves to "fits" or "does-not-fit" with the memory the load takes on each
+// device, or "unknown" for a load the fitter cannot project. A model it cannot
+// read, or an invalid request, rejects.
 //
 // The request is copied into plain C++ on the JS thread, the projection runs
 // on a worker thread, and the result object is built back on the JS thread.
@@ -527,30 +538,77 @@ struct FitRequest {
 };
 
 struct FitDevice {
+  std::string id;
   std::string name;
-  double totalBytes;
+  bool unified;
+  double usedBytes;
   double freeBytes;
-  double modelBytes;
-  double contextBytes;
-  double computeBytes;
+  double totalBytes;
+};
+
+// The load as the fit resolved it: on "fits" the context and layer count the
+// fitter settled on, on "does-not-fit" the ones the load asked for.
+struct FitStats {
+  double ctxSize;
+  double gpuLayers;
 };
 
 struct FitResult {
-  std::string status = "error";
-  std::string reason;
-  double gpuLayers = 0;
-  double ctxSize = 0;
+  std::string status;
   std::vector<FitDevice> devices;
-  double deviceBytes = 0;
-  double hostBytes = 0;
-  double trainCtxSize = 0;
-  double expertCount = 0;
+  std::optional<FitStats> stats;
 };
 
-inline FitResult errorResult(const char* reason) {
-  FitResult result;
-  result.reason = reason;
-  return result;
+inline FitResult unknownResult() { return FitResult{"unknown", {}, {}}; }
+
+[[noreturn]] inline void throwFitError(
+    qvac_errors::general_error::GeneralErrorCode code,
+    const std::string& message) {
+  throw qvac_errors::StatusError(code, "assessFit: " + message);
+}
+
+// The PCI bus ID when the backend reports one, so the same GPU matches across
+// addons built on different backends; the device name otherwise.
+//
+// Unified marks memory the host owns: the CPU, an integrated GPU, a GPU that
+// says it shares host memory, Android's OpenCL GPU, and a device that reports
+// no memory of its own. A unified device that reports none takes the CPU's
+// figures.
+inline FitDevice fitDevice(
+    ggml_backend_dev_t device, double usedBytes, double freeBytes,
+    double totalBytes) {
+  ggml_backend_dev_props props{};
+  ggml_backend_dev_get_props(device, &props);
+  const bool reportsNoMemory = totalBytes == 0;
+#if defined(__ANDROID__)
+  const char* registry =
+      ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+  const bool androidOpenCl =
+      registry != nullptr && std::strcmp(registry, "OpenCL") == 0;
+#else
+  const bool androidOpenCl = false;
+#endif
+  const bool unified = props.memory_unified ||
+                       props.type == GGML_BACKEND_DEVICE_TYPE_IGPU ||
+                       props.type == GGML_BACKEND_DEVICE_TYPE_CPU ||
+                       androidOpenCl || reportsNoMemory;
+  if (unified && reportsNoMemory) {
+    if (ggml_backend_dev_t host =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      size_t hostFree = 0;
+      size_t hostTotal = 0;
+      ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+      freeBytes = static_cast<double>(hostFree);
+      totalBytes = static_cast<double>(hostTotal);
+    }
+  }
+  return {
+      props.device_id != nullptr ? props.device_id : props.name,
+      props.name,
+      unified,
+      usedBytes,
+      freeBytes,
+      totalBytes};
 }
 
 inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
@@ -627,23 +685,26 @@ inline FitResult runFit(FitRequest request) {
   // An empty registry would still yield a verdict, measured against a machine
   // the fitter cannot see.
   if (ggml_backend_dev_count() == 0) {
-    return errorResult("no-backend-device");
+    throwFitError(
+        qvac_errors::general_error::InternalError,
+        "no backend device is registered");
   }
 
   // A path llama cannot open reaches it as a `runtime_error` carrying no
-  // filename, which reports as a model it could not read either way. Naming
-  // the cause here keeps that distinct from a load it cannot represent.
+  // filename, so the file is opened here first to name the cause.
   if (std::FILE* file = std::fopen(modelPath.c_str(), "rb")) {
     std::fclose(file);
   } else {
-    return errorResult("model-unreadable");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "cannot open the model file");
   }
 
   // The fitter measures device memory, and a cpu load's weights stay
   // file-backed, so it would project `fits` for nearly any model.
   if (auto device = configFilemap.find("device");
       device != configFilemap.end() && device->second == "cpu") {
-    return errorResult("unsupported-config");
+    return unknownResult();
   }
 
   common_params loadParams;
@@ -664,8 +725,8 @@ inline FitResult runFit(FitRequest request) {
     loadParams = std::move(normalized.params);
     qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
         speculativeConfig, loadParams);
-  } catch (const std::exception&) {
-    return errorResult("unsupported-config");
+  } catch (const std::exception& e) {
+    throwFitError(qvac_errors::general_error::InvalidArgument, e.what());
   }
   // The draft model (DFlash or an MTP head) is a second file the fit reads;
   // probed like the target above. The load requires a regular file, and
@@ -673,21 +734,22 @@ inline FitResult runFit(FitRequest request) {
   if (const std::string& draftPath = loadParams.speculative.draft.mparams.path;
       !draftPath.empty()) {
     std::error_code error;
-    if (!std::filesystem::is_regular_file(draftPath, error)) {
-      return errorResult("model-unreadable");
+    std::FILE* file = std::filesystem::is_regular_file(draftPath, error)
+                          ? std::fopen(draftPath.c_str(), "rb")
+                          : nullptr;
+    if (file == nullptr) {
+      throwFitError(
+          qvac_errors::general_error::InvalidArgument,
+          "cannot open the draft model file");
     }
-    if (std::FILE* file = std::fopen(draftPath.c_str(), "rb")) {
-      std::fclose(file);
-    } else {
-      return errorResult("model-unreadable");
-    }
+    std::fclose(file);
   }
   loadParams.embedding = false;
 
   // Each is a second resident file the projection does not count, so a load
   // carrying one would come back understated.
   if (!loadParams.lora_adapters.empty() || !loadParams.mmproj.path.empty()) {
-    return errorResult("unsupported-config");
+    return unknownResult();
   }
 
   llama_model_params mparams = common_model_params_to_llama(loadParams);
@@ -698,7 +760,9 @@ inline FitResult runFit(FitRequest request) {
   const auto requestedMinCtx = request.minCtxSize;
   if (requestedMinCtx.has_value() &&
       (!std::isfinite(*requestedMinCtx) || *requestedMinCtx < 0)) {
-    return errorResult("unsupported-config");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "minCtxSize must be a non-negative count");
   }
   const uint32_t minCtx =
       requestedMinCtx.has_value()
@@ -708,7 +772,9 @@ inline FitResult runFit(FitRequest request) {
   const auto requestedMargin = request.marginBytes;
   if (requestedMargin.has_value() &&
       (!std::isfinite(*requestedMargin) || *requestedMargin < 0)) {
-    return errorResult("unsupported-config");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "marginBytes must be a non-negative byte count");
   }
 
   // In/out: the fitter rewrites only the entries still holding a llama
@@ -721,7 +787,9 @@ inline FitResult runFit(FitRequest request) {
   // llama walks this array to its `{nullptr, nullptr}` terminator, so a list
   // that does not fit with the terminator would be read past its end.
   if (loadParams.tensor_buft_overrides.size() > buftOverrides.size()) {
-    return errorResult("unsupported-config");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "the load sets more tensor buffer overrides than llama accepts");
   }
   std::copy_n(
       loadParams.tensor_buft_overrides.begin(),
@@ -741,7 +809,7 @@ inline FitResult runFit(FitRequest request) {
 
   // Without the fitter the load places nothing, so there is no verdict.
   if (!loadParams.fit_params) {
-    return errorResult("unsupported-config");
+    return unknownResult();
   }
 
   // A draft context (MTP, or a DFlash draft model) is fitted next to the
@@ -757,10 +825,10 @@ inline FitResult runFit(FitRequest request) {
     namespace spec = qvac_lib_inference_addon_llama::speculative;
     const auto head = spec::readGgufShape(speculativeFit->extra()->path_model);
     const auto target = spec::readGgufShape(modelPath);
-    if (!spec::mtpHeadMismatch(
-             head.width, target.width, head.vocab, target.vocab)
-             .empty()) {
-      return errorResult("unsupported-config");
+    const std::string mismatch = spec::mtpHeadMismatch(
+        head.width, target.width, head.vocab, target.vocab);
+    if (!mismatch.empty()) {
+      throwFitError(qvac_errors::general_error::InvalidArgument, mismatch);
     }
   }
 
@@ -780,22 +848,19 @@ inline FitResult runFit(FitRequest request) {
         // The load's fit passes it too, so `moe-cache-mib: auto` sizes the
         // same expert cache in the projection as in the load.
         loadParams.moe_cache_auto_explicit);
-  } catch (const std::exception&) {
+  } catch (const std::exception& e) {
     // `common_fit_params` answers its own failures with a status, so a throw
     // escaping it came from the setup around the probe.
-    return errorResult("unsupported-config");
-  }
-
-  const char* statusName = "error";
-  if (status == COMMON_PARAMS_FIT_STATUS_SUCCESS) {
-    statusName = "fits";
-  } else if (status == COMMON_PARAMS_FIT_STATUS_FAILURE) {
-    statusName = "does-not-fit";
+    throwFitError(qvac_errors::general_error::InternalError, e.what());
   }
 
   if (status == COMMON_PARAMS_FIT_STATUS_ERROR) {
-    return errorResult("model-unreadable");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "the model cannot be read");
   }
+  const char* statusName =
+      status == COMMON_PARAMS_FIT_STATUS_SUCCESS ? "fits" : "does-not-fit";
 
   // The per-device breakdown is a second no-alloc probe, so it costs about
   // what the fit cost and only runs once a projection exists.
@@ -804,7 +869,6 @@ inline FitResult runFit(FitRequest request) {
   uint32_t trainCtx = 0;
   uint32_t expertCount = 0;
   common_device_memory_data_vec breakdown;
-  bool measured = true;
   try {
     breakdown = common_get_device_memory_data(
         modelPath.c_str(),
@@ -816,113 +880,116 @@ inline FitResult runFit(FitRequest request) {
         expertCount,
         GGML_LOG_LEVEL_INFO);
   } catch (const std::exception&) {
-    // The fit already reached a verdict; this probe only breaks it down, so a
-    // failure here leaves the verdict standing without per-device figures.
-    measured = false;
-    devices.clear();
-    breakdown.clear();
+    // A verdict is reported only with the rows it rests on.
+    return unknownResult();
   }
   // The figures count the draft side, as the verdict does. A draft model the
   // fit cannot measure stays out of both, as fabric fits without it. An MTP
   // draft that cannot be measured, such as one without MTP layers, fails the
-  // load, so it is refused. A failed fit leaves `n_ctx` 0, which the load
+  // load, so it rejects. A failed fit leaves `n_ctx` 0, which the load
   // resolves to the trained context.
   llama_context_params draftCparams = cparams;
   draftCparams.n_ctx = cparams.n_ctx != 0 ? cparams.n_ctx : trainCtx;
-  if (measured && speculativeFit &&
+  if (speculativeFit &&
       !speculativeFit->addMemory(
           modelPath.c_str(), mparams, draftCparams, devices, breakdown) &&
       speculativeFit->isMtp()) {
-    return errorResult("unsupported-config");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "the MTP draft cannot be measured");
+  }
+
+  // A fitted context of 0 with no trained context names no usable load.
+  if (cparams.n_ctx == 0 && trainCtx == 0) {
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "the model declares no trained context");
   }
 
   // The probe returns one row per device the model was assigned to, then a
   // trailing host row: the CPU device is counted among the devices but its
-  // demand lands on the host.
+  // demand lands on the host. Weights mapped from the file under
+  // LLAMA_LOAD_MODE_MMAP are page cache the OS can evict, so the host row
+  // leaves them out, as fabric's own verdict does. A verdict always carries the
+  // host row, so a probe without one, or a registry without a CPU device to
+  // name it by, leaves the load unsized.
+  ggml_backend_dev_t host =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (host == nullptr || breakdown.size() <= devices.size()) {
+    return unknownResult();
+  }
+  const bool hostModelEvictable = mparams.load_mode == LLAMA_LOAD_MODE_MMAP;
   FitResult result;
   result.status = statusName;
-  result.reason =
-      status == COMMON_PARAMS_FIT_STATUS_SUCCESS ? "fits" : "does-not-fit";
   for (size_t i = 0; i < breakdown.size(); ++i) {
     const auto& row = breakdown[i];
-    const bool isHost = i >= devices.size();
-    const double used = static_cast<double>(row.model) +
-                        static_cast<double>(row.context) +
-                        static_cast<double>(row.compute);
-    if (isHost) {
-      result.hostBytes += used;
-    } else {
-      result.deviceBytes += used;
-    }
-    // Device handles are borrowed from the backend. Copy names before its
-    // owning handle is released; completion only receives owned C++ values.
-    result.devices.push_back(
-        {isHost ? "host" : ggml_backend_dev_name(devices[i]),
-         static_cast<double>(row.total),
-         static_cast<double>(row.free),
-         static_cast<double>(row.model),
-         static_cast<double>(row.context),
-         static_cast<double>(row.compute)});
-  }
-
-  // A fitted 0 names the trained context rather than a usable load. Only the
-  // breakdown probe reads the trained context, so without it a fitted 0 stays
-  // 0 instead of being read as an unreadable model.
-  uint32_t fittedCtx = cparams.n_ctx;
-  if (fittedCtx == 0 && measured) {
-    if (trainCtx == 0) {
-      return errorResult("model-unreadable");
-    }
-    fittedCtx = trainCtx;
+    const bool hostRow = i >= devices.size();
+    ggml_backend_dev_t device = hostRow ? host : devices[i];
+    const double model =
+        hostRow && hostModelEvictable ? 0 : static_cast<double>(row.model);
+    // Device handles are borrowed from the backend, so only owned values leave
+    // this worker for the result.
+    result.devices.push_back(fitDevice(
+        device,
+        model + static_cast<double>(row.context) +
+            static_cast<double>(row.compute),
+        static_cast<double>(row.free),
+        static_cast<double>(row.total)));
   }
 
   // A load that fits whole leaves llama's -1 in place. llama resolves that to
   // every layer plus the output layer, and to none when the placement holds no
-  // device; the probe's device list never holds the CPU.
-  //
-  // `resolvedLayers` omits an MTP model's nextn layers unless the load asked
-  // for them, so such a model reports short of what llama would offload.
-  double gpuLayers = static_cast<double>(mparams.n_gpu_layers);
-  if (mparams.n_gpu_layers < 0 && measured) {
-    gpuLayers = devices.empty() ? 0.0 : static_cast<double>(resolvedLayers) + 1;
-  }
-  result.gpuLayers = gpuLayers;
-  result.ctxSize = static_cast<double>(fittedCtx);
-  result.trainCtxSize = static_cast<double>(trainCtx);
-  result.expertCount = static_cast<double>(expertCount);
+  // device; the probe's device list never holds the CPU. `resolvedLayers`
+  // omits an MTP model's nextn layers unless the load asked for them, so such a
+  // model reports short of what llama would offload. A fitted context of 0 is
+  // the trained context.
+  const double gpuLayers =
+      mparams.n_gpu_layers >= 0 ? static_cast<double>(mparams.n_gpu_layers)
+      : devices.empty()         ? 0.0
+                                : static_cast<double>(resolvedLayers) + 1;
+  result.stats = FitStats{
+      static_cast<double>(cparams.n_ctx != 0 ? cparams.n_ctx : trainCtx),
+      gpuLayers};
+
+#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+  // The margin the fitter held back on each device is held back from the app's
+  // limit too.
+  const size_t margin =
+      margins.empty() ? 0 : *std::max_element(margins.begin(), margins.end());
+  result.status = qvac_lib_inference_addon_llama::applyAppMemoryBudget(
+      result.status,
+      result.devices,
+      static_cast<double>(os_proc_available_memory()),
+      static_cast<double>(margin));
+#endif
   return result;
 }
 
 inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
   auto result = js::Object::create(env);
   result.setProperty(env, "status", js::String::create(env, fit.status));
-  result.setProperty(env, "reason", js::String::create(env, fit.reason));
-  result.setProperty(env, "gpuLayers", js::Number::create(env, fit.gpuLayers));
-  result.setProperty(env, "ctxSize", js::Number::create(env, fit.ctxSize));
   auto devices = js::Array::create(env);
   for (size_t i = 0; i < fit.devices.size(); ++i) {
     const auto& row = fit.devices[i];
     auto entry = js::Object::create(env);
+    entry.setProperty(env, "id", js::String::create(env, row.id));
     entry.setProperty(env, "name", js::String::create(env, row.name));
-    entry.setProperty(
-        env, "totalBytes", js::Number::create(env, row.totalBytes));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", js::Number::create(env, row.usedBytes));
     entry.setProperty(env, "freeBytes", js::Number::create(env, row.freeBytes));
     entry.setProperty(
-        env, "modelBytes", js::Number::create(env, row.modelBytes));
-    entry.setProperty(
-        env, "contextBytes", js::Number::create(env, row.contextBytes));
-    entry.setProperty(
-        env, "computeBytes", js::Number::create(env, row.computeBytes));
+        env, "totalBytes", js::Number::create(env, row.totalBytes));
     devices.set(env, i, entry);
   }
   result.setProperty(env, "devices", devices);
-  result.setProperty(
-      env, "deviceBytes", js::Number::create(env, fit.deviceBytes));
-  result.setProperty(env, "hostBytes", js::Number::create(env, fit.hostBytes));
-  result.setProperty(
-      env, "trainCtxSize", js::Number::create(env, fit.trainCtxSize));
-  result.setProperty(
-      env, "expertCount", js::Number::create(env, fit.expertCount));
+  auto stats = js::Object::create(env);
+  if (fit.stats.has_value()) {
+    stats.setProperty(
+        env, "ctxSize", js::Number::create(env, fit.stats->ctxSize));
+    stats.setProperty(
+        env, "gpuLayers", js::Number::create(env, fit.stats->gpuLayers));
+  }
+  result.setProperty(env, "stats", stats);
   return result;
 }
 
