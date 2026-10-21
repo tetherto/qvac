@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <system_error>
+#include <vector>
 
 #include <common/log.h>
 #include <gguf.h>
@@ -45,10 +47,23 @@ bool isFileInitialized(const std::filesystem::path& path) {
 }
 
 // llama-server's `process_mtmd_chunk` post-decode callback: hands each image
-// or audio embedding batch to the speculative state.
-int32_t speculativePostDecode(llama_batch batch, void* userData) {
+// or audio embedding batch to the speculative state. The helper's sub-batch is
+// wrapped, without copying, in the llama_batch SpeculativeRuntime takes; both
+// lay out positions section-major.
+int32_t
+speculativePostDecode(const mtmd_helper_embd_batch* embdBatch, void* userData) {
   const auto* runtime =
       static_cast<const speculative::SpeculativeRuntime*>(userData);
+  const auto nTokens = static_cast<std::size_t>(embdBatch->n_tokens);
+  llama_seq_id seqId = embdBatch->seq_id;
+  std::vector<int32_t> nSeqId(nTokens, 1);
+  std::vector<llama_seq_id*> seqIds(nTokens, &seqId);
+  llama_batch batch{};
+  batch.n_tokens = embdBatch->n_tokens;
+  batch.embd = const_cast<float*>(embdBatch->embd);
+  batch.pos = const_cast<llama_pos*>(embdBatch->pos);
+  batch.n_seq_id = nSeqId.data();
+  batch.seq_id = seqIds.data();
   return runtime->process(batch) ? 0 : 1;
 }
 } // namespace

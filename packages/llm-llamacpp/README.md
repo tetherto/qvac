@@ -25,6 +25,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 - [Architecture](#architecture)
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
+  - [Fuzzing](#fuzzing)
 - [Glossary](#glossary)
 - [License](#license)
 
@@ -697,6 +698,28 @@ npm run test:cpp:models:ci   # exactly what .github/workflows/cpp-tests-llm.yml
 ```
 
 First-run downloads pull several GB from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` (see `test/unit/test_common.hpp`).
+
+### Fuzzing
+
+`forLogMessage`, `toLowerAscii`, and `matchesAnyStopString` have a
+[Google FuzzTest][fuzztest] target, `llm-string-fuzz`. Fuzzing is Linux-only:
+it needs clang with libFuzzer and AddressSanitizer, CMake 3.25 or newer,
+[vcpkg](https://vcpkg.io/) (set `VCPKG_ROOT`) and `bare-make`. The target does
+not link `@qvac/fabric`, so it runs with full ASan and LeakSanitizer.
+
+```bash
+npm install
+npm run fuzz                     # bounded run of every FUZZ_TEST, as Linux CI does
+npm run fuzz:continuous          # coverage-guided, one FUZZ_TEST at a time
+npm run fuzz:continuous -- LlmStringFuzz.MatchesAnyStopNeverCrashes --fuzz_for=30m
+```
+
+Flags other than `--continuous` and `--build-dir` go to the fuzz binary. See
+[`docs/architecture/ADDON-FUZZING.md`](../../docs/architecture/ADDON-FUZZING.md)
+for the fuzzing design, the vcpkg-supplied FuzzTest stack, and how to add a
+target.
+
+[fuzztest]: https://github.com/google/fuzztest
 
 ## Glossary
 
