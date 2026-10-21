@@ -5,6 +5,7 @@ const test = require('node:test')
 
 const {
   DEFAULT_OVERLAP,
+  NO_CONTEXT_FRAMES,
   longFormFramesFor,
   parseLongFormArguments
 } = require('../../examples/parakeet-long-form-arguments.js')
@@ -39,6 +40,25 @@ test('60 s with 25 % overlap are the frame counts TranscribePsy recommends', () 
   assert.deepEqual(longFormFramesFor(60, 0.25), {
     longFormWindowFrames: TRANSCRIBEPSY_WINDOW_FRAMES,
     longFormContextFrames: TRANSCRIBEPSY_CONTEXT_FRAMES
+  })
+})
+
+test('an explicit zero overlap sends the no-context sentinel, not the automatic 0', () => {
+  assert.equal(NO_CONTEXT_FRAMES, -1)
+  assert.deepEqual(longFormFramesFor(60, 0), {
+    longFormWindowFrames: TRANSCRIBEPSY_WINDOW_FRAMES,
+    longFormContextFrames: NO_CONTEXT_FRAMES
+  })
+})
+
+test('an overlap that rounds to no frames is sent as no context as well', () => {
+  assert.deepEqual(longFormFramesFor(1, 0.01), {
+    longFormWindowFrames: 13,
+    longFormContextFrames: NO_CONTEXT_FRAMES
+  })
+  assert.deepEqual(longFormFramesFor(1, 0.1), {
+    longFormWindowFrames: 13,
+    longFormContextFrames: 1
   })
 })
 

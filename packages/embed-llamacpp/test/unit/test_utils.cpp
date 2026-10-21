@@ -6,9 +6,37 @@
 #include <utility>
 #include <vector>
 
+#include <common/common.h>
 #include <gtest/gtest.h>
 
 #include "model-interface/utils.hpp"
+
+namespace {
+common_params paramsWith(int32_t nBatch, int32_t nCtx) {
+  common_params params;
+  params.n_batch = nBatch;
+  params.n_ctx = nCtx;
+  return params;
+}
+} // namespace
+
+TEST(UnifiedSequenceLimitTest, LargeBatchAdmitsLlamaMaximum) {
+  EXPECT_EQ(
+      unifiedSequenceLimit(paramsWith(4096, 0)),
+      static_cast<int32_t>(llama_max_parallel_sequences()));
+}
+
+TEST(UnifiedSequenceLimitTest, SmallBatchCapsTheLimit) {
+  EXPECT_EQ(unifiedSequenceLimit(paramsWith(64, 2048)), 64);
+}
+
+TEST(UnifiedSequenceLimitTest, ShortContextCapsTheLimit) {
+  EXPECT_EQ(unifiedSequenceLimit(paramsWith(1024, 128)), 128);
+}
+
+TEST(UnifiedSequenceLimitTest, NeverBelowOne) {
+  EXPECT_EQ(unifiedSequenceLimit(paramsWith(0, 0)), 1);
+}
 
 TEST(SplitLinesTest, BasicSplit) {
   std::string input = "line1\nline2\nline3";

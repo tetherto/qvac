@@ -101,8 +101,7 @@
     },
     {
       "name": "speech-cpp",
-      "version": "2026-10-20",
-      "port-version": 2
+      "version": "2026-10-21"
     }
   ]
 }

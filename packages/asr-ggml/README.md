@@ -900,10 +900,11 @@ ggml.
 Diarizer bundles load on first use, and each capacity costs 190-220 MiB of
 weights. They pay off on base and Pro chips and iOS (1.4-2.7x over Metal on an
 M4). A Max or Ultra GPU is as fast as the Neural Engine (0.70-1.17x on an M3
-Ultra), so leave them out there. `PARAKEET_COREML_DIARIZER_DISABLE=1` ignores them and keeps the
-encoder-only sidecars. `assessFit` charges the bundles a workload can load as
-`coremlBytes`. Diarizer bundles are not in the model registry yet: export them
-with `engines/parakeet/scripts/export-nemotron-diarization-coreml.py` and
+Ultra), so leave them out there. `PARAKEET_COREML_DIARIZER_DISABLE=1` ignores
+them and keeps the encoder-only sidecars. `assessFit` charges the bundles a
+workload can load as `coremlBytes`. Diarizer bundles are not in the model
+registry yet: export them with
+`engines/parakeet/scripts/export-nemotron-diarization-coreml.py` and
 `export-sortformer-diarizer-coreml.py`. The
 [Parakeet backends guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/backends.md#core-ml-diarizer-sidecars)
 gives the commands and the measured speedups.
@@ -1110,18 +1111,11 @@ tests and the C++ option-mapping tests do not establish GPU execution.
 
 ### OpenMOSS native dependency validation
 
-The package pins `speech-cpp` 2026-10-20#2 and `ggml-speech` 2026-10-07#1.
-The registry baseline remains `e31be272ecdf9f20970302ebf8a2943d47803001`.
-The `speech-cpp` override selects the native source
-`5695511ddf094653676ad83bcaf755b2705d4b65` published by
-[registry PR #440](https://github.com/tetherto/qvac-registry-vcpkg/pull/440).
-This speech revision adds TranscribePsy with its model-recommended long-form
-window and its Core ML encoder and decoder sidecars, bounds the long-form
-encoder's memory, balances automatic windows and runs the TDT decoder on the
-CPU backend under OpenCL. It also adds the Nemotron 3 Diarization and
-Sortformer v2.1 Core ML diarizer sidecars and their `assessFit` charge, and it
-loads Nemotron 3 Diarization again. It keeps the explicit MOSS backend selector
-the addon uses; the selector and dependency pin must ship together.
+The exact native dependency versions are declared in [vcpkg.json](vcpkg.json).
+The registry configuration is declared in
+[vcpkg-configuration.json](vcpkg-configuration.json).
+The native dependency provides the explicit MOSS backend selector used by the
+addon; validate the packaged addon against the checked-in manifests.
 
 On a provisioned Linux NVIDIA host with CUDA 13, Vulkan drivers, sufficient
 memory, and package development dependencies installed, run from this package:

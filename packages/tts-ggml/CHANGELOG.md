@@ -9,8 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Align the shared native `speech-cpp` source pin to `2026-10-20#2` across
+- Align the shared native `speech-cpp` source pin to `2026-10-21` across
   the speech addons so they use the same source revision.
+- Update the shared native `speech-cpp` source to `2026-10-19`, including
+  optional CosyVoice3 Core ML sidecars on Apple platforms. Re-export existing
+  LM sidecars to include the cache feedback fix for consecutive predictions.
+- Include native Pocket TTS Metal, CUDA, Vulkan and OpenCL support. The Pocket
+  JavaScript API continues to require CPU inference.
 - The JavaScript wrapper is split into modules under `lib/`: engine ids and
   discovery, model-file normalization, per-engine configuration (`lib/engines/`),
   option validation, native parameter building, per-call fields, reload and

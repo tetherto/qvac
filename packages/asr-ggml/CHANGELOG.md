@@ -36,7 +36,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Align the shared native `speech-cpp` source pin to `2026-10-20#2` across
+- Align the shared native `speech-cpp` source pin to `2026-10-21` across
   the speech addons. The pinned revision adds TranscribePsy and the Core ML
   diarizer sidecars, bounds the long-form encoder's memory to one cached
   graph per windowed pass, balances automatic long-form windows and runs the

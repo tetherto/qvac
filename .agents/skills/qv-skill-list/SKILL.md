@@ -120,6 +120,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | Skill | Purpose | Use when |
 |-------|---------|----------|
 | [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates the docs website after a change to the SDK or CLI. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
+| [`qv-docs-line-cut`](../qv-docs-line-cut/SKILL.md) | Cuts the next documentation line of every versioned collection whose release has shipped. | A release went live, or a sprint starts and the coming version needs a folder to land in. **Manual:** `/qv-docs-line-cut` |
 
 ---
 
@@ -161,6 +162,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
 | Update the docs website after an SDK/CLI change | `qv-docs-update` |
+| Cut the next docs line after a release | `qv-docs-line-cut` |
 | Check if a QIP is needed | `qv-qip-triage` |
 | Draft a QIP | `qv-qip-create` |
 | Review a QIP | `qv-qip-review` |

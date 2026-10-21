@@ -501,25 +501,35 @@ export class ConsumerBase {
   }
 
   /**
-   * Whether platform policy skips this test here, and why. Matching is by segment prefix, so
-   * `desktop` matches `desktop-macos` but never `desktop-pythonista`.
+   * Whether platform policy skips this test here, and why. When the skip carries per-platform
+   * `reasons`, only the groups that match this platform are reported, so a leg does not show the
+   * reasons another leg was skipped for.
    */
   protected getTestSkipReason(definition: TestDefinition): string | null {
-    const declared = definition.skip?.platforms
-    if (!declared?.length) return null
+    const skip = definition.skip
+    if (!skip?.platforms?.length || !this.matchesPlatform(skip.platforms)) return null
 
+    const own = (skip.reasons ?? [])
+      .filter((group) => this.matchesPlatform(group.platforms))
+      .map((group) => group.reason)
+    return own.length > 0 ? own.join(' | ') : skip.reason
+  }
+
+  /**
+   * Matching is by segment prefix, so `desktop` matches `desktop-macos` but never
+   * `desktop-pythonista`.
+   */
+  private matchesPlatform(declared: string[]): boolean {
     const segments = this.platform.split('-')
     // A coarse entry widens over the OS and nothing else: `electron` covers `electron-linux`, but
     // `desktop` must not silently cover `desktop-python`, which is a different client.
-    const matches = declared.some((entry) => {
+    return declared.some((entry) => {
       if (entry === this.platform) return true
       const entrySegments = entry.split('-')
       if (entrySegments.length >= segments.length) return false
       if (!entrySegments.every((segment, index) => segment === segments[index])) return false
       return segments.slice(entrySegments.length).every((segment) => OPERATING_SYSTEMS.has(segment))
     })
-
-    return matches ? (definition.skip?.reason ?? null) : null
   }
 
   protected async executeTest(uniqueTestId: string, definition: TestDefinition) {

@@ -6,6 +6,7 @@
 const ENCODER_FRAMES_PER_SECOND = 12.5
 const DEFAULT_OVERLAP = 0.25
 const MAX_OVERLAP = 0.5
+const NO_CONTEXT_FRAMES = -1
 
 const USAGE =
   'Usage: bare examples/parakeet-transcribepsy-transcribe.js --model <gguf> --audio <file> ' +
@@ -42,14 +43,28 @@ function parseLongFormArguments(argv) {
   return args
 }
 
+// The overlap is shared half and half with each neighbour. The engine reads a
+// context of 0 as "choose automatically", so an overlap that rounds to no
+// frames is sent as the explicit no-context sentinel.
+function contextFramesFor(windowFrames, overlap) {
+  const frames = Math.round((windowFrames * overlap) / 2)
+  return frames === 0 ? NO_CONTEXT_FRAMES : frames
+}
+
 // An explicit window becomes the engine's frame counts; without one the
 // engine applies the window the model recommends (60 s / 25 % for
-// TranscribePsy). The overlap is shared half and half with each neighbour.
+// TranscribePsy).
 function longFormFramesFor(windowSeconds, overlap) {
   if (windowSeconds === null) return {}
   const longFormWindowFrames = Math.round(windowSeconds * ENCODER_FRAMES_PER_SECOND)
-  const longFormContextFrames = Math.round((longFormWindowFrames * overlap) / 2)
+  const longFormContextFrames = contextFramesFor(longFormWindowFrames, overlap)
   return { longFormWindowFrames, longFormContextFrames }
 }
 
-module.exports = { DEFAULT_OVERLAP, USAGE, longFormFramesFor, parseLongFormArguments }
+module.exports = {
+  DEFAULT_OVERLAP,
+  NO_CONTEXT_FRAMES,
+  USAGE,
+  longFormFramesFor,
+  parseLongFormArguments
+}
