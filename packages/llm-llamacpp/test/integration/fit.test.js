@@ -202,6 +202,13 @@ test(
       context(mtp) > context(plain),
       `the draft context's memory is in the figures (${context(mtp)} > ${context(plain)})`
     )
+    // The MTP layers add a few percent to the target; counting the shared
+    // weights again would double them.
+    const weights = (fit) => totalOf(fit, 'modelBytes')
+    t.ok(
+      weights(mtp) < 1.5 * weights(plain),
+      `the shared weights count once (${weights(mtp)} < 1.5 × ${weights(plain)})`
+    )
   }
 )
 
