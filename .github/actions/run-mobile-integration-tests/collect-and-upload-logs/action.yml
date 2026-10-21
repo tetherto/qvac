@@ -185,16 +185,23 @@ runs:
         mkdir -p "$CONSOLE_DIR"
         # Artifacts live under <LOG_DIR>/<run_device>/<suite>/.  Use the
         # job-level dir (grandparent) as the device label for extracted files.
+        # Keep the per-suite directory for the raw captures: a flat name
+        # collides across Setup/Tests/Teardown and drops the Tests_Suite
+        # logcat, the only one holding on-device engine output.
         find "$LOG_DIR" -type f \( -iname "Logcat.*" -o -iname "*Customer_Artifacts.zip" -o -iname "*test*spec*output*" -o -iname "*standard*output*" \) | while read -r f; do
           fname=$(basename "$f")
           device=$(basename "$(dirname "$(dirname "$f")")")
+          # Mirror Device Farm's own layout for the raw captures.
+          rel="${f#"$LOG_DIR"/}"
           if echo "$fname" | grep -qiE "Logcat\."; then
-            cp "$f" "$CONSOLE_DIR/${device}_${fname}"
-            echo "  Console log: ${device}_${fname}"
+            mkdir -p "$CONSOLE_DIR/$(dirname "$rel")"
+            cp "$f" "$CONSOLE_DIR/$rel"
+            echo "  Console log: $rel"
           fi
           if echo "$fname" | grep -qiE "(test.*spec.*output|standard.*output)"; then
-            cp "$f" "$CONSOLE_DIR/${device}_${fname}"
-            echo "  Host phase log: ${device}_${fname}"
+            mkdir -p "$CONSOLE_DIR/$(dirname "$rel")"
+            cp "$f" "$CONSOLE_DIR/$rel"
+            echo "  Host phase log: $rel"
           fi
           if echo "$fname" | grep -qiE "Customer_Artifacts\.zip$"; then
             tmpdir=$(mktemp -d)
