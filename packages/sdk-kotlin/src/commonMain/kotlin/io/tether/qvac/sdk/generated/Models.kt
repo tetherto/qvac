@@ -3075,7 +3075,7 @@ object Models {
         expectedSize = 844548128,
         sha256Checksum = "33dac85dcf22281d56e3a4fcb78def3c8fa59131c208af45a2e5c57cbe268de4",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "f16",
         params = "421M",
     )
@@ -3093,7 +3093,7 @@ object Models {
         expectedSize = 449919008,
         sha256Checksum = "1270162611a0c7074cc2a376380ddaca825702c62bebf2433baf42269de246fe",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "q8_0",
         params = "421M",
     )
@@ -3111,7 +3111,7 @@ object Models {
         expectedSize = 649973184,
         sha256Checksum = "e658ac8a717089528a1f402caa6b91aec8a4059b76c9c35114a70ba32b2fb469",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "f16",
         params = "322M",
     )
@@ -3129,7 +3129,7 @@ object Models {
         expectedSize = 348425664,
         sha256Checksum = "59a61f840e6f125c25037f7cc0363efafee1aeea3394b504d25551b4bda5a219",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "q8_0",
         params = "322M",
     )
@@ -3147,7 +3147,7 @@ object Models {
         expectedSize = 844548256,
         sha256Checksum = "5a44e3f8060290ab40b390a83242961aeab7af62913853530a4342bc5ec9ebe8",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "f16",
         params = "421M",
     )
@@ -3165,7 +3165,7 @@ object Models {
         expectedSize = 449919104,
         sha256Checksum = "72d5e753a4861f5532e0e3e065b9644ff6f6894efef82fa74af0898fa93ba899",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "q8_0",
         params = "421M",
     )

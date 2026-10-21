@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 class GeneratedContractTest {
     @Test
     fun generatesEveryManifestOperation() {
-        assertEquals(46, QvacMethods.all.size)
+        assertEquals(47, QvacMethods.all.size)
         assertEquals(
             setOf(QvacCallShape.REQUEST_REPLY, QvacCallShape.SERVER_STREAM, QvacCallShape.DUPLEX),
             QvacMethods.all.map { it.callShape }.toSet(),
@@ -35,7 +35,7 @@ class GeneratedContractTest {
 
     @Test
     fun generatesModelCatalogAndVersion() {
-        assertEquals("0.21.0", SDK_VERSION)
+        assertEquals("0.22.0", SDK_VERSION)
         assertTrue(Models.all.isNotEmpty())
         assertNotNull(Models.QWEN3_600M_INST_Q4)
     }

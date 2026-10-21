@@ -1,18 +1,15 @@
 import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { type Addon, type GGMLConfig } from "./addon";
-import type ActualIdMapIndex from "./idMapIndex";
-import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
 export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon, } from "./addon";
-export type { IdMapIndexBitWidth, IdMapIndexOptions, IdMapIndexSearchResult, IdMapIndexStorage, } from "./idMapIndex";
 export { BertInterface, pickPrimaryGgufPath } from "./addon";
 export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type { LayaConfig, LayaRequest, LayaSingleRequest, LayaBatchRequest, LayaQuestion, LayaChoiceQuestion, LayaScoreQuestion, LayaNoulQuestion, LayaState, LayaCriterion, LayaResponse, LayaResult, LayaAnswer, LayaChoiceAnswer, LayaScoreAnswer, LayaNoulAnswer, LayaUsage, LayaDecisionsArgs, } from "./laya";
+export { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
+export type { RerankConfig, RerankRequest, RerankScores, RerankerArgs, } from "./rerank";
 export { assessFit } from "./fit";
 export type { EmbedFitDevice, EmbedFitRequest, EmbedFitResult, EmbedFitStatus } from "./fit";
 export type { QvacResponse };
-export declare const IdMapIndex: typeof ActualIdMapIndex;
-export declare const IdMapIndexFilter: typeof ActualIdMapIndexFilter;
 export interface GGMLBertArgs {
     files: {
         model: string[];

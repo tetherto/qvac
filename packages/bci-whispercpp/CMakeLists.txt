@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
+# rather than qvac_addon_preproject() so overlay triplets and Android STL
+# stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+
 option(BUILD_TESTING "Build tests" OFF)
+qvac_addon_fuzz_manifest()
 
 # Vulkan / Metal / OpenCL are wired per-platform by the unconditional
 # speech-cpp dependencies in vcpkg.json. CUDA is opt-in because it needs
@@ -50,6 +56,12 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.valgrind.supp
                ${CMAKE_CURRENT_SOURCE_DIR}/.valgrind.supp COPYONLY)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
+
+# Fuzz-only configure (BUILD_FUZZING without BUILD_TESTING): build just the
+# fuzz targets and skip engine find_package() + the .bare module so pure
+# parse/transform drivers keep full ASan + LSan.
+qvac_addon_fuzz_only_return()
+
 find_package(whisper CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -64,10 +76,10 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
-# Subdir bare's runtime installs the dlopen-able backend modules into
-# (<addon>/prebuilds/<bare_target>/<module_name>/); BCIModel joins it
-# with the runtime-supplied backendsDir before
-# ggml_backend_load_all_from_path(). Mirrors transcription-whispercpp.
+# cmake-bare installs the dynamically loadable ggml backends to
+# <host>/<module name>, the directory the addon looks in next to itself (see
+# ModuleBackendsDir.hpp); bare-link and the SDK worker bundle put them next to
+# the module instead.
 bare_target(bare_target_value)
 bare_module_target("." _unused_target NAME module_name VERSION _unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
@@ -114,13 +126,13 @@ add_bare_module(bci-whispercpp EXPORTS ${BACKEND_DL_LIBS})
 
 # Stage every loose MODULE backend (Vulkan / OpenCL on Android, ...)
 # into the same per-host/per-module subdir cmake-bare's INSTALL TARGET
-# branch uses for IMPORTED targets -- keeping destinations identical so
-# `ggml_backend_load_all_from_path(backendsDir / BACKENDS_SUBDIR)`
-# discovers IMPORTED-target CPU + loose-file GPU backends in one scan.
+# branch uses for IMPORTED targets -- keeping destinations identical so one
+# `ggml_backend_load_all_from_path()` scan discovers IMPORTED-target CPU +
+# loose-file GPU backends.
 if(BACKEND_DL_LOOSE_SOS)
   install(
     FILES ${BACKEND_DL_LOOSE_SOS}
-    DESTINATION ${bare_target_value}/${module_name}
+    DESTINATION ${BACKENDS_SUBDIR_VALUE}
   )
 endif()
 
@@ -155,7 +167,10 @@ target_link_libraries(
 )
 
 target_compile_definitions(${bci-whispercpp} PUBLIC JS_LOGGER)
-target_compile_definitions(${bci-whispercpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+# Read by ModuleBackendsDir.hpp; every target compiling BCIModel.cpp (this
+# module and bci-core below) needs it.
+target_compile_definitions(${bci-whispercpp} PRIVATE
+  QVAC_ADDON_MODULE_NAME="${module_name}")
 if(BUILD_TESTING)
   find_package(GTest REQUIRED)
 
@@ -170,6 +185,10 @@ if(BUILD_TESTING)
 
   target_link_libraries(bci-core PRIVATE
       whisper::whisper
+  )
+
+  target_compile_definitions(bci-core PRIVATE
+      QVAC_ADDON_MODULE_NAME="${module_name}"
   )
 
   target_include_directories(bci-core PRIVATE
@@ -188,6 +207,7 @@ if(BUILD_TESTING)
 
   target_compile_definitions(test-bci-core PRIVATE
       BCI_TEST_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/addon/tests/fixtures"
+      QVAC_ADDON_MODULE_NAME="${module_name}"
   )
 
   target_include_directories(test-bci-core PRIVATE
@@ -243,3 +263,5 @@ if(BUILD_TESTING)
       message(STATUS "LLVM Coverage enabled for bci-core tests")
   endif()
 endif()
+
+qvac_addon_add_fuzz_subdirectory()

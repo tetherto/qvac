@@ -71,8 +71,8 @@ async function runRecorded(fields) {
 test('MOSS-SFX: explicit engine option routes to moss-sfx', (t) => {
   const model = createMockedSfxModel()
   t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS_SFX)
-  t.is(model._mossSoundEffectPath, SFX_MODEL)
-  t.absent(model._mossBackbonePath, 'no delay backbone on moss-sfx')
+  t.is(model._setup.paths.mossSoundEffectPath, SFX_MODEL)
+  t.absent(model._setup.paths.mossBackbonePath, 'no delay backbone on moss-sfx')
 })
 
 test('MOSS-SFX: the model file alone routes to moss-sfx, under either alias', (t) => {
@@ -82,7 +82,7 @@ test('MOSS-SFX: the model file alone routes to moss-sfx, under either alias', (t
   )
   const aliased = new TTSGgml({ files: { mossSoundEffectPath: SFX_MODEL } })
   t.is(aliased.getEngineType(), TTSGgml.ENGINE_MOSS_SFX)
-  t.is(aliased._mossSoundEffectPath, SFX_MODEL)
+  t.is(aliased._setup.paths.mossSoundEffectPath, SFX_MODEL)
 })
 
 test('MOSS-SFX: modelDir auto-detect finds the sound-effect GGUF', (t) => {
@@ -90,7 +90,7 @@ test('MOSS-SFX: modelDir auto-detect finds the sound-effect GGUF', (t) => {
     fs.writeFileSync(path.join(root, 'moss-sfx-v2-f16.gguf'), 'sfx')
     const model = new TTSGgml({ files: { modelDir: root } })
     t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS_SFX)
-    t.is(model._mossSoundEffectPath, path.join(root, 'moss-sfx-v2-f16.gguf'))
+    t.is(model._setup.paths.mossSoundEffectPath, path.join(root, 'moss-sfx-v2-f16.gguf'))
   })
 })
 
@@ -99,7 +99,7 @@ test('MOSS-SFX: modelDir prefers the q8_0 quant, and MOSS Delay keeps precedence
     fs.writeFileSync(path.join(root, 'moss-sfx-v2-f16.gguf'), 'f16')
     fs.writeFileSync(path.join(root, 'moss-sfx-v2-q8_0.gguf'), 'q8')
     t.is(
-      new TTSGgml({ files: { modelDir: root } })._mossSoundEffectPath,
+      new TTSGgml({ files: { modelDir: root } })._setup.paths.mossSoundEffectPath,
       path.join(root, 'moss-sfx-v2-q8_0.gguf')
     )
     fs.writeFileSync(path.join(root, 'moss-tts-delay-f16.gguf'), 'moss')

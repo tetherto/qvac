@@ -42,9 +42,13 @@ per-package workflow. The next train moves it above that version.
 1. Bring every range between train packages up to the current workspace
    version (for example the plugins' `@qvac/cli` and `@qvac/ai-sdk-provider`).
    nx only rewrites a range it can see as a workspace link.
-2. Write `.nx/version-plans/<ticket>.md` with a bump for every train package.
+2. Regenerate each package's NOTICE. The generator runs `npm install` in the
+   package directory, which fails once the version pass has moved a train
+   dependency to a version npm does not have yet. It also replaces the
+   package's `node_modules`; run `pnpm install --frozen-lockfile` afterwards.
+3. Write `.nx/version-plans/<ticket>.md` with a bump for every train package.
    Keys are group or project names; values are relative bumps (`major`,
-   `minor`, `patch`, `pre*`).
+   `minor`, `patch`, `pre*`). nx requires a message after the frontmatter.
 
    ```markdown
    ---
@@ -54,9 +58,11 @@ per-package workflow. The next train moves it above that version.
    "@qvac/opencode-plugin": patch
    "@qvac/openclaw-plugin": patch
    ---
+
+   Release the sdk train.
    ```
 
-3. Apply it, after reading the dry run, then delete the plan. nx leaves it in
+4. Apply it, after reading the dry run, then delete the plan. nx leaves it in
    place and applies every plan on disk on its next run. Do not pass
    `--groups`, `--projects` or a version specifier.
 
@@ -66,11 +72,16 @@ per-package workflow. The next train moves it above that version.
    rm .nx/version-plans/<ticket>.md
    ```
 
-4. Write a changelog section for each package (`qv-sdk-changelog`).
-5. Cut `release-train-sdk-<engine version>` from `upstream/main`. Open the
+5. Write a changelog section for each package (`qv-sdk-changelog`), and bring
+   `packages/sdk-python` and `packages/sdk-kotlin` to the new `@qvac/sdk`
+   version (Steps 3 and 3b of `qv-sdk-inference-version`).
+   `pr-checks-sdk-kotlin.yml` checks the Kotlin version on both PRs.
+6. Cut `release-train-sdk-<engine version>` from `upstream/main`. Open the
    release PR into it from a head not named `release-*`, and the backmerge PR
-   into `main`.
-6. Merge the release PR. `release-train.yml` then:
+   into `main` from `backmerge/release-train-sdk-<engine version>`.
+7. Wait for the release PR's `Release Train (nx)` run, the dry run described
+   under [Checks](#checks), then merge the release PR. `release-train.yml`
+   then:
    1. checks the branch and lists the packages whose version moved
    2. builds and packs the train, and runs the train's checks
    3. publishes the train to npm after the `npm` approval, as `latest`
@@ -79,12 +90,15 @@ per-package workflow. The next train moves it above that version.
    5. publishes `tetherto-qvac-sdk` after the `pypi` approval
    6. tags each package, creates the SDK's GitHub release and attaches the fat
       wheels
-7. Merge the backmerge PR.
+8. Merge the backmerge PR once the push run has published to npm. Before that,
+   `main` would name versions that the checks of later PRs cannot install. If
+   the run fails before publishing, fix it with a PR into the train branch
+   (see [Recovery](#recovery)) and carry the same commit to the backmerge.
 
 ## Checks
 
-On the release PR (`pr-release-guard.yml`) and on every push
-(`release-train.yml`):
+On the release PR (`pr-release-guard.yml` and `release-train.yml`) and on every
+push (`release-train.yml`):
 
 - every train package moves, and each anchor package is at the branch version
 - every range between train packages accepts the new version of its target
@@ -99,8 +113,9 @@ Before npm publish:
 - **`package-checks`**: each package's checks from `.github/sdk-pod-checks.json`
   (install, format, lint, typecheck, build, unit, bare and e2e tests, and the
   SDK's consumer installs), with every train package installed from a tarball
-  of this commit and everything else from npm. The release PR runs the same
-  through `pr-checks-sdk-pod.yml`.
+  of this commit and everything else from npm. The backmerge PR, from
+  `backmerge/release-train-<train>-<x.y.z>` into `main`, runs the same through
+  `pr-checks-sdk-pod.yml`.
 - **`shared-runtime-libs`**: `check-shared-runtime-libs.mjs` for inference and
   sdk, as `publish-inference.yml` and `publish-sdk.yml` run it.
 - **`sdk-python`**: the Python contract check, build, version lockstep and
@@ -111,8 +126,18 @@ Before npm publish:
 After npm publish, `package-checks` runs again with every package installed
 from npm. Tags, the GitHub release, PyPI and the wheels wait for it.
 
-`workflow_dispatch` with `dry_run: true` runs every check and
-`pnpm publish --dry-run`, and publishes, tags and releases nothing.
+### Dry run
+
+Every PR into a train branch runs `release-train.yml` as a dry run: the checks
+above, the build, and `pnpm publish --dry-run`, which also stops on a version
+below npm's `latest`. The run measures the train from the merge base with
+`main`, so a fix PR after the release PR checks the whole train again. A
+`workflow_dispatch` with `dry_run: true` on the train branch does the
+same. A dry run publishes, tags and releases nothing, and needs no approval:
+`pnpm publish --dry-run` runs in its own job, with no environment and no
+`id-token`. Publishing runs only on a push or a dispatch without `dry_run`, in
+the job that holds the `npm` environment. Both jobs wait for `checks-passed`,
+which requires the build and every check the train lists.
 
 ## Publishing
 
@@ -144,7 +169,10 @@ guard on push and on `workflow_dispatch`, with `strict-slug`: a branch other tha
 ## Before the first train
 
 npm trusted publishing names a workflow file. Add `release-train.yml` as a
-trusted publisher for every package in the train on npm, and for
-`tetherto-qvac-sdk` on PyPI. Keep the per-package workflows registered too: npm
+trusted publisher for every package in the train on npm, with environment
+`npm`, and for `tetherto-qvac-sdk` on PyPI, with environment `pypi`. A release
+PR runs its own copy of `release-train.yml`; binding the publisher to the
+environment means only a job that passed that environment's approval gets a
+token npm or PyPI accepts. Keep the per-package workflows registered too: npm
 allows up to 10 trusted publishers per package, and a hotfix still publishes
 through them.

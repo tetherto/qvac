@@ -12,6 +12,7 @@
 #include "CacheLedger.hpp"
 #include "RenderOverrides.hpp"
 #include "SequenceDriver.hpp"
+#include "SpeculativeSequence.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
 #include "common/sampling.h"
@@ -20,6 +21,10 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 
 struct mtmd_context;
+
+namespace qvac_lib_inference_addon_llama::speculative {
+class SpeculativeRuntime;
+} // namespace qvac_lib_inference_addon_llama::speculative
 
 struct GenerationParams {
   std::optional<int> n_predict;
@@ -137,36 +142,14 @@ public:
   [[nodiscard]] int32_t capacity() const noexcept { return capacity_; }
 };
 
-struct ThreadPoolDeleter {
-  void operator()(ggml_threadpool* ptr) {
-    if (ptr != nullptr) {
-      auto* cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-      if (cpuDev == nullptr) {
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(NoBackendFound), "no CPU backend found");
-      }
-      auto* reg = ggml_backend_dev_backend_reg(cpuDev);
-      void* procAddr =
-          ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_free");
-      if (procAddr == nullptr) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            toString(UnableToDeleteThreadPool),
-            "Failed to get ggml_threadpool_free function address");
-      }
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      auto* ggmlThreadpoolFreeFn =
-          reinterpret_cast<decltype(ggml_threadpool_free)*>(procAddr);
-      ggmlThreadpoolFreeFn(ptr);
-    }
-  }
-};
-using ThreadPoolPtr = std::unique_ptr<ggml_threadpool, ThreadPoolDeleter>;
-
 struct LlmModelContext {
   llama_model* model = nullptr;
   llama_context* lctx = nullptr;
   const llama_vocab* vocab = nullptr;
+  /// Speculative decoding for this model; null when it is off. Owned by the
+  /// context that owns `lctx`, which outlives every sequence driver.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime* speculative =
+      nullptr;
 };
 
 /// Canonical layout of the per-session cache metadata that every cache
@@ -272,6 +255,14 @@ public:
   virtual common_params& getParams() = 0;
 
   /**
+   * Speculative decoding state shared by every sequence of this context;
+   * null when speculative decoding is off.
+   */
+  [[nodiscard]] virtual qvac_lib_inference_addon_llama::speculative::
+      SpeculativeRuntime*
+      getSpeculative() const = 0;
+
+  /**
    * The llama-side sequence id this context owns (0 for the single-prompt
    * path, the scheduler-assigned slot id under continuous batching). Used as
    * the `seq_id` argument when persisting/restoring per-sequence cache state.
@@ -374,6 +365,16 @@ public:
    */
   [[nodiscard]] virtual int32_t lastGeneratedTokenCount() const {
     return lastGeneratedTokenCount_;
+  }
+
+  /**
+   * Speculative-decoding counters of the most recent generation; empty when
+   * speculative decoding is off.
+   */
+  [[nodiscard]] virtual qvac_lib_inference_addon_llama::speculative::
+      SpeculativeStats
+      speculativeStats() const {
+    return {};
   }
 
   /**

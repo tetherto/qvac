@@ -8,8 +8,7 @@ import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
  * `sha256Checksum` — the same checksum a model constant carries.
  *
  * Facts only: on-disk bytes plus the GGUF transformer shape when the registry
- * captured it. Memory estimates are derived at call time by the estimators, so
- * a re-calibration never regenerates this file.
+ * captured it.
  */
 export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfile>> = {
   '002fe52ee02cef4e76f8114bfd810bb64aefb44a218666b01872a46e5c0349fc': {
@@ -4449,7 +4448,8 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
   caa552d3369ea37f03fadf7d706cc4ad54660ba7ec7f18ce089c2635ef221ea5: {
     schemaVersion: 1,
     engine: 'tts-ggml',
-    artifactBytes: 794582720
+    artifactBytes: 1057658782,
+    assumptions: ['artifactBytes sums 6 companion-set files']
   },
   cad75f2c3eccb9545b571ca32f235e6ffaae6d8a77bfa808cf8068948c421f10: {
     schemaVersion: 1,

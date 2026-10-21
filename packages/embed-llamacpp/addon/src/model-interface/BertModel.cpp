@@ -298,6 +298,20 @@ void adjustEmbeddingContextSize(
   }
 }
 
+/// @brief RANK pooling yields n_cls_out classifier scores per sequence, not an
+/// n_embd vector: batchDecode would read n_embd floats past their end.
+qvac_errors::StatusError
+rankPoolingUnsupported(const char* func, const std::string& scores) {
+  return qvac_errors::StatusError(
+      ADDON_ID,
+      toString(UnsupportedEmbeddings),
+      string_format(
+          "%s: rank pooling returns classifier scores%s, not embeddings, and "
+          "is not supported; load reranker models with Reranker",
+          func,
+          scores.c_str()));
+}
+
 } // namespace
 
 BertEmbeddings::BertEmbeddings(
@@ -350,13 +364,25 @@ LlamaModelLoader::Hooks BertModel::loadHooks() {
 void BertModel::configureParams(
     common_params& params, const ModelMetaData& metadata,
     bool ctxSizeConfigured) {
+  // Reject RANK pooling before the weights load: set in the config, or the
+  // GGUF's default when the config leaves pooling unset.
+  const bool rankPooling =
+      params.pooling_type == LLAMA_POOLING_TYPE_RANK ||
+      (params.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED &&
+       metadata.tryGetPoolingType() ==
+           static_cast<uint32_t>(LLAMA_POOLING_TYPE_RANK));
+  if (rankPooling) {
+    throw rankPoolingUnsupported(__func__, "");
+  }
+
   params.embedding = true;
 
   // if the number of prompts that would be encoded is known in advance, it's
   // more efficient to specify the
   //   --parallel argument accordingly. for convenience, if not specified, we
   //   fallback to unified KV cache in order to support any number of prompts
-  if (params.n_parallel == 1) {
+  const bool unifiedFallback = params.n_parallel == 1;
+  if (unifiedFallback) {
     qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
         GGML_LOG_LEVEL_INFO,
         string_format(
@@ -372,9 +398,24 @@ void BertModel::configureParams(
   if (std::optional<int> trainedCtx = readTrainedContextSize(metadata)) {
     adjustEmbeddingContextSize(params, *trainedCtx, ctxSizeConfigured);
   }
+
+  // The unified cache does not lift the batch's sequence limit: every seq_id
+  // must be below n_seq_max. Sized from the final context and batch.
+  if (unifiedFallback) {
+    params.n_parallel = unifiedSequenceLimit(params);
+  }
 }
 
 void BertModel::onLoaded(llama_model* model, llama_context* ctx) {
+  // configureParams rejects RANK from the config and the GGUF; this catches
+  // a context that ends up with it any other way.
+  if (llama_pooling_type(ctx) == LLAMA_POOLING_TYPE_RANK) {
+    throw rankPoolingUnsupported(
+        __func__,
+        string_format(
+            " (n_cls_out = %u per sequence)", llama_model_n_cls_out(model)));
+  }
+
   model_ = model;
   ctx_ = ctx;
   pooling_type = llama_pooling_type(ctx_);
@@ -382,15 +423,8 @@ void BertModel::onLoaded(llama_model* model, llama_context* ctx) {
   batch_ = llama_batch_init(loader_.params().n_batch, 0, 1);
   n_embd = llama_model_n_embd(model_);
 
-  // Set up abort callback for cancellation support during llama_decode
-  // The callback checks stopCancelled_ and returns true to abort if set
-  llama_set_abort_callback(
-      ctx_,
-      [](void* data) -> bool {
-        const auto* model = static_cast<const BertModel*>(data);
-        return model->stopCancelled_.load();
-      },
-      const_cast<BertModel*>(this));
+  // Abort a pass in llama_decode once cancel() is requested.
+  abortDecodeWhen(ctx_, stopCancelled_);
 
   if (llama_model_has_encoder(model_) && llama_model_has_decoder(model_)) {
     std::string msg = string_format(
@@ -528,8 +562,9 @@ BertEmbeddings BertModel::processBatched(
 
     uint64_t numTokensInPrompt = inp.size();
 
-    // encode if at capacity
-    if (batch_.n_tokens + numTokensInPrompt > loader_.params().n_batch) {
+    // encode if at capacity: tokens, or sequence ids the context admits
+    if (batch_.n_tokens + numTokensInPrompt > loader_.params().n_batch ||
+        numPromptsInBatch >= llama_n_seq_max(ctx_)) {
       std::span<float> embSpan{emb, embeddings.size()};
       float* out =
           embSpan

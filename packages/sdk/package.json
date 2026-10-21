@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "qvacIpcAuthentication": "token-v1",
   "license": "Apache-2.0",
   "repository": {
@@ -167,6 +167,10 @@
     "./moss-transcribe/plugin": {
       "types": "./dist/src/worker/plugins/moss-transcribe.d.ts",
       "import": "./dist/src/worker/plugins/moss-transcribe.js"
+    },
+    "./llamacpp-decision/plugin": {
+      "types": "./dist/src/worker/plugins/llamacpp-decision.d.ts",
+      "import": "./dist/src/worker/plugins/llamacpp-decision.js"
     }
   },
   "imports": {
@@ -225,16 +229,17 @@
     "@qvac/classification-ggml": "^0.31.1",
     "@qvac/decoder-audio": "^0.8.1",
     "@qvac/diffusion-cpp": "^0.30.0",
-    "@qvac/embed-llamacpp": "^0.48.1",
+    "@qvac/embed-llamacpp": "^0.50.0",
     "@qvac/error": "^0.1.1",
     "@qvac/ggml-rpc-server": "^0.5.1",
-    "@qvac/inference": "^0.21.0",
+    "@qvac/inference": "^0.22.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.61.1",
+    "@qvac/llm-llamacpp": "^0.61.2",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.29.1",
     "@qvac/translation-nmtcpp": "^0.21.1",
     "@qvac/tts-ggml": "^0.13.0",
+    "@qvac/turbovec-ggml": "^0.1.1",
     "@qvac/vla-ggml": "^0.32.2",
     "bare-abort-controller": "^1.0.0",
     "bare-cpu-info": "0.1.1",

@@ -10,12 +10,12 @@ OpenAPI document, and mounts one or more **extensions** that contribute the actu
 | `openai`  | `--openai`         | `/v1/...`      | [openai.md](openai.md)   |
 
 ```bash
-qvac serve                        # the QVAC surface
-qvac serve --openai               # QVAC + OpenAI-compatible
-qvac serve --openai --no-default  # OpenAI-compatible only
+qvac serve                          # the QVAC surface
+qvac serve --openai                 # QVAC + OpenAI-compatible
+qvac serve --openai --no-default    # OpenAI-compatible only
 ```
 
-`qvac serve openai` is a deprecated alias for the last form.
+`qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 
 The OpenAPI document describes whatever is mounted. It is always at `/openapi.json`;
 `--docs` additionally serves Swagger UI at `/docs`.
@@ -29,6 +29,14 @@ Configuration lives under `serve` in `qvac.config.*`. `serve.models`, `serve.loa
 The default `127.0.0.1` bind is unauthenticated. A non-loopback `--host` refuses to start without `--api-key <key>` or `--api-key-file <path>`; `--allow-unauthenticated` downgrades that refusal to a warning for operators who accept the exposure.
 
 Prefer `--api-key-file`: `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. The file must be a regular file, and the CLI warns when it is readable beyond its owner (`chmod 600`).
+
+CORS only governs cross-origin requests. A page that points its own domain at `127.0.0.1` (DNS rebinding) is same-origin with the server, so every request, `/openapi.json` included, must also carry a `Host` header naming a loopback host (`localhost`, `*.localhost`, `127.0.0.0/8`, `[::1]`), an IP address, the bind host, the `--public-base-url` host or an allowed host; the port is ignored and anything else gets `403 host_not_allowed`. Add names that reach the server through a proxy or DNS with `--allowed-host` or `serve.allowedHosts`; a leading dot covers the domain and its subdomains:
+
+```bash
+qvac serve --openai --allowed-host qvac.internal --allowed-host .corp.example
+```
+
+`--allow-any-host` (or `"allowedHosts": true`) turns the check off.
 
 Browser access requires explicit trusted origins unless `--docs` enables its same-port loopback defaults. Repeat `--cors-origin` or configure `serve.cors.origins`; wildcard (`*`) is rejected:
 

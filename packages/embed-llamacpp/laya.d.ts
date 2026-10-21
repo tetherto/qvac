@@ -1,6 +1,6 @@
-import QvacLogger = require("@qvac/logging");
-import { type QvacResponse } from "@qvac/infer-base";
-import { type AddonOutputCallback, type LoadWeightsData, type NumericLike } from "./addon";
+import type { QvacResponse } from "@qvac/infer-base";
+import type { AddonOutputCallback, NumericLike } from "./addon";
+import { ModelInterface, ModelRunner, type MappedModelEvent, type ModelBinding, type ModelConfigurationParams, type ModelRunnerArgs } from "./modelRunner";
 /**
  * Load options for {@link LayaDecisions}. Any other key is rejected at load:
  * pooling, context size, ubatch and parallelism are fixed by Laya's
@@ -29,6 +29,10 @@ export interface LayaConfig {
      * as `threads`; unset uses `threads`, `0` or below every logical CPU.
      */
     "threads-batch"?: NumericLike;
+    /** Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100 (maximum polling). Defaults to 0. */
+    poll?: NumericLike;
+    /** Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when neither option is set. */
+    "poll-batch"?: NumericLike;
     "main-gpu"?: NumericLike | "integrated" | "dedicated";
     "split-mode"?: "none" | "layer";
     "tensor-split"?: string;
@@ -144,45 +148,19 @@ export interface LayaResult {
 }
 /** {@link LayaResult} for `state`, one per state for `states`. */
 export type LayaResponse = LayaResult | LayaResult[];
-export interface LayaDecisionsArgs {
-    files: {
-        model: string[];
-    };
-    /** Required, with at least `device`. */
-    config: LayaConfig;
-    logger?: QvacLogger | Console | null;
-    opts?: {
-        stats?: boolean;
-    };
-}
-export interface LayaBinding {
+export type LayaDecisionsArgs = ModelRunnerArgs<LayaConfig>;
+export interface LayaBinding extends ModelBinding {
     createLayaInstance(owner: LayaInterface, configurationParams: {
         path: string;
         config: LayaConfig;
         backendsDir?: string;
     }, outputCallback: AddonOutputCallback): object;
-    activate(handle: unknown): Promise<void> | void;
     runJob(handle: unknown, input: {
         type: "text";
         input: string;
     }): Promise<boolean>;
-    loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
-    cancel(handle: unknown): Promise<void>;
-    destroyInstance(handle: unknown): void;
 }
-export type MappedLayaEvent = {
-    type: "JobEnded";
-    data: unknown;
-    error: null;
-} | {
-    type: "Error";
-    data: unknown;
-    error: unknown;
-} | {
-    type: "Output";
-    data: LayaResponse;
-    error: null;
-};
+export type MappedLayaEvent = MappedModelEvent<LayaResponse>;
 /**
  * Normalize a raw native event of a Laya instance. The output is laya's
  * response JSON, parsed here; `backendDevice` in the stats maps `0/1` to
@@ -190,20 +168,10 @@ export type MappedLayaEvent = {
  */
 export declare function mapLayaEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedLayaEvent | null;
 /** An interface between the native Laya instance and the JS runtime. */
-export declare class LayaInterface {
-    private readonly _binding;
-    private _handle;
-    constructor(binding: unknown, configurationParams: {
-        path: string;
-        config: LayaConfig;
-        backendsDir?: string;
-    }, outputCb: AddonOutputCallback);
-    cancel(): Promise<void>;
+export declare class LayaInterface extends ModelInterface<LayaConfig, LayaBinding> {
+    protected _createInstance(configurationParams: ModelConfigurationParams<LayaConfig>, outputCb: AddonOutputCallback): object;
     /** Resolves `true` if the job was accepted, `false` if busy. */
     runJob(requestJson: string): Promise<boolean>;
-    loadWeights(data: LoadWeightsData): Promise<void>;
-    activate(): Promise<void>;
-    unload(): Promise<void>;
 }
 /**
  * Typed decisions with Laya checkpoints: answers `choice`, `score` and `noul`
@@ -215,24 +183,8 @@ export declare class LayaInterface {
  * const [result] = await (await laya.run({ state, questions })).await()
  * ```
  */
-export declare class LayaDecisions {
-    logger: QvacLogger;
-    opts: {
-        stats?: boolean;
-    };
-    state: {
-        configLoaded: boolean;
-    };
-    private _addon;
-    private readonly _files;
-    private readonly _config;
-    private readonly _job;
-    private readonly _run;
-    private _hasActiveResponse;
-    constructor({ files, config, logger, opts }: LayaDecisionsArgs);
-    load(): Promise<void>;
-    private _load;
-    private _streamShards;
+export declare class LayaDecisions extends ModelRunner<LayaConfig, LayaRequest, string, LayaResponse, LayaInterface> {
+    protected readonly _modelName = "Laya";
     /**
      * Answers a request. `await()` on the response resolves to `[response]`:
      * one {@link LayaResult} for `state`, or one per state for `states`.
@@ -240,14 +192,9 @@ export declare class LayaDecisions {
     run(request: LayaSingleRequest): Promise<QvacResponse<LayaResult>>;
     run(request: LayaBatchRequest): Promise<QvacResponse<LayaResult[]>>;
     run(request: LayaRequest): Promise<QvacResponse<LayaResponse>>;
-    private _runInternal;
-    private _outputCallback;
-    /** Unload the model and clear resources. Fails any in-flight job. */
-    unload(): Promise<void>;
-    /** Cancel the current request. */
-    cancel(): Promise<void>;
-    getState(): {
-        configLoaded: boolean;
-    };
+    protected _createAddon(binding: unknown, configurationParams: ModelConfigurationParams<LayaConfig>, outputCb: AddonOutputCallback): LayaInterface;
+    protected _encodeRequest(request: LayaRequest): string;
+    protected _startJob(addon: LayaInterface, requestJson: string): Promise<boolean>;
+    protected _mapEvent(event: unknown, data: unknown, error: unknown): MappedLayaEvent | null;
 }
 export {};
