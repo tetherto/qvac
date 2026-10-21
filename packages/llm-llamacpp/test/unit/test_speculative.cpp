@@ -1,3 +1,4 @@
+#include <array>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -350,6 +351,83 @@ TEST(SpeculativeConfigTest, FitCountsAnExternalMtpHeadOnItsOwn) {
   EXPECT_EQ(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
   EXPECT_TRUE(fit->isMtp());
   EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
+}
+
+namespace {
+
+// Device handles are only compared, never dereferenced.
+ggml_backend_dev_t fakeDevice(size_t index) {
+  static std::array<char, 3> handles{};
+  return reinterpret_cast<ggml_backend_dev_t>(&handles.at(index));
+}
+
+common_device_memory_data
+memoryRow(size_t model, size_t context, size_t compute) {
+  return {
+      .total = 0,
+      .free = 0,
+      .model = model,
+      .context = context,
+      .compute = compute};
+}
+
+void expectRow(
+    const common_device_memory_data& row, size_t model, size_t context,
+    size_t compute) {
+  EXPECT_EQ(row.model, model);
+  EXPECT_EQ(row.context, context);
+  EXPECT_EQ(row.compute, compute);
+}
+
+} // namespace
+
+TEST(SpeculativeFitMemoryTest, DraftRowsAddToTheTargetRowOfTheirDevice) {
+  const std::vector<ggml_backend_dev_t> devices{fakeDevice(0), fakeDevice(1)};
+  common_device_memory_data_vec breakdown{
+      memoryRow(100, 10, 1), memoryRow(200, 20, 2), memoryRow(300, 30, 3)};
+  // The draft side runs on the second device and on one the target does not
+  // use, listed in another order.
+  const std::vector<ggml_backend_dev_t> draftDevices{
+      fakeDevice(1), fakeDevice(2)};
+  const common_device_memory_data_vec measured{
+      memoryRow(5, 6, 7), memoryRow(50, 60, 70), memoryRow(8, 9, 10)};
+  ASSERT_TRUE(addDraftMemory(devices, breakdown, draftDevices, measured, true));
+  expectRow(breakdown[0], 100, 10, 1);
+  expectRow(breakdown[1], 205, 26, 9);
+  // The host row is added whole.
+  expectRow(breakdown[2], 308, 39, 13);
+}
+
+TEST(SpeculativeFitMemoryTest, SharedWeightsAreLeftOut) {
+  const std::vector<ggml_backend_dev_t> devices{fakeDevice(0)};
+  common_device_memory_data_vec breakdown{
+      memoryRow(100, 10, 1), memoryRow(300, 30, 3)};
+  const common_device_memory_data_vec measured{
+      memoryRow(100, 4, 5), memoryRow(300, 6, 7)};
+  // An MTP context on the target's own layers: its weights are the target's.
+  ASSERT_TRUE(addDraftMemory(devices, breakdown, devices, measured, false));
+  expectRow(breakdown[0], 100, 14, 6);
+  expectRow(breakdown[1], 300, 36, 10);
+}
+
+TEST(SpeculativeFitMemoryTest, RowsWithoutAHostRowAreRefused) {
+  const std::vector<ggml_backend_dev_t> devices{fakeDevice(0)};
+  common_device_memory_data_vec breakdown{
+      memoryRow(100, 10, 1), memoryRow(300, 30, 3)};
+  // A draft measurement missing its host row.
+  EXPECT_FALSE(
+      addDraftMemory(devices, breakdown, devices, {memoryRow(1, 1, 1)}, true));
+  // A target breakdown missing its host row.
+  common_device_memory_data_vec noHostRow{memoryRow(100, 10, 1)};
+  EXPECT_FALSE(addDraftMemory(
+      devices,
+      noHostRow,
+      devices,
+      {memoryRow(1, 1, 1), memoryRow(1, 1, 1)},
+      true));
+  expectRow(breakdown[0], 100, 10, 1);
+  expectRow(breakdown[1], 300, 30, 3);
+  expectRow(noHostRow[0], 100, 10, 1);
 }
 
 TEST(SpeculativeSequenceTest, MaxDraftLeavesRoomAndRespectsBudget) {

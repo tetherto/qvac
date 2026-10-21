@@ -287,10 +287,20 @@ bool SpeculativeFitModel::addMemory(
   } catch (const std::exception&) {
     return false;
   }
-  if (measured.size() != draftDevices.size() + 1) {
+  return addDraftMemory(
+      devices, breakdown, draftDevices, measured, !extra_.shares_model);
+}
+
+bool addDraftMemory(
+    const std::vector<ggml_backend_dev_t>& devices,
+    common_device_memory_data_vec& breakdown,
+    const std::vector<ggml_backend_dev_t>& draftDevices,
+    const common_device_memory_data_vec& measured, bool countWeights) {
+  if (breakdown.size() != devices.size() + 1 ||
+      measured.size() != draftDevices.size() + 1) {
     return false;
   }
-  const auto add = [countWeights = !extra_.shares_model](
+  const auto add = [countWeights](
                        common_device_memory_data& into,
                        const common_device_memory_data& from) {
     if (countWeights) {

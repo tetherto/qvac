@@ -112,6 +112,18 @@ private:
   common_fit_extra_model extra_{};
 };
 
+/// Adds `measured`, the rows `common_get_device_memory_data` returned for a
+/// draft side on `draftDevices`, to `breakdown`, the target's rows on
+/// `devices`: rows matched by device, a draft row on a device the target does
+/// not use left out, the host row added whole, and the weights only when
+/// `countWeights`. False, with `breakdown` untouched, when either side's rows
+/// are not one per device plus a trailing host row.
+bool addDraftMemory(
+    const std::vector<ggml_backend_dev_t>& devices,
+    common_device_memory_data_vec& breakdown,
+    const std::vector<ggml_backend_dev_t>& draftDevices,
+    const common_device_memory_data_vec& measured, bool countWeights);
+
 /// The draft side of one sequence's state: the draft context's memory
 /// for the sequence and the speculative implementation's own carry-over
 /// (`common_speculative_get_state`). Travels with every in-memory copy of the
