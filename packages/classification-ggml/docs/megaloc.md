@@ -33,7 +33,8 @@ aspect-ratio padding is applied. Batch size is one. Calls on one instance are
 serialized; different instances own separate graphs and weight buffers.
 
 `load()` reads weights and builds the graph on a native worker, keeping the JS
-event loop responsive. `load()` and `unload()` are idempotent. An unloaded instance can load again.
+event loop responsive. `load()` and `unload()` are idempotent. An unloaded
+instance can load again.
 `destroy()` releases resources permanently. Runtime statistics describe the last
 successful embedding and include time, allocated weight bytes, backend ID and
 the number of graph nodes assigned to CPU fallback. Backend IDs are CPU=0,
@@ -43,7 +44,7 @@ operations to execute on CPU when a GPU backend does not support them.
 ## Local GGUF conversion
 
 Two formats are supported: **F16 (default), 436.8 MiB**, and **mixed (F16 body
-+ Q6_K projection), 278.7 MiB**. Mixed is **36.2% smaller** (F16 is 1.57 times
+with a Q6_K projection), 278.7 MiB**. Mixed is **36.2% smaller** (F16 is 1.57 times
 its size). In a 512-query retrieval screen, both retained PyTorch FP32's
 78.9062% Recall@1. The lowest mAP across four tested backends was 70.8692% for
 F16 and 70.8455% for mixed, versus 70.8680% for PyTorch: mixed lost 0.0225
