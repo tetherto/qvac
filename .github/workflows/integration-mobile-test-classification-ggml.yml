@@ -282,6 +282,9 @@ jobs:
       - name: Build mobile app
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        env:
+          # Android's resource compiler reads the GGUF fixtures into memory.
+          GRADLE_OPTS: ${{ matrix.platform == 'Android' && '-Dorg.gradle.jvmargs=-Xmx4g' || '' }}
         with:
           # Empty keeps the published @qvac/fabric runtime.
           fabric-prebuild-run-id: ${{ inputs.fabric_prebuild_run_id }}
