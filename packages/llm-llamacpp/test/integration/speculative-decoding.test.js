@@ -154,6 +154,21 @@ function assertDrafted(t, stats, label) {
   )
 }
 
+function assertStopsAtFirstMatch(t, output, stopWord, label) {
+  const lower = output.toLowerCase()
+  const first = lower.indexOf(stopWord)
+  t.ok(
+    first !== -1 && lower.indexOf(stopWord, first + 1) === -1,
+    `${label} output ends at the first "${stopWord}"`
+  )
+}
+
+function commonPrefixLength(a, b) {
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  return i
+}
+
 for (const variant of VARIANTS) {
   const { label, target, skip } = variant
   const timeout = (ms) => Math.max(ms, variant.timeout || 0)
@@ -211,12 +226,29 @@ for (const variant of VARIANTS) {
         'antiprompt',
         'speculative decoding stopped on the stop word'
       )
-      t.is(
-        speculative.output,
-        plain.output,
-        'speculative output matches plain output up to the stop'
+      // Not an exact match on purpose. Speculative decoding verifies several
+      // drafted tokens in one batch, and some GPU backends round a batch
+      // slightly differently from one-token decoding. On RADV Vulkan (Radeon
+      // 8060S) that flips near-ties, such as "Let me think" vs "I should",
+      // so the two greedy outputs can take different but equally valid paths
+      // before the stop and reach the stop word at different points. CPU and
+      // NVIDIA Vulkan produce identical outputs. What this test guards is
+      // stop handling, so each run must stop at its own first match, and
+      // while the outputs agree they must stop at the same place with the
+      // same token count.
+      assertStopsAtFirstMatch(t, plain.output, stopWord, 'plain')
+      assertStopsAtFirstMatch(t, speculative.output, stopWord, 'speculative')
+      const a = speculative.output
+      const b = plain.output
+      t.ok(
+        a === b || !(a.startsWith(b) || b.startsWith(a)),
+        'speculative decoding stops where plain decoding does on the same text'
       )
-      t.is(speculative.stats.generatedTokens, plain.stats.generatedTokens, 'same token count')
+      if (a === b) {
+        t.is(speculative.stats.generatedTokens, plain.stats.generatedTokens, 'same token count')
+      } else {
+        t.comment(`outputs diverged at character ${commonPrefixLength(a, b)} before the stop`)
+      }
       assertDrafted(t, speculative.stats, 'stop string')
     }
   )
