@@ -1,31 +1,20 @@
 'use strict'
 
 const test = require('brittle')
-const { ClassificationInterface } = require('../../addon')
-const binding = require('../../binding')
 
-const {
-  loadImage,
-  TEST_TIMEOUT,
-  makeClassifier,
-  cleanupClassifier,
-  resolveModelPath
-} = require('./utils')
+const { loadImage, TEST_TIMEOUT, makeClassifier, cleanupClassifier } = require('./utils')
 
 test('unsupported native input types report both accepted types', async function (t) {
   t.timeout(TEST_TIMEOUT)
-  const addon = new ClassificationInterface(
-    binding,
-    { path: resolveModelPath(), config: {} },
-    () => {}
-  )
+  const classifier = makeClassifier()
+  await classifier.load()
   try {
     await t.exception.all(
-      () => addon.runJob({ type: 'unsupported' }),
+      () => classifier.addon.runJob({ type: 'unsupported' }),
       /only 'image' or 'embedding' input types/
     )
   } finally {
-    await addon.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
