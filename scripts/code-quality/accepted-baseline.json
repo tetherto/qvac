@@ -1678,31 +1678,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:0c36c59a0e8ce3c73341b0503789459bc8cde035c5a51e79e03449a71f4ef0ae",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/embed-llamacpp/test/integration/rag-id-map-index.test.js",
-        "symbol": "safeTest \"desktop RAG workflow exercises all IdMapIndex operations\" callback#1"
-      },
-      "summary": "safeTest \"desktop RAG workflow exercises all IdMapIndex operations\" callback#1 in packages/embed-llamacpp/test/integration/rag-id-map-index.test.js exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/embed-llamacpp/test/integration/rag-id-map-index.test.js",
-        "line": 74,
-        "column": 3
-      },
-      "measurement": {
-        "value": 138,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
-      }
-    },
-    {
       "fingerprint": "quality-v1:0c4c6667d2f119de921aea22cb2d7a3aed5d372a94791ad2e0f941d6803c0672",
       "detector": "structure",
       "rule": "file-lines",

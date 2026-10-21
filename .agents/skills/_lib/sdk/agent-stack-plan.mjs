@@ -5,12 +5,18 @@
  *   node .agents/skills/_lib/sdk/agent-stack-plan.mjs
  *   node .agents/skills/_lib/sdk/agent-stack-plan.mjs --json
  *   node .agents/skills/_lib/sdk/agent-stack-plan.mjs --no-npm
+ *   node .agents/skills/_lib/sdk/agent-stack-plan.mjs --base-ref=<ref>
  */
 
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import {
+  loadTrain,
+  readRepoJson
+} from '../../../../.github/scripts/lib/release-train.mjs'
 
 const require = createRequire(import.meta.url)
 const { getPackageDir, getNpmName } = require(
@@ -18,7 +24,7 @@ const { getPackageDir, getNpmName } = require(
 )
 
 /** Lower → upper. */
-const STACK = Object.freeze([
+export const STACK = Object.freeze([
   { slug: 'inference', role: 'engine', dependsOn: null },
   {
     slug: 'sdk',
@@ -303,12 +309,53 @@ function recommendVersion (entry, spec, bySlug) {
       rationale: '0.x: [bc]/[api]/ or feat → minor'
     }
   }
+  let rationale = 'Dependency-range alignment → patch'
+  if (entry.reasons.includes('code_changes')) {
+    rationale = 'Outstanding non-breaking commits → patch'
+  } else if (entry.reasons.length === 1 && entry.reasons[0] === 'train') {
+    rationale = `Released with the ${entry.train} train`
+  }
   return {
     suggested: bumpPatch(current),
     kind: 'patch',
-    rationale: entry.reasons.includes('code_changes')
-      ? 'Outstanding non-breaking commits → patch'
-      : 'Dependency-range alignment → patch'
+    rationale
+  }
+}
+
+/** npm name → name of the release train that publishes it. */
+export function trainsByPackage (catalog, nxJson) {
+  const out = new Map()
+  for (const name of Object.keys(catalog)) {
+    for (const project of loadTrain(name, catalog, nxJson).projects) {
+      out.set(project, name)
+    }
+  }
+  return out
+}
+
+/**
+ * A train publishes every package in it (`checkRelease` in
+ * .github/scripts/lib/release-train.mjs rejects a train branch where one does
+ * not move). Once any member needs a release, the members with no reason of
+ * their own get the `train` reason.
+ */
+function applyTrainReleases (packages, trainOf) {
+  const active = new Set()
+  for (const entry of packages) {
+    const train = trainOf.get(entry.npmName)
+    if (train && entry.needsRelease) active.add(train)
+  }
+  for (const entry of packages) {
+    const train = trainOf.get(entry.npmName)
+    if (!train) continue
+    entry.train = train
+    if (
+      active.has(train) &&
+      entry.reasons.length === 0 &&
+      entry.blockers.length === 0
+    ) {
+      entry.reasons = ['train']
+    }
   }
 }
 
@@ -381,6 +428,26 @@ function inspectPackage (spec, ctx) {
   return entry
 }
 
+/**
+ * Everything after the per-package inspection. `packages` holds one entry per
+ * STACK spec, in STACK order.
+ */
+export function finalizePlan (packages, trainOf) {
+  applyTrainReleases(packages, trainOf)
+
+  // Second pass: deps against finalized lower recommendations.
+  const bySlug = new Map(packages.map((entry) => [entry.slug, entry]))
+  for (let i = 0; i < STACK.length; i++) {
+    const entry = packages[i]
+    const deps = evaluateDeps(entry, STACK[i], bySlug)
+    entry.depResults = deps.depResults
+    entry.reasons = deps.reasons
+    entry.needsWork = entry.reasons.length > 0
+    entry.needsRelease = entry.needsWork && entry.blockers.length === 0
+    entry.recommendation = recommendVersion(entry, STACK[i], bySlug)
+  }
+}
+
 function buildPlan (opts) {
   const root = repoRoot()
   const ctx = {
@@ -397,17 +464,10 @@ function buildPlan (opts) {
     packages.push(entry)
   }
 
-  // Second pass: deps against finalized lower recommendations.
-  for (let i = 0; i < STACK.length; i++) {
-    const entry = packages[i]
-    const deps = evaluateDeps(entry, STACK[i], ctx.bySlug)
-    entry.depResults = deps.depResults
-    entry.reasons = deps.reasons
-    entry.needsWork = entry.reasons.length > 0
-    entry.needsRelease = entry.needsWork && entry.blockers.length === 0
-    entry.recommendation = recommendVersion(entry, STACK[i], ctx.bySlug)
-    ctx.bySlug.set(entry.slug, entry)
-  }
+  finalizePlan(
+    packages,
+    trainsByPackage(readRepoJson('.github/release-trains.json'), readRepoJson('nx.json'))
+  )
 
   return {
     generatedAt: new Date().toISOString(),
@@ -468,4 +528,4 @@ function main () {
   )
 }
 
-main()
+if (import.meta.url === pathToFileURL(process.argv[1]).href) main()

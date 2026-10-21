@@ -11,8 +11,9 @@ fuzz helpers (`qvac_addon_fuzz_manifest`, `qvac_addon_fuzz_only_return`,
 CMake-template adoption. Bounded Linux CI coverage exists for
 `classification-ggml`, the `tts-ggml` and `audiogen-ggml` config-parse
 fronts, the `asr-ggml` s16le PCM decoder, the `bci-whispercpp`
-neural-signal parser, the `embed-llamacpp` main-gpu config parsers, and
-the `diffusion-cpp` GGUF video-capability inspector. Fleet
+neural-signal parser, the `embed-llamacpp` main-gpu config parsers, the
+`diffusion-cpp` GGUF video-capability inspector, and the `llm-llamacpp`
+stop-string and log sanitizers. Fleet
 corpus/dictionary scale-up, scheduled continuous fuzzing, and optional
 OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
@@ -584,8 +585,9 @@ families that protect several addons at once.
   migration. `tts-ggml` and `audiogen-ggml` config number parsers are in,
   `asr-ggml` fuzzes the s16le PCM decoder, `bci-whispercpp` fuzzes the
   length-prefixed neural-signal parser, `embed-llamacpp` fuzzes the
-  header-only main-gpu and device parsers, and `diffusion-cpp` fuzzes the
-  GGUF video-capability inspector. Prefer the no-fabric link;
+  header-only main-gpu and device parsers, `diffusion-cpp` fuzzes the
+  GGUF video-capability inspector, and `llm-llamacpp` fuzzes the
+  header-only stop-string and log sanitizers. Prefer the no-fabric link;
   reserve `LINK_FABRIC` for header loaders that actually call ggml/gguf. Factor
   shared parsing helpers so one target covers multiple consumers where the code
   is genuinely shared.

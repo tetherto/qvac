@@ -21,7 +21,7 @@ This builds on the pnpm + Nx workspace. Read `docs/pnpm-nx-workspace.md` first f
 2. Reads each affected package's `options.ci` for that target from a **trusted ref** via `git show <config-ref>:packages/<pkg>/project.json` — never the checked-out (PR-head) tree.
 3. Emits a flattened `{package, platform, ...ci-fields}` JSON matrix, an `any` boolean, and a `carveouts` list (packages flagged `carveOut: true`, routed to bespoke reusables instead of the generic matrix).
 
-`config-ref` defaults to the affected base; callers on `pull_request_target` pass `github.event.repository.default_branch` so config is always read from the trusted default branch. See "Fork safety".
+`config-ref` defaults to the affected base; callers on `pull_request_target` pass `github.event.repository.default_branch` so config is always read from the trusted default branch. A manual `on-pr-nx.yml` dispatch can set `config_ref_override` to test package selection and desktop integration configuration from an explicit trusted branch. The integration caller forwards that manual override as its `base-ref`; PR events continue to use the default branch. See "Fork safety".
 
 ## Workflow wiring
 
