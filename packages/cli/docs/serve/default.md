@@ -43,9 +43,9 @@ Run several chat prompts through one loaded LLM in a single request, backed by t
 `batchCompletion()`. The model decodes them together, which is faster than sending the same
 prompts one by one.
 
-`model` names a `serve.models` alias whose endpoint category is `chat`. Concurrency comes from
-that alias's `config.parallel`: at `parallel: 1` the prompts run one after another, and above
-it up to `parallel` decode at once. The slots share the alias's `ctx_size`.
+`model` names a `serve.models` alias whose endpoint category is `chat` and whose
+`config.parallel` is 2 or more. Up to `parallel` prompts decode at once and the rest queue. The
+slots share the alias's `ctx_size`.
 
 | Field     | Type       | Required | Meaning                                              |
 | --------- | ---------- | -------- | ---------------------------------------------------- |
@@ -106,6 +106,7 @@ curl -sS http://localhost:11434/qvac/v1/chat/batch \
 | 400  | `too_many_prompts`           | `prompts` carries more than 64 entries              |
 | 400  | `duplicate_prompt_id`        | Two prompts share an `id`                           |
 | 400  | `invalid_request`            | The body carries an unknown top-level field         |
+| 400  | `batch_not_enabled`          | The alias's `config.parallel` is below 2            |
 | 400  | `deferred_tools_unsupported` | A prompt's tool sets `defer_loading`                |
 | 400  | `tools_not_enabled`          | A prompt has `tools` and the alias lacks `tools`    |
 | 400  | `invalid_response_format`    | Bad `response_format`, or one combined with `tools` |

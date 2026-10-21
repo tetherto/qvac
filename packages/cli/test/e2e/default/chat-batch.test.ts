@@ -86,6 +86,13 @@ describe('qvac chat batch: validation', () => {
     assert.notEqual(entry?.state, server().qvac.registry.STATES.READY)
   })
 
+  it('rejects an alias without parallel slots before loading the model', async () => {
+    const res = await post({ model: 'chat-model', prompts: [prompt] })
+    assertStatusAndError(res, 400, 'batch_not_enabled')
+    const entry = server().qvac.registry.getEntry('chat-model')
+    assert.notEqual(entry?.state, server().qvac.registry.STATES.READY)
+  })
+
   it('unknown model returns 404', async () => {
     assertStatusAndError(await post({ model: 'nope', prompts: [prompt] }), 404, 'model_not_found')
   })

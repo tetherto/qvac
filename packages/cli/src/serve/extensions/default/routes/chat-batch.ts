@@ -5,6 +5,7 @@ import type { z } from 'zod'
 import { batchCompletion, SDK_SERVER_ERROR_CODES, type CompletionFinal, type Tool } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { requireModel } from '@/serve/core/plugins/require-model'
+import { resolveModelAlias } from '@/serve/core/config/models'
 import { assertToolsEnabled, toolsRequested } from '@/serve/lib/assert-tools-enabled'
 import { formatToolErrors } from '@/serve/core/completion'
 import {
@@ -36,9 +37,9 @@ the SDK's \`batchCompletion()\`. The model decodes them together (continuous
 batching), which is faster than the same prompts sent one by one.
 
 \`model\` names a \`serve.models\` alias whose endpoint category is \`chat\`.
-Concurrency comes from that alias's \`config.parallel\`: at \`parallel: 1\` the
-prompts run one after another, and above it up to \`parallel\` decode at once.
-The context window (\`ctx_size\`) is shared between those slots.
+The alias needs \`config.parallel\` of 2 or more: up to \`parallel\` prompts
+decode at once and the rest queue. The context window (\`ctx_size\`) is shared
+between those slots.
 
 \`prompts\` holds 1 to ${MAX_BATCH_PROMPTS} entries. Each takes the
 \`/v1/chat/completions\` fields \`messages\`, \`tools\`, \`tool_choice\`,
@@ -57,7 +58,8 @@ finishes, and a client disconnect cancels it.
 
 Errors: \`400 invalid_json\`, \`400 missing_model\`, \`400 invalid_prompts\`,
 \`400 too_many_prompts\`, \`400 duplicate_prompt_id\`,
-\`400 deferred_tools_unsupported\`, \`400 tools_not_enabled\`,
+\`400 batch_not_enabled\`, \`400 deferred_tools_unsupported\`,
+\`400 tools_not_enabled\`,
 \`400 invalid_response_format\`, \`400 invalid_tool_choice\`,
 \`400 unsupported_image_content\`, \`400 invalid_model_type\`,
 \`400 context_length_exceeded\`, \`404 model_not_found\`,
@@ -77,12 +79,13 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         summary: 'Batch chat completion',
         description
       },
-      // Duplicate ids are a body error, so they fail before a model loads.
-      preHandler: [rejectDuplicateIds, requireModel('chat')]
+      // Body and alias-config errors fail before a model loads.
+      preHandler: [rejectDuplicateIds, rejectSingleSlot, requireModel('chat')]
     },
     async (req) => {
       const { prompts } = req.body
-      const { sdkModelId, alias } = req.qvacModel!
+      const { sdkModelId, alias, entry } = req.qvacModel!
+      assertBatchEnabled(entry.config, alias)
 
       const prepared = prompts.map((prompt, index) => prepare(req, prompt, index))
 
@@ -103,6 +106,25 @@ async function rejectDuplicateIds(req: FastifyRequest): Promise<void> {
     }
     seen.add(id)
   }
+}
+
+// lunte-disable-next-line require-await
+async function rejectSingleSlot(req: FastifyRequest): Promise<void> {
+  const { model } = req.body as { model: string }
+  const alias = resolveModelAlias(req.server.qvac.serveConfig, model.trim())
+  // Anything else is left to `requireModel`, which reports it.
+  if (alias?.endpointCategory === 'chat') assertBatchEnabled(alias.config, alias.alias)
+}
+
+// The addon refuses a batch on a single sequence slot (`n_seq_max > 1`).
+function assertBatchEnabled(config: Record<string, unknown>, alias: string): void {
+  const parallel = Math.floor(Number(config['parallel']))
+  if (Number.isFinite(parallel) && parallel >= 2) return
+  throw new HttpError(
+    400,
+    'batch_not_enabled',
+    `Model "${alias}" has one decode slot. Set serve.models.${alias}.config.parallel to 2 or more and reload the model.`
+  )
 }
 
 function prepare(req: FastifyRequest, prompt: BatchPromptBody, index: number): SdkChatArgs {
