@@ -104,7 +104,7 @@ for (const quant of ['f16', 'mixed']) {
           ? 3
           : backend.startsWith('Metal') || backend.startsWith('MTL')
             ? 1
-            : backend.startsWith('OpenCL')
+            : backend.startsWith('OpenCL') || backend.startsWith('GPUOpenCL')
               ? 4
               : 0
       t.is(stats.backend_id, expected, 'requested backend is used')

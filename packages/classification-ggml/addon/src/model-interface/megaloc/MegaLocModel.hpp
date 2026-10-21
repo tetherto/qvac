@@ -47,5 +47,6 @@ private:
 };
 
 std::vector<float> preprocess(const ImageInput& input);
+int backendId(const char* name);
 
 } // namespace classification_ggml::megaloc

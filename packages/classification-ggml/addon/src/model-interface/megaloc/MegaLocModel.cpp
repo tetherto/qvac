@@ -31,6 +31,8 @@ void check(bool condition, const std::string& message) {
 using Context = std::unique_ptr<ggml_context, decltype(&ggml_free)>;
 using Gguf = std::unique_ptr<gguf_context, decltype(&gguf_free)>;
 
+} // namespace
+
 int backendId(const char* name) {
   const std::string value(name);
   if (value.starts_with("CPU"))
@@ -41,12 +43,10 @@ int backendId(const char* name) {
     return 2;
   if (value.starts_with("Vulkan"))
     return 3;
-  if (value.starts_with("OpenCL"))
+  if (value.starts_with("OpenCL") || value.starts_with("GPUOpenCL"))
     return 4;
   return 99;
 }
-
-} // namespace
 
 struct MegaLocModel::Impl {
   ggml_backend_t device = nullptr;

@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <utility>
 
 #include <ggml.h>
 #include <gguf.h>
@@ -12,6 +13,21 @@
 #include "model-interface/megaloc/MegaLocModel.hpp"
 
 namespace mega = classification_ggml::megaloc;
+
+TEST(MegaLocBackendNames, MatchesFabricDeviceNamesAndPublicIds) {
+  for (const auto& [name, expected] :
+       {std::pair{"CPU", 0},
+        {"Metal", 1},
+        {"Metal0", 1},
+        {"MTL0", 1},
+        {"CUDA0", 2},
+        {"Vulkan1", 3},
+        {"OpenCL", 4},
+        {"GPUOpenCL", 4},
+        {"unknown", 99}}) {
+    EXPECT_EQ(mega::backendId(name), expected) << name;
+  }
+}
 
 namespace {
 class MegaLocGgufTest : public ::testing::Test {
