@@ -21,6 +21,7 @@ const process = require('bare-process')
 const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
 const {
+  NO_CONTEXT_FRAMES,
   USAGE,
   longFormFramesFor,
   parseLongFormArguments
@@ -60,10 +61,11 @@ function describeWindows(parakeetConfig) {
     console.log('Windows: recommended by the model (60 s / 25 % for TranscribePsy)')
     return
   }
-  console.log(
-    `Windows: ${parakeetConfig.longFormWindowFrames} encoder frames, ` +
-      `${parakeetConfig.longFormContextFrames} frames of context each side`
-  )
+  const context =
+    parakeetConfig.longFormContextFrames === NO_CONTEXT_FRAMES
+      ? 'no context'
+      : `${parakeetConfig.longFormContextFrames} frames of context each side`
+  console.log(`Windows: ${parakeetConfig.longFormWindowFrames} encoder frames, ${context}`)
 }
 
 function describeEncoder(backendInfo, stats) {
