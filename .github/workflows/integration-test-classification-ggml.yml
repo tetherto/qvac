@@ -38,13 +38,17 @@ env:
   PKG_DIR: packages/classification-ggml
 
 jobs:
+  test-models:
+    permissions: {}
+    uses: ./.github/workflows/test-models-classification-ggml.yml
+
   runner_names:
     permissions:
       contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
   run-integration-tests:
-    needs: runner_names
+    needs: [runner_names, test-models]
     timeout-minutes: 30
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -239,32 +243,30 @@ jobs:
       # Keep current MobileNet-only source compatible before MegaLoc lands.
       - name: Stage MegaLoc test models
         if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
-        uses: ./.github/actions/stage-integration-models
+        uses: tetherto/qvac/.github/actions/stage-integration-models@94eb8ef3e888f8bc1f1717d5e31f55b14d4ac915
         with:
           workdir: ${{ env.PKG_DIR }}
           aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
-          s3-manifest: >-
-            [{"src":"qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf","dest":"test/fixtures/megaloc-f16.gguf"},
-             {"src":"qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf","dest":"test/fixtures/megaloc-mixed.gguf"}]
+          s3-manifest: ${{ needs.test-models.outputs.manifest }}
 
       - name: Verify MegaLoc test models
         if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
+        env:
+          MODEL_MANIFEST: ${{ needs.test-models.outputs.manifest }}
         run: |
           node --input-type=module -e '
             import { createHash } from "node:crypto";
             import { createReadStream } from "node:fs";
-            const expected = {
-              "megaloc-f16.gguf": "f2519f42a826bb82f5d3bd6360e6017fb156ad3cb25f71d73163df01d26c6636",
-              "megaloc-mixed.gguf": "c1215bca09ed783f34e66ab372b0b02e75213733bea8105764557b58f2082575"
-            };
-            for (const [name, sha256] of Object.entries(expected)) {
+            const expected = JSON.parse(process.env.MODEL_MANIFEST);
+            if (expected.length !== 2) throw new Error("Expected both MegaLoc test models");
+            for (const { dest, sha256 } of expected) {
               const hash = createHash("sha256");
-              for await (const chunk of createReadStream("test/fixtures/" + name)) hash.update(chunk);
-              if (hash.digest("hex") !== sha256) throw new Error("Checksum mismatch: " + name);
-              console.log("Verified " + name);
+              for await (const chunk of createReadStream(dest)) hash.update(chunk);
+              if (hash.digest("hex") !== sha256) throw new Error("Checksum mismatch: " + dest);
+              console.log("Verified " + dest);
             }
           '
 
