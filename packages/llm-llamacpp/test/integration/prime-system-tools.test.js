@@ -27,6 +27,7 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const desktopOnly = isMobile ? 'desktop-only: several model loads per test' : false
 
 const QWEN35 = { modelName: 'Qwen3.5-0.8B-Q8_0.gguf' }
+// prestage-ignore: Qwen3-0.6B-Q8_0.gguf — used only by the desktop concurrency tests
 const QWEN3 = { modelName: 'Qwen3-0.6B-Q8_0.gguf' }
 const MODELS = [
   { label: 'Qwen3.5', def: QWEN35 },
@@ -123,7 +124,12 @@ async function startGenerating(model, messages, runOptions) {
     .onUpdate(() => firstPiece())
     .await()
     .then(() => Date.now())
-  await generating
+  await Promise.race([
+    generating,
+    done.then(() => {
+      throw new Error('The background request finished before streaming any output')
+    })
+  ])
   return { done }
 }
 
@@ -143,6 +149,11 @@ async function baseline(t, def, modelPath) {
   })
   await fresh.unload()
   const result = { promptTokens: ask.promptTokens, primedTokens: prime.cacheTokens }
+  t.ok(result.primedTokens > 0, 'the baseline prefill caches a nonempty prefix')
+  t.ok(
+    result.promptTokens > result.primedTokens,
+    'the cold question includes tokens beyond the primed prefix'
+  )
   baselines.set(def.modelName, result)
   return result
 }
