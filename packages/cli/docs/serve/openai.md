@@ -953,7 +953,7 @@ Two generation modes:
 - **txt2vid** — JSON body with `prompt` only. No image required.
 - **img2vid** — include `input_reference` in one of these forms:
   - **multipart file field** — send `multipart/form-data` with `input_reference` as a file field (this is what the OpenAI SDK sends when you pass a local `File`/`Blob`/`fs.ReadStream` as `Uploadable`)
-  - **JSON `{ image_url }`** — base64 data URI (`data:image/jpeg;base64,...`) or an HTTP(S) URL (the server fetches it; 100 MB / 30 s limits apply)
+  - **JSON `{ image_url }`** — base64 data URI (`data:image/jpeg;base64,...`) or a public HTTP(S) URL (the server fetches it; 100 MB / 30 s limits apply)
   - **JSON `{ file_id }`** — ID of a file previously uploaded via `POST /v1/files`
 
   Mode is inferred from the presence of `input_reference`; no explicit `mode` field needed.
@@ -976,13 +976,13 @@ Two generation modes:
 - `size` accepts any `WxH` (multiples of 16) in addition to OpenAI's 4-value enum.
 - `Content-Type: video/mp4` is produced by a server-side ffmpeg transcode; `?format=avi` returns the native container.
 - The list endpoint is **in-memory only** — a restart clears it.
-- HTTP(S) URL fetches for `input_reference.image_url` are capped at 100 MB and 30 s.
+- HTTP(S) URL fetches for `input_reference.image_url` are capped at 100 MB and 30 s. The server refuses loopback, private, link-local and cloud-metadata addresses, including after a redirect or DNS resolution; send a data URI or `file_id` for images on those hosts. Any fetch failure returns the same message.
 
 ### Errors
 
 | HTTP | `error.code`              | When                                                                                                                                                                               |
 | ---- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400  | `invalid_input_reference` | Data URI has invalid base64, decodes to empty bytes, or is missing the comma separator; HTTP(S) URL returned non-200, timed out, or exceeded the 100 MB limit; `file_id` not found |
+| 400  | `invalid_input_reference` | Data URI has invalid base64, decodes to empty bytes, or is missing the comma separator; HTTP(S) URL fetch failed or was refused, or exceeded the 100 MB limit; `file_id` not found |
 | 400  | `invalid_strength`        | `strength` outside `[0, 1]` or non-numeric                                                                                                                                         |
 | 400  | `invalid_model_type`      | Alias is not a `video` model                                                                                                                                                       |
 | 404  | `video_not_found`         | Unknown job id                                                                                                                                                                     |

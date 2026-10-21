@@ -1434,7 +1434,7 @@ OpenAI-compatible **async** video generation backed by the SDK's `video()`. Crea
 Two modes are supported:
 
 - **txt2vid** — JSON body with `prompt` only. No image needed.
-- **img2vid** — include `input_reference` as a multipart file field (OpenAI SDK `Uploadable`), or JSON `{ image_url }` (base64 data URI or HTTP(S) URL), or JSON `{ file_id }` (file uploaded via `POST /v1/files`). Mode is inferred automatically.
+- **img2vid** — include `input_reference` as a multipart file field (OpenAI SDK `Uploadable`), or JSON `{ image_url }` (base64 data URI or public HTTP(S) URL), or JSON `{ file_id }` (file uploaded via `POST /v1/files`). Mode is inferred automatically.
 
 The OpenAI sub-routes `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented.
 
@@ -1517,7 +1517,7 @@ curl http://localhost:11434/v1/videos \
   -F "seconds=2"
 ```
 
-JSON with a base64 data URI or HTTP(S) URL (≤ 100 MB, 30 s fetch timeout):
+JSON with a base64 data URI or public HTTP(S) URL (≤ 100 MB, 30 s fetch timeout). The server refuses loopback, private, link-local and cloud-metadata addresses, including after a redirect or DNS resolution:
 
 ```bash
 curl http://localhost:11434/v1/videos \
@@ -1556,11 +1556,11 @@ curl http://localhost:11434/v1/videos \
 | `negative_prompt` | QVAC extension. Negative prompt for the sampler. | No |
 | `cfg_scale` | QVAC extension. Classifier-free guidance scale (Wan range ~5–8). | No |
 | `flow_shift` | QVAC extension. Flow-matching shift; Wan 2.1 T2V needs `3.0` for visible motion. | No |
-| `input_reference` | img2vid reference image. Multipart file field, JSON `{ image_url }` (data URI or HTTP(S) URL, ≤ 100 MB / 30 s), or JSON `{ file_id }`. When present the job runs in img2vid mode; omit for txt2vid. | No |
+| `input_reference` | img2vid reference image. Multipart file field, JSON `{ image_url }` (data URI or public HTTP(S) URL, ≤ 100 MB / 30 s), or JSON `{ file_id }`. When present the job runs in img2vid mode; omit for txt2vid. | No |
 | `strength` | QVAC extension. img2vid denoise strength `[0, 1]`. Only meaningful with `input_reference`. | No |
 
 <Callout type="info">
-**img2vid via `input_reference`** — supply the reference image as a multipart file field named `input_reference` (OpenAI SDK `Uploadable`), or as JSON `{ "image_url": "data:image/jpeg;base64,..." }` (data URI or HTTP(S) URL up to 100 MB), or as JSON `{ "file_id": "file-…" }` (file uploaded via `POST /v1/files`). Omit `input_reference` entirely for txt2vid.
+**img2vid via `input_reference`** — supply the reference image as a multipart file field named `input_reference` (OpenAI SDK `Uploadable`), or as JSON `{ "image_url": "data:image/jpeg;base64,..." }` (data URI or public HTTP(S) URL up to 100 MB), or as JSON `{ "file_id": "file-…" }` (file uploaded via `POST /v1/files`). Omit `input_reference` entirely for txt2vid.
 </Callout>
 
 The `Video` resource returned by `POST` (and by `GET /v1/videos/:id`):
