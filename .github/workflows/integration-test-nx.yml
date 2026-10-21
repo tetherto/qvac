@@ -594,10 +594,14 @@ jobs:
         env:
           QVAC_ENV_NAME: ${{ matrix.envVarName }}
           QVAC_ENV_VALUE: ${{ matrix.envSecretName && secrets[matrix.envSecretName] }}
+          QVAC_TEST_ENV: ${{ toJSON(matrix.testEnv) }}
           TEST_SCRIPT: ${{ matrix.testScript || 'test:integration' }}
         shell: bash
         run: |
           [ -n "${QVAC_ENV_NAME:-}" ] && export "${QVAC_ENV_NAME}=${QVAC_ENV_VALUE}"
+          if [ -n "${QVAC_TEST_ENV:-}" ] && [ "$QVAC_TEST_ENV" != "null" ]; then
+            eval "$(echo "$QVAC_TEST_ENV" | jq -r 'to_entries[] | "export \(.key)=\(.value|tostring|@sh)"')"
+          fi
           npm run "$TEST_SCRIPT" ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }}
 
       - name: Upload performance report
