@@ -17,6 +17,8 @@ const TEST_SCRIPT_ENV = `TEST_SCRIPT: \${{ matrix.testScript || '${DEFAULT_TEST_
 const HARDCODED_DEFAULT_RUN = /npm run test:integration(?!:)/
 const SCRIPT_FIELDS = ['testScript', 'modelDownloadScript']
 const DARWIN_X64_SMOKE_PACKAGES = ['bci-whispercpp', 'tts-ggml']
+const PREBUILD_LIBRARY_PATH = '{workspace}/{workdir}/prebuilds/{platform}-{arch}'
+const CUDA_LIBRARY_PATH = '/usr/local/cuda/lib64'
 
 const workflow = readFileSync(join(root, WORKFLOW), 'utf8')
 const DEFAULT_RUN_STEP = 'Run integration tests\n'
@@ -141,6 +143,14 @@ test('TTS Linux GPU integration rows pin both CUDA and Vulkan', () => {
     'each GPU row must pin its backend'
   )
   assert.deepEqual([...new Set(backends)].sort(), ['cuda', 'vulkan'])
+  const cudaRow = gpuRows.find((row) => row.testEnv.TTS_CPP_GPU_BACKEND === 'cuda')
+  assert.equal(cudaRow.modelEnv.LD_LIBRARY_PATH, `${PREBUILD_LIBRARY_PATH}:${CUDA_LIBRARY_PATH}`)
+  assert.equal(cudaRow.modelEnv.DYLD_LIBRARY_PATH, PREBUILD_LIBRARY_PATH)
+  assert.equal(
+    cudaRow.modelEnv.INTEGRATION_TEST_TIMEOUT,
+    integrationCiOf('tts-ggml').modelEnv.INTEGRATION_TEST_TIMEOUT
+  )
+  assert.equal(cudaRow.testEnv.LD_LIBRARY_PATH, undefined)
 })
 
 test('manual integration dispatch forwards the trusted config override', () => {

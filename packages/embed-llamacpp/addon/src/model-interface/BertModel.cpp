@@ -381,7 +381,8 @@ void BertModel::configureParams(
   // more efficient to specify the
   //   --parallel argument accordingly. for convenience, if not specified, we
   //   fallback to unified KV cache in order to support any number of prompts
-  if (params.n_parallel == 1) {
+  const bool unifiedFallback = params.n_parallel == 1;
+  if (unifiedFallback) {
     qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
         GGML_LOG_LEVEL_INFO,
         string_format(
@@ -396,6 +397,12 @@ void BertModel::configureParams(
 
   if (std::optional<int> trainedCtx = readTrainedContextSize(metadata)) {
     adjustEmbeddingContextSize(params, *trainedCtx, ctxSizeConfigured);
+  }
+
+  // The unified cache does not lift the batch's sequence limit: every seq_id
+  // must be below n_seq_max. Sized from the final context and batch.
+  if (unifiedFallback) {
+    params.n_parallel = unifiedSequenceLimit(params);
   }
 }
 
@@ -555,8 +562,9 @@ BertEmbeddings BertModel::processBatched(
 
     uint64_t numTokensInPrompt = inp.size();
 
-    // encode if at capacity
-    if (batch_.n_tokens + numTokensInPrompt > loader_.params().n_batch) {
+    // encode if at capacity: tokens, or sequence ids the context admits
+    if (batch_.n_tokens + numTokensInPrompt > loader_.params().n_batch ||
+        numPromptsInBatch >= llama_n_seq_max(ctx_)) {
       std::span<float> embSpan{emb, embeddings.size()};
       float* out =
           embSpan
