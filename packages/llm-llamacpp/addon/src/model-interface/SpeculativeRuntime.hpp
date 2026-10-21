@@ -66,19 +66,18 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config);
 /// regular file. Separate from parsing, which only checks the path's form.
 void requireDraftModelFile(const SpeculativeConfig& config);
 
-/// Why an external MTP head cannot draft for the target, or empty when it
-/// can. Fabric asserts that the hidden widths match, aborting the process,
-/// and the head's draft ids must be the target's tokens. A value of 0 is
-/// unknown and not compared.
+/// Why an external MTP head cannot draft for the target, or empty. Fabric
+/// aborts on a width mismatch. A value of 0 is unknown and not compared.
 std::string mtpHeadMismatch(
     int64_t headWidth, int64_t targetWidth, int64_t headVocab,
     int64_t targetVocab);
 
 /// Copies `config` into `params.speculative` and sizes the target context's
 /// output buffers for a verification batch, exactly as llama-server does
-/// before it creates the target context (`server_output_limits`). A DFlash
-/// draft model is placed like the target model (its GPU layers and
-/// devices), since the addon has no separate options for it. `n_max` is
+/// before it creates the target context (`server_output_limits`). A draft
+/// model (DFlash or an external MTP head) is placed like the target model
+/// (its GPU layers and devices), since the addon has no separate options for
+/// it. `n_max` is
 /// lowered to fit one ubatch and the batch's per-sequence share; throws
 /// `std::invalid_argument` when not even one draft token fits. Must run
 /// before `common_init_from_params`: `load_mtp` and `n_rs_seq` are derived
@@ -87,29 +86,24 @@ void applySpeculativeConfig(
     const SpeculativeConfig& config, common_params& params);
 
 /// The draft model and context as fabric fits them next to the target model
-/// (`common_init_from_params`): an MTP context sharing the target's weights,
-/// or a DFlash draft model of its own. Lets a fit projection count the draft
-/// side like the load does.
+/// (`common_init_from_params`): an MTP context on the target's weights or an
+/// external head, or a DFlash draft model. Lets a fit projection count the
+/// draft side like the load does.
 class SpeculativeFitModel {
 public:
   /// Null when `params` has no MTP or draft-model speculative decoding.
   static std::unique_ptr<SpeculativeFitModel>
   create(const common_params& params);
   [[nodiscard]] const common_fit_extra_model* extra() const { return &extra_; }
-  /// The draft context is an MTP context, on the target's own MTP layers or
-  /// on an external MTP head.
+  /// The draft context is an MTP context.
   [[nodiscard]] bool isMtp() const {
     return cparams_.ctx_type == LLAMA_CONTEXT_TYPE_MTP;
   }
 
-  /// Adds the draft side's memory at context `nCtx` to `breakdown`, the rows
-  /// `common_get_device_memory_data` returned for the target on `devices`,
-  /// laid out as fabric's fit lays it out: rows matched by device, the host
-  /// row added whole, and an MTP context's weights left out because the
-  /// target's rows already hold them. False, with `breakdown` untouched, when
-  /// the draft side cannot be measured; the fit then leaves it out too. Like
-  /// fabric's fit, the draft side is measured at the placement the load asked
-  /// for, so its rows follow that placement when the fit moves layers.
+  /// Measures the draft side at context `nCtx` and adds it to `breakdown`,
+  /// the target's rows on `devices` (see `addDraftMemory`). As in fabric's
+  /// fit, it is measured at the requested placement, not the fitted one.
+  /// False, with `breakdown` untouched, when it cannot be measured.
   bool addMemory(
       uint32_t nCtx, const std::vector<ggml_backend_dev_t>& devices,
       common_device_memory_data_vec& breakdown) const;
@@ -122,12 +116,11 @@ private:
   common_fit_extra_model extra_{};
 };
 
-/// Adds `measured`, the rows `common_get_device_memory_data` returned for a
-/// draft side on `draftDevices`, to `breakdown`, the target's rows on
-/// `devices`: rows matched by device, a draft row on a device the target does
-/// not use left out, the host row added whole, and the weights only when
-/// `countWeights`. False, with `breakdown` untouched, when either side's rows
-/// are not one per device plus a trailing host row.
+/// Adds the draft side's rows `measured` on `draftDevices` to the target's
+/// `breakdown` on `devices`, as fabric's fit does: rows matched by device,
+/// unmatched ones dropped, the host row added whole, weights only when
+/// `countWeights`. False, with `breakdown` untouched, when either side is not
+/// one row per device plus a host row.
 bool addDraftMemory(
     const std::vector<ggml_backend_dev_t>& devices,
     common_device_memory_data_vec& breakdown,
@@ -179,7 +172,7 @@ void restoreDraftSequenceState(
 void resetDraftSequence(llama_context* ctxTgt, llama_seq_id seqId);
 
 /// Model-wide speculative-decoding state: the draft context (MTP, on the
-/// target's weights, or DFlash, on the draft model) created against the
+/// target's weights or an external head, or DFlash) created against the
 /// target model, and the `common_speculative` that drafts for
 /// every sequence of the target context. One per loaded model; sequence
 /// drivers hold a non-owning pointer through `LlmModelContext`.

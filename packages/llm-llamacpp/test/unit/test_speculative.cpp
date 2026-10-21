@@ -127,11 +127,6 @@ TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
           {{"spec-type", "draft-dflash"},
            {"spec-draft-model", "\\\\host\\share\\d.gguf"}}),
       std::invalid_argument);
-  EXPECT_THROW(
-      parse(
-          {{"spec-type", "draft-mtp"},
-           {"spec-draft-model", "\\??\\UNC\\host\\share\\d.gguf"}}),
-      std::invalid_argument);
 }
 
 TEST(SpeculativeConfigTest, DraftModelMustBeARegularFile) {

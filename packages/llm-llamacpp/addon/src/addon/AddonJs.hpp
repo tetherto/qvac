@@ -667,9 +667,9 @@ inline FitResult runFit(FitRequest request) {
   } catch (const std::exception&) {
     return errorResult("unsupported-config");
   }
-  // The DFlash draft model is a second file the fit reads; probed like the
-  // target model above. The load also requires a regular file, and `fopen`
-  // opens a directory on POSIX.
+  // The draft model (DFlash or an MTP head) is a second file the fit reads;
+  // probed like the target above. The load requires a regular file, and
+  // `fopen` opens a directory on POSIX.
   if (const std::string& draftPath = loadParams.speculative.draft.mparams.path;
       !draftPath.empty()) {
     std::error_code error;
@@ -808,13 +808,10 @@ inline FitResult runFit(FitRequest request) {
     devices.clear();
     breakdown.clear();
   }
-  // The verdict counted the draft context next to the target; so do the
-  // per-device figures. A DFlash model fabric cannot measure stays out of
-  // both. An MTP context it cannot create, on a model or an external head
-  // without MTP layers, fails the load, so the projection is refused like
-  // any such load. The load sizes the draft context to the target's; a fit
-  // that fails leaves the caller's 0, which the target resolves to its
-  // trained context.
+  // The figures count the draft side, as the verdict does; an unmeasurable
+  // DFlash model stays out of both. An MTP context that cannot be measured
+  // (no MTP layers) fails the load, so it is refused. A failed fit leaves
+  // `n_ctx` 0, which the load resolves to the trained context.
   const uint32_t draftCtx = cparams.n_ctx != 0 ? cparams.n_ctx : trainCtx;
   if (measured && speculativeFit &&
       !speculativeFit->addMemory(draftCtx, devices, breakdown) &&

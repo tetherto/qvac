@@ -81,20 +81,8 @@ GgufShape readGgufShape(const std::string& path) {
   return shape;
 }
 
-void throwOnMtpHeadMismatch(
-    const std::string& path, const std::string& reason) {
-  if (reason.empty()) {
-    return;
-  }
-  throw qvac_errors::StatusError(
-      ADDON_ID,
-      toString(UnableToLoadModel),
-      "[Speculative] the MTP head '" + path +
-          "' does not match the model: " + reason + "\n");
-}
-
-// The speculative types the addon creates a draft context for: an MTP head
-// on the target's weights, or a separate draft model (DFlash).
+// The speculative types the addon creates a draft context for: MTP, on the
+// target's layers or an external head, or a DFlash model.
 bool hasDraftContext(const common_params_speculative& params) {
   return hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_MTP) || params.has_dft();
 }
@@ -155,12 +143,9 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
     const std::string& path = draftModel->second;
     const auto isSeparator = [](char c) { return c == '/' || c == '\\'; };
     // A leading double separator is a network share or a Windows device
-    // path, which `is_absolute` accepts there, and so may an NT-namespace
-    // `\??\` prefix.
+    // path, which `is_absolute` accepts there.
     if (path.empty() || !std::filesystem::path(path).is_absolute() ||
-        (path.size() >= 2 && isSeparator(path[0]) && isSeparator(path[1])) ||
-        (path.size() >= 4 && isSeparator(path[0]) && path[1] == '?' &&
-         path[2] == '?' && isSeparator(path[3]))) {
+        (path.size() >= 2 && isSeparator(path[0]) && isSeparator(path[1]))) {
       throw std::invalid_argument(
           draftModel->first + " must be an absolute local path, got: \"" +
           path + "\"");
@@ -393,23 +378,25 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
   std::unique_ptr<SpeculativeRuntime> runtime(new SpeculativeRuntime());
   runtime->ctxTgt_ = ctxTgt;
 
-  const bool isExternalMtp =
-      hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP) &&
-      params.speculative.has_dft();
-  const int32_t targetVocab =
-      llama_vocab_n_tokens(llama_model_get_vocab(modelTgt));
+  const bool isMtp =
+      hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP);
   {
     common_params paramsDft = common_base_params_to_speculative(params);
-    // Checked from the head's header before fabric loads it.
-    if (isExternalMtp) {
+    // Checked from the head's header, before fabric loads it.
+    if (isMtp && params.speculative.has_dft()) {
       const GgufShape head = readGgufShape(paramsDft.model.path);
-      throwOnMtpHeadMismatch(
-          paramsDft.model.path,
-          mtpHeadMismatch(
-              head.width,
-              llama_model_n_embd(modelTgt),
-              head.vocab,
-              targetVocab));
+      const std::string mismatch = mtpHeadMismatch(
+          head.width,
+          llama_model_n_embd(modelTgt),
+          head.vocab,
+          llama_vocab_n_tokens(llama_model_get_vocab(modelTgt)));
+      if (!mismatch.empty()) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(UnableToLoadModel),
+            "[Speculative] the MTP head '" + paramsDft.model.path +
+                "' does not match the model: " + mismatch + "\n");
+      }
     }
     runtime->specInit_ =
         common_speculative_init_from_params(paramsDft, modelTgt, ctxTgt);
@@ -423,8 +410,6 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
     }
     runtime->ctxDft_ = runtime->specInit_->context();
     if (runtime->ctxDft_ == nullptr) {
-      const bool isMtp =
-          hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP);
       std::string message = "[Speculative] failed to create the draft context";
       if (isMtp && params.speculative.has_dft()) {
         message = "[Speculative] failed to create the MTP context; '" +
@@ -436,17 +421,6 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
       }
       throw qvac_errors::StatusError(
           ADDON_ID, toString(UnableToLoadModel), message + "\n");
-    }
-    // The widths fabric's MTP drafter asserts on, from the loaded models.
-    if (isExternalMtp) {
-      const llama_model* head = llama_get_model(runtime->ctxDft_);
-      throwOnMtpHeadMismatch(
-          paramsDft.model.path,
-          mtpHeadMismatch(
-              llama_model_n_embd_out(head),
-              llama_model_n_embd_out(modelTgt),
-              llama_vocab_n_tokens(llama_model_get_vocab(head)),
-              targetVocab));
     }
     params.speculative.draft.ctx_tgt = ctxTgt;
     params.speculative.draft.ctx_dft = runtime->ctxDft_;
