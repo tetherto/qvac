@@ -7,13 +7,15 @@
 - External MTP heads: `spec-type: 'draft-mtp'` accepts `spec-draft-model`, as
   llama-server's `--spec-type draft-mtp -md <head>`, to draft for a model
   without MTP layers. The head is placed like the model, and the load's fit
-  and `assessFit` count its weights and context.
+  and `assessFit` count its weights and context. A head with another hidden
+  width or vocabulary than the model fails the load.
 
 ### Fixed
 
 - `assessFit` with `spec-type: 'draft-mtp'` now counts the MTP draft context
   in its per-device figures (`devices`, `deviceBytes`, `hostBytes`), not only
-  in its verdict, so the headroom they show matches what the load uses.
+  in its verdict, so their totals match what the load uses. As in fabric's
+  fit, the draft side's rows follow the placement the load asked for.
 - `assessFit` refuses `spec-type: 'draft-mtp'` on a model without MTP layers
   with `unsupported-config`, as the load fails, instead of projecting the
   load without the MTP context.

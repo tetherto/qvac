@@ -66,6 +66,14 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config);
 /// regular file. Separate from parsing, which only checks the path's form.
 void requireDraftModelFile(const SpeculativeConfig& config);
 
+/// Why an external MTP head cannot draft for the target, or empty when it
+/// can. Fabric asserts that the hidden widths match, aborting the process,
+/// and the head's draft ids must be the target's tokens. A value of 0 is
+/// unknown and not compared.
+std::string mtpHeadMismatch(
+    int64_t headWidth, int64_t targetWidth, int64_t headVocab,
+    int64_t targetVocab);
+
 /// Copies `config` into `params.speculative` and sizes the target context's
 /// output buffers for a verification batch, exactly as llama-server does
 /// before it creates the target context (`server_output_limits`). A DFlash
@@ -99,7 +107,9 @@ public:
   /// laid out as fabric's fit lays it out: rows matched by device, the host
   /// row added whole, and an MTP context's weights left out because the
   /// target's rows already hold them. False, with `breakdown` untouched, when
-  /// the draft side cannot be measured; the fit then leaves it out too.
+  /// the draft side cannot be measured; the fit then leaves it out too. Like
+  /// fabric's fit, the draft side is measured at the placement the load asked
+  /// for, so its rows follow that placement when the fit moves layers.
   bool addMemory(
       uint32_t nCtx, const std::vector<ggml_backend_dev_t>& devices,
       common_device_memory_data_vec& breakdown) const;

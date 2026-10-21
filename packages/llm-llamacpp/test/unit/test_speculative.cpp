@@ -85,6 +85,22 @@ TEST(SpeculativeConfigTest, ParsesDraftMtpWithAnExternalHead) {
       std::invalid_argument);
 }
 
+TEST(SpeculativeConfigTest, AnMtpHeadMustMatchTheModel) {
+  EXPECT_EQ(mtpHeadMismatch(5120, 5120, 248320, 248320), "");
+  // A head for another model of the family: fabric would abort on the width.
+  EXPECT_EQ(
+      mtpHeadMismatch(1024, 2048, 248320, 248320),
+      "hidden width 1024, the model's 2048");
+  EXPECT_EQ(
+      mtpHeadMismatch(1024, 1024, 248320, 151936),
+      "248320 tokens, the model's 151936");
+  EXPECT_EQ(
+      mtpHeadMismatch(1024, 2048, 248320, 151936),
+      "hidden width 1024, the model's 2048; 248320 tokens, the model's 151936");
+  // A value missing from the head's header is not compared.
+  EXPECT_EQ(mtpHeadMismatch(0, 2048, 0, 151936), "");
+}
+
 TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
   EXPECT_THROW(parse({{"spec-type", "draft-dflash"}}), std::invalid_argument);
   EXPECT_THROW(
@@ -110,6 +126,11 @@ TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
       parse(
           {{"spec-type", "draft-dflash"},
            {"spec-draft-model", "\\\\host\\share\\d.gguf"}}),
+      std::invalid_argument);
+  EXPECT_THROW(
+      parse(
+          {{"spec-type", "draft-mtp"},
+           {"spec-draft-model", "\\??\\UNC\\host\\share\\d.gguf"}}),
       std::invalid_argument);
 }
 

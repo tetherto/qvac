@@ -309,7 +309,8 @@ safeTest('MTP with an image prompt', { timeout: 900_000 }, async (t) => {
 })
 
 // A projection with a draft model is a verdict. fabric cannot measure a DFlash
-// draft model yet, so only an external MTP head adds to the figures.
+// draft model yet, so only an external MTP head adds to the figures. Kept here
+// rather than in fit.test.js because the variants' models are opt-in.
 for (const variant of VARIANTS.filter((v) => v.draft)) {
   safeTest(
     `${variant.label}: assessFit projects the load`,
@@ -407,3 +408,20 @@ safeTest('an external head without MTP layers fails to load', { timeout: 300_000
   await t.exception(model.load(), /failed to create the MTP context; '.*' has no MTP layers/)
   await model.unload().catch(() => {})
 })
+
+// Qwen3 has another vocabulary, which fabric does not check for MTP, and its
+// hidden width is asserted on, aborting the process.
+// prestage-ignore: Qwen3-0.6B-Q8_0.gguf — desktop-only; the test skips on mobile
+safeTest(
+  'an external head for another model fails to load',
+  { timeout: 300_000, skip: isMobile },
+  async (t) => {
+    const model = new LlmLlamacpp({
+      files: { model: [await modelPath('Qwen3-0.6B-Q8_0.gguf')] },
+      config: baseConfig({ 'spec-draft-model': await modelPath(MTP_MODEL) }),
+      logger: null
+    })
+    await t.exception(model.load(), /the MTP head '.*' does not match the model/)
+    await model.unload().catch(() => {})
+  }
+)
