@@ -3254,3 +3254,34 @@ test("cache policy: the toolchain fingerprint identifies vcpkg by version, not b
 
   assert.deepEqual(offenders, []);
 });
+
+for (const [workflow, nextStep] of [
+  ["integration-test-classification-ggml.yml", "Check production package excludes test models"],
+  ["integration-mobile-test-classification-ggml.yml", "Copy mobile test assets (weights + images)"],
+]) {
+  test(`${workflow}: staging credentials are cleared before PR-head test code`, () => {
+    const path = `.github/workflows/${workflow}`;
+    const source = read(path);
+    const steps = source.split(/\n {6}- /);
+    const verification = steps.findIndex((step) => step.startsWith("name: Verify MegaLoc test models"));
+    const cleanup = steps.findIndex((step) => step.startsWith("name: Drop staging AWS credentials"));
+    const consumer = steps.findIndex((step) => step.startsWith(`name: ${nextStep}`));
+    assert.ok(verification >= 0 && verification < cleanup && cleanup < consumer);
+    assert.match(steps[cleanup], /if: always\(\) && hashFiles/);
+    const script = extractRunBlock(path, "Drop staging AWS credentials");
+    const values = runScript('GITHUB_ENV="$GITHUB_OUTPUT"\n' + script, {
+      AWS_ACCESS_KEY_ID: "fixture-access-key",
+      AWS_SECRET_ACCESS_KEY: "fixture-secret-key",
+      AWS_SESSION_TOKEN: "fixture-session-token",
+    });
+    assert.deepEqual(values, {
+      AWS_ACCESS_KEY_ID: "",
+      AWS_SECRET_ACCESS_KEY: "",
+      AWS_SESSION_TOKEN: "",
+    });
+    if (workflow.includes("mobile")) {
+      assert.match(source, /name: Upload to Device Farm[\s\S]*?aws-role-to-assume: \$\{\{ secrets.AWS_OIDC_ROLE_ARN \}\}/);
+      assert.match(read(".github/actions/run-mobile-integration-tests/upload-to-devicefarm/action.yml"), /uses: aws-actions\/configure-aws-credentials@[a-f0-9]{40}/);
+    }
+  });
+}

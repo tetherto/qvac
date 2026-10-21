@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ImageClassifier = void 0;
+exports.ImageClassifier = exports.MegaLoc = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
@@ -8,6 +8,9 @@ const env = require("bare-env");
 const QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
+const megaloc_1 = require("./megaloc");
+var megaloc_2 = require("./megaloc");
+Object.defineProperty(exports, "MegaLoc", { enumerable: true, get: function () { return megaloc_2.MegaLoc; } });
 const addon_1 = require("./addon");
 const DEFAULT_WEIGHTS_FILENAME = "mobilenetv3_3class_v3_fp16.gguf";
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
@@ -211,4 +214,5 @@ exports.ImageClassifier = ImageClassifier;
 exports.default = ImageClassifier;
 const cjsExports = ImageClassifier;
 cjsExports.ImageClassifier = ImageClassifier;
+cjsExports.MegaLoc = megaloc_1.MegaLoc;
 module.exports = cjsExports;
