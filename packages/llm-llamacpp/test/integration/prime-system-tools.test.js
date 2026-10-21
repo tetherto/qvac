@@ -7,6 +7,7 @@
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
+const process = require('bare-process')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModelPath, safeTest } = require('./utils')
 
@@ -14,13 +15,14 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const useCpu = isDarwinX64 || isLinuxArm64
+const noGpu = String(os.getEnv?.('NO_GPU') || process.env.NO_GPU || '').toLowerCase() === 'true'
+const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 
 const QWEN35 = { modelName: 'Qwen3.5-0.8B-Q8_0.gguf' }
 
 const CONFIG = {
   device: useCpu ? 'cpu' : 'gpu',
-  gpu_layers: '999',
+  gpu_layers: useCpu ? '0' : '999',
   ctx_size: '4096',
   n_predict: '8',
   temp: '0',
@@ -64,9 +66,15 @@ async function loadModel(t, modelPath) {
 
 async function run(model, messages, runOptions) {
   const response = await model.run(messages, runOptions)
-  await response.onUpdate(() => {}).await()
+  let output = ''
+  await response
+    .onUpdate((chunk) => {
+      output += chunk
+    })
+    .await()
   const stats = response.stats || {}
   return {
+    output,
     promptTokens: Number(stats.promptTokens || 0),
     cacheTokens: Number(stats.CacheTokens || 0),
     toolDefinitionsDropped: Number(stats.toolDefinitionsDropped || 0)
@@ -97,6 +105,7 @@ safeTest(
     await first.model.saveCache(primedKey)
     await first.unload()
 
+    t.is(primed.output, '', 'the prefill generates no answer')
     t.is(primed.toolDefinitionsDropped, 0, 'the prefill keeps the tool definitions')
     t.ok(primed.cacheTokens > 0, `the prefill cached ${primed.cacheTokens} tokens`)
     t.ok(

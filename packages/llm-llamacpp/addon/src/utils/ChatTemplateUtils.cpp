@@ -578,9 +578,7 @@ std::optional<PromptRenderResult> renderWithoutUserTurn(
         cut, static_cast<size_t>(mismatch.in1 - prompts.front().begin()));
   }
 
-  // Tools must sit in front of the cut, or the cached prefix holds none of
-  // them. Rendering the first placeholder without the tools tells: the text
-  // in front of the cut must differ.
+  std::optional<std::string> promptWithoutTools;
   if (!inputs.tools.empty()) {
     try {
       common_chat_templates_inputs withUserNoTools = inputs;
@@ -590,18 +588,14 @@ std::optional<PromptRenderResult> renderWithoutUserTurn(
       withUserNoTools.messages.push_back(std::move(placeholder));
       withUserNoTools.add_generation_prompt = false;
       withUserNoTools.tools.clear();
-      const auto noTools =
+      promptWithoutTools =
           common_chat_templates_apply(tmpls, withUserNoTools).prompt;
-      if (noTools.compare(0, cut, prompts.front(), 0, cut) == 0) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[ChatTemplateUtils] chat template renders the tools after the "
-            "user message; there is no tools prefix to cache\n");
-        return std::nullopt;
-      }
     } catch (...) {
-      // A template that requires tools: they are in front of the cut, since
-      // nothing renders without them.
+      QLOG_IF(
+          Priority::WARNING,
+          "[ChatTemplateUtils] cannot verify the tools prefix; using the "
+          "plain render\n");
+      return std::nullopt;
     }
   }
 
@@ -619,6 +613,18 @@ std::optional<PromptRenderResult> renderWithoutUserTurn(
           return isTokenPrefix(cutTokens, tokens);
         });
     if (tokenSafe) {
+      // Check the final cut: back-off must not remove tools, and removing
+      // tools must leave the user content and everything after it unchanged.
+      if (promptWithoutTools.has_value() &&
+          (promptWithoutTools->compare(0, cut, prompts.front(), 0, cut) == 0 ||
+           !promptWithoutTools->ends_with(
+               std::string_view(prompts.front()).substr(cut)))) {
+        QLOG_IF(
+            Priority::WARNING,
+            "[ChatTemplateUtils] tools do not fit in the cached prefix; "
+            "using the plain render\n");
+        return std::nullopt;
+      }
       PromptRenderResult out = exportParams(
           std::move(*first),
           /* renderedByJinja = */ true,

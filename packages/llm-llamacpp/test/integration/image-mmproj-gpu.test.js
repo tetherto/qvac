@@ -7,9 +7,9 @@
 // recompiling; when unset the backend is auto-selected per device class
 // (QVAC-21867): desktop/iOS -> GPU; Android Adreno 800+ / other non-Mali GPUs
 // -> GPU; Android Mali and Adreno <800 -> CPU. These tests
-// assert the key is honoured on a GPU backend and, on hosts without a GPU,
-// that requesting it on the CPU backend warns and cleanly falls back (the
-// projector stays on CPU, vision still works).
+// assert the key is honoured on a GPU backend and that requesting it on a
+// CPU backend warns and cleanly falls back (the projector stays on CPU,
+// vision still works).
 //
 // This file ends in `.test.js`, so the mobile generator picks it up as
 // `runImageMmprojGpuTest` and it runs on the Android + iOS Device Farm pools
@@ -86,7 +86,7 @@ test(
 // is still described correctly.
 test(
   'device:cpu + mmproj-use-gpu:true loads without error and runs the projector on CPU',
-  { timeout: TEST_CONSTANTS.timeout, skip: gpuAvailable },
+  { timeout: TEST_CONSTANTS.timeout },
   async (t) => {
     const inference = await loadVlm(t, 'cpu', 'true')
     await assertDescribesImage(t, inference, '[CPU][mmproj=cpu]')

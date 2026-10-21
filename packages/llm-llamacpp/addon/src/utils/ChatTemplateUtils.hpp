@@ -233,7 +233,8 @@ using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
  * - `inputs` has a user or tool turn, or is not rendered by Jinja;
  * - the template already renders the conversation, and its tools, without a
  *   user turn;
- * - a placeholder render fails, or its tools come after the user content.
+ * - a placeholder render or tool-prefix check fails, or the tools affect
+ *   text beyond the final token-safe cut.
  *
  * On success `prompt` is the cut text, `generationPrompt` is empty and
  * `toolDefinitionsDropped` is false.

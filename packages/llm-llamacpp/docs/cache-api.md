@@ -473,21 +473,33 @@ reconciliation removes it; if the render preserves it, it remains reusable.
 
 ### Prefill the system prompt and tools
 
-A prefill of only a system prompt, with or without tools, caches the part of the
-prompt that every later request with the same system prompt and tools shares. The next
-request then decodes only its user turn, on any model, including hybrid,
-recurrent and sliding-window models that cannot trim: the cached state ends
-exactly where the new prompt continues, so nothing has to be rolled back.
+A prefill of only a system prompt, with or without tools, can cache the prefix
+shared with a later request. When that prefix matches, the next request evaluates
+only the remaining user turn and template delimiters. This also works on hybrid
+and recurrent models without trimming or restoring their state.
 
 ```js
 const system = { role: 'system', content: 'You are a weather assistant.' }
-const tools = [{ type: 'function', name: 'get_weather', description: '...', parameters: { ... } }]
+const tools = [{
+  type: 'function',
+  name: 'get_weather',
+  description: 'Get the weather for a city',
+  parameters: {
+    type: 'object',
+    properties: { city: { type: 'string' } },
+    required: ['city']
+  }
+}]
 
-await model.run([system, ...tools], { cacheKey: 'weather.bin', prefill: true })
+const prime = await model.run([system, ...tools], { cacheKey: 'weather.bin', prefill: true })
+await prime.await()
 await model.saveCache('weather.bin')
 
 // Later, in this or another process: only the user turn is prefilled.
-await model.run([system, ...tools, { role: 'user', content: 'Weather in Paris?' }], { cacheKey: 'weather.bin' })
+await collectOutput(await model.run(
+  [system, ...tools, { role: 'user', content: 'Weather in Paris?' }],
+  { cacheKey: 'weather.bin' }
+))
 ```
 
 Some templates only render the conversation once it has a user message
@@ -498,8 +510,12 @@ it: the system prompt and the tool block, if any, ending at the user turn's
 header. Templates that render a system prompt and tools without a user message
 (GLM-5.3-Flash, DeepSeek V4 Flash) cache their plain render. The
 placeholder is not used when the template puts the tools after the user's
-content, or when the request carries media; the prefill then caches the plain
-render, and `stats.toolDefinitionsDropped` reports whether it left the tools out.
+content, the tool-prefix check cannot be completed, or the request carries media.
+The prefill then uses the plain render, and `stats.toolDefinitionsDropped` reports
+whether that renderer omitted the tools. Reuse requires identical effective
+system instructions, tools and rendering settings; changed inputs can require a
+partial or full prefill. Placeholder probes do not establish compatibility with
+every possible custom template or user message.
 
 The next turn on the same `cacheKey` continues that conversation, and the file
 written for it afterwards holds the whole conversation, not the primed prefix.

@@ -322,10 +322,10 @@ No end-of-history checkpoint is taken for:
   for it either.
 
 A prefill-only request needs none: its committed state is itself the end of
-the history. A prefill of only a system prompt and tools ends where the next
-request's user turn begins (see
-[cache-api.md](./cache-api.md#prefill-the-system-prompt-and-tools)), so that
-request reuses the whole state without trimming or restoring anything.
+the history. When a system-and-tools prefill produces a matching prefix, the
+next request reuses that state without trimming or restoring it. See
+[cache-api.md](./cache-api.md#prefill-the-system-prompt-and-tools) for the
+template and rendering requirements.
 
 ### Restoring a checkpoint
 

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -8,6 +9,7 @@
 #include <llama.h>
 
 #include "prime_chat_templates.hpp"
+#include "test_common.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 
 using namespace qvac_lib_inference_addon_llama::utils;
@@ -19,8 +21,8 @@ namespace {
 // a letter each become a single token, as BPE merges them. That is what makes
 // a cut right after `user\n` unsafe when the content starts with `\n`.
 std::vector<llama_token> fakeTokenize(const std::string& text) {
-  constexpr llama_token NEWLINE_RUN_BASE = 1000;
-  constexpr llama_token SPACE_LETTER_BASE = 2000;
+  constexpr llama_token newlineRunBase = 1000;
+  constexpr llama_token spaceLetterBase = 2000;
   std::vector<llama_token> tokens;
   for (size_t i = 0; i < text.size();) {
     const auto ch = static_cast<unsigned char>(text[i]);
@@ -29,13 +31,13 @@ std::vector<llama_token> fakeTokenize(const std::string& text) {
       while (end < text.size() && text[end] == '\n') {
         ++end;
       }
-      tokens.push_back(NEWLINE_RUN_BASE + static_cast<llama_token>(end - i));
+      tokens.push_back(newlineRunBase + static_cast<llama_token>(end - i));
       i = end;
     } else if (
         ch == ' ' && i + 1 < text.size() &&
         std::isalpha(static_cast<unsigned char>(text[i + 1])) != 0) {
       tokens.push_back(
-          SPACE_LETTER_BASE + static_cast<unsigned char>(text[i + 1]));
+          spaceLetterBase + static_cast<unsigned char>(text[i + 1]));
       i += 2;
     } else {
       tokens.push_back(static_cast<llama_token>(ch));
@@ -89,9 +91,11 @@ std::string renderWithQuestion(
   return common_chat_templates_apply(tmpls, inputs).prompt;
 }
 
-bool isTokenPrefixOf(const std::string& prefix, const std::string& full) {
-  const auto prefixTokens = fakeTokenize(prefix);
-  const auto fullTokens = fakeTokenize(full);
+bool isTokenPrefixOf(
+    const std::string& prefix, const std::string& full,
+    const Tokenizer& tokenize = FAKE_TOKENIZER) {
+  const auto prefixTokens = tokenize(prefix);
+  const auto fullTokens = tokenize(full);
   return prefixTokens.size() <= fullTokens.size() &&
          std::equal(
              prefixTokens.begin(), prefixTokens.end(), fullTokens.begin());
@@ -101,9 +105,13 @@ const std::vector<std::string> QUESTIONS{
     "What is the weather in Paris?",
     " leading space",
     "\nleading newline",
+    "\n\nrepeated newlines",
+    "\r\nleading CRLF",
+    "\tleading tab",
     "123 numbers first",
     "?punctuation first",
-    "¿Qué tiempo hace?"};
+    "¿Qué tiempo hace?",
+    "日本の天気は？"};
 
 } // namespace
 
@@ -279,6 +287,113 @@ TEST(PrimeToolsPrefixTest, ToolsAfterTheUserContentAreRejected) {
   EXPECT_FALSE(
       renderWithoutUserTurn(tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER)
           .has_value());
+}
+
+TEST(PrimeToolsPrefixTest, RequiredToolsAfterTheUserContentAreRejected) {
+  constexpr const char* source =
+      "{%- if not tools and messages[0].content == 'You are a weather "
+      "assistant.' %}"
+      "{{ raise_exception('tools required') }}{%- endif %}"
+      "{%- set ns = namespace(user=false) %}"
+      "{%- for m in messages %}"
+      "{%- if m.role == 'user' %}{%- set ns.user = true %}{%- endif %}"
+      "{%- endfor %}{%- if not ns.user %}"
+      "{{ raise_exception('user required') }}{%- endif %}"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- for t in tools %}<def>{{ t.function.name }}</def>{%- endfor %}";
+  auto tmpls = common_chat_templates_init(nullptr, source);
+  ASSERT_NE(tmpls, nullptr);
+  EXPECT_FALSE(
+      renderWithoutUserTurn(tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER)
+          .has_value());
+}
+
+TEST(PrimeToolsPrefixTest, ToolBoilerplateDoesNotProveTheDefinitionsAreCached) {
+  constexpr const char* source =
+      "{%- set ns = namespace(user=false) %}"
+      "{%- for m in messages %}"
+      "{%- if m.role == 'user' %}{%- set ns.user = true %}{%- endif %}"
+      "{%- endfor %}{%- if not ns.user %}"
+      "{{ raise_exception('user required') }}{%- endif %}"
+      "{%- if tools %}<tool-mode>on</tool-mode>{%- endif %}"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- for t in tools %}<def>{{ t.function.name }}</def>{%- endfor %}";
+  auto tmpls = common_chat_templates_init(nullptr, source);
+  ASSERT_NE(tmpls, nullptr);
+  EXPECT_FALSE(
+      renderWithoutUserTurn(tmpls.get(), makeSystemAndTools(), FAKE_TOKENIZER)
+          .has_value());
+}
+
+TEST(PrimeToolsPrefixTest, TokenBackoffCannotDiscardTheToolBlock) {
+  constexpr const char* source =
+      "{%- set ns = namespace(user=false) %}"
+      "{%- for m in messages %}"
+      "{%- if m.role == 'user' %}{%- set ns.user = true %}{%- endif %}"
+      "{%- endfor %}{%- if not ns.user %}"
+      "{{ raise_exception('user required') }}{%- endif %}"
+      "prefix"
+      "{%- if tools %}<tools>"
+      "{%- for t in tools %}{{ t.function.name }}{%- endfor %}"
+      "</tools>{%- endif %}"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}";
+  auto tmpls = common_chat_templates_init(nullptr, source);
+  ASSERT_NE(tmpls, nullptr);
+  const Tokenizer mergeToolTail = [](const std::string& text) {
+    const size_t start = text.find("<tools>");
+    if (start == std::string::npos) {
+      return fakeTokenize(text);
+    }
+    auto tokens = fakeTokenize(text.substr(0, start));
+    tokens.push_back(10000 + static_cast<llama_token>(text.size()));
+    return tokens;
+  };
+  EXPECT_FALSE(
+      renderWithoutUserTurn(tmpls.get(), makeSystemAndTools(), mergeToolTail)
+          .has_value());
+}
+
+TEST(PrimeToolsPrefixTest, RealVocabularyKeepsThePrimedTokensForEveryQuestion) {
+  const test_common::TestModelPath modelPath(
+      "Qwen3.5-0.8B-Q8_0.gguf",
+      "QWEN35_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Fail);
+  ASSERT_TRUE(modelPath.found()) << modelPath.missingMessage();
+  auto params = llama_model_default_params();
+  params.vocab_only = true;
+  params.n_gpu_layers = 0;
+  std::unique_ptr<llama_model, decltype(&llama_model_free)> model(
+      llama_model_load_from_file(modelPath.path.c_str(), params),
+      llama_model_free);
+  ASSERT_NE(model, nullptr);
+  const Tokenizer tokenize = [&model](const std::string& text) {
+    return common_tokenize(
+        llama_model_get_vocab(model.get()), text, false, true);
+  };
+  const char* modelTemplate = llama_model_chat_template(model.get(), nullptr);
+  ASSERT_NE(modelTemplate, nullptr);
+  const char* sources[]{modelTemplate, fixtures::QWEN38_CHAT_TEMPLATE};
+  for (const char* source : sources) {
+    auto tmpls = common_chat_templates_init(nullptr, source);
+    ASSERT_NE(tmpls, nullptr);
+    for (bool thinking : {false, true}) {
+      for (auto inputs : {makeSystemAndTools(), makeSystemOnly()}) {
+        inputs.enable_thinking = thinking;
+        auto primed = renderWithoutUserTurn(tmpls.get(), inputs, tokenize);
+        auto rendered = primed.has_value() ? std::move(*primed)
+                                           : getPrompt(tmpls.get(), inputs);
+        ASSERT_FALSE(rendered.prompt.empty());
+        EXPECT_FALSE(rendered.toolDefinitionsDropped);
+        for (const std::string& question : QUESTIONS) {
+          EXPECT_TRUE(isTokenPrefixOf(
+              rendered.prompt,
+              renderWithQuestion(tmpls.get(), question, inputs),
+              tokenize))
+              << "question: " << question << "\nprimed: " << rendered.prompt;
+        }
+      }
+    }
+  }
 }
 
 // Content is not trimmed, so a question starting with a newline merges with
