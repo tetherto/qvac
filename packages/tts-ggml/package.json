@@ -129,6 +129,7 @@
     "test/utils/mossBackend.js",
     "test/utils/mossGpuValidation.js",
     "test/utils/gpuOnly.js",
+    "test/utils/desktopGpuBackend.js",
     "test/utils/testThreads.js",
     "test/utils/perf-helper.js",
     "test/utils/runChatterboxTTS.js",
