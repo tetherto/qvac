@@ -344,16 +344,24 @@ export function applyPlatformSkips(tests: TestDefinition[]): void {
     const existing = test.skip
     const platforms = new Set<string>(existing?.platforms ?? [])
     const reasons: string[] = []
+    // The joined `reason` is what the producer logs; `groups` lets each consumer report only the
+    // reasons for its own platform instead of every leg's.
+    const groups: NonNullable<SkipInfo['reasons']> = []
     // Prefixed with its own platforms, like the rules below: a merged reason that names the
     // platforms for every clause but one reads as if that clause applied everywhere.
     if (existing?.reason && existing.platforms?.length) {
       reasons.push(`${existing.platforms.join(', ')}: ${existing.reason}`)
+      groups.push(
+        ...(existing.reasons ?? [{ platforms: existing.platforms, reason: existing.reason }])
+      )
     }
 
     for (const rule of matched) {
-      for (const platform of rule.skip.platforms ?? []) platforms.add(platform)
-      const group = (rule.skip.platforms ?? []).join(', ')
+      const rulePlatforms = rule.skip.platforms ?? []
+      for (const platform of rulePlatforms) platforms.add(platform)
+      const group = rulePlatforms.join(', ')
       reasons.push(group ? `${group}: ${rule.skip.reason}` : rule.skip.reason)
+      if (rulePlatforms.length) groups.push({ platforms: rulePlatforms, reason: rule.skip.reason })
     }
 
     // An unconditional skip already in place stays unconditional -- the producer drops it before
@@ -363,7 +371,8 @@ export function applyPlatformSkips(tests: TestDefinition[]): void {
     test.skip = {
       ...(existing ?? {}),
       reason: reasons.join(' | '),
-      platforms: [...platforms]
+      platforms: [...platforms],
+      reasons: groups
     }
   }
 }
