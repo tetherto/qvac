@@ -109,7 +109,7 @@ concurrency:
 jobs:
   test-models:
     permissions: {}
-    uses: ./.github/workflows/test-models-classification-ggml.yml
+    uses: ./.github/workflows/reusable-test-models-classification-ggml.yml
 
   runner_names:
     permissions:
@@ -272,6 +272,12 @@ jobs:
             }
           '
 
+      - name: Drop staging AWS credentials
+        if: always() && hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
+        shell: bash
+        run: |
+          printf '%s=\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> "$GITHUB_ENV"
+
       # The shared composite handles prebuild fan-out, but classification-ggml
       # also needs `weights/*.gguf` copied into `test/mobile/testAssets/<file>.gguf.bin`
       # (plus `test/images/*` staged) so the React Native bundler packs them into
@@ -286,8 +292,8 @@ jobs:
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
         env:
-          # Android's resource compiler reads the GGUF fixtures into memory.
-          GRADLE_OPTS: ${{ matrix.platform == 'Android' && '-Dorg.gradle.jvmargs=-Xmx4g' || '' }}
+          # Retain Expo's metaspace limit while increasing heap for the GGUF fixtures.
+          GRADLE_OPTS: ${{ matrix.platform == 'Android' && '-Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"' || '' }}
         with:
           # Empty keeps the published @qvac/fabric runtime.
           fabric-prebuild-run-id: ${{ inputs.fabric_prebuild_run_id }}
