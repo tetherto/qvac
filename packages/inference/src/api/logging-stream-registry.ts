@@ -64,7 +64,7 @@ export function stopLoggingStreamForModel(modelId: string) {
   if (stream) {
     activeStreams.delete(modelId)
     // `return()` would wait for a log an unloaded model never sends.
-    stream.controller.abort(new Error(`Model ${modelId} unloaded`))
+    stream.controller.abort(undefined)
     logger.debug(`Stopped logging stream for model ${modelId}`)
   }
 }

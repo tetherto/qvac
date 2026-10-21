@@ -46,6 +46,6 @@ export function subscribeServerLogs(handler: ServerLogHandler) {
   })()
 
   return () => {
-    controller.abort(new Error('Unsubscribed from server logs'))
+    controller.abort(undefined)
   }
 }

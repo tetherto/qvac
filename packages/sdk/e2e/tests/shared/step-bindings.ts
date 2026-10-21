@@ -300,9 +300,16 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     const state = streamId ? LOGGING_STREAMS.get(streamId) : undefined
     if (!state) return { closed: false }
     LOGGING_STREAMS.delete(streamId as string)
-    // Wait for the pump so the stream is closed when this step returns.
     state.controller.abort()
-    await state.pump
+    // Bounded, so a stream that stops closing fails here instead of hanging the run.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), 5000)
+    })
+    const outcome = await Promise.race([state.pump, timedOut])
+    clearTimeout(timer)
+    if (outcome === 'timeout')
+      throw new Error(`log stream "${streamId}" did not close within 5000ms`)
     return { closed: true }
   },
 
