@@ -1234,8 +1234,9 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
 | `input` | Non-empty string, capped at `serve.openai.audio.speech.maxInputChars` (default `4096`; set to `null` to disable). | Yes |
 | `voice` | Voice id; defaults to `defaultVoice`. | No |
 | `response_format` | `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. | No |
+| `stream_format` | `audio` (default, one audio body) or `sse` (see [Streaming](#streaming-stream_format-sse)). Other values return `400 invalid_stream_format`. | No |
 
-The encoded formats (`mp3`, `opus`, `aac`, `flac`) are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`. When ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`); unknown values return `400 invalid_response_format`. The default stays `wav` so synthesis works on hosts without ffmpeg. `speed`, `instructions`, and `stream_format` are accepted but ignored — dropped fields are echoed back in the `X-QVAC-Ignored-Params` response header.
+The encoded formats (`mp3`, `opus`, `aac`, `flac`) are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`. When ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`); unknown values return `400 invalid_response_format`. The default stays `wav` so synthesis works on hosts without ffmpeg. `speed` and `instructions` are accepted but ignored — dropped fields are echoed back in the `X-QVAC-Ignored-Params` response header.
 
 ##### Response
 
@@ -1249,7 +1250,31 @@ The response body is binary audio. Headers always include:
 | `X-Audio-Channels` | Always `1` (mono). Only sent for `wav`/`pcm`. |
 | `X-Audio-Bits-Per-Sample` | Always `16`. Only sent for `wav`/`pcm`. |
 
-The route always **buffers the full audio** before responding (chunked HTTP streaming is tracked as a follow-up).
+With the default `stream_format: "audio"` the route buffers the full audio before responding.
+
+##### Streaming (`stream_format: "sse"`)
+
+Set `stream_format` to `"sse"` to receive audio as it is synthesized instead of one body at the end. The response is `text/event-stream` with OpenAI's speech events:
+
+```text
+data: {"type":"speech.audio.delta","audio":"<base64 audio chunk>"}
+
+data: {"type":"speech.audio.done","usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}
+```
+
+- Text is split into sentences, and each synthesized chunk arrives as one `speech.audio.delta` event.
+- `response_format` must be `pcm` or `wav`; other formats return `400 unsupported_response_format`. With `wav`, the first delta starts with a RIFF header whose size fields are `0xFFFFFFFF` (unknown length).
+- MOSS-SoundEffect and MOSS-Speech aliases (`ttsEngine` `moss-sfx` / `moss-speech`) are batch-only and return `400 unsupported_stream_format`.
+- `X-Audio-Sample-Rate`, `X-Audio-Channels` and `X-Audio-Bits-Per-Sample` describe the PCM in the deltas.
+- `usage` token counts are always `0`.
+- Errors raised before the first audio chunk return the usual JSON error and status code. A failure after that ends the stream with a final `{"error":{...}}` event and no `speech.audio.done`.
+- The stream has no `[DONE]` sentinel. `speech.audio.done` is the last event.
+
+```bash
+curl -N http://localhost:11434/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-tts","voice":"alloy","input":"Hello from QVAC.","response_format":"pcm","stream_format":"sse"}'
+```
 
 #### `GET /v1/audio/voices`
 
