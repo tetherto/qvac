@@ -26,7 +26,9 @@
         "cwd": "packages/diffusion-cpp",
         "ci": {
           "artifactNamePrefix": "sd-cpp-",
-          "includeVulkanSdk": true
+          "includeVulkanSdk": true,
+          "includeCuda": true,
+          "includeCudaArm64": true
         }
       },
       "inputs": [

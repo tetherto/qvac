@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.23.0] - 2026-10-20
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11018.2.0` -> `11259.0.0`, a rebase onto
+  upstream llama.cpp b11259. The native API changes, so native consumers must
+  be rebuilt against this release:
+  - `mtmd_helper_post_decode_callback` takes a
+    `const mtmd_helper_embd_batch *` instead of a `llama_batch`.
+  - `llama_opt_params` gains `flash_attn`, default `false`: flash attention
+    during training is opt-in.
+  - In `common.h`, `common_params::hostname` becomes `hostnames`, the
+    `fs_get_*` helpers return `std::filesystem::path`,
+    `fs_create_directory_with_parents` and `string_from(ctx, llama_batch)` are
+    removed, and `string_split<T>` throws on a value it cannot parse.
+  - The ggml op list and the RPC protocol (111) are unchanged, so RPC peers on
+    0.22.0 stay compatible.
+
+### Fixed
+
+- CUDA: a ubatch without outputs no longer drops a node from the MoE graph, so
+  the scheduler no longer re-reserves the compute buffer at that ubatch's size.
+  With `GGML_SCHED_DEBUG_REALLOC=1` the next larger ubatch aborted.
+
+### Changed
+
+- `llama_decode` and `llama_encode` go through upstream's batch layer. A batch
+  may mix token and embedding rows on default contexts, and an embedding batch
+  with the wrong row width returns `-1`.
+- LoRA weights stay on the CPU, with a warning, when the GPU backend cannot run
+  `OPT_STEP_ADAMW` and `OPT_STEP_SGD`.
+- Faster Adreno OpenCL small-batch and decode paths: small-batch matmuls,
+  multi-column K-quant GEMVs, a PQ2_0 mat-vec, and GDN verify batches.
+- Faster Vulkan and HIP prefill on Strix Halo, including flash attention.
+
+### Added
+
+- Vulkan shaders for the speech ops `CONV_1D_DW_DIRECT`, `NORM_CHANNEL`,
+  `SCALE_RESIDUAL`, `BIAS_GELU`, `PAD_REPLICATE_1D`, `GRU`, `ZERO_UPSAMPLE`,
+  `CHANNEL_SHUFFLE`, `AFFINE_PRELU`, `SNAKE`, `LSTM_CELL`, `TDT_STEP` and
+  `SIGLU`.
+- Metal kernels for `CONV_1D_DW_DIRECT`, `NORM_CHANNEL`, `SCALE_RESIDUAL`,
+  `BIAS_GELU`, `PAD_REPLICATE_1D`, `LSTM_CELL`, `TDT_STEP` and `SIGLU`.
+- Flash-attention backward on Vulkan and CUDA.
+- The `llama_batch_ext_*` batch API with `llama_process`, plus
+  `llama_get_causal_attn` and `llama_adapter_lora_init_from_file_ptr`.
+- EmbeddingGemma 2 (`gemma-embedding2`) models and the Ling3-VL vision
+  projector.
+
 ## [0.22.0] - 2026-10-14
 
 ### Breaking

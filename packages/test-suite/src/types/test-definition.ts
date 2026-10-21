@@ -17,7 +17,18 @@ export const skipInfoSchema = z.object({
   platforms: z
     .array(z.string())
     .optional()
-    .describe('If set, skip only on these platforms (e.g., ["mobile-ios", "mobile-android"])')
+    .describe('If set, skip only on these platforms (e.g., ["mobile-ios", "mobile-android"])'),
+  reasons: z
+    .array(
+      z.object({
+        platforms: z.array(z.string()).min(1),
+        reason: z.string()
+      })
+    )
+    .optional()
+    .describe(
+      'Per-platform reasons for a skip merged from several rules. A consumer reports only the groups matching its platform, falling back to `reason`'
+    )
 })
 
 export type SkipInfo = z.infer<typeof skipInfoSchema>
