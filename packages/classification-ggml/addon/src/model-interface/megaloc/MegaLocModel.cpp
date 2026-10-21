@@ -35,7 +35,7 @@ int backendId(const char* name) {
   const std::string value(name);
   if (value.starts_with("CPU"))
     return 0;
-  if (value.starts_with("Metal"))
+  if (value.starts_with("Metal") || value.starts_with("MTL"))
     return 1;
   if (value.starts_with("CUDA"))
     return 2;
@@ -86,7 +86,8 @@ struct MegaLocModel::Impl {
 
   Tensor* linear(Tensor* x, const std::string& name) {
     auto* y = ggml_mul_mat(ctx(), weight(name + ".weight"), x);
-    ggml_mul_mat_set_prec(y, GGML_PREC_F32);
+    check(
+        ggml_prec_set_acc(y, GGML_PREC_F32), "F32 accumulation is unavailable");
     return ggml_add(ctx(), y, weight(name + ".bias"));
   }
 
@@ -151,11 +152,15 @@ struct MegaLocModel::Impl {
         ctx(),
         ggml_permute(ctx(), ggml_reshape_3d(ctx(), v, 64, 12, n), 1, 2, 0, 3));
     auto* scores = ggml_mul_mat(ctx(), k, q);
-    ggml_mul_mat_set_prec(scores, GGML_PREC_F32);
+    check(
+        ggml_prec_set_acc(scores, GGML_PREC_F32),
+        "F32 accumulation is unavailable");
     auto* probabilities =
         ggml_soft_max(ctx(), ggml_scale(ctx(), scores, 0.125F));
     auto* values = ggml_mul_mat(ctx(), v, probabilities);
-    ggml_mul_mat_set_prec(values, GGML_PREC_F32);
+    check(
+        ggml_prec_set_acc(values, GGML_PREC_F32),
+        "F32 accumulation is unavailable");
     values = ggml_cont(ctx(), ggml_permute(ctx(), values, 0, 2, 1, 3));
     return linear(ggml_reshape_2d(ctx(), values, 768, n), name + ".proj");
   }
@@ -371,7 +376,9 @@ struct MegaLocModel::Impl {
         ggml_view_2d(ctx(), assignment, 64, PATCH_COUNT, assignment->nb[1], 0));
     auto* aggregated =
         ggml_mul_mat(ctx(), transpose(local), transpose(assignment));
-    ggml_mul_mat_set_prec(aggregated, GGML_PREC_F32);
+    check(
+        ggml_prec_set_acc(aggregated, GGML_PREC_F32),
+        "F32 accumulation is unavailable");
     aggregated = ggml_reshape_2d(ctx(), transpose(l2(aggregated)), 16384, 1);
     auto* descriptor = l2(ggml_concat(ctx(), l2(token), aggregated, 0));
     output = l2(linear(descriptor, "aggregator.linear"));
@@ -445,6 +452,10 @@ void MegaLocModel::load() {
   auto* selected = config_.backend.empty()
                        ? ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU)
                        : ggml_backend_dev_by_name(config_.backend.c_str());
+  if (!selected && config_.backend.starts_with("Metal")) {
+    const auto name = "MTL" + config_.backend.substr(5);
+    selected = ggml_backend_dev_by_name(name == "MTL" ? "MTL0" : name.c_str());
+  }
   if (!selected && config_.backend.empty())
     selected = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_IGPU);
   if (!selected && config_.backend.empty())

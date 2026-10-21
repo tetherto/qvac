@@ -64,7 +64,7 @@ export class MegaLoc {
     return { ...this.stats };
   }
 
-  load() {
+  load(): Promise<void> {
     return this.exclusive(async () => {
       if (this.destroyed) throw new Error("MegaLoc has been destroyed");
       if (this.addon) return;
@@ -95,7 +95,7 @@ export class MegaLoc {
     });
   }
 
-  embed(image: Uint8Array, options?: ImageEmbeddingOptions) {
+  embed(image: Uint8Array, options?: ImageEmbeddingOptions): Promise<Float32Array> {
     return this.exclusive(async () => {
       if (!this.addon) throw new Error("MegaLoc is not loaded. Call load() first.");
       const input: ImageEmbeddingJob = { type: "embedding", content: image };
@@ -150,11 +150,11 @@ export class MegaLoc {
     this.stats = {};
   }
 
-  unload() {
+  unload(): Promise<void> {
     return this.exclusive(() => this.release());
   }
 
-  destroy() {
+  destroy(): Promise<void> {
     return this.exclusive(async () => {
       await this.release();
       this.destroyed = true;

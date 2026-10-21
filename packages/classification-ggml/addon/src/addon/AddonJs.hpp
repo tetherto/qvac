@@ -125,7 +125,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     megaConfig.backendsDir = backendsDir;
     auto embedding =
         std::make_unique<megaloc::MegaLocModel>(std::move(megaConfig));
-    embedding->load();
     model = std::move(embedding);
   } else {
     throw StatusError(
@@ -155,6 +154,20 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  auto& instance =
+      addon_cpp::JsInterface::getInstance(env, args.get(0, "instance"));
+  auto addon = instance.addonCpp;
+  if (dynamic_cast<megaloc::MegaLocModel*>(&addon->model.get())) {
+    return jsu::JsAsyncTask::run(env, [addon = std::move(addon)] {
+      dynamic_cast<megaloc::MegaLocModel&>(addon->model.get()).load();
+    });
+  }
+  return addon_cpp::JsInterface::activate(env, info);
+}
+JSCATCH
+
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
   addon_cpp::AddonJs& instance =
@@ -166,8 +179,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   if (type != "image" && type != "embedding") {
     throw StatusError(
         InvalidArgument,
-        "Classification addon accepts only 'image' input type, got '" + type +
-            "'");
+        "Classification addon accepts only 'image' or 'embedding' input types, "
+        "got '" +
+            type + "'");
   }
 
   ClassifyInput cppInput;
@@ -205,19 +219,25 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
             std::to_string(provided) + " of 3");
   }
   if (provided == 3) {
-    const double w = widthOpt->as<double>(env);
-    const double h = heightOpt->as<double>(env);
-    const double c = channelsOpt->as<double>(env);
-    if (!std::isfinite(w) || w <= 0 || std::floor(w) != w ||
-        w > preprocess::MAX_IMAGE_DIMENSION) {
+    // Preserve MobileNet's truncation; embedding dimensions are strict.
+    const bool embedding = type == "embedding";
+    const auto number = [embedding, env](jsu::Number value) {
+      const double raw = value.as<double>(env);
+      return embedding ? raw : std::trunc(raw);
+    };
+    const double w = number(*widthOpt);
+    const double h = number(*heightOpt);
+    const double c = number(*channelsOpt);
+    const double maximum = embedding ? preprocess::MAX_IMAGE_DIMENSION
+                                     : std::numeric_limits<int32_t>::max();
+    if (!std::isfinite(w) || w <= 0 || std::floor(w) != w || w > maximum) {
       throw StatusError(
           InvalidArgument,
           "Image 'width' must be a positive integer when passing raw RGB "
           "bytes; got " +
               std::to_string(w));
     }
-    if (!std::isfinite(h) || h <= 0 || std::floor(h) != h ||
-        h > preprocess::MAX_IMAGE_DIMENSION) {
+    if (!std::isfinite(h) || h <= 0 || std::floor(h) != h || h > maximum) {
       throw StatusError(
           InvalidArgument,
           "Image 'height' must be a positive integer when passing raw RGB "
@@ -238,10 +258,13 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
 
   auto topKOpt = inputObj.getOptionalProperty<jsu::Number>(env, "topK");
+  if (type == "embedding" && topKOpt)
+    throw StatusError(
+        InvalidArgument, "topK is not supported for image embeddings");
   if (topKOpt.has_value()) {
-    const double topK = topKOpt->as<double>(env);
-    if (!std::isfinite(topK) || topK <= 0 || std::floor(topK) != topK ||
-        topK > std::numeric_limits<uint32_t>::max()) {
+    const double topK = std::trunc(topKOpt->as<double>(env));
+    if (!std::isfinite(topK) || topK <= 0 ||
+        topK > std::numeric_limits<int32_t>::max()) {
       throw StatusError(
           InvalidArgument,
           "Image 'topK' must be a positive integer when provided; got " +
@@ -251,9 +274,6 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
 
   if (type == "embedding") {
-    if (topKOpt)
-      throw StatusError(
-          InvalidArgument, "topK is not supported for image embeddings");
     ImageInput image;
     image.data = std::move(cppInput.data);
     image.rawRgb = cppInput.rawRgb;

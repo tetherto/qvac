@@ -14,7 +14,7 @@ export interface ClassificationBinding {
     configurationParams: ClassificationConfigurationParams,
     outputCallback: ClassificationOutputCallback,
   ): object;
-  activate(handle: unknown): void;
+  activate(handle: unknown): void | Promise<void>;
   runJob(handle: unknown, input: ClassificationJob | ImageEmbeddingJob): Promise<boolean>;
   cancel(handle: unknown): Promise<void>;
   destroyInstance(handle: unknown): void;
@@ -194,10 +194,9 @@ export class ClassificationInterface {
     );
   }
 
-  activate(): Promise<void> {
+  async activate(): Promise<void> {
     if (!this.handle) throw new Error("Classification addon is not initialized");
-    this.binding.activate(this.handle);
-    return Promise.resolve();
+    await this.binding.activate(this.handle);
   }
 
   async runJob(input: ClassificationJob | ImageEmbeddingJob): Promise<boolean> {

@@ -4,6 +4,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const env = require('bare-env')
+const process = require('bare-process')
 const { MegaLoc } = require('../../index')
 const references = require('../fixtures/megaloc-reference.json')
 const { isMobile, TEST_TIMEOUT, makeClassifier, loadImage, resolveModelPath } = require('./utils')
@@ -101,7 +102,7 @@ for (const quant of ['f16', 'mixed']) {
         ? 2
         : backend.startsWith('Vulkan')
           ? 3
-          : backend.startsWith('Metal')
+          : backend.startsWith('Metal') || backend.startsWith('MTL')
             ? 1
             : backend.startsWith('OpenCL')
               ? 4
@@ -119,6 +120,84 @@ for (const quant of ['f16', 'mixed']) {
     await t.exception.all(() => model.load(), /destroyed/i)
   })
 }
+
+for (const quant of ['f16', 'mixed']) {
+  test(`MegaLoc ${quant}: automatic backend matches original PyTorch without blocking load`, async function (t) {
+    t.timeout(TEST_TIMEOUT)
+    const model = new MegaLoc({
+      modelPath: asset(`megaloc-${quant}.gguf`, `QVAC_MEGALOC_${quant.toUpperCase()}_MODEL_PATH`)
+    })
+    let ticks = 0
+    const timer = setInterval(() => ticks++, 1)
+    try {
+      await model.load()
+      clearInterval(timer)
+      t.ok(ticks > 0, 'event loop runs while native weights and graph load')
+      for (const reference of references.cases) {
+        const result = await model.embed(image(reference.width, reference.height), {
+          width: reference.width,
+          height: reference.height,
+          channels: 3
+        })
+        descriptor(t, result)
+        const bytes = fs.readFileSync(asset(reference.reference))
+        const baseline = new Float32Array(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+        )
+        const similarity = cosine(result, baseline)
+        t.comment(
+          `automatic ${quant} ${reference.name}: cosine=${similarity}, stats=${JSON.stringify(model.getRuntimeStats())}`
+        )
+        t.ok(similarity >= (quant === 'f16' ? 0.9999 : 0.9995), 'automatic backend matches PyTorch')
+      }
+      const backend = model.getRuntimeStats().backend_id
+      t.ok([0, 1, 2, 3, 4].includes(backend), 'automatic selection reports a known backend')
+      if (env.QVAC_MEGALOC_EXPECT_GPU === '1') t.not(backend, 0, 'GPU runner executes GPU parity')
+      if (process.platform === 'darwin' || process.platform === 'ios') {
+        t.is(backend, 1, 'Apple automatic selection uses Metal')
+        await model.unload()
+        for (const name of ['Metal', 'Metal0', 'MTL0']) {
+          const metal = new MegaLoc({
+            modelPath: asset(
+              `megaloc-${quant}.gguf`,
+              `QVAC_MEGALOC_${quant.toUpperCase()}_MODEL_PATH`
+            ),
+            backend: name
+          })
+          try {
+            await metal.load()
+            descriptor(t, await metal.embed(image(64, 48), { width: 64, height: 48, channels: 3 }))
+            t.is(metal.getRuntimeStats().backend_id, 1, `${name} selects Metal`)
+          } finally {
+            await metal.destroy()
+          }
+        }
+      }
+    } finally {
+      clearInterval(timer)
+      await model.destroy()
+    }
+  })
+}
+
+test('MegaLoc serializes unload queued during native loading', async function (t) {
+  t.timeout(TEST_TIMEOUT)
+  const model = makeModel('mixed')
+  try {
+    const loading = model.load()
+    const unloading = model.unload()
+    await Promise.all([loading, unloading])
+    t.is(model.getState().configLoaded, false)
+    await t.exception.all(
+      () => model.embed(image(1, 1), { width: 1, height: 1, channels: 3 }),
+      /not loaded/i
+    )
+    await model.load()
+    descriptor(t, await model.embed(image(1, 1), { width: 1, height: 1, channels: 3 }))
+  } finally {
+    await model.destroy()
+  }
+})
 
 test('MegaLoc: PNG decoding equals raw RGB preprocessing', async function (t) {
   t.timeout(TEST_TIMEOUT)

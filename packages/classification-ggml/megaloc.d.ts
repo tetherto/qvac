@@ -41,10 +41,10 @@ export declare class MegaLoc {
         cpu_fallback_nodes?: number;
         weight_bytes?: number;
     };
-    load(): Promise<any>;
-    embed(image: Uint8Array, options?: ImageEmbeddingOptions): Promise<any>;
+    load(): Promise<void>;
+    embed(image: Uint8Array, options?: ImageEmbeddingOptions): Promise<Float32Array>;
     private onEvent;
     private release;
-    unload(): Promise<any>;
-    destroy(): Promise<any>;
+    unload(): Promise<void>;
+    destroy(): Promise<void>;
 }

@@ -8,7 +8,7 @@ type NativeLoggerCallback = (priority: number, message: string) => void;
 export interface ClassificationBinding {
     setLogger(callback: NativeLoggerCallback): void;
     createInstance(owner: ClassificationInterface, configurationParams: ClassificationConfigurationParams, outputCallback: ClassificationOutputCallback): object;
-    activate(handle: unknown): void;
+    activate(handle: unknown): void | Promise<void>;
     runJob(handle: unknown, input: ClassificationJob | ImageEmbeddingJob): Promise<boolean>;
     cancel(handle: unknown): Promise<void>;
     destroyInstance(handle: unknown): void;
