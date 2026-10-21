@@ -172,27 +172,70 @@ test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
   t.is(fit.reason, 'unsupported-config')
 })
 
-// ggml-org's quant keeps the MTP layers.
+// ggml-org's quant keeps the MTP layers; unsloth's strips them, so the
+// ggml-org quant serves as its external head.
 // prestage-ignore: Qwen3.5-0.8B-MTP-Q8_0.gguf — desktop-only; the test skips on mobile
 const MTP_MODEL = 'Qwen3.5-0.8B-MTP-Q8_0.gguf'
+const NO_MTP_MODEL = 'Qwen3.5-0.8B-Q8_0.gguf'
+
+// A pinned context and placement keep two projections comparable.
+const PINNED = { 'ctx-size': '4096', 'gpu-layers': '0' }
+
+async function localModel(modelName) {
+  const [name, dir] = await ensureModel({ modelName })
+  return path.join(dir, name)
+}
+
+const totalOf = (fit, field) => fit.devices.reduce((total, row) => total + row[field], 0)
 
 test(
   'the MTP draft context is counted in the projection',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
-    const [name, dir] = await ensureModel({ modelName: MTP_MODEL })
-    const file = path.join(dir, name)
-    // A pinned context and placement keep the two projections comparable.
-    const pinned = { 'ctx-size': '4096', 'gpu-layers': '0' }
-    const plain = await assess(file, pinned)
-    const mtp = await assess(file, { ...pinned, 'spec-type': 'draft-mtp' })
+    const file = await localModel(MTP_MODEL)
+    const plain = await assess(file, PINNED)
+    const mtp = await assess(file, { ...PINNED, 'spec-type': 'draft-mtp' })
 
     t.ok(mtp.status === 'fits' || mtp.status === 'does-not-fit', 'a verdict, not an error')
-    const context = (fit) => fit.devices.reduce((total, row) => total + row.contextBytes, 0)
+    const context = (fit) => totalOf(fit, 'contextBytes')
     t.ok(
       context(mtp) > context(plain),
       `the draft context's memory is in the figures (${context(mtp)} > ${context(plain)})`
     )
+  }
+)
+
+test(
+  'an external MTP head is counted in the projection',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    const file = await localModel(NO_MTP_MODEL)
+    const plain = await assess(file, PINNED)
+    const mtp = await assess(file, {
+      ...PINNED,
+      'spec-type': 'draft-mtp',
+      'spec-draft-model': await localModel(MTP_MODEL)
+    })
+
+    t.ok(mtp.status === 'fits' || mtp.status === 'does-not-fit', 'a verdict, not an error')
+    for (const field of ['modelBytes', 'contextBytes']) {
+      t.ok(
+        totalOf(mtp, field) > totalOf(plain, field),
+        `the head's ${field} are in the figures (${totalOf(mtp, field)} > ${totalOf(plain, field)})`
+      )
+    }
+  }
+)
+
+test(
+  'an external head without MTP layers is refused',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    const file = await localModel(NO_MTP_MODEL)
+    const fit = await assess(file, { 'spec-type': 'draft-mtp', 'spec-draft-model': file })
+
+    t.is(fit.status, 'error')
+    t.is(fit.reason, 'unsupported-config', 'the load fails the same way')
   }
 )
 
