@@ -257,14 +257,13 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     const id = p.id ?? SDK_LOG_ID
     const collected: LogEntry[] = []
     const streamId = `logs-${++loggingStreamSeq}`
-    const state: LoggingStream = { collected, cutoffMs: 0, done: false }
+    const state: LoggingStream = { collected, cutoffMs: 0, controller: new AbortController() }
     LOGGING_STREAMS.set(streamId, state)
     // Read in the background: the catalog triggers the operation between this step and the collect,
     // and nothing would be listening in between.
     state.pump = (async () => {
       try {
-        for await (const entry of loggingStream({ id })) {
-          if (state.done) break
+        for await (const entry of loggingStream({ id }, { signal: state.controller.signal })) {
           collected.push(entry as LogEntry)
         }
       } catch {
@@ -300,8 +299,17 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     const streamId = (params as { streamId?: string }).streamId
     const state = streamId ? LOGGING_STREAMS.get(streamId) : undefined
     if (!state) return { closed: false }
-    state.done = true
     LOGGING_STREAMS.delete(streamId as string)
+    state.controller.abort()
+    // Bounded, so a stream that stops closing fails here instead of hanging the run.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), 5000)
+    })
+    const outcome = await Promise.race([state.pump, timedOut])
+    clearTimeout(timer)
+    if (outcome === 'timeout')
+      throw new Error(`log stream "${streamId}" did not close within 5000ms`)
     return { closed: true }
   },
 
@@ -690,7 +698,7 @@ type LogEntry = { timestamp: number; level: string; namespace: string; message: 
 type LoggingStream = {
   collected: LogEntry[]
   cutoffMs: number
-  done: boolean
+  controller: AbortController
   pump?: Promise<void>
 }
 
