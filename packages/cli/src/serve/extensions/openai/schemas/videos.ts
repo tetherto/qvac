@@ -112,7 +112,7 @@ export const videosCreateBody = z
               .string()
               .optional()
               .describe(
-                'Base64 data URI (`data:image/...;base64,...`) or HTTP(S) URL of the reference image.'
+                'Base64 data URI (`data:image/...;base64,...`) or public HTTP(S) URL of the reference image.'
               ),
             file_id: z
               .string()
@@ -126,7 +126,7 @@ export const videosCreateBody = z
       .optional()
       .describe(
         'OpenAI img2vid. Provide the reference image as a multipart file field (OpenAI SDK `Uploadable`), ' +
-          'via `image_url` (data URI or HTTP URL), or via `file_id` (file uploaded via POST /v1/files). ' +
+          'via `image_url` (data URI or public HTTP(S) URL), or via `file_id` (file uploaded via POST /v1/files). ' +
           'When present the job runs in img2vid mode; omit for txt2vid.'
       ),
     strength: z

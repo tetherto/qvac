@@ -2602,14 +2602,9 @@ test("iOS mobile runs collect on-device crash reports", () => {
     "node node_modules/@wdio/cli/bin/wdio.js",
   );
   const crashPull = generateTestspec.lastIndexOf("pymobiledevice3 crash pull");
-  const androidLogcat = generateTestspec.indexOf("adb logcat -d -b all");
   // Anchor on the emitted YAML key, not the word — prose above mentions it too.
   const postTestPhase = generateTestspec.indexOf("  post_test:\n    commands:");
   assert.ok(crashPull > 0, "iOS crash-report pull must exist");
-  assert.ok(
-    androidLogcat > 0,
-    "Android logcat collection must stay in post_test",
-  );
   assert.ok(
     crashPull < postTestPhase,
     "crash pull must be emitted in the test phase — post_test never runs on a failed test",
@@ -2620,21 +2615,21 @@ test("iOS mobile runs collect on-device crash reports", () => {
   const rcCapture = generateTestspec.indexOf("WDIO_RC=$?");
   assert.ok(
     rcCapture > wdioCall,
-    "wdio exit code must be captured right after the run",
+    "iOS wdio exit code must be captured right after the run",
   );
   assert.ok(
     exitLine > crashPull,
-    "the wrapper must re-exit after collecting logs",
+    "the iOS wrapper must re-exit after collecting the crash report",
   );
   assert.match(
     generateTestspec.slice(0, wdioCall),
     /if \[ "\$PLATFORM" = "iOS" \]/,
-    "wrapper must be iOS-only",
+    "the iOS wrapper must sit inside the iOS platform branch",
   );
   assert.doesNotMatch(
     generateTestspec.slice(wdioCall, exitLine),
     /^\s+set -e$/m,
-    "set -e must not be re-enabled around log collection",
+    "set -e must not be re-enabled around iOS log collection",
   );
 
   assert.match(generateTestspec, /\[CRASH_REPORT_START\]/);
@@ -2683,6 +2678,51 @@ test("iOS mobile runs collect on-device crash reports", () => {
   // ...and they have to reach the uploaded artifact.
   assert.match(collectLogs, /-type d -name "crash-reports"/);
   assert.match(collectLogs, /Extracted iOS crash report/);
+});
+
+test("Android mobile runs collect the device logcat without rewriting the verdict", () => {
+  const generateTestspec = read(
+    ".github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh",
+  );
+
+  const postTestPhase = generateTestspec.indexOf("  post_test:\n    commands:");
+  // The Android block follows the iOS one, so anchor on the last wdio call and
+  // chain forward; indexOf would resolve every anchor into the iOS wrapper.
+  const wdioCall = generateTestspec.lastIndexOf(
+    "node node_modules/@wdio/cli/bin/wdio.js",
+  );
+  assert.ok(wdioCall > 0, "Android wdio invocation must exist");
+
+  const rcCapture = generateTestspec.indexOf("WDIO_RC=$?", wdioCall);
+  const logcat = generateTestspec.indexOf("adb logcat -d -b all", rcCapture);
+  const exitLine = generateTestspec.indexOf("exit $WDIO_RC", logcat);
+
+  assert.ok(
+    rcCapture > wdioCall,
+    "Android wdio exit code must be captured right after the run",
+  );
+  assert.ok(
+    logcat > rcCapture,
+    "the logcat dump must run after the exit code is captured",
+  );
+  assert.ok(
+    exitLine > logcat,
+    "the Android wrapper must re-exit with wdio's code after the dump — without it the block ends on `adb … || true` and a failing shard reports a pass",
+  );
+  assert.ok(
+    exitLine < postTestPhase,
+    "the whole Android wrapper must sit in the test phase — post_test never runs on a failed test",
+  );
+  assert.doesNotMatch(
+    generateTestspec.slice(wdioCall, exitLine),
+    /^\s+set -e$/m,
+    "set -e must not be re-enabled around Android log collection",
+  );
+  assert.strictEqual(
+    generateTestspec.indexOf("adb logcat -d", postTestPhase),
+    -1,
+    "no adb logcat may be left in post_test — it never runs on a failed shard",
+  );
 });
 
 test("tts-ggml functional mobile workflow opts into dual flagship per shard", () => {
