@@ -145,6 +145,7 @@ export {
   loadedToolNames,
   searchDeferredTools
 } from '@/utils/tools/defer'
+export { untilAborted } from '@/utils/until-aborted'
 
 // The full value-clean schema, profiling, and constant barrels: the @qvac/sdk client
 // and worker source every internal schema/const/profiling name from here, so it
