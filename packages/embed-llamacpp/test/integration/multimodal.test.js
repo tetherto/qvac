@@ -4,14 +4,30 @@ const os = require('bare-os')
 const path = require('bare-path')
 const process = require('bare-process')
 const { GGMLBert } = require('../../index.js')
-const { safeTest } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 
-// A multimodal embedding model (EmbeddingGemma 2) and its projection model.
-// Neither is in models.manifest.json yet, so the tests read their paths from
-// EMBED_MULTIMODAL_MODEL and EMBED_MULTIMODAL_MMPROJ and skip without them.
-const MODEL = process.env.EMBED_MULTIMODAL_MODEL
-const MMPROJ = process.env.EMBED_MULTIMODAL_MMPROJ
-const skip = !MODEL || !MMPROJ
+// A multimodal embedding model (EmbeddingGemma 2) and its projection model,
+// from models.manifest.json (downloaded on desktop, pre-staged on mobile).
+// EMBED_MULTIMODAL_MODEL and EMBED_MULTIMODAL_MMPROJ point at local copies
+// instead.
+const MODEL_NAME = 'embeddinggemma-2-Q8_0.gguf'
+const MMPROJ_NAME = 'mmproj-embeddinggemma-2-Q8_0.gguf'
+let multimodalFiles = null
+function modelFiles() {
+  multimodalFiles ??= (async () => {
+    const { EMBED_MULTIMODAL_MODEL: model, EMBED_MULTIMODAL_MMPROJ: mmproj } = process.env
+    if (model && mmproj) {
+      return { model: path.resolve(model), projectionModel: path.resolve(mmproj) }
+    }
+    const [modelName, modelDir] = await ensureModel({ modelName: MODEL_NAME })
+    const [mmprojName, mmprojDir] = await ensureModel({ modelName: MMPROJ_NAME })
+    return {
+      model: path.join(modelDir, modelName),
+      projectionModel: path.join(mmprojDir, mmprojName)
+    }
+  })()
+  return multimodalFiles
+}
 
 const platform = os.platform()
 const arch = os.arch()
@@ -133,14 +149,20 @@ function sineWavF32(frequency = 440, seconds = 1, sampleRate = 16000) {
   return buf
 }
 
-function deviceConfig(device) {
-  return device === 'gpu' ? { device: 'gpu', gpu_layers: '99' } : { device: 'cpu' }
+// As createEmbeddingsTestInstance loads: flash attention off on Android, and
+// OpenCL's kernel cache next to the model.
+function deviceConfig(device, modelPath) {
+  const config = device === 'gpu' ? { device: 'gpu', gpu_layers: '99' } : { device: 'cpu' }
+  if (platform === 'android') config.flash_attn = 'off'
+  config.openclCacheDir = path.dirname(modelPath)
+  return config
 }
 
 async function withModel(t, device, fn, extraConfig = {}) {
+  const files = await modelFiles()
   const model = new GGMLBert({
-    files: { model: [path.resolve(MODEL)], projectionModel: path.resolve(MMPROJ) },
-    config: { ...deviceConfig(device), ...extraConfig },
+    files: { model: [files.model], projectionModel: files.projectionModel },
+    config: { ...deviceConfig(device, files.model), ...extraConfig },
     opts: { stats: true }
   })
   try {
@@ -162,7 +184,7 @@ const BLUE = solidBmp([0, 0, 255])
 const QUERY = 'task: search result | query: '
 
 for (const device of DEVICES) {
-  safeTest(`[${device}] image input yields one normalized 768-d embedding`, { skip }, async (t) => {
+  safeTest(`[${device}] image input yields one normalized 768-d embedding`, {}, async (t) => {
     await withModel(t, device, async (model) => {
       const vectors = await embed(model, ['title: none | text: ', { media: RED }])
       t.is(vectors.length, 1)
@@ -171,7 +193,7 @@ for (const device of DEVICES) {
     })
   })
 
-  safeTest(`[${device}] an image is closer to the text describing it`, { skip }, async (t) => {
+  safeTest(`[${device}] an image is closer to the text describing it`, {}, async (t) => {
     await withModel(t, device, async (model) => {
       const vectors = await embed(model, {
         inputs: [
@@ -194,7 +216,7 @@ for (const device of DEVICES) {
     })
   })
 
-  safeTest(`[${device}] audio input yields a deterministic embedding`, { skip }, async (t) => {
+  safeTest(`[${device}] audio input yields a deterministic embedding`, {}, async (t) => {
     await withModel(t, device, async (model) => {
       const tone = sineWav()
       const first = await embed(model, [{ media: tone }])
@@ -204,26 +226,22 @@ for (const device of DEVICES) {
     })
   })
 
-  safeTest(
-    `[${device}] text and image in one input differ from either alone`,
-    { skip },
-    async (t) => {
-      await withModel(t, device, async (model) => {
-        const vectors = await embed(model, {
-          inputs: [
-            [QUERY + 'red ', { media: RED }],
-            QUERY + 'red ',
-            ['title: none | text: ', { media: RED }]
-          ]
-        })
-        const [mixed, textOnly, imageOnly] = vectors
-        t.ok(cosine(mixed, textOnly) < 0.9999, 'mixed differs from its text')
-        t.ok(cosine(mixed, imageOnly) < 0.9999, 'mixed differs from its image')
+  safeTest(`[${device}] text and image in one input differ from either alone`, {}, async (t) => {
+    await withModel(t, device, async (model) => {
+      const vectors = await embed(model, {
+        inputs: [
+          [QUERY + 'red ', { media: RED }],
+          QUERY + 'red ',
+          ['title: none | text: ', { media: RED }]
+        ]
       })
-    }
-  )
+      const [mixed, textOnly, imageOnly] = vectors
+      t.ok(cosine(mixed, textOnly) < 0.9999, 'mixed differs from its text')
+      t.ok(cosine(mixed, imageOnly) < 0.9999, 'mixed differs from its image')
+    })
+  })
 
-  safeTest(`[${device}] text inputs match the text-only path`, { skip }, async (t) => {
+  safeTest(`[${device}] text inputs match the text-only path`, {}, async (t) => {
     await withModel(t, device, async (model) => {
       // One string goes through the text path; the same string next to a
       // media input goes through the multimodal path.
@@ -233,7 +251,7 @@ for (const device of DEVICES) {
     })
   })
 
-  safeTest(`[${device}] the same media in other formats embeds the same`, { skip }, async (t) => {
+  safeTest(`[${device}] the same media in other formats embeds the same`, {}, async (t) => {
     await withModel(t, device, async (model) => {
       const prefix = 'title: none | text: '
       const [bmp, ppm, tga, s16, f32] = await embed(model, {
@@ -263,7 +281,7 @@ async function imageTokens(model, image) {
   return response.stats.total_tokens
 }
 
-safeTest('image-max-tokens bounds the tokens of a large image', { skip }, async (t) => {
+safeTest('image-max-tokens bounds the tokens of a large image', {}, async (t) => {
   const byDefault = await withModel(t, OPTIONS_DEVICE, (model) => imageTokens(model, BIG))
   const capped = await withModel(t, OPTIONS_DEVICE, (model) => imageTokens(model, BIG), {
     'image-max-tokens': '280'
@@ -274,7 +292,7 @@ safeTest('image-max-tokens bounds the tokens of a large image', { skip }, async 
   t.ok(capped < byDefault, 'the cap lowers the default budget')
 })
 
-safeTest('mmproj-no-audio rejects audio and keeps images', { skip }, async (t) => {
+safeTest('mmproj-no-audio rejects audio and keeps images', {}, async (t) => {
   await withModel(
     t,
     OPTIONS_DEVICE,
@@ -287,7 +305,7 @@ safeTest('mmproj-no-audio rejects audio and keeps images', { skip }, async (t) =
   )
 })
 
-safeTest('image-max-megapixels rejects a larger image before decoding', { skip }, async (t) => {
+safeTest('image-max-megapixels rejects a larger image before decoding', {}, async (t) => {
   await withModel(
     t,
     OPTIONS_DEVICE,
@@ -300,7 +318,7 @@ safeTest('image-max-megapixels rejects a larger image before decoding', { skip }
   )
 })
 
-safeTest('audio-max-seconds rejects longer audio before decoding', { skip }, async (t) => {
+safeTest('audio-max-seconds rejects longer audio before decoding', {}, async (t) => {
   await withModel(
     t,
     OPTIONS_DEVICE,
@@ -313,7 +331,7 @@ safeTest('audio-max-seconds rejects longer audio before decoding', { skip }, asy
   )
 })
 
-safeTest('a WAV that declares more samples than it holds is rejected', { skip }, async (t) => {
+safeTest('a WAV that declares more samples than it holds is rejected', {}, async (t) => {
   await withModel(t, OPTIONS_DEVICE, async (model) => {
     // A 44-byte header declaring ~4 GB of 8 kHz samples (about 75 hours):
     // mtmd-helper would size its decode by the declared length.
@@ -323,7 +341,7 @@ safeTest('a WAV that declares more samples than it holds is rejected', { skip },
   })
 })
 
-safeTest('media whose format cannot be decoded is rejected', { skip }, async (t) => {
+safeTest('media whose format cannot be decoded is rejected', {}, async (t) => {
   await withModel(t, OPTIONS_DEVICE, async (model) => {
     // A WebP header (decoded only through ffmpeg) and bytes of no format.
     const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])
@@ -337,7 +355,7 @@ safeTest('media whose format cannot be decoded is rejected', { skip }, async (t)
 
 safeTest(
   'mmproj-use-gpu off runs the projector on the CPU',
-  { skip: skip || OPTIONS_DEVICE !== 'gpu' },
+  { skip: OPTIONS_DEVICE !== 'gpu' },
   async (t) => {
     const input = ['title: none | text: ', { media: RED }]
     const [onGpu] = await withModel(t, 'gpu', (model) => embed(model, input))
