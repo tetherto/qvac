@@ -898,7 +898,9 @@ ggml.
 | MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
 
 Diarizer bundles load on first use, and each capacity costs 190-220 MiB of
-weights. `PARAKEET_COREML_DIARIZER_DISABLE=1` ignores them and keeps the
+weights. They pay off on base and Pro chips and iOS (1.4-2.7x over Metal on an
+M4). A Max or Ultra GPU is as fast as the Neural Engine (0.70-1.17x on an M3
+Ultra), so leave them out there. `PARAKEET_COREML_DIARIZER_DISABLE=1` ignores them and keeps the
 encoder-only sidecars. `assessFit` charges the bundles a workload can load as
 `coremlBytes`. Diarizer bundles are not in the model registry yet: export them
 with `engines/parakeet/scripts/export-nemotron-diarization-coreml.py` and
