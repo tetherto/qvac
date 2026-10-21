@@ -751,6 +751,7 @@ You normally use the **same** underlying weights for both transcription and tran
 | 400  | `unsupported_param`              | `language` is present on a translation request                                                               |
 | 400  | `invalid_response_format`        | Format is not `json`, `text`, `srt`, `vtt`, or `verbose_json`                                                |
 | 400  | `unsupported_response_format`    | `srt`, `vtt`, or `verbose_json` requested from a model without Whisper segment metadata (including Parakeet) |
+| 400  | `unsupported_stream_format`      | `stream_format: "sse"` with a MOSS-SoundEffect or MOSS-Speech alias                                          |
 | 400  | `invalid_model_type`             | Alias does not match the endpoint category (`transcription` or `audio-translation`)                          |
 | 404  | `model_not_found`                | Unknown alias                                                                                                |
 | 503  | `model_not_ready`                | Model not loaded yet                                                                                         |
@@ -852,7 +853,8 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
   - `input` (required) — non-empty string, capped at **`serve.openai.audio.speech.maxInputChars`** (default **4096**, OpenAI's documented limit; set to `null` to disable)
   - `voice` (optional, defaults to `defaultVoice`) — an OpenAI built-in voice name (`alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`, `onyx`, `nova`, `sage`, `shimmer`, `verse`, `marin`, `cedar`), any other string, or a custom voice reference `{ "id": "voice_1234" }`. The object form routes the same way as its `id` string.
   - `response_format` (optional) — `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. The encoded formats are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`; when ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`). The default stays `wav` so synthesis works on hosts without ffmpeg.
-- **Accepted but ignored:** `speed`, `instructions`, `stream_format` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
+  - `stream_format` (optional) — `audio` (default, one audio body) or `sse` (see [Streaming](#streaming-stream_format-sse)). Other values return `400 invalid_stream_format`.
+- **Accepted but ignored:** `speed`, `instructions` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
 
 ### Response
 
@@ -867,7 +869,31 @@ Binary audio body. Headers include:
 | `X-Audio-Bits-Per-Sample` | Always `16`. Only sent for `wav`/`pcm`.                                                                                                                                                                                                       |
 | `X-QVAC-Ignored-Params`   | Comma-separated list of accepted-but-dropped OpenAI fields (only present when at least one was sent).                                                                                                                                         |
 
-The route always **buffers the full audio** before responding (chunked HTTP streaming is tracked as a follow-up).
+With the default `stream_format: "audio"` the route buffers the full audio before responding.
+
+### Streaming (`stream_format: "sse"`)
+
+Set `stream_format` to `"sse"` to receive audio as it is synthesized instead of one body at the end. The response is `text/event-stream` with OpenAI's speech events:
+
+```text
+data: {"type":"speech.audio.delta","audio":"<base64 audio chunk>"}
+
+data: {"type":"speech.audio.done","usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}
+```
+
+- Text is split into sentences, and each synthesized chunk arrives as one `speech.audio.delta` event.
+- `response_format` must be `pcm` or `wav`; other formats return `400 unsupported_response_format`. With `wav`, the first delta starts with a RIFF header whose size fields are `0xFFFFFFFF` (unknown length).
+- MOSS-SoundEffect and MOSS-Speech aliases (`ttsEngine` `moss-sfx` / `moss-speech`) are batch-only and return `400 unsupported_stream_format`.
+- `X-Audio-Sample-Rate`, `X-Audio-Channels` and `X-Audio-Bits-Per-Sample` describe the PCM in the deltas.
+- `usage` token counts are always `0`.
+- Errors raised before the first audio chunk return the usual JSON error and status code. A failure after that ends the stream with a final `{"error":{...}}` event and no `speech.audio.done`.
+- The stream has no `[DONE]` sentinel. `speech.audio.done` is the last event.
+
+```bash
+curl -N http://localhost:11434/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-tts","voice":"alloy","input":"Hello from QVAC.","response_format":"pcm","stream_format":"sse"}'
+```
 
 ### Examples
 
@@ -892,21 +918,23 @@ ffplay -f s16le -ar 24000 -ac 1 speech.pcm  # rate/channels come from the respon
 
 ### Errors
 
-| HTTP | `error.code`              | When                                                                                                    |
-| ---- | ------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 400  | `invalid_json`            | Body is not valid JSON                                                                                  |
-| 400  | `missing_model`           | `model` field is missing                                                                                |
-| 400  | `missing_input`           | `input` is missing or empty/whitespace                                                                  |
-| 400  | `input_too_long`          | `input.length` exceeds `maxInputChars` (default 4096)                                                   |
-| 400  | `missing_voice`           | `voice` not sent and `defaultVoice` is `null`, or `voice` is neither a string nor `{ "id": "..." }`     |
-| 400  | `invalid_response_format` | Anything other than `wav` / `pcm` / `mp3` / `opus` / `aac` / `flac`                                     |
-| 400  | `invalid_model_type`      | Alias is not a `speech` model                                                                           |
-| 404  | `model_not_found`         | No `voices` mapping, no hyphen alias, no bare alias matches                                             |
-| 502  | `speech_empty`            | The SDK returned zero samples — surfaced loudly so callers can distinguish "no audio" from "audio body" |
-| 502  | `transcode_failed`        | ffmpeg failed (or timed out) encoding `mp3` / `opus` / `aac` / `flac` — retry with `wav`/`pcm`          |
-| 503  | `transcode_unavailable`   | `mp3` / `opus` / `aac` / `flac` requested but `ffmpeg` is not on the server's `PATH`                    |
-| 503  | `model_not_ready`         | Model not loaded yet                                                                                    |
-| 500  | `speech_error`            | SDK / engine failure (message goes to server logs only)                                                 |
+| HTTP | `error.code`                  | When                                                                                                    |
+| ---- | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 400  | `invalid_json`                | Body is not valid JSON                                                                                  |
+| 400  | `missing_model`               | `model` field is missing                                                                                |
+| 400  | `missing_input`               | `input` is missing or empty/whitespace                                                                  |
+| 400  | `input_too_long`              | `input.length` exceeds `maxInputChars` (default 4096)                                                   |
+| 400  | `missing_voice`               | `voice` not sent and `defaultVoice` is `null`, or `voice` is neither a string nor `{ "id": "..." }`     |
+| 400  | `invalid_response_format`     | Anything other than `wav` / `pcm` / `mp3` / `opus` / `aac` / `flac`                                     |
+| 400  | `invalid_stream_format`       | `stream_format` is not `audio` or `sse`                                                                 |
+| 400  | `unsupported_response_format` | `stream_format: "sse"` with `mp3` / `opus` / `aac` / `flac`                                             |
+| 400  | `invalid_model_type`          | Alias is not a `speech` model                                                                           |
+| 404  | `model_not_found`             | No `voices` mapping, no hyphen alias, no bare alias matches                                             |
+| 502  | `speech_empty`                | The SDK returned zero samples — surfaced loudly so callers can distinguish "no audio" from "audio body" |
+| 502  | `transcode_failed`            | ffmpeg failed (or timed out) encoding `mp3` / `opus` / `aac` / `flac` — retry with `wav`/`pcm`          |
+| 503  | `transcode_unavailable`       | `mp3` / `opus` / `aac` / `flac` requested but `ffmpeg` is not on the server's `PATH`                    |
+| 503  | `model_not_ready`             | Model not loaded yet                                                                                    |
+| 500  | `speech_error`                | SDK / engine failure (message goes to server logs only)                                                 |
 
 ## `GET /v1/audio/voices`
 
