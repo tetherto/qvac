@@ -25,6 +25,7 @@ import {
 } from '@/serve/lib/video-transcode'
 import type { QvacContext } from '@/serve/core/context'
 import { openaiState } from '@/serve/extensions/openai/state'
+import { fetchRemoteImage, RemoteImageTooLargeError } from '@/serve/lib/remote-image-fetch'
 
 const descriptions = {
   create: `
@@ -36,7 +37,7 @@ once \`status: completed\`.
 
 **Image-to-video (img2vid):** include \`input_reference\` as one of:
 - a multipart file field (OpenAI SDK \`Uploadable\` — the SDK sends this when you pass a local \`File\`/\`Blob\`)
-- JSON \`{ image_url }\` where \`image_url\` is a base64 data URI (\`data:image/...;base64,...\`) or an HTTP(S) URL (100 MB / 30 s limit)
+- JSON \`{ image_url }\` where \`image_url\` is a base64 data URI (\`data:image/...;base64,...\`) or a public HTTP(S) URL (100 MB / 30 s limit; loopback, private and link-local addresses are refused)
 - JSON \`{ file_id }\` to reference a file uploaded via \`POST /v1/files\`
 
 Mode is inferred from the presence of \`input_reference\` — no explicit \`mode\` field needed.
@@ -167,72 +168,22 @@ export async function resolveInputReferenceImage(
     return new Uint8Array(decoded)
   }
   if (url.startsWith('http://') || url.startsWith('https://')) {
-    let res: Response
     try {
-      res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+      return await fetchRemoteImage(url, { maxBytes: MAX_IMAGE_BYTES, timeoutMs: FETCH_TIMEOUT_MS })
     } catch (err) {
-      const isTimeout =
-        err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
-      if (isTimeout) {
+      if (err instanceof RemoteImageTooLargeError) {
         throw new HttpError(
           400,
           'invalid_input_reference',
-          `input_reference.image_url: timed out after ${FETCH_TIMEOUT_MS / 1000}s.`
+          `input_reference.image_url: ${err.message}.`
         )
       }
-      const message = err instanceof Error ? err.message : String(err)
       throw new HttpError(
         400,
         'invalid_input_reference',
-        `input_reference.image_url: failed to fetch image — ${message}`
+        'input_reference.image_url: could not fetch the image. Only public HTTP(S) hosts are reachable; send a data URI or file_id for other images.'
       )
     }
-    if (!res.ok) {
-      throw new HttpError(
-        400,
-        'invalid_input_reference',
-        `input_reference.image_url: server returned HTTP ${res.status}.`
-      )
-    }
-    const chunks: Uint8Array[] = []
-    let totalBytes = 0
-    const reader = res.body!.getReader()
-    try {
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        totalBytes += value.length
-        if (totalBytes > MAX_IMAGE_BYTES) {
-          await reader.cancel()
-          throw new HttpError(
-            400,
-            'invalid_input_reference',
-            `input_reference.image_url: image exceeds the ${MAX_IMAGE_BYTES / (1024 * 1024)} MB limit.`
-          )
-        }
-        chunks.push(value)
-      }
-    } catch (err) {
-      if (err instanceof HttpError) throw err
-      const isTimeout =
-        err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
-      throw new HttpError(
-        400,
-        'invalid_input_reference',
-        isTimeout
-          ? `input_reference.image_url: timed out after ${FETCH_TIMEOUT_MS / 1000}s.`
-          : `input_reference.image_url: failed reading response body.`
-      )
-    } finally {
-      reader.releaseLock()
-    }
-    const result = new Uint8Array(totalBytes)
-    let offset = 0
-    for (const chunk of chunks) {
-      result.set(chunk, offset)
-      offset += chunk.length
-    }
-    return result
   }
   throw new HttpError(
     400,
