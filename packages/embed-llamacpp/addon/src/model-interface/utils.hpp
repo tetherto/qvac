@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -56,6 +57,12 @@ void checkLoadOptions(
     const std::unordered_map<std::string, std::string>& config,
     const std::unordered_set<std::string>& allowed, const char* caller,
     const char* model, const char* accepted);
+
+/// @brief The sequence limit for a unified-cache context: one sequence per
+/// token the batch can hold, at most llama's maximum. llama aborts a context
+/// whose sequence limit exceeds its batch, and rejects a batch whose sequence
+/// ids reach the limit.
+int32_t unifiedSequenceLimit(const common_params& params);
 
 /// @brief A context that reads RANK pooling in one pass per batch, as
 /// llama-laya and llama-server's --reranking set it up: no KV cache is kept
