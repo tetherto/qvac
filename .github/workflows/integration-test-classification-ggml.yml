@@ -40,7 +40,7 @@ env:
 jobs:
   test-models:
     permissions: {}
-    uses: ./.github/workflows/test-models-classification-ggml.yml
+    uses: ./.github/workflows/reusable-test-models-classification-ggml.yml
 
   runner_names:
     permissions:
@@ -269,6 +269,12 @@ jobs:
               console.log("Verified " + dest);
             }
           '
+
+      - name: Drop staging AWS credentials
+        if: always() && hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
+        shell: bash
+        run: |
+          printf '%s=\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> "$GITHUB_ENV"
 
       - name: Check production package excludes test models
         if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
