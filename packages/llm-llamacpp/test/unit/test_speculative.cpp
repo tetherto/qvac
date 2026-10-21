@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <gguf.h>
 #include <gtest/gtest.h>
 #include <llama.h>
 
@@ -27,6 +28,30 @@ SpeculativeConfig parse(ConfigMap config) {
 // Absolute on every platform: "/models/x" has no drive on Windows.
 std::string absoluteModelPath(const char* name) {
   return (std::filesystem::temp_directory_path() / name).string();
+}
+
+// A header-only GGUF with `arch`'s widths (0 leaves a key out) and `vocab`
+// tokens, written to a temporary file.
+std::string writeHeadHeader(
+    const char* name, const char* arch, uint32_t width, uint32_t widthOut,
+    size_t vocab) {
+  gguf_context* ctx = gguf_init_empty();
+  gguf_set_val_str(ctx, "general.architecture", arch);
+  if (width != 0) {
+    gguf_set_val_u32(
+        ctx, (std::string(arch) + ".embedding_length").c_str(), width);
+  }
+  if (widthOut != 0) {
+    gguf_set_val_u32(
+        ctx, (std::string(arch) + ".embedding_length_out").c_str(), widthOut);
+  }
+  std::vector<const char*> tokens(vocab, "t");
+  gguf_set_arr_str(ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
+  const std::string path = absoluteModelPath(name);
+  const bool written = gguf_write_to_file(ctx, path.c_str(), true);
+  gguf_free(ctx);
+  EXPECT_TRUE(written) << path;
+  return path;
 }
 
 } // namespace
@@ -99,6 +124,38 @@ TEST(SpeculativeConfigTest, AnMtpHeadMustMatchTheModel) {
       "hidden width 1024, the model's 2048; 248320 tokens, the model's 151936");
   // A value missing from the head's header is not compared.
   EXPECT_EQ(mtpHeadMismatch(0, 2048, 0, 151936), "");
+}
+
+TEST(SpeculativeConfigTest, AnMtpHeadIsReadAtTheWidthItDraftsFrom) {
+  // A Qwen MTP head has no `embedding_length_out`; its own width is read.
+  const std::string qwen =
+      writeHeadHeader("qwen35-head.gguf", "qwen35", 1024, 0, 8);
+  const GgufShape qwenShape = readGgufShape(qwen);
+  EXPECT_EQ(qwenShape.width, 1024);
+  EXPECT_EQ(qwenShape.vocab, 8);
+  EXPECT_EQ(
+      mtpHeadMismatch(qwenShape.width, 2048, qwenShape.vocab, 8),
+      "hidden width 1024, the model's 2048");
+
+  // A Gemma 4 assistant runs at its own width and reads the target's hidden
+  // states, whose width is in `embedding_length_out`.
+  const std::string gemma = writeHeadHeader(
+      "gemma4-assistant.gguf", "gemma4-assistant", 1024, 5376, 8);
+  const GgufShape gemmaShape = readGgufShape(gemma);
+  EXPECT_EQ(gemmaShape.width, 5376);
+  EXPECT_EQ(mtpHeadMismatch(gemmaShape.width, 5376, gemmaShape.vocab, 8), "");
+  EXPECT_EQ(
+      mtpHeadMismatch(gemmaShape.width, 2816, gemmaShape.vocab, 8),
+      "hidden width 5376, the model's 2816");
+
+  // An unreadable file has no shape, so nothing is compared.
+  const GgufShape missing =
+      readGgufShape(absoluteModelPath("no-such-head.gguf"));
+  EXPECT_EQ(missing.width, 0);
+  EXPECT_EQ(missing.vocab, 0);
+
+  std::filesystem::remove(qwen);
+  std::filesystem::remove(gemma);
 }
 
 TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {

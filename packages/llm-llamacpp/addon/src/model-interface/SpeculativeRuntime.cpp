@@ -50,35 +50,13 @@ bool hasType(
   return false;
 }
 
-struct GgufShape {
-  int64_t width = 0;
-  int64_t vocab = 0;
-};
-
-// The hidden width and vocabulary size in a GGUF's header, 0 when absent.
-GgufShape readGgufShape(const std::string& path) {
-  GgufShape shape;
-  gguf_init_params init = {};
-  init.no_alloc = true;
-  gguf_context* ctx = gguf_init_from_file(path.c_str(), init);
-  if (ctx == nullptr) {
-    return shape;
+// A positive u32 at `key`, or 0.
+int64_t readGgufU32(const gguf_context* ctx, const std::string& key) {
+  const int64_t id = gguf_find_key(ctx, key.c_str());
+  if (id < 0 || gguf_get_kv_type(ctx, id) != GGUF_TYPE_UINT32) {
+    return 0;
   }
-  const int64_t arch = gguf_find_key(ctx, "general.architecture");
-  if (arch >= 0 && gguf_get_kv_type(ctx, arch) == GGUF_TYPE_STRING) {
-    const std::string key =
-        std::string(gguf_get_val_str(ctx, arch)) + ".embedding_length";
-    const int64_t width = gguf_find_key(ctx, key.c_str());
-    if (width >= 0 && gguf_get_kv_type(ctx, width) == GGUF_TYPE_UINT32) {
-      shape.width = gguf_get_val_u32(ctx, width);
-    }
-  }
-  const int64_t tokens = gguf_find_key(ctx, "tokenizer.ggml.tokens");
-  if (tokens >= 0 && gguf_get_kv_type(ctx, tokens) == GGUF_TYPE_ARRAY) {
-    shape.vocab = static_cast<int64_t>(gguf_get_arr_n(ctx, tokens));
-  }
-  gguf_free(ctx);
-  return shape;
+  return gguf_get_val_u32(ctx, id);
 }
 
 // The speculative types the addon creates a draft context for: MTP, on the
@@ -114,6 +92,32 @@ bool allowsPositionGaps(const llama_model* model) {
 }
 
 } // namespace
+
+GgufShape readGgufShape(const std::string& path) {
+  GgufShape shape;
+  gguf_init_params init = {};
+  init.no_alloc = true;
+  gguf_context* ctx = gguf_init_from_file(path.c_str(), init);
+  if (ctx == nullptr) {
+    return shape;
+  }
+  const int64_t arch = gguf_find_key(ctx, "general.architecture");
+  if (arch >= 0 && gguf_get_kv_type(ctx, arch) == GGUF_TYPE_STRING) {
+    const std::string prefix = gguf_get_val_str(ctx, arch);
+    // As fabric's `n_embd_out()`: a Gemma 4 assistant carries the target's
+    // width in `embedding_length_out` and its own in `embedding_length`.
+    shape.width = readGgufU32(ctx, prefix + ".embedding_length_out");
+    if (shape.width == 0) {
+      shape.width = readGgufU32(ctx, prefix + ".embedding_length");
+    }
+  }
+  const int64_t tokens = gguf_find_key(ctx, "tokenizer.ggml.tokens");
+  if (tokens >= 0 && gguf_get_kv_type(ctx, tokens) == GGUF_TYPE_ARRAY) {
+    shape.vocab = static_cast<int64_t>(gguf_get_arr_n(ctx, tokens));
+  }
+  gguf_free(ctx);
+  return shape;
+}
 
 SpeculativeConfig
 parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
@@ -387,7 +391,7 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
       const GgufShape head = readGgufShape(paramsDft.model.path);
       const std::string mismatch = mtpHeadMismatch(
           head.width,
-          llama_model_n_embd(modelTgt),
+          llama_model_n_embd_out(modelTgt),
           head.vocab,
           llama_vocab_n_tokens(llama_model_get_vocab(modelTgt)));
       if (!mismatch.empty()) {
