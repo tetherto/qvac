@@ -310,7 +310,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | `diffusion-cpp` | `@qvac/diffusion-cpp` | Image/video generation and upscaling |
 | `audiogen-ggml` | `@qvac/audiogen-ggml` | Text-conditioned audio generation |
 | `vla-ggml` | `@qvac/vla-ggml` | Vision-language-action inference |
-| `classification-ggml` | `@qvac/classification-ggml` | Image classification |
+| `classification-ggml` | `@qvac/classification-ggml` | MobileNet image classification and MegaLoc image embeddings |
 
 **Support Libraries**
 
