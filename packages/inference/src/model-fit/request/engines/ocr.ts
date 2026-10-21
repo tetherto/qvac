@@ -2,7 +2,7 @@ import type { OcrFitRequest } from '@qvac/ocr-ggml'
 
 import type { OCRConfig } from '@/schemas/index'
 import { ocrParamsFor } from '@/plugins/builtin/ggml-ocr/params'
-import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-fit-request'
+import type { FitRequestPlan } from '@/model-fit/request/create'
 
 export interface OcrFitRequestParams {
   /** The recognizer, which is the load's primary model. */

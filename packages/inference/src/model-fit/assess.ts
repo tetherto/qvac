@@ -11,8 +11,8 @@ import type {
 import type { GPUResourceCapabilities, SystemResources } from '@/schemas/system-resources'
 import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
 import { getModelResourceProfile } from '@/models/registry/resource-profiles'
-import { computeFloor, FLOOR_VERSION } from '@/resources/model-fit/floor'
-import type { ModelFitPlatform } from '@/resources/model-fit/types'
+import { computeFloor, FLOOR_VERSION } from '@/model-fit/floor'
+import type { ModelFitPlatform } from '@/model-fit/platform'
 
 const GIB = 1024 * 1024 * 1024
 
@@ -534,7 +534,7 @@ function allocatesFromSystemMemory(gpu: GPUResourceCapabilities) {
  * APU also exposes for its carve-out — a Ryzen 5000U reported `dedicated` with
  * over a gigabyte of "VRAM". Vulkan calls the same device INTEGRATED_GPU, but
  * that is not in the collector, so an AMD GPU on linux cannot be placed and
- * assesses as `unknown` until the engine's own device type is exposed.
+ * assesses as `unknown`.
  */
 function integratedIsIndistinguishable(gpu: GPUResourceCapabilities, platform: ModelFitPlatform) {
   if (!platform.startsWith('linux')) return false

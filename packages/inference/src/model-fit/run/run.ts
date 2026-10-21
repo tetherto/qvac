@@ -4,12 +4,18 @@ import os from 'bare-os'
 import path from 'bare-path'
 
 import { generateShortHash } from '@/utils/formatting'
-import { callEngineFit } from '@/resources/model-fit/native-probe/engine-fit'
-import type { FitProbeRequest } from '@/resources/model-fit/native-probe/engine-fit'
-import type {
-  FitRunResult,
-  FitRunUnknownReason
-} from '@/resources/model-fit/native-probe/fit-outcome'
+import { callEngineFit } from '@/model-fit/run/engine'
+import type { FitProbeRequest, FitProbeResult } from '@/model-fit/run/engine'
+
+/**
+ * Why a run produced no projection. Every one of these is absence of evidence,
+ * so the caller proceeds with the load it was going to run anyway.
+ */
+export type FitRunUnknownReason = 'cancelled' | 'crashed' | 'invocation-error' | 'timeout'
+
+export type FitRunResult =
+  | { status: 'completed'; probe: FitProbeResult }
+  | { status: 'unknown'; reason: FitRunUnknownReason; message: string }
 
 export interface RunFitOptions {
   signal?: AbortSignal

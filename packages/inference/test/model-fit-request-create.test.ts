@@ -1,7 +1,7 @@
 import test from 'brittle'
 
 import { ModelType } from '@/schemas/index'
-import { createFitRequest } from '@/resources/model-fit/native-probe/create-fit-request'
+import { createFitRequest } from '@/model-fit/request/create'
 
 const COMPLETION_CONFIG = {
   ctx_size: 4096,

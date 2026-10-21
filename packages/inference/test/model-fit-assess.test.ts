@@ -1,7 +1,7 @@
 import test from 'brittle'
-import { assessModelFitFromResources } from '@/resources/model-fit/assess'
-import type { NativeCandidateFit } from '@/resources/model-fit/assess'
-import { computeFloor, FLOOR_VERSION } from '@/resources/model-fit/floor'
+import { assessModelFitFromResources } from '@/model-fit/assess'
+import type { NativeCandidateFit } from '@/model-fit/assess'
+import { computeFloor, FLOOR_VERSION } from '@/model-fit/floor'
 import type { GgufFacts, ModelResourceProfile } from '@/schemas/model-resource-profile'
 import type { SystemResources } from '@/schemas/system-resources'
 import type { ModelFitEstimateTarget } from '@/schemas/assess-model-fit'
@@ -188,9 +188,8 @@ test('assess: desktop reserve is 20% of available, capped at 2 GiB', (t) => {
   t.is(large.budget?.availableAfterReserveBytes, 46 * GIB)
 })
 
-// The reserve used to be a share of total subtracted from available, so on a
-// host already using most of its RAM it exceeded the headroom and zeroed the
-// budget — every model, however small, read likely-too-large.
+// The reserve is a share of what is free, so a host already using most of its
+// RAM keeps a budget and a small model still reads likely-fits.
 test('assess: a busy host keeps a budget proportional to what is free', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate({ workload: { kind: 'llm', contextTokens: 1 } })],

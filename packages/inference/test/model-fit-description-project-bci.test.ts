@@ -10,10 +10,10 @@ import { BCI_EMBEDDER, BCI_WINDOWED } from '@/models/registry/index'
 import { getPlugin, registerPlugin, unregisterPlugin } from '@/plugins/registry'
 import { bciPlugin } from '@/plugins/builtin/bci-whispercpp-transcription/plugin'
 import { ModelType } from '@/schemas/index'
-import { projectFitFromLoad } from '@/resources/model-fit/fit-stub/project-fit-from-load'
-import type { FitBlobBinding, FitStubEntry } from '@/resources/model-fit/fit-stub/fetch-fit-stub'
-import type { FitProbeRequest } from '@/resources/model-fit/native-probe/engine-fit'
-import type { FitRunResult } from '@/resources/model-fit/native-probe/fit-outcome'
+import { projectFitFromLoad } from '@/model-fit/description/project'
+import type { FitBlobBinding, FitStubEntry } from '@/model-fit/description/fetch'
+import type { FitProbeRequest } from '@/model-fit/run/engine'
+import type { FitRunResult } from '@/model-fit/run/run'
 
 /**
  * The projection `assessModelFit` runs for a BCI load before download: the

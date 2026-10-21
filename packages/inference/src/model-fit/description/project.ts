@@ -1,16 +1,10 @@
-import {
-  resolveLoadFromStubs,
-  type LoadDescription
-} from '@/resources/model-fit/fit-stub/resolve-load-from-stubs'
-import type {
-  FitStubOptions,
-  FitStubUnavailableReason
-} from '@/resources/model-fit/fit-stub/fetch-fit-stub'
+import { resolveLoadFromStubs, type LoadDescription } from '@/model-fit/description/resolve-load'
+import type { FitStubOptions, FitStubUnavailableReason } from '@/model-fit/description/fetch'
 import {
   runAdvisoryFitCheck,
   type AdvisoryFitOptions,
   type AdvisoryFitOutcome
-} from '@/resources/model-fit/native-probe/advisory-fit'
+} from '@/model-fit/load-check'
 
 export type LoadFitOutcome =
   | { status: 'projected'; fit: AdvisoryFitOutcome }

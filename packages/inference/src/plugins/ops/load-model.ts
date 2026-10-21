@@ -25,7 +25,7 @@ import {
   InferenceCancelledError
 } from '@/errors/index'
 import { ensureAddonLoggerReady, getPlugin } from '@/plugins/index'
-import { runAdvisoryFitCheck } from '@/resources/model-fit/native-probe/advisory-fit'
+import { runAdvisoryFitCheck } from '@/model-fit/load-check'
 import { refusesLoad, resolveModelFitPolicy, runsProbe } from '@/schemas/model-fit-policy'
 import { getConfig } from '@/runtime/state'
 import { promises as fsPromises } from 'bare-fs'

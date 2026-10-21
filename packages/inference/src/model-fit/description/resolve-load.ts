@@ -20,7 +20,7 @@ import {
   type FitStubSet,
   type FitStubSetMember,
   type FitStubUnavailableReason
-} from '@/resources/model-fit/fit-stub/fetch-fit-stub'
+} from '@/model-fit/description/fetch'
 
 export interface LoadDescription {
   transcriptionWorkload?: TranscriptionFitWorkload | undefined

@@ -1,7 +1,7 @@
 import test from 'brittle'
 
-import { classifyFit } from '@/resources/model-fit/native-probe/classify-fit'
-import type { FitProbeResult } from '@/resources/model-fit/native-probe/engine-fit'
+import { classifyFit } from '@/model-fit/classify'
+import type { FitProbeResult } from '@/model-fit/run/engine'
 
 const PROVENANCE = { basis: 'native-probe', estimatorVersion: 'native-probe-v1' } as const
 

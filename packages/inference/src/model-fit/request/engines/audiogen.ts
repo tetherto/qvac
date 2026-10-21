@@ -1,8 +1,8 @@
 import type { AudiogenFitRequest } from '@qvac/audiogen-ggml'
 
 import type { AudioGenRuntimeConfig, MinimaxAudioGenRuntimeConfig } from '@/schemas/index'
-import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-fit-request'
-import { gpuLayersFromGate } from '@/resources/model-fit/native-probe/engines/gpu'
+import type { FitRequestPlan } from '@/model-fit/request/create'
+import { gpuLayersFromGate } from '@/model-fit/request/gpu'
 
 /**
  * `@qvac/audiogen-ggml` is an optional peer dependency, so its value exports

@@ -13,7 +13,7 @@ import {
   type FitStubEntry,
   type FitStubRef,
   type FitStubSet
-} from '@/resources/model-fit/fit-stub/fetch-fit-stub'
+} from '@/model-fit/description/fetch'
 
 const REF: FitStubRef = {
   name: 'Llama-3.2-1B-Instruct-Q4_0',

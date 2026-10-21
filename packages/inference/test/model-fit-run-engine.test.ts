@@ -2,7 +2,7 @@ import test from 'brittle'
 
 import { z } from 'zod'
 
-import { callEngineFit } from '@/resources/model-fit/native-probe/engine-fit'
+import { callEngineFit } from '@/model-fit/run/engine'
 import { registerPlugin, unregisterPlugin } from '@/plugins/registry'
 import type { QvacPlugin } from '@/schemas/plugin'
 

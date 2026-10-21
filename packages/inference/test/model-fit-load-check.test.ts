@@ -3,9 +3,9 @@ import { AbortController } from 'bare-abort-controller'
 
 import type { Logger } from '@/logging/types'
 import { ModelType } from '@/schemas/index'
-import { runAdvisoryFitCheck } from '@/resources/model-fit/native-probe/advisory-fit'
-import type { FitProbeRequest, FitProbeResult } from '@/resources/model-fit/native-probe/engine-fit'
-import type { FitRunResult } from '@/resources/model-fit/native-probe/fit-outcome'
+import { runAdvisoryFitCheck } from '@/model-fit/load-check'
+import type { FitProbeRequest, FitProbeResult } from '@/model-fit/run/engine'
+import type { FitRunResult } from '@/model-fit/run/run'
 
 const COMPLETION_INPUT = {
   modelId: 'llm-1',

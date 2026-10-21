@@ -11,8 +11,8 @@ import type {
   MossTranscribeConfig,
   TranscriptionFitWorkload
 } from '@/schemas/index'
-import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-fit-request'
-import { gpuLayersFromGate } from '@/resources/model-fit/native-probe/engines/gpu'
+import type { FitRequestPlan } from '@/model-fit/request/create'
+import { gpuLayersFromGate } from '@/model-fit/request/gpu'
 
 export interface AsrFitRequestParams {
   modelPath: string
