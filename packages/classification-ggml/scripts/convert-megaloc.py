@@ -7,9 +7,11 @@ No model code is downloaded or executed, and no output is uploaded.
 """
 import argparse
 import ctypes
+import errno
 import hashlib
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 
@@ -66,6 +68,26 @@ def position_embeddings(position):
     return np.concatenate((position[0, :1], resized.reshape(529, 768).astype(np.float32)))
 
 
+def publish(temporary, output):
+    try:
+        os.link(temporary, output)
+        return
+    except FileExistsError:
+        raise
+    except OSError as error:
+        if error.errno not in {errno.ENOSYS, errno.ENOTSUP, errno.EPERM, errno.EXDEV} and \
+                getattr(error, "winerror", None) not in {1, 50, 1314}:
+            raise
+    with temporary.open("rb") as source:
+        destination = output.open("xb")
+        try:
+            with destination:
+                shutil.copyfileobj(source, destination, 8 * 1024 * 1024)
+        except BaseException:
+            output.unlink()
+            raise
+
+
 def convert(args):
     if args.gguf_py:
         sys.path.insert(0, str(args.gguf_py.resolve(strict=True)))
@@ -81,7 +103,7 @@ def convert(args):
         raise ValueError("Checkpoint does not match the supported MegaLoc revision and SHA256")
     library, directory = native_quantizer(args.ggml_library) if args.quant == "mixed" else (None, None)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    # Build next to the destination so rename publishes only a complete file.
+    # Prefer publishing a complete file without replacing an existing output.
     descriptor, temporary = tempfile.mkstemp(prefix=args.output.name + ".", suffix=".tmp", dir=args.output.parent)
     os.close(descriptor)
     temporary = Path(temporary)
@@ -130,7 +152,7 @@ def convert(args):
         writer.write_tensors_to_file(progress=False)
         writer.close()
         writer = None
-        os.link(temporary, args.output)
+        publish(temporary, args.output)
     finally:
         if writer is not None:
             writer.close()

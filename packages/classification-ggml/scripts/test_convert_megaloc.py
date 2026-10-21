@@ -1,6 +1,9 @@
 import importlib.util
+import errno
 from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -41,6 +44,50 @@ class PositionEmbeddingTests(unittest.TestCase):
     def test_wrong_input_shape_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "shape"):
             converter.position_embeddings(np.zeros((1, 530, 768), dtype=np.float32))
+
+
+class PublicationTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.source = Path(self.directory.name) / "model.tmp"
+        self.output = Path(self.directory.name) / "model.gguf"
+        self.source.write_bytes(b"GGUF test data")
+
+    def test_hardlink_publishes_complete_file(self):
+        converter.publish(self.source, self.output)
+        self.assertEqual(self.source.read_bytes(), self.output.read_bytes())
+
+    def test_unsupported_links_fall_back_to_exclusive_copy(self):
+        with patch.object(converter.os, "link", side_effect=OSError(errno.ENOTSUP, "unsupported")):
+            converter.publish(self.source, self.output)
+        self.assertEqual(self.source.read_bytes(), self.output.read_bytes())
+
+    def test_existing_output_is_preserved_on_both_paths(self):
+        self.output.write_bytes(b"existing")
+        for error in [FileExistsError(errno.EEXIST, "exists"), OSError(errno.ENOTSUP, "unsupported")]:
+            with self.subTest(error=error), patch.object(converter.os, "link", side_effect=error):
+                with self.assertRaises(FileExistsError):
+                    converter.publish(self.source, self.output)
+                self.assertEqual(self.output.read_bytes(), b"existing")
+
+    def test_failed_copy_removes_partial_output_and_retains_source(self):
+        def failed_copy(source, destination, length):
+            destination.write(source.read(4))
+            raise OSError(errno.ENOSPC, "disk full")
+
+        with patch.object(converter.os, "link", side_effect=OSError(errno.ENOTSUP, "unsupported")), \
+                patch.object(converter.shutil, "copyfileobj", side_effect=failed_copy):
+            with self.assertRaisesRegex(OSError, "disk full"):
+                converter.publish(self.source, self.output)
+        self.assertFalse(self.output.exists())
+        self.assertEqual(self.source.read_bytes(), b"GGUF test data")
+
+    def test_unrelated_errors_are_not_masked(self):
+        with patch.object(converter.os, "link", side_effect=OSError(errno.ENOSPC, "disk full")):
+            with self.assertRaisesRegex(OSError, "disk full"):
+                converter.publish(self.source, self.output)
+        self.assertFalse(self.output.exists())
 
 
 if __name__ == "__main__":

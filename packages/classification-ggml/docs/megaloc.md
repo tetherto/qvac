@@ -21,7 +21,8 @@ await model.destroy()
 
 Omit `backend` to select a registered GPU, then an integrated GPU, then CPU.
 An explicitly requested backend must exist; it does not silently select another
-device. `backendsDir` optionally overrides Fabric's module directory. Backend
+device. Metal accepts `Metal`, `Metal0` and GGML's native `MTL0` name.
+`backendsDir` optionally overrides Fabric's module directory. Backend
 availability depends on the platform's Fabric build. GPU masks set before
 starting the process also apply to this addon.
 
@@ -31,7 +32,8 @@ antialiased bilinear resizing to 322 × 322, and 14 × 14 patches. No cropping o
 aspect-ratio padding is applied. Batch size is one. Calls on one instance are
 serialized; different instances own separate graphs and weight buffers.
 
-`load()` and `unload()` are idempotent. An unloaded instance can load again.
+`load()` reads weights and builds the graph on a native worker, keeping the JS
+event loop responsive. `load()` and `unload()` are idempotent. An unloaded instance can load again.
 `destroy()` releases resources permanently. Runtime statistics describe the last
 successful embedding and include time, allocated weight bytes, backend ID and
 the number of graph nodes assigned to CPU fallback. Backend IDs are CPU=0,
@@ -39,6 +41,16 @@ Metal=1, CUDA=2, Vulkan=3, OpenCL=4 and other=99. Fallback allows portable graph
 operations to execute on CPU when a GPU backend does not support them.
 
 ## Local GGUF conversion
+
+Two formats are supported: **F16 (default), 436.8 MiB**, and **mixed (F16 body
++ Q6_K projection), 278.7 MiB**. Mixed is **36.2% smaller** (F16 is 1.57 times
+its size). In a 512-query retrieval screen, both retained PyTorch FP32's
+78.9062% Recall@1. The lowest mAP across four tested backends was 70.8692% for
+F16 and 70.8455% for mixed, versus 70.8680% for PyTorch: mixed lost 0.0225
+percentage points against PyTorch. Lowest mean descriptor cosine similarity to
+PyTorch was 0.9999948 for F16 and 0.9998124 for mixed. These small engineering
+screens do not establish accuracy on unseen datasets; latency depends on the
+backend, so smaller storage does not imply faster inference.
 
 Obtain the original `model.safetensors` from
 [MegaLoc on Hugging Face](https://huggingface.co/gberton/MegaLoc/resolve/a0f34722c4297ff787e022433799250180860af7/model.safetensors).
@@ -87,8 +99,9 @@ Positional embeddings use fixed-order float64 bicubic interpolation followed by
 F32 storage, retaining the original coordinates and cubic kernel while avoiding
 platform-dependent FP32 rounding. PyTorch is needed only to regenerate the test
 reference fixtures, not for conversion or addon inference.
-The converter writes a complete temporary file before publishing the output
-path and refuses to overwrite an existing file.
+The converter finishes a temporary file before publishing the output path and
+refuses to overwrite an existing file. Filesystems without hard links use an
+exclusive copy; a failed copy removes its partial output.
 
 Keep converted files outside the package's `weights/` directory. MegaLoc GGUFs
 are not bundled, uploaded by the converter, or registered with P2P. The MIT
@@ -112,14 +125,18 @@ Convert both files into `test/fixtures/` using the commands above before
 `npm run test:integration`. Alternatively, set `QVAC_MEGALOC_F16_MODEL_PATH` and
 `QVAC_MEGALOC_MIXED_MODEL_PATH` to your manually converted files elsewhere.
 The tests require both formats and report missing files as errors.
-`QVAC_MEGALOC_BACKEND` selects the device for those tests and defaults
-to CPU. Synthetic reference fixtures come from original PyTorch FP32 and cover
+`QVAC_MEGALOC_BACKEND` selects the explicit test device and defaults to CPU.
+Separate tests compare both formats against PyTorch using automatic device
+selection, exercising GPU inference when available. Set
+`QVAC_MEGALOC_EXPECT_GPU=1` to require GPU selection in those tests.
+Synthetic reference fixtures come from original PyTorch FP32 and cover
 upscaling, downscaling and unchanged dimensions. They also check repeated
 inference, decoding, error recovery, model coexistence and lifecycle behavior.
 
 `npm run test:cpp` includes preprocessing parity and malformed-model checks.
 Run `python scripts/test_convert_megaloc.py -v` with NumPy installed to check the
-converter's positional interpolation against stored original PyTorch references.
+converter's positional interpolation against stored original PyTorch references
+and output publication, including filesystems without hard links.
 Integration tests verify backend selection and record CPU fallback counts.
 For mobile tests, run `npm run mobile:copy-prebuilds` after conversion. It stages
 both model files and reference assets for the device using the same local paths

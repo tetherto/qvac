@@ -4,6 +4,8 @@ GGML-powered vision addon for QVAC. `ImageClassifier` runs the bundled MobileNet
 
 ## MegaLoc image embeddings
 
+**Detailed MegaLoc guide: [API, quantization tradeoffs, GGUF conversion and tests](docs/megaloc.md).**
+
 ```js
 const { MegaLoc } = require('@qvac/classification-ggml')
 
@@ -16,7 +18,6 @@ await model.destroy()
 **F16 is the default conversion format.** F16 body + Q6_K projection is the other
 supported format. MegaLoc weights are supplied separately; the package includes
 a local conversion script and does not download or redistribute these GGUFs.
-See [MegaLoc usage, conversion and tests](docs/megaloc.md).
 
 ## MobileNet classification
 
