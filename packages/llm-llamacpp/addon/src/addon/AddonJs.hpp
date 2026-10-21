@@ -812,9 +812,12 @@ inline FitResult runFit(FitRequest request) {
   // per-device figures. A DFlash model fabric cannot measure stays out of
   // both. An MTP context it cannot create, on a model or an external head
   // without MTP layers, fails the load, so the projection is refused like
-  // any such load.
+  // any such load. The load sizes the draft context to the target's; a fit
+  // that fails leaves the caller's 0, which the target resolves to its
+  // trained context.
+  const uint32_t draftCtx = cparams.n_ctx != 0 ? cparams.n_ctx : trainCtx;
   if (measured && speculativeFit &&
-      !speculativeFit->addMemory(cparams.n_ctx, devices, breakdown) &&
+      !speculativeFit->addMemory(draftCtx, devices, breakdown) &&
       speculativeFit->isMtp()) {
     return errorResult("unsupported-config");
   }
