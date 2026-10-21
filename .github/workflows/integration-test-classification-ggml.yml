@@ -72,12 +72,14 @@ jobs:
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
+            gpu: true
             runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
           # @qvac/fabric hard-imports vulkan-1.dll on Windows; qvac-win25-x64-gpu has
           # the Vulkan loader installed (same env as llm-llamacpp and other fabric
           # consumers being migrated).
           - platform: win32
             arch: x64
+            gpu: true
             runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
 
     steps:
@@ -279,6 +281,7 @@ jobs:
           # Invaluable for debugging platform-specific numerical issues
           # (noise is bounded to a few lines per sample image).
           QVAC_CLASSIFICATION_TRACE: "1"
+          QVAC_MEGALOC_EXPECT_GPU: ${{ matrix.gpu && '1' || '0' }}
         run: npm run test:integration
 
       - name: Upload performance report
