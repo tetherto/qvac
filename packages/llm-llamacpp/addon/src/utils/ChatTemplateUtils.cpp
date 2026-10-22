@@ -365,35 +365,37 @@ bool jinjaRenderOmittedTools(
   return renderIsUnchangedWithoutTools(tmpls, inputs, prompt);
 }
 
+// Single export point for every render path (`getPrompt` and
+// `renderWithoutUserTurn`). Takes ownership: every caller hands over a
+// local it no longer reads, and the payload carries several strings plus
+// three vectors.
+PromptRenderResult exportParams(
+    common_chat_params&& params, bool renderedByJinja,
+    bool toolDefinitionsDropped) {
+  PromptRenderResult out;
+  out.prompt = std::move(params.prompt);
+  out.thinkingForcedOpen = params.thinking_forced_open;
+  out.thinkingStartTag = std::move(params.thinking_start_tag);
+  out.thinkingEndTag = params.thinking_end_tags.empty()
+                           ? std::string()
+                           : params.thinking_end_tags.front();
+  out.thinkingEndTags = std::move(params.thinking_end_tags);
+  out.generationPrompt = std::move(params.generation_prompt);
+  out.grammar = std::move(params.grammar);
+  out.grammarLazy = params.grammar_lazy;
+  out.grammarTriggers = std::move(params.grammar_triggers);
+  out.preservedTokens = std::move(params.preserved_tokens);
+  out.additionalStops = std::move(params.additional_stops);
+  out.renderedByJinja = renderedByJinja;
+  out.toolDefinitionsDropped = toolDefinitionsDropped;
+  return out;
+}
+
 } // namespace
 
 PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs) {
-  // Single export point for all three render paths below.
-  // Takes ownership: every caller below hands over a local it no longer
-  // reads, and the payload carries several strings plus three vectors.
-  auto exportParams = [](common_chat_params&& params,
-                         bool renderedByJinja,
-                         bool toolDefinitionsDropped) {
-    PromptRenderResult out;
-    out.prompt = std::move(params.prompt);
-    out.thinkingForcedOpen = params.thinking_forced_open;
-    out.thinkingStartTag = std::move(params.thinking_start_tag);
-    out.thinkingEndTag = params.thinking_end_tags.empty()
-                             ? std::string()
-                             : params.thinking_end_tags.front();
-    out.thinkingEndTags = std::move(params.thinking_end_tags);
-    out.generationPrompt = std::move(params.generation_prompt);
-    out.grammar = std::move(params.grammar);
-    out.grammarLazy = params.grammar_lazy;
-    out.grammarTriggers = std::move(params.grammar_triggers);
-    out.preservedTokens = std::move(params.preserved_tokens);
-    out.additionalStops = std::move(params.additional_stops);
-    out.renderedByJinja = renderedByJinja;
-    out.toolDefinitionsDropped = toolDefinitionsDropped;
-    return out;
-  };
   // A template can fail either because it rejects the tool definitions or
   // because it rejects the shape of the message list (e.g. Qwen3.5 raises
   // when there is no user turn to anchor its tool block on). Retry without
@@ -477,6 +479,175 @@ PromptRenderResult getPrompt(
       std::move(params),
       /* renderedByJinja = */ false,
       /* toolDefinitionsDropped = */ legacyDroppedTools);
+}
+
+namespace {
+
+// Placeholder user contents for `renderWithoutUserTurn`. Differing first
+// characters, and leading whitespace, keep the cut in front of any token the
+// template's text merges with the start of the content.
+inline constexpr std::array<std::string_view, 6> PLACEHOLDER_USER_CONTENTS{
+    "A", "z", "7", "?", " q", "\nq"};
+
+// Bounds the token-safe back-off below; a cut needs a few steps at most, so
+// running out means the renders never agree on a token boundary.
+inline constexpr size_t MAX_CUT_BACKOFF_STEPS = 256;
+
+bool isTokenPrefix(
+    const std::vector<llama_token>& prefix,
+    const std::vector<llama_token>& tokens) {
+  return prefix.size() <= tokens.size() &&
+         std::equal(prefix.begin(), prefix.end(), tokens.begin());
+}
+
+// Start of the UTF-8 character before byte `pos` of `text`.
+size_t previousUtf8Boundary(const std::string& text, size_t pos) {
+  if (pos == 0) {
+    return 0;
+  }
+  --pos;
+  while (pos > 0 && (static_cast<unsigned char>(text[pos]) & 0xC0U) == 0x80U) {
+    --pos;
+  }
+  return pos;
+}
+
+// Whether the Jinja render of `inputs` as they are cannot be cached for a
+// later request: the template raises on them, or leaves the tools out.
+bool plainRenderFallsShort(
+    const struct common_chat_templates* tmpls,
+    const common_chat_templates_inputs& inputs) {
+  try {
+    const auto params = common_chat_templates_apply(tmpls, inputs);
+    return !inputs.tools.empty() &&
+           jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
+  } catch (...) {
+    return true;
+  }
+}
+
+} // namespace
+
+bool hasUserTurn(const std::vector<common_chat_msg>& messages) {
+  return std::ranges::any_of(messages, [](const common_chat_msg& message) {
+    return message.role == "user" || message.role == "tool";
+  });
+}
+
+std::optional<PromptRenderResult> renderWithoutUserTurn(
+    const struct common_chat_templates* tmpls,
+    const common_chat_templates_inputs& inputs, const Tokenizer& tokenize) {
+  if (!inputs.use_jinja || hasUserTurn(inputs.messages) ||
+      !plainRenderFallsShort(tmpls, inputs)) {
+    return std::nullopt;
+  }
+
+  std::optional<common_chat_params> first;
+  std::vector<std::string> prompts;
+  prompts.reserve(PLACEHOLDER_USER_CONTENTS.size());
+  try {
+    for (std::string_view content : PLACEHOLDER_USER_CONTENTS) {
+      common_chat_templates_inputs withUser = inputs;
+      common_chat_msg placeholder;
+      placeholder.role = "user";
+      placeholder.content = std::string(content);
+      withUser.messages.push_back(std::move(placeholder));
+      withUser.add_generation_prompt = false;
+      auto params = common_chat_templates_apply(tmpls, withUser);
+      prompts.push_back(params.prompt);
+      if (!first.has_value()) {
+        first = std::move(params);
+      }
+    }
+  } catch (const std::exception& e) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[ChatTemplateUtils] chat template cannot render this "
+            "conversation with a placeholder user message either: %s\n",
+            forLogMessage(e.what(), K_MAX_LOG_DIAGNOSTIC).c_str()));
+    return std::nullopt;
+  } catch (...) {
+    return std::nullopt;
+  }
+
+  size_t cut = prompts.front().size();
+  for (const std::string& prompt : prompts) {
+    const auto mismatch = std::ranges::mismatch(prompts.front(), prompt);
+    cut = std::min(
+        cut, static_cast<size_t>(mismatch.in1 - prompts.front().begin()));
+  }
+
+  std::optional<std::string> promptWithoutTools;
+  if (!inputs.tools.empty()) {
+    try {
+      common_chat_templates_inputs withUserNoTools = inputs;
+      common_chat_msg placeholder;
+      placeholder.role = "user";
+      placeholder.content = std::string(PLACEHOLDER_USER_CONTENTS.front());
+      withUserNoTools.messages.push_back(std::move(placeholder));
+      withUserNoTools.add_generation_prompt = false;
+      withUserNoTools.tools.clear();
+      promptWithoutTools =
+          common_chat_templates_apply(tmpls, withUserNoTools).prompt;
+    } catch (...) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[ChatTemplateUtils] cannot verify the tools prefix; using the "
+          "plain render\n");
+      return std::nullopt;
+    }
+  }
+
+  std::vector<std::vector<llama_token>> variantTokens;
+  variantTokens.reserve(prompts.size());
+  for (const std::string& prompt : prompts) {
+    variantTokens.push_back(tokenize(prompt));
+  }
+  for (size_t step = 0; cut > 0 && step < MAX_CUT_BACKOFF_STEPS; ++step) {
+    const std::vector<llama_token> cutTokens =
+        tokenize(prompts.front().substr(0, cut));
+    const bool tokenSafe =
+        !cutTokens.empty() &&
+        std::ranges::all_of(variantTokens, [&](const auto& tokens) {
+          return isTokenPrefix(cutTokens, tokens);
+        });
+    if (tokenSafe) {
+      // Check the final cut: back-off must not remove tools, and removing
+      // tools must leave the user content and everything after it unchanged.
+      if (promptWithoutTools.has_value() &&
+          (promptWithoutTools->compare(0, cut, prompts.front(), 0, cut) == 0 ||
+           !promptWithoutTools->ends_with(
+               std::string_view(prompts.front()).substr(cut)))) {
+        QLOG_IF(
+            Priority::WARNING,
+            "[ChatTemplateUtils] tools do not fit in the cached prefix; "
+            "using the plain render\n");
+        return std::nullopt;
+      }
+      PromptRenderResult out = exportParams(
+          std::move(*first),
+          /* renderedByJinja = */ true,
+          /* toolDefinitionsDropped = */ false);
+      out.prompt = prompts.front().substr(0, cut);
+      out.generationPrompt.clear();
+      out.thinkingForcedOpen = false;
+      QLOG_IF(
+          Priority::INFO,
+          string_format(
+              "[ChatTemplateUtils] chat template needs a user message to "
+              "render this conversation; rendered with a placeholder and kept "
+              "the %zu tokens in front of it\n",
+              cutTokens.size()));
+      return out;
+    }
+    cut = previousUtf8Boundary(prompts.front(), cut);
+  }
+  QLOG_IF(
+      Priority::WARNING,
+      "[ChatTemplateUtils] placeholder renders share no token-safe prefix; "
+      "using the plain render\n");
+  return std::nullopt;
 }
 
 namespace {

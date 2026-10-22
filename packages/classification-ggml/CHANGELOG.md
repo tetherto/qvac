@@ -7,6 +7,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] - 2026-10-21
+
+### Added
+
+- `MegaLoc` image embeddings for visual place recognition and image retrieval,
+  with `load`, `embed`, `unload` and `destroy` lifecycle methods. `embed` accepts
+  JPEG/PNG or packed RGB input and returns an L2-normalized `Float32Array(8448)`.
+  Inference uses Fabric CPU/GPU backends, with CPU fallback for unsupported GPU
+  operations. Loading runs on a native worker so the JS event loop stays responsive.
+- Local MegaLoc GGUF support: F16 by default, or an F16 body with a Q6_K final
+  projection. Includes a checkpoint-verified safetensors-to-GGUF converter,
+  conversion/usage documentation and original PyTorch parity tests on CPU/GPU.
+
+### Changed
+
+- MobileNet and MegaLoc implementations have separate native directories and
+  resources. The existing `ImageClassifier` API and bundled MobileNet default
+  are retained.
+- The package includes the MegaLoc entrypoint/declarations, converter,
+  documentation, MIT notice and reference test fixtures. Converted MegaLoc
+  GGUFs are excluded from the package; callers supply their own local files.
+
+### Fixed
+
+- Reject non-finite and out-of-range numeric arguments before native integer
+  conversion, while preserving MobileNet's in-range fractional-number truncation.
+
+### Pull Requests
+
+- [#5248](https://github.com/tetherto/qvac/pull/5248) - MegaLoc integration and CI prerequisites,
+  including [#5242](https://github.com/tetherto/qvac/pull/5242).
+
 ## [0.32.0] - 2026-10-20
 
 ### Changed
