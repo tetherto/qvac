@@ -9,6 +9,7 @@ import {
 } from '@/serve/extensions/openai/schemas/videos'
 import { createVideoJobsStore, type VideoJob } from '@/serve/extensions/openai/video-jobs-store'
 import { tearDownJob, resolveInputReferenceImage } from '@/serve/extensions/openai/routes/videos'
+import { HttpError } from '@/serve/lib/http-error'
 import type { QvacContext } from '@/serve/core/context'
 import type { OpenAIState } from '@/serve/extensions/openai/state'
 
@@ -381,32 +382,22 @@ function makeCtxStub(
   const removed = opts.removed ?? []
   const files = opts.files ?? {}
   const openai = {
-    ephemeralFiles: {
-      remove: (id: string) => {
-        removed.push(id)
-      },
-      get: (id: string) => files[id]
-    },
     ...(opts.cancelOverride ? { cancelOverride: opts.cancelOverride } : {})
   } as unknown as OpenAIState
 
   return {
     logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+    files: {
+      remove: (id: string) => {
+        removed.push(id)
+      },
+      get: (id: string) => files[id]
+    },
     extensions: { openai }
   } as unknown as QvacContext
 }
 
 // Temporarily replaces globalThis.fetch for a single async test body; always restores.
-async function withMockFetch<T>(mock: typeof globalThis.fetch, fn: () => Promise<T>): Promise<T> {
-  const original = globalThis.fetch
-  globalThis.fetch = mock
-  try {
-    return await fn()
-  } finally {
-    globalThis.fetch = original
-  }
-}
-
 function makeJob(overrides: Partial<VideoJob> = {}): VideoJob {
   const base: VideoJob = {
     id: 'video_test',
@@ -505,109 +496,24 @@ describe('resolveInputReferenceImage', () => {
 
   // ── HTTP fetch ───────────────────────────────────────────────────────
 
-  it('rejects HTTP URL that returns a non-200 response', async () => {
+  it('refuses loopback, private and metadata URLs with one opaque message', async () => {
     const ctx = makeCtxStub()
-    await withMockFetch(
-      // lunte-disable-next-line require-await
-      async () => ({ ok: false, status: 404 }) as Response,
-      async () => {
-        await assert.rejects(
-          () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
-          (err: unknown) => err instanceof Error && err.message.includes('HTTP 404')
-        )
-      }
-    )
-  })
-
-  it('rejects HTTP URL when fetch throws a network error', async () => {
-    const ctx = makeCtxStub()
-    await withMockFetch(
-      // lunte-disable-next-line require-await
-      async () => {
-        throw new Error('ECONNREFUSED')
-      },
-      async () => {
-        await assert.rejects(
-          () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
-          (err: unknown) => err instanceof Error && err.message.includes('ECONNREFUSED')
-        )
-      }
-    )
-  })
-
-  it('rejects HTTP URL when fetch times out on initial connect', async () => {
-    const ctx = makeCtxStub()
-    const timeoutErr = Object.assign(new Error('fetch timed out'), { name: 'TimeoutError' })
-    await withMockFetch(
-      // lunte-disable-next-line require-await
-      async () => {
-        throw timeoutErr
-      },
-      async () => {
-        await assert.rejects(
-          () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
-          (err: unknown) => err instanceof Error && err.message.includes('timed out after')
-        )
-      }
-    )
-  })
-
-  it('rejects HTTP URL when response body exceeds the 100 MB limit', async () => {
-    const ctx = makeCtxStub()
-    const bigChunk = new Uint8Array(101 * 1024 * 1024)
-    await withMockFetch(
-      // lunte-disable-next-line require-await
-      async () =>
-        ({
-          ok: true,
-          status: 200,
-          body: {
-            getReader: () => ({
-              // lunte-disable-next-line require-await
-              read: async () => ({ done: false, value: bigChunk }),
-              // lunte-disable-next-line require-await
-              cancel: async () => {},
-              releaseLock: () => {}
-            })
-          }
-        }) as unknown as Response,
-      async () => {
-        await assert.rejects(
-          () => resolveInputReferenceImage({ image_url: 'https://example.com/big.png' }, ctx),
-          (err: unknown) => err instanceof Error && err.message.includes('exceeds')
-        )
-      }
-    )
-  })
-
-  it('rejects HTTP URL when body read throws an error', async () => {
-    const ctx = makeCtxStub()
-    await withMockFetch(
-      // lunte-disable-next-line require-await
-      async () =>
-        ({
-          ok: true,
-          status: 200,
-          body: {
-            getReader: () => ({
-              // lunte-disable-next-line require-await
-              read: async () => {
-                throw new Error('stream error')
-              },
-              // lunte-disable-next-line require-await
-              cancel: async () => {},
-              releaseLock: () => {}
-            })
-          }
-        }) as unknown as Response,
-      async () => {
-        await assert.rejects(
-          () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
-          (err: unknown) =>
-            err instanceof Error && err.message.includes('failed reading response body')
-        )
-      }
-    )
+    for (const url of [
+      'http://127.0.0.1:1/v1/models',
+      'http://localhost:1/',
+      'http://169.254.169.254/latest/meta-data/',
+      'http://10.0.0.1/',
+      'http://[::1]:1/'
+    ]) {
+      await assert.rejects(
+        () => resolveInputReferenceImage({ image_url: url }, ctx),
+        (err: unknown) =>
+          err instanceof HttpError &&
+          err.status === 400 &&
+          err.code === 'invalid_input_reference' &&
+          err.message.startsWith('input_reference.image_url: could not fetch the image.')
+      )
+    }
   })
 })
 

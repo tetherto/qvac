@@ -321,6 +321,12 @@ No end-of-history checkpoint is taken for:
 - `cache_checkpoints: 0`: nothing would keep it, so the prefill does not stop
   for it either.
 
+A prefill-only request needs none: its committed state is itself the end of
+the history. When a system-and-tools prefill produces a matching prefix, the
+next request reuses that state without trimming or restoring it. See
+[cache-api.md](./cache-api.md#prefill-the-system-prompt-and-tools) for the
+template and rendering requirements.
+
 ### Restoring a checkpoint
 
 A restore writes the saved part back

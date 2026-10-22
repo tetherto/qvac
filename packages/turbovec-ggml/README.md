@@ -57,9 +57,10 @@ Errors thrown by the native index carry the fabric error category as their
 message: `InvalidArgument`, `DuplicateId`, `NotFound`, `IOError`, `BadMagic`,
 `BadVersion`, `OutOfMemory`, `PartialCompact`, `NotDurable` or `InternalError`.
 
-For an end-to-end embedding and retrieval example, see
-[RAG with TurboVec](../embed-llamacpp/examples/ragWithTurboVec.js) in
-`@qvac/embed-llamacpp`.
+For retrieval over text, index embeddings from `GGMLBert` in
+[`@qvac/embed-llamacpp`](../embed-llamacpp): L2-normalize each document
+embedding, add the rows with their chunk IDs, and search with the normalized
+query embedding.
 
 ## Development
 
