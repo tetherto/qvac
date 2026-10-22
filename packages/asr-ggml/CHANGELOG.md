@@ -16,6 +16,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- TranscribePsy-250M-EU-sub (`transcribepsy-250m-eu-sub`): the 254M
+  FastConformer-TDT distilled from Parakeet-TDT-0.6B-v3 for eight European
+  languages loads as a TDT model. Long recordings use the 60 s / 25 % windows
+  the model recommends when `longFormWindowFrames` is 0, and on macOS and iOS
+  its published Core ML distribution (an encoder-less GGUF with encoder and
+  decoder sidecars) runs both on the Neural Engine. New example
+  `examples/parakeet-transcribepsy-transcribe.js`.
 - Bounded FuzzTest coverage for the untrusted s16le PCM decoder
   (`decodeS16lePcm`). Linux C++ CI runs the suite after unit tests. The
   decoder compiles without whisper/parakeet, so ASan and LeakSanitizer stay
@@ -23,8 +30,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Align the shared native `speech-cpp` source pin to `2026-10-19` across
-  the speech addons so they use the same source revision.
+- Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
+  the speech addons. The pinned revision adds TranscribePsy, bounds the
+  long-form encoder's memory to one cached graph per windowed pass, balances
+  automatic long-form windows and runs the TDT decoder on the CPU backend
+  under OpenCL.
 
 ## [0.10.0] - 2026-10-14
 
