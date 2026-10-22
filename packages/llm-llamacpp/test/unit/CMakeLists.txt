@@ -36,6 +36,7 @@ add_executable(
   # Utility tests
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp
+  test_prime_tools_prefix.cpp
   test_reasoning_utils.cpp
   test_sequence_state_snapshot.cpp
   test_logging_macros.cpp
