@@ -2,12 +2,24 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { STACK, finalizePlan, trainsByPackage } from './agent-stack-plan.mjs'
-import { readRepoJson } from '../../../../.github/scripts/lib/release-train.mjs'
 
-const trainsOf = trainsByPackage(
-  readRepoJson('.github/release-trains.json'),
-  readRepoJson('nx.json')
-)
+// A whole-chain train holding a smaller one, as release-trains.json allows.
+const NX_JSON = {
+  release: {
+    groups: {
+      lower: { projects: ['@qvac/inference', '@qvac/sdk'], projectsRelationship: 'fixed' },
+      upper: {
+        projects: ['@qvac/cli', '@qvac/ai-sdk-provider', '@qvac/opencode-plugin', '@qvac/openclaw-plugin'],
+        projectsRelationship: 'independent'
+      }
+    }
+  }
+}
+const CATALOG = {
+  whole: { groups: ['lower', 'upper'], anchorGroup: 'lower' },
+  top: { groups: ['upper'], anchorProject: '@qvac/cli' }
+}
+const trainsOf = trainsByPackage(CATALOG, NX_JSON)
 
 // An entry as inspectPackage leaves it, before finalizePlan.
 function inspected (spec, reasons = [], blockers = []) {
@@ -37,20 +49,18 @@ function changed (slug) {
   ))
 }
 
-test('the engine is in the sdk train; the rest also in the cli train', () => {
-  for (const spec of STACK) {
-    const expected = ['inference', 'sdk'].includes(spec.slug) ? ['sdk'] : ['cli', 'sdk']
-    assert.deepEqual(trainsOf.get(`@qvac/${spec.slug}`), expected, spec.slug)
-  }
+test('lists the trains of each package, smallest first', () => {
+  assert.deepEqual(trainsOf.get('@qvac/sdk'), ['whole'])
+  assert.deepEqual(trainsOf.get('@qvac/cli'), ['top', 'whole'])
 })
 
-test('a changed agent-stack package releases the cli train only', () => {
+test('a change only the smaller train holds releases that train alone', () => {
   const bySlug = changed('ai-sdk-provider')
 
   const cli = bySlug.get('cli')
   assert.equal(cli.needsRelease, true)
   assert.equal(cli.recommendation.suggested, '0.15.1')
-  assert.equal(cli.recommendation.rationale, 'Released with the cli train')
+  assert.equal(cli.recommendation.rationale, 'Released with the top train')
   assert.equal(
     bySlug.get('ai-sdk-provider').recommendation.rationale,
     'Outstanding non-breaking commits → patch'
@@ -59,13 +69,13 @@ test('a changed agent-stack package releases the cli train only', () => {
   assert.equal(bySlug.get('inference').needsRelease, false)
 })
 
-test('a changed engine package releases the whole sdk train', () => {
+test('a change outside the smaller train releases the larger one whole', () => {
   const bySlug = changed('sdk')
   for (const slug of ['inference', 'cli', 'openclaw-plugin']) {
     assert.equal(bySlug.get(slug).needsRelease, true, slug)
-    assert.equal(bySlug.get(slug).train, 'sdk', slug)
+    assert.equal(bySlug.get(slug).train, 'whole', slug)
   }
-  assert.equal(bySlug.get('cli').recommendation.rationale, 'Released with the sdk train')
+  assert.equal(bySlug.get('cli').recommendation.rationale, 'Released with the whole train')
 })
 
 test('no train release when no member needs one', () => {

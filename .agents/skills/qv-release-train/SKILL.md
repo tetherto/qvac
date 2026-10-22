@@ -1,38 +1,39 @@
 ---
 name: qv-release-train
-description: Release the packages of a release train together from one branch and one publish run - the sdk train (inference, sdk, cli, ai-sdk-provider, the two plugins) or the cli train (cli, ai-sdk-provider, the two plugins, against the sdk on npm). Use when releasing the SDK chain or the CLI, writing a version plan, or invoking /qv-release-train.
+description: Release the packages of a release train (.github/release-trains.json) together from one branch and one publish run. Use when releasing a set of packages that ship as a train, writing a version plan, or invoking /qv-release-train.
 ---
 
 # Release train
 
 Follow `docs/ci/RELEASE-TRAIN.md`. It holds the procedure, the configuration
-and the checks CI runs. This skill adds what an agent does differently.
+and the checks CI runs. `.github/release-trains.json` lists the trains. This
+skill adds what an agent does differently.
 
 ## When to use
 
-- The user asks to release the SDK chain or the train, or invokes
-  `/qv-release-train`.
+- The user asks to release a train, or invokes `/qv-release-train`.
 
-A hotfix of one train package, and any package outside every train
-(`registry-server`, `rag`, `logging`, `error`, `test-suite`), stays on the
-per-package flow in `docs/gitflow.md`.
+A hotfix of one train package, and any package outside every train, stays on
+the per-package flow in `docs/gitflow.md`.
 
 ## Agent rules
 
-- Run `/qv-agent-stack-sync --plan` first and show the user its table. Its
-  `Train` column names the train to release: `cli` when only agent-stack
-  packages need a release, `sdk` otherwise. Every train package moves; ask the
-  user for the bump of each when the plan and the work do not make it clear.
-- On the `cli` train, commit the `fromNpm` exclusion as its own commit in the
-  release PR (`docs/ci/RELEASE-TRAIN.md`, "The cli train"), and leave it out of
-  the backmerge.
+- Pick the smallest train that holds every package needing a release, and show
+  the user why. For agent-stack packages, run `/qv-agent-stack-sync --plan`
+  and show its table; its `Train` column names the train. Every train package
+  moves; ask the user for the bump of each when the plan and the work do not
+  make it clear.
 - Before the version pass, set every range between train packages to the
   current workspace version, then run `pnpm install --lockfile-only`.
 - Generate the NOTICE files (`qv-sdk-changelog` Step 6) before the version
   pass; `docs/ci/RELEASE-TRAIN.md` step 2 says why.
 - Show the user the `nx release version --dry-run` output before applying it.
-- Do not run Step 2 of `/qv-sdk-inference-version`: the version pass writes the
-  `@qvac/inference` range. Its Steps 3 and 3b still apply.
+- When the train moves `@qvac/sdk`, do not run Step 2 of
+  `/qv-sdk-inference-version`: the version pass writes the `@qvac/inference`
+  range. Its Steps 3 and 3b still apply.
+- When the train lists `fromNpm` packages, make the workspace exclusion its own
+  commit in the release PR (`docs/ci/RELEASE-TRAIN.md` step 5), and leave it
+  out of the backmerge.
 - Open both PRs with `qv-sdk-pr-create`: one release PR, one backmerge, for the
   whole train.
 - Never approve the `npm` or `pypi` deployment; tell the user when each waits.
