@@ -48,6 +48,7 @@ At the moment, the OpenAI-compatible extension supports the following QVAC AI ca
 * Translation (audio-to-English only) — via [Audio](#audio) (`/v1/audio/translations`, Whisper translate task).
 
 The QVAC surface supports:
+* [Batch chat completion](#post-qvacv1chatbatch) — via `/qvac/v1/chat/batch`, several prompts decoded together on one LLM.
 * [Text translation](#post-qvacv1translate) — via `/qvac/v1/translate`, backed by an NMT model.
 
 ## Running the server
@@ -319,6 +320,102 @@ A failed delete returns `500 kv_cache_reclaim_failed`.
 </Callout>
 
 This route needs the QVAC surface mounted. It is absent under `--no-default`, and therefore under the deprecated `qvac serve openai`, which implies it.
+
+### `POST /qvac/v1/chat/batch`
+
+Run several chat prompts through one loaded LLM in a single request, backed by the SDK's
+[`batchCompletion()`](/sdk/reference/api#batchcompletion). The model decodes them together,
+which is faster than sending the same prompts one by one.
+
+`model` names a `serve.models` alias whose endpoint category is `chat` and whose
+`config.parallel` is 2 or more. Up to `parallel` prompts decode at once and the rest queue.
+The slots share the alias's `ctx_size`.
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `model` | `string` | Yes | A `serve.models` alias with endpoint category `chat` |
+| `prompts` | `object[]` | Yes | 1 to 64 prompts |
+
+Each prompt takes these [Chat](#chat) fields: `messages` (required), `tools`, `tool_choice`,
+`parallel_tool_calls`, `response_format`, `temperature`, `top_p`, `seed`,
+`frequency_penalty`, `presence_penalty`, `max_tokens` / `max_completion_tokens` and
+`reasoning_budget`. It may also carry an `id`, unique within the batch. Tools with
+`defer_loading` are not supported.
+
+`results` comes back in prompt order. Each entry has its `id` (the one given, or one the
+server assigned), `index`, an assistant `message` shaped like a Chat choice, and
+`finish_reason`. `stats` covers the whole batch; the engine does not break it down per
+prompt.
+
+```json
+{
+  "object": "chat.batch",
+  "model": "my-llm",
+  "results": [
+    {
+      "id": "cherry",
+      "index": 0,
+      "message": { "role": "assistant", "content": "CHERRY" },
+      "finish_reason": "stop"
+    },
+    {
+      "id": "banana",
+      "index": 1,
+      "message": { "role": "assistant", "content": "BANANA" },
+      "finish_reason": "stop"
+    }
+  ],
+  "stats": { "tokensPerSecond": 226.7, "avgConcurrentSeq": 1.98 }
+}
+```
+
+The batch succeeds or fails as a whole. The request blocks until every prompt finishes, and a
+client disconnect cancels it.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/chat/batch \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-llm","prompts":[
+        {"id":"cherry","messages":[{"role":"user","content":"Reply with only the word CHERRY."}]},
+        {"id":"banana","messages":[{"role":"user","content":"Reply with only the word BANANA."}]}
+      ]}'
+```
+
+| HTTP | `error.code` | When |
+| --- | --- | --- |
+| 400 | `invalid_json` | Body is not valid JSON |
+| 400 | `missing_model` | `model` is missing |
+| 400 | `invalid_prompts` | `prompts` is missing, empty or carries a bad prompt |
+| 400 | `too_many_prompts` | `prompts` carries more than 64 entries |
+| 400 | `duplicate_prompt_id` | Two prompts share an `id` |
+| 400 | `invalid_request` | The body carries an unknown top-level field |
+| 400 | `batch_not_enabled` | The alias's `config.parallel` is below 2 |
+| 400 | `deferred_tools_unsupported` | A prompt's tool sets `defer_loading` |
+| 400 | `tools_not_enabled` | A prompt has `tools` and the alias lacks `tools` |
+| 400 | `invalid_response_format` | Bad `response_format`, or one combined with `tools` |
+| 400 | `invalid_tool_choice` | `tool_choice` names no declared tool |
+| 400 | `unsupported_image_content` | An image is not a PNG or JPEG data URL |
+| 400 | `invalid_model_type` | Alias is not a `chat` model |
+| 400 | `context_length_exceeded` | The batch does not fit the context window |
+| 404 | `model_not_found` | Unknown alias |
+| 429 | `request_rejected_by_policy` | The model is busy and its policy rejects queueing |
+| 502 | `inference_failed` | Inference failed |
+| 503 | `model_not_loaded` | Model not loaded and lazy loading is disabled |
+
+Configure the alias with at least two `parallel` slots:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "my-llm": {
+        "model": "QWEN3_600M_INST_Q4",
+        "config": { "ctx_size": 8192, "parallel": 4 }
+      }
+    }
+  }
+}
+```
 
 ### `POST /qvac/v1/translate`
 

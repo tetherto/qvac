@@ -3,6 +3,8 @@
 //   release-train.mjs resolve <ref> <base-sha> <head-sha> [--check-npm]
 //   release-train.mjs slugs <train>
 //   release-train.mjs projects <train>
+//   release-train.mjs from-npm <train>
+//   release-train.mjs exclude <train>
 //   release-train.mjs linked <train>
 //   release-train.mjs pack <train> <dest-dir>
 //   release-train.mjs stage <package-dir> <tarball-dir>
@@ -12,7 +14,8 @@
 //
 // resolve prints the train and the packages whose version moved between the two
 // commits; publish, wait and tag take that list. Inside a workflow the results
-// go to GITHUB_OUTPUT.
+// go to GITHUB_OUTPUT. exclude takes the train's fromNpm packages out of
+// pnpm-workspace.yaml, for the release commit.
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
@@ -22,6 +25,7 @@ import { parseArgs } from 'node:util'
 import {
   checkRelease,
   compareVersions,
+  excludeFromWorkspace,
   linkedOutsideTrain,
   loadTrain,
   movedProjects,
@@ -37,6 +41,7 @@ import {
 
 const CATALOG = '.github/release-trains.json'
 const TARBALL_INDEX = 'tarballs.json'
+const WORKSPACE = 'pnpm-workspace.yaml'
 
 function run (command, args, options = {}) {
   const result = spawnSync(command, args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: 1 << 28, ...options })
@@ -150,6 +155,8 @@ function resolveTrain ([ref, base, headRef], options) {
       changelogAt: (project) => gitShow(head, `${project.dir}/CHANGELOG.md`),
       versionPlans: capture('git', ['ls-tree', '-r', '--name-only', head, '--', '.nx/version-plans']).split('\n').filter(Boolean),
       manifests: Object.fromEntries(projects.map((project) => [project.name, manifestAt(head, project)])),
+      workspace: gitShow(head, WORKSPACE) ?? '',
+      fromNpm: resolved.fromNpm.map((dir) => ({ dir, name: manifestAt(head, { dir })?.name ?? null })),
     })
     if (options['check-npm']) {
       for (const project of moved) {
@@ -184,6 +191,22 @@ function printSlugs ([name]) {
 
 function printProjects ([name]) {
   console.log(train(name).projects.join(','))
+}
+
+function printFromNpm ([name]) {
+  console.log(JSON.stringify(train(name).fromNpm))
+}
+
+function excludeFromNpm ([name]) {
+  const path = join(repoRoot, WORKSPACE)
+  const before = readFileSync(path, 'utf8')
+  const after = excludeFromWorkspace(before, train(name).fromNpm)
+  if (after === before) {
+    console.log(`${WORKSPACE} already leaves out every fromNpm package of the '${name}' train`)
+    return
+  }
+  writeFileSync(path, after)
+  console.log(`${WORKSPACE}: left out ${train(name).fromNpm.join(', ')}. Run \`pnpm install --lockfile-only\` next.`)
 }
 
 function checkLinked ([name]) {
@@ -353,6 +376,8 @@ const commands = {
   resolve: resolveTrain,
   slugs: printSlugs,
   projects: printProjects,
+  'from-npm': printFromNpm,
+  exclude: excludeFromNpm,
   linked: checkLinked,
   pack: packTrain,
   stage: stagePackage,
