@@ -1408,8 +1408,8 @@ describe('parallel_tool_calls wiring', () => {
       .generationParams
   }
 
-  it('defaults to true on a chat request with tools', () => {
-    assert.deepEqual(chatParams({ tools }), { parallel_tool_calls: true })
+  it('leaves an unset chat value to the SDK default', () => {
+    assert.equal(chatParams({ tools }), undefined)
   })
 
   it('forwards an explicit false on a chat request', () => {
@@ -1418,25 +1418,24 @@ describe('parallel_tool_calls wiring', () => {
     })
   })
 
-  it('is not sent without tools', () => {
-    assert.equal(chatParams({ parallel_tool_calls: true }), undefined)
-  })
-
   it('rides along with tool_choice', () => {
-    assert.deepEqual(chatParams({ tools, tool_choice: 'required' }), {
+    assert.deepEqual(chatParams({ tools, tool_choice: 'required', parallel_tool_calls: true }), {
       tool_choice: 'required',
       parallel_tool_calls: true
     })
   })
 
-  it('defaults to true on a responses request with tools and forwards false', () => {
+  it('forwards an explicit responses value, echoes true when unset', () => {
     const responsesTools = [
       { type: 'function', name: 'get_weather', parameters: { type: 'object' } }
     ]
-    assert.deepEqual(responsesParams({ tools: responsesTools }), { parallel_tool_calls: true })
+    const unset = toSdkResponsesArgs(
+      responsesBody.parse({ model: 'm', input: 'hi', tools: responsesTools })
+    )
+    assert.equal(unset.generationParams, undefined)
+    assert.equal(unset.parallelToolCalls, true)
     assert.deepEqual(responsesParams({ tools: responsesTools, parallel_tool_calls: false }), {
       parallel_tool_calls: false
     })
-    assert.equal(responsesParams({}), undefined)
   })
 })
