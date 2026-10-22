@@ -1,5 +1,6 @@
 #include "AudioLengthLimit.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <limits>
@@ -16,64 +17,150 @@ using namespace qvac_lib_infer_llamacpp_embed::errors;
 namespace audio_length_limit {
 namespace {
 
+// The lengths below are miniaudio's (v0.11.25, as vendored by fabric):
+// mtmd-helper sizes its decode by ma_decoder_get_length_in_pcm_frames, and
+// ma_decoder tries WAV, then FLAC, then MP3 on the same bytes. Where the
+// length depends on details this code does not mirror exactly, it takes the
+// larger count, so it only ever rejects more.
+
 uint32_t le16(const uint8_t* p) { return p[0] | (p[1] << 8); }
 uint32_t le32(const uint8_t* p) {
   return p[0] | (p[1] << 8) | (p[2] << 16) |
          (static_cast<uint32_t>(p[3]) << 24);
 }
+uint32_t be32(const uint8_t* p) {
+  return (static_cast<uint32_t>(p[0]) << 24) | (p[1] << 16) | (p[2] << 8) |
+         p[3];
+}
 
-/// WAV: frames = data chunk size / bytes per frame, both as the header
-/// declares them (miniaudio sizes its decode by the declared data size, not
-/// by the bytes present). ADPCM blocks carry samplesPerBlock frames each.
+/// The offset after the ID3v2 tags at @p off, skipped in a loop as dr_flac
+/// does (10-byte header, syncsafe size, 10 more with a footer).
+uint64_t skipId3Tags(const uint8_t* data, size_t size, uint64_t off) {
+  while (off + 10 <= size && std::memcmp(data + off, "ID3", 3) == 0) {
+    const uint8_t* h = data + off;
+    const uint64_t tag = (static_cast<uint64_t>(h[6] & 0x7F) << 21) |
+                         ((h[7] & 0x7F) << 14) | ((h[8] & 0x7F) << 7) |
+                         (h[9] & 0x7F);
+    off += 10 + tag + ((h[5] & 0x10) != 0 ? 10 : 0);
+  }
+  return off;
+}
+
+/// WAV (RIFF), as dr_wav reads it. dr_wav's rejections are rejected here
+/// too: ma_decoder would otherwise go on to read the bytes as MP3.
 std::optional<double> wavSeconds(const uint8_t* data, size_t size) {
-  constexpr uint32_t kFormatMsAdpcm = 0x0002;
-  constexpr uint32_t kFormatImaAdpcm = 0x0011;
-  std::optional<uint32_t> sampleRate;
+  constexpr uint32_t kAdpcm = 0x0002;
+  constexpr uint32_t kAlaw = 0x0006;
+  constexpr uint32_t kMulaw = 0x0007;
+  constexpr uint32_t kDviAdpcm = 0x0011;
+  constexpr uint32_t kExtensible = 0xFFFE;
+  constexpr uint32_t kMaxSampleRate = 384000;
+  constexpr uint32_t kMaxChannels = 256;
+  constexpr uint32_t kMaxBitsPerSample = 64;
+
+  bool haveFmt = false;
+  uint32_t format = 0;
+  uint32_t channels = 0;
+  uint32_t sampleRate = 0;
   uint32_t blockAlign = 0;
-  uint32_t framesPerBlock = 1;
-  // 64-bit, so a declared chunk size cannot wrap the offset.
+  uint32_t bitsPerSample = 0;
+  std::optional<uint64_t> dataSize;
+  uint64_t factFrames = 0;
+
+  // 64-bit, so a declared chunk size cannot wrap the offset. Every chunk is
+  // read, including a fact chunk after data.
   uint64_t off = 12;
   while (off + 8 <= size) {
     const uint8_t* chunk = data + off;
     const uint64_t chunkSize = le32(chunk + 4);
     const uint64_t body = off + 8;
-    if (std::memcmp(chunk, "fmt ", 4) == 0) {
+    if (std::memcmp(chunk, "fmt ", 4) == 0 && !haveFmt) {
       if (body + 16 > size) {
         return std::nullopt;
       }
-      const uint32_t format = le16(data + body);
+      haveFmt = true;
+      format = le16(data + body);
+      channels = le16(data + body + 2);
       sampleRate = le32(data + body + 4);
       blockAlign = le16(data + body + 12);
-      if ((format == kFormatMsAdpcm || format == kFormatImaAdpcm) &&
-          chunkSize >= 20 && body + 20 <= size) {
-        framesPerBlock = le16(data + body + 18);
+      bitsPerSample = le16(data + body + 14);
+      // WAVE_FORMAT_EXTENSIBLE: the format is the sub-format GUID's first
+      // two bytes.
+      if (format == kExtensible) {
+        if (chunkSize < 26 || body + 26 > size) {
+          return std::nullopt;
+        }
+        format = le16(data + body + 24);
       }
-    } else if (std::memcmp(chunk, "data", 4) == 0) {
-      if (!sampleRate.has_value() || *sampleRate == 0 || blockAlign == 0 ||
-          framesPerBlock == 0) {
-        return std::nullopt;
-      }
-      // A streaming writer leaves the size unset: miniaudio then reads to
-      // the end of the buffer.
-      const uint64_t declared = (chunkSize == 0 || chunkSize == 0xFFFFFFFFULL)
-                                    ? size - body
-                                    : chunkSize;
-      const uint64_t frames = (declared / blockAlign) * framesPerBlock;
-      return static_cast<double>(frames) / *sampleRate;
+    } else if (std::memcmp(chunk, "fact", 4) == 0 && body + 4 <= size) {
+      factFrames = std::max<uint64_t>(factFrames, le32(data + body));
+    } else if (std::memcmp(chunk, "data", 4) == 0 && !dataSize.has_value()) {
+      // The memory decoder can tell the size, so dr_wav reads to the end of
+      // the buffer when the declared size is unset or larger.
+      const uint64_t present = body <= size ? size - body : 0;
+      dataSize = (chunkSize == 0xFFFFFFFFULL || chunkSize > present)
+                     ? present
+                     : chunkSize;
     }
     off = body + chunkSize + (chunkSize & 1);
   }
-  return std::nullopt;
-}
 
-/// FLAC: STREAMINFO's sample rate and total samples. A stream that leaves
-/// the total unset has no length to check, so it is not accepted.
-std::optional<double> flacSeconds(const uint8_t* data, size_t size) {
-  constexpr size_t kStreamInfo = 8; // "fLaC" + block header
-  if (size < kStreamInfo + 18 || (data[4] & 0x7F) != 0) {
+  if (!haveFmt || !dataSize.has_value() || sampleRate == 0 ||
+      sampleRate > kMaxSampleRate || channels == 0 || channels > kMaxChannels ||
+      bitsPerSample == 0 || bitsPerSample > kMaxBitsPerSample ||
+      blockAlign == 0) {
     return std::nullopt;
   }
-  const uint8_t* info = data + kStreamInfo;
+  const bool adpcm = format == kAdpcm || format == kDviAdpcm;
+  if (adpcm && channels > 2) {
+    return std::nullopt;
+  }
+  // dr_wav's bytes per frame: from the bit depth when it is whole bytes, the
+  // block alignment otherwise; a-law and mu-law must be one byte a channel.
+  uint64_t bytesPerFrame = (bitsPerSample & 7) == 0
+                               ? uint64_t{bitsPerSample} * channels / 8
+                               : blockAlign;
+  if ((format == kAlaw || format == kMulaw) && bytesPerFrame != channels) {
+    bytesPerFrame = 0;
+  }
+  if (bytesPerFrame == 0) {
+    return std::nullopt;
+  }
+
+  uint64_t frames = 0;
+  const uint64_t bytes = *dataSize;
+  if (!adpcm) {
+    frames = bytes / bytesPerFrame;
+  } else {
+    // dr_wav's block formula, in its unsigned 64-bit arithmetic (a short
+    // data chunk wraps to a huge count, which is rejected below).
+    uint64_t blocks = bytes / blockAlign;
+    if (blocks * blockAlign < bytes) {
+      ++blocks;
+    }
+    const uint64_t headerBytes =
+        blocks * (format == kAdpcm ? 6 : 4) * uint64_t{channels};
+    frames = ((bytes - headerBytes) * 2) / channels;
+    if (format == kDviAdpcm) {
+      frames += blocks;
+    }
+  }
+  // dr_wav takes an MS ADPCM fact chunk's count over the formula.
+  if (format == kAdpcm) {
+    frames = std::max(frames, factFrames);
+  }
+  return static_cast<double>(frames) / sampleRate;
+}
+
+/// FLAC at @p off ("fLaC"), as dr_flac reads it: STREAMINFO must come first,
+/// and its total sample count is the length. A stream that leaves the count
+/// unset has no length to check, so it is not accepted.
+std::optional<double>
+flacSeconds(const uint8_t* data, size_t size, uint64_t off) {
+  if (off + 8 + 18 > size || (data[off + 4] & 0x7F) != 0) {
+    return std::nullopt;
+  }
+  const uint8_t* info = data + off + 8;
   const uint32_t sampleRate =
       (info[10] << 12) | (info[11] << 4) | (info[12] >> 4);
   const uint64_t totalSamples = (static_cast<uint64_t>(info[13] & 0x0F) << 32) |
@@ -85,8 +172,10 @@ std::optional<double> flacSeconds(const uint8_t* data, size_t size) {
   return static_cast<double>(totalSamples) / sampleRate;
 }
 
-/// MP3: the sum over its MPEG audio frames, walked by their headers as
-/// miniaudio counts them. Bytes between frames are skipped to the next sync.
+/// MP3, as dr_mp3 counts it: the frames present, or a Xing/Info header's
+/// frame count when it declares more (dr_mp3 takes the length from the first
+/// frame's tag). Every frame's tag is considered, in case dr_mp3's first
+/// frame is not the first one found here.
 std::optional<double> mp3Seconds(const uint8_t* data, size_t size) {
   // kbps, indexed [MPEG1 ? 0 : 1][layer 1..3 - 1][bitrate index].
   static constexpr std::array<std::array<std::array<uint16_t, 15>, 3>, 2>
@@ -134,16 +223,9 @@ std::optional<double> mp3Seconds(const uint8_t* data, size_t size) {
       {44100, 48000, 32000}, // MPEG 1
   }};
 
-  size_t off = 0;
-  // ID3v2 tag: 10-byte header, a syncsafe size and an optional footer.
-  if (size >= 10 && std::memcmp(data, "ID3", 3) == 0) {
-    const size_t tag = (static_cast<size_t>(data[6] & 0x7F) << 21) |
-                       ((data[7] & 0x7F) << 14) | ((data[8] & 0x7F) << 7) |
-                       (data[9] & 0x7F);
-    off = 10 + tag + ((data[5] & 0x10) != 0 ? 10 : 0);
-  }
-
-  double seconds = 0;
+  uint64_t off = skipId3Tags(data, size, 0);
+  double walked = 0;
+  double declared = 0;
   bool anyFrame = false;
   while (off + 4 <= size) {
     const uint8_t* h = data + off;
@@ -170,21 +252,36 @@ std::optional<double> mp3Seconds(const uint8_t* data, size_t size) {
     const uint32_t padding = (h[2] >> 1) & 1;
     const uint32_t samples =
         layer == 1 ? 384 : (layer == 2 || mpeg1 ? 1152 : 576);
-    const size_t frameBytes =
+    const uint64_t frameBytes =
         layer == 1 ? (12 * bitrate / sampleRate + padding) * 4
                    : samples / 8 * bitrate / sampleRate + padding;
     if (frameBytes < 4) {
       ++off;
       continue;
     }
-    seconds += static_cast<double>(samples) / sampleRate;
+
+    // Xing/Info sits after the header, the CRC and the layer III side info,
+    // where dr_mp3 reads it; flag bit 0 means a frame count follows.
+    const bool mono = (h[3] >> 6) == 3;
+    const uint64_t sideInfo = mpeg1 ? (mono ? 17 : 32) : (mono ? 9 : 17);
+    const uint64_t tag = off + 4 + ((h[1] & 1) == 0 ? 2 : 0) + sideInfo;
+    if (tag + 12 <= size && (std::memcmp(data + tag, "Xing", 4) == 0 ||
+                             std::memcmp(data + tag, "Info", 4) == 0)) {
+      if ((data[tag + 7] & 0x01) != 0) {
+        const double tagSeconds =
+            static_cast<double>(be32(data + tag + 8)) * samples / sampleRate;
+        declared = std::max(declared, tagSeconds);
+      }
+    }
+
+    walked += static_cast<double>(samples) / sampleRate;
     anyFrame = true;
     off += frameBytes;
   }
   if (!anyFrame) {
     return std::nullopt;
   }
-  return seconds;
+  return std::max(walked, declared);
 }
 
 [[noreturn]] void throwUnsupportedMedia(const std::string& message) {
@@ -199,12 +296,21 @@ std::optional<double> durationSeconds(const uint8_t* data, size_t size) {
   if (data == nullptr || size < 12) {
     return std::nullopt;
   }
+  // ma_decoder's order: WAV, then FLAC (after any ID3 tags, native or Ogg),
+  // then MP3.
   if (std::memcmp(data, "RIFF", 4) == 0 &&
       std::memcmp(data + 8, "WAVE", 4) == 0) {
     return wavSeconds(data, size);
   }
-  if (std::memcmp(data, "fLaC", 4) == 0) {
-    return flacSeconds(data, size);
+  const uint64_t afterTags = skipId3Tags(data, size, 0);
+  if (afterTags + 4 <= size) {
+    if (std::memcmp(data + afterTags, "fLaC", 4) == 0) {
+      return flacSeconds(data, size, afterTags);
+    }
+    if (std::memcmp(data + afterTags, "OggS", 4) == 0) {
+      // Ogg FLAC: its length is in Ogg pages this code does not read.
+      return std::nullopt;
+    }
   }
   return mp3Seconds(data, size);
 }

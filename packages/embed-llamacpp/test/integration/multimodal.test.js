@@ -337,13 +337,27 @@ safeTest('audio-max-seconds rejects longer audio before decoding', {}, async (t)
   )
 })
 
-safeTest('a WAV that declares more samples than it holds is rejected', {}, async (t) => {
+safeTest('a WAV that decodes past the limit is rejected before decoding', {}, async (t) => {
   await withModel(t, OPTIONS_DEVICE, async (model) => {
-    // A 44-byte header declaring ~4 GB of 8 kHz samples (about 75 hours):
-    // mtmd-helper would size its decode by the declared length.
-    const wav = sineWav(440, 0, 8000)
-    new DataView(wav.buffer).setUint32(40, 0xfffffff0, true)
+    // 700 samples at 1 Hz: 1.4 kB that decode to 700 s, resampled to the
+    // model's rate (about 11 million samples).
+    const wav = sineWav(440, 700, 1)
     await t.exception.all(embed(model, { inputs: [[{ media: wav }]] }), /exceeds the 600 s limit/)
+  })
+})
+
+safeTest('cancel stops a running multimodal request', { timeout: 600_000 }, async (t) => {
+  await withModel(t, 'cpu', async (model) => {
+    // Several long clips, so the cancel lands while the job runs.
+    const clip = sineWav(440, 60)
+    const response = await model.run({ inputs: Array.from({ length: 6 }, () => [{ media: clip }]) })
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    await model.cancel()
+    await t.exception(response.await(), /Job cancelled/)
+
+    // The cancel does not fail the next job.
+    const [after] = await embed(model, { inputs: [[{ media: RED }]] })
+    t.is(after.length, 768)
   })
 })
 

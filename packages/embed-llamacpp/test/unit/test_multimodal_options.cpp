@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -39,6 +40,49 @@ std::vector<uint8_t> wavHeader(
   std::memcpy(buf.data() + 36, "data", 4);
   putLe(buf, 40, dataBytes, 4);
   return buf;
+}
+
+// A RIFF WAV with the given fmt fields, an optional fact chunk, and a data
+// chunk that declares dataBytes with `present` bytes after it.
+struct WavSpec {
+  uint16_t format = 1; // PCM
+  uint16_t channels = 1;
+  uint32_t sampleRate = 16000;
+  uint16_t blockAlign = 2;
+  uint16_t bitsPerSample = 16;
+  std::optional<uint32_t> factFrames;
+  uint32_t dataBytes = 0;
+  size_t present = 0;
+};
+
+std::vector<uint8_t> wavFile(const WavSpec& w) {
+  std::vector<uint8_t> buf(12 + 8 + 16, 0);
+  std::memcpy(buf.data(), "RIFF", 4);
+  std::memcpy(buf.data() + 8, "WAVEfmt ", 8);
+  putLe(buf, 16, 16, 4);
+  putLe(buf, 20, w.format, 2);
+  putLe(buf, 22, w.channels, 2);
+  putLe(buf, 24, w.sampleRate, 4);
+  putLe(buf, 28, w.sampleRate * w.blockAlign, 4);
+  putLe(buf, 32, w.blockAlign, 2);
+  putLe(buf, 34, w.bitsPerSample, 2);
+  if (w.factFrames.has_value()) {
+    const size_t at = buf.size();
+    buf.resize(at + 12, 0);
+    std::memcpy(buf.data() + at, "fact", 4);
+    putLe(buf, at + 4, 4, 4);
+    putLe(buf, at + 8, *w.factFrames, 4);
+  }
+  const size_t at = buf.size();
+  buf.resize(at + 8 + w.present, 0);
+  std::memcpy(buf.data() + at, "data", 4);
+  putLe(buf, at + 4, w.dataBytes, 4);
+  putLe(buf, 4, static_cast<uint32_t>(buf.size() - 8), 4);
+  return buf;
+}
+
+std::optional<double> lengthOf(const std::vector<uint8_t>& b) {
+  return audio_length_limit::durationSeconds(b.data(), b.size());
 }
 
 // "fLaC" and a STREAMINFO block declaring sampleRate and totalSamples.
@@ -189,21 +233,22 @@ TEST(ImagePixelLimitTest, RejectsAnImageOfUnknownSize) {
 }
 
 TEST(AudioLengthLimitTest, ReadsWavLengthFromItsHeader) {
-  // 16 kHz stereo, 2 s of 16-bit samples.
-  const auto wav = wavHeader(16000, 2, 16000 * 2 * 2 * 2);
+  // 16 kHz stereo, 2 s of 16-bit samples (present: miniaudio measures PCM by
+  // the bytes it holds).
+  const auto wav = wavHeader(16000, 2, 16000 * 2 * 2 * 2, 16000 * 2 * 2 * 2);
   const auto seconds =
       audio_length_limit::durationSeconds(wav.data(), wav.size());
   ASSERT_TRUE(seconds.has_value());
   EXPECT_DOUBLE_EQ(*seconds, 2.0);
 }
 
-TEST(AudioLengthLimitTest, RejectsAWavThatDeclaresMoreThanItHolds) {
-  // 44 bytes that declare ~4 GB of samples: mtmd-helper would allocate the
-  // declared length before reading any of it.
-  const auto wav = wavHeader(8000, 1, 0xFFFFFFF0U);
-  EXPECT_THROW(
-      audio_length_limit::checkBuffer(wav.data(), wav.size(), 600),
-      qvac_errors::StatusError);
+TEST(AudioLengthLimitTest, MeasuresPcmWavByTheBytesItHolds) {
+  // The memory decoder clamps a PCM data chunk to the bytes present, so one
+  // that declares ~4 GB but holds 1 s is decoded as 1 s.
+  const auto wav = wavFile({.dataBytes = 0xFFFFFFF0U, .present = 32000});
+  const auto seconds = lengthOf(wav);
+  ASSERT_TRUE(seconds.has_value());
+  EXPECT_DOUBLE_EQ(*seconds, 1.0);
 }
 
 TEST(AudioLengthLimitTest, ReadsFlacLengthFromStreamInfo) {
@@ -289,4 +334,113 @@ TEST(AudioLengthLimitTest, RejectsMp3WithFreeFormatFrames) {
   EXPECT_THROW(
       audio_length_limit::checkBuffer(mp3.data(), mp3.size(), 600),
       qvac_errors::StatusError);
+}
+
+// The shapes below are each one where miniaudio's length is larger than the
+// file suggests; each must be measured as miniaudio measures it.
+
+TEST(AudioLengthLimitTest, UsesDrWavBytesPerFrameNotBlockAlign) {
+  // 8-bit mono at 1 Hz: dr_wav's frame is 1 byte whatever blockAlign says,
+  // so 1000 bytes are 1000 s (resampled to the model's rate on decode).
+  const auto wav = wavFile(
+      {.sampleRate = 1,
+       .blockAlign = 65535,
+       .bitsPerSample = 8,
+       .dataBytes = 1000,
+       .present = 1000});
+  const auto seconds = lengthOf(wav);
+  ASSERT_TRUE(seconds.has_value());
+  EXPECT_DOUBLE_EQ(*seconds, 1000.0);
+  EXPECT_THROW(
+      audio_length_limit::checkBuffer(wav.data(), wav.size(), 600),
+      qvac_errors::StatusError);
+}
+
+TEST(AudioLengthLimitTest, UsesAnAdpcmFactCount) {
+  // MS ADPCM: dr_wav takes the fact chunk's sample count, which the file
+  // size does not bound.
+  const auto wav = wavFile(
+      {.format = 0x0002,
+       .blockAlign = 256,
+       .bitsPerSample = 4,
+       .factFrames = 0xFFFFFF00U,
+       .dataBytes = 256,
+       .present = 256});
+  const auto seconds = lengthOf(wav);
+  ASSERT_TRUE(seconds.has_value());
+  EXPECT_GT(*seconds, 600.0);
+}
+
+TEST(AudioLengthLimitTest, KeepsDrWavsAdpcmArithmetic) {
+  // Blocks shorter than their headers wrap dr_wav's unsigned formula to a
+  // huge count: it must be measured (and rejected), not treated as empty.
+  const auto wav = wavFile(
+      {.format = 0x0011,
+       .channels = 2,
+       .blockAlign = 4,
+       .bitsPerSample = 4,
+       .dataBytes = 64,
+       .present = 64});
+  const auto seconds = lengthOf(wav);
+  ASSERT_TRUE(seconds.has_value());
+  EXPECT_GT(*seconds, 600.0);
+}
+
+TEST(AudioLengthLimitTest, RejectsWhatDrWavRejects) {
+  // ma_decoder would go on to read these bytes as MP3.
+  for (const WavSpec& bad :
+       {WavSpec{.channels = 0, .dataBytes = 2, .present = 2},
+        WavSpec{.sampleRate = 0, .dataBytes = 2, .present = 2},
+        WavSpec{.blockAlign = 0, .dataBytes = 2, .present = 2},
+        WavSpec{.bitsPerSample = 0, .dataBytes = 2, .present = 2},
+        WavSpec{
+            .format = 0x0002,
+            .channels = 3,
+            .blockAlign = 256,
+            .bitsPerSample = 4,
+            .dataBytes = 256,
+            .present = 256}}) {
+    const auto wav = wavFile(bad);
+    EXPECT_FALSE(lengthOf(wav).has_value());
+  }
+}
+
+TEST(AudioLengthLimitTest, UsesAnMp3XingFrameCount) {
+  // dr_mp3 takes the length from the first frame's Xing frame count, which
+  // the frames present do not bound.
+  auto mp3 = mp3Frames(3, false);
+  // MPEG-1 layer III stereo, no CRC: the tag follows 4 + 32 bytes.
+  const size_t tag = 4 + 32;
+  std::memcpy(mp3.data() + tag, "Xing", 4);
+  mp3[tag + 7] = 0x01; // frame count present
+  mp3[tag + 8] = 0x00;
+  mp3[tag + 9] = 0x10; // 0x00100000 frames
+  mp3[tag + 10] = 0x00;
+  mp3[tag + 11] = 0x00;
+  const auto seconds = lengthOf(mp3);
+  ASSERT_TRUE(seconds.has_value());
+  EXPECT_NEAR(*seconds, 0x00100000 * 1152.0 / 44100, 1e-6);
+}
+
+TEST(AudioLengthLimitTest, ReadsFlacBehindId3Tags) {
+  // dr_flac skips leading ID3 tags (any number) before "fLaC".
+  std::vector<uint8_t> buf;
+  for (int i = 0; i < 2; ++i) {
+    const std::vector<uint8_t> id3 = {'I', 'D', '3', 4, 0, 0, 0, 0, 0, 4};
+    buf.insert(buf.end(), id3.begin(), id3.end());
+    buf.insert(buf.end(), 4, 0);
+  }
+  const auto flac = flacHeader(48000, 48000ULL * 3600);
+  buf.insert(buf.end(), flac.begin(), flac.end());
+  const auto seconds = lengthOf(buf);
+  ASSERT_TRUE(seconds.has_value());
+  EXPECT_DOUBLE_EQ(*seconds, 3600.0);
+}
+
+TEST(AudioLengthLimitTest, RejectsOggBehindId3Tags) {
+  // dr_flac would read Ogg FLAC here, whose length this code does not read.
+  std::vector<uint8_t> buf = {'I', 'D', '3', 4, 0, 0, 0, 0, 0, 0};
+  const std::vector<uint8_t> ogg = {'O', 'g', 'g', 'S', 0, 2, 0, 0, 0, 0, 0, 0};
+  buf.insert(buf.end(), ogg.begin(), ogg.end());
+  EXPECT_FALSE(lengthOf(buf).has_value());
 }

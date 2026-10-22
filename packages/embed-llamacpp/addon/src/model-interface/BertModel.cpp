@@ -749,6 +749,9 @@ BertModel::encodeHostF32Multimodal(const std::vector<MultimodalInput>& inputs) {
   std::vector<float> embeddings(inputs.size() * embeddingSize, 0.0F);
   std::span<float> embSpan{embeddings};
   for (std::size_t i = 0; i < inputs.size(); ++i) {
+    if (stopCancelled_.load()) {
+      throw std::runtime_error("Job cancelled");
+    }
     multimodal_->embed(
         inputs[i],
         embSpan.subspan(i * embeddingSize, embeddingSize),

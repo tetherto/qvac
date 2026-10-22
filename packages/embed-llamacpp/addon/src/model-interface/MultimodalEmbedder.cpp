@@ -235,7 +235,8 @@ mtmd::bitmap decodeMedia(
 /// input.
 void tokenize(
     const mtmd_context* mctx, const MultimodalInput& input,
-    const MediaLimits& limits, mtmd_input_chunks* output) {
+    const MediaLimits& limits, const std::atomic<bool>& cancelled,
+    mtmd_input_chunks* output) {
   std::vector<mtmd::bitmap> bitmaps;
   std::vector<mtmd_input_text> texts;
   bitmaps.reserve(input.size());
@@ -246,6 +247,9 @@ void tokenize(
   std::size_t mediaIndex = 0;
   for (const MultimodalPart& part : input) {
     if (part.isMedia) {
+      // Decoding one part can take seconds (up to audio-max-seconds of
+      // audio), so a cancel is checked before each.
+      throwIfCancelled(cancelled);
       bitmaps.push_back(decodeMedia(mctx, part, mediaIndex++, limits));
       parts.push_back({.text = nullptr, .bitmap = bitmaps.back().ptr.get()});
     } else if (!part.text.empty()) {
@@ -376,6 +380,7 @@ void MultimodalEmbedder::embed(
       MediaLimits{
           .maxImagePixels = maxImagePixels_,
           .maxAudioSeconds = maxAudioSeconds_},
+      cancelled,
       chunks.ptr.get());
 
   // A memory-less model sees the whole input in one ubatch: the text tokens
