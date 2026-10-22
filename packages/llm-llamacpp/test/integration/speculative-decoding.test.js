@@ -13,6 +13,9 @@
 //     models).
 //   - QVAC_RUN_SPECULATIVE_27B=1: MTP on the model's own layers, an external
 //     MTP head and a DFlash2 drafter on Qwen3.8-27B (about 21 GB of models).
+//   - QVAC_RUN_SPECULATIVE_MTP_HEADS=1: external MTP heads on other models, a
+//     Gemma 4 assistant on Gemma 4 E2B and unsloth's MTP quant on its
+//     Qwen3.5-2B (about 6 GB of models).
 //
 // QVAC_SPECULATIVE_TOLERATE_DIVERGENCE=1 lets greedy output differ from plain
 // decoding and between runs, for GPU backends (e.g. RADV Vulkan) whose batched
@@ -23,6 +26,10 @@
 // prestage-ignore: Qwen3.8-27B-UD-Q4_K_XL.gguf — opt-in via QVAC_RUN_SPECULATIVE_27B=1, desktop-only
 // prestage-ignore: mtp-Qwen3.8-27B-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_27B=1, desktop-only
 // prestage-ignore: Qwen3.8-27B-DFlash2-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_27B=1, desktop-only
+// prestage-ignore: google_gemma-4-E2B-it-Q4_K_M.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
+// prestage-ignore: gemma-4-E2B-it-assistant-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
+// prestage-ignore: Qwen3.5-2B-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
+// prestage-ignore: Qwen3.5-2B-MTP-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
 
 const path = require('bare-path')
 const os = require('bare-os')
@@ -63,10 +70,12 @@ const MMPROJ = 'mmproj-Qwen3.5-0.8B-F16.gguf'
 const LARGE_TARGET = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
 const skipDflash = optIn('QVAC_RUN_SPECULATIVE_DFLASH', 'DFlash on Qwen3-4B')
 const skipLarge = optIn('QVAC_RUN_SPECULATIVE_27B', 'Speculative decoding on Qwen3.8-27B')
+const skipMtpHeads = optIn('QVAC_RUN_SPECULATIVE_MTP_HEADS', 'External MTP heads')
 const tolerateDivergence = readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '1'
 
 // `draft` is the `spec-draft-model`. The 27B variants download their models
-// on first use, so their tests get room for that.
+// on first use, so their tests get room for that. `unmeasured` marks a draft
+// fabric cannot measure, which a fit leaves out.
 const VARIANTS = [
   { label: 'MTP', target: MTP_MODEL, type: 'draft-mtp' },
   {
@@ -98,6 +107,21 @@ const VARIANTS = [
     draft: 'Qwen3.8-27B-DFlash2-Q8_0.gguf',
     skip: skipLarge,
     timeout: 7_200_000
+  },
+  {
+    label: 'A Gemma 4 assistant on Gemma 4 E2B',
+    target: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
+    type: 'draft-mtp',
+    draft: 'gemma-4-E2B-it-assistant-Q8_0.gguf',
+    unmeasured: true,
+    skip: skipMtpHeads
+  },
+  {
+    label: 'An external MTP head on Qwen3.5-2B',
+    target: 'Qwen3.5-2B-Q4_0.gguf',
+    type: 'draft-mtp',
+    draft: 'Qwen3.5-2B-MTP-Q4_0.gguf',
+    skip: skipMtpHeads
   }
 ]
 
@@ -353,9 +377,9 @@ safeTest('MTP with an image prompt', { timeout: 900_000 }, async (t) => {
   }
 })
 
-// A projection with a draft model is a verdict. fabric cannot measure a DFlash
-// draft model yet, so only an external MTP head adds to the figures. Kept here
-// rather than in fit.test.js because the variants' models are opt-in.
+// A projection with a draft model is a verdict; only a draft fabric can
+// measure adds to the figures. Kept here rather than in fit.test.js because
+// the variants' models are opt-in.
 for (const variant of VARIANTS.filter((v) => v.draft)) {
   safeTest(
     `${variant.label}: assessFit projects the load`,
@@ -381,7 +405,7 @@ for (const variant of VARIANTS.filter((v) => v.draft)) {
           0
         )
       t.comment(`${variant.label}: plain ${total(plain)} bytes, speculative ${total(fit)} bytes`)
-      if (variant.type === 'draft-mtp') {
+      if (variant.type === 'draft-mtp' && !variant.unmeasured) {
         t.ok(total(fit) > total(plain), 'the MTP head and its context are in the figures')
       }
     }
