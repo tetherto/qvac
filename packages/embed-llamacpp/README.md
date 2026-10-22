@@ -504,6 +504,7 @@ const fit = await EmbedLlamacpp.assessFit({
 
 fit.status // 'fits' | 'does-not-fit' | 'error'
 fit.reason // 'fits', 'does-not-fit', 'model-unreadable', 'no-backend-device' or 'unsupported-config'
+fit.message // with status 'error': what caused it, e.g. the refused config key
 fit.gpuLayers // what fits, which is not always what the request asked for
 fit.ctxSize
 fit.devices // one row per device the model was assigned to, then a `host` row
@@ -513,7 +514,7 @@ fit.hostBytes // the same, for the trailing host row
 
 A multimodal load is refused with `unsupported-config`: pass its `projectionModel` (or projector options in `config`), and the projection does not count the projector's weights and buffers, so it would otherwise answer for the text model alone.
 
-`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`. A setting left out takes llama's default.
+`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`, and `message` names the setting and why. A setting left out takes llama's default.
 
 Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
 

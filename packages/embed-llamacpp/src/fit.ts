@@ -37,6 +37,12 @@ export interface EmbedFitDevice {
 export interface EmbedFitResult {
   status: EmbedFitStatus
   reason: EmbedFitReason
+  /**
+   * With `status: "error"`: what caused it, such as the config key that was
+   * refused or the parser's own message, so a caller can act on it. Absent
+   * otherwise.
+   */
+  message?: string
   /** The layer count the placement resolved to. */
   gpuLayers: number
   ctxSize: number

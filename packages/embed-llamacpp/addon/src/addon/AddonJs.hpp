@@ -64,6 +64,8 @@ struct FitDevice {
 struct FitResult {
   std::string status = "error";
   std::string reason;
+  // What caused an `error` status, for the caller to act on; empty otherwise.
+  std::string message;
   double gpuLayers = 0;
   double ctxSize = 0;
   std::vector<FitDevice> devices;
@@ -73,9 +75,10 @@ struct FitResult {
   double expertCount = 0;
 };
 
-inline FitResult errorResult(const char* reason) {
+inline FitResult errorResult(const char* reason, std::string message) {
   FitResult result;
   result.reason = reason;
+  result.message = std::move(message);
   return result;
 }
 
@@ -150,14 +153,17 @@ inline FitResult runFit(FitRequest request) {
   // were text only, so it is refused, as @qvac/llm-llamacpp refuses an mmproj.
   // Projector options in the config mark such a load too.
   if (!request.projectionModel.empty()) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "projectionModel: the fitter does not count a projector, so a "
+        "multimodal load cannot be projected");
   }
   // The options go through the same function load uses: without a projection
   // model it refuses any of them, as load does.
   try {
     takeMultimodalOptions(configFilemap, /* hasProjectionModel = */ false);
-  } catch (const std::exception&) {
-    return errorResult("unsupported-config");
+  } catch (const std::exception& e) {
+    return errorResult("unsupported-config", e.what());
   }
 
   // `common_fit_params` reads ggml's global device registry and loads nothing
@@ -169,7 +175,8 @@ inline FitResult runFit(FitRequest request) {
   // An empty registry would still yield a verdict, measured against a machine
   // the fitter cannot see.
   if (ggml_backend_dev_count() == 0) {
-    return errorResult("no-backend-device");
+    return errorResult(
+        "no-backend-device", "no ggml backend device is registered");
   }
 
   // A path llama cannot open reaches it as a `runtime_error` carrying no
@@ -178,28 +185,32 @@ inline FitResult runFit(FitRequest request) {
   if (std::FILE* file = std::fopen(modelPath.c_str(), "rb")) {
     std::fclose(file);
   } else {
-    return errorResult("model-unreadable");
+    return errorResult("model-unreadable", "cannot open " + modelPath);
   }
 
   // The fitter measures device memory, and a cpu load's weights stay
   // file-backed, so it would project `fits` for nearly any model.
   if (auto device = configFilemap.find("device");
       device != configFilemap.end() && device->second == "cpu") {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "device: a cpu load keeps its weights file-backed, which the fitter "
+        "does not measure");
   }
 
   common_params loadParams;
   try {
     loadParams = setupParams(modelPath, std::move(configFilemap)).params;
-  } catch (const std::exception&) {
-    return errorResult("unsupported-config");
+  } catch (const std::exception& e) {
+    return errorResult("unsupported-config", e.what());
   }
   loadParams.embedding = true;
 
   // A second resident file the projection does not count, so a load carrying
   // one would come back understated.
   if (!loadParams.lora_adapters.empty()) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config", "lora: the fitter does not count a LoRA adapter");
   }
 
   // `BertModel::configureParams` applies both to every embedding load: a
@@ -246,7 +257,9 @@ inline FitResult runFit(FitRequest request) {
   const auto requestedMinCtx = request.minCtxSize;
   if (requestedMinCtx.has_value() &&
       (!std::isfinite(*requestedMinCtx) || *requestedMinCtx < 0)) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "minCtxSize must be a finite number of 0 or more");
   }
   const uint32_t minCtx =
       requestedMinCtx.has_value()
@@ -256,7 +269,9 @@ inline FitResult runFit(FitRequest request) {
   const auto requestedMargin = request.marginBytes;
   if (requestedMargin.has_value() &&
       (!std::isfinite(*requestedMargin) || *requestedMargin < 0)) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "marginBytes must be a finite number of 0 or more");
   }
 
   // In/out: the fitter rewrites only the entries still holding a llama
@@ -269,7 +284,9 @@ inline FitResult runFit(FitRequest request) {
   // llama walks this array to its `{nullptr, nullptr}` terminator, so a list
   // that does not fit with the terminator would be read past its end.
   if (loadParams.tensor_buft_overrides.size() > buftOverrides.size()) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "override-tensor: more tensor overrides than llama accepts");
   }
   std::copy_n(
       loadParams.tensor_buft_overrides.begin(),
@@ -289,7 +306,10 @@ inline FitResult runFit(FitRequest request) {
 
   // Without the fitter the load places nothing, so there is no verdict.
   if (!loadParams.fit_params) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "fit: the load turns the fitter off, so there is no placement to "
+        "project");
   }
 
   common_params_fit_status status{};
@@ -308,10 +328,10 @@ inline FitResult runFit(FitRequest request) {
         // The load's fit passes it too, so `moe-cache-mib: auto` sizes the
         // same expert cache in the projection as in the load.
         loadParams.moe_cache_auto_explicit);
-  } catch (const std::exception&) {
+  } catch (const std::exception& e) {
     // `common_fit_params` answers its own failures with a status, so a throw
     // escaping it came from the setup around the probe.
-    return errorResult("unsupported-config");
+    return errorResult("unsupported-config", e.what());
   }
 
   const char* statusName = "error";
@@ -322,7 +342,8 @@ inline FitResult runFit(FitRequest request) {
   }
 
   if (status == COMMON_PARAMS_FIT_STATUS_ERROR) {
-    return errorResult("model-unreadable");
+    return errorResult(
+        "model-unreadable", "the fitter could not read " + modelPath);
   }
 
   // The per-device breakdown is a second no-alloc probe, so it costs about
@@ -386,7 +407,8 @@ inline FitResult runFit(FitRequest request) {
   uint32_t fittedCtx = cparams.n_ctx;
   if (fittedCtx == 0 && measured) {
     if (trainCtx == 0) {
-      return errorResult("model-unreadable");
+      return errorResult(
+          "model-unreadable", modelPath + " declares no trained context");
     }
     fittedCtx = trainCtx;
   }
@@ -414,6 +436,9 @@ inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
   auto result = js::Object::create(env);
   result.setProperty(env, "status", js::String::create(env, fit.status));
   result.setProperty(env, "reason", js::String::create(env, fit.reason));
+  if (!fit.message.empty()) {
+    result.setProperty(env, "message", js::String::create(env, fit.message));
+  }
   result.setProperty(env, "gpuLayers", js::Number::create(env, fit.gpuLayers));
   result.setProperty(env, "ctxSize", js::Number::create(env, fit.ctxSize));
   auto devices = js::Array::create(env);
