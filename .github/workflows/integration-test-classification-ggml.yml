@@ -38,13 +38,17 @@ env:
   PKG_DIR: packages/classification-ggml
 
 jobs:
+  test-models:
+    permissions: {}
+    uses: ./.github/workflows/reusable-test-models-classification-ggml.yml
+
   runner_names:
     permissions:
       contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
   run-integration-tests:
-    needs: runner_names
+    needs: [runner_names, test-models]
     timeout-minutes: 30
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -72,12 +76,14 @@ jobs:
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
+            gpu: true
             runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
           # @qvac/fabric hard-imports vulkan-1.dll on Windows; qvac-win25-x64-gpu has
           # the Vulkan loader installed (same env as llm-llamacpp and other fabric
           # consumers being migrated).
           - platform: win32
             arch: x64
+            gpu: true
             runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
 
     steps:
@@ -234,6 +240,47 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem prebuilds/
 
+      # Keep current MobileNet-only source compatible before MegaLoc lands.
+      - name: Stage MegaLoc test models
+        if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
+        uses: tetherto/qvac/.github/actions/stage-integration-models@94eb8ef3e888f8bc1f1717d5e31f55b14d4ac915
+        with:
+          workdir: ${{ env.PKG_DIR }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          s3-manifest: ${{ needs.test-models.outputs.manifest }}
+
+      - name: Verify MegaLoc test models
+        if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        env:
+          MODEL_MANIFEST: ${{ needs.test-models.outputs.manifest }}
+        run: |
+          node --input-type=module -e '
+            import { createHash } from "node:crypto";
+            import { createReadStream } from "node:fs";
+            const expected = JSON.parse(process.env.MODEL_MANIFEST);
+            if (expected.length !== 2) throw new Error("Expected both MegaLoc test models");
+            for (const { dest, sha256 } of expected) {
+              const hash = createHash("sha256");
+              for await (const chunk of createReadStream(dest)) hash.update(chunk);
+              if (hash.digest("hex") !== sha256) throw new Error("Checksum mismatch: " + dest);
+              console.log("Verified " + dest);
+            }
+          '
+
+      - name: Drop staging AWS credentials
+        if: always() && hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
+        shell: bash
+        run: |
+          printf '%s=\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> "$GITHUB_ENV"
+
+      - name: Check production package excludes test models
+        if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm run test:package
+
       - name: Run JS integration tests
         working-directory: ${{ env.PKG_DIR }}
         env:
@@ -242,6 +289,7 @@ jobs:
           # Invaluable for debugging platform-specific numerical issues
           # (noise is bounded to a few lines per sample image).
           QVAC_CLASSIFICATION_TRACE: "1"
+          QVAC_MEGALOC_EXPECT_GPU: ${{ matrix.gpu && '1' || '0' }}
         run: npm run test:integration
 
       - name: Upload performance report

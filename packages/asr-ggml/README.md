@@ -78,6 +78,7 @@ GGUF metadata** — there is no `modelType` to pass.
 | **CTC** (`parakeet-ctc-0.6b`) | English | argmax CTC | ~700 MiB | Fast, no punctuation/capitalization |
 | **TDT** (`parakeet-tdt-0.6b-v3`) | ~25 | RNN-T greedy + duration | ~715 MiB | Recommended default; PnC + language auto-detect |
 | **Unified** (`parakeet-unified-en-0.6b`) | English | RNN-T | ~715 MiB | One checkpoint for batch and cache-aware streaming at 80/160/560/1040 ms; PnC |
+| **TranscribePsy** (`transcribepsy-250m-eu-sub`) | 8 European | RNN-T greedy + duration | ~291 MiB | 254M distilled from TDT v3 for Dutch, English, French, German, Italian, Polish, Portuguese and Spanish; PnC; long recordings use the 60 s / 25 % windows it recommends; Core ML distribution runs encoder and decoder on the Neural Engine |
 | **EOU** (`parakeet-eou-120m-v1`) | English | RNN-T greedy + `<EOU>` | ~132 MiB | Streaming-trained; native end-of-turn token |
 | **Indic Conformer CTC** (`indic-conformer-ctc`) | Indic aggregate | argmax CTC + language mask | ~701 MiB | Multilingual Indic; set `parakeetConfig.language` (e.g. `"hi"`) |
 | **Sortformer v1** (`sortformer-4spk-v1`) | n/a | Diarization head (sliding history) | ~141 MiB | 4-speaker. Default for **offline** diarization |
@@ -85,11 +86,14 @@ GGUF metadata** — there is no `modelType` to pass.
 | **Nemotron 3 Diarization** (`Nemotron-3-Diarization`) | n/a | Diarization head + speaker cache | ~102 MiB | Up to 8 speakers, 10 ms probabilities, offline and AOSC streaming; official q8_0 GGUF |
 
 On macOS and iOS, TDT, Unified, EOU, and Sortformer v2.1 can also run their
-encoder on an optional Core ML sidecar; CTC and Indic Conformer CTC cannot
-with the pinned engine, and Sortformer v1 has no sidecar. See
-[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
+encoder on an optional Core ML sidecar, and TranscribePsy's published Core ML
+distribution runs its encoder and TDT decoder on the Neural Engine; CTC and
+Indic Conformer CTC cannot with the pinned engine, and Sortformer v1 has no
+sidecar. See [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
 
-Upstream `.nemo` checkpoints are NVIDIA's; see the
+TranscribePsy is published ready to run by
+[QVAC on Hugging Face](https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf);
+its model card states the license. Upstream `.nemo` checkpoints are NVIDIA's; see the
 [Parakeet model cards](https://huggingface.co/collections/nvidia/parakeet-asr-models-66b50d5a37b9580ee4ba93c2)
 for the per-checkpoint NVIDIA Open Model License terms.
 
@@ -125,6 +129,7 @@ language coverage, translation, and diarization.
 | If you need… | Use this model | Notes |
 | --- | --- | --- |
 | Default multilingual / English ASR (batch or duplex stream) | `parakeet-tdt-0.6b-v3` (q8_0 GGUF) | Recommended Parakeet default: ~25 languages, punctuation/capitalization, language auto-detect, low-latency streaming. |
+| Smallest multilingual model for phones (Dutch, English, French, German, Italian, Polish, Portuguese, Spanish) | `transcribepsy-250m-eu-sub` | 254M TDT distilled from `parakeet-tdt-0.6b-v3`: ~291 MiB q8_0, PnC, no language to set. Long recordings use the 60 s / 25 % windows the model recommends. On Apple, the Core ML distribution runs encoder and decoder on the Neural Engine. |
 | English batch and low-latency streaming with one checkpoint | `parakeet-unified-en-0.6b` | Standard RNN-T with punctuation and capitalization; use when multilingual TDT or native EOU tokens are not required. Streaming uses the native cache-aware encoder: `streamingChunkMs` accepts 80, 160, 560, or 1040 and `streamingRightLookaheadMs` 0, 80, 160, 240, 320, 560, or 1040, both snapped down to the nearest trained value. Defaults to 560 ms. |
 | Native end-of-turn for conversational / duplex English | `parakeet-eou-120m-v1` | Emits `<EOU>`; smallest Parakeet (~132 MiB). Pair with TDT when you need broader language coverage *and* EOU. |
 | Fast English-only, no punctuation | `parakeet-ctc-0.6b` | Lowest decode cost in the Parakeet family; no PnC. |
@@ -704,7 +709,10 @@ diarization model.
 does not pay the GPU shader or kernel compile. `longFormWindowFrames` bounds
 the offline encoder window (0 picks it from the model, a negative value
 always runs one pass), which keeps memory flat on long `run()` inputs;
-`cancel()` also takes effect between those windows.
+`cancel()` also takes effect between those windows. With 0, TranscribePsy
+gets the 60 s windows with 25 % overlap it recommends (750 frames with 94
+frames of context each side); the other models get the engine's balanced
+automatic windows.
 
 For four-speaker streaming diarization, use the Sortformer v2.1 GGUF. For up to
 eight speakers, use Nemotron 3 Diarization. Both enable their speaker cache
@@ -865,8 +873,9 @@ the ggml backend. It is opt-in by presence: at `load()` the engine looks for a
 compiled `<stem>-encoder.mlmodelc` next to the GGUF, where `<stem>` is the GGUF
 name with its quantization suffix stripped, so one sidecar serves every tier
 (`parakeet-tdt-0.6b-v3.q8_0.gguf` and `.f16.gguf` both resolve to
-`parakeet-tdt-0.6b-v3-encoder.mlmodelc`). The published models ship without
-sidecars, so a model directory behaves as before until you stage one. A
+`parakeet-tdt-0.6b-v3-encoder.mlmodelc`). The NVIDIA models ship without
+sidecars, so a model directory behaves as before until you stage one;
+TranscribePsy publishes its Core ML distribution ready-made (see the table). A
 missing sidecar, an input shape it does not take, or a failed prediction falls
 back to ggml, and `PARAKEET_COREML_DISABLE=1` in the process environment forces
 ggml.
@@ -875,6 +884,7 @@ ggml.
 | --- | --- | --- | --- |
 | TDT (`parakeet-tdt-0.6b-v3`) | `<stem>-encoder.mlmodelc` | any length: shorter inputs are zero-padded to the compiled shape, longer offline inputs are split into overlapping windows | only on fallback |
 | Unified (`parakeet-unified-en-0.6b`) | `<stem>-encoder.mlmodelc` | `run()`, padded or windowed like TDT | `runStreaming()`, which uses the cache-aware encoder |
+| TranscribePsy (`transcribepsy-250m-eu-sub-coreml.gguf`, the encoder-less GGUF of the Core ML distribution) | `<stem>-encoder.mlmodelc` and `<stem>-decoder.mlmodelc` | any length: 15 s Neural Engine windows with 1.28 s of seam context; the TDT decoder runs on the Neural Engine as well | never: without its encoder sidecar that GGUF fails to load, since it carries no encoder weights. The full `transcribepsy-250m-eu-sub.gguf` behaves like TDT |
 | EOU (`parakeet-eou-120m-v1`) | `<stem>-encoder.mlmodelc` | inputs of exactly the compiled mel length | every other length, including streaming windows of a different length |
 | Sortformer v2.1 + AOSC | `<stem>-encoder.mlmodelc` (batch), `<stem>-encoder-bypass-pre-encode.mlmodelc` (AOSC) | batch: exactly the compiled length; AOSC: slabs up to the masked capacity (410 encoder frames for the default geometry) | other batch lengths, larger AOSC slabs; the speaker head always |
 | CTC (`parakeet-ctc-0.6b`), Indic Conformer CTC | none in the pinned `speech-cpp` | — | always (the engine adds CTC sidecars from `speech-cpp` `2026-09-24`) |
@@ -930,6 +940,16 @@ npm run download-models                 # interactive picker into ./models/
 npm run download-models:parakeet:registry              # all types
 npm run download-models:parakeet:registry -- -t tdt    # just TDT
 npm run download-models:parakeet:registry -- -t unified
+```
+
+**TranscribePsy**, published ready to run on Hugging Face (the q8_0 GGUF; on
+Apple also the Core ML distribution, whose three files stay together under
+their published names):
+
+```bash
+python -m pip install huggingface_hub
+hf download qvac/TranscribePsy-250M-EU-sub-gguf transcribepsy-250m-eu-sub.gguf --local-dir models
+hf download qvac/TranscribePsy-250M-EU-sub-coreml --local-dir models/transcribepsy-coreml
 ```
 
 **Parakeet**, converting NVIDIA `.nemo` yourself:
@@ -1231,6 +1251,7 @@ Parakeet:
 
 - [`examples/parakeet-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-transcribe.js) — CTC, TDT, Unified, EOU, or Sortformer transcription
 - [`examples/parakeet-unified-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-unified-transcribe.js) — batch transcription with `parakeet-unified-en-0.6b`
+- [`examples/parakeet-transcribepsy-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-transcribepsy-transcribe.js) — TranscribePsy transcription with the model-recommended or explicit `--window-sec` / `--overlap` long-form windows, reporting whether the encoder ran on Core ML
 - [`examples/parakeet-indic-conformer-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-indic-conformer-transcribe.js) — Indic Conformer transcription with the required `--language <id>` option
 - [`examples/parakeet-diarized-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
 - [`examples/nemotron-diarization.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/nemotron-diarization.js) — Nemotron 3 offline 8-speaker diarization
@@ -1257,6 +1278,7 @@ npm run example:whisper:reload
 npm run example:whisper:decoder
 npm run example:parakeet
 npm run example:parakeet:unified
+npm run example:parakeet:transcribepsy -- --model <gguf> --audio <file>
 npm run example:parakeet:indic-conformer
 npm run example:parakeet:diarize
 npm run example:parakeet:nemotron-diarize
