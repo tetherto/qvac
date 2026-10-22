@@ -3,6 +3,7 @@ import EventEmitter from 'bare-events'
 
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
 import env from 'bare-env'
+import os from 'bare-os'
 
 import type { FitProbeRequest } from '@/resources/model-fit/native-probe/engine-fit'
 import {
@@ -569,11 +570,17 @@ test('uses the runtime-safe default environment source and preserves the 14-key 
     t.is(Object.keys(receivedOptions?.env ?? {}).length, 14)
   } finally {
     for (const [key, value] of Object.entries(previousEnvironment)) {
-      // bare-env's proxy rejects `delete`; blank the key instead. A '' entry
-      // still travels through the allowlist, but the assertions above ran
-      // before this cleanup and this is the final test in the file.
-      env[key] = value === undefined ? '' : value
+      // A blank TMPDIR makes os.tmpdir() return '' for every later test file in
+      // this process. `delete env[key]` cannot be used: bare-env's delete trap
+      // returns undefined, which throws in strict mode.
+      if (value === undefined) os.unsetEnv(key)
+      else env[key] = value
     }
+  }
+
+  for (const [key, value] of Object.entries(previousEnvironment)) {
+    t.is(os.hasEnv(key), value !== undefined, `${key} is set only if it was set before`)
+    if (value !== undefined) t.is(env[key], value, `${key} keeps its previous value`)
   }
 })
 
