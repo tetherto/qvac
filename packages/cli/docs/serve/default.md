@@ -16,6 +16,23 @@ described in [README.md](README.md) and applies here. Its own configuration live
 | `POST`   | `/qvac/v1/models/fit` | Whether models fit, before loading them |
 | `POST`   | `/qvac/v1/translate`  | Text translation (NMT model)            |
 
+## Binary inputs
+
+Routes that take an image or other file accept it in any of three forms, under the field name
+the route documents:
+
+- a `multipart/form-data` file part;
+- a base64 data URL, `data:<type>;base64,...`, as a JSON string or a multipart text part;
+- the `id` of a file uploaded with `POST /v1/files`, which needs the OpenAI surface mounted.
+
+Uploads are capped at 100 MB per file and 10 files per request.
+
+| HTTP | `error.code`       | When                                                         |
+| ---- | ------------------ | ------------------------------------------------------------ |
+| 400  | `invalid_data_url` | Data URL is not base64-encoded, or its payload is not base64 |
+| 400  | `file_not_found`   | Value is neither a data URL nor the id of an uploaded file   |
+| 400  | `empty_input`      | The input has no bytes                                       |
+
 ## KV-cache retention
 
 `/v1/chat/completions` caches each conversation's prefix under `~/.qvac/kv-cache`, so a

@@ -8,13 +8,13 @@ import type {
 import { isCanonicalModelType, normalizeModelType, ModelType } from '@/schemas/index'
 import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
 import { ModelTypeRequiredError } from '@/errors/index'
-import type { FitStubUnavailableReason } from '@/resources/model-fit/fit-stub/fetch-fit-stub'
-import { projectFitFromLoad } from '@/resources/model-fit/fit-stub/project-fit-from-load'
+import type { FitStubUnavailableReason } from '@/model-fit/description/fetch'
+import { projectFitFromLoad } from '@/model-fit/description/project'
 import type { SystemResources } from '@/schemas/system-resources'
 import { getResourceCollector } from '@/resources/instance'
 import { getConfig } from '@/runtime/state'
-import { assessModelFitFromResources, type NativeCandidateFit } from '@/resources/model-fit/assess'
-import { detectPlatform } from '@/resources/model-fit/platform'
+import { assessModelFitFromResources, type NativeCandidateFit } from '@/model-fit/assess'
+import { detectPlatform } from '@/model-fit/platform'
 
 /**
  * Runs a pre-download fit assessment worker-side.
@@ -90,7 +90,7 @@ function audiogenUsesGpu(config: Record<string, unknown>): boolean {
 
 /**
  * Engines that carry a GPU switch, each read at the key its own config spells
- * it under. These are the keys the fit builders read in `native-probe/engines`,
+ * it under. These are the keys the fit builders read in `model-fit/request/engines`,
  * so a projection and a device never disagree. Only bci defaults to on.
  */
 const GPU_SWITCH: Record<string, (config: Record<string, unknown>) => boolean> = {
