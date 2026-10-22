@@ -412,9 +412,19 @@ void MtmdLlmContext::tokenizeChat(
       inputs.parallel_tool_calls = *renderOverrides_.parallelToolCalls;
     }
   }
+  const Tokenizer tokenize = [this](const std::string& text) {
+    return ::common_tokenize(modelCtx_.lctx, text, false, true);
+  };
+  // See TextLlmContext::tokenizeChat. Media markers must match the loaded
+  // bitmaps, so a request carrying media keeps the full render.
+  std::optional<PromptRenderResult> primed =
+      isPrefillOnlyRequest_ && bitmaps_.entries.empty()
+          ? renderWithoutUserTurn(tmpls_.get(), inputs, tokenize)
+          : std::nullopt;
   // See TextLlmContext::tokenizeChat: not const so the prompt and stop list
   // move out instead of being copied per request.
-  PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
+  PromptRenderResult rendered =
+      primed.has_value() ? std::move(*primed) : getPrompt(tmpls_.get(), inputs);
   formattedChat = std::move(rendered.prompt);
   if (rendered.toolDefinitionsDropped) {
     ++toolDefinitionsDropped_;
@@ -439,9 +449,6 @@ void MtmdLlmContext::tokenizeChat(
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
 
-  const Tokenizer tokenize = [this](const std::string& text) {
-    return ::common_tokenize(modelCtx_.lctx, text, false, true);
-  };
   // Template stop strings are per request: replace, never accumulate. No
   // template any qvac package ships populates `additional_stops`, so these
   // lists are empty for those models — but see TextLlmContext::tokenizeChat:
