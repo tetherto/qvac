@@ -2425,7 +2425,7 @@
                     "minLength": 1
                   },
                   "parallel_tool_calls": {
-                    "description": "Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
+                    "description": "Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
                     "type": "boolean"
                   }
                 },
@@ -4021,7 +4021,7 @@
               "minLength": 1
             },
             "parallel_tool_calls": {
-              "description": "Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "description": "Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "boolean"
             }
           },
@@ -4721,7 +4721,7 @@
               "minLength": 1
             },
             "parallel_tool_calls": {
-              "description": "Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "description": "Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "boolean"
             }
           },
