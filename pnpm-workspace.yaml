@@ -18,6 +18,7 @@ packages:
   - "packages/registry-server/client"
   - "packages/registry-server/shared"
   - "plugins/*"
+  - "!packages/sdk"
 
 # Plain semver everywhere, no workspace:. Falls back to registry when local
 # version doesn't satisfy the range.
