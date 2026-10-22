@@ -181,10 +181,11 @@ function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {
  * parse would drop, so it is carried across.
  */
 function prepareRequest<T extends Request>(request: T): Request {
-  const withDeviceDefaults = applyDeviceDefaults(request)
-  const profilingMeta = getProfilingMeta(withDeviceDefaults)
+  let withDeviceDefaults: Request
   let validated: Request
   try {
+    // Resolving device defaults parses the model config, so a bad value fails here.
+    withDeviceDefaults = applyDeviceDefaults(request)
     validated = requestSchema.parse(withDeviceDefaults)
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -192,6 +193,7 @@ function prepareRequest<T extends Request>(request: T): Request {
     }
     throw error
   }
+  const profilingMeta = getProfilingMeta(withDeviceDefaults)
   if (profilingMeta !== undefined) {
     ;(validated as Record<PropertyKey, unknown>)[PROFILING_KEY] = profilingMeta
   }

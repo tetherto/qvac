@@ -199,6 +199,40 @@ export const modelLoadLlmCacheCheckpointsOutOfRangeRejected: TestDefinition = {
   }
 }
 
+// The validation code proves the SDK rejected 'rank' before the native load (an addon without its
+// own refusal would load it and return garbage vectors); 'pooling' pins which field failed.
+export const modelLoadEmbeddingRankPoolingRejected: TestDefinition = {
+  testId: 'model-load-embedding-rank-pooling-rejected',
+  params: { pooling: 'rank' },
+  expectation: { validation: 'throws-error', errorContains: '50010' },
+  steps: [
+    { modelSource: { dep: 'embeddings', as: 'src' } },
+    {
+      callError: {
+        method: 'loadModel',
+        params: {
+          modelSrc: '$src.modelSrc',
+          modelType: '$src.modelType',
+          modelConfig: { pooling: '$params.pooling' }
+        },
+        as: 'err'
+      }
+    },
+    {
+      assert: {
+        on: '$err',
+        named: 'errorMatches',
+        with: { code: '50010', messageContains: 'pooling' }
+      }
+    }
+  ],
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 1000
+  }
+}
+
 export const modelLoadEmbedding: TestDefinition = {
   testId: 'model-load-embedding',
   params: {},
@@ -506,6 +540,7 @@ const catalog: TestDefinition[] = [
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,
   modelLoadEmbedding,
+  modelLoadEmbeddingRankPoolingRejected,
   modelLoadOcr,
   modelLoadOcrDoctr,
   modelLoadInvalid,
