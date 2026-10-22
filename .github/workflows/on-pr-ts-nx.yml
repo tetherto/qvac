@@ -31,6 +31,7 @@ on:
       - "packages/**"
       - "cmake/qvac-addon/**"
       - ".github/workflows/**"
+      - ".github/actions/stage-integration-models/**"
 
 permissions:
   contents: read

@@ -15,7 +15,7 @@ Legend:
 | bare-sdk | Removed (last npm release 0.18.2). Use `@qvac/inference` for in-process Bare | SDK |
 | ai-sdk-provider | Vercel AI SDK provider exposing the QVAC runtime (chat, embeddings, transcription, translation, speech, OCR, image) | SDK |
 | bci-whispercpp | Brain-Computer Interface (BCI) neural-signal transcription addon powered by whisper.cpp | Addon |
-| classification-ggml | Image classification addon (MobileNetV3-Small) on the GGML backend | Addon |
+| classification-ggml | MobileNetV3-Small classification and MegaLoc image embeddings on GGML/Fabric | Addon |
 | decoder-audio | Audio decoder library leveraging FFmpeg as a preprocessing step for other addons | Addon |
 | diffusion-cpp | Native C++ addon for image/video generation via `qvac-ext-stable-diffusion.cpp` | Addon |
 | embed-llamacpp | Native C++ addon for text embedding generation via `qvac-fabric-llm.cpp` | Addon |
