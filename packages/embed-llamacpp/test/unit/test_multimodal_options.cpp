@@ -1,8 +1,10 @@
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -443,4 +445,86 @@ TEST(AudioLengthLimitTest, RejectsOggBehindId3Tags) {
   const std::vector<uint8_t> ogg = {'O', 'g', 'g', 'S', 0, 2, 0, 0, 0, 0, 0, 0};
   buf.insert(buf.end(), ogg.begin(), ogg.end());
   EXPECT_FALSE(lengthOf(buf).has_value());
+}
+
+namespace {
+// A fmt chunk body: the 16 PCM fields, then cbSize and an extension when
+// given.
+std::vector<uint8_t> fmtBody(
+    uint16_t format, uint16_t channels, uint32_t sampleRate,
+    uint16_t blockAlign, uint16_t bitsPerSample,
+    std::optional<std::vector<uint8_t>> extension = std::nullopt) {
+  std::vector<uint8_t> b(16, 0);
+  putLe(b, 0, format, 2);
+  putLe(b, 2, channels, 2);
+  putLe(b, 4, sampleRate, 4);
+  putLe(b, 8, sampleRate * blockAlign, 4);
+  putLe(b, 12, blockAlign, 2);
+  putLe(b, 14, bitsPerSample, 2);
+  if (extension.has_value()) {
+    b.resize(18 + extension->size(), 0);
+    putLe(b, 16, static_cast<uint32_t>(extension->size()), 2);
+    std::copy(extension->begin(), extension->end(), b.begin() + 18);
+  }
+  return b;
+}
+
+// A RIFF WAVE holding @p chunks in order, each with its true size.
+std::vector<uint8_t> riffWave(
+    const std::vector<std::pair<std::string, std::vector<uint8_t>>>& chunks) {
+  std::vector<uint8_t> buf(12, 0);
+  std::memcpy(buf.data(), "RIFF", 4);
+  std::memcpy(buf.data() + 8, "WAVE", 4);
+  for (const auto& [id, body] : chunks) {
+    const size_t at = buf.size();
+    buf.resize(at + 8 + body.size() + (body.size() & 1), 0);
+    std::memcpy(buf.data() + at, id.data(), 4);
+    putLe(buf, at + 4, static_cast<uint32_t>(body.size()), 4);
+    std::copy(body.begin(), body.end(), buf.begin() + at + 8);
+  }
+  putLe(buf, 4, static_cast<uint32_t>(buf.size() - 8), 4);
+  return buf;
+}
+} // namespace
+
+TEST(AudioLengthLimitTest, UsesTheLastFmtBeforeData) {
+  // dr_wav keeps the last fmt chunk: 16-bit at 384 kHz, then 8-bit at 1 Hz,
+  // so 1000 bytes decode to 1000 s, not ~1.3 ms.
+  const auto wav = riffWave(
+      {{"fmt ", fmtBody(1, 1, 384000, 2, 16)},
+       {"fmt ", fmtBody(1, 1, 1, 1, 8)},
+       {"data", std::vector<uint8_t>(1000, 0)}});
+  const auto seconds = lengthOf(wav);
+  ASSERT_TRUE(seconds.has_value());
+  EXPECT_DOUBLE_EQ(*seconds, 1000.0);
+  EXPECT_THROW(
+      audio_length_limit::checkBuffer(wav.data(), wav.size(), 600),
+      qvac_errors::StatusError);
+}
+
+TEST(AudioLengthLimitTest, RejectsFmtAfterData) {
+  // dr_wav stops at the first data chunk, finds no fmt and fails, and
+  // ma_decoder would read the bytes as MP3.
+  const auto wav = riffWave(
+      {{"data", std::vector<uint8_t>(64, 0)},
+       {"fmt ", fmtBody(1, 1, 16000, 2, 16)}});
+  EXPECT_FALSE(lengthOf(wav).has_value());
+}
+
+TEST(AudioLengthLimitTest, ReadsExtensibleFmtAsDrWavDoes) {
+  // WAVE_FORMAT_EXTENSIBLE needs dr_wav's 22-byte extension; the format is
+  // the sub-format GUID's first two bytes (here PCM).
+  std::vector<uint8_t> extension(22, 0);
+  putLe(extension, 6, 1, 2); // sub-format: PCM
+  const auto good = riffWave(
+      {{"fmt ", fmtBody(0xFFFE, 1, 16000, 2, 16, extension)},
+       {"data", std::vector<uint8_t>(32000, 0)}});
+  const auto seconds = lengthOf(good);
+  ASSERT_TRUE(seconds.has_value());
+  EXPECT_DOUBLE_EQ(*seconds, 1.0);
+
+  const auto shortExtension = riffWave(
+      {{"fmt ", fmtBody(0xFFFE, 1, 16000, 2, 16, std::vector<uint8_t>(10, 0))},
+       {"data", std::vector<uint8_t>(32000, 0)}});
+  EXPECT_FALSE(lengthOf(shortExtension).has_value());
 }

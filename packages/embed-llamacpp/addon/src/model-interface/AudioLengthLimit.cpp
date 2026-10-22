@@ -67,15 +67,17 @@ std::optional<double> wavSeconds(const uint8_t* data, size_t size) {
   std::optional<uint64_t> dataSize;
   uint64_t factFrames = 0;
 
-  // 64-bit, so a declared chunk size cannot wrap the offset. Every chunk is
-  // read, including a fact chunk after data.
+  // dr_wav's walk, as ma_decoder opens it (from memory, without metadata):
+  // each fmt chunk replaces the last, and the walk stops at the first data
+  // chunk, so a fmt or fact chunk after it is never read. 64-bit, so a
+  // declared chunk size cannot wrap the offset.
   uint64_t off = 12;
   while (off + 8 <= size) {
     const uint8_t* chunk = data + off;
     const uint64_t chunkSize = le32(chunk + 4);
     const uint64_t body = off + 8;
-    if (std::memcmp(chunk, "fmt ", 4) == 0 && !haveFmt) {
-      if (body + 16 > size) {
+    if (std::memcmp(chunk, "fmt ", 4) == 0) {
+      if (chunkSize < 16 || body + 16 > size) {
         return std::nullopt;
       }
       haveFmt = true;
@@ -84,23 +86,36 @@ std::optional<double> wavSeconds(const uint8_t* data, size_t size) {
       sampleRate = le32(data + body + 4);
       blockAlign = le16(data + body + 12);
       bitsPerSample = le16(data + body + 14);
-      // WAVE_FORMAT_EXTENSIBLE: the format is the sub-format GUID's first
-      // two bytes.
+      // dr_wav reads cbSize and seeks over the extension; its memory stream
+      // fails a seek past the end.
+      uint32_t cbSize = 0;
+      if (chunkSize > 16) {
+        if (body + 18 > size) {
+          return std::nullopt;
+        }
+        cbSize = le16(data + body + 16);
+        if (body + 18 + cbSize > size) {
+          return std::nullopt;
+        }
+      }
+      // WAVE_FORMAT_EXTENSIBLE: dr_wav requires the 22-byte extension, and
+      // the format is the sub-format GUID's first two bytes.
       if (format == kExtensible) {
-        if (chunkSize < 26 || body + 26 > size) {
+        if (cbSize != 22) {
           return std::nullopt;
         }
         format = le16(data + body + 24);
       }
     } else if (std::memcmp(chunk, "fact", 4) == 0 && body + 4 <= size) {
       factFrames = std::max<uint64_t>(factFrames, le32(data + body));
-    } else if (std::memcmp(chunk, "data", 4) == 0 && !dataSize.has_value()) {
+    } else if (std::memcmp(chunk, "data", 4) == 0) {
       // The memory decoder can tell the size, so dr_wav reads to the end of
       // the buffer when the declared size is unset or larger.
       const uint64_t present = body <= size ? size - body : 0;
       dataSize = (chunkSize == 0xFFFFFFFFULL || chunkSize > present)
                      ? present
                      : chunkSize;
+      break;
     }
     off = body + chunkSize + (chunkSize & 1);
   }
