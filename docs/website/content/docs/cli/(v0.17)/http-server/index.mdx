@@ -165,6 +165,39 @@ The default LLM context window is 1,024 tokens and includes both the input and g
 `default` field **does not** act as a fallback when an API request omits `model`. Requests must still include a `model` field; otherwise, the server returns `400`.
 </Callout>
 
+### Endpoint categories
+
+Each alias gets an endpoint category from its model type, and a route only accepts aliases of its own category (`400 invalid_model_type` otherwise). The [model catalog](#model-catalog-browse) reports it as `role`.
+
+| Model type | Category |
+| --- | --- |
+| `llamacpp-completion`, `llm` | `chat` |
+| `llamacpp-embedding`, `embeddings` | `embedding` |
+| `llamacpp-decision` | `decision` |
+| `whispercpp-transcription`, `parakeet-transcription`, `moss-transcribe`, `whisper`, `parakeet` | `transcription` |
+| `whispercpp-audio-translation` | `audio-translation` |
+| `bci-whispercpp-transcription`, `bci` | `bci` |
+| `nmtcpp-translation`, `nmt` | `translation` |
+| `tts-ggml`, `onnx-tts`, `tts` | `speech` |
+| `ggml-ocr`, `ocr` | `ocr` |
+| `ggml-classification`, `classification` | `classification` |
+| `audiogen-ggml`, `audiogen` | `audiogen` |
+| `ggml-vla`, `vla` | `vla` |
+| `sdcpp-generation`, `diffusion` | by `config.mode` |
+| `sdcpp-video` | `video` |
+
+An `sdcpp-generation` model serves one operation, chosen by `config.mode`: `diffusion` (the default) is `image`, and `video`, `upscale` and `world` are categories of the same name. Any other `mode` fails at startup.
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "upscaler": { "model": "REALESRGAN_X4PLUS", "config": { "mode": "upscale" } }
+    }
+  }
+}
+```
+
 ## Integration
 
 To create a client, you can use any OpenAI-compatible AI SDK provider, such as [Vercel AI SDK](https://ai-sdk.dev). For a better developer experience, use our npm package `@qvac/ai-sdk-provider`.
@@ -232,6 +265,22 @@ qvac serve --openai --allowed-host qvac.internal --allowed-host .corp.example
 ## QVAC API
 
 Served by the QVAC surface, mounted by default. Base path: `/qvac/v1`.
+
+### Binary inputs
+
+Routes that take an image or other file accept it in any of three forms, under the field name the route documents:
+
+- a `multipart/form-data` file part;
+- a base64 data URL, `data:<type>;base64,...`, as a JSON string or a multipart text part;
+- the `id` of a file uploaded with [`POST /v1/files`](#files), which needs the OpenAI surface mounted.
+
+Uploads are capped at 100 MB per file and 10 files per request.
+
+| HTTP | `error.code` | When |
+| --- | --- | --- |
+| 400 | `invalid_data_url` | Data URL is not base64-encoded, or its payload is not base64 |
+| 400 | `file_not_found` | Value is neither a data URL nor the id of an uploaded file |
+| 400 | `empty_input` | The input has no bytes |
 
 ### KV cache
 
@@ -1173,7 +1222,7 @@ Lists loaded (READY) text-to-speech models — the speech-capable subset of [`/v
 
 ### Images
 
-Text-to-image and image-to-image endpoints backed by any alias whose endpoint category is `image` (built-in addons that resolve to this category are `diffusion` and `sdcpp-generation`).
+Text-to-image and image-to-image endpoints backed by any alias whose endpoint category is `image`: a `diffusion` or `sdcpp-generation` model in its default `diffusion` mode.
 
 #### `POST /v1/images/generations`
 
@@ -1203,7 +1252,7 @@ Response:
 
 ##### Loaded model
 
-Register an alias whose endpoint category is `image` (built-in addons that resolve to this category are `diffusion` and `sdcpp-generation`):
+Register an alias whose endpoint category is `image` (a `diffusion` or `sdcpp-generation` model in its default `diffusion` mode):
 
 ```json title="qvac.config.json"
 {
@@ -1440,7 +1489,7 @@ The OpenAI sub-routes `/edits`, `/remix`, `/extensions`, and `/characters` are n
 
 #### Loaded model
 
-Register an alias whose endpoint category is `video` using the virtual SDK type **`sdcpp-video`** (it resolves to the `sdcpp-generation` addon with `mode: "video"`). Nested model-source fields (`t5XxlModelSrc`, `vaeModelSrc`, `clipLModelSrc`, …) accept SDK constant names, which the P2P registry resolves to downloadable weights:
+Register an alias whose endpoint category is `video`: the virtual SDK type **`sdcpp-video`** (it resolves to the `sdcpp-generation` addon with `mode: "video"`), or `sdcpp-generation` with `config.mode: "video"`. Nested model-source fields (`t5XxlModelSrc`, `vaeModelSrc`, `clipLModelSrc`, …) accept SDK constant names, which the P2P registry resolves to downloadable weights:
 
 ```json title="qvac.config.json"
 {

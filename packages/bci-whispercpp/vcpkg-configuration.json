@@ -2,8 +2,7 @@
   "default-registry": {
     "kind": "git",
     "baseline": "dca20a940d85d6741285c888b53bd10da29c0723",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
-    "reference": "QVAC-26890/speech-cpp-diarizers"
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {

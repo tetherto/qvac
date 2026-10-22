@@ -16,32 +16,49 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
-- TranscribePsy-250M-EU-sub (`transcribepsy-250m-eu-sub`): the 254M
-  FastConformer-TDT distilled from Parakeet-TDT-0.6B-v3 for eight European
-  languages loads as a TDT model. Long recordings use the 60 s / 25 % windows
-  the model recommends when `longFormWindowFrames` is 0, and on macOS and iOS
-  its published Core ML distribution (an encoder-less GGUF with encoder and
-  decoder sidecars) runs both on the Neural Engine. New example
-  `examples/parakeet-transcribepsy-transcribe.js`.
 - Core ML diarizer sidecars on macOS and iOS: Nemotron 3 Diarization and
   Sortformer v2.1 run their whole network on the Neural Engine when a
   `<stem>-diarizer-<frames>.mlmodelc` sits beside the GGUF, and fall back to
   ggml above its capacity or on failure. `PARAKEET_COREML_DIARIZER_DISABLE=1`
   ignores them. `assessFit` reports the bundles a workload can load as
   `coremlBytes` and counts them on unified memory.
-- Bounded FuzzTest coverage for the untrusted s16le PCM decoder
-  (`decodeS16lePcm`). Linux C++ CI runs the suite after unit tests. The
-  decoder compiles without whisper/parakeet, so ASan and LeakSanitizer stay
-  at full strength. No public addon API changes.
+
+### Fixed
+
+- Nemotron 3 Diarization loads again. The `speech-cpp` `2026-10-20#1` pin of
+  0.11.0 rejected its GGUF as having no encoder weights.
 
 ### Changed
 
 - Align the shared native `speech-cpp` source pin to `2026-10-21` across
-  the speech addons. The pinned revision adds TranscribePsy and the Core ML
-  diarizer sidecars, bounds the long-form encoder's memory to one cached
-  graph per windowed pass, balances automatic long-form windows and runs the
-  TDT decoder on the CPU backend under OpenCL. It also loads Nemotron 3
-  Diarization, which `2026-10-20#1` rejected as having no encoder weights.
+  the speech addons. The pinned revision adds the Core ML diarizer sidecars
+  and the Nemotron 3 Diarization loader fix.
+
+## [0.11.0] - 2026-10-22
+
+### Added
+
+- TranscribePsy-250M-EU-sub (`transcribepsy-250m-eu-sub`): the 254M
+  FastConformer-TDT distilled from Parakeet-TDT-0.6B-v3 for eight European
+  languages loads as a TDT model ([#5245](https://github.com/tetherto/qvac/pull/5245)).
+  Long recordings use the 60 s / 25 % windows the model recommends when
+  `longFormWindowFrames` is 0, and on macOS and iOS its published Core ML
+  distribution (an encoder-less GGUF with encoder and decoder sidecars) runs
+  both on the Neural Engine. New example
+  `examples/parakeet-transcribepsy-transcribe.js`.
+- Bounded FuzzTest coverage for the untrusted s16le PCM decoder
+  (`decodeS16lePcm`) ([#4603](https://github.com/tetherto/qvac/pull/4603)).
+  Linux C++ CI runs the suite after unit tests. The decoder compiles without
+  whisper/parakeet, so ASan and LeakSanitizer stay at full strength. No
+  public addon API changes.
+
+### Changed
+
+- Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
+  the speech addons ([#5245](https://github.com/tetherto/qvac/pull/5245)).
+  The pinned revision adds TranscribePsy, bounds the long-form encoder's
+  memory to one cached graph per windowed pass, balances automatic long-form
+  windows and runs the TDT decoder on the CPU backend under OpenCL.
 
 ## [0.10.0] - 2026-10-14
 

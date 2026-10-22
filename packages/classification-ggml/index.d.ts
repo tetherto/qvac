@@ -1,3 +1,4 @@
+export { MegaLoc, type MegaLocOptions, type ImageEmbeddingOptions, type MegaLocRuntimeStats } from "./megaloc";
 /**
  * Canonical labels emitted by the bundled 3-class MobileNetV3-Small model.
  * Kept permissive for future fine-tunes that ship different class names
