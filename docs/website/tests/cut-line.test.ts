@@ -8,6 +8,7 @@ import {
   cutRedirects,
   emptyReleaseNotes,
   relabelTitle,
+  retargetReleaseNotesLink,
 } from '../scripts/cut-line';
 import { DOCUMENTED_SOFTWARE } from '../src/lib/versions';
 
@@ -200,6 +201,42 @@ describe('the release notes of the line being opened', () => {
   });
 });
 
+describe('the release-notes link of the line being opened', () => {
+  const meta = (tag: string) =>
+    [
+      '{',
+      '  "title": "Reference",',
+      '  "pages": [',
+      '    "api",',
+      `    "external:[Release Notes](https://github.com/tetherto/qvac/releases/tag/${tag})"`,
+      '  ]',
+      '}',
+      '',
+    ].join('\n');
+
+  it('names the opened line\'s own tag, not the one it was copied from', () => {
+    expect(
+      retargetReleaseNotesLink(meta('sdk-v0.22.0'), 'sdk', 'v0.23'),
+    ).toContain('/releases/tag/sdk-v0.23.0)');
+  });
+
+  it('leaves the rest of the entry alone', () => {
+    const retargeted = retargetReleaseNotesLink(
+      meta('sdk-v0.22.0'),
+      'sdk',
+      'v0.23',
+    )!;
+    expect(retargeted).toContain('"api"');
+    expect(retargeted).toContain('external:[Release Notes](');
+    expect(retargeted).not.toContain('sdk-v0.22.0');
+  });
+
+  it('reports a file carrying no such entry, which is every other collection', () => {
+    const cli = '{\n  "title": "Reference",\n  "pages": ["api"]\n}\n';
+    expect(retargetReleaseNotesLink(cli, 'cli', 'v0.18')).toBeNull();
+  });
+});
+
 describe('a cut against a copy of the tree', () => {
   let root: string;
   let result: Awaited<ReturnType<typeof cutLine>>;
@@ -277,17 +314,16 @@ describe('a cut against a copy of the tree', () => {
     );
   });
 
-  it('opens the line with empty release notes and the summary intact', async () => {
+  it('opens the line with the summary intact and no release-notes page', async () => {
     const pageIn = (folder: string, page: string) =>
       fs.readFile(
         path.join(root, 'content', 'docs', 'sdk', folder, 'reference', page),
         'utf-8',
       );
 
-    const notes = await pageIn(`(${NEXT})`, 'release-notes.mdx');
-    expect(notes).toContain(`${NEXT} has not been released yet.`);
-    expect(notes).toContain(`description: Release notes for @qvac/sdk ${NEXT}.`);
-    expect(notes).not.toContain(`## ${CURRENT}.0`);
+    // No line publishes release notes any more, so the cut has no page to
+    // empty. `emptyLineReleaseNotes` is best-effort for exactly this reason.
+    await expect(pageIn(`(${NEXT})`, 'release-notes.mdx')).rejects.toThrow();
 
     // The summary is the opposite case: the release renders it over the copy,
     // and the diff against the previous line is what makes that review work.
@@ -299,19 +335,19 @@ describe('a cut against a copy of the tree', () => {
     );
   });
 
-  it('empties the opened line\'s notes only, never the preserved one\'s', async () => {
-    const notes = (from: string, folder: string) =>
-      fs.readFile(
-        path.join(
-          from, 'content', 'docs', 'sdk', folder, 'reference', 'release-notes.mdx',
-        ),
-        'utf-8',
-      );
-    const body = (page: string) => page.slice(page.indexOf('\n---\n') + 5);
+  it('points the opened line\'s release-notes link at its own tag', async () => {
+    const tagIn = async (folder: string) =>
+      (
+        await fs.readFile(
+          path.join(
+            root, 'content', 'docs', 'sdk', folder, 'reference', 'meta.json',
+          ),
+          'utf-8',
+        )
+      ).match(/\/releases\/tag\/([^)]+)\)/)?.[1];
 
-    expect(body(await notes(root, CURRENT))).toBe(
-      body(await notes(WEBSITE, `(${CURRENT})`)),
-    );
+    expect(await tagIn(`(${NEXT})`)).toBe(`sdk-${NEXT}.0`);
+    expect(await tagIn(CURRENT)).toBe(`sdk-${CURRENT}.0`);
   });
 
   it('reports what it changed', () => {

@@ -90,6 +90,39 @@ per-package workflow. The next train moves it above that version.
    into `main` from `backmerge/release-train-<train>-<anchor version>`. The
    backmerge keeps `main`'s `pnpm-workspace.yaml` and regenerates
    `pnpm-lock.yaml` from it.
+
+   The documentation site has its own two steps here. **You open both PRs, in
+   one sitting, right after cutting the train branch**; the documentation
+   engineer reviews them and merges 6a then 6b. Both target `main` — the train
+   branch is the release's target, never documentation's. Nothing in steps 1 to
+   8 waits on them, and they touch no package.
+
+   - 6a. **Close the line of the version being released.** Generate the API
+     summary into the current documentation line, from a branch off `main`
+     (`qv-sdk-changelog` no longer does this). One file per collection. The
+     documentation engineer records the merge commit: it is what
+     [`docs/website/docs-workflow.md`](../website/docs-workflow.md) promotes to
+     the public site on release day, so the site publishes the version that
+     shipped and nothing merged after it.
+   - 6b. **Open the line of the next version** (`qv-docs-line-cut`). The line
+     just closed becomes a preserved folder and the next one becomes current,
+     which is where the coming sprint's feature PRs write.
+
+   **6b branches off 6a's branch, never off `main`.** A cut renames the folder
+   6a writes into. Branched off `main`, the two merge in order and git silently
+   drops 6a from the preserved folder — the one production serves — while
+   conflicting only in the newly opened folder, which no reader has reached yet.
+   Stacked on 6a, both merge clean. The cost is that merging 6a retargets 6b and
+   dismisses its approval, which is one re-approval from the same reviewer.
+
+   Why here and not at step 7 or 8: a documentation line must be open for the
+   *next* version from the moment its development starts. Opening it at its own
+   release — which is what used to happen — leaves a whole sprint of feature
+   documentation written into the folder of a release that already shipped.
+
+   Skipping these two steps is the one option that is not available: a skipped
+   cut is the defect above. If the documentation engineer is unavailable to
+   review, the PRs wait — they block no other step.
 7. Wait for the release PR's `Release Train (nx)` run, the dry run described
    under [Checks](#checks), then merge the release PR. `release-train.yml`
    then:

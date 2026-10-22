@@ -210,7 +210,9 @@
 # The API summary and the release notes used to keep one page per minor
 # series alongside the current one. Versioning by line replaced that: each
 # line carries its own reference pages, so the sixteen series pages left
-# `content/docs` and their URLs redirect to the section's current page.
+# `content/docs` and their URLs redirect to the section's current page —
+# except the release notes, which the site stopped publishing altogether
+# and which go to the docs home instead (see the section below).
 #
 # The Markdown twins are listed one by one, above the patterns, because a
 # `:version` placeholder matches a whole segment and cannot tell
@@ -224,31 +226,54 @@
 /sdk/reference/api/v0.13.x.md            /sdk/reference/api.md             301
 /sdk/reference/api/v0.14.x.md            /sdk/reference/api.md             301
 /sdk/reference/api/v0.15.x.md            /sdk/reference/api.md             301
-/sdk/reference/release-notes/v0.8.x.md   /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.9.x.md   /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.10.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.11.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.12.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.13.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.14.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.15.x.md  /sdk/reference/release-notes.md   301
+/sdk/reference/release-notes/v0.8.x.md   /ecosystem.md   301
+/sdk/reference/release-notes/v0.9.x.md   /ecosystem.md   301
+/sdk/reference/release-notes/v0.10.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.11.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.12.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.13.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.14.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.15.x.md  /ecosystem.md   301
 
 # The page form, in both shapes. The pattern is safe here: its target has
 # one segment fewer than its source, so a redirected request cannot match
 # it again.
 /sdk/reference/api/:version/             /sdk/reference/api/             301
-/sdk/reference/release-notes/:version/   /sdk/reference/release-notes/   301
+/sdk/reference/release-notes/:version/   /ecosystem/                     301
 /sdk/reference/api/:version              /sdk/reference/api/             301
-/sdk/reference/release-notes/:version    /sdk/reference/release-notes/   301
+/sdk/reference/release-notes/:version    /ecosystem/                     301
 
 # The same two sections at their pre-collections paths, sent straight to
 # the current page. The bare form is listed because Pretty URLs skips
 # dot-containing segments, so a bare `/reference/api/v0.7.x` is never
 # normalized into the with-slash form the generated block above carries.
 /reference/api/:version/             /sdk/reference/api/             301
-/reference/release-notes/:version/   /sdk/reference/release-notes/   301
+/reference/release-notes/:version/   /ecosystem/                     301
 /reference/api/:version              /sdk/reference/api/             301
-/reference/release-notes/:version    /sdk/reference/release-notes/   301
+/reference/release-notes/:version    /ecosystem/                     301
+
+# ======================================================================
+# RETIRED RELEASE-NOTES PAGES
+# ----------------------------------------------------------------------
+# The site no longer publishes release notes: each line's sidebar entry
+# links to that minor's GitHub release, which is the record the release
+# train already produces. The pages that did exist are sent to the docs
+# home — the rules above, which used to land on them, now land here too,
+# so no chain grew a hop.
+#
+# Two shapes answer the section itself, and two cover it inside a line.
+# The line form is a placeholder rather than one rule per line: unlike the
+# line index rules further down, these never need to reach a bare
+# dot-containing path, because the pages they stand for are gone and
+# nothing links them.
+#
+# ORDER MATTERS: the line form must precede the `/sdk/v0.22/*` splat
+# below, which would otherwise rewrite the request to an index.html that
+# was never built and drop it on the catch-all 404.
+/sdk/reference/release-notes/            /ecosystem/     301
+/sdk/reference/release-notes.md          /ecosystem.md   301
+/sdk/:line/reference/release-notes/      /ecosystem/     301
+/sdk/:line/reference/release-notes.md    /ecosystem.md   301
 
 # ======================================================================
 # DOCUMENTATION LINES

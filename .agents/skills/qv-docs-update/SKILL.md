@@ -25,7 +25,7 @@ Never edit anything under `packages/**`. If a source file is wrong, report it an
 
 The writable surface is defined in [references/docs-scope.md](references/docs-scope.md). Read that file before writing anything. A write outside the allowlist aborts the run and reverts every patch already applied.
 
-One constraint from that file shapes every phase, so it is repeated here. The SDK and the CLI are each cut into one documentation line per published version, and this skill writes to the **current** line only — the folder written in parentheses, `sdk/(v0.20)` and `cli/(v0.14)`. It documents the working tree, which is the release not yet cut; a line already cut documents a release already shipped. Resolve the folder each run, never from memory:
+One constraint from that file shapes every phase, so it is repeated here. The SDK and the CLI are each cut into one documentation line per version, and this skill writes to the **current** line only — the folder written in parentheses, `sdk/(v0.23)` and `cli/(v0.17)`. That line is the **version under development**, which is exactly what the working tree is; every plain folder is a version that already shipped. Resolve the folder each run, never from memory:
 
 ```bash
 ls docs/website/content/docs/sdk | grep '^(v'
@@ -434,7 +434,7 @@ or the source change mixes scopes. The patches stand.
 
 6. For each entry in `new_capability_symbols[]`, classify the symbol by the rule in [States](#states), then run the matching subprocedure, below. If the symbol performs inference, run `NEW_CAPABILITY_PAGE`. Else run `NEW_MODELS_PAGE`.
 
-Both subprocedures also apply to a symbol the router could not place because **no page links its anchor yet**. R2 binds a page by the `/sdk/reference/api#<symbol>` link it already contains, so a public symbol that no prose page mentions routes to nothing and reaches `unrouted[]` whether or not it is new in this run. A symbol in that position, exported from the barrel and listed in the API summary, needs the page the routers found missing rather than a question to the developer. Confirm the absence before creating the page: search the current line, `docs/website/content/docs/sdk/<line>/`, for the symbol name and for its anchor, and treat a hit under `reference/` as no coverage, since the API summary and the release notes are both generated there. Search that line alone — a hit in a line already cut says the symbol was documented for a shipped release, not that the current one covers it.
+Both subprocedures also apply to a symbol the router could not place because **no page links its anchor yet**. R2 binds a page by the `/sdk/reference/api#<symbol>` link it already contains, so a public symbol that no prose page mentions routes to nothing and reaches `unrouted[]` whether or not it is new in this run. A symbol in that position, exported from the barrel and listed in the API summary, needs the page the routers found missing rather than a question to the developer. Confirm the absence before creating the page: search the current line, `docs/website/content/docs/sdk/<line>/`, for the symbol name and for its anchor, and treat a hit under `reference/` as no coverage, since the API summary is generated there. Search that line alone — a hit in a line already cut says the symbol was documented for a shipped release, not that the current one covers it.
 
 7. For each entry in `unrouted[]` that is user-facing **and carries no `newSymbol`**, emit `HUMAN_INPUT_REQUIRED` for that source and ask which page covers the topic.
 

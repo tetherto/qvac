@@ -203,6 +203,35 @@ export function relabelTitle(
 }
 
 /**
+ * Point a line's release-notes sidebar entry at its own GitHub release.
+ *
+ * The site publishes no release-notes page: `reference/meta.json` carries an
+ * external entry naming the tag of that line's first release
+ * (`sdk-v0.22.0`). The URL is per line, and a cut copies the current line's
+ * folder wholesale, so without this the opened line would inherit the closing
+ * line's tag and advertise the wrong release — silently, since an external
+ * entry is never checked against the content tree.
+ *
+ * The tag of the opened line does not exist yet at cut time; it is created
+ * when that version publishes, which is also when production starts serving
+ * the line. Pointing at it early is therefore correct, not broken.
+ *
+ * Returns `null` when the file carries no such entry, which is every
+ * collection but the SDK.
+ */
+export function retargetReleaseNotesLink(
+  source: string,
+  slug: string,
+  to: string,
+): string | null {
+  const entry = new RegExp(
+    `(external:\\[[^\\]]*\\]\\([^)]*/releases/tag/)${slug}-v[0-9]+\\.[0-9]+\\.0(\\))`,
+  );
+  if (!entry.test(source)) return null;
+  return source.replace(entry, `$1${slug}-${to}.0$2`);
+}
+
+/**
  * Empty the opened line's release notes, keeping the page.
  *
  * The API summary is left as the copy brought it, because the release that
@@ -272,6 +301,31 @@ async function relabelLine(
     touched.push(page);
   }
   return touched;
+}
+
+/**
+ * Retarget the opened line's release-notes link, best-effort: only a
+ * collection whose releases are published on GitHub carries the entry, so a
+ * line without it is a valid line. Today that is the SDK; the CLI publishes
+ * no reference pages and has no GitHub releases.
+ */
+async function retargetLineReleaseNotesLink(
+  dir: string,
+  slug: string,
+  opened: string,
+): Promise<string[]> {
+  const meta = path.join(dir, "reference", "meta.json");
+  if (!(await exists(meta))) return [];
+
+  const retargeted = retargetReleaseNotesLink(
+    await fs.readFile(meta, "utf-8"),
+    slug,
+    opened,
+  );
+  if (retargeted === null) return [];
+
+  await fs.writeFile(meta, retargeted);
+  return [meta];
 }
 
 /**
@@ -378,7 +432,13 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
     software.package,
   );
 
-  const touched = [...relabelled, ...emptied].map((page) =>
+  const retargeted = await retargetLineReleaseNotesLink(
+    openedDir,
+    slug,
+    opened,
+  );
+
+  const touched = [...relabelled, ...emptied, ...retargeted].map((page) =>
     path.relative(root, page),
   );
 

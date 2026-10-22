@@ -89,7 +89,7 @@ packages/**                                    # source is never edited
 
 The two line globs are exact because of how a line folder is named: the current line starts with `(`, every cut line with `v`. `sdk/v*` therefore matches the cut lines and never the current one.
 
-`reference/**` gets an explicit entry because it is the most tempting wrong answer. The API summary and the release notes are produced from the SDK source by the generators in `docs/website/scripts/`, in every line. A hand-written patch there is overwritten on the next release.
+`reference/**` gets an explicit entry because it is the most tempting wrong answer. The API summary is produced from the SDK source by the generators in `docs/website/scripts/`, in every line, and the release-notes entry beside it is a link to that minor's GitHub release rather than a page. A hand-written patch there is overwritten at the next release cutoff.
 
 `how-it-works.mdx` explains the architecture behind the SDK rather than how to use it. It moved into the SDK line from the old `about/` section and keeps that section's read-only status.
 

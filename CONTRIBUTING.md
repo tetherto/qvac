@@ -14,6 +14,14 @@ npm run docs:generate-api -- 0.9.1 --latest  # writes the current line's referen
 
 Full workflow, CLI flags, determinism guarantees, and troubleshooting are documented in [docs/website/docs-workflow.md](docs/website/docs-workflow.md). `docs:generate-api` requires `bun` on PATH (listed as a devDependency of `docs/website`).
 
+## Documentation lines
+
+The SDK and the CLI are each documented one folder per minor release under `docs/website/content/docs/`. The folder in parentheses — `sdk/(v0.23)` — is the **current line**: the release under development, and the one that answers the version-less URLs. Every other folder is a release that already shipped, and it documents that release and nothing else.
+
+Write to the current line. If your PR touches documentation content, the `Docs lines up to date with main` check compares the set of line folders at your branch point against main's and fails when main has cut a new line since. That failure means your edits would land in a shipped release's folder: git relocates them there by rename detection, without a conflict and with a green merge. Run `git merge origin/main` and move the edits to the current line.
+
+Editing a shipped release's folder on purpose is fine — a factual correction to published documentation belongs there. The check allows it as long as your branch is current on the line set; it only prints a warning, so that a change that also applies to the current line is not forgotten.
+
 ## PR Labels
 
 CI behaviour is driven by PR labels and the `fork-ci` environment. External fork PRs need merge/release-team approval of the `fork-ci` environment on each workflow run before secret-bearing jobs execute — see [`docs/ci/LABELS.md`](docs/ci/LABELS.md) for the full reference (labels, fork trust, per-commit re-approval), and [`docs/ci/TEAMS.md`](docs/ci/TEAMS.md) for the teams that can approve.

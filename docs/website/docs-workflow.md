@@ -25,9 +25,9 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 - [CI Workflows](#ci-workflows)
   - [PR Checks](#1-docs-website-pr-checks)
   - [Promote docs to production (manual)](#2-promote-docs-to-production-manual)
-  - [SDK release docs (local, skill-driven)](#3-sdk-release-docs-local-skill-driven)
+  - [Documentation at the release cutoff (local, skill-driven)](#3-documentation-at-the-release-cutoff-local-skill-driven)
 - [Script Reference](#script-reference)
-- [Release-Notes Overrides](#release-notes-overrides)
+- [Release-Notes Overrides (dormant)](#release-notes-overrides-dormant)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -52,9 +52,10 @@ Content falls into two categories:
 |---|---|---|
 | Manual content (guides, tutorials, addons) | one collection folder per top level: `content/docs/ecosystem/`, `content/docs/sdk/`, `content/docs/cli/`, `content/docs/resources/` | Yes |
 | SDK API summary (generated) | `content/docs/sdk/<current line>/reference/api.mdx` | Yes (committed once per minor release) |
-| SDK release notes (generated) | `content/docs/sdk/<current line>/reference/release-notes.mdx` | Yes (committed on every minor and patch release) |
 
-The SDK API summary and release notes are **generated from TypeScript source / package CHANGELOGs** via [TypeDoc](https://typedoc.org/) and Nunjucks. Each is one MDX page inside the SDK's current documentation line, the folder `src/lib/versions.ts` declares as current. A line that has shipped is never regenerated, so there is one target and no way to name another. Generation is triggered by the release pipeline; locally a maintainer can regenerate to preview.
+The SDK API summary is **generated from TypeScript source** via [TypeDoc](https://typedoc.org/) and Nunjucks. It is one MDX page inside the SDK's current documentation line, the folder `src/lib/versions.ts` declares as current. A line that has shipped is never regenerated, so there is one target and no way to name another. It is generated at the release cutoff; locally a maintainer can regenerate to preview.
+
+**The site publishes no release-notes pages.** Each line's sidebar carries a `Release Notes` entry that links out to that minor's GitHub release, which is where the changelog already lives. The release notes a release authors (`qv-sdk-changelog`) therefore reach readers through GitHub, and a patch release touches `docs/website` not at all.
 
 ### How the Pipeline Works
 
@@ -73,13 +74,11 @@ Phase 1: TypeDoc extraction  ──►  api-data.json
 Phase 2: Nunjucks rendering  ──►  content/docs/sdk/<current line>/reference/api.mdx
 ```
 
-Release notes are one page in the current line too — it accumulates patch
-sections as `## vX.Y.Z`
-directly under the `## vX.Y.0` minor block. The body of each section is
-inlined verbatim from each SDK pod package's
-`packages/<pkg>/changelog/<version>/CHANGELOG_LLM.md` under a per-package
-`### @qvac/<pkg>` subsection (heading levels demoted so they nest under
-the page hierarchy).
+The API summary is the only generated page. Release notes are not rendered
+into the site at all: `reference/meta.json` declares the sidebar entry as an
+external link to `https://github.com/tetherto/qvac/releases/tag/sdk-v<X.Y>.0`,
+so each line points at the GitHub release of its own minor. A cut rewrites that
+tag for the line it opens.
 
 ---
 
@@ -149,21 +148,15 @@ There is no flag naming the target. The destination is the SDK's current line,
 read from the manifest, and a version that is not that line's is refused before
 anything is written — see [Where generated pages land](#where-generated-pages-land).
 
-Release notes work the same way:
-
-```bash
-bun run scripts/generate-release-notes.ts <version> [--append-patch]
-```
-
-`--append-patch` inserts a `## vX.Y.Z` section into the line's existing page
-instead of rendering it from scratch. Re-running the same patch is idempotent.
+`scripts/generate-release-notes.ts` is still on disk but has no caller: the
+site publishes no release-notes pages. See
+[Retired tooling](#retired-tooling).
 
 ### Where generated pages land
 
-Both generators write into the SDK's **current documentation line** — the
-folder `src/lib/versions.ts` declares as current — and neither takes a target.
-A line that has shipped is what the site already serves and is never
-regenerated.
+The generator writes into the SDK's **current documentation line** — the folder
+`src/lib/versions.ts` declares as current — and takes no target. A line that has
+shipped is what the site already serves and is never regenerated.
 
 Because the destination is read rather than passed, it has to be checked. A
 version that is not the current line's is refused, before the first write:
@@ -175,14 +168,21 @@ Refusing to write v0.21 pages into v0.20, the current line of /sdk.
 ```
 
 Without that refusal, documenting a release before its line is cut would
-overwrite the previous line's own release notes, and the resulting tree would
-still build and still pass the suite.
+overwrite the API summary of the version before it, and the resulting tree
+would still build and still pass the suite.
 
 ### Cutting a documentation line
 
-A cut is what makes the next line current. It happens immediately after a
-release deploys — not when the next one is being prepared — so new material has
-a folder to land in and the release that just shipped is preserved as it stood.
+A cut is what makes the next line current. It happens at the **release
+cutoff** — step 6b of [`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md),
+on the morning the sprint's versions are declared final and their release
+branches are cut, stacked on step 6a — so the next version has a folder from the
+first day of its development, and the version entering release is preserved as
+it stood.
+
+Cutting at a release's own deploy instead, which is what used to happen, leaves
+a whole sprint writing feature documentation into the folder of a version that
+already shipped. That is the defect QVAC-27286 fixed.
 
 ```bash
 bun run scripts/cut-line.ts <collection> <version>
@@ -193,18 +193,18 @@ bun run scripts/cut-line.ts sdk v0.21
 It renames the outgoing folder group to its plain form, copies it to the new
 group, updates the manifest, adds the preserved line's rules to
 `public/_redirects`, moves the currency marker from the preserved line's titles
-to the opened one's, and empties the opened line's release-notes page. It
-refuses a collection that is not versioned, a version that is not above the
-current line, a destination already on disk, and a working tree that already
-carries changes.
+to the opened one's, and points the opened line's `Release Notes` sidebar link
+at its own minor's GitHub release tag. It refuses a collection that is not
+versioned, a version that is not above the current line, a destination already
+on disk, and a working tree that already carries changes.
 
-The opened line keeps the API summary it copied and starts with empty release
-notes, because the release PR that regenerates both is reviewed as a diff: a
-summary diffed against the previous line shows only the surface that moved,
-while notes diffed against the previous line's would be a wholesale
-replacement. The release-notes page is kept and blanked rather than deleted —
-`reference/meta.json` lists it — and its `description` is rewritten to the line
-being opened.
+The opened line keeps the API summary it copied, because the PR that
+regenerates it is reviewed as a diff: a summary diffed against the previous
+line shows only the surface that moved.
+
+The tag the opened line links at does not exist yet — the release it names is
+weeks away. That is fine: the link only has to resolve once the version ships,
+which is also when readers reach that line.
 
 It is a convenience, never a dependency. The same cut made by hand is the same
 cut — the procedure is in [`README.md`](README.md) — and the build is what
@@ -252,8 +252,7 @@ content/docs/
 │   ├── (v0.20)/                -> current line, serves /sdk/…
 │   │   ├── quickstart.mdx      ->            /sdk/quickstart
 │   │   └── reference/
-│   │       ├── api.mdx         ->            /sdk/reference/api          (generated)
-│   │       └── release-notes.mdx ->          /sdk/reference/release-notes (generated)
+│   │       └── api.mdx         ->            /sdk/reference/api          (generated)
 │   ├── v0.19/                  -> preserved, serves /sdk/v0.19/…
 │   └── v0.18/
 └── cli/
@@ -265,7 +264,9 @@ content/docs/
 - **Line name**: `vX.Y`. A line represents every patch in its range, so a line
   is never named for a patch.
 - **Currency**: stated once, by the parentheses. Nothing else records it, which
-  is why a cut is the only thing that changes it.
+  is why a cut is the only thing that changes it. The current line is the
+  **version under development**; every plain folder is a version that shipped
+  and documents that version alone.
 - **Manifest**: `src/lib/versions.ts`, hand-edited, naming each line and the
   folder holding it. `tests/line-structure.test.ts` fails the build when the
   manifest and the folders disagree.
@@ -276,34 +277,24 @@ content/docs/
   URLs, the agent artifacts, `versions.json`, the sitemap, and the retrieval
   metadata are computed at build time from the manifest and the folders.
 
-SDK release docs are generated **locally** as part of the release prep, not by
-a CI workflow. The `qv-sdk-changelog` skill (Step 8) runs the two generators in
-the same working tree as the changelog, so both land in a single release PR.
-The line being released was already cut, so the generators have somewhere to
-write; a release that reaches them before the cut is refused.
+Documentation closes at the **release cutoff**, on `main`, by its own two PRs —
+steps 6a and 6b of [`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md). A
+release PR and its backmerge carry nothing under `docs/website`, and no CI
+workflow generates documentation.
 
 ### Minor vs patch release behavior
 
-| Trigger | API summary | Release notes |
-|---|---|---|
-| `release-sdk-X.Y.0` (minor) | Re-run TypeDoc and render `api.mdx` into the current line. | Full render of the `## vX.Y.0` block (per-package verbatim `CHANGELOG_LLM.md` under `### @qvac/<pkg>`) into the current line's `release-notes.mdx`. |
-| `release-sdk-X.Y.Z`, `Z >= 1` (patch) | **Not touched.** The public API is frozen at the minor boundary, so a patch by definition adds nothing here. | Insert the `## vX.Y.Z` section directly after the existing `## vX.Y.0` block. Description range bumps to include the new patch. |
+| Trigger | API summary |
+|---|---|
+| Minor (`X.Y.0`) | Re-run TypeDoc and render `api.mdx` into the current line, at the cutoff (step 6a). |
+| Patch (`X.Y.Z`, `Z >= 1`) | **Not touched.** The public API is frozen at the minor boundary, so a patch by definition adds nothing here. |
 
-A patch of an older line is an ordinary edit to that line's page, not a release
-flow: the generators only write the current line.
+A patch release therefore touches `docs/website` not at all. What a patch
+changes for readers is in its GitHub release, which the line's sidebar already
+links.
 
-Re-running a patch is **idempotent** — the existing `## vX.Y.Z` block is detected and replaced in place rather than appended again. The newest patch always sits directly below the minor block; older patches stay further down.
-
-### Release notes data source
-
-Each `## vX.Y.Z` section's body is read **verbatim** from each SDK pod
-package's per-version folder (`packages/<pkg>/changelog/<X.Y.Z>/CHANGELOG_LLM.md`,
-falling back to raw `CHANGELOG.md`). The H1 release-notes banner is
-stripped and every surviving heading is demoted by two levels so it
-nests cleanly under the page's `### @qvac/<pkg>` subsection. Packages
-without a folder for that version are skipped (the SDK typically lists
-all five pod packages; in practice only `@qvac/sdk` shares the version
-namespace with the SDK pod's release cadence).
+A correction to an older line is an ordinary edit to that line's folder, not a
+release flow: the generator only ever writes the current line.
 
 ### Retired tooling
 
@@ -317,9 +308,22 @@ content change:
   `release-version-patch.ts` modules
 - `scripts/update-versions-list.ts`
 
-Nothing calls them. Running one prints what to do instead. The release path is
-the two generators; the cut is `scripts/cut-line.ts` or the hand procedure in
-[`README.md`](README.md).
+Nothing calls them. Running one prints what to do instead.
+
+A second set is dormant rather than retired: the release-notes page generator
+and everything feeding it. The site stopped publishing those pages — each
+line's sidebar links its minor's GitHub release instead — so these have no
+caller, but nothing about them is wrong and the page model may come back. Each
+carries a note at the top saying so. Do not call them:
+
+- `scripts/generate-release-notes.ts`
+- `scripts/lib/changelog-parser.ts`
+- `scripts/api-docs/templates/release-notes-page.njk` and
+  `release-notes-patch-section.njk`
+- `release-notes-overrides/`
+
+The release path is `generate-api-docs.ts` at the cutoff; the cut is
+`scripts/cut-line.ts` or the hand procedure in [`README.md`](README.md).
 
 ---
 
@@ -343,7 +347,21 @@ Hosting provider builds              ▼
 - **`docs-production`** is the production environment. The hosting provider watches this branch; any new commit triggers a build and deploy to the production site.
 - `docs-production` is **not a development branch**: it is a delayed production pointer that only ever advances to a commit that already exists on `main`. It receives commits **only** through the manual promotion workflow (never a PR, squash-merge, cherry-pick, or direct push).
 
-With `main` + `docs-production`, production is always a fast-forward of a reviewed, already-on-`main` state — so the two branches never diverge historically and staging is always what production will become.
+The two branches show different versions, and that is the point:
+
+| Branch | Shows | Sits at |
+|---|---|---|
+| `main` (staging) | the version **under development** | the tip of `main` |
+| `docs-production` (production) | the version **released** | the cutoff's step-6a commit |
+
+So production is not promoted to `main`'s tip. It is promoted to the commit
+that closed the released version's line — step 6a of
+[`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md) — which publishes exactly
+that tree and nothing merged after it. Everything merged since is the next
+version, visible on staging until its own release day.
+
+Either way production is a fast-forward of a reviewed, already-on-`main`
+commit, so the two branches never diverge historically.
 
 ### Builder configuration
 
@@ -364,23 +382,19 @@ Raising `NODE_OPTIONS` does not help and tends to hurt: it is a ceiling, not a r
 ### Staging (automatic)
 
 ```
-SDK release prep: qv-sdk-changelog skill (Step 8) generates docs locally
+During the sprint: feature PRs document the current line on main
     │
     ▼
-Generated docs committed in the SDK release PR (alongside the changelog)
+At the cutoff: step 6a closes the line, step 6b opens the next one
     │
     ▼
-Release PR (and its backmerge) merges to main
-    │
-    ▼
-Hosting provider detects new commit on main and rebuilds staging
+Hosting provider detects each new commit on main and rebuilds staging
 ```
 
-Generated docs ship inside the reviewable SDK release PR rather than via a
-separate auto-opened docs PR — so the API reference and release notes are
-reviewed together with the changelog that produced them. Any other push to
-`main` (docs content changes, merged PRs from contributors) still triggers the
-hosting provider's build the same way.
+Staging always shows the version under development, so a feature's
+documentation is reviewable the moment its PR merges. Every push to `main`
+triggers the hosting provider's build the same way — there is no documentation
+release workflow and release PRs carry no documentation at all.
 
 ### Production (manual promotion)
 
@@ -406,16 +420,21 @@ Hosting provider builds the static site and deploys to production
 Production is promoted by manually running the **Promote docs to
 production** workflow (`.github/workflows/promote-docs-production.yml`),
 never by merging a PR into `docs-production`. The workflow advances
-`docs-production` to the current `main` commit using **fast-forward-only**
+`docs-production` to the commit you name using **fast-forward-only**
 semantics: if the branches have diverged it fails instead of creating a
-merge commit, so `docs-production` stays a pure pointer into `main`'s
-history.
+merge commit, so `docs-production` stays a pure pointer into `main`'s history.
+
+**Which commit:** the merge commit of the cutoff's step 6a, recorded when that
+PR landed. Not `main`'s tip — that is already the next version. The workflow
+rejects a commit that is not contained in `main`, so only reviewed, merged work
+can be promoted, and its preflight prints the content diff this promotion
+publishes so you read the prose before approving it.
 
 The person promoting is responsible for confirming staging is healthy and
 that the docs PR Checks have passed on `main` before running the workflow.
 Promotion is fully manual on purpose — the workflow never runs
-automatically on a merge to `main`, and the timing (e.g. waiting for the
-Head of QVAC to publish the SDK package) is a human decision.
+automatically on a merge to `main`, and the timing (waiting for the npm
+publish to go out) is a human decision.
 
 > **Why fast-forward-only?** If `docs-production` ever received squash
 > merges, cherry-picks, or direct commits, Git would create commits that
@@ -429,7 +448,7 @@ Head of QVAC to publish the SDK package) is a human decision.
 
 ## CI Workflows
 
-Two GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes `main` to `docs-production`. SDK release docs are generated locally by a Cursor skill (no release workflow). Neither workflow builds or deploys the site — the hosting provider does that on branch pushes.
+Two GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes a reviewed `main` commit to `docs-production`. There is no documentation release workflow — the API summary is generated locally at the cutoff. Neither workflow builds or deploys the site; the hosting provider does that on branch pushes.
 
 ### 1. Docs Website PR Checks
 
@@ -440,12 +459,35 @@ Two GitHub Actions workflows touch the docs: one validates docs PRs, one manuall
 **What it does:**
 - Installs dependencies with Bun
 - Runs `bun run build` to validate the site compiles
-- Runs Vitest tests (sidebar consistency, link integrity, single-page rendering, changelog parser) excluding TSDoc completeness tests that require SDK source
+- Runs Vitest tests (sidebar consistency, link integrity, single-page rendering, the cut) excluding TSDoc completeness tests that require SDK source
 - Optionally installs the SDK and runs the TSDoc completeness audit in warning mode
+- Runs `Docs lines up to date with main` in a second job, described below
 
 **Purpose:** Catches build errors and broken links in docs PRs before merge.
 
-The API summary page lives in the SDK's current line, at `content/docs/sdk/<current line>/reference/api.mdx`, and is committed to the repo (refreshed locally by the `qv-sdk-changelog` skill Step 8 during SDK release prep), so PR checkouts always have it on disk — no placeholder step is needed.
+The API summary page lives in the SDK's current line, at `content/docs/sdk/<current line>/reference/api.mdx`, and is committed to the repo (refreshed at the release cutoff), so PR checkouts always have it on disk — no placeholder step is needed.
+
+**`Docs lines up to date with main`** is the second job, and it exists because
+git cannot report the failure it catches. A cut renames the current line's
+folder; git detects that rename by content similarity, so a branch created
+before a cut has its documentation edits replayed into the folder the cut
+*preserved* — a release that already shipped — with no conflict and a green
+merge. That is how `cli/v0.16` came to document five features 0.16.0 never
+shipped (QVAC-27286).
+
+The job compares the set of line folders at `merge-base(main, head)` against
+main's tip, and fails when they differ. The question it asks is "did main move
+the line set under this branch?", not "what does this branch do to the line
+set" — which is what lets the cut's own PR pass with no label and no exception.
+The fix for a failure is `git merge origin/main`, then moving the edits to the
+current line.
+
+A PR that edits only preserved lines gets a warning rather than a failure: a
+factual correction to a shipped release's documentation is legitimate, and only
+a human can tell it apart from a misplaced edit.
+
+Do not make this job a required check in branch protection while it is new. A
+false positive would block every docs PR at once.
 
 ### 2. Promote docs to production (manual)
 
@@ -453,45 +495,46 @@ The API summary page lives in the SDK's current line, at `content/docs/sdk/<curr
 
 **Triggers:** Manual `workflow_dispatch` only. It never runs automatically on a merge to `main`.
 
+**Input:** the commit to promote — the cutoff's step-6a merge commit, not `main`'s tip.
+
 **What it does:**
-- Checks out `docs-production` (full history) using `PAT_TOKEN` (the default `GITHUB_TOKEN` cannot push to the protected `docs-production` branch)
-- Fetches `origin/main` and runs `git merge --ff-only origin/main`
-- Pushes the fast-forwarded `docs-production`, which the hosting provider picks up to deploy production
+- Validates the requested commit in an ungated job that cannot push: it must exist, be contained in `main`, and be strictly ahead of `docs-production`
+- Prints a step summary with the commits being promoted and **the documentation content diff this promotion publishes**, so the prose going public is read before the approval
+- Waits for the `docs-production` environment approval
+- Fast-forwards and pushes `docs-production` using `PAT_TOKEN` (the default `GITHUB_TOKEN` cannot push to the protected branch), which the hosting provider picks up to deploy production
 
-**Fails when:** `docs-production` has diverged from `main` (the `--ff-only` merge is rejected). This is intentional — divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`.
+**Fails when:** the commit is unknown, is not on `main`, is behind `docs-production` (a silent rollback), or the branches have diverged. Each is intentional — divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`.
 
-**Purpose:** Give the docs owner a single, deliberate button to promote the reviewed `main` state to production once the SDK package is (about to be) published, without ever letting `docs-production` drift from `main`'s history.
+**Purpose:** Give the docs owner a single, deliberate button to publish the version that shipped, reviewed content and all, without ever letting `docs-production` drift from `main`'s history.
 
 > `docs-production` should stay branch-protected (no direct pushes, no PR merges); the promotion workflow's `PAT_TOKEN` account is the only identity allowed to push to it.
 
-### 3. SDK release docs (local, skill-driven)
+### 3. Documentation at the release cutoff (local, skill-driven)
 
-**Where:** the `qv-sdk-changelog` Cursor skill, Step 8 (`.cursor/skills/qv-sdk-changelog/SKILL.md`). There is no GitHub Actions docs-release workflow — generation runs locally during release prep and ships in the SDK release PR alongside the changelog.
+**Where:** steps 6a and 6b of [`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md). There is no GitHub Actions documentation-release workflow, and a release PR carries no documentation.
 
-**When:** while preparing an `@qvac/sdk` release (after the changelog / `CHANGELOG_LLM.md` is generated). Skipped for non-`sdk` packages.
+**Who:** the train's **tech lead** opens both PRs, in one sitting, right after cutting the train branch. The **documentation engineer** reviews them and merges 6a then 6b. The order is not a preference — see "Why 6b stacks on 6a" below.
 
-**Precondition:** the line for the version being released is already cut. The
-cut happens right after the *previous* release deploys, so by release prep the
-folder exists. Reaching the generators before that is refused, naming the cut
-that is missing.
+**When:** on the morning the sprint's versions are declared final and the release branches are cut. Not when the release publishes, days later.
 
-**What it does:**
-1. Runs the generators from `docs/website`, against the current line:
-   - **Minor (`X.Y.0`)** — `generate-api-docs.ts <version> --force-extract`
-     (TypeDoc + render, deterministic by construction) and
-     `generate-release-notes.ts <version>` (per-package verbatim
-     `CHANGELOG_LLM.md` under a single `## v<X.Y.0>` block).
-   - **Patch (`X.Y.Z`, `Z >= 1`)** — `generate-release-notes.ts <version> --append-patch`,
-     inserting `## v<X.Y.Z>` directly after the existing `## v<X.Y>.0` block.
-     The API summary is never touched by a patch.
-2. Runs `npm run build` from `docs/website` to verify the site still compiles (fail-stop on error).
-3. Only the generated surfaces are committed — `content/docs/sdk/<current line>/reference/api.mdx` and `content/docs/sdk/<current line>/reference/release-notes.mdx`. Never `src/lib/versions.ts` or `public/_redirects`: both belong to the cut. The skill only generates files (it never runs `git add`); review `git status` and commit these, while all build/generation byproducts (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`) are gitignored so they never show up.
+**6a — close the line of the version being released.** From `docs/website`, on a branch off `main`, against the current line:
 
-The dual-checkout race window the old CI workflow guarded against does not apply locally: the skill runs in the single release working tree after the changelog is generated, so the SDK source and CHANGELOGs are already the released state.
+```bash
+bun run scripts/generate-api-docs.ts <version> --force-extract
+npm run build
+```
 
-Once the SDK release PR (and its backmerge) lands on `main`, the hosting provider's `main` build picks it up and deploys to staging.
+One file per collection: `content/docs/sdk/<current line>/reference/api.mdx`. Never `src/lib/versions.ts` or `public/_redirects` — both belong to the cut.
 
-Patches never re-run TypeDoc — they touch only the frontmatter title of the API summary and append a section to the release notes — so `api-data.json` only changes on minor releases.
+**Record 6a's merge commit.** It is what the promotion workflow publishes on release day, and it is the last commit whose tree still has the released version as the current line.
+
+A patch release has no 6a. The public API is frozen at the minor boundary, so there is nothing to regenerate.
+
+**6b — open the line of the next version.** `qv-docs-line-cut`, on a branch off **6a's branch**.
+
+**Why 6b stacks on 6a.** A cut renames the folder 6a writes into. If 6b branches off `main` instead, merging 6a and then 6b produces a tree where the *preserved* folder — the one production serves — silently keeps the **old** API summary, because that half of the merge has no conflict to report. The conflict surfaces only in the freshly opened folder, which no reader has reached yet. Stacked on 6a, both merge clean and the preserved folder keeps what 6a generated. The cost is that merging 6a retargets 6b's base and dismisses its approval; the same reviewer re-approves and merges.
+
+Build and generation byproducts (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`) are gitignored, so `git status` shows only committable files.
 
 ---
 
@@ -508,13 +551,13 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `api-docs/extract.ts` | -- | Phase 1: TypeDoc analysis, writes `api-data.json` |
 | `api-docs/render.ts` | -- | Phase 2: Nunjucks rendering of `single-page.njk` from `api-data.json` |
 | `api-docs/audit-tsdoc.ts` | `docs:audit-tsdoc` | TSDoc completeness audit (standalone or via extraction) |
-| `generate-release-notes.ts` | `docs:generate-release-notes` | Generates / augments the release-notes page of the SDK's current line. Default mode renders the page from scratch with a `## v<X.Y.0>` block; `--append-patch` inserts a `## v<X.Y.Z>` block directly after the minor; `--title-only` relabels the frontmatter title only. |
-| `cut-line.ts` | -- | Cuts a versioned collection's next documentation line: preserves the outgoing one, opens the new one as a copy, and updates the manifest, the redirects, and the currency marker. A convenience for the hand procedure in `README.md`, never a dependency. |
+| `generate-release-notes.ts` | `docs:generate-release-notes` | **Dormant**, kept on disk. Rendered the release-notes page of the SDK's current line; the site publishes no such page any more. Do not call it. |
+| `cut-line.ts` | -- | Cuts a versioned collection's next documentation line: preserves the outgoing one, opens the new one as a copy, and updates the manifest, the redirects, the currency marker, and the opened line's release-notes link. A convenience for the hand procedure in `README.md`, never a dependency. |
 | `update-versions-list.ts` | -- | **Retired**, kept for reference. Rebuilt `src/lib/versions.ts` from the series siblings on disk; that file is now hand-edited. |
 | `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the current line's API summary using the monorepo SDK's `package.json` version (no version bump) |
 | `create-version-bundle.ts` | -- | **Retired**, kept for reference. Copied the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx`. |
 | `lib/release-shared.ts` | -- | Shared helpers for the generators: version parsing, the manifest reader, and `referenceDirFor` / `apiPageFor` / `releaseNotesPageFor`, which resolve the current line's reference folder and refuse a version that is not its own |
-| `lib/changelog-parser.ts` | -- | Changelog parsing — `readChangelogLLMVerbatim` for the verbatim per-package render plus legacy `parseChangelog` / `parseChangelogFolder` / `mergeChangelogs` exports kept for unit-test fixtures and ad-hoc tooling |
+| `lib/changelog-parser.ts` | -- | **Dormant**, kept on disk. Changelog parsing for the release-notes page generator, its only caller. |
 | `lib/link-validator.ts` | -- | Internal link extraction + resolution (used by the link-integrity test) |
 
 > AI-assisted authoring (drafting descriptions or examples) happens
@@ -528,15 +571,15 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 
 ---
 
-## Release-Notes Overrides
+## Release-Notes Overrides (dormant)
 
-To customize the generated release notes page for a specific version, create a markdown file at:
+`release-notes-overrides/<version>.md` injected extra `## Heading` sections at
+the top of a generated release-notes page. The site publishes no release-notes
+pages any more, so nothing reads this directory. It is kept on disk with its
+existing files, because the page model may come back.
 
-```
-docs/website/release-notes-overrides/<version>.md
-```
-
-For example, `release-notes-overrides/0.11.0.md`. The file should contain `## Heading` sections that are injected at the top of the page (after frontmatter, before the per-version `## vX.Y.Z` blocks). Useful for highlights, migration guides, or breaking-change callouts that don't fit inside any single package's `CHANGELOG_LLM.md`. Overrides only apply to full minor renders (default mode), not to the patch append flow.
+A highlight, migration guide, or breaking-change callout now belongs in the
+version's `CHANGELOG_LLM.md`, which is the body of its GitHub release.
 
 ---
 
@@ -595,9 +638,9 @@ Version vX.Y.Z was not found
 Refusing to write v0.21 pages into v0.20, the current line of /sdk.
 ```
 
-**Cause:** the generators write into the current line and only accept a version that belongs to it.
+**Cause:** the generator writes into the current line and only accepts a version that belongs to it.
 
-**Fix:** if the version is ahead, its line has not been cut — `bun run scripts/cut-line.ts sdk v<X.Y>`, or the hand procedure in [`README.md`](README.md). If the version is behind, it has already shipped and its line is what the site serves; edit that line's page directly instead of regenerating it.
+**Fix:** if the version is ahead, its line has not been cut yet — which at the cutoff means step 6b has not run. If the version is behind, it has already shipped and its line is what the site serves; edit that line's page directly instead of regenerating it. Do not cut a line to make the refusal go away: cutting opens the line *after* the one you are naming, which is the mistake the refusal is there to catch.
 
 ### Build stops with no error and no log
 
@@ -621,16 +664,39 @@ The committed `content/docs/sdk/<current line>/reference/api.mdx` is what `next 
 2. Run `bun run build` locally to reproduce
 3. Look for broken MDX frontmatter or invalid imports in `content/`
 
-### Recover a broken reference page after a bad release
+### Recover a broken API summary
 
-If a release ran but produced a broken `reference/api.mdx` or `reference/release-notes.mdx`, re-render the page from the current line's own version:
+If step 6a produced a broken `reference/api.mdx`, re-render it from the current line's own version:
 
 ```bash
 bun run scripts/generate-api-docs.ts <current-line-X.Y.Z> --force-extract
-bun run scripts/generate-release-notes.ts <current-line-X.Y.Z>
 ```
 
-Then revert the bad commit / branch state via `git`. There is no automatic backup directory — versioning is the safety net (every previous version exists as a sibling `vX.Y.Z.mdx`).
+Then revert the bad commit via `git`. There is no automatic backup directory — the retained lines are the safety net, each a full copy of the tree as that release stood.
+
+### Fix production without waiting for the next release
+
+Production is pinned at the released version's commit, so an urgent correction
+to a published page cannot simply be merged to `main` — `main` is the next
+version, and promoting it would publish unreleased documentation.
+
+The procedure is deliberately manual, and it bypasses `docs-production`
+entirely:
+
+1. Fix what needs fixing on `main`, through a normal PR, and merge it.
+2. Branch `docs-fix` from `main` at that commit.
+3. On `docs-fix`, remove the current line's folder and make the manifest
+   declare the previous line as current. The tree now shows the released
+   version, plus the correction.
+4. Push `docs-fix` to the repository.
+5. In the hosting provider's dashboard, trigger a one-off manual deploy of the
+   production site from `docs-fix`, leaving the automatic configuration pointed
+   at `docs-production`.
+6. Delete `docs-fix` once the next ordinary promotion has gone out.
+
+Nothing is scripted here on purpose: it is rare, it touches production
+directly, and every step wants a human looking at it. Step 3 is also the only
+inverse of a cut — the cut itself has none.
 
 ### Generated MDX contains "undefined" or "[object Object]"
 

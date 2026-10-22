@@ -57,11 +57,17 @@ npm run serve
 
 A versioned collection — SDK, CLI — publishes its current line, whose folder is
 a Fumadocs group so its pages answer at the version-less paths, and every line
-cut before it, whose folders are plain so their pages carry the version. A line
-is never retired: it is the only record of how that release behaved. Cut the
-next line as soon as a release goes live, not when the next one is being
-prepared, so the version-less paths serve what was just released and new
-material has a folder to land in.
+cut before it, whose folders are plain so their pages carry the version. The
+current line is the **version under development**; every plain folder is a
+version that shipped and documents that version alone. A line is never retired:
+it is the only record of how that release behaved.
+
+Cut at the **release cutoff** — step 6b of
+[`../ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md), the morning the sprint's
+versions are declared final and their release branches are cut — so the next
+version has a folder from the first day of its development.
+Cutting at a release's own deploy instead leaves a whole sprint writing feature
+documentation into the folder of a version that already shipped.
 
 One command does the whole thing, from `docs/website`:
 
@@ -106,25 +112,24 @@ Then edit the two hand-maintained inputs:
 Then move the currency marker. A page that states in its own title which series
 it documents also states whether that series is current, and the parentheses
 are the only other place currency is recorded, so nothing else can maintain the
-claim. Today that is the SDK's two generated reference pages: `v0.17.x (latest)`
-becomes plain `v0.17.x` in the preserved line, and `v0.18.x (latest)` in the new
-one.
+claim. Today that is the SDK's generated API summary: `v0.17.x (latest)` becomes
+plain `v0.17.x` in the preserved line, and `v0.18.x (latest)` in the new one.
 
-Then empty the new line's `reference/release-notes.mdx`, keeping its
-frontmatter and replacing its body with a line stating the release has not
-shipped. The two generated pages are treated differently on purpose:
+The API summary keeps the copy. The cutoff that renders it is reviewed as a
+diff, and against the previous line's summary only the part of the surface that
+actually moved shows up.
 
-- The **API summary** keeps the copy. The release that renders it is reviewed
-  as a diff, and against the previous line's summary only the part of the
-  surface that actually moved shows up.
-- The **release notes** share nothing with the line before them. Keeping them
-  would make that same diff a wholesale replacement, and would publish the
-  previous release's notes under the new line's title for as long as the line
-  goes unreleased.
+Then retarget the new line's release-notes link. `reference/meta.json` carries
+the sidebar entry as an external link to that minor's GitHub release:
 
-The page itself stays either way: `reference/meta.json` lists it, so removing
-it would drop it from the sidebar. Its `description` names a version too, so it
-is rewritten to the line being opened.
+```
+"external:[Release Notes](https://github.com/tetherto/qvac/releases/tag/sdk-v0.18.0)"
+```
+
+The copy brought the preserved line's tag with it, so rewrite it to the line
+being opened. The tag does not exist yet — the release it names is weeks away —
+and that is fine: the link only has to resolve once the version ships, which is
+also when readers reach that line.
 
 Everything else follows: the sidebars come from the `meta.json` files the copy
 brought with it, and the switcher, canonicals, agent artifacts, `versions.json`,

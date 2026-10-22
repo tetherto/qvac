@@ -189,7 +189,8 @@ const ALLOWLIST_FILES = new Set([
  */
 const RESTRICTED_FILES = new Set(["ecosystem/index.mdx"]);
 
-/** `reference/` in any line: the API summary and release notes are generated. */
+/** `reference/` in any line: the API summary is generated, and the release-notes
+ * entry beside it is an external link to that minor's GitHub release. */
 function isGenerated(page: string): boolean {
   return page.split("/").includes("reference");
 }

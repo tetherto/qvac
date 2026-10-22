@@ -37,14 +37,14 @@ jobs:
         run: bun install
 
       - name: Build and validate
-        # The API summary lives at `content/docs/sdk/(v0.20)/reference/api.mdx`,
-        # with one copy per cut line under `content/docs/sdk/v0.19/reference/`
-        # and `content/docs/sdk/v0.18/reference/`. Each is committed to the
-        # repo and refreshed locally by the `qv-sdk-changelog` skill (Step 8)
-        # during SDK release prep, so every PR checkout already has them on
-        # disk — no placeholder step is needed here. (The historical
-        # placeholder targeted `content/docs/sdk/api/`, a path the build never
-        # read and that no longer exists.)
+        # The API summary lives at `content/docs/sdk/(v0.23)/reference/api.mdx`,
+        # with one copy per cut line under `content/docs/sdk/v0.22/reference/`
+        # and the lines below it. Each is committed to the repo and refreshed
+        # locally during the release cutoff (see `docs/ci/RELEASE-TRAIN.md`
+        # step 6a), so every PR checkout already has them on disk — no
+        # placeholder step is needed here. (The historical placeholder
+        # targeted `content/docs/sdk/api/`, a path the build never read and
+        # that no longer exists.)
         run: bun run build
 
       - name: Run docs tests
@@ -62,3 +62,76 @@ jobs:
         env:
           SDK_PATH: ${{ github.workspace }}/packages/sdk
         run: bun run vitest run tests/tsdoc-completeness.test.ts
+
+  lines-up-to-date:
+    # Refuse a branch whose documentation lines are older than main's.
+    #
+    # A cut renames the current line's folder and copies it to the next one.
+    # Git detects that rename by content similarity, so a branch created
+    # before a cut has its edits replayed into the folder the cut *preserved* —
+    # the line of a release that already shipped — with no conflict and a green
+    # merge. That is how `cli/v0.16` came to document five features 0.16.0
+    # never shipped (QVAC-27286). Nothing in git reports it, so a check has to.
+    #
+    # The comparison is `merge-base(main, head)` against main's tip, not the
+    # branch against main. The question is "did main move the line set under
+    # this branch?", which is the actual defect; what the branch does to the
+    # line set is none of this check's business. That is also what lets the
+    # cut's own PR pass with no label and no exception: it branches from a
+    # base whose line set already matches main's.
+    #
+    # The line set is read from the folder names rather than from
+    # `src/lib/versions.ts`, which is ~300 lines of which the manifest is a
+    # part. A commit touching one of its helpers would otherwise block every
+    # open docs PR. `tests/line-structure.test.ts` already fails the build when
+    # folders and manifest disagree, so the two are the same fact.
+    name: Docs lines up to date with main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          # merge-base needs history; the default depth of 1 has none.
+          fetch-depth: 0
+
+      - name: Compare the line set at the branch point against main
+        env:
+          # The PR head, never `HEAD`. On `pull_request` the checkout is the
+          # merge commit, which already has main merged in, so its merge-base
+          # with main is main's own tip — the check would pass forever.
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        working-directory: .
+        run: |
+          set -euo pipefail
+
+          lines() {
+            git ls-tree -d --name-only "$1" \
+              docs/website/content/docs/sdk/ docs/website/content/docs/cli/ \
+              | sort
+          }
+
+          git fetch --no-tags origin main
+          base=$(git merge-base FETCH_HEAD "$HEAD_SHA")
+
+          changed=$(git diff --name-only "$base" "$HEAD_SHA" \
+            -- docs/website/content/docs/ || true)
+          if [ -z "$changed" ]; then
+            echo "No documentation content in this PR; nothing to check."
+            exit 0
+          fi
+
+          if ! diff <(lines "$base") <(lines FETCH_HEAD); then
+            echo "::error::The documentation line set moved on main after this branch was created."
+            echo "::error::Run 'git merge origin/main', then move your edits to the current line (the folder in parentheses)."
+            exit 1
+          fi
+
+          # The line set matches, so the branch knows which line is current and
+          # editing a preserved line is a deliberate, legitimate act — fixing a
+          # shipped release's docs. It is also what a merge of main leaves
+          # behind when rename detection relocates pre-cut edits, so say so
+          # without blocking: only a human can tell the two apart.
+          if ! grep -q '/content/docs/[^/]*/(' <<<"$changed"; then
+            echo "::warning::This PR edits only preserved documentation lines. If the change also applies to the current line, add it there too."
+          fi
+
+          echo "Documentation line set matches main."

@@ -1,6 +1,6 @@
 ---
 name: qv-docs-line-cut
-description: Cut the next documentation line of every versioned collection whose release has already shipped — run scripts/cut-line.ts per collection, commit each cut on its own, verify it mechanically, and measure the evidence the PR body quotes. Use when a release goes live, at the start of a sprint when the coming version needs a folder to land in, or when invoking /qv-docs-line-cut.
+description: Cut the next documentation line of every versioned collection whose current line has entered release — run scripts/cut-line.ts per collection, commit each cut on its own, verify it mechanically, and measure the evidence the PR body quotes. Use at a release cutoff (step 6b of docs/ci/RELEASE-TRAIN.md), when the coming version needs a folder to land in, or when invoking /qv-docs-line-cut.
 disable-model-invocation: true
 ---
 
@@ -8,9 +8,12 @@ disable-model-invocation: true
 
 A versioned collection publishes its current line from a parenthesized folder,
 whose pages answer at the version-less paths, and every line cut before it from
-a plain folder. A cut preserves the outgoing line and opens the next one as a
-copy, so the sprint's features have a folder to land in while the version-less
-paths keep serving what was just released.
+a plain folder. The current line is the **version under development**; each
+plain folder is a version that shipped and documents that version alone.
+
+A cut closes the current line and opens the next one as a copy. It runs at the
+release cutoff, so the coming sprint's features have a folder to land in from
+their first day.
 
 `docs/website/scripts/cut-line.ts` performs the cut. This skill is the round
 around it: which collections are due, in what order, what to measure, and what
@@ -33,14 +36,17 @@ that is not a versioned collection, listing the ones that are.
 
 ## When to use
 
-- A release of a documented collection has gone live and its line must be cut
-  before the sprint's first feature PR needs a folder.
-- At the start of a sprint, to cut every line that is due in one PR.
+- A release cutoff: the sprint's versions are final and their release branches
+  are cut, so the next version needs a folder before the coming sprint's first
+  feature PR. Step 6b of
+  [`docs/ci/RELEASE-TRAIN.md`](../../../docs/ci/RELEASE-TRAIN.md), invoked by
+  the train's tech lead.
+- To cut every line that is due in one PR.
 - `/qv-docs-line-cut` invoked directly.
 
 ## What it does NOT do
 
-- Does not release or publish. It reacts to releases that already shipped.
+- Does not release or publish. It reacts to a release that has started.
 - Does not write the opened line's content; the sprint's feature PRs do.
 - Does not open the PR. It leaves the tree committed and the evidence measured.
 - Does not build the preserved line's content from anything but the outgoing
@@ -51,29 +57,53 @@ that is not a versioned collection, listing the ones that are.
 
 ### Step 1: Decide which lines are due
 
-For each collection in the manifest, ask the registry for the published
-version of the package it follows:
+A line is cut when the version it documents **enters release**, not when that
+version ships. The current line is the version under development; once its
+release branches are cut, development has moved to the next version and that
+next version needs a folder. This is step 6b of
+[`docs/ci/RELEASE-TRAIN.md`](../../../docs/ci/RELEASE-TRAIN.md), run by the
+train's tech lead as part of the release procedure.
+
+**The moment is declared, not detected.** The tech lead invokes this skill at
+step 6b, naming the version being released. Do not try to infer from the
+repository that a cutoff has arrived: a `release-train-*` branch can be cut
+early and sit open for days, so its mere existence says nothing about whether
+the sprint is over. The invocation is the signal.
+
+What this step does is **verify the declared moment against the state**, per
+collection, and refuse a cut that does not fit:
 
 ```bash
 npm view <package> version
 ```
 
-Compare its major.minor against the collection's current line:
-
-- **Equal** → due. The current line has shipped, and the line to open is the
-  next minor.
-- **Below** → not due. The current line is still unreleased; leave it open and
-  skip the collection.
-- **Above** → stop and ask. A line was skipped, which this skill does not
-  resolve.
+- **Published version one minor below the current line** → on time. The current
+  line is the version entering release; npm still serves the one before it.
+  Cut the next minor.
+- **Published version equal to the current line** → **the cut is late.** That
+  version is already out, and the sprint after it has been writing into its
+  folder. Report it before cutting: the opened line will carry prose about
+  features that release never shipped, and the preserved folder keeps a copy.
+  See "Cut on time".
+- **Published version above the current line** → stop and ask. A line was
+  skipped, which this skill does not resolve.
+- **Current line is not the version the tech lead named** → stop and ask. Either
+  the cut already ran for this cutoff, or the collection is a release behind.
 
 **Never read the version from `packages/<name>/package.json` on `main`.** The
 release bumps it on the release branch, and `main` only catches up when the
-backmerge lands, so a shipped release still reads as the previous version
-there. The registry is the signal.
+backmerge lands. The registry is the signal.
 
-Report the roster, the published version, and the verdict per collection before
-cutting anything.
+Report the roster, the published version, the version being released, and the
+verdict per collection before cutting anything.
+
+**Branch off step 6a, not off `main`.** Step 6a regenerates the API summary of
+the line being closed, in its own PR that has not merged yet when you run. A cut
+renames the folder 6a writes into, so a cut branched from `main` silently
+reverts 6a in the preserved line once both merge — measured: `main` keeps the
+*old* summary in the published folder and conflicts only in the opened one,
+which nobody is reading yet. Branch 6b from 6a's branch and both merge clean, in
+order. If 6a's commit is not in your history, stop.
 
 ### Step 2: Cut each due collection, one commit each
 
@@ -102,19 +132,18 @@ disk, and a dirty tree.
 Per collection, against the commit that made the cut:
 
 ```bash
-diff -r -x release-notes.mdx content/docs/<slug>/<preserved> 'content/docs/<slug>/(<opened>)'
+diff -r content/docs/<slug>/<preserved> 'content/docs/<slug>/(<opened>)'
 ```
 
-The only difference reported is the **title line of each page whose title names
-the series**, where the opened line gains the `(latest)` marker the preserved
-line loses. A collection publishing no such page reports nothing and exits 0 —
-a line with no marker anywhere is a valid line, not a failure.
+Two differences are reported, and only these two:
 
-`release-notes.mdx` is excluded because the cut empties it by design: the
-opened line's notes share nothing with the line before them, so carrying them
-over would publish the previous release's notes under the new line's title and
-turn the release PR's diff into a wholesale replacement. The page itself stays,
-because `reference/meta.json` lists it.
+- the **title line of each page whose title names the series**, where the
+  opened line gains the `(latest)` marker the preserved line loses
+- the **release-notes link in `reference/meta.json`**, where each line points
+  at its own minor's GitHub release rather than the one it was copied from
+
+A collection with neither reports nothing and exits 0 — a line with no marker
+and no release link is a valid line, not a failure.
 
 Second proof, free from git: the commit records the opened folder as a rename
 of the outgoing one, at 100% similarity for every page except the ones
@@ -158,12 +187,27 @@ it sends the reviewer looking for a discrepancy that is the body's fault.
 
 ## Cut on time
 
-Cut as soon as the release goes live, not when the next one is being prepared.
-A line cut late is not just late: while the folder is missing, the sprint's
-feature PRs document their features inside the line that is still current, so
-the preserved line ends up describing features its release never shipped.
-Recovering costs an extra commit that resets the preserved folders to the tree
-of the release's backmerge commit, and the PR stops being pure script output.
+Cut at the cutoff — the morning the sprint's versions are declared final and
+their release branches are cut — not when the release goes live days later, and
+not when the next one is being prepared. The current line is always the version
+under development, and the cut is what moves that pointer forward.
+
+A late cut is not merely late. While the next version has no folder, the
+sprint's feature PRs document their features inside the line that is still
+current, which by then is a version in release or already published. The cut
+then preserves that contaminated folder and copies it forward, so the published
+line describes features its release never shipped. That is QVAC-27286: `cli/v0.16`
+documented five features 0.16.0 never had.
+
+Two things catch it before readers do. `Docs lines up to date with main` in
+`docs-website-pr-checks.yml` fails a branch whose line set is older than main's,
+which is how a pre-cut branch's edits reach a preserved folder. And the
+promotion preflight prints the content diff this release publishes, for review
+before the approval.
+
+Recovering from a late cut costs an extra commit that resets the preserved
+folders to the tree of the release's backmerge commit, and the PR stops being
+pure script output.
 
 ## If the base moved under the branch
 
@@ -175,17 +219,21 @@ base while the preserved line gets the new one.
 Reset onto the base and re-run the script instead. That is cheap precisely
 because the commits are script output.
 
-Avoid stacking the cut on another branch. Changing an open PR's base dismisses
-every approval on it — GitHub treats the base change as its own reason, apart
-from `dismiss_stale_reviews_on_push`.
+Stack the cut on step 6a's branch and nothing else. That one stack is required
+(see Step 1); any other is not. Note the cost and warn the reviewer: when 6a
+merges, GitHub retargets this PR to `main`, and a base change dismisses every
+approval on it — GitHub treats it as its own reason, apart from
+`dismiss_stale_reviews_on_push`. Since the two PRs are merged back to back by
+the same reviewer, re-approving is the whole cost.
 
 ## Quality Checklist
 
 - [ ] Roster read from `src/lib/versions.ts`, not assumed
-- [ ] Each collection's verdict based on `npm view`, not on `main`'s manifest
+- [ ] Each collection's verdict based on the train branch, with `npm view` read as the timing check — never on `main`'s manifest
+- [ ] Step 6a's API-summary commit already on `main` before cutting
 - [ ] One `cut-line.ts` invocation and one commit per collection
-- [ ] `diff -r -x release-notes.mdx` run per collection, output recorded
-- [ ] Opened line's `release-notes.mdx` holds the placeholder, frontmatter kept
+- [ ] `diff -r` run per collection, output recorded
+- [ ] Opened line's `reference/meta.json` links its own minor's GitHub release
 - [ ] No hardcoded current line left in `src`, `tests`, or `scripts`
 - [ ] `npm run build` clean and `vitest` green minus `tsdoc-completeness`
 - [ ] Every number in the PR body measured against the branch tip
