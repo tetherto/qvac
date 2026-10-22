@@ -79,6 +79,10 @@ function isAbove(
   return a.major !== b.major ? a.major > b.major : a.minor > b.minor;
 }
 
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Rewrite one collection's entry in the manifest: its current line's folder
  * loses the parentheses, and the line being opened is inserted above it.
@@ -225,10 +229,15 @@ export function retargetReleaseNotesLink(
   to: string,
 ): string | null {
   const entry = new RegExp(
-    `(external:\\[[^\\]]*\\]\\([^)]*/releases/tag/)${slug}-v[0-9]+\\.[0-9]+\\.0(\\))`,
+    `(external:\\[[^\\]]*\\]\\([^)]*/releases/tag/)` +
+      `${escapeForRegExp(slug)}-v[0-9]+\\.[0-9]+\\.0(\\))`,
   );
   if (!entry.test(source)) return null;
-  return source.replace(entry, `$1${slug}-${to}.0$2`);
+  return source.replace(
+    entry,
+    (_match, before: string, after: string) =>
+      `${before}${slug}-${to}.0${after}`,
+  );
 }
 
 /**

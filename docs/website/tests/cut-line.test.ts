@@ -235,6 +235,10 @@ describe('the release-notes link of the line being opened', () => {
     const cli = '{\n  "title": "Reference",\n  "pages": ["api"]\n}\n';
     expect(retargetReleaseNotesLink(cli, 'cli', 'v0.18')).toBeNull();
   });
+
+  it('matches the slug literally, so a metacharacter cannot stand for a letter', () => {
+    expect(retargetReleaseNotesLink(meta('sdk-v0.22.0'), 'sd.', 'v0.23')).toBeNull();
+  });
 });
 
 describe('a cut against a copy of the tree', () => {
