@@ -1,4 +1,10 @@
-import { completion, loadModel, unloadModel, type CompletionStats } from '@qvac/sdk'
+import {
+  completion,
+  loadModel,
+  unloadModel,
+  QWEN3_5_0_8B_MTP_Q4_K_M,
+  type CompletionStats
+} from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
@@ -8,7 +14,7 @@ import {
   speculativeDecodingTests
 } from '../../speculative-decoding-tests.js'
 
-type CompletesParams = { modelUrl: string; prompt: string }
+type CompletesParams = { prompt: string }
 
 /** The executor body of the step-defined tests, for consumers without the step interpreter. */
 export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
@@ -54,10 +60,10 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
   }
 
   async rejectDraftNMax(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { modelUrl: string; draftNMax: number }
+    const p = params as { draftNMax: number }
     try {
       const modelId = await loadModel({
-        modelSrc: p.modelUrl,
+        modelSrc: QWEN3_5_0_8B_MTP_Q4_K_M,
         modelType: 'llamacpp-completion',
         modelConfig: { spec_type: 'draft-mtp', spec_draft_n_max: p.draftNMax }
       })
@@ -75,7 +81,7 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
 
   private async completesWith(p: CompletesParams, expectation: unknown, specType: string) {
     const modelId = await loadModel({
-      modelSrc: p.modelUrl,
+      modelSrc: QWEN3_5_0_8B_MTP_Q4_K_M,
       modelType: 'llamacpp-completion',
       modelConfig: { ctx_size: 2048, spec_type: specType as 'draft-mtp' | 'none' }
     })
