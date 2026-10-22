@@ -246,6 +246,21 @@ test(
   }
 )
 
+test(
+  'an external head for another model is refused',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    // Qwen3's vocabulary differs from the Qwen3.5 head's.
+    const fit = await assess(await modelPath(), {
+      'spec-type': 'draft-mtp',
+      'spec-draft-model': await localModel(MTP_MODEL)
+    })
+
+    t.is(fit.status, 'error')
+    t.is(fit.reason, 'unsupported-config', 'the load fails the same way')
+  }
+)
+
 test('draft-mtp on a model without MTP layers is refused', { timeout: 600_000 }, async (t) => {
   // Qwen3 has no MTP layers, so the load cannot create the MTP context.
   const fit = await assess(await modelPath(), { 'spec-type': 'draft-mtp' })

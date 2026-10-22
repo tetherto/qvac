@@ -750,6 +750,20 @@ inline FitResult runFit(FitRequest request) {
       qvac_lib_inference_addon_llama::speculative::SpeculativeFitModel::create(
           loadParams);
 
+  // The load refuses an external MTP head for another model; so does the
+  // projection, comparing the same header values.
+  if (speculativeFit && speculativeFit->isMtp() &&
+      !speculativeFit->extra()->shares_model) {
+    namespace spec = qvac_lib_inference_addon_llama::speculative;
+    const auto head = spec::readGgufShape(speculativeFit->extra()->path_model);
+    const auto target = spec::readGgufShape(modelPath);
+    if (!spec::mtpHeadMismatch(
+             head.width, target.width, head.vocab, target.vocab)
+             .empty()) {
+      return errorResult("unsupported-config");
+    }
+  }
+
   common_params_fit_status status{};
   try {
     status = common_fit_params(

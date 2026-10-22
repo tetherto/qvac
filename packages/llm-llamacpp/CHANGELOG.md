@@ -10,7 +10,7 @@
   is placed like the model, and the load's fit and `assessFit` count its
   weights and context; fabric cannot measure a Gemma 4 assistant, so they
   leave it out. A head with another hidden width or vocabulary than the
-  model fails the load.
+  model fails the load, and `assessFit` refuses it with `unsupported-config`.
 
 ### Fixed
 
