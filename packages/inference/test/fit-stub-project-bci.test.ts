@@ -181,7 +181,6 @@ function project(
         downloadBlob: options.registry.downloadBlob
       },
       fit: {
-        mobile: false,
         runFit: options.runFit,
         residentModelBytes: async () => 0,
         availableSystemBytes: async () => options.availableBytes,

@@ -14,13 +14,6 @@ import { createFitRequest } from '@/resources/model-fit/native-probe/create-fit-
 import { runFit as runFitDefault } from '@/resources/model-fit/native-probe/run-fit'
 
 /**
- * Shorter than the supervisor's own 60s default: this check sits in front of a
- * real load, so a wedged child must not hold the load for a full minute. Every
- * expiry is `unknown` and the load continues.
- */
-const ADVISORY_FIT_TIMEOUT_MS = 30_000
-
-/**
  * The base every engine's fitter withholds by default. Made explicit here
  * because the resident-model reserve is added to it: setting a margin at all
  * replaces the engine default, so the base has to travel with it. It is also
@@ -68,8 +61,6 @@ export interface AdvisoryFitInput {
  */
 export interface AdvisoryFitOptions {
   signal?: AbortSignal
-  mobile?: boolean
-  timeoutMs?: number
   runFit?: typeof runFitDefault
   logger?: Logger
   availableSystemBytes?: () => Promise<number | undefined>
@@ -80,17 +71,6 @@ export interface AdvisoryFitOptions {
    * as loaded alongside this one but that this worker does not yet hold.
    */
   extraResidentBytes?: number
-}
-
-/**
- * The mobile runtime flag is imported lazily: that module reaches Bare-only
- * bindings, and resolving it eagerly would make this orchestration untestable
- * outside a Bare runtime.
- */
-async function resolveMobile(explicit: boolean | undefined): Promise<boolean> {
-  if (explicit !== undefined) return explicit
-  const { isMobile } = await import('@/runtime/state')
-  return isMobile()
 }
 
 /**
@@ -274,10 +254,10 @@ function report(logger: Logger, input: AdvisoryFitInput, outcome: AdvisoryFitOut
  * Runs the advisory fit check for a load that is about to start, against the
  * fitter belonging to the engine that will run it.
  *
- * Fail-open by construction: an unsupported shape, a crashed or wedged child, a
- * malformed response, and an unexpected internal error all resolve to `unknown`
- * and the caller proceeds with the ordinary load path. This function never
- * throws and never rejects.
+ * Fail-open by construction: an unsupported shape, a fitter that crashed,
+ * threw or did not return in time, and an unexpected internal error all
+ * resolve to `unknown` and the caller proceeds with the ordinary load path.
+ * This function never throws and never rejects.
  */
 export async function runAdvisoryFitCheck(
   input: AdvisoryFitInput,
@@ -286,8 +266,6 @@ export async function runAdvisoryFitCheck(
   let logger: Logger | undefined = options.logger
   try {
     logger ??= getEngineLogger()
-
-    const mobile = await resolveMobile(options.mobile)
 
     const availableBytes = await (options.availableSystemBytes ?? defaultAvailableSystemBytes)()
     const residentBytes =
@@ -314,11 +292,10 @@ export async function runAdvisoryFitCheck(
       return outcome
     }
 
-    const result = await (options.runFit ?? runFitDefault)(plan.probe, {
-      mobile,
-      timeoutMs: options.timeoutMs ?? ADVISORY_FIT_TIMEOUT_MS,
-      ...(options.signal !== undefined && { signal: options.signal })
-    })
+    const result = await (options.runFit ?? runFitDefault)(
+      plan.probe,
+      options.signal !== undefined ? { signal: options.signal } : {}
+    )
 
     const outcome =
       result.status === 'completed'
