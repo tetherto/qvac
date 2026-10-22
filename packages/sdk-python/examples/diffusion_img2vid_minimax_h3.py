@@ -63,6 +63,10 @@ async def main() -> int:
         "H3_LLM", "qwen3vl_32b_minimax_h3-Q4_K_M.gguf"
     )
     vae_model_src = root / "vae/minimax_h3_video_vae_fp16.safetensors"
+    for file in (model_src, llm_model_src, vae_model_src, init_image_path):
+        if not file.is_file():
+            print(f"✖ missing model file: {file}", file=sys.stderr)
+            return 1
 
     model_config: dict[str, Any] = {
         "mode": "video",
@@ -87,10 +91,6 @@ async def main() -> int:
         async with Client() as client:
             t = client.transport
             try:
-                for file in (model_src, llm_model_src, vae_model_src, init_image_path):
-                    if not file.is_file():
-                        raise FileNotFoundError(file)
-
                 print(
                     "▸ Loading MiniMax-H3 model "
                     "(diffusion + Qwen3-VL + video VAE)..."

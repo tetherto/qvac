@@ -53,15 +53,24 @@ async def main() -> int:
         t = client.transport
         try:
             # The generated stub takes the wire request, so fields are camelCase
-            # and `modelSrc` is the constant's `src` string: JS's assessModelFit
-            # wrapper does both conversions for you, and `modelConfig` collides
-            # with pydantic's own attribute, so build the request from a dict.
+            # and the constant is spelled out field by field: JS's assessModelFit
+            # wrapper only infers `modelType` and hands the whole descriptor
+            # through. The checksum is what matches a candidate to its catalog
+            # profile, so a bare `src` string would cost the profile and leave
+            # `name` as the full registry:// URL. `modelConfig` collides with
+            # pydantic's own attribute, so build the request from a dict.
             request = AssessModelFitRequest.model_validate(
                 {
                     "type": "assessModelFit",
                     "models": [
                         {
-                            "modelSrc": model.src,
+                            "modelSrc": {
+                                "src": model.src,
+                                "name": model.name,
+                                "sha256Checksum": model.sha256_checksum,
+                                "registryPath": model.registry_path,
+                                "registrySource": model.registry_source,
+                            },
                             "modelType": "llamacpp-completion",
                             "modelConfig": {"ctx_size": CONTEXT_TOKENS},
                         }

@@ -50,7 +50,10 @@ async def main() -> int:
                     "modelFitPolicy": "refuse",
                 }
             )
-            await load_model(t, request)
+            resp = await load_model(t, request)
+            if not resp.success:
+                print(f"✖ {resp.error}", file=sys.stderr)
+                return 1
 
             print("▸ Loaded — the fitter projected this one to fit here")
         except Exception as error:
