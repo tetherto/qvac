@@ -913,6 +913,12 @@ test(
         containsExpectedWord(texts[idx], item.expected),
         `${item.id} received its own output [${item.expected.join(', ')}] — no cross-talk`
       )
+      // The words above survive a doubled answer; the closing chunk does not.
+      t.is(
+        responses[idx].output.at(-1),
+        '',
+        `${item.id} does not repeat its whole output as the closing chunk`
+      )
     }
 
     const maxConcurrentSeq = Math.max(

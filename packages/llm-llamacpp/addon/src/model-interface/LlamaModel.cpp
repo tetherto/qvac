@@ -1113,8 +1113,14 @@ std::string LlamaModel::processConcurrent(
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
     jobStats_[id] = std::move(terminal);
   }
-  return result.outputs.empty() ? std::string{}
-                                : std::move(result.outputs.front());
+  // A streamed prompt already delivered every piece through its callback, and
+  // the scheduler queues this return value as one more output event, so only a
+  // prompt without a callback gets its text back here, as processPromptImpl
+  // does.
+  if (prompt.outputCallback || result.outputs.empty()) {
+    return std::string{};
+  }
+  return std::move(result.outputs.front());
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(

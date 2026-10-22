@@ -318,6 +318,7 @@ private:
   /// Route a single Prompt through the scheduler as a one-item batch, recording
   /// its assigned `seqId` against @p id for the lifetime of the run so
   /// `cancelById` can target this job. Reuses processPromptBatchImpl machinery.
+  /// Returns the generated text only when the prompt has no outputCallback.
   std::string processConcurrent(
       const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id);
 

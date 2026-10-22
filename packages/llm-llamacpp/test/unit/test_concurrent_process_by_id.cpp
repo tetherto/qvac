@@ -158,13 +158,13 @@ TEST_F(ConcurrentProcessByIdTest, TwoConcurrentJobsRunIsolatedAndOverlap) {
   const std::string outA = futureA.get();
   const std::string outB = futureB.get();
 
-  EXPECT_FALSE(outA.empty());
-  EXPECT_FALSE(outB.empty());
-  EXPECT_NE(outA, outB);
-  EXPECT_EQ(streamedA, outA) << "job 1 stream must match its own return value";
-  EXPECT_EQ(streamedB, outB) << "job 2 stream must match its own return value";
-  EXPECT_TRUE(containsCaseInsensitive(outA, "Paris")) << outA;
-  EXPECT_TRUE(containsCaseInsensitive(outB, "Moon")) << outB;
+  // A streamed job delivers its text through its callback only; returning it
+  // as well would hand the caller every token twice.
+  EXPECT_TRUE(outA.empty()) << outA;
+  EXPECT_TRUE(outB.empty()) << outB;
+  EXPECT_NE(streamedA, streamedB);
+  EXPECT_TRUE(containsCaseInsensitive(streamedA, "Paris")) << streamedA;
+  EXPECT_TRUE(containsCaseInsensitive(streamedB, "Moon")) << streamedB;
 
   const auto stats = model->runtimeStats();
   const double avgConcurrentSeq =
@@ -173,6 +173,34 @@ TEST_F(ConcurrentProcessByIdTest, TwoConcurrentJobsRunIsolatedAndOverlap) {
       << "two id-tagged jobs did not overlap on the scheduler; "
          "avgConcurrentSeq="
       << avgConcurrentSeq;
+}
+
+/// A tagged single prompt on a parallel model hands its text back exactly
+/// once: as the return value when it has no outputCallback, through the
+/// callback alone when it streams. The job scheduler queues the return value
+/// as one more output event, so a streamed job that also returned its text
+/// would deliver the whole answer a second time.
+TEST_F(ConcurrentProcessByIdTest, StreamedJobDeliversItsTextOnlyOnce) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "16";
+  auto model = loadModel();
+  const std::string question = "What is the capital of France? One word.";
+
+  std::any unstreamed =
+      model->process(std::any(makePrompt(question)), JobId{1});
+  const std::string returned = std::any_cast<std::string>(unstreamed);
+  ASSERT_FALSE(returned.empty()) << "a prompt without a callback returns text";
+
+  std::string streamed;
+  auto prompt = makePrompt(question);
+  prompt.outputCallback = [&streamed](const std::string& piece) {
+    streamed += piece;
+  };
+  std::any out = model->process(std::any(prompt), JobId{2});
+
+  EXPECT_TRUE(std::any_cast<std::string>(out).empty())
+      << "a streamed job must not also return its text";
+  EXPECT_EQ(streamed, returned);
 }
 
 /// Variant: parallel = 1, single request. The tagged call falls back to the
@@ -450,20 +478,25 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
 
   std::atomic<bool> cancelFired = false;
   std::atomic<size_t> keepPieces = 0;
+  std::string cancelled;
+  std::string kept;
 
   auto cancelPrompt = makePrompt(
       "Write a long, detailed, multi-paragraph essay about the history of "
       "astronomy.");
-  cancelPrompt.outputCallback = [&model, &cancelFired](const std::string&) {
-    bool expected = false;
-    if (cancelFired.compare_exchange_strong(expected, true)) {
-      model->cancelById(kCancelId);
-    }
-  };
+  cancelPrompt.outputCallback =
+      [&model, &cancelFired, &cancelled](const std::string& piece) {
+        cancelled += piece;
+        bool expected = false;
+        if (cancelFired.compare_exchange_strong(expected, true)) {
+          model->cancelById(kCancelId);
+        }
+      };
 
   auto keepPrompt = makePrompt(
       "Write a long, detailed, multi-paragraph essay about ocean currents.");
-  keepPrompt.outputCallback = [&keepPieces](const std::string&) {
+  keepPrompt.outputCallback = [&keepPieces, &kept](const std::string& piece) {
+    kept += piece;
     keepPieces.fetch_add(1);
   };
 
@@ -485,8 +518,8 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
                     "too slow to judge cancellation targeting (seen on "
                     "loaded CI runners)";
   }
-  const std::string cancelled = cancelFuture.get();
-  const std::string kept = keepFuture.get();
+  EXPECT_TRUE(cancelFuture.get().empty());
+  EXPECT_TRUE(keepFuture.get().empty());
 
   ASSERT_TRUE(cancelFired.load())
       << "test setup: cancelled job never emitted a token";
