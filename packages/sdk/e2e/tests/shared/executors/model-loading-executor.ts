@@ -17,6 +17,7 @@ import {
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,
   modelLoadEmbedding,
+  modelLoadEmbeddingRankPoolingRejected,
   modelLoadOcr,
   modelLoadOcrDoctr,
   modelLoadInvalid,
@@ -37,6 +38,7 @@ const modelLoadTests = [
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,
   modelLoadEmbedding,
+  modelLoadEmbeddingRankPoolingRejected,
   modelLoadOcr,
   modelLoadOcrDoctr,
   modelLoadInvalid,
@@ -61,6 +63,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     [modelLoadLlmCacheCheckpointsOutOfRangeRejected.testId]:
       this.rejectOutOfRangeCacheCheckpoints.bind(this),
     [modelLoadEmbedding.testId]: this.loadEmbedding.bind(this),
+    [modelLoadEmbeddingRankPoolingRejected.testId]: this.rejectRankPooling.bind(this),
     [modelLoadOcr.testId]: this.loadOcr.bind(this),
     [modelLoadOcrDoctr.testId]: this.loadOcrDoctr.bind(this),
     [modelLoadInvalid.testId]: this.loadInvalid.bind(this),
@@ -385,6 +388,32 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
         }
       }
       // The code is on the error, not in its message.
+      const code = (error as { code?: number }).code
+      return ValidationHelpers.validate(`${code} ${errorMsg}`, expectation)
+    }
+  }
+
+  async rejectRankPooling(
+    params: typeof modelLoadEmbeddingRankPoolingRejected.params,
+    expectation: typeof modelLoadEmbeddingRankPoolingRejected.expectation
+  ): Promise<TestResult> {
+    const { pooling } = params as { pooling: string }
+    const dep = 'embedding-rank-pooling'
+    try {
+      const modelId = await loadModel({
+        modelSrc: GTE_LARGE_FP16,
+        modelType: 'llamacpp-embedding',
+        modelConfig: { pooling }
+      } as unknown as Parameters<typeof loadModel>[0])
+      // Should not happen, but release it rather than leak on the failure path.
+      this.resources.register(dep, modelId)
+      await this.resources.evict(dep)
+      return { passed: false, output: 'Rank pooling should have been rejected' }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
+      if (!/pooling/i.test(errorMsg)) {
+        return { passed: false, output: `Expected pooling validation error: ${errorMsg}` }
+      }
       const code = (error as { code?: number }).code
       return ValidationHelpers.validate(`${code} ${errorMsg}`, expectation)
     }
