@@ -7,8 +7,8 @@ import path from 'bare-path'
 import { registerPlugin, clearPlugins } from '@/plugins/registry'
 import { definePlugin, type ResolveContext } from '@/schemas/plugin'
 import { ModelType } from '@/schemas/index'
-import { resolveLoadFromStubs } from '@/resources/model-fit/fit-stub/resolve-load-from-stubs'
-import { createFitRequest } from '@/resources/model-fit/native-probe/create-fit-request'
+import { resolveLoadFromStubs } from '@/model-fit/description/resolve-load'
+import { createFitRequest } from '@/model-fit/request/create'
 import { audioGenPlugin } from '@/plugins/builtin/audiogen-ggml/plugin'
 
 function scratchFile(name: string): string {

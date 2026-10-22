@@ -4,7 +4,7 @@ import {
   LLAMA_WEIGHTS_ASSUMPTION,
   kvCacheFloorBytes,
   narrowestKvElementBytes
-} from '@/resources/model-fit/kv-cache'
+} from '@/model-fit/kv-cache'
 
 export const FLOOR_VERSION = 'floor-v1'
 

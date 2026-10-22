@@ -2,7 +2,7 @@ import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
 
 import type { NmtConfig } from '@/schemas/index'
 import { nmtConfigFor, nmtFilesFor } from '@/plugins/builtin/nmtcpp-translation/load-files'
-import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-fit-request'
+import type { FitRequestPlan } from '@/model-fit/request/create'
 
 export interface NmtFitRequestParams {
   modelPath: string

@@ -1,7 +1,7 @@
 import type { DiffusionFiles, SdConfig } from '@qvac/diffusion-cpp'
 
 import type { SdcppConfig } from '@/schemas/index'
-import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-fit-request'
+import type { FitRequestPlan } from '@/model-fit/request/create'
 
 export interface DiffusionFitRequestParams {
   modelPath: string

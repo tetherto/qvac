@@ -1,5 +1,5 @@
 import type { NativeProbeFit, NativeProbeProjection, NativeProbeVerdict } from '@/schemas/index'
-import type { FitProbeResult } from '@/resources/model-fit/native-probe/engine-fit'
+import type { FitProbeResult } from '@/model-fit/run/engine'
 
 type LlamaProbe = Extract<FitProbeResult, { engine: 'llm-llamacpp' | 'embed-llamacpp' }>
 

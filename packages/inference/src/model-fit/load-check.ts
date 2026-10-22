@@ -9,9 +9,9 @@ import type {
   NativeProbeVerdict,
   TranscriptionFitWorkload
 } from '@/schemas/index'
-import { classifyFit } from '@/resources/model-fit/native-probe/classify-fit'
-import { createFitRequest } from '@/resources/model-fit/native-probe/create-fit-request'
-import { runFit as runFitDefault } from '@/resources/model-fit/native-probe/run-fit'
+import { classifyFit } from '@/model-fit/classify'
+import { createFitRequest } from '@/model-fit/request/create'
+import { runFit as runFitDefault } from '@/model-fit/run/run'
 
 /**
  * The base every engine's fitter withholds by default. Made explicit here
@@ -126,8 +126,8 @@ async function defaultAvailableSystemBytes(): Promise<number | undefined> {
   const [{ getResourceCollector }, { resolveBasis, resolveBudget }, { detectPlatform }] =
     await Promise.all([
       import('@/resources/instance'),
-      import('@/resources/model-fit/assess'),
-      import('@/resources/model-fit/platform')
+      import('@/model-fit/assess'),
+      import('@/model-fit/platform')
     ])
   const collector = getResourceCollector()
   if (!collector) return undefined
@@ -145,11 +145,7 @@ async function defaultAvailableSystemBytes(): Promise<number | undefined> {
  */
 async function deviceBytesCountAgainstSystem(): Promise<boolean> {
   const [{ getResourceCollector }, { boundBySystemMemory }, { detectPlatform }] = await Promise.all(
-    [
-      import('@/resources/instance'),
-      import('@/resources/model-fit/assess'),
-      import('@/resources/model-fit/platform')
-    ]
+    [import('@/resources/instance'), import('@/model-fit/assess'), import('@/model-fit/platform')]
   )
   const collector = getResourceCollector()
   // Unknown counts them, which errs toward refusing.

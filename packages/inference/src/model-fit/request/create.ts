@@ -1,21 +1,18 @@
 import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import { ModelType, type CanonicalModelType, type TranscriptionFitWorkload } from '@/schemas/index'
-import type { FitProbeRequest } from '@/resources/model-fit/native-probe/engine-fit'
+import type { FitProbeRequest } from '@/model-fit/run/engine'
 import {
   createBciFitRequest,
   createMossTranscribeFitRequest,
   createParakeetFitRequest,
   createWhisperFitRequest
-} from '@/resources/model-fit/native-probe/engines/asr'
-import { createAudiogenFitRequest } from '@/resources/model-fit/native-probe/engines/audiogen'
-import { createDiffusionFitRequest } from '@/resources/model-fit/native-probe/engines/diffusion'
-import {
-  createLlamaFitRequest,
-  llamaLoadKindFor
-} from '@/resources/model-fit/native-probe/engines/llama'
-import { createNmtFitRequest } from '@/resources/model-fit/native-probe/engines/nmt'
-import { createOcrFitRequest } from '@/resources/model-fit/native-probe/engines/ocr'
-import { createTtsFitRequest } from '@/resources/model-fit/native-probe/engines/tts'
+} from '@/model-fit/request/engines/asr'
+import { createAudiogenFitRequest } from '@/model-fit/request/engines/audiogen'
+import { createDiffusionFitRequest } from '@/model-fit/request/engines/diffusion'
+import { createLlamaFitRequest, llamaLoadKindFor } from '@/model-fit/request/engines/llama'
+import { createNmtFitRequest } from '@/model-fit/request/engines/nmt'
+import { createOcrFitRequest } from '@/model-fit/request/engines/ocr'
+import { createTtsFitRequest } from '@/model-fit/request/engines/tts'
 
 export type FitRequestPlan =
   { supported: true; probe: FitProbeRequest } | { supported: false; detail: string }

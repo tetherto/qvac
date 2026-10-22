@@ -4,13 +4,13 @@ import os from 'bare-os'
 import path from 'bare-path'
 import { AbortController } from 'bare-abort-controller'
 
-import type { FitProbeRequest, FitProbeResult } from '@/resources/model-fit/native-probe/engine-fit'
+import type { FitProbeRequest, FitProbeResult } from '@/model-fit/run/engine'
 import {
   crashedMarkerPath,
   runFit,
   runningMarkerPath,
   suspectMarkerPath
-} from '@/resources/model-fit/native-probe/run-fit'
+} from '@/model-fit/run/run'
 
 const PROBE: FitProbeRequest = {
   engine: 'llm-llamacpp',

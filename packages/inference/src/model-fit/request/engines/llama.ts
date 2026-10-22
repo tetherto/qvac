@@ -9,7 +9,7 @@ import {
 } from '@/schemas/index'
 import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
-import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-fit-request'
+import type { FitRequestPlan } from '@/model-fit/request/create'
 
 export type LlamaLoadKind = 'completion' | 'embedding'
 
