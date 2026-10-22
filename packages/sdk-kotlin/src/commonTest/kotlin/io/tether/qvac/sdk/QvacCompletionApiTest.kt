@@ -27,6 +27,30 @@ import kotlin.test.assertTrue
 
 class QvacCompletionApiTest {
     @Test
+    fun prefillForwardsOptionsAndFinishesWithoutAnswer() = runTest {
+        val transport = ApiTransport(stream = flowOf(completionFrame(
+            done = true,
+            event("completionStats", 0) {
+                put("stats", buildJsonObject { put("generatedTokens", 0) })
+            },
+            event("completionDone", 1) {},
+        )))
+        val client = QvacClient(transport)
+        try {
+            val result = client.completion.run(
+                "model", listOf(QvacMessage.system("Hi")),
+                options = QvacCompletionOptions(kvCache = QvacKvCache.Key("prime"), prefill = true),
+            ).final.await()
+            assertEquals("", result.text)
+            assertTrue(result.toolCalls.isEmpty())
+            assertEquals(JsonPrimitive(true), transport.lastPayload?.get("prefill"))
+            assertEquals(JsonPrimitive("prime"), transport.lastPayload?.get("kvCache"))
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
     fun completionRunAggregatesTextThinkingStatsAndStopReason() = runTest {
         val transport = ApiTransport(
             stream = flowOf(

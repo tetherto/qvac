@@ -3793,6 +3793,12 @@ class CompletionOrchestrateRequestResponseFormatJsonSchema(GeneratedBaseModel):
 
 
 class CompletionOrchestrateRequest(GeneratedBaseModel):
+    prefill: Annotated[
+        bool | None,
+        Field(
+            description="Evaluate the prompt without generating an answer. Requires an enabled KV cache."
+        ),
+    ] = None
     history: Annotated[
         list[CompletionOrchestrateRequestHistoryItem],
         Field(description="Array of conversation messages sent to the model."),
@@ -4439,6 +4445,12 @@ class CompletionStreamRequestResponseFormatJsonSchema(GeneratedBaseModel):
 
 
 class CompletionStreamRequest(GeneratedBaseModel):
+    prefill: Annotated[
+        bool | None,
+        Field(
+            description="Evaluate the prompt without generating an answer. Requires an enabled KV cache."
+        ),
+    ] = None
     history: Annotated[
         list[CompletionStreamRequestHistoryItem],
         Field(description="Array of conversation messages sent to the model."),

@@ -856,6 +856,15 @@ const COMPARISONS: Record<
     output: string
   }
 > = {
+  prefillReuse(left, right, args) {
+    const [cold, warm, primed] = [Number(left), Number(right), Number(args.primedTokens)]
+    const passed =
+      [cold, warm, primed].every(Number.isFinite) &&
+      primed > 0 &&
+      warm > 0 &&
+      cold - warm === primed
+    return { passed, output: `cold=${cold}, warm=${warm}, primed=${primed}` }
+  },
   /** The left number is strictly larger than the right. */
   greaterThan(left, right) {
     const [a, b] = [Number(left), Number(right)]

@@ -3760,6 +3760,10 @@
       "title": "CompletionOrchestrateRequest",
       "type": "object",
       "properties": {
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
+        },
         "history": {
           "type": "array",
           "items": {
@@ -4460,6 +4464,10 @@
       "title": "CompletionStreamRequest",
       "type": "object",
       "properties": {
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
+        },
         "history": {
           "type": "array",
           "items": {

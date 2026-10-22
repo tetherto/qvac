@@ -256,6 +256,10 @@ export const historyMessageSchema = z
 export type HistoryMessage = z.infer<typeof historyMessageSchema>
 
 export const completionParamsSchema = z.object({
+  prefill: z
+    .boolean()
+    .optional()
+    .describe('Evaluate the prompt without generating an answer. Requires an enabled KV cache.'),
   history: z
     .array(historyMessageSchema)
     .describe('Array of conversation messages sent to the model.'),
@@ -334,7 +338,34 @@ function refineNoToolsWithStructuredOutput(
   }
 }
 
+function refinePrefill(
+  data: {
+    prefill?: boolean | undefined
+    kvCache?: boolean | string | undefined
+    generationParams?: { tool_choice?: string | undefined } | undefined
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (!data.prefill) return
+  if (!data.kvCache) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'prefill requires kvCache: true or a nonempty cache key.',
+      path: ['kvCache']
+    })
+  }
+  const choice = data.generationParams?.tool_choice
+  if (choice !== undefined && choice !== 'auto' && choice !== 'none') {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'prefill cannot be combined with a forced tool_choice.',
+      path: ['generationParams', 'tool_choice']
+    })
+  }
+}
+
 export const completionClientParamsSchema = completionClientParamsBaseSchema
+  .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
   .superRefine(refineReservedToolNames)
@@ -343,6 +374,7 @@ export const completionStreamRequestSchema = completionClientParamsBaseSchema
   .extend({
     type: z.literal('completionStream')
   })
+  .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
   .superRefine(refineReservedToolNames)
@@ -375,6 +407,7 @@ export const completionOrchestrateRequestSchema = completionClientParamsBaseSche
           'the next turn. Defaults to 8.'
       )
   })
+  .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
   .superRefine(refineReservedToolNames)

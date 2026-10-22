@@ -1,0 +1,149 @@
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+const tools = [
+  {
+    type: 'function',
+    name: 'get_weather',
+    description: 'Get weather for a city.',
+    parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+  }
+]
+const history = [{ role: 'system', content: 'Follow the user instructions. Be brief.' }]
+const question = [...history, { role: 'user', content: 'Reply with only the word APPLE.' }]
+const generationParams = { temp: 0, top_k: 1, seed: 42, predict: 128, reasoning_budget: 0 }
+
+function reuseCase(
+  name: string,
+  kvCache: string | true,
+  withTools: boolean,
+  reload = false
+): TestDefinition {
+  const params = {
+    history,
+    question,
+    tools: withTools ? tools : [],
+    generationParams,
+    kvCache,
+    reload,
+    zero: 0,
+    stream: withTools
+  }
+  const run = (as: string, prime: boolean, cache: string | boolean): Step => ({
+    call: {
+      method: 'completion',
+      collect: 'text',
+      as,
+      params: {
+        modelId: '$model',
+        history: prime ? '$params.history' : '$params.question',
+        tools: '$params.tools',
+        generationParams: '$params.generationParams',
+        stream: '$params.stream',
+        kvCache: cache,
+        prefill: prime
+      }
+    }
+  })
+  const steps: Step[] = [
+    { useModel: { deps: ['prefill-llm'], as: 'model' } },
+    ...(typeof kvCache === 'string'
+      ? [{ call: { method: 'deleteCache', params: { kvCacheKey: kvCache } } }]
+      : []),
+    run('cold', false, false),
+    run('prime', true, kvCache),
+    { project: { from: '$prime', path: 'text', as: 'empty' } },
+    { assert: { on: '$empty', named: 'isEmptyText' } },
+    { project: { from: '$prime', path: 'toolCalls', as: 'calls' } },
+    { assert: { on: '$calls', named: 'lengthIs', with: { length: 0 } } },
+    { project: { from: '$prime', path: 'stats.generatedTokens', as: 'generated' } },
+    { compare: { left: '$generated', right: '$params.zero', named: 'equalStrings' } },
+    ...(withTools
+      ? ([
+          { project: { from: '$prime', path: 'stats.toolDefinitionsDropped', as: 'dropped' } },
+          { compare: { left: '$dropped', right: '$params.zero', named: 'equalStrings' } }
+        ] as Step[])
+      : []),
+    ...(reload
+      ? ([
+          { call: { method: 'evictResource', params: { dep: 'prefill-llm' } } },
+          { useModel: { deps: ['prefill-llm'], as: 'model' } }
+        ] as Step[])
+      : []),
+    run('warm', false, kvCache),
+    { project: { from: '$warm', path: 'text', as: 'answer' } },
+    { assert: { on: '$answer', use: 'expectation' } },
+    { project: { from: '$cold', path: 'stats.promptTokens', as: 'coldTokens' } },
+    { project: { from: '$warm', path: 'stats.promptTokens', as: 'warmTokens' } },
+    {
+      compare: {
+        left: '$coldTokens',
+        right: '$warmTokens',
+        named: 'prefillReuse',
+        with: { primedTokens: '$prime.stats.promptTokens' }
+      }
+    }
+  ]
+  return {
+    testId: `kv-cache-prefill-${name}`,
+    params,
+    steps,
+    expectation: { validation: 'contains-all', contains: ['APPLE'] },
+    finally: [
+      {
+        call: {
+          method: 'deleteCache',
+          params: typeof kvCache === 'string' ? { kvCacheKey: kvCache } : { auto: true }
+        }
+      }
+    ],
+    metadata: { category: 'kv-cache', dependency: 'prefill-llm', estimatedDurationMs: 60000 }
+  }
+}
+
+const invalidCases = [
+  {
+    name: 'cache-required',
+    params: { prefill: true, kvCache: false },
+    error: 'prefill requires kvCache'
+  },
+  {
+    name: 'forced-tool',
+    params: {
+      prefill: true,
+      kvCache: 'invalid-prime',
+      tools,
+      generationParams: { tool_choice: 'required' }
+    },
+    error: 'prefill cannot be combined'
+  }
+].map(({ name, params, error }): TestDefinition => ({
+  testId: `kv-cache-prefill-${name}`,
+  params,
+  expectation: { validation: 'throws-error', errorContains: error },
+  steps: [
+    {
+      callError: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: 'prefill-validation',
+          history,
+          stream: false,
+          ...params
+        },
+        as: 'error'
+      }
+    },
+    { project: { from: '$error', path: 'message', as: 'message' } },
+    { assert: { on: '$message', use: 'expectation' } }
+  ],
+  metadata: { category: 'kv-cache', dependency: 'none', estimatedDurationMs: 5000 }
+}))
+
+export const kvCachePrefillTests = [
+  reuseCase('named', 'prefill-named', true),
+  reuseCase('auto', true, true),
+  reuseCase('reload', 'prefill-reload', true, true),
+  reuseCase('system-only', 'prefill-system-only', false),
+  ...invalidCases
+]
