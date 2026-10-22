@@ -28,8 +28,7 @@ const diffusionModelSrc = process.argv[5] || LTX_2_3_22B_Q5_K_M
 const llmModelSrc = process.argv[6] || GEMMA_3_12B_Q4_K_XL
 const vaeModelSrc = process.argv[7] || LTX_2_3_VIDEO_VAE
 const audioVaeModelSrc = process.argv[8] || LTX_2_3_AUDIO_VAE
-const embeddingsConnectorsModelSrc =
-  process.argv[9] || LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS
+const embeddingsConnectorsModelSrc = process.argv[9] || LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS
 
 if (!initImagePath) {
   console.error('✖ init image path is required')

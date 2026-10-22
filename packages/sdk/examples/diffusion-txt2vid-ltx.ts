@@ -25,8 +25,7 @@ const diffusionModelSrc = process.argv[2] || LTX_2_3_22B_Q5_K_M
 const llmModelSrc = process.argv[3] || GEMMA_3_12B_Q4_K_XL
 const vaeModelSrc = process.argv[4] || LTX_2_3_VIDEO_VAE
 const audioVaeModelSrc = process.argv[5] || LTX_2_3_AUDIO_VAE
-const embeddingsConnectorsModelSrc =
-  process.argv[6] || LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS
+const embeddingsConnectorsModelSrc = process.argv[6] || LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS
 
 const prompt = process.argv[7] || 'a claymation cat playing jazz on a piano'
 const outputDir = process.argv[8] || '.'
