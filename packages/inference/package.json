@@ -210,7 +210,7 @@
   "peerDependencies": {
     "@qvac/asr-ggml": "^0.10.0",
     "@qvac/audiogen-ggml": "^0.8.0",
-    "@qvac/bci-whispercpp": "^0.12.0",
+    "@qvac/bci-whispercpp": "^0.13.0",
     "@qvac/classification-ggml": "^0.31.1",
     "@qvac/decoder-audio": "^0.8.1",
     "@qvac/diffusion-cpp": "^0.30.0",
@@ -274,7 +274,7 @@
   "devDependencies": {
     "@qvac/asr-ggml": "^0.10.0",
     "@qvac/audiogen-ggml": "^0.8.0",
-    "@qvac/bci-whispercpp": "^0.12.0",
+    "@qvac/bci-whispercpp": "^0.13.0",
     "@qvac/classification-ggml": "^0.31.1",
     "@qvac/decoder-audio": "^0.8.1",
     "@qvac/diffusion-cpp": "^0.30.0",

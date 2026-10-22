@@ -12008,7 +12008,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfig(GeneratedBaseMode
         str | None,
         Field(
             alias="backendsDir",
-            description="Android only: override the default ggml backend prebuilds directory. Defaults to `<addon>/prebuilds`.",
+            description="Android and Linux: the directory scanned, as given, for the ggml backend modules. Defaults to the directory next to the loaded addon module.",
         ),
     ] = None
     embedder_model_src: Annotated[
