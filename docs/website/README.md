@@ -55,19 +55,19 @@ npm run serve
 
 ## Cutting a documentation line
 
-A versioned collection — SDK, CLI — publishes its current line, whose folder is
-a Fumadocs group so its pages answer at the version-less paths, and every line
-cut before it, whose folders are plain so their pages carry the version. The
-current line is the **version under development**; every plain folder is a
-version that shipped and documents that version alone. A line is never retired:
-it is the only record of how that release behaved.
+A versioned collection — SDK, CLI — publishes one folder per line it has cut:
+the parenthesized one is a Fumadocs group, so its pages answer at the
+version-less paths, and every plain one carries its version in the URL. A line
+is never retired: it is the only record of how that release behaved.
 
-Cut at the **release cutoff** — step 6b of
-[`../ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md), the morning the sprint's
-versions are declared final and their release branches are cut — so the next
-version has a folder from the first day of its development.
-Cutting at a release's own deploy instead leaves a whole sprint writing feature
-documentation into the folder of a version that already shipped.
+The line still being written is not among them. It lives at
+`content/_unpublished/<collection>/next/`, which nothing builds and no URL
+reaches, under a fixed name so the path a feature PR writes to does not move.
+
+A cut publishes the line of the version being released. Cut at the **release
+cutoff** — step 6 of [`../ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md) for a
+train, step 1 of the release flow in [`../gitflow.md`](../gitflow.md) for a
+single package.
 
 One command does the whole thing, from `docs/website`:
 
@@ -76,27 +76,33 @@ bun run scripts/cut-line.ts sdk v0.18
 ```
 
 It refuses a collection that is not versioned, a version that is not above the
-current line, a destination already on disk, and a working tree that already
-carries changes — the cut is reviewed as its own diff. Review what it did, then
-`npm run build` and `npm test`.
+line last cut, a missing development line, a destination already on disk, and a
+working tree that already carries changes — the cut is reviewed as its own
+diff. Review what it did, then `npm run build` and `npm test`.
 
 The command is a convenience, not a dependency. What it does is the following,
-and doing it by hand is the same cut. For `@qvac/sdk` going from `0.17` to
-`0.18`:
+and doing it by hand is the same cut. For `@qvac/sdk` releasing `0.18`, with
+`0.17` the line last cut:
 
 ```bash
 # 1. Preserve the outgoing line, which keeps serving what it served.
 git mv 'content/docs/sdk/(v0.17)' content/docs/sdk/v0.17
 
-# 2. Open the coming one as a copy, complete from the first build.
-cp -r content/docs/sdk/v0.17 'content/docs/sdk/(v0.18)'
+# 2. Publish the line the sprint was written into — a copy, so the
+#    development line stays where it is and becomes v0.19's.
+cp -r content/_unpublished/sdk/next 'content/docs/sdk/(v0.18)'
 ```
+
+Step 2 is a copy and not a move on purpose. Nothing is deleted and no folder is
+renamed across versions, so a feature PR opened before the cutoff and merged
+after it lands in the line it was written for — git has no deletion to pair its
+edits against.
 
 Then edit the two hand-maintained inputs:
 
 - `src/lib/versions.ts` — the SDK gains `{ version: 'v0.18', folder: '(v0.18)' }`
   at the top and its `v0.17` entry's folder becomes plain. The older entries stay
-  as they are.
+  as they are. The development line is not in this file; it is not published.
 - `public/_redirects` — the line just preserved needs the pair every dotted
   segment needs, because the CDN reads `v0.17` as a file request and so never
   normalizes the trailing slash:
@@ -114,10 +120,7 @@ it documents also states whether that series is current, and the parentheses
 are the only other place currency is recorded, so nothing else can maintain the
 claim. Today that is the SDK's generated API summary: `v0.17.x (latest)` becomes
 plain `v0.17.x` in the preserved line, and `v0.18.x (latest)` in the new one.
-
-The API summary keeps the copy. The cutoff that renders it is reviewed as a
-diff, and against the previous line's summary only the part of the surface that
-actually moved shows up.
+The development line carries no marker.
 
 Then retarget the new line's release-notes link. `reference/meta.json` carries
 the sidebar entry as an external link to that minor's GitHub release:
@@ -126,10 +129,20 @@ the sidebar entry as an external link to that minor's GitHub release:
 "external:[Release Notes](https://github.com/tetherto/qvac/releases/tag/sdk-v0.18.0)"
 ```
 
-The copy brought the preserved line's tag with it, so rewrite it to the line
-being opened. The tag does not exist yet — the release it names is weeks away —
-and that is fine: the link only has to resolve once the version ships, which is
-also when readers reach that line.
+The copy brought the development line's tag with it, so rewrite it to the line
+being opened. The tag exists within days: the release follows the cutoff, and
+production is not promoted until it has.
+
+**The first cut of a collection** under this model is different, because there
+is no development line yet — the parenthesized folder still holds the version
+under development. That cut only copies it:
+
+```bash
+cp -r 'content/docs/sdk/(v0.23)' content/_unpublished/sdk/next
+```
+
+No rename, no manifest edit, no redirect. From the next cutoff on, the cut
+behaves as above.
 
 Everything else follows: the sidebars come from the `meta.json` files the copy
 brought with it, and the switcher, canonicals, agent artifacts, `versions.json`,

@@ -41,10 +41,15 @@ jobs:
         # with one copy per cut line under `content/docs/sdk/v0.22/reference/`
         # and the lines below it. Each is committed to the repo and refreshed
         # locally during the release cutoff (see `docs/ci/RELEASE-TRAIN.md`
-        # step 6a), so every PR checkout already has them on disk — no
+        # step 6), so every PR checkout already has them on disk — no
         # placeholder step is needed here. (The historical placeholder
         # targeted `content/docs/sdk/api/`, a path the build never read and
         # that no longer exists.)
+        #
+        # The development line is not built: it sits outside `content/docs/`,
+        # so a broken link or invalid frontmatter in it surfaces on the cutoff
+        # PR rather than on the feature PR that wrote it. That is the accepted
+        # cost of keeping unreleased pages off the site.
         run: bun run build
 
       - name: Run docs tests
@@ -63,75 +68,68 @@ jobs:
           SDK_PATH: ${{ github.workspace }}/packages/sdk
         run: bun run vitest run tests/tsdoc-completeness.test.ts
 
-  lines-up-to-date:
-    # Refuse a branch whose documentation lines are older than main's.
+  published-lines:
+    # Say when a PR edits a line that has already been cut.
     #
-    # A cut renames the current line's folder and copies it to the next one.
-    # Git detects that rename by content similarity, so a branch created
-    # before a cut has its edits replayed into the folder the cut *preserved* —
-    # the line of a release that already shipped — with no conflict and a green
-    # merge. That is how `cli/v0.16` came to document five features 0.16.0
-    # never shipped (QVAC-27286). Nothing in git reports it, so a check has to.
+    # Feature documentation belongs in the development line, outside the site
+    # at `content/_unpublished/<collection>/next/`. Everything under
+    # `content/docs/<collection>/` has been cut: either it is a version the
+    # site already serves, or it is the version being released and awaiting
+    # promotion. Editing one is legitimate — correcting a shipped release's
+    # pages is the reason the folders are kept — so this never blocks. It only
+    # says what the edit implies, because only a human can tell a correction
+    # from documentation written into the wrong line.
     #
-    # The comparison is `merge-base(main, head)` against main's tip, not the
-    # branch against main. The question is "did main move the line set under
-    # this branch?", which is the actual defect; what the branch does to the
-    # line set is none of this check's business. That is also what lets the
-    # cut's own PR pass with no label and no exception: it branches from a
-    # base whose line set already matches main's.
-    #
-    # The line set is read from the folder names rather than from
-    # `src/lib/versions.ts`, which is ~300 lines of which the manifest is a
-    # part. A commit touching one of its helpers would otherwise block every
-    # open docs PR. `tests/line-structure.test.ts` already fails the build when
-    # folders and manifest disagree, so the two are the same fact.
-    name: Docs lines up to date with main
+    # There is no rename check here any more. A cut copies the development line
+    # into the collection and leaves it in place, so no line folder is deleted
+    # and git has no deletion to pair a pre-cutoff edit against: the path a
+    # feature PR writes to is the same before and after a cutoff, and the edit
+    # lands in the line it was written for. The failure that needed catching
+    # (QVAC-27286) cannot occur under that shape.
+    name: Published lines advisory
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          # merge-base needs history; the default depth of 1 has none.
+          # The diff needs both ends; the default depth of 1 has neither.
           fetch-depth: 0
 
-      - name: Compare the line set at the branch point against main
+      - name: Report edits to lines already cut
         env:
-          # The PR head, never `HEAD`. On `pull_request` the checkout is the
-          # merge commit, which already has main merged in, so its merge-base
-          # with main is main's own tip — the check would pass forever.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         working-directory: .
         run: |
           set -euo pipefail
 
-          lines() {
-            git ls-tree -d --name-only "$1" \
-              docs/website/content/docs/sdk/ docs/website/content/docs/cli/ \
-              | sort
-          }
-
-          git fetch --no-tags origin main
-          base=$(git merge-base FETCH_HEAD "$HEAD_SHA")
-
-          changed=$(git diff --name-only "$base" "$HEAD_SHA" \
-            -- docs/website/content/docs/ || true)
-          if [ -z "$changed" ]; then
-            echo "No documentation content in this PR; nothing to check."
+          if [ -z "${HEAD_SHA:-}" ]; then
+            echo "Not a pull request; nothing to report."
             exit 0
           fi
 
-          if ! diff <(lines "$base") <(lines FETCH_HEAD); then
-            echo "::error::The documentation line set moved on main after this branch was created."
-            echo "::error::Run 'git merge origin/main', then move your edits to the current line (the folder in parentheses)."
-            exit 1
+          # A collection whose development line does not exist yet has not had
+          # its first cut under this model: its group still holds the version
+          # under development, so editing it is what a feature PR is supposed
+          # to do. Skip it. This retires with the last bootstrap cut.
+          paths=()
+          for collection in sdk cli; do
+            if [ -d "docs/website/content/_unpublished/${collection}/next" ]; then
+              paths+=("docs/website/content/docs/${collection}/")
+            fi
+          done
+
+          if [ ${#paths[@]} -eq 0 ]; then
+            echo "No collection has a development line yet; nothing to report."
+            exit 0
           fi
 
-          # The line set matches, so the branch knows which line is current and
-          # editing a preserved line is a deliberate, legitimate act — fixing a
-          # shipped release's docs. It is also what a merge of main leaves
-          # behind when rename detection relocates pre-cut edits, so say so
-          # without blocking: only a human can tell the two apart.
-          if ! grep -q '/content/docs/[^/]*/(' <<<"$changed"; then
-            echo "::warning::This PR edits only preserved documentation lines. If the change also applies to the current line, add it there too."
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          changed=$(git diff --name-only "$base" "$HEAD_SHA" -- "${paths[@]}" || true)
+
+          if [ -z "$changed" ]; then
+            echo "This PR edits no line that has been cut."
+            exit 0
           fi
 
-          echo "Documentation line set matches main."
+          echo "::warning::This PR edits documentation lines that have already been cut. Correcting a release's pages is legitimate; documenting a new feature is not — that belongs in content/_unpublished/<collection>/next/. If the correction also applies to the line under development, apply it there too, or it will not survive the next cutoff."
+          printf '%s\n' "$changed"

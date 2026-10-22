@@ -330,6 +330,27 @@ cd packages/sdk-python
 published. Include sdk-python generated updates in the release commit. The Python
 client does not get its own changelog — history lives in `packages/sdk/CHANGELOG.md`.
 
+### Step 8: Cut the documentation line of the version being released
+
+Only for a package with a versioned documentation collection —
+`@qvac/sdk` → `/sdk`, `@qvac/cli` → `/cli`, per
+`docs/website/src/lib/versions.ts`. Any other `--package` value documents
+nothing versioned and skips this step.
+
+A release publishes the documentation line written for it. Invoke
+`qv-docs-cutoff` with the version being released and that one collection. It
+opens **one** PR into `main`, separate from the release PR, and reports its
+URL. Do not approve or merge it: the documentation engineer reviews it, and
+that review is the only gate on the documentation side of the release.
+
+This is the same step a release train runs at `docs/ci/RELEASE-TRAIN.md` step
+6; the only difference is that a train cuts every collection it moves and this
+cuts one.
+
+The documentation does not reach production on merge. After the version is on
+npm, the merged commit goes to `promote-docs-production.yml` — step 3 of the
+release flow in `docs/gitflow.md`, not before.
+
 ## CLI Parameters
 
 | Flag                            | Required | Description                                                        |
@@ -421,6 +442,7 @@ Before completing:
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions
 - [ ] Root file is deterministic (fully regenerated)
+- [ ] For a package with a versioned docs collection: `qv-docs-cutoff` invoked, its PR URL reported, neither approved nor merged
 - [ ] Org remote (`upstream` when that is tetherto/qvac) is the push target, not the fork
 
 ## References
@@ -431,3 +453,4 @@ Before completing:
 - NOTICE generation: `.agents/skills/qv-notice-generate/SKILL.md`
 - sdk @qvac/inference version: `.agents/skills/qv-sdk-inference-version/SKILL.md`
 - Release PR branch naming (org `release-*` push / Merge Guard): `.agents/skills/qv-sdk-pr-create/SKILL.md`
+- Documentation cutoff: `.agents/skills/qv-docs-cutoff/SKILL.md`

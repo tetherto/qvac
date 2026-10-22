@@ -223,7 +223,7 @@ To skip this sync for a single run, the user can invoke `/qv-sdk-pr-create --no-
 2. If yes, read `.agents/skills/qv-docs-update/SKILL.md` and follow it. Don't open the PR until it reports `DONE`, `NO_DOCS_IMPACT`, or `GENERATED_DOCS_ONLY`.
 3. If no (library-only), put the library-only note in the PR body — one line on why the change needs no docs.
 
-This trigger is about prose. The generated API summary is `docs/ci/RELEASE-TRAIN.md` step 6a.
+This trigger is about prose. The generated API summary is regenerated at the cutoff, `docs/ci/RELEASE-TRAIN.md` step 6.
 
 ## Release Target Dual-PR Flow
 

@@ -45,7 +45,7 @@ interface SourceChangeSet {
 }
 
 interface Candidate {
-  /** Page path relative to `content/docs/`. */
+  /** Page path relative to `content/`. */
   page: string;
   /** Enclosing heading text, or null when the hit is page-level (R3). */
   section: string | null;
@@ -107,27 +107,44 @@ const SKILL_DIR = path.resolve(SCRIPT_DIR, "..");
 // .agents/skills/qv-docs-update/scripts -> repo root is four levels up.
 const REPO = repoRoot ?? path.resolve(SCRIPT_DIR, "..", "..", "..", "..");
 
-const DOCS_CONTENT = path.join(REPO, "docs", "website", "content", "docs");
+const CONTENT = path.join(REPO, "docs", "website", "content");
 const API_BARREL = path.join(REPO, "packages", "sdk", "src", "client", "api", "index.ts");
 const ROUTING_MAP = path.join(SKILL_DIR, "references", "routing-map.yaml");
 
 // ---------------------------------------------------------------------------
 // Documentation lines
 //
-// The SDK and the CLI are cut into one folder per published version. The
-// current line is the folder written in parentheses — Fumadocs reads that as a
-// group and drops it from the URL, so it is the line answering the version-less
-// addresses. Every other folder is a line already cut.
+// The SDK and the CLI are cut into one folder per released version. The line
+// still being written — the one this skill documents — lives outside the site,
+// at `content/_unpublished/<collection>/next/`, so nothing publishes it before
+// its release. Every folder under `content/docs/<collection>/` is a line
+// already cut.
 //
-// Resolved at runtime rather than written down, because the folder changes at
-// every release and a stale constant would silently route the whole run at a
-// shipped version.
+// Paths below are relative to `content/`, not to `content/docs/`, because the
+// line being written and the lines already cut sit in different subtrees.
+//
+// Resolved at runtime rather than written down: the development line is
+// addressed by a fixed name, but the fallback below is not, and a stale
+// constant would silently route a whole run at a released version.
 // ---------------------------------------------------------------------------
 
 const LINE_GROUP_RE = /^\(v\d+\.\d+\)$/;
 
-function currentLineOf(collection: string): string {
-  const dir = path.join(DOCS_CONTENT, collection);
+/**
+ * The line a collection is writing, relative to `content/`.
+ *
+ * The fallback covers a collection whose development line does not exist yet,
+ * which is every collection until its first cut under this model: there the
+ * group still holds the version under development. It retires with the last
+ * bootstrap cut.
+ */
+function lineOf(collection: string): string {
+  const development = path.join("_unpublished", collection, "next");
+  if (fs.existsSync(path.join(CONTENT, development))) {
+    return development.split(path.sep).join("/");
+  }
+
+  const dir = path.join(CONTENT, "docs", collection);
   if (!fs.existsSync(dir)) {
     console.error(`route-docs-targets: no collection at ${dir}`);
     process.exit(2);
@@ -139,21 +156,21 @@ function currentLineOf(collection: string): string {
 
   if (groups.length !== 1) {
     console.error(
-      `route-docs-targets: ${collection} has ${groups.length} current lines (${groups.join(", ") || "none"}); exactly one folder must be parenthesized`,
+      `route-docs-targets: ${collection} has ${groups.length} lines cut as a group (${groups.join(", ") || "none"}); exactly one folder must be parenthesized`,
     );
     process.exit(2);
   }
-  return groups[0]!;
+  return `docs/${collection}/${groups[0]!}`;
 }
 
-const SDK_LINE = currentLineOf("sdk");
-const CLI_LINE = currentLineOf("cli");
+const SDK_LINE = lineOf("sdk");
+const CLI_LINE = lineOf("cli");
 
-/** `sdk/<line>/…` -> `sdk/(v0.20)/…`, per collection. */
+/** `sdk/<line>/…` -> `_unpublished/sdk/next/…`, per collection. */
 function expandLine(glob: string): string {
   return glob
-    .replace("sdk/<line>/", `sdk/${SDK_LINE}/`)
-    .replace("cli/<line>/", `cli/${CLI_LINE}/`);
+    .replace("sdk/<line>/", `${SDK_LINE}/`)
+    .replace("cli/<line>/", `${CLI_LINE}/`);
 }
 
 // ---------------------------------------------------------------------------
@@ -162,32 +179,32 @@ function expandLine(glob: string): string {
 // explains it and the two must be changed together.
 //
 // Line-scoped on purpose. This skill documents the working tree, which is the
-// release not yet cut, so the current line is the only one whose pages describe
-// it. A cut line documents a release already shipped.
+// release not yet cut, so the development line is the only one whose pages
+// describe it. A cut line documents a release already shipped.
 // ---------------------------------------------------------------------------
 
 const ALLOWLIST_PREFIXES = [
-  `sdk/${SDK_LINE}/ai-capabilities/`,
-  `sdk/${SDK_LINE}/configuration/`,
-  `sdk/${SDK_LINE}/models/`,
-  `sdk/${SDK_LINE}/p2p-capabilities/`,
-  `sdk/${SDK_LINE}/runtime/`,
-  `cli/${CLI_LINE}/`,
+  `${SDK_LINE}/ai-capabilities/`,
+  `${SDK_LINE}/configuration/`,
+  `${SDK_LINE}/models/`,
+  `${SDK_LINE}/p2p-capabilities/`,
+  `${SDK_LINE}/runtime/`,
+  `${CLI_LINE}/`,
 ];
 
 const ALLOWLIST_FILES = new Set([
   // The SDK collection overview — the page `introduction.mdx` became.
-  `sdk/${SDK_LINE}/index.mdx`,
-  `sdk/${SDK_LINE}/js-ts-sdk.mdx`,
-  `sdk/${SDK_LINE}/python-sdk.mdx`,
-  `sdk/${SDK_LINE}/system-requirements.mdx`,
+  `${SDK_LINE}/index.mdx`,
+  `${SDK_LINE}/js-ts-sdk.mdx`,
+  `${SDK_LINE}/python-sdk.mdx`,
+  `${SDK_LINE}/system-requirements.mdx`,
 ]);
 
 /**
  * Editable only as an append, and only in NEW_CAPABILITY_PAGE: the home grid
  * that links every capability, on the page the old site index became.
  */
-const RESTRICTED_FILES = new Set(["ecosystem/index.mdx"]);
+const RESTRICTED_FILES = new Set(["docs/ecosystem/index.mdx"]);
 
 /** `reference/` in any line: the API summary is generated, and the release-notes
  * entry beside it is an external link to that minor's GitHub release. */
@@ -214,7 +231,7 @@ interface Heading {
 }
 
 interface Page {
-  /** Relative to `content/docs/`. */
+  /** Relative to `content/`. */
   rel: string;
   lines: string[];
   headings: Heading[];
@@ -235,7 +252,7 @@ function loadPages(): Page[] {
       }
       if (!entry.name.endsWith(".mdx")) continue;
 
-      const rel = path.relative(DOCS_CONTENT, abs).split(path.sep).join("/");
+      const rel = path.relative(CONTENT, abs).split(path.sep).join("/");
       // A generated page is never a routing target, and skipping it before the
       // scope check keeps the ~2000-line API summary — one per line — out of
       // every grep below.
@@ -247,7 +264,7 @@ function loadPages(): Page[] {
     }
   };
 
-  walk(DOCS_CONTENT);
+  walk(CONTENT);
   pages.sort((a, b) => a.rel.localeCompare(b.rel));
   return pages;
 }
@@ -453,7 +470,7 @@ function runR1(pages: Page[], files: ChangedFile[]) {
 //
 // packages/sdk/src/client/api/ holds one file per public function, kebab-cased.
 // Pages link those functions as `/sdk/reference/api#<symbol-lowercase>` — the
-// version-less address, which the current line answers.
+// version-less address, which the line last cut answers.
 // ---------------------------------------------------------------------------
 
 function kebabToCamel(name: string): string {
@@ -602,12 +619,12 @@ function runR2(pages: Page[], files: ChangedFile[]) {
 // R4 — CLI command router (exact)
 //
 // packages/cli/src/ has one folder per command area, and each command has its
-// own `### `qvac <command>`` heading in the CLI collection's index page, at its
-// current line.
+// own `### `qvac <command>`` heading in the CLI collection's index page, in the
+// line being written.
 // ---------------------------------------------------------------------------
 
-const CLI_INDEX = `cli/${CLI_LINE}/index.mdx`;
-const CLI_HTTP_SERVER = `cli/${CLI_LINE}/http-server/`;
+const CLI_INDEX = `${CLI_LINE}/index.mdx`;
+const CLI_HTTP_SERVER = `${CLI_LINE}/http-server/`;
 
 /** Command folder -> the command line as written in the docs heading. */
 const CLI_COMMANDS: Record<string, string> = {

@@ -37,11 +37,14 @@ the per-package flow in `docs/gitflow.md`.
 - Open both PRs with `qv-sdk-pr-create`: one release PR, one backmerge, for the
   whole train.
 - Invoke `qv-docs-cutoff` right after cutting the train branch, passing the
-  version being released. It opens the two documentation PRs into `main` and
-  reports their URLs. Nothing in steps 7 and 8 waits on them.
-- Do not approve or merge either documentation PR. The documentation engineer
-  reviews both — that review is the only gate on the documentation side of the
-  release — then merges them in the order `qv-docs-cutoff` reports.
+  version being released. It opens one documentation PR into `main` and
+  reports its URL. Nothing in steps 7 and 8 waits on it.
+- Do not approve or merge the documentation PR. The documentation engineer
+  reviews it — that review is the only gate on the documentation side of the
+  release.
+- Tell the user, at step 9, that the merged documentation commit is what goes
+  to `promote-docs-production.yml`, and only once the versions are on npm.
+  Promoting earlier publishes documentation for packages nobody can install.
 - Never approve the `npm` or `pypi` deployment; tell the user when each waits.
 - On a failed run, report it. Do not publish a package by hand and do not move
   or delete a tag.

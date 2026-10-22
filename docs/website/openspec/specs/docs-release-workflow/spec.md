@@ -2,16 +2,24 @@
 
 What a release does to the documentation. When a line is cut and what the cut consists of, which surfaces regenerate themselves from the line set, which redirects a cut owes and which it does not, and what the build rejects in a malformed cut.
 ## Requirements
-### Requirement: A line is cut as soon as the previous release is live
+### Requirement: A line is published at the release cutoff
 
-Publishing a documentation line SHALL happen immediately after a release deploys, not when the next one does, and consist of three moves in one change: renaming the outgoing folder group to its plain versioned form, which preserves what the site is serving, copying it to the coming release's folder group, which becomes current, and updating the version manifest so its entries name the folders as they now stand. A cut SHALL be made for every tracked package with a version scheduled in the coming cycle, and MAY also be made ahead of any schedule to demonstrate the model. Documentation describing that version MUST land in the folder group, and MUST NOT be written into an older line.
+A versioned collection SHALL write its coming release into a **development line** that the site does not publish, and SHALL publish that line at the release cutoff — when the version's release branch is cut, not when the release deploys. Publishing SHALL consist of three moves in one change: renaming the outgoing folder group to its plain versioned form, which preserves what the site is serving; **copying** the development line into the collection as the new folder group; and updating the version manifest so its entries name the folders as they now stand. The development line SHALL remain in place after the cut, and is then the next version's. A cut SHALL be made for each collection whose package the release moves, and collections SHALL be cuttable independently of one another. Documentation describing an unreleased version MUST land in the development line, and MUST NOT be written into a published one.
 
-#### Scenario: A cut preserves the outgoing line and opens the new one
+The development line SHALL be addressed by a name that does not change from one version to the next, so that the path a change writes to is the same before and after a cutoff. No folder SHALL be renamed across versions and none SHALL be deleted by a cut: a change written before a cutoff and merged after it MUST land in the line it was written for, with no rename for the version-control system to replay it through.
 
-- **WHEN** `@qvac/sdk` `0.16` has been deployed and `0.17` is the version being prepared
-- **THEN** `(v0.18)` becomes `v0.18` and a copy of it becomes `(v0.19)`
-- **AND** the manifest renames the `v0.18` entry's folder and gains a `v0.19` entry naming the group
-- **AND** the collection's version-less paths serve `v0.19` from the deploy that releases it
+#### Scenario: A cut preserves the outgoing line and publishes the one being released
+
+- **WHEN** `@qvac/sdk` `0.19` is the line last cut and `0.20` is the version being released
+- **THEN** `(v0.19)` becomes `v0.19` and a copy of the development line becomes `(v0.20)`
+- **AND** the manifest renames the `v0.19` entry's folder and gains a `v0.20` entry naming the group
+- **AND** the development line is still on disk, unchanged, and is now `0.21`'s
+
+#### Scenario: A change in flight across a cutoff lands in its own version
+
+- **WHEN** a change is written into the development line before a cutoff and merged after it
+- **THEN** it lands in the development line, which the cutoff left in place
+- **AND** no published line is modified by the merge
 
 #### Scenario: A half-done cut does not build
 
@@ -23,15 +31,20 @@ Publishing a documentation line SHALL happen immediately after a release deploys
 - **WHEN** a line is preserved by a cut
 - **THEN** its pages are what the collection's version-less paths served immediately before the cut
 
-#### Scenario: The new line starts complete
+#### Scenario: One collection is cut without the others
 
-- **WHEN** the copy is built before any release-specific edit
-- **THEN** it contains every page of the older line, at the same paths, and resolves at the version-less paths
+- **WHEN** a release moves one versioned collection's package and not another's
+- **THEN** only that collection is cut, and every other collection's folders and manifest entries are unchanged
 
-#### Scenario: New-release material does not land in an older line
+#### Scenario: The development line is not published
 
-- **WHEN** a page is written or edited to describe the new release
-- **THEN** the edit lands in the folder group
+- **WHEN** the site is built
+- **THEN** no page of the development line is rendered and no URL resolves to one
+
+#### Scenario: New-release material does not land in a published line
+
+- **WHEN** a page is written or edited to describe the coming release
+- **THEN** the edit lands in the development line
 
 ### Requirement: An older line stays editable
 
@@ -90,7 +103,7 @@ Every surface derived from the line set — the switcher, the sidebars, the cano
 
 Cutting a line SHALL be an ordinary content change — a rename, a copy, a manifest edit, and an edit to the redirects — that can be performed by hand. No tool is required to make a cut correct; the build MUST be what rejects an incorrect one. A cut leaving a collection with anything but exactly one folder group, with a patch-shaped line name, with a line numbered above the folder group, or with folders and manifest entries that do not correspond MUST fail the build. The number of lines a cut leaves behind SHALL NOT be a reason to reject it.
 
-A command MAY be provided that performs the whole cut for one collection, and it SHALL produce exactly the edit a person would make by hand. It MUST NOT become a step anything depends on: the hand procedure stays documented, and releasing MUST NOT require it. It SHALL refuse a cut it cannot make reviewable — an unversioned collection, a version not above the current line, a destination already occupied, or a working tree that already carries changes — and it SHALL leave verification to the build rather than reporting success of its own.
+A command MAY be provided that performs the whole cut for one collection, and it SHALL produce exactly the edit a person would make by hand. It MUST NOT become a step anything depends on: the hand procedure stays documented, and releasing MUST NOT require it. It SHALL refuse a cut it cannot make reviewable — an unversioned collection, a version not above the line last cut, a missing development line, a destination already occupied, or a working tree that already carries changes — and it SHALL leave verification to the build rather than reporting success of its own.
 
 #### Scenario: A cut needs no tooling
 
@@ -104,7 +117,7 @@ A command MAY be provided that performs the whole cut for one collection, and it
 
 #### Scenario: An unreviewable cut is refused
 
-- **WHEN** the command is asked to cut into an occupied destination, below the current line, on an unversioned collection, or over uncommitted work
+- **WHEN** the command is asked to cut into an occupied destination, below the line last cut, on an unversioned collection, with no development line, or over uncommitted work
 - **THEN** it refuses and changes nothing
 
 #### Scenario: An invalid structure fails the build
@@ -129,51 +142,47 @@ A command MAY be provided that performs the whole cut for one collection, and it
 
 ### Requirement: A version is only written into the line that carries it
 
-A generator that writes a page describing a release SHALL refuse when the version it was given does not belong to the line it would write into. It MUST refuse before writing anything, and MUST name both the version asked for and the line that is current.
+A generator that writes a page describing a release SHALL write into the development line, and SHALL refuse a version that a published line already carries. It MUST refuse before writing anything, and MUST name both the version asked for and the line last cut.
 
-The check exists because the destination is resolved from the manifest rather than named on the command line, so a release run before its line was cut would otherwise land in the previous line, overwrite that line's own record of itself, and leave a tree that builds and tests clean. A released line is never regenerated, and this is what enforces it.
+The check exists because the destination is resolved rather than named on the command line, so a run for a shipped version would otherwise overwrite that release's own record of itself and leave a tree that builds and tests clean. A published line is never regenerated, and this is what enforces it.
 
-#### Scenario: A version matching the current line is generated
+#### Scenario: The coming version is generated into the development line
 
-- **WHEN** a generator is run for a version whose major and minor are the current line's
-- **THEN** it writes into that line
+- **WHEN** a generator is run for a version above the line last cut
+- **THEN** it writes into the development line
 
-#### Scenario: A version ahead of the current line is refused
+#### Scenario: A shipped version is refused
 
-- **WHEN** a generator is run for the coming release and the line for it has not been cut
-- **THEN** it refuses, names the version and the current line, and writes nothing
+- **WHEN** a generator is run for a version whose line has already been published
+- **THEN** it refuses, names the version and the line last cut, and writes nothing
+- **AND** it names the published folder to edit instead
 
-#### Scenario: An older line is not regenerated
+### Requirement: The cutoff regenerates the API summary of the version being released
 
-- **WHEN** a generator is run for a version whose line has already been preserved
-- **THEN** it refuses, because that line is what the site already serves
+A cutoff SHALL regenerate the API summary of the line it is about to publish, by running the generator directly, before the cut copies that line into the collection. No other surface is a release's to write: the manifest and the redirects belong to the cut, and every remaining surface is derived at build time. Release notes SHALL NOT be rendered as a page; each line's sidebar entry is an external link to that minor's release.
 
-### Requirement: A release regenerates the reference pages of the current line
+A minor release SHALL render the API summary. A patch release SHALL render nothing and cut nothing, because the public API is frozen at the minor boundary.
 
-Releasing SHALL regenerate only the API summary and the release notes of the current line, by running the two generators directly. No other surface is a release's to write: the manifest and the redirects belong to the cut, and every remaining surface is derived at build time.
-
-A minor release SHALL render both pages. A patch release SHALL append its section to the release notes and leave the API summary untouched, because the public API is frozen at the minor boundary. Releasing SHALL be preceded by the cut that opened the line being released, and the instructions an operator follows MUST say so.
-
-#### Scenario: A minor renders both pages
+#### Scenario: A minor renders the API summary
 
 - **WHEN** a minor release is documented
-- **THEN** the API summary and the release notes of the current line are rendered
+- **THEN** the API summary of the line being published is rendered, before the cut copies it
 
-#### Scenario: A patch leaves the API summary alone
+#### Scenario: A patch changes no documentation
 
 - **WHEN** a patch release is documented
-- **THEN** its section is appended to the release notes and the API summary is not rewritten
+- **THEN** no page is rendered and no line is cut
 
 #### Scenario: A release does not touch the cut's inputs
 
 - **WHEN** a release is documented
-- **THEN** neither the version manifest nor the redirects are modified
+- **THEN** neither the version manifest nor the redirects are modified by the generator
 
 ### Requirement: The currency marker follows the cut
 
 Where a page states in its own text that it belongs to the current line, that statement SHALL be maintained by the cut, which is the only event that changes which line is current. A cut MUST clear the marker from the line it preserves and carry it, with the new line's number, onto the line it opens.
 
-A generator rendering a page of the current line MUST preserve the marker the cut set, so regenerating never silently demotes the line it writes into.
+The development line SHALL carry no marker, since it is not published. A generator rendering into it MUST NOT add one, and MUST NOT remove the marker the cut sets on the line it publishes.
 
 #### Scenario: The preserved line stops claiming to be current
 
@@ -185,8 +194,8 @@ A generator rendering a page of the current line MUST preserve the marker the cu
 - **WHEN** a line is opened by a cut
 - **THEN** its pages carry the marker and name the new line
 
-#### Scenario: Regenerating does not drop the marker
+#### Scenario: Regenerating the development line adds no marker
 
-- **WHEN** a page of the current line is regenerated
-- **THEN** it still carries the marker
+- **WHEN** a page of the development line is regenerated
+- **THEN** it carries no marker, and gains one only when the cut publishes it
 

@@ -1,42 +1,50 @@
 ---
 name: qv-docs-cutoff
-description: Open the two documentation PRs of a release cutoff — one closing the line of the version being released, one opening the next version's line. Use at step 6 of docs/ci/RELEASE-TRAIN.md, when invoked from qv-release-train, or when invoking /qv-docs-cutoff.
+description: Open the documentation PR of a release cutoff — one PR that publishes the line of the version being released and leaves the next sprint's line open. Use at step 6 of docs/ci/RELEASE-TRAIN.md, at step 1 of a single-package release in docs/gitflow.md, when invoked from qv-release-train or qv-sdk-changelog, or when invoking /qv-docs-cutoff.
 ---
 
 # Documentation cutoff
 
 The documentation site publishes one **line** per minor of each versioned
-collection. The line in a parenthesized folder is the version **under
-development**; every plain folder is a version that shipped and documents that
-version alone.
+collection. Every line under `content/docs/<collection>/` has been cut: the
+parenthesized one is the newest and answers the version-less paths, and every
+plain one carries its version in the URL. The line still being written lives
+outside the site, at `content/_unpublished/<collection>/next/`, where nothing
+builds it and no URL reaches it.
 
-A cutoff advances that pointer by two PRs into `main`:
+A cutoff publishes the line of the version being released, in **one** PR into
+`main`, per collection cut:
 
-- **6a — close the line being released.** Regenerate its API summary, so the
-  line states the surface the release actually ships.
-- **6b — open the next version's line.** The line just closed becomes a plain
-  folder; a new parenthesized one takes over and receives the coming sprint's
-  feature documentation from its first day.
+- the outgoing group becomes plain and gains its versioned URLs
+- a copy of the development line becomes the new group
+- the development line stays where it is — it is already the next version's
+- the manifest and the redirects follow
 
-This skill opens both and hands them to the documentation engineer. It runs at
-the same moment the release branches are cut, because that is when `main` is
-the release's source and when the next version starts.
+The development line is addressed by a fixed name rather than by its number,
+and that is what makes the cutoff cheap: no line folder is deleted, so git has
+no deletion to pair a pre-cutoff edit against, and a feature PR that straddles
+the cutoff merges clean into the line it was written for.
 
 ## When to use
 
 - Step 6 of [`docs/ci/RELEASE-TRAIN.md`](../../../docs/ci/RELEASE-TRAIN.md),
-  invoked from `qv-release-train` right after the train branch is cut.
-- `/qv-docs-cutoff` invoked directly, to redo a cutoff's documentation PRs.
+  invoked from `qv-release-train` right after the train branch is cut. Every
+  collection the train moves is cut, in one PR.
+- Step 1 of the release flow in [`docs/gitflow.md`](../../../docs/gitflow.md),
+  invoked from `qv-sdk-changelog` when a single package is released on its own.
+  One collection is cut, in one PR.
+- `/qv-docs-cutoff` invoked directly, to redo a cutoff's documentation PR.
 
 ## What it does NOT do
 
-- Does not merge or approve either PR. The documentation engineer reviews both —
-  that review is the only gate on the documentation side of a release — then
-  merges 6a, records its merge commit, and merges 6b.
-- Does not write prose. Feature documentation reaches the line through the
-  sprint's own PRs (`qv-docs-update`), and is already on `main` by now.
-- Does not promote anything to production. That is a separate manual workflow,
-  run on release day against 6a's merge commit.
+- Does not merge or approve the PR. The documentation engineer reviews it —
+  that review is the only gate on the documentation side of a release.
+- Does not write prose. Feature documentation reaches the development line
+  through the sprint's own PRs (`qv-docs-update`), and is already on `main`.
+- Does not promote anything to production. Promotion happens **after** the
+  version is on npm — step 9 of `RELEASE-TRAIN.md`, or after step 3 of the
+  release flow in `gitflow.md`. Promoting before that would publish a line
+  whose packages nobody can install.
 
 ## Prerequisites
 
@@ -53,13 +61,33 @@ name.
 
 ## Workflow
 
-### Step 1: Check the moment and the tree
+### Step 1: Resolve the collections and check the moment
 
 Read the version being released, `<x.y.z>`, from the invocation.
 
-Confirm `<x.y>` is the current line of `/sdk` in
-`docs/website/src/lib/versions.ts`. If it is not, stop and report: either this
-cutoff's documentation PRs already exist, or the collection is a release behind.
+Derive the collections to cut:
+
+- Invoked from `qv-release-train`: every versioned collection whose package the
+  train moves. `docs/website/src/lib/versions.ts` maps package to collection —
+  `@qvac/sdk` → `/sdk`, `@qvac/cli` → `/cli`. A train package with no
+  collection (`@qvac/inference`, `@qvac/ai-sdk-provider`, the plugins) cuts
+  nothing.
+- Invoked from `qv-sdk-changelog` or by hand: the one collection of the package
+  being released. If it has none, there is nothing to do — report that and
+  stop.
+
+Per collection, read the line last cut from the manifest — the parenthesized
+entry — and check the moment:
+
+- If `<x.y>` is **above** it, the cutoff is due. This is the ordinary case.
+- If `<x.y>` **equals** it and the collection has no
+  `content/_unpublished/<collection>/next/`, this is the collection's **first
+  cut** under this model: the group still holds the version under development,
+  so the cut only opens the development line. Expect no manifest or redirect
+  change.
+- If `<x.y>` equals it and the development line exists, stop and report: this
+  cutoff already ran.
+- If `<x.y>` is below it, stop and ask. The collection is a release ahead.
 
 Confirm the tree is clean (`git status --porcelain` empty) and fetch:
 
@@ -67,98 +95,87 @@ Confirm the tree is clean (`git status --porcelain` empty) and fetch:
 git fetch ORG_REMOTE main
 ```
 
-Both PRs come off `main` so they carry documentation alone. The release's own
-version bump, changelog and NOTICE live on the release head branch, which is a
-different branch and stays there. A dirty tree means release work is still
-uncommitted: stop, and let the release flow finish step 6 first.
+The PR comes off `main` so it carries documentation alone. The release's own
+version bump, changelog and NOTICE live on the release head branch and stay
+there. A dirty tree means release work is still uncommitted: stop, and let the
+release flow reach its own cut first.
 
-### Step 2: PR 1 — close the line being released
+### Step 2: Regenerate the API summary of the version being released
 
-Branch, regenerate, build:
+Only the SDK has a generated reference; skip this for any other collection.
 
 ```bash
-git switch -c docs/cutoff-<x.y.z>-close-line ORG_REMOTE/main
+git switch -c docs/cutoff-<x.y.z> ORG_REMOTE/main
 cd docs/website && bun run scripts/generate-api-docs.ts <x.y.z> --force-extract
-npm run build
-cd ../..
 ```
 
-This writes one file:
-`docs/website/content/docs/sdk/(v<x.y>)/reference/api.mdx`. The SDK is the only
-collection with a generated reference, so this is the whole of 6a.
+This writes one file, into the line that is about to be published:
+`content/_unpublished/sdk/next/reference/api.mdx` — or, on the collection's
+first cut, `content/docs/sdk/(v<x.y>)/reference/api.mdx`. The destination is
+resolved, never passed; a version whose line has already been cut is refused.
 
 **Confirm the body changed, not just the title.** `--force-extract` re-runs
 TypeDoc; a diff of one line means it did not, and the page would then advertise
 the new version while describing the previous one:
 
 ```bash
-git diff --stat -- docs/website/content/docs/sdk
+git diff --stat -- content
 ```
 
-Commit and open the PR:
+### Step 3: Cut each collection
+
+Invoke `qv-docs-line-cut`, passing the version and the collections resolved in
+Step 1. It runs `scripts/cut-line.ts` once per collection, commits each cut on
+its own, and verifies the result.
+
+The API summary from Step 2 goes in with the first commit. The cut copies the
+development line after it, so the published line carries the summary just
+generated and the development line keeps it as its starting point.
+
+### Step 4: Open one PR
 
 ```bash
-git add -A docs/website
-git commit -m "docs: close the SDK v<x.y> line for <x.y.z>"
-git push -u ORG_REMOTE docs/cutoff-<x.y.z>-close-line
+git push -u ORG_REMOTE docs/cutoff-<x.y.z>
 ```
 
-Open it into `main`. The body states the version, that the summary was
-re-extracted, and the diffstat just measured.
+Open it into `main`. The body states the version, the collections cut, that the
+summary was re-extracted, and the evidence `qv-docs-line-cut` measured.
 
-### Step 3: PR 2 — open the next version's line
+One PR, not two: nothing here renames a folder another commit writes into, so
+there is no ordering to protect and no stacked base to retarget.
 
-Branch off **PR 1's branch**, then invoke `qv-docs-line-cut`:
-
-```bash
-git switch -c docs/cutoff-<x.y.z>-open-lines   # from the branch above, still checked out
-```
-
-`qv-docs-line-cut` reads the roster from the manifest and cuts every collection
-whose current line has entered release, one invocation and one commit each. It
-covers the CLI as well as the SDK, and it measures the evidence its PR body
-quotes.
-
-Open the PR with **base `docs/cutoff-<x.y.z>-close-line`**, so its diff shows
-the cut alone. When PR 1 merges, GitHub retargets this PR to `main`.
-
-Stacking on PR 1 is what makes the pair correct. Branched off `main` instead,
-the two merge in order and git drops PR 1's regenerated summary from the
-*preserved* folder — the one production serves — reporting a conflict only in
-the freshly opened folder, which no reader has reached yet.
-
-### Step 4: Hand both over
+### Step 5: Hand it over
 
 Report:
 
-- both PR URLs, labelled 6a and 6b
-- that they merge in that order, 6a first
-- that merging 6a retargets 6b and dismisses its approval, so 6b needs
-  re-approving
-- that 6a's merge commit is the production promotion target, and the
-  documentation engineer records it
-- the review procedure: `docs/website/docs-workflow.md`, "Reviewing the two
-  cutoff PRs"
+- the PR URL
+- the collections it cuts and the version each publishes
+- that promotion to production happens **after** the version is on npm, not on
+  merge — step 9 of `RELEASE-TRAIN.md`, or after step 3 of the release flow in
+  `gitflow.md`
+- the review procedure: `docs/website/docs-workflow.md`, "Reviewing the cutoff
+  PR"
 
 If the documentation engineer reports a problem, reset the branch and re-run
-rather than patching it. Both PRs are script output, and a cut commit must never
-be rebased — replaying a cut onto a base that moved applies cleanly and produces
-an incoherent tree.
+rather than patching it. The PR is script output, and a cut commit must never be
+rebased — replaying a cut onto a base that moved applies cleanly and produces an
+incoherent tree.
 
 ## Quality Checklist
 
-- [ ] `<x.y>` confirmed as the current line of `/sdk` in the manifest
-- [ ] Both branches cut from `ORG_REMOTE/main`, tree clean at the start
-- [ ] PR 1 carries one file, `content/docs/sdk/(v<x.y>)/reference/api.mdx`
-- [ ] PR 1's diff is more than the title line, proving TypeDoc re-extracted
-- [ ] `npm run build` clean before PR 1 is opened
-- [ ] PR 2 branched off PR 1's branch, and its PR base is that branch
-- [ ] PR 2 carries one commit per collection, from `qv-docs-line-cut`
-- [ ] Both PR URLs reported with their merge order, neither approved nor merged
+- [ ] Collections derived from the packages being released, via the manifest
+- [ ] Per collection, `<x.y>` checked against the line last cut
+- [ ] Branch cut from `ORG_REMOTE/main`, tree clean at the start
+- [ ] The API summary regenerated into the line being published, body changed
+- [ ] One `cut-line.ts` invocation and one commit per collection
+- [ ] `npm run build` clean and `vitest` green before the PR is opened
+- [ ] One PR URL reported, neither approved nor merged
+- [ ] Promotion stated as a later step, gated on npm
 
 ## References
 
-- Release procedure: `docs/ci/RELEASE-TRAIN.md` step 6
+- Release procedures: `docs/ci/RELEASE-TRAIN.md` step 6,
+  `docs/gitflow.md` "Release flow"
 - The cut: `.agents/skills/qv-docs-line-cut/SKILL.md`
 - Line model, review procedure and the production promotion:
   `docs/website/docs-workflow.md`

@@ -6,10 +6,10 @@ import {
   cutLine,
   cutManifest,
   cutRedirects,
-  emptyReleaseNotes,
   relabelTitle,
   retargetReleaseNotesLink,
 } from '../scripts/cut-line';
+import { DEVELOPMENT_LINE } from '../scripts/lib/release-shared';
 import { DOCUMENTED_SOFTWARE } from '../src/lib/versions';
 
 /**
@@ -31,6 +31,9 @@ const NEXT = (() => {
   const [major, minor] = CURRENT.replace(/^v/, '').split('.');
   return `v${major}.${Number(minor) + 1}`;
 })();
+
+const developmentDir = (root: string, slug = 'sdk') =>
+  path.join(root, 'content', '_unpublished', slug, DEVELOPMENT_LINE);
 
 describe('the manifest edit', () => {
   const manifest = [
@@ -152,55 +155,6 @@ describe('the currency marker', () => {
   });
 });
 
-describe('the release notes of the line being opened', () => {
-  const page = [
-    '---',
-    'title: SDK Release Notes — v0.21.x (latest)',
-    'sidebarTitle: Release notes',
-    'icon: Tag',
-    'description: Release notes for QVAC SDK v0.20.3.',
-    '---',
-    '',
-    '## v0.20.3',
-    '',
-    'What the previous line shipped.',
-    '',
-  ].join('\n');
-
-  const emptied = emptyReleaseNotes(page, 'v0.21', '@qvac/sdk')!;
-
-  it('drops the previous line\'s notes, which it shares nothing with', () => {
-    expect(emptied).not.toContain('## v0.20.3');
-    expect(emptied).not.toContain('What the previous line shipped.');
-  });
-
-  it('keeps the frontmatter, so the page stays in the sidebar', () => {
-    expect(emptied).toContain('title: SDK Release Notes — v0.21.x (latest)');
-    expect(emptied).toContain('sidebarTitle: Release notes');
-    expect(emptied).toContain('icon: Tag');
-  });
-
-  it('describes the line it opens, not the release it copied', () => {
-    expect(emptied).toContain('description: Release notes for @qvac/sdk v0.21.');
-    expect(emptied).not.toContain('v0.20.3.');
-  });
-
-  it('says the line has not shipped, rather than rendering blank', () => {
-    expect(emptied).toContain('v0.21 has not been released yet.');
-  });
-
-  it('writes a description when the page carried none', () => {
-    const bare = '---\ntitle: SDK Release Notes — v0.21.x\n---\n\n## v0.20.3\n';
-    expect(emptyReleaseNotes(bare, 'v0.21', '@qvac/sdk')).toContain(
-      'description: Release notes for @qvac/sdk v0.21.',
-    );
-  });
-
-  it('reports a page with no frontmatter to keep, rather than emptying it', () => {
-    expect(emptyReleaseNotes('## v0.20.3\n', 'v0.21', '@qvac/sdk')).toBeNull();
-  });
-});
-
 describe('the release-notes link of the line being opened', () => {
   const meta = (tag: string) =>
     [
@@ -241,23 +195,58 @@ describe('the release-notes link of the line being opened', () => {
   });
 });
 
+describe("a collection's first cut, which only opens the development line", () => {
+  let root: string;
+  let result: Awaited<ReturnType<typeof cutLine>>;
+
+  beforeAll(async () => {
+    root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-first-'));
+    await copyTree(root);
+    result = await cutLine({ root, slug: 'sdk', version: CURRENT });
+  }, 30_000);
+
+  afterAll(async () => {
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it('opens the development line as a copy of the group', async () => {
+    expect(await pagesOf(developmentDir(root))).toEqual(
+      await pagesOf(path.join(root, 'content', 'docs', 'sdk', `(${CURRENT})`)),
+    );
+  });
+
+  it('leaves the group where it is, because it already holds the release', async () => {
+    await expect(
+      fs.stat(path.join(root, 'content', 'docs', 'sdk', `(${CURRENT})`)),
+    ).resolves.toBeTruthy();
+  });
+
+  it('touches neither the manifest nor the redirects, since no line moved', async () => {
+    expect(result.changed).toEqual([
+      path.join('content', '_unpublished', 'sdk', DEVELOPMENT_LINE),
+    ]);
+    expect(result.preserved).toBeNull();
+  });
+
+  it('refuses a second time, because the development line is already open', async () => {
+    await expect(
+      cutLine({ root, slug: 'sdk', version: CURRENT }),
+    ).rejects.toThrow(/already carries a development line/);
+  });
+});
+
 describe('a cut against a copy of the tree', () => {
   let root: string;
   let result: Awaited<ReturnType<typeof cutLine>>;
 
   beforeAll(async () => {
     root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-'));
-    for (const relative of [
-      path.join('content', 'docs', 'sdk'),
-      path.join('src', 'lib', 'versions.ts'),
-      path.join('public', '_redirects'),
-    ]) {
-      const to = path.join(root, relative);
-      await fs.mkdir(path.dirname(to), { recursive: true });
-      await fs.cp(path.join(WEBSITE, relative), to, { recursive: true });
-    }
+    await copyTree(root);
+    // The state a steady-state cut starts from: the collection has been cut
+    // once, so its development line exists and holds the sprint's work.
+    await cutLine({ root, slug: 'sdk', version: CURRENT });
     result = await cutLine({ root, slug: 'sdk', version: NEXT });
-  }, 30_000);
+  }, 60_000);
 
   afterAll(async () => {
     await fs.rm(root, { recursive: true, force: true });
@@ -272,17 +261,19 @@ describe('a cut against a copy of the tree', () => {
     ).rejects.toThrow();
   });
 
-  it('opens the new line complete, at the same paths', async () => {
-    const pagesOf = async (folder: string) =>
-      (
-        await fs.readdir(path.join(root, 'content', 'docs', 'sdk', folder), {
-          recursive: true,
-        })
-      ).sort();
-    expect(await pagesOf(`(${NEXT})`)).toEqual(await pagesOf(CURRENT));
+  it('opens the released line complete, at the same paths', async () => {
+    expect(await pagesOf(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`))).toEqual(
+      await pagesOf(path.join(root, 'content', 'docs', 'sdk', CURRENT)),
+    );
   });
 
-  it('declares both lines in the manifest, the new one current', async () => {
+  it('leaves the development line in place, which is what makes the path stable', async () => {
+    expect(await pagesOf(developmentDir(root))).toEqual(
+      await pagesOf(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`)),
+    );
+  });
+
+  it('declares both lines in the manifest, the released one as the group', async () => {
     const manifest = await fs.readFile(
       path.join(root, 'src', 'lib', 'versions.ts'),
       'utf-8',
@@ -301,62 +292,43 @@ describe('a cut against a copy of the tree', () => {
     expect(redirects).toContain(`/sdk/${CURRENT}/*       /sdk/${CURRENT}/:splat/index.html`);
   });
 
-  it('moves the currency marker from the preserved line to the opened one', async () => {
-    const titleIn = async (folder: string) =>
-      (
-        await fs.readFile(
-          path.join(root, 'content', 'docs', 'sdk', folder, 'reference', 'api.mdx'),
-          'utf-8',
-        )
-      )
-        .split('\n')
-        .find((line) => line.startsWith('title:'));
+  it('moves the currency marker from the preserved line to the released one', async () => {
+    expect(await titleIn(path.join(root, 'content', 'docs', 'sdk', CURRENT))).toBe(
+      `title: API Summary — ${CURRENT}.x`,
+    );
+    expect(
+      await titleIn(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`)),
+    ).toBe(`title: API Summary — ${NEXT}.x (latest)`);
+  });
 
-    expect(await titleIn(CURRENT)).toBe(`title: API Summary — ${CURRENT}.x`);
-    expect(await titleIn(`(${NEXT})`)).toBe(
+  it('leaves the development line carrying the released marker, for the next cut to move', async () => {
+    expect(await titleIn(developmentDir(root))).toBe(
       `title: API Summary — ${NEXT}.x (latest)`,
     );
   });
 
-  it('opens the line with the summary intact and no release-notes page', async () => {
-    const pageIn = (folder: string, page: string) =>
-      fs.readFile(
-        path.join(root, 'content', 'docs', 'sdk', folder, 'reference', page),
-        'utf-8',
-      );
+  it('opens the line with the summary the development line carried', async () => {
+    const summaryOf = (dir: string) =>
+      fs.readFile(path.join(dir, 'reference', 'api.mdx'), 'utf-8');
 
-    // No line publishes release notes any more, so the cut has no page to
-    // empty. `emptyLineReleaseNotes` is best-effort for exactly this reason.
-    await expect(pageIn(`(${NEXT})`, 'release-notes.mdx')).rejects.toThrow();
-
-    // The summary is the opposite case: the release renders it over the copy,
-    // and the diff against the previous line is what makes that review work.
-    expect(await pageIn(`(${NEXT})`, 'api.mdx')).toBe(
-      (await pageIn(CURRENT, 'api.mdx')).replace(
-        `${CURRENT}.x`,
-        `${NEXT}.x (latest)`,
-      ),
+    expect(await summaryOf(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`))).toBe(
+      await summaryOf(developmentDir(root)),
     );
   });
 
-  it('points the opened line\'s release-notes link at its own tag', async () => {
-    const tagIn = async (folder: string) =>
-      (
-        await fs.readFile(
-          path.join(
-            root, 'content', 'docs', 'sdk', folder, 'reference', 'meta.json',
-          ),
-          'utf-8',
-        )
-      ).match(/\/releases\/tag\/([^)]+)\)/)?.[1];
-
-    expect(await tagIn(`(${NEXT})`)).toBe(`sdk-${NEXT}.0`);
-    expect(await tagIn(CURRENT)).toBe(`sdk-${CURRENT}.0`);
+  it("points the released line's release-notes link at its own tag", async () => {
+    expect(await tagIn(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`))).toBe(
+      `sdk-${NEXT}.0`,
+    );
+    expect(await tagIn(path.join(root, 'content', 'docs', 'sdk', CURRENT))).toBe(
+      `sdk-${CURRENT}.0`,
+    );
+    expect(await tagIn(developmentDir(root))).toBe(`sdk-${NEXT}.0`);
   });
 
   it('reports what it changed', () => {
+    expect(result.released).toBe(NEXT);
     expect(result.preserved).toBe(CURRENT);
-    expect(result.opened).toBe(NEXT);
     expect(result.changed).toContain(path.join('src', 'lib', 'versions.ts'));
     expect(result.changed).toContain(path.join('public', '_redirects'));
   });
@@ -382,14 +354,20 @@ describe('a cut it cannot make reviewable', () => {
     );
   });
 
-  it('refuses a version that is not above the current line', async () => {
-    await expect(against('sdk', CURRENT)).rejects.toThrow(/is not above/);
+  it('refuses a version below the line last cut', async () => {
+    await expect(against('sdk', 'v0.1')).rejects.toThrow(/is not above/);
+  });
+
+  it('refuses to publish a line the development line cannot supply', async () => {
+    await expect(against('sdk', NEXT)).rejects.toThrow(/no development line/);
   });
 
   it('refuses a destination already on disk', async () => {
     const root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-occupied-'));
-    // Only the folder a cut would create: the refusal has to land before the
-    // manifest is even read, so nothing else needs to be there.
+    // The development line a cut reads from, plus the one folder a cut would
+    // create: the refusal has to land before the manifest is even read, so
+    // nothing else needs to be there.
+    await fs.mkdir(developmentDir(root), { recursive: true });
     await fs.mkdir(path.join(root, 'content', 'docs', 'sdk', CURRENT), {
       recursive: true,
     });
@@ -399,3 +377,32 @@ describe('a cut it cannot make reviewable', () => {
     await fs.rm(root, { recursive: true, force: true });
   });
 });
+
+/** The pieces of the real tree a cut reads and writes. */
+async function copyTree(root: string): Promise<void> {
+  for (const relative of [
+    path.join('content', 'docs', 'sdk'),
+    path.join('src', 'lib', 'versions.ts'),
+    path.join('public', '_redirects'),
+  ]) {
+    const to = path.join(root, relative);
+    await fs.mkdir(path.dirname(to), { recursive: true });
+    await fs.cp(path.join(WEBSITE, relative), to, { recursive: true });
+  }
+}
+
+async function pagesOf(dir: string): Promise<string[]> {
+  return (await fs.readdir(dir, { recursive: true })).sort();
+}
+
+async function titleIn(dir: string): Promise<string | undefined> {
+  return (await fs.readFile(path.join(dir, 'reference', 'api.mdx'), 'utf-8'))
+    .split('\n')
+    .find((line) => line.startsWith('title:'));
+}
+
+async function tagIn(dir: string): Promise<string | undefined> {
+  return (
+    await fs.readFile(path.join(dir, 'reference', 'meta.json'), 'utf-8')
+  ).match(/\/releases\/tag\/([^)]+)\)/)?.[1];
+}

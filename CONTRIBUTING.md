@@ -4,23 +4,32 @@ We welcome contributions! Feel free to open a pull request, report bugs, or shar
 
 ## API Reference Docs
 
-The SDK's public API summary is generated from TypeScript source by a pipeline under `docs/website/scripts/`. It is written into the SDK's current documentation line, at `docs/website/content/docs/sdk/<current line>/reference/api.mdx`, resolved from the version manifest in `docs/website/src/lib/versions.ts`. To regenerate it locally:
+The SDK's public API summary is generated from TypeScript source by a pipeline under `docs/website/scripts/`. It is written into the SDK's development line, at `docs/website/content/_unpublished/sdk/next/reference/api.mdx` — the version being written, which the release cutoff publishes. To regenerate it locally:
 
 ```bash
 cd docs/website
 npm install
-npm run docs:generate-api -- 0.9.1 --latest  # writes the current line's reference/api.mdx
+npm run docs:generate-api -- 0.9.1 --latest  # writes the development line's reference/api.mdx
 ```
 
 Full workflow, CLI flags, determinism guarantees, and troubleshooting are documented in [docs/website/docs-workflow.md](docs/website/docs-workflow.md). `docs:generate-api` requires `bun` on PATH (listed as a devDependency of `docs/website`).
 
 ## Documentation lines
 
-The SDK and the CLI are each documented one folder per minor release under `docs/website/content/docs/`. The folder in parentheses — `sdk/(v0.23)` — is the **current line**: the release under development, and the one that answers the version-less URLs. Every other folder is a release that already shipped, and it documents that release and nothing else.
+The SDK and the CLI are each documented one folder per minor release. Every folder under `docs/website/content/docs/sdk/` and `.../cli/` is a release that already shipped, and documents that release and nothing else. The one in parentheses — `sdk/(v0.23)` — is the most recent, and answers the version-less URLs.
 
-Write to the current line. If your PR touches documentation content, the `Docs lines up to date with main` check compares the set of line folders at your branch point against main's and fails when main has cut a new line since. That failure means your edits would land in a shipped release's folder: git relocates them there by rename detection, without a conflict and with a green merge. Run `git merge origin/main` and move the edits to the current line.
+**Your feature's documentation goes in the development line**, which is outside the site:
 
-Editing a shipped release's folder on purpose is fine — a factual correction to published documentation belongs there. The check allows it as long as your branch is current on the line set; it only prints a warning, so that a change that also applies to the current line is not forgotten.
+```
+docs/website/content/_unpublished/sdk/next/
+docs/website/content/_unpublished/cli/next/
+```
+
+Nothing under `_unpublished/` is built or served, so your prose is invisible on the site until the release cutoff publishes that line, with the version it belongs to. Review it in the PR diff, or preview it locally with the symlink described in [docs/website/docs-workflow.md](docs/website/docs-workflow.md), "Previewing the development line".
+
+The path never changes. A cutoff copies the development line into the collection rather than renaming it, so a PR opened before a cutoff and merged after it needs no rebase and no relocation: it lands in the version whose sprint it was written in, either way. There is no window to avoid, including the days between a cutoff and the npm release.
+
+If your PR changes a file under `content/docs/`, the `Published lines advisory` check says so in a warning. Editing a shipped release's folder on purpose is fine — a factual correction to published documentation belongs there, and reaches production with the next promotion. The warning exists so a feature's documentation does not land there by mistake.
 
 ## PR Labels
 
