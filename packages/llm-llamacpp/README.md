@@ -341,6 +341,8 @@ const response = await model.run([
 
 `arguments` is an object or the text of a JSON object, and `content` may be empty on the assistant turn. A malformed tool turn is rejected with `InvalidInputFormat`. [`examples/toolCalling.js`](./examples/toolCalling.js) shows a full round trip.
 
+Declare `required` properties before optional ones, at every level of `parameters`. The model sees the schema in the order you declare it, but the tool grammar accepts an object's required properties first, then its optional ones, each in schema order. With an optional property declared first, a model that follows the schema writes it first and the grammar rejects the call. This applies to nested objects, and to every argument in formats that write the arguments as one JSON object (Qwen3). Qwen3.5's top-level `<parameter=...>` arguments are accepted in any order.
+
 #### Batch inference
 
 Load the model with `parallel >= 2`, then pass an array of prompts. Each chunk arrives tagged with the id of the sequence that produced it; `await()` returns results in input order.

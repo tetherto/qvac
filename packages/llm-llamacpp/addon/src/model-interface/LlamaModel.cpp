@@ -1939,6 +1939,14 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
     const common_json orderedJson = common_json::parse_no_throw(input);
     const common_json* ordered =
         orderedJson.is_discarded() ? nullptr : &orderedJson;
+    if (ordered == nullptr) {
+      // picojson accepts input common_json rejects: trailing text after the
+      // array, raw invalid UTF-8, numbers like `01`.
+      QLOG_IF(
+          Priority::DEBUG,
+          "[LlamaModel] formatPrompt: request is not strict JSON, so tool "
+          "schemas and call arguments keep sorted key order\n");
+    }
 
     int addMediaPlaceholder = 0;
     bool isNextUser = false;
