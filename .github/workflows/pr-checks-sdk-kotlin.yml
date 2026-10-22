@@ -178,8 +178,11 @@ jobs:
           # Validate the ship contract on the committed registry pin first — a
           # pure package.json check with no install — so the Kotlin runtime
           # version, the @qvac/sdk pin, and packages/sdk/package.json are
-          # confirmed to share one version before the pin is swapped.
-          ./gradlew --no-daemon checkVersionAlignment
+          # confirmed to share one version before the pin is swapped. These
+          # are the scripts behind the checkVersionAlignment Gradle task, run
+          # without starting a separate Gradle JVM.
+          node scripts/verify-runtime-profiles.mjs
+          node scripts/check-version-alignment.mjs
 
           # @qvac/inference is transitive here (via @qvac/sdk), so an override is
           # allowed (npm rejects one for a direct dependency), and it points the
@@ -195,7 +198,11 @@ jobs:
           # on npm still installs.
           npm install --ignore-scripts --legacy-peer-deps --no-package-lock "../sdk/${sdk_tgz}"
 
-          ./gradlew --no-daemon \
+          # The configuration cache lets tasks of one project run in parallel.
+          # buildWorkspaceSdk is excluded because the steps above already
+          # built packages/sdk/dist from this commit.
+          ./gradlew --no-daemon --configuration-cache \
+            -x :android-barekit:buildWorkspaceSdk \
             checkContract \
             jvmTest \
             :android-example:testDebugUnitTest \
@@ -213,6 +220,5 @@ jobs:
           path: |
             packages/sdk-kotlin/build/maven-repository
             packages/sdk-kotlin/android-example/build/outputs/apk/debug/*.apk
-            packages/sdk-kotlin/consumer-smoke/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7

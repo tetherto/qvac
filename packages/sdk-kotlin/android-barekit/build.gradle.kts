@@ -1,4 +1,6 @@
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 import java.net.URI
 
 plugins {
@@ -140,9 +142,17 @@ val buildWorkspaceSdk by tasks.registering(Exec::class) {
     outputs.dir(runtimeRoot.dir("../sdk/dist/src/worker"))
 }
 
+// Every profile bundles through the same packages/sdk/qvac/worker.bundle.*
+// files, so the prepare tasks must not run concurrently.
+abstract class QvacRuntimeBundleLock : BuildService<BuildServiceParameters.None>
+val runtimeBundleLock = gradle.sharedServices.registerIfAbsent("qvacRuntimeBundleLock", QvacRuntimeBundleLock::class) {
+    maxParallelUsages.set(1)
+}
+
 val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
     tasks.register<Exec>("prepare${profile.name.replaceFirstChar(Char::uppercase)}QvacAndroidRuntime") {
         description = "Bundle the ${profile.name} QVAC worker and link Android addons"
+        usesService(runtimeBundleLock)
         dependsOn(npmCi, buildWorkspaceSdk)
         workingDir(runtimeRoot)
         commandLine("node", "scripts/prepare-android-runtime.mjs")
