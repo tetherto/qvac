@@ -12511,7 +12511,6 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling(Enum):
     mean = "mean"
     cls = "cls"
     last = "last"
-    rank = "rank"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention(Enum):
@@ -12595,7 +12594,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
     pooling: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling | None,
         Field(
-            description="Pooling strategy collapsing token embeddings into one sequence vector: `'none'`, `'mean'`, `'cls'`, `'last'`, or `'rank'`. Unset uses the model default.",
+            description="Pooling strategy collapsing token embeddings into one sequence vector: `'none'`, `'mean'`, `'cls'`, or `'last'`. Unset uses the model default.",
             title="LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling",
         ),
     ] = None
