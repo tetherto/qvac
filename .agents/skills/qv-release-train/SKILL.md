@@ -25,15 +25,15 @@ the per-package flow in `docs/gitflow.md`.
   make it clear.
 - Before the version pass, set every range between train packages to the
   current workspace version, then run `pnpm install --lockfile-only`.
-- Generate the NOTICE files (`qv-sdk-changelog` Step 6) before the version
-  pass; `docs/ci/RELEASE-TRAIN.md` step 2 says why.
+- Generate the NOTICE files (the NOTICE step of `qv-sdk-changelog`) before
+  the version pass; "Making a release" in `docs/ci/RELEASE-TRAIN.md` says why.
 - Show the user the `nx release version --dry-run` output before applying it.
-- When the train moves `@qvac/sdk`, do not run Step 2 of
+- When the train moves `@qvac/sdk`, skip "Point the SDK at that version" in
   `/qv-sdk-inference-version`: the version pass writes the `@qvac/inference`
-  range. Its Steps 3 and 3b still apply.
+  range. Its `sdk-python` and `sdk-kotlin` syncs still apply.
 - When the train lists `fromNpm` packages, make the workspace exclusion its own
-  commit in the release PR (`docs/ci/RELEASE-TRAIN.md` step 5), and leave it
-  out of the backmerge.
+  commit in the release PR ("Making a release" in `docs/ci/RELEASE-TRAIN.md`),
+  and leave it out of the backmerge.
 - Open both PRs with `qv-sdk-pr-create`: one release PR, one backmerge, for the
   whole train.
 - Never approve the `npm` or `pypi` deployment; tell the user when each waits.

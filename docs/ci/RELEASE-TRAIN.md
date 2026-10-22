@@ -29,7 +29,8 @@ per-package workflow. The next train moves it above that version.
   - `anchorGroup`, a fixed group whose version names the branch, or
     `anchorProject`, one package whose version does
   - `fromNpm`: directories of workspace packages the train depends on but
-    builds and checks against the version on npm (see step 5)
+    builds and checks against the version on npm (see
+    [Making a release](#making-a-release))
   - `githubRelease`: the one package that gets a GitHub release; the others get
     a `<slug>-v<version>` tag
   - `checks`: the check jobs in `release-train.yml` that must pass
@@ -69,8 +70,8 @@ per-package workflow. The next train moves it above that version.
 
 5. Write a changelog section for each package (`qv-sdk-changelog`). When the
    train moves `@qvac/sdk`, bring `packages/sdk-python` and
-   `packages/sdk-kotlin` to its new version (Steps 3 and 3b of
-   `qv-sdk-inference-version`); `pr-checks-sdk-kotlin.yml` checks the Kotlin
+   `packages/sdk-kotlin` to its new version (the `sdk-python` and `sdk-kotlin`
+   syncs of `qv-sdk-inference-version`); `pr-checks-sdk-kotlin.yml` checks the Kotlin
    version on both PRs.
 
    When the train lists `fromNpm` packages, take them out of the workspace in a
