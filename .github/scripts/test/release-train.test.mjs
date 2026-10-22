@@ -4,6 +4,7 @@ import {
   changelogSection,
   checkRelease,
   compareVersions,
+  excludeFromWorkspace,
   linkedOutsideTrain,
   loadTrain,
   movedProjects,
@@ -15,6 +16,7 @@ import {
   readRepoJson,
   satisfies,
   stageManifest,
+  workspaceEntries,
 } from '../lib/release-train.mjs'
 
 const NX_JSON = {
@@ -27,8 +29,10 @@ const NX_JSON = {
 }
 const CATALOG = {
   sdk: { groups: ['engine', 'agentstack'], anchorGroup: 'engine', githubRelease: { project: '@qvac/sdk', name: 'QVAC SDK' } },
+  cli: { groups: ['agentstack'], anchorProject: '@qvac/cli', fromNpm: ['packages/sdk'] },
 }
 const TRAIN = loadTrain('sdk', CATALOG, NX_JSON)
+const CLI_TRAIN = loadTrain('cli', CATALOG, NX_JSON)
 
 // The Releases page is SDK-only (ci-trust-policy.test.mjs); release-train.yml
 // cuts a release for whichever package the catalog names.
@@ -47,14 +51,35 @@ test('rejects a train the config cannot release', () => {
     () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, groups: ['engine', 'tools'] } }, NX_JSON),
     /'tools', which nx.json does not declare/,
   )
+  const withTools = { release: { groups: { ...NX_JSON.release.groups, tools: { projects: ['@qvac/rag'], projectsRelationship: 'fixed' } } } }
   assert.throws(
-    () => loadTrain('sdk', { ...CATALOG, other: { groups: ['agentstack'], anchorGroup: 'agentstack' } }, NX_JSON),
-    /'agentstack' is in both 'sdk' and 'other'/,
+    () => loadTrain('sdk', { ...CATALOG, other: { groups: ['agentstack', 'tools'], anchorGroup: 'tools' } }, withTools),
+    /'sdk' and 'other' share release group 'agentstack', so one must hold every group of the other/,
   )
   assert.throws(
     () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, anchorGroup: 'agentstack' } }, NX_JSON),
     /must be one of its groups and "fixed"/,
   )
+  assert.throws(
+    () => loadTrain('cli', { cli: { ...CATALOG.cli, anchorProject: '@qvac/sdk' } }, NX_JSON),
+    /anchorProject @qvac\/sdk must be in the train/,
+  )
+  assert.throws(
+    () => loadTrain('cli', { cli: { ...CATALOG.cli, anchorGroup: 'agentstack' } }, NX_JSON),
+    /replaces anchorGroup/,
+  )
+  assert.throws(
+    () => loadTrain('cli', { cli: { ...CATALOG.cli, fromNpm: ['packages/*'] } }, NX_JSON),
+    /fromNpm must list package directories/,
+  )
+})
+
+test('a train inside another, versioned by one project', () => {
+  assert.deepEqual(CLI_TRAIN.projects, ['@qvac/cli'])
+  assert.deepEqual(CLI_TRAIN.anchorProjects, ['@qvac/cli'])
+  assert.deepEqual(CLI_TRAIN.fromNpm, ['packages/sdk'])
+  assert.deepEqual(TRAIN.anchorProjects, ['@qvac/inference', '@qvac/sdk'])
+  assert.deepEqual(TRAIN.fromNpm, [])
   assert.throws(
     () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, githubRelease: { project: '@qvac/rag' } } }, NX_JSON),
     /@qvac\/rag is not in the train/,
@@ -169,6 +194,47 @@ test('rejects a committed version plan, which nx would apply to the next train',
   assert.deepEqual(check({ versionPlans: ['.nx/version-plans/qvac-1.md'] }), [
     '.nx/version-plans/qvac-1.md is committed; delete it, nx would apply it again',
   ])
+})
+
+const WORKSPACE_YAML = `packages:
+  - "packages/*"
+  # sdk-kotlin is a Gradle package
+  - "!packages/sdk-kotlin"
+  - "plugins/*"
+
+linkWorkspacePackages: true
+`
+
+function checkCli (workspace, fromNpm = [{ dir: 'packages/sdk', name: '@qvac/sdk' }]) {
+  return checkRelease({
+    branch: { train: 'cli', version: '0.16.0' },
+    train: CLI_TRAIN,
+    moved: [MOVED[2]],
+    versionAtHead: (name) => VERSIONS[name],
+    changelogAt: () => '## [0.16.0]\n\n- notes\n',
+    manifests: { '@qvac/cli': MANIFESTS['@qvac/cli'] },
+    workspace,
+    fromNpm,
+  })
+}
+
+test('a train installs its fromNpm packages from npm only once they leave the workspace', () => {
+  const [error] = checkCli(WORKSPACE_YAML)
+  assert.match(error, /^packages\/sdk is in the pnpm workspace, but the 'cli' train installs @qvac\/sdk from npm/)
+  assert.deepEqual(checkCli(excludeFromWorkspace(WORKSPACE_YAML, ['packages/sdk'])), [])
+  assert.deepEqual(checkCli(WORKSPACE_YAML, [{ dir: 'packages/cli', name: '@qvac/cli' }]), [
+    "@qvac/cli is in the 'cli' train, so it cannot come from npm",
+  ])
+  assert.deepEqual(checkCli(WORKSPACE_YAML, [{ dir: 'packages/gone', name: null }]), [
+    "packages/gone/package.json does not exist; fix fromNpm in the 'cli' train",
+  ])
+})
+
+test('leaves a package out of the workspace once, after the other entries', () => {
+  const excluded = excludeFromWorkspace(WORKSPACE_YAML, ['packages/sdk'])
+  assert.deepEqual(workspaceEntries(excluded), ['packages/*', '!packages/sdk-kotlin', 'plugins/*', '!packages/sdk'])
+  assert.ok(excluded.endsWith('linkWorkspacePackages: true\n'))
+  assert.equal(excludeFromWorkspace(excluded, ['packages/sdk']), excluded)
 })
 
 const HEAD = 'a'.repeat(40)

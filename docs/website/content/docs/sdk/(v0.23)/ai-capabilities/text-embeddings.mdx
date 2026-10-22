@@ -11,6 +11,8 @@ Text embeddings uses [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fa
 
 `embed()` returns a single embedding vector (`number[]`) for single text input, or an array of embedding vectors (`number[][]`) for batch input.
 
+`modelConfig.pooling` accepts `"none"`, `"mean"`, `"cls"`, or `"last"`. Omit it to use the model default. `"rank"` fails validation, including in `deviceDefaults` in [`qvac.config.*`](/sdk/configuration): it produces reranker scores, not embeddings, and `embed()` does not support reranker models.
+
 ## Functions
 
 Use the following sequence of function calls:

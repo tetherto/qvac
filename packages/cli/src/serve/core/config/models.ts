@@ -2,7 +2,7 @@ import type { ModelConstant } from '@qvac/sdk'
 import { modelFitPolicySchema, type ModelFitPolicy } from '@qvac/sdk/schemas'
 import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from '@/serve/core/config/aliases/sdcpp-video'
-import { normalizeEndpointCategory } from '@/serve/core/config/endpoint-category'
+import { endpointCategoryFor } from '@/serve/core/config/endpoint-category'
 import { loadModelConstants } from '@/serve/core/config/constants'
 import { resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
 
@@ -67,7 +67,7 @@ export function resolveExplicitServeModel(
   if (type !== VIRTUAL_SDK_WHISPER_AUDIO_TRANSLATION) {
     return {
       sdkType: type,
-      endpointCategory: normalizeEndpointCategory(type),
+      endpointCategory: endpointCategoryFor(type, config),
       config: { ...config }
     }
   }
@@ -95,6 +95,19 @@ export function resolveExplicitServeModel(
   }
 }
 
+function resolveForAlias(
+  alias: string,
+  type: string,
+  config: Record<string, unknown>
+): ReturnType<typeof resolveExplicitServeModel> {
+  try {
+    return resolveExplicitServeModel(type, config)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`serve.models.${alias}.${message}`)
+  }
+}
+
 function isConstantModelEntry(entry: unknown): entry is ConstantModelEntry {
   return (
     entry !== null &&
@@ -114,7 +127,7 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
   }
 
   const rawConfig = entry.config ?? {}
-  const resolved = resolveExplicitServeModel(entry.type || model.engine || model.addon, rawConfig)
+  const resolved = resolveForAlias(alias, entry.type || model.engine || model.addon, rawConfig)
 
   return {
     alias,
@@ -137,7 +150,7 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
   }
 
   const rawConfig = entry.config ?? {}
-  const resolved = resolveExplicitServeModel(entry.type, rawConfig)
+  const resolved = resolveForAlias(alias, entry.type, rawConfig)
 
   // Allow `entry.src` to be either a path or a known SDK model-constant name.
   // Constant names look like `WAN2_1_T2V_1_3B_FP16`; paths contain `/` or
