@@ -19,6 +19,7 @@
     "vla",
     "ocr",
     "image-classification",
-    "decisions"
+    "decisions",
+    "reranking"
   ]
 }
