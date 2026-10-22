@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { ttsConfigSchema, ttsClientParamsSchema } from '@/schemas/text-to-speech'
-import { createTtsFitRequest } from '@/resources/model-fit/native-probe/engines/tts'
+import { createTtsFitRequest } from '@/model-fit/request/engines/tts'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
 import { modelFitCandidateSchema } from '@/schemas/assess-model-fit'
