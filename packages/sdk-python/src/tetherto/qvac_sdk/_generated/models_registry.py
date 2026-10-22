@@ -4511,42 +4511,6 @@ PARAKEET_0_6B_Q8_0 = ModelConstant(
     params="0.6B",
 )
 
-PARAKEET_250M_Q8_0 = ModelConstant(
-    name="PARAKEET_250M_Q8_0",
-    src="registry://hf/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
-    registry_path="qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
-    registry_source="hf",
-    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
-    blob_block_offset=1780751,
-    blob_block_length=265,
-    blob_byte_offset=116675069421,
-    model_id="transcribepsy-250m-eu-sub-coreml.gguf",
-    expected_size=17313056,
-    sha256_checksum="9b7a82f33891a8f55917333b58b920878fdcca3d29a1e92d4748c228ba6eb882",
-    addon="parakeet",
-    engine="parakeet-transcription",
-    quantization="q8_0",
-    params="250M",
-)
-
-PARAKEET_250M_Q8_0_1 = ModelConstant(
-    name="PARAKEET_250M_Q8_0_1",
-    src="registry://hf/qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
-    registry_path="qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
-    registry_source="hf",
-    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
-    blob_block_offset=1781017,
-    blob_block_length=4653,
-    blob_byte_offset=116692385165,
-    model_id="transcribepsy-250m-eu-sub.gguf",
-    expected_size=304879584,
-    sha256_checksum="a93ef324d38e410b5e49389db95d06364eddbb890b74a69f311e482d2fda6f4b",
-    addon="parakeet",
-    engine="parakeet-transcription",
-    quantization="q8_0",
-    params="250M",
-)
-
 PARAKEET_CTC_0_6B_F16 = ModelConstant(
     name="PARAKEET_CTC_0_6B_F16",
     src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf",
@@ -4977,6 +4941,42 @@ PARAKEET_TDT_1_1B_Q8_0 = ModelConstant(
     engine="parakeet-transcription",
     quantization="q8_0",
     params="1.1B",
+)
+
+PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0 = ModelConstant(
+    name="PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0",
+    src="registry://hf/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
+    registry_path="qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1780751,
+    blob_block_length=265,
+    blob_byte_offset=116675069421,
+    model_id="transcribepsy-250m-eu-sub-coreml.gguf",
+    expected_size=17313056,
+    sha256_checksum="9b7a82f33891a8f55917333b58b920878fdcca3d29a1e92d4748c228ba6eb882",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="250M",
+)
+
+PARAKEET_TRANSCRIBEPSY_250M_Q8_0 = ModelConstant(
+    name="PARAKEET_TRANSCRIBEPSY_250M_Q8_0",
+    src="registry://hf/qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
+    registry_path="qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1781017,
+    blob_block_length=4653,
+    blob_byte_offset=116692385165,
+    model_id="transcribepsy-250m-eu-sub.gguf",
+    expected_size=304879584,
+    sha256_checksum="a93ef324d38e410b5e49389db95d06364eddbb890b74a69f311e482d2fda6f4b",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="250M",
 )
 
 PARAKEET_UNIFIED_0_6B_F16 = ModelConstant(
@@ -8650,8 +8650,6 @@ __all__ = [
     "PARAKEET_0_6B_F16",
     "PARAKEET_0_6B_Q4_0",
     "PARAKEET_0_6B_Q8_0",
-    "PARAKEET_250M_Q8_0",
-    "PARAKEET_250M_Q8_0_1",
     "PARAKEET_CTC_0_6B_F16",
     "PARAKEET_CTC_0_6B_Q4_0",
     "PARAKEET_CTC_0_6B_Q8_0",
@@ -8676,6 +8674,8 @@ __all__ = [
     "PARAKEET_TDT_0_6B_V3_Q8_0",
     "PARAKEET_TDT_1_1B_F16",
     "PARAKEET_TDT_1_1B_Q8_0",
+    "PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0",
+    "PARAKEET_TRANSCRIBEPSY_250M_Q8_0",
     "PARAKEET_UNIFIED_0_6B_F16",
     "PARAKEET_UNIFIED_0_6B_Q4_0",
     "PARAKEET_UNIFIED_0_6B_Q8_0",
