@@ -314,11 +314,11 @@ rankPoolingUnsupported(const char* func, const std::string& scores) {
 
 /// @brief A copy of @p config without the projector options, which are
 /// stored in @p options: llama.cpp's argument parser rejects them for an
-/// embedding load.
+/// embedding load. They need a projection model (see takeMultimodalOptions).
 std::unordered_map<std::string, std::string> withoutMultimodalOptions(
     std::unordered_map<std::string, std::string> config,
-    MultimodalOptions& options) {
-  options = takeMultimodalOptions(config);
+    const std::string& projectionPath, MultimodalOptions& options) {
+  options = takeMultimodalOptions(config, !projectionPath.empty());
   return config;
 }
 
@@ -347,12 +347,12 @@ BertModel::BertModel(
       projectionPath_(projectionPath),
       loader_(
           "BertModel", loadHooks(), modelGgufPath,
-          withoutMultimodalOptions(config, multimodalOptions_), backendsDir) {}
+          withoutMultimodalOptions(config, projectionPath, multimodalOptions_),
+          backendsDir) {}
 
-BertModel::BertModel(BertModelSetup& setup, const std::string& projectionPath)
+BertModel::BertModel(BertModelSetup& setup)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0),
-      projectionPath_(projectionPath),
       loader_("BertModel", loadHooks(), setup) {}
 
 void BertModel::resolveShardPaths(

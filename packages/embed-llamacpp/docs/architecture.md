@@ -970,9 +970,10 @@ EmbeddingGemma 2 (upstream llama.cpp #30054) embeds text, images and audio into 
 ### Decision
 
 - **Same class, optional file:** `files.projectionModel` on `GGMLBert`, the name `@qvac/llm-llamacpp` uses. Without it, nothing changes.
-- **Ordered parts:** a multimodal input is an array of strings and `{ media: Uint8Array }` parts. The addon passes them to `mtmd_tokenize_from_parts()`, so callers never write mtmd's media marker. `{ inputs }` gives several inputs. An input without media takes the text path.
+- **Ordered parts, only in `{ inputs }`:** a multimodal input is an array of strings and `{ media: Uint8Array }` parts, inside `{ inputs: [...] }`. The addon passes them to `mtmd_tokenize_from_parts()`, so callers never write mtmd's media marker. A bare array keeps its one meaning, one embedding per string, and an array holding media is rejected. An input without media takes the text path.
+- **Projector options need a projection model:** the options are taken out of the config and validated by one function, used by both load and `assessFit`. Set without `files.projectionModel`, they fail the load with `InvalidConfiguration`, as llama.cpp's argument parser rejected them before, and `assessFit` refuses them, so load and fit agree.
 - **A component, not a model class:** `BertModel` creates a `MultimodalEmbedder` in `onLoaded` when a projection model is given. A model loaded with one still embeds plain text through the text path, and load, stats and cancel stay in one place.
-- **One mixed batch per input:** media chunks are encoded first, then the text tokens and the media embeddings go into one `llama_batch_ext`, in prompt order and with llama-server's positions, for one `llama_process()`.
+- **One mixed batch per input:** each media chunk is encoded and its embedding rows are added next to the text tokens, in prompt order and with llama-server's positions, to one `llama_batch_ext` (which copies them), for one `llama_process()`.
 
 ### Rationale
 

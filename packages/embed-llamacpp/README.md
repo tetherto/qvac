@@ -164,7 +164,7 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `backend`        | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` |
 | `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | `"0"` | Native logging verbosity. The `addonLogging.setLogger` callback receives only messages at or above this threshold. Use `"2"` for llama.cpp INFO logs and `"3"` for DEBUG logs. The verbosity level is process-global and is updated each time a model is constructed, so the most recently constructed model's `config.verbosity` wins for all subsequent native log dispatch. |
 
-These keys apply with [`files.projectionModel`](#embed-images-and-audio), with the names and spellings `@qvac/llm-llamacpp` uses (each also accepts its underscore form, e.g. `image_max_tokens`):
+These keys apply with [`files.projectionModel`](#embed-images-and-audio), with the names and spellings `@qvac/llm-llamacpp` uses (each also accepts its underscore form, e.g. `image_max_tokens`). Set without `files.projectionModel`, any of them fails the load with `InvalidConfiguration`:
 
 | Key                    | Range / Type                         | Default | Description |
 |------------------------|--------------------------------------|---------|-------------|
@@ -234,7 +234,7 @@ When `opts.stats` is enabled, `response.stats` includes runtime metrics such as 
 
 #### Embed images and audio
 
-A multimodal embedding model, such as EmbeddingGemma 2, maps text, images and audio into one vector space. Load it with its projection model, then pass each input as an array of parts in order: strings for text, and `{ media: Uint8Array }` for the bytes of an image (jpg, png, bmp, gif, ...) or of wav/mp3/flac audio.
+A multimodal embedding model, such as EmbeddingGemma 2, maps text, images and audio into one vector space. Load it with its projection model, then pass `{ inputs: [...] }`: each input is a string, or an array of parts in order, with strings for text and `{ media: Uint8Array }` for the bytes of an image (jpg, png, bmp, gif, ...) or of wav/mp3/flac audio.
 
 ```js
 const model = new GGMLBert({
@@ -243,19 +243,15 @@ const model = new GGMLBert({
 })
 await model.load()
 
-// One input with text and an image: one embedding
-const response = await model.run(['title: none | text: ', { media: imageBytes }])
-const [[embedding]] = await response.await()
-
-// Several inputs, each a string or an array of parts: one embedding each
-const batch = await model.run({
+// One embedding per input
+const response = await model.run({
   inputs: [
     'task: search result | query: waterproof trail running shoes',
     ['title: none | text: ', { media: imageBytes }],
     [{ media: audioBytes }]
   ]
 })
-const [embeddings] = await batch.await()
+const [embeddings] = await response.await()
 ```
 
 `run()` takes:
@@ -264,8 +260,9 @@ const [embeddings] = await batch.await()
 |-------|------------|
 | `string` | one |
 | `string[]` | one per string |
-| an array with at least one `{ media }` part | one, for all its parts together |
-| `{ inputs: [...] }` | one per input |
+| `{ inputs: [...] }`, each a string or an array of parts | one per input |
+
+Media goes only in `{ inputs }`. A bare array is always one embedding per string, so an array holding `{ media }` is rejected with a `TypeError` rather than read as a single input.
 
 Notes:
 

@@ -4,6 +4,7 @@
 #include <cctype>
 #include <charconv>
 #include <initializer_list>
+#include <limits>
 #include <regex>
 #include <stdexcept>
 #include <system_error>
@@ -68,15 +69,23 @@ bool parseBool(const std::string& name, const std::string& raw) {
       raw.c_str()));
 }
 
-int parsePositiveInt(const std::string& name, const std::string& raw) {
-  int value = 0;
+/// A positive integer no larger than @p max.
+uint64_t
+parsePositive(const std::string& name, const std::string& raw, uint64_t max) {
+  uint64_t value = 0;
   const auto* end = raw.data() + raw.size();
   const auto result = std::from_chars(raw.data(), end, value);
-  if (result.ec != std::errc{} || result.ptr != end || value <= 0) {
+  if (result.ec != std::errc{} || result.ptr != end || value == 0 ||
+      value > max) {
     throwInvalidOption(string_format(
         "%s must be a positive integer, got: %s", name.c_str(), raw.c_str()));
   }
   return value;
+}
+
+int parseTokenCount(const std::string& name, const std::string& raw) {
+  return static_cast<int>(
+      parsePositive(name, raw, std::numeric_limits<int>::max()));
 }
 
 #ifdef __ANDROID__
@@ -202,13 +211,12 @@ mtmd::bitmap decodeMedia(
       part.media.size(),
       /* placeholder = */ false,
       mtmd_helper_init_opt_default());
+  // A video container never gets here (the pixel check above rejects what
+  // stb_image cannot read); free one anyway rather than leak it.
   if (wrapper.video_ctx != nullptr) {
     mtmd_helper_video_free(wrapper.video_ctx);
     mtmd_bitmap_free(wrapper.bitmap);
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnsupportedMedia),
-        string_format("media part %zu: video input is not supported", index));
+    wrapper.bitmap = nullptr;
   }
   if (wrapper.bitmap == nullptr) {
     throw qvac_errors::StatusError(
@@ -272,13 +280,16 @@ void tokenize(
 
 } // namespace
 
-MultimodalOptions takeMultimodalOptions(ConfigMap& config) {
+MultimodalOptions
+takeMultimodalOptions(ConfigMap& config, bool hasProjectionModel) {
+  constexpr uint64_t kPixelsPerMegapixel = 1'000'000;
+  const size_t keysBefore = config.size();
   MultimodalOptions options;
   if (auto raw = takeOption(config, {"image-min-tokens", "image_min_tokens"})) {
-    options.imageMinTokens = parsePositiveInt("image-min-tokens", *raw);
+    options.imageMinTokens = parseTokenCount("image-min-tokens", *raw);
   }
   if (auto raw = takeOption(config, {"image-max-tokens", "image_max_tokens"})) {
-    options.imageMaxTokens = parsePositiveInt("image-max-tokens", *raw);
+    options.imageMaxTokens = parseTokenCount("image-max-tokens", *raw);
   }
   if (options.imageMinTokens > 0 && options.imageMaxTokens > 0 &&
       options.imageMinTokens > options.imageMaxTokens) {
@@ -293,8 +304,28 @@ MultimodalOptions takeMultimodalOptions(ConfigMap& config) {
   if (auto raw = takeOption(config, {"mmproj-use-gpu", "mmproj_use_gpu"})) {
     options.useGpu = parseBool("mmproj-use-gpu", *raw);
   }
-  options.maxImagePixels = image_pixel_limit::takeMaxPixels(config);
-  options.maxAudioSeconds = audio_length_limit::takeMaxSeconds(config);
+  if (auto raw = takeOption(
+          config, {"image-max-megapixels", "image_max_megapixels"})) {
+    options.maxImagePixels =
+        parsePositive(
+            "image-max-megapixels",
+            *raw,
+            std::numeric_limits<uint64_t>::max() / kPixelsPerMegapixel) *
+        kPixelsPerMegapixel;
+  }
+  if (auto raw =
+          takeOption(config, {"audio-max-seconds", "audio_max_seconds"})) {
+    options.maxAudioSeconds = parsePositive(
+        "audio-max-seconds", *raw, std::numeric_limits<uint64_t>::max());
+  }
+  // Before the addon took these keys, llama.cpp's argument parser rejected
+  // them; without a projection model they still do nothing, so they fail the
+  // load instead of being dropped.
+  if (!hasProjectionModel && config.size() != keysBefore) {
+    throwInvalidOption(
+        "projector options (image-*, mmproj-*, audio-max-seconds) need "
+        "files.projectionModel");
+  }
   return options;
 }
 
@@ -374,39 +405,18 @@ void MultimodalEmbedder::embed(
             effectiveContextSize));
   }
 
-  // Encode every media chunk first: the decode below needs them all at once.
-  // mtmd_get_output_embd() is overwritten by the next encode and
-  // llama_batch_ext keeps pointers into the rows, so each chunk keeps its own
-  // copy until the decode is done.
+  // One batch, in prompt order. Each media chunk is encoded and its rows are
+  // added as soon as they are out: llama_batch_ext copies them, and the next
+  // encode overwrites mtmd_get_output_embd(). The positions match
+  // llama-server's add_mtmd_chunk(), including the M-RoPE layout of image
+  // tokens.
   const auto nEmbdInp =
       static_cast<std::size_t>(llama_model_n_embd_inp(model_));
-  std::vector<std::vector<float>> encoded;
-  for (std::size_t i = 0; i < chunks.size(); ++i) {
-    throwIfCancelled(cancelled);
-    const mtmd_input_chunk* chunk = chunks[i];
-    if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_TEXT) {
-      continue;
-    }
-    if (mtmd_encode_chunk(mctx_.get(), chunk) != 0) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(MediaEncodeFailed),
-          string_format("failed to encode media chunk %zu", i));
-    }
-    const float* embd = mtmd_get_output_embd(mctx_.get());
-    const std::size_t n = mtmd_input_chunk_get_n_tokens(chunk) * nEmbdInp;
-    encoded.emplace_back(embd, embd + n);
-  }
-  throwIfCancelled(cancelled);
-
-  // One batch, in prompt order. The positions match llama-server's
-  // add_mtmd_chunk(), including the M-RoPE layout of image tokens.
   constexpr llama_seq_id seqId = 0;
   llama_batch_ext* batch = batch_.get();
   llama_batch_ext_clear(batch);
   const bool isMrope = mtmd_decode_use_mrope(mctx_.get());
   llama_pos pos = 0;
-  auto encodedIt = encoded.begin();
 
   auto addOrThrow = [](int32_t idx) {
     if (idx < 0) {
@@ -419,6 +429,7 @@ void MultimodalEmbedder::embed(
   };
 
   for (std::size_t i = 0; i < chunks.size(); ++i) {
+    throwIfCancelled(cancelled);
     const mtmd_input_chunk* chunk = chunks[i];
     if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_TEXT) {
       std::size_t nText = 0;
@@ -434,6 +445,13 @@ void MultimodalEmbedder::embed(
       continue;
     }
 
+    if (mtmd_encode_chunk(mctx_.get(), chunk) != 0) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(MediaEncodeFailed),
+          string_format("failed to encode media chunk %zu", i));
+    }
+    const float* embd = mtmd_get_output_embd(mctx_.get());
     const mtmd_image_tokens* image = mtmd_input_chunk_get_tokens_image(chunk);
     const std::size_t nChunkTokens = mtmd_input_chunk_get_n_tokens(chunk);
     const llama_pos pos0 = pos;
@@ -449,17 +467,15 @@ void MultimodalEmbedder::embed(
         entryPos[3] = rel.z;
       }
       const llama_embd row{
-          .data = encodedIt->data() + t * nEmbdInp,
-          .n_rows = 1,
-          .n_embd = nEmbdInp};
+          .data = embd + t * nEmbdInp, .n_rows = 1, .n_embd = nEmbdInp};
       const int32_t idx =
           addOrThrow(llama_batch_ext_add_embd(batch, seqId, row));
       llama_batch_ext_set_pos(batch, idx, entryPos);
       llama_batch_ext_set_output_embd(batch, idx, true);
     }
     pos = pos0 + mtmd_input_chunk_get_n_pos(chunk);
-    ++encodedIt;
   }
+  throwIfCancelled(cancelled);
 
   llama_memory_clear(llama_get_memory(ctx_), true);
   const int32_t ret = llama_process(ctx_, LLAMA_PROCESS_TYPE_DECODE, batch);

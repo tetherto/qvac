@@ -113,9 +113,9 @@ public:
       const std::string& projectionPath = "");
 
   /// @brief Construct with already parsed parameters bundled in a
-  /// @ref BertModelSetup.
-  explicit BertModel(
-      BertModelSetup& setup, const std::string& projectionPath = "");
+  /// @ref BertModelSetup, for text only: the setup's config has already been
+  /// parsed, so it cannot carry projector options.
+  explicit BertModel(BertModelSetup& setup);
 
   /// @brief Deletes model implementation.
   ~BertModel() override;

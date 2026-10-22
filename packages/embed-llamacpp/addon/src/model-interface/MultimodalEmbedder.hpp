@@ -32,10 +32,13 @@ struct MultimodalOptions {
 };
 
 /// @brief Reads and erases the projector options from @p config: fabric's
-/// argument parser does not accept them for embedding loads.
-/// @throws qvac_errors::StatusError(InvalidConfiguration) on an invalid value.
-MultimodalOptions
-takeMultimodalOptions(std::unordered_map<std::string, std::string>& config);
+/// argument parser does not accept them for embedding loads. Load and
+/// assessFit both take the options through this, so they agree.
+/// @throws qvac_errors::StatusError(InvalidConfiguration) on an invalid value,
+/// or when an option is set and @p hasProjectionModel is false.
+MultimodalOptions takeMultimodalOptions(
+    std::unordered_map<std::string, std::string>& config,
+    bool hasProjectionModel);
 
 /// @brief One part of a multimodal input, in prompt order: text, or the bytes
 /// of a media file that mtmd decodes (an image, or wav/mp3/flac audio).

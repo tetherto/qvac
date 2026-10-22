@@ -18,8 +18,21 @@ test('an empty array maps to an empty sequences job', function (t) {
   t.alike(toBertJobInput([]), { type: 'sequences', input: [] })
 })
 
-test('an array with a media part is one multimodal input in order', function (t) {
-  const job = toBertJobInput(['task: search result | query: ', { media: jpeg }, ' red shoes'])
+test('a bare array with a media part is rejected, pointing to { inputs }', function (t) {
+  // A bare array always means one embedding per string: appending an image to
+  // a list of strings must not silently fuse them into one embedding.
+  t.exception.all(
+    () => toBertJobInput(['doc one', 'doc two', { media: jpeg }]),
+    /input\[2\]: media goes in \{ inputs: \[\.\.\.\] \}/
+  )
+  t.exception.all(() => toBertJobInput([{ media: jpeg }]), /media goes in \{ inputs/)
+  t.exception.all(() => toBertJobInput(['ok', 42]), /input\[1\] must be a string/)
+})
+
+test('an { inputs } item of parts is one multimodal input in order', function (t) {
+  const job = toBertJobInput({
+    inputs: [['task: search result | query: ', { media: jpeg }, ' red shoes']]
+  })
   t.is(job.type, 'multimodal')
   t.is(job.input.length, 1)
   t.alike(job.input[0], [
@@ -30,7 +43,7 @@ test('an array with a media part is one multimodal input in order', function (t)
 })
 
 test('adjacent text parts are merged', function (t) {
-  const job = toBertJobInput(['a', 'b', { media: wav }, 'c', 'd'])
+  const job = toBertJobInput({ inputs: [['a', 'b', { media: wav }, 'c', 'd']] })
   t.alike(job.input[0], [
     { type: 'text', text: 'ab' },
     { type: 'media', data: wav },
@@ -59,8 +72,8 @@ test('{ inputs } without media takes the text path', function (t) {
 
 test('an invalid part is rejected with its position', function (t) {
   t.exception.all(
-    () => toBertJobInput(['text', { media: 'not bytes' }]),
-    /input\[1\] must be a string or \{ media: Uint8Array \}/
+    () => toBertJobInput({ inputs: [['text', { media: 'not bytes' }]] }),
+    /inputs\[0\]\[1\] must be a string or \{ media: Uint8Array \}/
   )
   t.exception.all(() => toBertJobInput({ inputs: ['ok', [42]] }), /inputs\[1\]\[0\]/)
   t.exception.all(

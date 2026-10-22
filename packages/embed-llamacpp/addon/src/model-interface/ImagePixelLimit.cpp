@@ -1,12 +1,10 @@
 #include "ImagePixelLimit.hpp"
 
 #include <algorithm>
-#include <charconv>
 #include <climits>
 #include <cstring>
 #include <limits>
-#include <string_view>
-#include <system_error>
+#include <string>
 
 #include <inference-addon-cpp/Errors.hpp>
 
@@ -23,7 +21,6 @@ using namespace qvac_lib_infer_llamacpp_embed::errors;
 namespace image_pixel_limit {
 namespace {
 constexpr uint64_t PIXELS_PER_MEGAPIXEL = 1'000'000;
-constexpr std::string_view CONFIG_KEY = "image-max-megapixels";
 
 [[noreturn]] void throwUnsupportedMedia(const std::string& message) {
   qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
@@ -63,36 +60,6 @@ bool isMtmdAudio(const uint8_t* data, size_t size) {
                    (data[0] == 0xff && (data[1] & 0xe0) == 0xe0);
   const bool flac = std::memcmp(data, "fLaC", 4) == 0;
   return wav || mp3 || flac;
-}
-
-uint64_t takeMaxPixels(std::unordered_map<std::string, std::string>& config) {
-  const auto hyphen = config.find(std::string(CONFIG_KEY));
-  const auto underscore = config.find("image_max_megapixels");
-  if (hyphen != config.end() && underscore != config.end()) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(InvalidConfiguration),
-        "Set only one of image-max-megapixels and image_max_megapixels");
-  }
-  const auto it = hyphen != config.end() ? hyphen : underscore;
-  if (it == config.end()) {
-    return DEFAULT_MAX_PIXELS;
-  }
-
-  uint64_t megapixels = 0;
-  const auto* begin = it->second.data();
-  const auto* end = begin + it->second.size();
-  const auto result = std::from_chars(begin, end, megapixels);
-  if (result.ec != std::errc{} || result.ptr != end || megapixels == 0 ||
-      megapixels >
-          std::numeric_limits<uint64_t>::max() / PIXELS_PER_MEGAPIXEL) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(InvalidConfiguration),
-        "image-max-megapixels must be a positive integer, got: " + it->second);
-  }
-  config.erase(it);
-  return megapixels * PIXELS_PER_MEGAPIXEL;
 }
 
 void checkBuffer(const uint8_t* data, size_t size, uint64_t maxPixels) {

@@ -186,7 +186,7 @@ const QUERY = 'task: search result | query: '
 for (const device of DEVICES) {
   safeTest(`[${device}] image input yields one normalized 768-d embedding`, {}, async (t) => {
     await withModel(t, device, async (model) => {
-      const vectors = await embed(model, ['title: none | text: ', { media: RED }])
+      const vectors = await embed(model, { inputs: [['title: none | text: ', { media: RED }]] })
       t.is(vectors.length, 1)
       t.is(vectors[0].length, 768)
       t.ok(Math.abs(norm(vectors[0]) - 1) < 1e-3, `unit norm: ${norm(vectors[0])}`)
@@ -219,8 +219,8 @@ for (const device of DEVICES) {
   safeTest(`[${device}] audio input yields a deterministic embedding`, {}, async (t) => {
     await withModel(t, device, async (model) => {
       const tone = sineWav()
-      const first = await embed(model, [{ media: tone }])
-      const second = await embed(model, [{ media: tone }])
+      const first = await embed(model, { inputs: [[{ media: tone }]] })
+      const second = await embed(model, { inputs: [[{ media: tone }]] })
       t.is(first[0].length, 768)
       t.ok(cosine(first[0], second[0]) > 0.9999, 'same audio, same embedding')
     })
@@ -276,7 +276,7 @@ const OPTIONS_DEVICE = DEVICES[DEVICES.length - 1]
 const BIG = solidBmp([0, 128, 255], 1024) // 1024 x 1024, about 1.05 MP
 
 async function imageTokens(model, image) {
-  const response = await model.run([{ media: image }])
+  const response = await model.run({ inputs: [[{ media: image }]] })
   await response.await()
   return response.stats.total_tokens
 }
@@ -297,9 +297,12 @@ safeTest('mmproj-no-audio rejects audio and keeps images', {}, async (t) => {
     t,
     OPTIONS_DEVICE,
     async (model) => {
-      const [image] = await embed(model, [{ media: RED }])
+      const [image] = await embed(model, { inputs: [[{ media: RED }]] })
       t.is(image.length, 768, 'images still embed')
-      await t.exception.all(embed(model, [{ media: sineWav() }]), /no audio encoder loaded/)
+      await t.exception.all(
+        embed(model, { inputs: [[{ media: sineWav() }]] }),
+        /no audio encoder loaded/
+      )
     },
     { 'mmproj-no-audio': 'true' }
   )
@@ -310,8 +313,8 @@ safeTest('image-max-megapixels rejects a larger image before decoding', {}, asyn
     t,
     OPTIONS_DEVICE,
     async (model) => {
-      await t.exception.all(embed(model, [{ media: BIG }]), /exceeds the 1 MP limit/)
-      const [small] = await embed(model, [{ media: RED }])
+      await t.exception.all(embed(model, { inputs: [[{ media: BIG }]] }), /exceeds the 1 MP limit/)
+      const [small] = await embed(model, { inputs: [[{ media: RED }]] })
       t.is(small.length, 768, 'a smaller image still embeds')
     },
     { 'image-max-megapixels': '1' }
@@ -323,8 +326,11 @@ safeTest('audio-max-seconds rejects longer audio before decoding', {}, async (t)
     t,
     OPTIONS_DEVICE,
     async (model) => {
-      await t.exception.all(embed(model, [{ media: sineWav(440, 2) }]), /exceeds the 1 s limit/)
-      const [short] = await embed(model, [{ media: sineWav(440, 1) }])
+      await t.exception.all(
+        embed(model, { inputs: [[{ media: sineWav(440, 2) }]] }),
+        /exceeds the 1 s limit/
+      )
+      const [short] = await embed(model, { inputs: [[{ media: sineWav(440, 1) }]] })
       t.is(short.length, 768, 'audio within the limit still embeds')
     },
     { 'audio-max-seconds': '1' }
@@ -337,7 +343,7 @@ safeTest('a WAV that declares more samples than it holds is rejected', {}, async
     // mtmd-helper would size its decode by the declared length.
     const wav = sineWav(440, 0, 8000)
     new DataView(wav.buffer).setUint32(40, 0xfffffff0, true)
-    await t.exception.all(embed(model, [{ media: wav }]), /exceeds the 600 s limit/)
+    await t.exception.all(embed(model, { inputs: [[{ media: wav }]] }), /exceeds the 600 s limit/)
   })
 })
 
@@ -345,9 +351,12 @@ safeTest('media whose format cannot be decoded is rejected', {}, async (t) => {
   await withModel(t, OPTIONS_DEVICE, async (model) => {
     // A WebP header (decoded only through ffmpeg) and bytes of no format.
     const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])
-    await t.exception.all(embed(model, [{ media: webp }]), /Unsupported or corrupt image/)
     await t.exception.all(
-      embed(model, [{ media: new Uint8Array(64).fill(7) }]),
+      embed(model, { inputs: [[{ media: webp }]] }),
+      /Unsupported or corrupt image/
+    )
+    await t.exception.all(
+      embed(model, { inputs: [[{ media: new Uint8Array(64).fill(7) }]] }),
       /Unsupported or corrupt image/
     )
   })
@@ -357,7 +366,7 @@ safeTest(
   'mmproj-use-gpu off runs the projector on the CPU',
   { skip: OPTIONS_DEVICE !== 'gpu' },
   async (t) => {
-    const input = ['title: none | text: ', { media: RED }]
+    const input = { inputs: [['title: none | text: ', { media: RED }]] }
     const [onGpu] = await withModel(t, 'gpu', (model) => embed(model, input))
     const [onCpu] = await withModel(t, 'gpu', (model) => embed(model, input), {
       'mmproj-use-gpu': 'false'
@@ -365,6 +374,16 @@ safeTest(
     t.ok(cosine(onGpu, onCpu) > 0.999, `same embedding: ${cosine(onGpu, onCpu).toFixed(6)}`)
   }
 )
+
+safeTest('projector options without files.projectionModel fail the load', {}, async (t) => {
+  // They would do nothing without a projection model. Options are checked before
+  // the model file is read, so no model is needed.
+  const model = new GGMLBert({
+    files: { model: ['/nonexistent/model.gguf'] },
+    config: { device: 'cpu', 'image-max-tokens': '280' }
+  })
+  await t.exception.all(model.load(), /projector options .* need files\.projectionModel/)
+})
 
 safeTest('an invalid projector option fails the load', {}, async (t) => {
   // Options are checked before the model file is read, so no model is needed.
@@ -385,7 +404,10 @@ safeTest(
     })
     // run() checks the input before it needs a loaded addon, so fake one.
     model.addon = {}
-    await t.exception.all(model.run([{ media: RED }]), /media input needs files\.projectionModel/)
+    await t.exception.all(
+      model.run({ inputs: [[{ media: RED }]] }),
+      /media input needs files\.projectionModel/
+    )
   }
 )
 

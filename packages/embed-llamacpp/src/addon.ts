@@ -76,11 +76,11 @@ export interface EmbedBatchInput {
  * Input of `GGMLBert.run()`:
  *   - a string: one embedding;
  *   - a string array: one embedding per string;
- *   - an array with at least one media part: one input whose parts go to the
- *     model in order, one embedding;
- *   - `{ inputs }`: one embedding per input.
+ *   - `{ inputs }`: one embedding per input, each a string or ordered parts.
+ *     Media goes only here, so a bare array always means one embedding per
+ *     string.
  */
-export type EmbedRunInput = string | string[] | EmbedMultimodalInput | EmbedBatchInput;
+export type EmbedRunInput = string | string[] | EmbedBatchInput;
 
 /** A multimodal input part as the native addon receives it. */
 export type AddonMultimodalPart =
@@ -129,10 +129,16 @@ export function toBertJobInput(input: EmbedRunInput): BertJobInput {
     return { type: "text", input };
   }
   if (Array.isArray(input)) {
-    if (input.every((part) => typeof part === "string")) {
-      return { type: "sequences", input: input as string[] };
+    const unknownInput: unknown[] = input;
+    const notString = unknownInput.findIndex((item) => typeof item !== "string");
+    if (notString !== -1) {
+      throw new TypeError(
+        isMediaPart(unknownInput[notString])
+          ? `input[${notString}]: media goes in { inputs: [...] }, where each input is a string or an array of parts; a bare array is one embedding per string`
+          : `input[${notString}] must be a string`,
+      );
     }
-    return { type: "multimodal", input: [toAddonParts(input, "input")] };
+    return { type: "sequences", input };
   }
   if (
     input !== null &&

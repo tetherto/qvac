@@ -40,10 +40,14 @@ function toBertJobInput(input) {
         return { type: "text", input };
     }
     if (Array.isArray(input)) {
-        if (input.every((part) => typeof part === "string")) {
-            return { type: "sequences", input: input };
+        const unknownInput = input;
+        const notString = unknownInput.findIndex((item) => typeof item !== "string");
+        if (notString !== -1) {
+            throw new TypeError(isMediaPart(unknownInput[notString])
+                ? `input[${notString}]: media goes in { inputs: [...] }, where each input is a string or an array of parts; a bare array is one embedding per string`
+                : `input[${notString}] must be a string`);
         }
-        return { type: "multimodal", input: [toAddonParts(input, "input")] };
+        return { type: "sequences", input };
     }
     if (input !== null &&
         typeof input === "object" &&

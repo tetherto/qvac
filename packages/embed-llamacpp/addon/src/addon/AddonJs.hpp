@@ -152,12 +152,10 @@ inline FitResult runFit(FitRequest request) {
   if (!request.projectionModel.empty()) {
     return errorResult("unsupported-config");
   }
+  // The options go through the same function load uses: without a projection
+  // model it refuses any of them, as load does.
   try {
-    const size_t keys = configFilemap.size();
-    takeMultimodalOptions(configFilemap);
-    if (configFilemap.size() != keys) {
-      return errorResult("unsupported-config");
-    }
+    takeMultimodalOptions(configFilemap, /* hasProjectionModel = */ false);
   } catch (const std::exception&) {
     return errorResult("unsupported-config");
   }

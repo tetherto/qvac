@@ -1,11 +1,9 @@
 #include "AudioLengthLimit.hpp"
 
 #include <array>
-#include <charconv>
 #include <cstring>
 #include <limits>
-#include <string_view>
-#include <system_error>
+#include <string>
 
 #include <common/common.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -154,12 +152,15 @@ std::optional<double> mp3Seconds(const uint8_t* data, size_t size) {
     const uint32_t bitrateIndex = h[2] >> 4;
     const uint32_t rateIndex = (h[2] >> 2) & 3;
     const bool sync = h[0] == 0xFF && (h[1] & 0xE0) == 0xE0;
-    if (!sync || version == 1 || layerBits == 0 || bitrateIndex == 0 ||
-        bitrateIndex == 15 || rateIndex == 3) {
-      // Free-format frames (bitrate index 0) have no length in their header
-      // and are skipped like other bytes that are not a frame.
+    if (!sync || version == 1 || layerBits == 0 || bitrateIndex == 15 ||
+        rateIndex == 3) {
       ++off;
       continue;
+    }
+    if (bitrateIndex == 0) {
+      // A free-format frame has no length in its header, but minimp3 decodes
+      // it (it finds the next frame), so its samples cannot be counted here.
+      return std::nullopt;
     }
     const uint32_t layer = 4 - layerBits; // 1, 2 or 3
     const bool mpeg1 = version == 3;
@@ -193,33 +194,6 @@ std::optional<double> mp3Seconds(const uint8_t* data, size_t size) {
 }
 
 } // namespace
-
-uint64_t takeMaxSeconds(std::unordered_map<std::string, std::string>& config) {
-  const auto hyphen = config.find("audio-max-seconds");
-  const auto underscore = config.find("audio_max_seconds");
-  if (hyphen != config.end() && underscore != config.end()) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(InvalidConfiguration),
-        "Set only one of audio-max-seconds and audio_max_seconds");
-  }
-  const auto it = hyphen != config.end() ? hyphen : underscore;
-  if (it == config.end()) {
-    return DEFAULT_MAX_SECONDS;
-  }
-  uint64_t seconds = 0;
-  const auto* begin = it->second.data();
-  const auto* end = begin + it->second.size();
-  const auto result = std::from_chars(begin, end, seconds);
-  if (result.ec != std::errc{} || result.ptr != end || seconds == 0) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(InvalidConfiguration),
-        "audio-max-seconds must be a positive integer, got: " + it->second);
-  }
-  config.erase(it);
-  return seconds;
-}
 
 std::optional<double> durationSeconds(const uint8_t* data, size_t size) {
   if (data == nullptr || size < 12) {

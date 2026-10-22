@@ -69,11 +69,11 @@ export interface EmbedBatchInput {
  * Input of `GGMLBert.run()`:
  *   - a string: one embedding;
  *   - a string array: one embedding per string;
- *   - an array with at least one media part: one input whose parts go to the
- *     model in order, one embedding;
- *   - `{ inputs }`: one embedding per input.
+ *   - `{ inputs }`: one embedding per input, each a string or ordered parts.
+ *     Media goes only here, so a bare array always means one embedding per
+ *     string.
  */
-export type EmbedRunInput = string | string[] | EmbedMultimodalInput | EmbedBatchInput;
+export type EmbedRunInput = string | string[] | EmbedBatchInput;
 /** A multimodal input part as the native addon receives it. */
 export type AddonMultimodalPart = {
     type: "text";

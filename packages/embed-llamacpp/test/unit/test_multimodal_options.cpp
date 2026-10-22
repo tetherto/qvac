@@ -101,7 +101,7 @@ std::vector<uint8_t> bmpHeader(int32_t width, int32_t height) {
 
 TEST(MultimodalOptionsTest, DefaultsWhenUnset) {
   Config config{{"device", "gpu"}};
-  const MultimodalOptions options = takeMultimodalOptions(config);
+  const MultimodalOptions options = takeMultimodalOptions(config, true);
   EXPECT_EQ(options.imageMinTokens, -1);
   EXPECT_EQ(options.imageMaxTokens, -1);
   EXPECT_FALSE(options.noAudio);
@@ -118,7 +118,7 @@ TEST(MultimodalOptionsTest, ReadsAndErasesEveryKey) {
       {"mmproj-no-audio", "on"},
       {"mmproj_use_gpu", "FALSE"},
       {"image-max-megapixels", "8"}};
-  const MultimodalOptions options = takeMultimodalOptions(config);
+  const MultimodalOptions options = takeMultimodalOptions(config, true);
   EXPECT_EQ(options.imageMinTokens, 70);
   EXPECT_EQ(options.imageMaxTokens, 280);
   EXPECT_TRUE(options.noAudio);
@@ -140,7 +140,7 @@ TEST(MultimodalOptionsTest, RejectsInvalidValues) {
         Config{{"image-min-tokens", "300"}, {"image-max-tokens", "280"}},
         Config{{"image-max-tokens", "280"}, {"image_max_tokens", "280"}}}) {
     Config config = bad;
-    EXPECT_THROW(takeMultimodalOptions(config), qvac_errors::StatusError)
+    EXPECT_THROW(takeMultimodalOptions(config, true), qvac_errors::StatusError)
         << bad.begin()->first << "=" << bad.begin()->second;
   }
 }
@@ -239,17 +239,54 @@ TEST(AudioLengthLimitTest, CountsMp3FramesWithAndWithoutId3) {
 
 TEST(AudioLengthLimitTest, ReadsTheLimitOption) {
   Config config{{"audio-max-seconds", "30"}, {"device", "cpu"}};
-  EXPECT_EQ(takeMultimodalOptions(config).maxAudioSeconds, 30U);
+  EXPECT_EQ(takeMultimodalOptions(config, true).maxAudioSeconds, 30U);
   EXPECT_EQ(config.size(), 1U);
 
   Config unset{};
   EXPECT_EQ(
-      takeMultimodalOptions(unset).maxAudioSeconds,
+      takeMultimodalOptions(unset, true).maxAudioSeconds,
       audio_length_limit::DEFAULT_MAX_SECONDS);
 
   for (const char* bad : {"0", "-1", "ten", "1.5"}) {
     Config invalid{{"audio-max-seconds", bad}};
-    EXPECT_THROW(takeMultimodalOptions(invalid), qvac_errors::StatusError)
+    EXPECT_THROW(takeMultimodalOptions(invalid, true), qvac_errors::StatusError)
         << bad;
   }
+}
+
+TEST(MultimodalOptionsTest, RejectsOptionsWithoutAProjectionModel) {
+  // Each key alone: none of them does anything without a projection model.
+  for (const char* key :
+       {"image-max-tokens",
+        "image_min_tokens",
+        "mmproj-no-audio",
+        "mmproj-use-gpu",
+        "image-max-megapixels",
+        "audio-max-seconds"}) {
+    Config config{{key, "1"}, {"device", "gpu"}};
+    EXPECT_THROW(takeMultimodalOptions(config, false), qvac_errors::StatusError)
+        << key;
+  }
+}
+
+TEST(MultimodalOptionsTest, LeavesATextOnlyConfigAlone) {
+  Config config{{"device", "gpu"}, {"batch_size", "512"}};
+  const MultimodalOptions options = takeMultimodalOptions(config, false);
+  EXPECT_EQ(options.imageMaxTokens, -1);
+  EXPECT_EQ(config, (Config{{"device", "gpu"}, {"batch_size", "512"}}));
+}
+
+TEST(AudioLengthLimitTest, RejectsMp3WithFreeFormatFrames) {
+  // One normal frame, then a free-format header (bitrate index 0): minimp3
+  // decodes such frames, so the length cannot be counted from the headers.
+  auto mp3 = mp3Frames(1, false);
+  const size_t at = mp3.size();
+  mp3.resize(at + 512, 0);
+  mp3[at] = 0xFF;
+  mp3[at + 1] = 0xFB;
+  mp3[at + 2] = 0x00; // free format, 44.1 kHz
+  EXPECT_FALSE(audio_length_limit::durationSeconds(mp3.data(), mp3.size()));
+  EXPECT_THROW(
+      audio_length_limit::checkBuffer(mp3.data(), mp3.size(), 600),
+      qvac_errors::StatusError);
 }

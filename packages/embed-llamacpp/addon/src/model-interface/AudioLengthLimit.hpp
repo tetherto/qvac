@@ -3,8 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <string>
-#include <unordered_map>
 
 /// Rejects audio longer than a duration limit before it is decoded.
 ///
@@ -15,10 +13,6 @@
 namespace audio_length_limit {
 
 inline constexpr uint64_t DEFAULT_MAX_SECONDS = 600;
-
-/// Reads and erases `audio-max-seconds` (or `audio_max_seconds`) from
-/// @p config. Returns DEFAULT_MAX_SECONDS when neither is set.
-uint64_t takeMaxSeconds(std::unordered_map<std::string, std::string>& config);
 
 /// The length in seconds that WAV, FLAC or MP3 audio in @p data decodes to,
 /// read without decoding it; nullopt when it cannot be read.
