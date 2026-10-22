@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-10-20
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.23.0`, which carries
+  `qvac-fabric` `11018.2.0` -> `11259.0.0`, a rebase onto upstream llama.cpp
+  b11259 ([#5171](https://github.com/tetherto/qvac/pull/5171)). A caret on a
+  `0.x` version locks the minor, so `^0.22.0` would not have resolved `0.23.0`
+  on its own. The native API changes, so the native addon is rebuilt against
+  the 0.23.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.23.0` together.
+- No API change for this package.
+
 ## [0.21.1] - 2026-10-15
 
 ### Fixed

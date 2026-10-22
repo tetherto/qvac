@@ -1,14 +1,14 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.31.1",
-  "description": "GGML image classification addon for QVAC (MobileNetV3-Small CPU inference)",
+  "version": "0.33.0",
+  "description": "GGML vision addon for QVAC: MobileNet classification and MegaLoc image embeddings",
   "addon": true,
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
-    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js addon.js index.d.ts addon.d.ts) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
+    "check:generated": "npm run build:ts && node scripts/check-generated.js",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
     "lint": "npm run lint:js && npm run lint:ts",
     "lint:fix": "npm run lint:js:fix && npm run lint:ts:fix",
@@ -17,7 +17,7 @@
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
-    "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/MobileNetGraph.cpp",
+    "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/mobilenet/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/mobilenet/MobileNetGraph.cpp addon/src/model-interface/megaloc/MegaLocModel.cpp addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run test:types && npm run test:package && npm run test:integration",
     "test:package": "node --test test/package/package-contract.test.js",
@@ -41,7 +41,7 @@
     "test:cpp:fuzz:build": "npm run test:cpp:fuzz:configure && npm run test:cpp:fuzz:build:tests && npm run test:cpp:fuzz:build:fuzz",
     "test:cpp:fuzz:run": "npm run test:scripts && node scripts/run-cpp-tests.js && node scripts/run-cpp-fuzz.js",
     "test:cpp:fuzz": "npm run test:cpp:fuzz:build && npm run test:cpp:fuzz:run",
-    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js scripts/__tests__/run-cpp-fuzz.test.js",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js scripts/__tests__/run-cpp-fuzz.test.js scripts/__tests__/copy-mobile-test-assets.test.js",
     "test:dts": "npm run test:types",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
@@ -52,14 +52,22 @@
     "addon.js",
     "index.d.ts",
     "addon.d.ts",
+    "megaloc.js",
+    "megaloc.d.ts",
+    "scripts/convert-megaloc.py",
+    "LICENSE-MegaLoc",
+    "test/fixtures",
+    "!test/fixtures/*.gguf",
     "prebuilds",
-    "weights",
+    "weights/mobilenetv3_3class_v3_fp16.gguf",
     "test/mobile",
     "test/integration",
     "test/images",
     "LICENSE",
     "NOTICE",
-    "README.md"
+    "README.md",
+    "docs/megaloc.md",
+    "!test/mobile/testAssets/megaloc-*"
   ],
   "repository": {
     "type": "git",
@@ -71,8 +79,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.22.0",
-    "@qvac/fabric-ios": "0.22.0",
+    "@qvac/fabric-android-arm64": "0.23.0",
+    "@qvac/fabric-ios": "0.23.0",
     "@types/node": "^24.2.1",
     "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0",
@@ -89,7 +97,7 @@
     "bare-process": "^4.2.2"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.22.0",
+    "@qvac/fabric": "^0.23.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-env": "^3.0.0",
@@ -101,15 +109,15 @@
     "brittle": "^3.16.5"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.22.0",
-    "@qvac/fabric-linux-arm64": "^0.22.0",
-    "@qvac/fabric-darwin-arm64": "^0.22.0",
-    "@qvac/fabric-darwin-x64": "^0.22.0",
-    "@qvac/fabric-win32-x64": "^0.22.0"
+    "@qvac/fabric-linux-x64": "^0.23.0",
+    "@qvac/fabric-linux-arm64": "^0.23.0",
+    "@qvac/fabric-darwin-arm64": "^0.23.0",
+    "@qvac/fabric-darwin-x64": "^0.23.0",
+    "@qvac/fabric-win32-x64": "^0.23.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.22.0",
-    "@qvac/fabric-ios": "^0.22.0"
+    "@qvac/fabric-android-arm64": "^0.23.0",
+    "@qvac/fabric-ios": "^0.23.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {

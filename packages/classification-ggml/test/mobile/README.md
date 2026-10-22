@@ -15,9 +15,12 @@ framework.
   one `async function runXxx(options)` per `*.test.js` file under
   `test/integration/`. **Do not edit manually.** Re-generate with
   `npm run test:mobile:generate`.
-- `testAssets/` — optional non-test resources that must be pushed to
-  the device (none required for this addon; the GGUF weights ship
-  inside the npm package at `weights/`).
+- `testAssets/` — staged model files, test images and reference descriptors.
+  Manually convert both MegaLoc models as described in
+  [the conversion guide](../../docs/megaloc.md#local-gguf-conversion), then run
+  `npm run mobile:copy-prebuilds`. It reads `test/fixtures/megaloc-f16.gguf`
+  and `test/fixtures/megaloc-mixed.gguf`, or the paths supplied through
+  `QVAC_MEGALOC_F16_MODEL_PATH` and `QVAC_MEGALOC_MIXED_MODEL_PATH`.
 
 ## Regenerating
 
@@ -31,8 +34,10 @@ npm run test:mobile:validate   # node ./scripts/validate-mobile-tests.js
 The package publishes `test/mobile/` **and** `test/integration/` (see
 the `files` field in `package.json`) so the mobile framework can
 resolve the `../integration/*.test.js` imports from the installed npm
-tree. The GGUF model is bundled under `weights/` and is resolved by the
-same default-path logic used on desktop.
+tree. Only the MobileNet model is bundled under `weights/`. MegaLoc GGUFs,
+including their staged `.gguf.bin` mobile copies, are excluded from the npm
+package. The mobile test harness must receive the staged assets separately;
+the tests resolve their device paths through `global.assetPaths`.
 
 ## Lifecycle caveat on mobile
 

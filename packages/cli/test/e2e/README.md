@@ -59,7 +59,7 @@ test/e2e/
   core/               shape-agnostic server behavior, in-process & modelless
     routing-cors-auth.test.ts, model-load-config.test.ts
   default/            /qvac/v1/* route tests, in-process & modelless
-    translate.test.ts
+    translate.test.ts, kv-cache.test.ts, system-model-fit.test.ts
   openai/             /v1/* route tests, in-process & modelless
     *-validation.test.ts, models, models-catalog, audio-*
   cli/                commands, serve lifecycle & flag behavior (spawned binary)
@@ -69,6 +69,7 @@ test/e2e/
     streaming-transport.test.ts   spawned server: real-socket streaming + cancel
     tts.test.ts                   spawned config: TTS; encoded formats ffmpeg-gated
     translate.test.ts             in-process: Bergamot NMT translation
+    system-model-fit.test.ts      in-process: host resources and pre-load model fit
 ```
 
 ## Concurrency
