@@ -21,6 +21,7 @@ export type RequestKind =
   | 'batchCompletion'
   | 'embeddings'
   | 'decision'
+  | 'rerank'
   | 'transcribe'
   | 'translate'
   | 'diffusion'
@@ -102,6 +103,13 @@ function installDefaultPolicies(r: RequestRegistry): void {
   // queued request never reaches the addon or interrupts the active job.
   r.policy({
     kind: 'decision',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
+  // The reranker likewise runs one job at a time per model.
+  r.policy({
+    kind: 'rerank',
     maxConcurrentPerModel: 1,
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64

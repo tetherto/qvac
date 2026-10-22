@@ -149,6 +149,10 @@
     "./llamacpp-decision/plugin": {
       "types": "./dist/plugins/builtin/llamacpp-decision/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-decision/plugin.js"
+    },
+    "./llamacpp-rerank/plugin": {
+      "types": "./dist/plugins/builtin/llamacpp-rerank/plugin.d.ts",
+      "import": "./dist/plugins/builtin/llamacpp-rerank/plugin.js"
     }
   },
   "files": [
