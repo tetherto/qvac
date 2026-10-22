@@ -69,11 +69,13 @@ void requireDraftModelFile(const SpeculativeConfig& config);
 struct GgufShape {
   int64_t width = 0;
   int64_t vocab = 0;
+  int64_t mtpLayers = 0;
 };
 
-/// The hidden-state width an MTP head reads and its vocabulary size, from a
-/// GGUF's header, 0 when absent. The width is `embedding_length_out` when
-/// set, as fabric's `n_embd_out()`, else `embedding_length`.
+/// The hidden-state width an MTP head reads, its vocabulary size and its MTP
+/// layers (`nextn_predict_layers`), from a GGUF's header, 0 when absent. The
+/// width is `embedding_length_out` when set, as fabric's `n_embd_out()`, else
+/// `embedding_length`.
 GgufShape readGgufShape(const std::string& path);
 
 /// Why an external MTP head cannot draft for the target, or empty. Fabric

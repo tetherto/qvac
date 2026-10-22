@@ -30,11 +30,11 @@ std::string absoluteModelPath(const char* name) {
   return (std::filesystem::temp_directory_path() / name).string();
 }
 
-// A header-only GGUF with `arch`'s widths (0 leaves a key out) and `vocab`
-// tokens, written to a temporary file.
+// A header-only GGUF with `arch`'s widths and MTP layers (0 leaves a key out)
+// and `vocab` tokens, written to a temporary file.
 std::string writeHeadHeader(
     const char* name, const char* arch, uint32_t width, uint32_t widthOut,
-    size_t vocab) {
+    size_t vocab, uint32_t mtpLayers = 0) {
   gguf_context* ctx = gguf_init_empty();
   gguf_set_val_str(ctx, "general.architecture", arch);
   if (width != 0) {
@@ -44,6 +44,10 @@ std::string writeHeadHeader(
   if (widthOut != 0) {
     gguf_set_val_u32(
         ctx, (std::string(arch) + ".embedding_length_out").c_str(), widthOut);
+  }
+  if (mtpLayers != 0) {
+    gguf_set_val_u32(
+        ctx, (std::string(arch) + ".nextn_predict_layers").c_str(), mtpLayers);
   }
   std::vector<const char*> tokens(vocab, "t");
   gguf_set_arr_str(ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
@@ -129,10 +133,11 @@ TEST(SpeculativeConfigTest, AnMtpHeadMustMatchTheModel) {
 TEST(SpeculativeConfigTest, AnMtpHeadIsReadAtTheWidthItDraftsFrom) {
   // A Qwen MTP head has no `embedding_length_out`; its own width is read.
   const std::string qwen =
-      writeHeadHeader("qwen35-head.gguf", "qwen35", 1024, 0, 8);
+      writeHeadHeader("qwen35-head.gguf", "qwen35", 1024, 0, 8, 1);
   const GgufShape qwenShape = readGgufShape(qwen);
   EXPECT_EQ(qwenShape.width, 1024);
   EXPECT_EQ(qwenShape.vocab, 8);
+  EXPECT_EQ(qwenShape.mtpLayers, 1);
   EXPECT_EQ(
       mtpHeadMismatch(qwenShape.width, 2048, qwenShape.vocab, 8),
       "hidden width 1024, the model's 2048");
@@ -140,9 +145,10 @@ TEST(SpeculativeConfigTest, AnMtpHeadIsReadAtTheWidthItDraftsFrom) {
   // A Gemma 4 assistant runs at its own width and reads the target's hidden
   // states, whose width is in `embedding_length_out`.
   const std::string gemma = writeHeadHeader(
-      "gemma4-assistant.gguf", "gemma4-assistant", 1024, 5376, 8);
+      "gemma4-assistant.gguf", "gemma4-assistant", 1024, 5376, 8, 4);
   const GgufShape gemmaShape = readGgufShape(gemma);
   EXPECT_EQ(gemmaShape.width, 5376);
+  EXPECT_EQ(gemmaShape.mtpLayers, 4);
   EXPECT_EQ(mtpHeadMismatch(gemmaShape.width, 5376, gemmaShape.vocab, 8), "");
   EXPECT_EQ(
       mtpHeadMismatch(gemmaShape.width, 2816, gemmaShape.vocab, 8),
@@ -153,6 +159,7 @@ TEST(SpeculativeConfigTest, AnMtpHeadIsReadAtTheWidthItDraftsFrom) {
       readGgufShape(absoluteModelPath("no-such-head.gguf"));
   EXPECT_EQ(missing.width, 0);
   EXPECT_EQ(missing.vocab, 0);
+  EXPECT_EQ(missing.mtpLayers, 0);
 
   std::filesystem::remove(qwen);
   std::filesystem::remove(gemma);

@@ -110,6 +110,7 @@ GgufShape readGgufShape(const std::string& path) {
     if (shape.width == 0) {
       shape.width = readGgufU32(ctx, prefix + ".embedding_length");
     }
+    shape.mtpLayers = readGgufU32(ctx, prefix + ".nextn_predict_layers");
   }
   const int64_t tokens = gguf_find_key(ctx, "tokenizer.ggml.tokens");
   if (tokens >= 0 && gguf_get_kv_type(ctx, tokens) == GGUF_TYPE_ARRAY) {

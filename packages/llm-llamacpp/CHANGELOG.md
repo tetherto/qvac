@@ -6,9 +6,11 @@
 
 - External MTP heads: `spec-type: 'draft-mtp'` accepts `spec-draft-model`, as
   llama-server's `--spec-type draft-mtp -md <head>`, to draft for a model
-  without MTP layers. The head is placed like the model, and the load's fit
-  and `assessFit` count its weights and context. A head with another hidden
-  width or vocabulary than the model fails the load.
+  without MTP layers, or a Gemma 4 assistant for its Gemma 4 model. The head
+  is placed like the model, and the load's fit and `assessFit` count its
+  weights and context; fabric cannot measure a Gemma 4 assistant, so they
+  leave it out. A head with another hidden width or vocabulary than the
+  model fails the load.
 
 ### Fixed
 
