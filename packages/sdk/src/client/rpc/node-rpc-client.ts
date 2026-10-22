@@ -1,8 +1,7 @@
 import RPC from 'bare-rpc'
 import spawn, { type ChildProcess as BareChildProcess } from 'bare-runtime/spawn'
 import type { Duplex, DuplexEvents } from 'bare-stream'
-import { randomBytes } from 'node:crypto'
-import fs, { existsSync, unlinkSync } from 'node:fs'
+import fs from 'node:fs'
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -18,6 +17,7 @@ import {
 } from '@/utils/errors-client'
 import type { QvacConfig, RuntimeContext } from '@qvac/inference/surface'
 import { createRPCInitTimeoutCause, type WorkerExit } from './worker-startup-error'
+import { createIPCSocketPath, removeIPCSocketPath } from './ipc-socket-path'
 import { RPC_INIT_TIMEOUT_ENV_VAR, resolveRPCInitTimeoutMs } from './init-timeout'
 
 const WORKER_STDERR_TAIL_CHARS = 16_384
@@ -150,24 +150,12 @@ function resolveWorkerPath(): string {
 
 const WORKER_PATH = resolveWorkerPath()
 
-function createSocketPath() {
-  const timestamp = Date.now().toString(36)
-  const randomSuffix = randomBytes(2).toString('hex')
-  const socketName = `qvac-worker-${process.pid}-${timestamp}-${randomSuffix}`
-  return process.platform === 'win32'
-    ? `\\\\.\\pipe\\${socketName}`
-    : path.join(os.tmpdir(), `${socketName}.sock`)
-}
-
-function bestEffortUnlinkSocket(socketPath: string | null) {
-  // Windows named pipes are not filesystem paths, so unlink is Unix-only.
-  if (!socketPath || process.platform === 'win32') return
+function bestEffortRemoveSocket(socketPath: string | null) {
+  if (!socketPath) return
   try {
-    if (existsSync(socketPath)) {
-      unlinkSync(socketPath)
-    }
+    removeIPCSocketPath(socketPath)
   } catch (error) {
-    logger.debug('Failed to unlink IPC socket path', { socketPath, error })
+    logger.debug('Failed to remove IPC socket path', { socketPath, error })
   }
 }
 
@@ -218,7 +206,7 @@ function teardownFailedInit() {
     }
   }
 
-  bestEffortUnlinkSocket(socketPathToClose)
+  bestEffortRemoveSocket(socketPathToClose)
 }
 
 export function getWorkerLifeSignal(): AbortSignal | null {
@@ -253,7 +241,7 @@ export function notifyChannelClosed(): void {
     }
   }
 
-  bestEffortUnlinkSocket(socketPathToClose)
+  bestEffortRemoveSocket(socketPathToClose)
   controller.abort(new WorkerCrashedError(null, null))
 }
 
@@ -310,7 +298,7 @@ function handlePostHandshakeExit(
     logger.debug('Failed to close IPC server after worker crash', { err })
   }
   spawn.controller.abort(new WorkerCrashedError(code, exitSignal))
-  bestEffortUnlinkSocket(spawn.socketPath)
+  bestEffortRemoveSocket(spawn.socketPath)
 }
 
 function closeSyncForExit() {
@@ -335,7 +323,7 @@ function closeSyncForExit() {
     }
   }
 
-  bestEffortUnlinkSocket(socketPathToClose)
+  bestEffortRemoveSocket(socketPathToClose)
 }
 
 /** Distinguishes "config file failed to load" from "no config file present". */
@@ -377,7 +365,7 @@ async function ensureRPC(): Promise<RPC> {
       )
   })
 
-  const socketPath = createSocketPath()
+  const socketPath = createIPCSocketPath()
   currentSocketPath = socketPath
 
   // Allocated here so the init race and exit handler share one controller.
@@ -589,7 +577,7 @@ export async function close() {
       })
     }
 
-    bestEffortUnlinkSocket(socketPathToClose)
+    bestEffortRemoveSocket(socketPathToClose)
   })()
 
   try {

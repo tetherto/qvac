@@ -210,6 +210,30 @@
             "type": "string"
           },
           "description": "Skip only on these platforms, e.g. [\"mobile-ios\", \"mobile-android\"]"
+        },
+        "reasons": {
+          "type": "array",
+          "description": "Per-platform reasons for a skip merged from several rules. A consumer reports only the groups matching its platform, falling back to `reason`.",
+          "items": {
+            "type": "object",
+            "required": [
+              "platforms",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "platforms": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },

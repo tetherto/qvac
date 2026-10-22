@@ -9,16 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Update the shared native `speech-cpp` source to `2026-10-19`, including
+  optional CosyVoice3 Core ML sidecars on Apple platforms. Re-export existing
+  LM sidecars to include the cache feedback fix for consecutive predictions.
+- Include native Pocket TTS Metal, CUDA, Vulkan and OpenCL support. The Pocket
+  JavaScript API continues to require CPU inference.
 - The JavaScript wrapper is split into modules under `lib/`: engine ids and
   discovery, model-file normalization, per-engine configuration (`lib/engines/`),
   option validation, native parameter building, per-call fields, reload and
   sentence streaming. `index.js` keeps the public `TTSGgml` class and its
   execution lifecycle; the public API, engine/file precedence, cancellation,
   exclusive execution and reload behaviour are unchanged.
+
+- The wrapper's Pocket execution rules (completion barrier, cancellation drain,
+  abort handling, lifecycle lock, reload), native event routing, the
+  `exclusiveRun` response queue and the `getVoiceControls()` catalog mapping
+  move to `lib/pocketLifecycle.js`, `lib/addonEvents.js`,
+  `lib/exclusiveQueue.js` and `lib/voiceControls.js`; `index.js` keeps the
+  public API and the load / run / cancel / reload lifecycle. No behaviour
+  change.
+
 - `normalizeGgmlFiles` in `lib/modelFiles.js` is table-driven: one row per
   canonical model-file key lists its aliases in precedence order, so adding an
   alias is a one-line table change. Alias precedence, the skipping of empty
   values and the normalized key set are unchanged.
+
 
 ### Fixed
 

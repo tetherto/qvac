@@ -251,8 +251,17 @@ if [ "$PLATFORM" = "iOS" ]; then
         exit $WDIO_RC
 EOF
 else
+  # Android wraps wdio for the same reason iOS does: Device Farm skips
+  # post_test when the test phase exits non-zero, which is exactly when the
+  # device log is the thing we need. Collected here, it survives a failure.
+  # `set +e` stays on so log collection can never rewrite a run's verdict.
   cat <<'EOF'
-      - node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js
+      - |
+        set +e
+        node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js
+        WDIO_RC=$?
+        adb logcat -d -b all > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true
+        exit $WDIO_RC
 EOF
 fi
 
@@ -284,13 +293,6 @@ if [ "$_shard_perf" = "true" ]; then
             break
           fi
         done
-EOF
-fi
-
-# --- Platform-specific post-test log collection ---
-if [ "$PLATFORM" = "Android" ]; then
-  cat <<'EOF'
-      - adb logcat -d -b all > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true
 EOF
 fi
 

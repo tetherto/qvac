@@ -1,6 +1,29 @@
 # Data flow — `@qvac/classification-ggml`
 
-End-to-end trace of a single `classifier.classify(buffer)` call.
+The addon exposes classification through `ImageClassifier.classify()` and image
+embeddings through `MegaLoc.embed()`. Their graphs and outputs are separate.
+See [MegaLoc](megaloc.md) for complete usage, GGUF conversion and backend details.
+
+## MegaLoc embedding path
+
+1. `MegaLoc.load()` creates the native instance with `modelType: "megaloc"`,
+   then awaits `activate()`. `JsAsyncTask` loads the weights and builds the graph
+   on a native worker, so the JS event loop remains responsive.
+2. `embed()` serializes an embedding job through the instance queue. The native
+   bridge validates JPEG/PNG bytes or packed RGB dimensions and submits it to
+   `JobRunner`.
+3. `MegaLocModel::process()` decodes, resizes to 322 × 322 and applies ImageNet
+   normalization, then runs the transformer and aggregation graph through
+   Fabric on the selected CPU/GPU backends.
+4. The output is L2-normalized and returned through the typed output handler as
+   `Float32Array(8448)`, without labels, softmax or `topK` selection.
+
+`load`, `embed` and `unload` are serialized per instance. `unload()` releases
+native resources and permits a later `load()`; `destroy()` is permanent.
+
+## MobileNet classification path
+
+End-to-end trace of a single `classifier.classify(buffer)` call:
 
 ```
 +-------------------------+
@@ -127,7 +150,7 @@ End-to-end trace of a single `classifier.classify(buffer)` call.
 +-------------------------+
 ```
 
-## Error paths
+## MobileNet error paths
 
 | Failure                                     | Where                                         | Surface behaviour |
 |---------------------------------------------|-----------------------------------------------|-------------------|
@@ -155,7 +178,22 @@ code never aborts on bad input — this is validated by the error-case
 integration tests in `test/integration/error-cases.test.js` and by the
 preprocessor / model unit tests in `test/unit/*.cpp`.
 
-## Lifecycle
+## MegaLoc error paths
+
+| Failure | Where | Surface behaviour |
+| --- | --- | --- |
+| Missing or invalid GGUF, wrong `general.architecture` | MegaLoc weight loader | `load()` rejects; the architecture must be `megaloc` |
+| Unsupported tensor type, shape or truncated data | MegaLoc weight loader | `load()` rejects; supported formats are F16 or F16 body + Q6_K projection |
+| Explicit backend unavailable | Fabric backend selection | `load()` rejects rather than selecting another device |
+| `topK` on a native embedding job | `AddonJs::runJob` | `InvalidArgument`: `topK is not supported for image embeddings` |
+| Invalid image bytes or incomplete raw RGB dimensions | Native input validation/preprocessing | `embed()` rejects; packed RGB requires width, height and three channels |
+| Embedding before loading, after unloading or after destruction | MegaLoc JS lifecycle | The returned promise rejects |
+
+These cases are covered by `test/integration/megaloc.test.js` and the MegaLoc
+C++ tests. See [model selection and activation](architecture.md#model-selection-and-activation)
+for the shared binding and async loading path.
+
+## MobileNet lifecycle
 
 ```
 new ImageClassifier()
