@@ -448,7 +448,7 @@ OpenAI-compatible image routes backed by the SDK's `diffusion()` primitive. The 
 
 ### Loaded model
 
-Both routes require an alias whose **endpoint category** is `image`. Built-in SDK addons that resolve to this category are `diffusion` and `sdcpp-generation`. Register a diffusion model in `serve.models` and (typically) `preload: true`:
+Both routes require an alias whose **endpoint category** is `image`: a `diffusion` or `sdcpp-generation` model in its default `diffusion` mode. Register a diffusion model in `serve.models` and (typically) `preload: true`:
 
 ```json
 {
@@ -973,8 +973,8 @@ creates a job and returns immediately with `status: "queued"`; generation runs
 in the background. Poll `GET /v1/videos/{id}` until `status` is `completed` (or
 `failed`), then fetch bytes from `GET /v1/videos/{id}/content`.
 
-Requires an alias whose **endpoint category** is `video` (SDK addon
-`sdcpp-video`). Register it in `serve.models`.
+Requires an alias whose **endpoint category** is `video`: type `sdcpp-video`, or
+`sdcpp-generation` with `config.mode: "video"`. Register it in `serve.models`.
 
 Two generation modes:
 

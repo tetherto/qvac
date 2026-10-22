@@ -12,6 +12,7 @@ const relativeImportPattern = /require\(['"](\.[^'"]+)['"]\)/g
 const helperFiles = new Set([
   'constants.js',
   'ffmpeg.js',
+  'parakeet-long-form-arguments.js',
   'parakeet-utils.js',
   'quickstart-arguments.js'
 ])

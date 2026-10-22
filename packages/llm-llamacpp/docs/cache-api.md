@@ -471,6 +471,59 @@ Generated reasoning is retained in the live cache immediately after a turn.
 If the next full-history render omits that reasoning, normal prefix
 reconciliation removes it; if the render preserves it, it remains reusable.
 
+### Prefill the system prompt and tools
+
+A prefill of only a system prompt, with or without tools, can cache the prefix
+shared with a later request. When that prefix matches, the next request evaluates
+only the remaining user turn and template delimiters. This also works on hybrid
+and recurrent models without trimming or restoring their state.
+
+```js
+const system = { role: 'system', content: 'You are a weather assistant.' }
+const tools = [{
+  type: 'function',
+  name: 'get_weather',
+  description: 'Get the weather for a city',
+  parameters: {
+    type: 'object',
+    properties: { city: { type: 'string' } },
+    required: ['city']
+  }
+}]
+
+const prime = await model.run([system, ...tools], { cacheKey: 'weather.bin', prefill: true })
+await prime.await()
+await model.saveCache('weather.bin')
+
+// Later, in this or another process: only the user turn is prefilled.
+await collectOutput(await model.run(
+  [system, ...tools, { role: 'user', content: 'Weather in Paris?' }],
+  { cacheKey: 'weather.bin' }
+))
+```
+
+Some templates only render the conversation once it has a user message
+(Qwen3.5 and the original Qwen3.8-27B and Qwen3.8-Flash-Next templates raise
+`No user query found in messages.`, with or without tools; some Qwen3.8 GGUFs
+ship a patched template that does not). For those, the prefill renders the
+conversation with a placeholder user message and caches only what comes before
+it: the system prompt and the tool block, if any, ending at the user turn's
+header. Templates that render a system prompt and tools without a user message
+(GLM-5.3-Flash, DeepSeek V4 Flash) cache their plain render. The
+placeholder is not used when the template puts the tools after the user's
+content, the tool-prefix check cannot be completed, or the request carries media.
+The prefill then uses the plain render, and `stats.toolDefinitionsDropped` reports
+whether that renderer omitted the tools. Reuse requires identical effective
+system instructions, tools and rendering settings; changed inputs can require a
+partial or full prefill. Placeholder probes do not establish compatibility with
+every possible custom template or user message.
+
+The next turn on the same `cacheKey` continues that conversation, and the file
+written for it afterwards holds the whole conversation, not the primed prefix.
+To start several conversations from one primed prefix, copy the saved file to a
+new `cacheKey` per conversation before its first request, or keep the
+conversations `ephemeral` so the primed file is never overwritten.
+
 > Migration note: this addon contract is intentionally incompatible with SDK
 > versions that still send delta messages/tools or expose
 > `remove_thinking_from_context`. Upgrade the SDK only after its full-history
