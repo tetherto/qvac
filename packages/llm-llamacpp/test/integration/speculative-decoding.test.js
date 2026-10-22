@@ -75,7 +75,8 @@ const tolerateDivergence = readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '
 
 // `draft` is the `spec-draft-model`. The 27B variants download their models
 // on first use, so their tests get room for that. `unmeasured` marks a draft
-// fabric cannot measure, which a fit leaves out.
+// fabric cannot measure, which a fit leaves out; drop it from the Gemma 4
+// assistant once fabric measures a draft that borrows from the model.
 const VARIANTS = [
   { label: 'MTP', target: MTP_MODEL, type: 'draft-mtp' },
   {
@@ -405,7 +406,9 @@ for (const variant of VARIANTS.filter((v) => v.draft)) {
           0
         )
       t.comment(`${variant.label}: plain ${total(plain)} bytes, speculative ${total(fit)} bytes`)
-      if (variant.type === 'draft-mtp' && !variant.unmeasured) {
+      if (variant.unmeasured) {
+        t.ok(total(fit) >= total(plain), 'the unmeasured draft takes nothing away')
+      } else if (variant.type === 'draft-mtp') {
         t.ok(total(fit) > total(plain), 'the MTP head and its context are in the figures')
       }
     }
