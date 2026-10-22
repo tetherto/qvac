@@ -294,12 +294,12 @@ The following script enables `kvCache: true` to speed up follow-up turns, and th
 Speculative decoding drafts several tokens per step and has the model verify the whole draft in one decode. The model checks every drafted token, so output keeps the distribution of plain decoding. Enable it at load time with `modelConfig.spec_type`:
 
 - `"draft-mtp"` — drafts with the model's own multi-token-prediction (MTP) layers. The model must ship them, or the load fails: for example `QWEN3_5_0_8B_MTP_Q4_K_M` (also 2B, 4B and 9B) or `QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL`.
-- `"draft-dflash"` — drafts with a separate DFlash model, given as `modelConfig.draftModelSrc`, which it requires: for example `QWEN3_5_4B_DFLASH_Q8_0` with `QWEN3_5_4B_MULTIMODAL_Q4_K_M`. `draftModelSrc` is accepted only with `"draft-dflash"`. The draft model is placed like the model, and model fit checks do not count its memory.
+- `"draft-dflash"` — drafts with a separate DFlash model, given as `modelConfig.draftModelSrc`, which it requires: for example `QWEN3_5_4B_DFLASH_Q8_0` with `QWEN3_5_4B_MULTIMODAL_Q4_K_M`. `draftModelSrc` is accepted only with `"draft-dflash"`. The draft model is placed like the model, and model fit checks do not count its memory, so leave room for it.
 - `"none"` (default) — one token per step.
 
-`spec_draft_n_max` (1–64, default 3) caps the draft length and is lowered at load to fit the batch. `spec_draft_n_min` (0–64, default 0) drops shorter drafts, and `spec_draft_p_min` (0–1, default 0) stops a draft at a less likely token. These three require `spec_type` `"draft-mtp"` or `"draft-dflash"`. Speculative decoding works with multimodal prompts, `parallel` and `kvCache`.
+`spec_draft_n_max` (1–64, default 3) caps the draft length and is lowered at load, with a warning, to fit the batch. `spec_draft_n_min` (0–64, default 0) drops shorter drafts, and `spec_draft_p_min` (0–1, default 0) is the minimum draft-head probability for a token to extend the draft. These three require `spec_type` `"draft-mtp"` or `"draft-dflash"`. Speculative decoding works with multimodal prompts, `parallel` and `kvCache`.
 
-When it is on, `stats.draftTokens` counts the drafted tokens and `stats.draftAcceptedTokens` the ones the model kept. For [`batchCompletion()`](/sdk/reference/api#batchcompletion) they are batch-level, on `run.stats`.
+When it is on, `stats.draftTokens` counts the drafted tokens and `stats.draftAcceptedTokens` the ones the model kept. For [`batchCompletion()`](/sdk/reference/api#batchcompletion) they are batch-level, on `run.stats`. The gain depends on the device: with several concurrent sequences, the larger verification batches can cost more than they save.
 
 ```js
 const modelId = await loadModel({
