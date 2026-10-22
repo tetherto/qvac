@@ -223,15 +223,7 @@ To skip this sync for a single run, the user can invoke `/qv-sdk-pr-create --no-
 2. If yes, read `.agents/skills/qv-docs-update/SKILL.md` and follow it. Don't open the PR until it reports `DONE`, `NO_DOCS_IMPACT`, or `GENERATED_DOCS_ONLY`.
 3. If no (library-only), put the library-only note in the PR body — one line on why the change needs no docs.
 
-This is not the generated API summary — that is merged to `main` at the release cutoff (`docs/ci/RELEASE-TRAIN.md` step 6a), never from a release PR.
-
-## Docs Artifacts (SDK Releases)
-
-**A release PR carries no documentation changes.** The documentation site is
-closed at the cutoff by its own PRs into `main` — steps 6a and 6b of
-`docs/ci/RELEASE-TRAIN.md` — days before the release PR merges. Reviewers
-should expect no diff under `docs/website`, and a diff there means something
-went wrong: stop and ask the documentation engineer.
+This trigger is about prose. The generated API summary is `docs/ci/RELEASE-TRAIN.md` step 6a.
 
 ## Release Target Dual-PR Flow
 
@@ -279,7 +271,6 @@ Before outputting the PR description, verify:
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
 - [ ] If the diff is a user-facing SDK capability, CLI was updated in this PR, the body says library-only, or the skip reminder was emitted
 - [ ] If diff touches sdk's `version` / `@qvac/inference` range (or sdk's deps), `qv-sdk-inference-version` ran (or `--no-sync` was set with a reminder emitted), and the version checks plus sdk-python checks pass
-- [ ] `git status` shows no change under `docs/website` — documentation is closed at the cutoff, not in a release PR
 - [ ] If base is `release-<pkg>-<x.y.z>` or `release-train-<train>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 - [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
 - [ ] Release changelog PRs: title is `chore:` (no `[bc]`); body API / Models / Breaking match `changelog/<this version>/`

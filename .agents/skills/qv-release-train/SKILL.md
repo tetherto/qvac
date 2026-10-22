@@ -1,6 +1,6 @@
 ---
 name: qv-release-train
-description: Release the packages of a release train (inference, sdk, cli, ai-sdk-provider, the two plugins) together from one branch and one publish run, and open the two documentation cutoff PRs that go with it. Use when releasing the SDK chain, writing a version plan, or invoking /qv-release-train.
+description: Release the packages of a release train (inference, sdk, cli, ai-sdk-provider, the two plugins) together from one branch and one publish run. Use when releasing the SDK chain, writing a version plan, or invoking /qv-release-train.
 ---
 
 # Release train
@@ -36,28 +36,12 @@ the per-package flow in `docs/gitflow.md`.
   and leave it out of the backmerge.
 - Open both PRs with `qv-sdk-pr-create`: one release PR, one backmerge, for the
   whole train.
-- Open the two **documentation** PRs right after cutting the train branch, both
-  into `main`. They belong to the cutoff, not to the release: nothing in steps 7
-  and 8 waits on them, they touch no package, and the release PR and backmerge
-  carry no documentation at all. In order:
-  1. **6a — close the line being released.** Per documented collection, on a
-     branch off `main`, naming that collection's version being released:
-     `cd docs/website && bun run scripts/generate-api-docs.ts <version>
-     --force-extract`, then `npm run build`. One file per collection
-     (`content/docs/<slug>/<current line>/reference/api.mdx`), never
-     `src/lib/versions.ts` or `public/_redirects`.
-  2. **6b — open the line of the next version.** `qv-docs-line-cut`, on a branch
-     off **6a's branch**, never off `main`.
-- Never branch 6b off `main`. Branched off `main`, the two merge in order and
-  git silently drops 6a from the *preserved* folder — the one production serves —
-  conflicting only in the newly opened folder, which no reader has reached yet.
-  Stacked on 6a, both merge clean.
-- Tell the user which PR is 6a and which is 6b, and that they merge in that
-  order. Do not merge either: the documentation engineer reviews them and
-  records 6a's merge commit, which is what the production promotion publishes.
-- Skipping the two documentation PRs is not an option. A skipped cut leaves the
-  coming sprint writing its feature documentation into the folder of a version
-  that already shipped. `docs/ci/RELEASE-TRAIN.md` step 6 carries the detail.
+- Invoke `qv-docs-cutoff` right after cutting the train branch, passing the
+  version being released. It opens the two documentation PRs into `main` and
+  reports their URLs. Nothing in steps 7 and 8 waits on them.
+- Do not approve or merge either documentation PR. The documentation engineer
+  reviews both — that review is the only gate on the documentation side of the
+  release — then merges them in the order `qv-docs-cutoff` reports.
 - Never approve the `npm` or `pypi` deployment; tell the user when each waits.
 - On a failed run, report it. Do not publish a package by hand and do not move
   or delete a tag.

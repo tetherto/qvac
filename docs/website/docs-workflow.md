@@ -513,7 +513,7 @@ false positive would block every docs PR at once.
 
 **Where:** steps 6a and 6b of [`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md). There is no GitHub Actions documentation-release workflow, and a release PR carries no documentation.
 
-**Who:** the train's **tech lead** opens both PRs, in one sitting, right after cutting the train branch. The **documentation engineer** reviews them and merges 6a then 6b. The order is not a preference — see "Why 6b stacks on 6a" below.
+**Who:** the train's **tech lead** runs `qv-docs-cutoff`, which opens both PRs in one sitting right after the train branch is cut. The **documentation engineer** reviews them and merges 6a then 6b. The order is not a preference — see "Why 6b stacks on 6a" below.
 
 **When:** on the morning the sprint's versions are declared final and the release branches are cut. Not when the release publishes, days later.
 
@@ -535,6 +535,36 @@ A patch release has no 6a. The public API is frozen at the minor boundary, so th
 **Why 6b stacks on 6a.** A cut renames the folder 6a writes into. If 6b branches off `main` instead, merging 6a and then 6b produces a tree where the *preserved* folder — the one production serves — silently keeps the **old** API summary, because that half of the merge has no conflict to report. The conflict surfaces only in the freshly opened folder, which no reader has reached yet. Stacked on 6a, both merge clean and the preserved folder keeps what 6a generated. The cost is that merging 6a retargets 6b's base and dismisses its approval; the same reviewer re-approves and merges.
 
 Build and generation byproducts (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`) are gitignored, so `git status` shows only committable files.
+
+#### Reviewing the two cutoff PRs
+
+**This review is how the documentation side of a release is verified.** There is
+no other gate: no CI job asserts that the API summary matches the version being
+released, and once 6a's commit is promoted it is what the public reads. Review
+both PRs before merging either.
+
+On **6a — close the line being released**:
+
+- The diff is one file per documented collection, `content/docs/<slug>/<current line>/reference/api.mdx`, and nothing else. `src/lib/versions.ts` and `public/_redirects` belong to the cut; their presence means 6a and 6b were not separated.
+- The frontmatter title names the version being released and carries `(latest)`.
+- **The body actually changed.** A summary byte-identical to the previous line's, title aside, means TypeDoc did not re-extract — the page would advertise the new version while describing the old one. `--force-extract` exists for this.
+- The base is `main`.
+
+After merging, **record the merge commit**. It is the promotion target, and nothing merged after it belongs to the released version.
+
+On **6b — open the next version's line**:
+
+- **The base is 6a's branch, not `main`.** Check this first. It is the only failure here that is silent: merged in order from `main`, git drops 6a from the preserved folder without a conflict and reports one only in the newly opened folder. The published line is the one that breaks, and nothing flags it.
+- The preserved folder carries the summary 6a generated, not the one before it.
+- `diff -r content/docs/<slug>/<preserved> 'content/docs/<slug>/(<opened>)'` reports only the title line and the release-notes link. Anything else means content moved that should not have.
+- The opened line's `reference/meta.json` names the **opened** line's release tag; the preserved line keeps its own.
+- The manifest and `public/_redirects` both moved, and `tests/line-structure.test.ts` passes — the build is what proves the manifest and the folders agree.
+
+Merge 6a first, then 6b. Merging 6a retargets 6b to `main` and dismisses its approval, so re-approve and merge.
+
+`Docs lines up to date with main` passes on both, by construction: 6a changes no folder names, and 6b's branch point has the same line set as `main`. A failure on either means the branch was cut from a stale base.
+
+If something is wrong, hand it back to the tech lead rather than fixing it in the PR. Both PRs are script output, and a cut commit must never be rebased — resetting and re-running is cheaper than repairing.
 
 ---
 

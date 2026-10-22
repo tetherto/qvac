@@ -1,7 +1,6 @@
 ---
 name: qv-docs-line-cut
 description: Cut the next documentation line of every versioned collection whose current line has entered release — run scripts/cut-line.ts per collection, commit each cut on its own, verify it mechanically, and measure the evidence the PR body quotes. Use at a release cutoff (step 6b of docs/ci/RELEASE-TRAIN.md), when the coming version needs a folder to land in, or when invoking /qv-docs-line-cut.
-disable-model-invocation: true
 ---
 
 # Documentation Line Cut
@@ -19,6 +18,12 @@ their first day.
 around it: which collections are due, in what order, what to measure, and what
 the PR has to prove. Every command runs from `docs/website` unless stated
 otherwise.
+
+**Invoked from a flow, not by hand.** `qv-docs-cutoff` calls this skill as its
+step 6b, after opening the PR that closes the line being released. It is
+model-invocable for that reason. A human running `/qv-docs-line-cut` directly is
+the exception — an out-of-band cut — and Step 1 is what refuses one made at the
+wrong moment.
 
 ## The roster comes from the manifest, never from this file
 

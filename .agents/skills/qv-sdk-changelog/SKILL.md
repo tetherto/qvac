@@ -330,25 +330,6 @@ cd packages/sdk-python
 published. Include sdk-python generated updates in the release commit. The Python
 client does not get its own changelog — history lives in `packages/sdk/CHANGELOG.md`.
 
-## Documentation is not part of a release PR
-
-A release carries no documentation changes. The site publishes one
-**documentation line** per SDK minor — a folder under `content/docs/sdk/` — and
-the line of the version being released was closed at the cutoff, days earlier,
-by the documentation engineer: `docs/ci/RELEASE-TRAIN.md` steps 6a and 6b. By
-the time the release PR exists, the API reference it publishes is already on
-`main` and the site no longer publishes release-notes pages at all (each line's
-sidebar links to that minor's GitHub release).
-
-So the release notes you author in Step 4 reach readers through the GitHub
-release, not through a generated page, and a patch release touches
-`docs/website` not at all.
-
-If a release PR shows a diff under `docs/website/content/docs/`, something is
-wrong: stop and ask the documentation engineer. Do not run
-`generate-api-docs.ts`, `generate-release-notes.ts` or `cut-line.ts` from a
-release PR.
-
 ## CLI Parameters
 
 | Flag                            | Required | Description                                                        |
@@ -377,9 +358,6 @@ Generates changelog files in `packages/<package>/changelog/<version>/`:
 Additionally:
 
 - `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest), preferring `CHANGELOG_LLM.md` (human-readable) from each version folder when available, falling back to `CHANGELOG.md`
-
-Nothing under `docs/website`. Documentation is closed at the cutoff, not in a
-release PR — see "Documentation is not part of a release PR" above.
 
 ## Tag Format
 
@@ -439,7 +417,6 @@ Before completing:
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
 - [ ] NOTICE updated; JS section not emptied by a failed install
 - [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
-- [ ] `git status` shows no change under `docs/website` — documentation is closed at the cutoff, not in a release PR
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions
@@ -453,5 +430,4 @@ Before completing:
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
 - NOTICE generation: `.agents/skills/qv-notice-generate/SKILL.md`
 - sdk @qvac/inference version: `.agents/skills/qv-sdk-inference-version/SKILL.md`
-- Docs site pipeline, and where in the release it runs: `docs/website/docs-workflow.md`
 - Release PR branch naming (org `release-*` push / Merge Guard): `.agents/skills/qv-sdk-pr-create/SKILL.md`

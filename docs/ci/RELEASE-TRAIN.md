@@ -91,11 +91,16 @@ per-package workflow. The next train moves it above that version.
    backmerge keeps `main`'s `pnpm-workspace.yaml` and regenerates
    `pnpm-lock.yaml` from it.
 
-   The documentation site has its own two steps here. **You open both PRs, in
-   one sitting, right after cutting the train branch**; the documentation
-   engineer reviews them and merges 6a then 6b. Both target `main` — the train
-   branch is the release's target, never documentation's. Nothing in steps 1 to
-   8 waits on them, and they touch no package.
+   The documentation site has its own two steps here. **Run `qv-docs-cutoff`
+   right after cutting the train branch**, passing the version being released;
+   it opens both PRs into `main` and reports their URLs and merge order. The
+   documentation engineer reviews them and merges 6a then 6b. That review is how
+   the documentation side of the release is verified — no CI check does it — so
+   do not approve or merge either yourself. The checks they run are in
+   [`docs/website/docs-workflow.md`](../website/docs-workflow.md), "Reviewing
+   the two cutoff PRs". Both land on `main`; the train branch is the release's
+   target, never documentation's. Nothing in steps 1 to 8 waits on them, and
+   they touch no package.
 
    - 6a. **Close the line of the version being released.** Generate the API
      summary into the current documentation line, from a branch off `main`

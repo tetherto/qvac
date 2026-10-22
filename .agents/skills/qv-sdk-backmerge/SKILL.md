@@ -71,7 +71,7 @@ In command examples below, `ORG_REMOTE` / `FORK_REMOTE` are placeholders — sub
 | Standalone with merged release PR     | The PR's merge/squash commit on `ORG_REMOTE/release-<pkg>-<x.y.z>` (`gh pr view <num> --json mergeCommit,headRefName`) |
 | Standalone with `--commit=<sha>`      | That single commit                                                                                               |
 
-**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and the `packages/sdk-python` and `packages/sdk-kotlin` files `qv-sdk-inference-version` Steps 3 and 3b change — never anything under `docs/website`). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
+**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and the `packages/sdk-python` and `packages/sdk-kotlin` files `qv-sdk-inference-version` Steps 3 and 3b change). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
 
 ### Step 3: Detect no-op (main already aligned)
 
@@ -152,8 +152,6 @@ touched.
 Never drop `pnpm-lock.yaml` from the cherry-pick: CI's `pnpm install
 --frozen-lockfile` fails on `main` when a manifest's range and the lockfile
 disagree.
-
-**A release commit carries nothing under `docs/website`.** Documentation is closed at the release cutoff by its own PRs into `main` (`docs/ci/RELEASE-TRAIN.md` steps 6a and 6b), so a backmerge never carries documentation and never conflicts over it. If one does, STOP and hand it to the documentation engineer: the content reached the release PR by a route that is not supposed to exist, and choosing which line it belongs in is their call, not a merge resolution.
 
 When stopping, print:
 
