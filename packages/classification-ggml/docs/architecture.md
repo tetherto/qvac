@@ -1,10 +1,34 @@
 # Architecture — `@qvac/classification-ggml`
 
-This document describes the architecture of the MobileNetV3-Small 3-class
-image classification addon, the GGML compute graph it constructs, and the
-rationale for the key implementation choices.
+The addon contains two independent `IModel` implementations: MobileNetV3-Small
+image classification and MegaLoc image embeddings. `ImageClassifier` keeps the
+bundled MobileNet default; `MegaLoc` uses a caller-provided GGUF. Both use the
+same native binding and Fabric runtime. See [MegaLoc](megaloc.md) for its graph,
+backend selection, input format, conversion and validation details.
 
-## Component layout
+## Model selection and activation
+
+```mermaid
+flowchart TD
+    IC[ImageClassifier] -->|modelType: mobilenet, default| C[createInstance]
+    ML[MegaLoc] -->|modelType: megaloc| C
+    C --> MN[MobileNet ClassificationModel]
+    C --> ME[MegaLocModel]
+    MN --> SYNC[Load during createInstance]
+    ME --> ASYNC[activate: JsAsyncTask worker loads weights and graph]
+    SYNC --> J[IModel processing through JobRunner]
+    ASYNC --> J
+```
+
+MegaLoc's JS `load()` awaits native `activate()`, keeping the event loop
+responsive while loading. Its native model lives in `model-interface/megaloc/`;
+MobileNet lives in `model-interface/mobilenet/`. Decoding and raw-input validation
+are shared, while preprocessing, graphs and weight buffers remain model-specific.
+MobileNet returns label/confidence results; MegaLoc's typed output handler
+returns an L2-normalized `Float32Array(8448)`. Fabric schedules MegaLoc on the
+selected GPU or CPU, with CPU fallback for unsupported GPU operations.
+
+## MobileNet component layout
 
 ```
 +----------------------------------------------+
@@ -89,7 +113,7 @@ Totals: **34 conv layers** (1 stem + 11 × {1 or 2 1×1 + 1 DW} + 1 tail)
 and **2 linear layers** in the classifier. `+` marks the residual add
 (applied when `stride == 1` and `inputChannels == outputChannels`).
 
-## GGML graph construction
+## MobileNet GGML graph construction
 
 ### Weight loading
 
@@ -152,7 +176,7 @@ The graph is captured via `ggml_new_graph_custom` + `ggml_build_forward_expand`.
 Nothing allocates tensors in the hot path; the only per-call work is the
 pixel copy, the compute itself, the 3-element softmax, and label lookup.
 
-## Threading model
+## MobileNet threading model
 
 - Each `ClassificationModel` instance owns its own `JobRunner` worker
   thread (inherited from `qvac-lib-inference-addon-cpp`), so concurrent
@@ -175,7 +199,7 @@ pixel copy, the compute itself, the 3-element softmax, and label lookup.
   could only ever apply on a subset of platforms. We picked
   consistency and dropped the knob altogether.
 
-## Memory footprint
+## MobileNet memory footprint
 
 - Weights on the CPU backend: ≈ `2.94 MB` + ≈ `60 KB` of folded BN scale/
   shift + FP32 classifier FC (≈ `2.5 MB`) ≈ **5.5 MB total** in memory.
