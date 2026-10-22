@@ -167,6 +167,12 @@ function installDefaultPolicies(r: RequestRegistry): void {
     onOverflow: 'queue',
     maxQueueDepthPerModel: 256
   })
+  // Diffusion has one native job per model and model-wide cancellation.
+  r.policy({
+    kind: 'diffusion',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'reject'
+  })
   // An ABot-World session runs one job at a time: the addon rejects a second
   // step while a block is still streaming, and scene creation shares the same
   // lane. Reject rather than queue, unlike every other policy here, because a
