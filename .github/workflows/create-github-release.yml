@@ -53,6 +53,9 @@ jobs:
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # 2.6.1
         with:
           tag_name: ${{ inputs.repo_name }}-v${{ inputs.published_version }}
+          # Without a commit, GitHub creates a missing tag on the default
+          # branch. The caller's commit is the one it published.
+          target_commitish: ${{ github.sha }}
           name: ${{ inputs.release_name }} v${{ inputs.published_version }}
           body_path: ${{ steps.changelog.outputs.release-notes-path }}
         env:

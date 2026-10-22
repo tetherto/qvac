@@ -9824,5 +9824,82 @@
     "tags": ["transcription", "parakeet", "transcribepsy", "ggml", "multilingual"],
     "notes": "Q8_0 GGUF build of qvac/TranscribePsy-250M-EU-sub for Dutch, English, French, German, Italian, Polish, Portuguese and Spanish.",
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/Qwen3.5-0.8B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 0.8B multimodal model with MTP layers",
+    "quantization": "q4_k_m",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "Keeps the multi-token-prediction (MTP) layers, so it can load with spec_type draft-mtp for speculative decoding. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/Qwen3.5-2B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 2B multimodal model with MTP layers",
+    "quantization": "q4_k_m",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "Keeps the multi-token-prediction (MTP) layers, so it can load with spec_type draft-mtp for speculative decoding. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF/resolve/86835bf9949e4d14d6860f7910b1340ad4f271a9/Qwen3.5-4B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 4B multimodal model with MTP layers",
+    "quantization": "q4_k_m",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "Keeps the multi-token-prediction (MTP) layers, so it can load with spec_type draft-mtp for speculative decoding. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/Qwen3.5-9B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 9B multimodal model with MTP layers",
+    "quantization": "q4_k_m",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "Keeps the multi-token-prediction (MTP) layers, so it can load with spec_type draft-mtp for speculative decoding. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/AtomicChat/Qwen3.5-4B-DFlash-GGUF/resolve/50b43bb3a4c1c973dc65ed4460f74dc98878cc12/Qwen3.5-4B-DFlash.Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DFlash draft model for Qwen 3.5 4B",
+    "quantization": "q8_0",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "dflash", "qwen3.5", "draft"],
+    "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen 3.5 4B entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/AtomicChat/Qwen3.5-4B-DFlash-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DFlash2 draft model for Qwen 3.8 27B",
+    "quantization": "q8_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "dflash2", "qwen3.8", "draft"],
+    "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen 3.8 27B entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/incoai/Qwen3.8-Flash-Next-DFlash2-GGUF/resolve/4f5a39be8f0a9e9a573ac9824251830a8f4096d9/Qwen3.8-Flash-Next-DFlash2-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DFlash2 draft model for Qwen3.8 Flash Next 177B",
+    "quantization": "q8_0",
+    "params": "177B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "dflash2", "qwen3.8-flash-next", "draft"],
+    "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen3.8 Flash Next entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/incoai/Qwen3.8-Flash-Next-DFlash2-GGUF"
   }
 ]
