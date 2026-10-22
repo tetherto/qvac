@@ -1,3 +1,5 @@
+import type { AbortSignal } from 'bare-abort-controller'
+
 import {
   loadModelServerParamsSchema,
   normalizeModelType,
@@ -19,7 +21,8 @@ import {
   ModelFileNotFoundError,
   ModelFileNotFoundInDirError,
   ModelFileLocateFailedError,
-  ModelFitRefusedError
+  ModelFitRefusedError,
+  InferenceCancelledError
 } from '@/errors/index'
 import { ensureAddonLoggerReady, getPlugin } from '@/plugins/index'
 import { runAdvisoryFitCheck } from '@/resources/model-fit/native-probe/advisory-fit'
@@ -35,9 +38,14 @@ export interface LoadModelResult {
   timing?: LoadTimingStats
 }
 
+export interface LoadModelOptions {
+  collectTiming?: boolean
+  request?: { signal: AbortSignal; requestId: string }
+}
+
 export async function loadModel(
   params: LoadModelServerParams,
-  options?: { collectTiming?: boolean }
+  options?: LoadModelOptions
 ): Promise<LoadModelResult> {
   const {
     modelId,
@@ -101,16 +109,24 @@ export async function loadModel(
   // the real load uses, and before `createModel()` so it never competes with
   // the native load for device memory.
   const fitPolicy = resolveModelFitPolicy(modelFitPolicy, getConfig().modelFitPolicy)
+  const request = options?.request
   const fitProbe = runsProbe(fitPolicy)
-    ? await runAdvisoryFitCheck({
-        modelId,
-        modelType: modelType as CanonicalModelType,
-        modelPath,
-        modelConfig,
-        artifacts,
-        isShardedModel
-      })
+    ? await runAdvisoryFitCheck(
+        {
+          modelId,
+          modelType: modelType as CanonicalModelType,
+          modelPath,
+          modelConfig,
+          artifacts,
+          isShardedModel
+        },
+        request !== undefined ? { signal: request.signal } : {}
+      )
     : undefined
+
+  if (request?.signal.aborted === true) {
+    throw new InferenceCancelledError(request.requestId)
+  }
 
   if (refusesLoad(fitPolicy, fitProbe?.verdict)) {
     throw new ModelFitRefusedError(modelType, fitProbe!.reason, fitProbe!.message)

@@ -10,8 +10,7 @@ import type { TtsFitRequest, TtsFitResult } from '@qvac/tts-ggml'
 
 /**
  * The engine packages each expose their own `assessFit`, taking the same fields
- * their loader takes and returning the figures their fitter measures. Every
- * member is plain JSON, so a request can cross a process boundary unchanged.
+ * their loader takes and returning the figures their fitter measures.
  */
 export type FitProbeRequest =
   | { engine: 'llm-llamacpp'; request: LlmLlamacpp.FitRequest }

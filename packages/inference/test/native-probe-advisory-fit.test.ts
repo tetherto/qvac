@@ -5,7 +5,7 @@ import type { Logger } from '@/logging/types'
 import { ModelType } from '@/schemas/index'
 import { runAdvisoryFitCheck } from '@/resources/model-fit/native-probe/advisory-fit'
 import type { FitProbeRequest, FitProbeResult } from '@/resources/model-fit/native-probe/engine-fit'
-import type { IsolatedFitResult } from '@/resources/model-fit/native-probe/run-isolated-fit'
+import type { FitRunResult } from '@/resources/model-fit/native-probe/fit-outcome'
 
 const COMPLETION_INPUT = {
   modelId: 'llm-1',
@@ -128,12 +128,11 @@ test('advisory fit forwards candidate-level MOSS workload without load config fi
       isShardedModel: false
     },
     {
-      mobile: false,
       residentModelBytes: zeroResident,
       logger: recordingLogger().logger,
       runFit: async (probe) => {
         recorded = probe
-        return { status: 'unknown', reason: 'timeout', message: 'test timeout' }
+        return { status: 'unknown', reason: 'cancelled', message: 'test cancelled' }
       }
     }
   )
@@ -152,7 +151,7 @@ test('advisory fit forwards candidate-level MOSS workload without load config fi
 // evidence class and headroom policy produced the verdict.
 const PROVENANCE = { basis: 'native-probe', estimatorVersion: 'native-probe-v2' } as const
 
-function fitReturning(result: IsolatedFitResult) {
+function fitReturning(result: FitRunResult) {
   const calls: unknown[][] = []
   const runFit = (...args: unknown[]) => {
     calls.push(args)
@@ -166,7 +165,6 @@ test('advisory fit: reports a projected fit with its plan and footprint', async 
   const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     runFit,
     logger
@@ -195,7 +193,6 @@ test('advisory fit: reports a projected insufficiency', async (t) => {
   })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     runFit,
     logger
@@ -228,7 +225,6 @@ test('advisory fit: treats every engine error as absent evidence', async (t) => 
     })
 
     const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-      mobile: false,
       residentModelBytes: zeroResident,
       runFit,
       logger
@@ -238,34 +234,33 @@ test('advisory fit: treats every engine error as absent evidence', async (t) => 
   }
 })
 
-test('advisory fit: treats every supervisor failure as absent evidence', async (t) => {
-  for (const reason of ['crashed', 'timeout', 'invalid-response', 'spawn-failed', 'cancelled']) {
+test('advisory fit: treats every run failure as absent evidence', async (t) => {
+  for (const reason of ['crashed', 'cancelled', 'invocation-error', 'timeout'] as const) {
     const { logger, records } = recordingLogger()
     const { runFit } = fitReturning({
       status: 'unknown',
-      reason: reason as never,
-      message: 'child failed'
+      reason,
+      message: 'fit failed'
     })
 
     const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-      mobile: false,
       residentModelBytes: zeroResident,
       runFit,
       logger
     })
 
-    t.alike(outcome, { ...PROVENANCE, verdict: 'unknown', reason, message: 'child failed' })
+    t.alike(outcome, { ...PROVENANCE, verdict: 'unknown', reason, message: 'fit failed' })
     t.is(records[0]?.level, 'info')
   }
 })
 
-test('advisory fit: never launches a child for a load with no fitter', async (t) => {
+test('advisory fit: never runs a fitter for a load with no fitter', async (t) => {
   const { logger, records } = recordingLogger()
   const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(
     { ...COMPLETION_INPUT, modelType: ModelType.ggmlClassification },
-    { mobile: false, runFit, logger }
+    { runFit, logger }
   )
 
   t.is(outcome.verdict, 'unknown')
@@ -287,35 +282,19 @@ test('advisory fit: dispatches a speech load to its own engine', async (t) => {
       modelConfig: { ttsEngine: 'parler' },
       isShardedModel: false
     },
-    { mobile: false, residentModelBytes: zeroResident, runFit, logger }
+    { residentModelBytes: zeroResident, runFit, logger }
   )
 
   t.is(calls.length, 1)
   t.is((calls[0]?.[0] as FitProbeRequest).engine, 'tts-ggml')
 })
 
-test('advisory fit: runs the fitter on mobile', async (t) => {
-  const { logger } = recordingLogger()
-  const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
-
-  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: true,
-    residentModelBytes: zeroResident,
-    runFit,
-    logger
-  })
-
-  t.is(outcome.verdict, 'fit')
-  t.is(calls.length, 1)
-})
-
-test('advisory fit: absorbs a supervisor that rejects', async (t) => {
+test('advisory fit: absorbs a runner that rejects', async (t) => {
   const { logger } = recordingLogger()
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
-    runFit: (() => Promise.reject(new TypeError('supervisor exploded'))) as never,
+    runFit: (() => Promise.reject(new TypeError('runner exploded'))) as never,
     logger
   })
 
@@ -323,15 +302,14 @@ test('advisory fit: absorbs a supervisor that rejects', async (t) => {
     ...PROVENANCE,
     verdict: 'unknown',
     reason: 'internal-error',
-    message: 'TypeError: supervisor exploded'
+    message: 'TypeError: runner exploded'
   })
 })
 
-test('advisory fit: absorbs a supervisor that throws synchronously', async (t) => {
+test('advisory fit: absorbs a runner that throws synchronously', async (t) => {
   const { logger } = recordingLogger()
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     runFit: (() => {
       throw new RangeError('bad request')
@@ -347,38 +325,19 @@ test('advisory fit: absorbs a supervisor that throws synchronously', async (t) =
   })
 })
 
-test('advisory fit: forwards the caller timeout and abort signal to the supervisor', async (t) => {
+test('advisory fit: forwards the caller abort signal to the runner', async (t) => {
   const { logger } = recordingLogger()
   const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
   const controller = new AbortController()
 
   await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     runFit,
     logger,
-    timeoutMs: 1_234,
     signal: controller.signal
   })
 
-  t.alike(calls[0]?.[1], { mobile: false, timeoutMs: 1_234, signal: controller.signal })
-})
-
-// The runner picks the strategy from this, so the advisory check resolves the
-// runtime once and passes the answer rather than choosing itself.
-test('advisory fit: tells the runner which isolation this host can use', async (t) => {
-  const { logger } = recordingLogger()
-
-  for (const mobile of [true, false]) {
-    const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
-    await runAdvisoryFitCheck(COMPLETION_INPUT, {
-      mobile,
-      residentModelBytes: zeroResident,
-      runFit,
-      logger
-    })
-    t.is((calls[0]?.[1] as { mobile: boolean }).mobile, mobile)
-  }
+  t.alike(calls[0]?.[1], { signal: controller.signal })
 })
 
 test('advisory fit: reserves resident model bytes through the fit margin', async (t) => {
@@ -386,7 +345,6 @@ test('advisory fit: reserves resident model bytes through the fit margin', async
   const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     // 10.5 GiB of resident weights -> 10752 MiB on top of the 1024 base.
     residentModelBytes: () => Promise.resolve(10.5 * 1024 * 1024 * 1024),
     runFit,
@@ -401,7 +359,6 @@ test('advisory fit: a caller can hold back bytes nothing has loaded yet', async 
   const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: () => Promise.resolve(2 * 1024 * 1024 * 1024),
     extraResidentBytes: 4 * 1024 * 1024 * 1024,
     runFit,
@@ -416,7 +373,6 @@ test('advisory fit: always sends the explicit base margin, even with nothing res
   const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     runFit,
     logger
@@ -432,7 +388,6 @@ test('advisory fit: absorbs a resident-bytes probe that rejects', async (t) => {
   const { runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: () => Promise.reject(new TypeError('registry unavailable')),
     runFit,
     logger
@@ -458,7 +413,6 @@ test('advisory fit: refuses a projected fit the machine cannot hold', async (t) 
   const { runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     availableSystemBytes: () => Promise.resolve(4 * GIB),
     countsDeviceRows: countsDevices,
@@ -477,7 +431,6 @@ test('advisory fit: keeps the placement the fitter resolved on a budget refusal'
   const { runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     availableSystemBytes: () => Promise.resolve(4 * GIB),
     countsDeviceRows: countsDevices,
@@ -500,7 +453,6 @@ test('advisory fit: a device with its own memory is not charged to the system', 
   const { runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     availableSystemBytes: () => Promise.resolve(4 * GIB),
     countsDeviceRows: hostOnly,
@@ -516,7 +468,6 @@ test('advisory fit: keeps a projected fit the machine can hold', async (t) => {
   const { runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     availableSystemBytes: () => Promise.resolve(PROJECTED_DEMAND + 2 * 1024 ** 3),
     runFit,
@@ -532,7 +483,6 @@ test('advisory fit: keeps the engine verdict where no system sample is available
   const { runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
     residentModelBytes: zeroResident,
     availableSystemBytes: () => Promise.resolve(undefined),
     runFit,
