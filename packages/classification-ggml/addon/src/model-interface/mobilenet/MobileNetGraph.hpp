@@ -14,7 +14,7 @@ namespace classification_ggml::graph {
 
 /// One torchvision MobileNetV3-Small `InvertedResidual` block.
 struct BlockConfig {
-  int featuresIndex;   // 1..11, matches `features.N` in the GGUF
+  int featuresIndex; // 1..11, matches `features.N` in the GGUF
   int inputChannels;
   int expandedChannels;
   int outputChannels;

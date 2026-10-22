@@ -5,6 +5,8 @@ import env = require("bare-env");
 import QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import { createJobHandler, exclusiveRunQueue, type JobHandler } from "@qvac/infer-base";
+import { MegaLoc } from "./megaloc";
+export { MegaLoc, type MegaLocOptions, type ImageEmbeddingOptions, type MegaLocRuntimeStats } from "./megaloc";
 import {
   ClassificationInterface,
   mapAddonEvent,
@@ -312,7 +314,9 @@ export default ImageClassifier;
 
 const cjsExports = ImageClassifier as typeof ImageClassifier & {
   ImageClassifier?: typeof ImageClassifier;
+  MegaLoc?: typeof MegaLoc;
 };
 cjsExports.ImageClassifier = ImageClassifier;
+cjsExports.MegaLoc = MegaLoc;
 module.exports = cjsExports;
 

@@ -22,8 +22,8 @@
 #include <inference-addon-cpp/Logger.hpp>
 #include <qvac-fabric.h>
 
-#include "ImagePreprocessor.hpp"
 #include "MobileNetGraph.hpp"
+#include "model-interface/ImagePreprocessor.hpp"
 
 namespace classification_ggml {
 
@@ -180,7 +180,9 @@ void ClassificationModel::load() {
         kWarmupSide,
         preprocess::CHANNELS);
     ggml_backend_tensor_set(
-        compute_.input, warmupTensor.data(), 0,
+        compute_.input,
+        warmupTensor.data(),
+        0,
         warmupTensor.size() * sizeof(float));
     (void)ggml_backend_graph_compute(backend_, compute_.graph);
     float warmupLogits[graph::NUM_CLASSES] = {0.0F};
@@ -202,12 +204,14 @@ std::any ClassificationModel::process(const std::any& input) {
 
   const auto* inPtr = std::any_cast<ClassifyInput>(&input);
   if (inPtr == nullptr) {
-    throw StatusError(InvalidArgument, "ClassificationModel: invalid input type");
+    throw StatusError(
+        InvalidArgument, "ClassificationModel: invalid input type");
   }
   if (!loaded_) {
     throw StatusError(
         InternalError,
-        "ClassificationModel: classify() called before load() or after unload()");
+        "ClassificationModel: classify() called before load() or after "
+        "unload()");
   }
 
   const auto t0 = std::chrono::steady_clock::now();
@@ -216,34 +220,37 @@ std::any ClassificationModel::process(const std::any& input) {
   // collapse the optional<RawRgbDims> to that triplet at this boundary.
   const uint32_t rawW = inPtr->rawRgb.has_value() ? inPtr->rawRgb->width : 0;
   const uint32_t rawH = inPtr->rawRgb.has_value() ? inPtr->rawRgb->height : 0;
-  const uint32_t rawC =
-      inPtr->rawRgb.has_value() ? inPtr->rawRgb->channels : 0;
+  const uint32_t rawC = inPtr->rawRgb.has_value() ? inPtr->rawRgb->channels : 0;
   std::vector<float> inputTensor = preprocess::preprocessToTensor(
       std::span<const uint8_t>(inPtr->data.data(), inPtr->data.size()),
-      rawW, rawH, rawC);
+      rawW,
+      rawH,
+      rawC);
 
   const size_t expected = static_cast<size_t>(preprocess::INPUT_SIZE) *
                           preprocess::INPUT_SIZE * preprocess::CHANNELS;
   if (inputTensor.size() != expected) {
     throw StatusError(
-        InternalError, "ClassificationModel: preprocessed tensor has wrong size");
+        InternalError,
+        "ClassificationModel: preprocessed tensor has wrong size");
   }
 
   ggml_backend_tensor_set(
-      compute_.input, inputTensor.data(), 0,
+      compute_.input,
+      inputTensor.data(),
+      0,
       inputTensor.size() * sizeof(float));
 
-  ggml_status status =
-      ggml_backend_graph_compute(backend_, compute_.graph);
+  ggml_status status = ggml_backend_graph_compute(backend_, compute_.graph);
   if (status != GGML_STATUS_SUCCESS) {
     throw StatusError(
-        InternalError, "ggml_backend_graph_compute failed with status " +
-                           std::to_string(static_cast<int>(status)));
+        InternalError,
+        "ggml_backend_graph_compute failed with status " +
+            std::to_string(static_cast<int>(status)));
   }
 
   float logits[graph::NUM_CLASSES] = {0.0F};
-  ggml_backend_tensor_get(
-      compute_.output, logits, 0, sizeof(logits));
+  ggml_backend_tensor_get(compute_.output, logits, 0, sizeof(logits));
 
   std::vector<float> probs =
       softmax(std::span<const float>(logits, graph::NUM_CLASSES));

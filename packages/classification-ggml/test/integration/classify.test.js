@@ -180,3 +180,32 @@ test('raw RGB bytes path', async function (t) {
     await cleanupClassifier(classifier)
   }
 })
+
+test('MobileNet preserves integer coercion for numeric options', async function (t) {
+  t.timeout(TEST_TIMEOUT)
+  const classifier = makeClassifier()
+  try {
+    await classifier.load()
+    for (const topK of [1.5, 1.9]) {
+      t.is((await classifier.classify(loadImage('meal_1.jpg'), { topK })).length, 1)
+    }
+    const raw = Buffer.from([200, 150, 50])
+    const baseline = await classifier.classify(raw, { width: 1, height: 1, channels: 3 })
+    for (const dimension of [1.5, 1.9]) {
+      const result = await classifier.classify(raw, {
+        width: dimension,
+        height: dimension,
+        channels: 3
+      })
+      t.alike(result, baseline, 'raw dimensions keep the existing truncation behavior')
+    }
+    for (const topK of [NaN, Infinity, 4294967297]) {
+      await t.exception.all(
+        () => classifier.classify(raw, { width: 1, height: 1, channels: 3, topK }),
+        /positive integer/
+      )
+    }
+  } finally {
+    await cleanupClassifier(classifier)
+  }
+})
