@@ -503,8 +503,9 @@ await collectOutput(await model.run(
 ```
 
 Some templates only render the conversation once it has a user message
-(Qwen3.5, Qwen3.8-27B and Qwen3.8-Flash-Next raise `No user query found in
-messages.`, with or without tools). For those, the prefill renders the
+(Qwen3.5 and the original Qwen3.8-27B and Qwen3.8-Flash-Next templates raise
+`No user query found in messages.`, with or without tools; some Qwen3.8 GGUFs
+ship a patched template that does not). For those, the prefill renders the
 conversation with a placeholder user message and caches only what comes before
 it: the system prompt and the tool block, if any, ending at the user turn's
 header. Templates that render a system prompt and tools without a user message
