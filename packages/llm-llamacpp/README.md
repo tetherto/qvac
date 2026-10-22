@@ -453,7 +453,7 @@ fit.hostBytes // the same, for the trailing host row
 
 `config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`. A setting left out takes llama's default.
 
-With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the per-device figures; on a model or head without MTP layers the load fails, so the projection is refused with `unsupported-config`. A DFlash draft model or a Gemma 4 assistant is passed to the fit the same way, but fabric cannot measure it yet, so neither counts it (see [Speculative decoding](#speculative-decoding-mtp-dflash)).
+With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the per-device figures; on a model or head without MTP layers the load fails, so the projection is refused with `unsupported-config`. A DFlash draft model or a Gemma 4 assistant is passed to the fit the same way, but fabric cannot measure either yet, so neither the verdict nor the figures count it (see [Speculative decoding](#speculative-decoding-mtp-dflash)).
 
 Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
 

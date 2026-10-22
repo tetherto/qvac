@@ -104,6 +104,7 @@ GgufShape readGgufShape(const std::string& path) {
   const int64_t arch = gguf_find_key(ctx, "general.architecture");
   if (arch >= 0 && gguf_get_kv_type(ctx, arch) == GGUF_TYPE_STRING) {
     const std::string prefix = gguf_get_val_str(ctx, arch);
+    shape.arch = prefix;
     // As fabric's `n_embd_out()`: a Gemma 4 assistant carries the target's
     // width in `embedding_length_out` and its own in `embedding_length`.
     shape.width = readGgufU32(ctx, prefix + ".embedding_length_out");
@@ -118,6 +119,10 @@ GgufShape readGgufShape(const std::string& path) {
   }
   gguf_free(ctx);
   return shape;
+}
+
+bool fitLeavesOutMtpDraft(const GgufShape& draft) {
+  return draft.arch == "gemma4-assistant" && draft.mtpLayers > 0;
 }
 
 SpeculativeConfig

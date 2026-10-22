@@ -67,16 +67,22 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config);
 void requireDraftModelFile(const SpeculativeConfig& config);
 
 struct GgufShape {
+  std::string arch;
   int64_t width = 0;
   int64_t vocab = 0;
   int64_t mtpLayers = 0;
 };
 
-/// The hidden-state width an MTP head reads, its vocabulary size and its MTP
-/// layers (`nextn_predict_layers`), from a GGUF's header, 0 when absent. The
-/// width is `embedding_length_out` when set, as fabric's `n_embd_out()`, else
-/// `embedding_length`.
+/// The architecture, the hidden-state width an MTP head reads, its vocabulary
+/// size and its MTP layers (`nextn_predict_layers`), from a GGUF's header,
+/// empty or 0 when absent. The width is `embedding_length_out` when set, as
+/// fabric's `n_embd_out()`, else `embedding_length`.
 GgufShape readGgufShape(const std::string& path);
+
+/// Whether a fit that cannot measure this MTP draft leaves it out instead of
+/// refusing the projection: only a Gemma 4 assistant with MTP layers, which
+/// fabric cannot measure on its own but loads.
+bool fitLeavesOutMtpDraft(const GgufShape& draft);
 
 /// Why an external MTP head cannot draft for the target, or empty. Fabric
 /// aborts on a width mismatch. A value of 0 is unknown and not compared.
