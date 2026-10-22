@@ -106,18 +106,26 @@ describe('qvac chat batch: validation', () => {
 describe('qvac chat batch: surface', () => {
   const server = useServer({ config: BATCH_CONFIG })
 
-  it('is published in openapi.json under its tag with its error codes', async () => {
+  it('is published in openapi.json, listing each error code under its status', async () => {
     const res = await server().inject({ method: 'GET', url: '/openapi.json' })
     assert.equal(res.statusCode, 200)
     const doc = res.json() as {
-      paths: Record<string, Record<string, { tags?: string[]; description?: string }>>
+      paths: Record<
+        string,
+        Record<string, { tags?: string[]; responses?: Record<string, { description?: string }> }>
+      >
     }
     const operation = doc.paths[URL]?.['post']
     assert.notEqual(operation, undefined, 'chat/batch has no POST in openapi.json')
     assert.deepEqual(operation?.tags, ['Chat Batch'])
-    for (const code of ['too_many_prompts', 'duplicate_prompt_id', 'context_length_exceeded']) {
-      assert.match(operation?.description ?? '', new RegExp(code))
+    const listed = (status: string) => operation?.responses?.[status]?.description ?? ''
+    for (const code of ['too_many_prompts', 'duplicate_prompt_id', 'batch_not_enabled']) {
+      assert.match(listed('400'), new RegExp(`\`${code}\``))
     }
+    assert.match(listed('404'), /`model_not_found`/)
+    assert.match(listed('429'), /`request_rejected_by_policy`/)
+    assert.match(listed('502'), /`inference_failed`/)
+    assert.match(listed('503'), /`model_not_loaded`/)
   })
 })
 

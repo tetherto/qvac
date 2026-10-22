@@ -4,6 +4,7 @@ import type { FastifyRequest } from 'fastify'
 import type { z } from 'zod'
 import { batchCompletion, SDK_SERVER_ERROR_CODES, type CompletionFinal, type Tool } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { errorResponses } from '@/serve/lib/error-responses'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { resolveModelAlias } from '@/serve/core/config/models'
 import { assertToolsEnabled, toolsRequested } from '@/serve/lib/assert-tools-enabled'
@@ -55,16 +56,6 @@ break it down per prompt.
 
 The batch succeeds or fails as a whole. The request blocks until every prompt
 finishes, and a client disconnect cancels it.
-
-Errors: \`400 invalid_json\`, \`400 missing_model\`, \`400 invalid_prompts\`,
-\`400 too_many_prompts\`, \`400 duplicate_prompt_id\`,
-\`400 batch_not_enabled\`, \`400 deferred_tools_unsupported\`,
-\`400 tools_not_enabled\`,
-\`400 invalid_response_format\`, \`400 invalid_tool_choice\`,
-\`400 unsupported_image_content\`, \`400 invalid_model_type\`,
-\`400 context_length_exceeded\`, \`404 model_not_found\`,
-\`429 request_rejected_by_policy\`, \`502 inference_failed\`,
-\`503 model_not_loaded\`.
 `.trim()
 
 // lunte-disable-next-line require-await
@@ -74,7 +65,34 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     {
       schema: {
         body: chatBatchBody,
-        response: { 200: chatBatchResult },
+        response: {
+          200: chatBatchResult,
+          ...errorResponses({
+            400: {
+              invalid_json: 'Body is not valid JSON',
+              missing_model: '`model` is missing',
+              invalid_prompts: '`prompts` is missing or empty, or a prompt is malformed',
+              too_many_prompts: `\`prompts\` carries more than ${MAX_BATCH_PROMPTS} entries`,
+              duplicate_prompt_id: 'Two prompts share an `id`',
+              invalid_request: 'The body carries an unknown top-level field',
+              invalid_model_type: 'The alias is not a `chat` model',
+              batch_not_enabled: "The alias's `config.parallel` is below 2",
+              deferred_tools_unsupported: 'A prompt has a tool with `defer_loading`',
+              tools_not_enabled: 'A prompt has `tools` and the alias lacks `config.tools`',
+              invalid_response_format:
+                'A prompt has a bad `response_format`, or one combined with `tools`',
+              invalid_tool_choice: "A prompt's `tool_choice` names no declared tool",
+              unsupported_image_content: 'An image is not a PNG or JPEG data URL',
+              context_length_exceeded: 'The batch does not fit the context window'
+            },
+            404: { model_not_found: 'Unknown alias' },
+            429: {
+              request_rejected_by_policy: 'The model is busy and its policy rejects queueing'
+            },
+            502: { inference_failed: 'Inference failed' },
+            503: { model_not_loaded: 'The model is not loaded and lazy loading is disabled' }
+          })
+        },
         tags: ['Chat Batch'],
         summary: 'Batch chat completion',
         description
