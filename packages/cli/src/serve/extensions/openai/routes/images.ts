@@ -23,7 +23,6 @@ import {
 } from '@/serve/extensions/openai/schemas/images'
 import type { EphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
 import type { QvacContext } from '@/serve/core/context'
-import { openaiState } from '@/serve/extensions/openai/state'
 
 const SUPPORTED_RESPONSE_FORMATS = new Set(['b64_json', 'url'])
 const RESPONSE_OUTPUT_FORMAT = 'png' as const
@@ -182,7 +181,7 @@ async function runAndRespond(
     buffers,
     responseFormat,
     ctx.serveConfig.publicBaseUrl ?? '',
-    openaiState(ctx).ephemeralFiles
+    ctx.files
   )
   reply.send({
     created: Math.floor(Date.now() / 1000),

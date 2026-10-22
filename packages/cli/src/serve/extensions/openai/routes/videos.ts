@@ -104,8 +104,8 @@ function tearDownJob(ctx: QvacContext, job: VideoJob): void {
       })
     }
   }
-  if (job.aviFileId) openai.ephemeralFiles.remove(job.aviFileId)
-  if (job.mp4FileId) openai.ephemeralFiles.remove(job.mp4FileId)
+  if (job.aviFileId) ctx.files.remove(job.aviFileId)
+  if (job.mp4FileId) ctx.files.remove(job.mp4FileId)
 }
 
 export { tearDownJob }
@@ -118,9 +118,8 @@ export async function resolveInputReferenceImage(
   ref: { image_url?: string | undefined; file_id?: string | undefined },
   ctx: QvacContext
 ): Promise<Uint8Array> {
-  const openai = openaiState(ctx)
   if (ref.file_id !== undefined) {
-    const record = openai.ephemeralFiles.get(ref.file_id)
+    const record = ctx.files.get(ref.file_id)
     if (!record) {
       throw new HttpError(
         400,
@@ -265,7 +264,7 @@ async function runVideoJob(
       throw new Error('video generation produced no output')
     }
 
-    const aviFileId = openai.ephemeralFiles.put({
+    const aviFileId = ctx.files.put({
       data: Buffer.from(buffer),
       fileName: `video-${jobId}.avi`,
       purpose: 'video',
@@ -282,7 +281,7 @@ async function runVideoJob(
 
     // The abort check above already handles DELETE / eviction on the normal
     // path. The store-update return is a second check: if the job is gone we
-    // remove the just-put AVI from ephemeralFiles instead of leaving it to
+    // remove the just-put AVI from the file store instead of leaving it to
     // age out via that store's TTL. Same pattern as the mp4 write below.
     const updated = store.update(jobId, {
       status: 'completed',
@@ -292,7 +291,7 @@ async function runVideoJob(
       aviFileId
     })
     if (!updated) {
-      openai.ephemeralFiles.remove(aviFileId)
+      ctx.files.remove(aviFileId)
       ctx.logger.info(`  video_create job=${jobId} bytes dropped (job torn down during generation)`)
       return
     }
@@ -339,7 +338,7 @@ async function serveContent(
       `Video bytes for job ${job.id} are no longer available.`
     )
   }
-  const aviRecord = openai.ephemeralFiles.get(job.aviFileId)
+  const aviRecord = ctx.files.get(job.aviFileId)
   if (!aviRecord) {
     openai.videoJobsStore.update(job.id, { aviFileId: null, mp4FileId: null })
     throw new HttpError(
@@ -370,7 +369,7 @@ async function serveContent(
 
   let mp4Buffer: Buffer | null = null
   if (job.mp4FileId) {
-    const cached = openai.ephemeralFiles.get(job.mp4FileId)
+    const cached = ctx.files.get(job.mp4FileId)
     if (cached) mp4Buffer = cached.data
     else openai.videoJobsStore.update(job.id, { mp4FileId: null })
   }
@@ -400,7 +399,7 @@ async function serveContent(
       }
       throw err
     }
-    const mp4FileId = openai.ephemeralFiles.put({
+    const mp4FileId = ctx.files.put({
       data: mp4Buffer,
       fileName: `video-${job.id}.mp4`,
       purpose: 'video',
@@ -409,12 +408,12 @@ async function serveContent(
     // The transcode awaited above takes seconds; a DELETE / eviction landing
     // in that window leaves the job gone from the store. Cache the mp4 only
     // if the job is still reachable — otherwise the entry would orphan in
-    // ephemeralFiles until that store's own TTL drops it. We still serve the
+    // the file store until its own TTL drops it. We still serve the
     // bytes for this in-flight request (the client asked, we already paid for
     // the transcode).
     const updated = openai.videoJobsStore.update(job.id, { mp4FileId })
     if (!updated) {
-      openai.ephemeralFiles.remove(mp4FileId)
+      ctx.files.remove(mp4FileId)
       ctx.logger.debug(
         `  video_content job=${job.id} mp4 cache dropped (job torn down during transcode)`
       )
