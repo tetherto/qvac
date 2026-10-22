@@ -164,6 +164,15 @@ export function buildWavHeader(dataLength: number, sampleRate: number): Buffer {
   return header
 }
 
+// A streamed WAV cannot know its length up front. 0xFFFFFFFF in both size
+// fields is the convention players and ffmpeg read as "until end of stream".
+export function buildStreamingWavHeader(sampleRate: number): Buffer {
+  const header = buildWavHeader(0, sampleRate)
+  header.writeUInt32LE(0xffffffff, 4)
+  header.writeUInt32LE(0xffffffff, 40)
+  return header
+}
+
 export function buildWavBuffer(samples: number[], sampleRate: number): Buffer {
   const data = int16SamplesToBuffer(samples)
   const header = buildWavHeader(data.length, sampleRate)
