@@ -261,6 +261,13 @@ completion({
 });
 ```
 
+On hybrid and recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss), a turn under a caller-managed `kvCache` key whose history diverges from the cache, such as the next turn under a thinking template or a regenerate, continues from a checkpoint instead of reprocessing the whole conversation. Each checkpoint costs host RAM, up to hundreds of MiB on larger models, which model fit checks do not count. Tune them at load time in `modelConfig`:
+
+- `cache_checkpoints`: checkpoints kept per sequence (0–1024, default 1). Editing the user message k-th from the end without reprocessing needs `k + 1`; `0` turns checkpoints off.
+- `cache_checkpoints_max_bytes`: byte budget for them per sequence, `0` (default) for unlimited.
+- `cache_checkpoint_storage`: `'memory'` (default) or `'disk'`. With `'disk'`, set `cache_checkpoint_dir` to a writable directory; on mobile, use the app's cache directory.
+- `cache_ram_mib`: host-RAM budget, in MiB, for cached conversations that are not running, so switching back to a caller-managed `kvCache` key skips reading its cache file. Default `0` (off).
+
 The following script enables `kvCache: true` to speed up follow-up turns, and then compares it with `kvCache: false` on the same history:
 
 <Tabs>
