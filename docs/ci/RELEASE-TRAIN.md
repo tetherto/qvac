@@ -6,12 +6,16 @@ in the train moves in every train release, so each release carries the latest
 of the whole chain. nx publishes them in dependency order and skips the
 dependents of a package that fails.
 
-Today there is one train, `sdk`:
+There are two trains. `sdk` releases the whole chain:
 
 ```
 @qvac/inference → @qvac/sdk → @qvac/cli → @qvac/ai-sdk-provider → the two plugins
                      └─ tetherto-qvac-sdk on PyPI, at @qvac/sdk's version
 ```
+
+`cli` releases `@qvac/cli`, `@qvac/ai-sdk-provider` and the two plugins
+against the `@qvac/sdk` already on npm, without an SDK release (see
+[The cli train](#the-cli-train)).
 
 A single package can still be released on its own (a hotfix) through its
 per-package workflow. The next train moves it above that version.
@@ -29,11 +33,17 @@ per-package workflow. The next train moves it above that version.
   - `adjustSemverBumpsForZeroMajorVersion: false`: a `minor` on `0.x` stays a
     minor.
 - **`.github/release-trains.json`** joins groups into a train:
-  - `groups`, and `anchorGroup`: a fixed group whose version names the branch
+  - `groups`. Two trains may share a group only when one holds every group of
+    the other, as `sdk` holds `cli`.
+  - `anchorGroup`, a fixed group whose version names the branch, or
+    `anchorProject`, one package whose version does
+  - `fromNpm`: workspace package directories the train installs from npm
+    instead of linking, such as `packages/sdk` for `cli`
   - `githubRelease`: the one package that gets a GitHub release; the others get
     a `<slug>-v<version>` tag
   - `checks`: the check jobs in `release-train.yml` that must pass. `sdk` uses
-    `shared-runtime-libs`, `sdk-python` and `package-checks`.
+    `shared-runtime-libs`, `sdk-python` and `package-checks`; `cli` uses
+    `package-checks`.
   - `packageChecks`: the per-package check config `package-checks` runs
     (`.github/sdk-pod-checks.json`, the same one release PRs use)
 
@@ -95,6 +105,31 @@ per-package workflow. The next train moves it above that version.
    the run fails before publishing, fix it with a PR into the train branch
    (see [Recovery](#recovery)) and carry the same commit to the backmerge.
 
+### The cli train
+
+The steps above, with these differences:
+
+- The version plan names only the four `agentstack` packages, and the branch
+  is `release-train-cli-<@qvac/cli version>`. Step 5's `sdk-python` and
+  `sdk-kotlin` updates do not apply.
+- pnpm links a workspace package whenever its version satisfies the range, so
+  `@qvac/sdk` has to leave the workspace for the train to build against the
+  version on npm. After the version pass and the changelogs, add a separate
+  commit to the release PR:
+
+  ```bash
+  node .github/scripts/release-train.mjs exclude cli
+  pnpm install --lockfile-only
+  git add pnpm-workspace.yaml pnpm-lock.yaml
+  ```
+
+  The train checks fail on a branch that still has a `fromNpm` package in the
+  workspace.
+- The backmerge keeps `main`'s `pnpm-workspace.yaml` and regenerates
+  `pnpm-lock.yaml` from it. Its package checks install the train from npm,
+  so they pass once the push run has published.
+- `@qvac/cli`'s `@qvac/sdk` range must accept a version npm has.
+
 ## Checks
 
 On the release PR (`pr-release-guard.yml` and `release-train.yml`) and on every
@@ -104,6 +139,8 @@ push (`release-train.yml`):
 - every range between train packages accepts the new version of its target
 - each moved package has notes under `## [<version>]` in its `CHANGELOG.md`
 - no `.nx/version-plans/` file is committed
+- every `fromNpm` directory is left out of `pnpm-workspace.yaml`, and is not a
+  train package
 - on the PR: npm does not have any moved version yet
 - on push: a version npm already has was published from this commit (its
   `gitHead`); otherwise the branch has released and the run stops
@@ -115,7 +152,8 @@ Before npm publish:
   SDK's consumer installs), with every train package installed from a tarball
   of this commit and everything else from npm. The backmerge PR, from
   `backmerge/release-train-<train>-<x.y.z>` into `main`, runs the same through
-  `pr-checks-sdk-pod.yml`.
+  `pr-checks-sdk-pod.yml`, except for a train with `fromNpm` packages, whose
+  backmerge installs every package from npm.
 - **`shared-runtime-libs`**: `check-shared-runtime-libs.mjs` for inference and
   sdk, as `publish-inference.yml` and `publish-sdk.yml` run it.
 - **`sdk-python`**: the Python contract check, build, version lockstep and
@@ -144,7 +182,7 @@ which requires the build and every check the train lists.
 - Every version is published as `latest`. A version below npm's `latest` stops
   the run; an older line is released through its per-package workflow.
 - `gitHead` in each published manifest is the commit it was built from. Each
-  tag goes on that commit.
+  tag goes on that commit, the GitHub release's tag included.
 - npm's sha of each published tarball must match the tarball the build job
   packed.
 - A version npm already has is skipped.
@@ -176,3 +214,9 @@ environment means only a job that passed that environment's approval gets a
 token npm or PyPI accepts. Keep the per-package workflows registered too: npm
 allows up to 10 trusted publishers per package, and a hotfix still publishes
 through them.
+
+The `release` ruleset matches `release-train-*` but requires only `Check
+Approvals`. A ruleset on `refs/heads/release-train-*` that requires `Train
+checks passed` keeps a release PR with a failed dry run from merging. It
+cannot go into the `release` ruleset: per-package release PRs never report
+that check.

@@ -30,8 +30,12 @@ tarballs, because npm does not have the new versions until the train publishes.
 The source carries several manifests, changelogs and `pnpm-lock.yaml`; that is
 release metadata for Step 2's sanity check. Never carry a `.nx/version-plans/`
 file to `main`: if the cherry-pick brings one, `git rm` it before committing, or
-the next train applies it again. `docs/ci/RELEASE-TRAIN.md` step 8 says when to
-merge it.
+the next train applies it again. A train with `fromNpm` packages (the `cli`
+train) also changes `pnpm-workspace.yaml` on its release branch: keep `main`'s
+copy (`git checkout ORG_REMOTE/main -- pnpm-workspace.yaml`) and regenerate
+`pnpm-lock.yaml` as Step 5 describes. Its backmerge checks install the train
+from npm, so they pass only after the push run publishes.
+`docs/ci/RELEASE-TRAIN.md` step 8 says when to merge it.
 
 ## Inputs (resolve in priority order)
 
