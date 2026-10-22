@@ -521,6 +521,11 @@ async function runOcrUnlimitedTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/ocr-unlimited.test.js', options)
 }
 
+async function runPrimeSystemToolsTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runPrimeSystemToolsTest')) return __FILTERED
+  return runIntegrationModule('../integration/prime-system-tools.test.js', options)
+}
+
 async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQuantizedKvcacheTest')) return __FILTERED
   return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
