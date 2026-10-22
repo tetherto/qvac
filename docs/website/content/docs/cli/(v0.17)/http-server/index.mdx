@@ -399,7 +399,7 @@ section. Send the request as JSON or `multipart/form-data`.
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `model` | `string` | Yes | A `serve.models` alias with endpoint category `ocr` |
-| `image` | file, data URL, id | Yes | A PNG, JPEG or BMP: a multipart file part, a base64 data URL (`data:<type>;base64,...`), or the `id` of a file uploaded with `POST /v1/files` |
+| `image` | file, data URL, id | Yes | A PNG, JPEG or BMP, in any [binary input](#binary-inputs) form |
 | `paragraph` | `boolean` | No | Merge nearby lines into paragraph blocks. Default `false` |
 | `stream` | `boolean` | No | Stream Server-Sent Events |
 
@@ -432,15 +432,14 @@ curl -sS http://localhost:11434/qvac/v1/ocr \
   -F image=@receipt.png
 ```
 
+The [binary input](#binary-inputs) errors apply to `image`, plus:
+
 | HTTP | `error.code` | When |
 | --- | --- | --- |
 | 400 | `invalid_json` | Body is not valid JSON |
 | 400 | `invalid_multipart` | Multipart body could not be parsed |
 | 400 | `missing_model` | `model` is missing |
 | 400 | `missing_image` | `image` is missing or empty |
-| 400 | `empty_input` | `image` has no bytes |
-| 400 | `invalid_data_url` | `image` is a data URL that is not base64 |
-| 400 | `file_not_found` | `image` is neither a data URL nor an uploaded file's id |
 | 400 | `unsupported_image_format` | `image` is not a PNG, JPEG or BMP |
 | 400 | `invalid_request` | Unknown field, or a flag that is not boolean |
 | 400 | `invalid_model_type` | Alias is not an `ocr` model |
