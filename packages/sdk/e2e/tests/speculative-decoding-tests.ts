@@ -42,6 +42,7 @@ export const speculativeDecodingMtp: TestDefinition = {
   testId: 'speculative-decoding-mtp',
   params: { modelUrl: MTP_MODEL_URL, prompt: PLANETS_PROMPT },
   expectation: { validation: 'contains-all', contains: ['Mercury', 'Venus', 'Earth'] },
+  suites: ['smoke'],
   steps: [
     ...completesWith({ ctx_size: 2048, spec_type: 'draft-mtp' }),
     { project: { from: '$stats', path: 'draftTokens', as: 'draftTokens' } },
