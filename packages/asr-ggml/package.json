@@ -1,6 +1,6 @@
 {
   "name": "@qvac/asr-ggml",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet + MOSS-Transcribe-Diarize) inference addon for qvac on the Bare runtime",
   "qvac": {
     "ggml-speech": "2026-10-07#1"
@@ -120,6 +120,7 @@
     "example:moss-transcribe": "bare examples/moss-transcribe.js",
     "example:moss-transcribe:fit": "bare examples/moss-transcribe-fit.js",
     "example:parakeet:unified": "bare examples/parakeet-unified-transcribe.js",
+    "example:parakeet:transcribepsy": "bare examples/parakeet-transcribepsy-transcribe.js",
     "example:parakeet:nemotron": "bare examples/parakeet-nemotron-transcribe.js",
     "example:parakeet:indic-conformer": "bare examples/parakeet-indic-conformer-transcribe.js",
     "example:parakeet:diarize": "bare examples/parakeet-diarized-transcribe.js",

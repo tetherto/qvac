@@ -99,6 +99,43 @@ flag override):
 }
 ```
 
+## Endpoint categories
+
+Each alias gets an endpoint category from its model type, and a route only accepts aliases of
+its own category (`400 invalid_model_type` otherwise). `GET /v1/models/catalog` reports it as
+`role`.
+
+| Model type                                                                                     | Category            |
+| ---------------------------------------------------------------------------------------------- | ------------------- |
+| `llamacpp-completion`, `llm`                                                                   | `chat`              |
+| `llamacpp-embedding`, `embeddings`                                                             | `embedding`         |
+| `llamacpp-decision`                                                                            | `decision`          |
+| `whispercpp-transcription`, `parakeet-transcription`, `moss-transcribe`, `whisper`, `parakeet` | `transcription`     |
+| `whispercpp-audio-translation`                                                                 | `audio-translation` |
+| `bci-whispercpp-transcription`, `bci`                                                          | `bci`               |
+| `nmtcpp-translation`, `nmt`                                                                    | `translation`       |
+| `tts-ggml`, `onnx-tts`, `tts`                                                                  | `speech`            |
+| `ggml-ocr`, `ocr`                                                                              | `ocr`               |
+| `ggml-classification`, `classification`                                                        | `classification`    |
+| `audiogen-ggml`, `audiogen`                                                                    | `audiogen`          |
+| `ggml-vla`, `vla`                                                                              | `vla`               |
+| `sdcpp-generation`, `diffusion`                                                                | by `config.mode`    |
+| `sdcpp-video`                                                                                  | `video`             |
+
+An `sdcpp-generation` model serves one operation, chosen by `config.mode`: `diffusion` (the
+default) is `image`, and `video`, `upscale` and `world` are categories of the same name. Any other
+`mode` fails at startup.
+
+```json
+{
+  "serve": {
+    "models": {
+      "upscaler": { "model": "REALESRGAN_X4PLUS", "config": { "mode": "upscale" } }
+    }
+  }
+}
+```
+
 ## Model source constants in config
 
 `serve.models[*].config` fields ending in `ModelSrc` accept SDK model constant

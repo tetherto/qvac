@@ -25,6 +25,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const process = require('process')
 
 const ADDON_DIR = path.resolve(__dirname, '..')
 const PREBUILDS_DIR = path.join(ADDON_DIR, 'prebuilds')
@@ -170,6 +171,22 @@ function main() {
   fanOutPrebuilds('ios-arm64', IOS_FLAVOURS)
   copyWeightsToTestAssets()
   copyTestImagesToTestAssets()
+  const fixtures = path.join(ADDON_DIR, 'test', 'fixtures')
+  for (const quant of ['f16', 'mixed']) {
+    const variable = `QVAC_MEGALOC_${quant.toUpperCase()}_MODEL_PATH`
+    const source = process.env[variable] || path.join(fixtures, `megaloc-${quant}.gguf`)
+    if (!fs.existsSync(source)) {
+      throw new Error(
+        `Convert the MegaLoc test models first (docs/megaloc.md), or set ${variable}: ${source}`
+      )
+    }
+    fs.copyFileSync(source, path.join(TEST_ASSETS_DIR, `megaloc-${quant}.gguf.bin`))
+  }
+  for (const filename of fs.readdirSync(fixtures)) {
+    if (filename.endsWith('.bin') || filename.endsWith('.png')) {
+      fs.copyFileSync(path.join(fixtures, filename), path.join(TEST_ASSETS_DIR, filename))
+    }
+  }
   console.log('[mobile:copy-prebuilds] Done.')
 }
 

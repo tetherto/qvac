@@ -121,6 +121,27 @@ test('transformLlmConfig: placement and fit keys keep their kebab spelling', (t)
   t.is(result['fit-ctx'], '8192')
 })
 
+test('transformLlmConfig: cache_checkpoints is forwarded as a string', (t) => {
+  t.is(transformLlmConfig(makeConfig({ cache_checkpoints: 0 }))['cache_checkpoints'], '0')
+  t.is(transformLlmConfig(makeConfig({ cache_checkpoints: 2 }))['cache_checkpoints'], '2')
+})
+
+test('transformLlmConfig: the other prompt-cache keys keep their underscore spelling', (t) => {
+  const result = transformLlmConfig(
+    makeConfig({
+      cache_checkpoints_max_bytes: 8589934592,
+      cache_checkpoint_storage: 'disk',
+      cache_checkpoint_dir: '/data/cache',
+      cache_ram_mib: 0
+    })
+  )
+  t.is(result['cache_checkpoints_max_bytes'], '8589934592')
+  t.is(result['cache_checkpoint_storage'], 'disk')
+  t.is(result['cache_checkpoint_dir'], '/data/cache')
+  t.is(result['cache_ram_mib'], '0')
+  t.absent('cache-ram-mib' in result)
+})
+
 test('transformLlmConfig: image-max-megapixels is forwarded as a kebab string', (t) => {
   const result = transformLlmConfig(makeConfig({ 'image-max-megapixels': 20 }))
   t.is(result['image-max-megapixels'], '20')
