@@ -414,7 +414,7 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
   },
   '1270162611a0c7074cc2a376380ddaca825702c62bebf2433baf42269de246fe': {
     schemaVersion: 1,
-    engine: 'llamacpp-decision',
+    engine: 'llamacpp-embedding',
     artifactBytes: 449919008,
     ggufFacts: {
       architecture: 'laya',
@@ -1098,7 +1098,7 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
   },
   '33dac85dcf22281d56e3a4fcb78def3c8fa59131c208af45a2e5c57cbe268de4': {
     schemaVersion: 1,
-    engine: 'llamacpp-decision',
+    engine: 'llamacpp-embedding',
     artifactBytes: 844548128,
     ggufFacts: {
       architecture: 'laya',
@@ -1962,7 +1962,7 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
   },
   '59a61f840e6f125c25037f7cc0363efafee1aeea3394b504d25551b4bda5a219': {
     schemaVersion: 1,
-    engine: 'llamacpp-decision',
+    engine: 'llamacpp-embedding',
     artifactBytes: 348425664,
     ggufFacts: {
       architecture: 'laya',
@@ -1988,7 +1988,7 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
   },
   '5a44e3f8060290ab40b390a83242961aeab7af62913853530a4342bc5ec9ebe8': {
     schemaVersion: 1,
-    engine: 'llamacpp-decision',
+    engine: 'llamacpp-embedding',
     artifactBytes: 844548256,
     ggufFacts: {
       architecture: 'laya',
@@ -2540,7 +2540,7 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
   },
   '72d5e753a4861f5532e0e3e065b9644ff6f6894efef82fa74af0898fa93ba899': {
     schemaVersion: 1,
-    engine: 'llamacpp-decision',
+    engine: 'llamacpp-embedding',
     artifactBytes: 449919104,
     ggufFacts: {
       architecture: 'laya',
@@ -5185,7 +5185,7 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
   },
   e658ac8a717089528a1f402caa6b91aec8a4059b76c9c35114a70ba32b2fb469: {
     schemaVersion: 1,
-    engine: 'llamacpp-decision',
+    engine: 'llamacpp-embedding',
     artifactBytes: 649973184,
     ggufFacts: {
       architecture: 'laya',
