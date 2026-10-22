@@ -9694,7 +9694,7 @@
     "link": "https://huggingface.co/convaiinnovations/laya-typed-decisions"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/analytics/coremldata.bin",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/analytics/coremldata.bin",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: analytics/coremldata.bin",
     "quantization": "",
@@ -9705,7 +9705,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/coremldata.bin",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/coremldata.bin",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: coremldata.bin",
     "quantization": "",
@@ -9716,7 +9716,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/metadata.json",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/metadata.json",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: metadata.json",
     "quantization": "",
@@ -9727,7 +9727,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/model.mil",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/model.mil",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: model.mil",
     "quantization": "",
@@ -9738,7 +9738,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/weights/weight.bin",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/weights/weight.bin",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: weights/weight.bin",
     "quantization": "",
@@ -9749,7 +9749,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/analytics/coremldata.bin",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/analytics/coremldata.bin",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: analytics/coremldata.bin",
     "quantization": "",
@@ -9760,7 +9760,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/coremldata.bin",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/coremldata.bin",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: coremldata.bin",
     "quantization": "",
@@ -9771,7 +9771,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/metadata.json",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/metadata.json",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: metadata.json",
     "quantization": "",
@@ -9782,7 +9782,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/model.mil",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/model.mil",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: model.mil",
     "quantization": "",
@@ -9793,7 +9793,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/weights/weight.bin",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/weights/weight.bin",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: weights/weight.bin",
     "quantization": "",
@@ -9804,7 +9804,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub-coreml.gguf",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub Core ML companion GGUF",
     "quantization": "q8_0",
@@ -9815,7 +9815,7 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-10-22/transcribepsy-250m-eu-sub.gguf",
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
     "engine": "@qvac/asr-ggml",
     "description": "TranscribePsy 250M EU-sub GGUF",
     "quantization": "q8_0",
