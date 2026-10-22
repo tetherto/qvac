@@ -1873,6 +1873,202 @@ TEST(CacheHistoryCheckpointTest, HybridThinkingChatReusesTheHistory) {
   fs::remove(cacheFile);
 }
 
+namespace {
+
+std::unique_ptr<LlamaModel> loadHybridToolsModel(
+    const test_common::TestModelPath& modelPath, const char* parallel) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["n_predict"] = "16";
+  config["temp"] = "0";
+  config["seed"] = "11";
+  config["tools"] = "true";
+  config["parallel"] = parallel;
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+/// The system prompt, and the tools when @p withTools is set, every request
+/// below shares, followed by a user question when @p withQuestion is set.
+std::string systemAndToolsInput(bool withQuestion, bool withTools = true) {
+  std::string input =
+      R"([{"role": "system", "content": "You are a weather assistant."})";
+  if (withTools) {
+    input += R"(, {"type": "function", "name": "getWeather",)"
+             R"(  "description": "Get the weather forecast for a city",)"
+             R"(  "parameters": {"type": "object",)"
+             R"(   "properties": {"city": {"type": "string"}},)"
+             R"(   "required": ["city"]}})";
+  }
+  if (withQuestion) {
+    input +=
+        R"(, {"role": "user", "content": "What is the weather in Paris?"})";
+  }
+  return input + "]";
+}
+
+struct KeyedRun {
+  double promptTokens = 0;
+  double cacheTokens = 0;
+  double toolDefinitionsDropped = 0;
+};
+
+KeyedRun runKeyed(
+    LlamaModel& model, const std::string& input, const fs::path& cacheFile,
+    bool prefill) {
+  LlamaModel::Prompt prompt;
+  prompt.input = input;
+  prompt.cacheKey = cacheFile.string();
+  prompt.prefill = prefill;
+  model.processPrompt(prompt);
+  const auto stats = model.runtimeStats();
+  return KeyedRun{
+      .promptTokens = getStatValue(stats, "promptTokens"),
+      .cacheTokens = getStatValue(stats, "CacheTokens"),
+      .toolDefinitionsDropped = getStatValue(stats, "toolDefinitionsDropped")};
+}
+
+/// Primes @p primedFile with the system prompt, and the tools when
+/// @p withTools is set, then asks a question on it, and checks that the
+/// question decodes only what follows the primed tokens: the full prompt,
+/// measured cold on @p coldFile, minus them. Qwen3.5's template renders
+/// nothing without a user turn, and the hybrid model cannot trim, so a prefix
+/// that diverged would decode it all.
+void expectPrimedSystemAndToolsAreReused(
+    LlamaModel& model, const fs::path& coldFile, const fs::path& primedFile,
+    bool withTools = true) {
+  const KeyedRun cold =
+      runKeyed(model, systemAndToolsInput(true, withTools), coldFile, false);
+  ASSERT_GT(cold.promptTokens, 0);
+
+  const KeyedRun primed =
+      runKeyed(model, systemAndToolsInput(false, withTools), primedFile, true);
+  EXPECT_EQ(primed.toolDefinitionsDropped, 0)
+      << "the prefill left the tool definitions out";
+  ASSERT_GT(primed.cacheTokens, 0);
+  ASSERT_LT(primed.cacheTokens, cold.promptTokens);
+
+  const KeyedRun question =
+      runKeyed(model, systemAndToolsInput(true, withTools), primedFile, false);
+  EXPECT_EQ(question.promptTokens, cold.promptTokens - primed.cacheTokens)
+      << "the question did not continue from the primed system prompt and "
+         "tools";
+}
+
+} // namespace
+
+TEST(PrimeSystemAndToolsTest, PrefillIsReusedByTheFirstQuestion) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridToolsModel(modelPath, "1");
+  ASSERT_TRUE(model->isLoaded());
+  ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr);
+
+  const fs::path coldFile = "prime_tools_cold_cache.bin";
+  const fs::path primedFile = "prime_tools_primed_cache.bin";
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+
+  expectPrimedSystemAndToolsAreReused(*model, coldFile, primedFile);
+
+  model.reset();
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+}
+
+TEST(
+    PrimeSystemAndToolsTest,
+    SystemPromptAlonePrefillIsReusedByTheFirstQuestion) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridToolsModel(modelPath, "1");
+  ASSERT_TRUE(model->isLoaded());
+
+  const fs::path coldFile = "prime_system_cold_cache.bin";
+  const fs::path primedFile = "prime_system_primed_cache.bin";
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+
+  expectPrimedSystemAndToolsAreReused(
+      *model, coldFile, primedFile, /* withTools = */ false);
+
+  model.reset();
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+}
+
+TEST(PrimeSystemAndToolsTest, SavedPrefillIsReusedAfterAReload) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path coldFile = "prime_tools_reload_cold_cache.bin";
+  const fs::path primedFile = "prime_tools_reload_primed_cache.bin";
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+
+  double primedTokens = 0;
+  {
+    auto model = loadHybridToolsModel(modelPath, "1");
+    ASSERT_TRUE(model->isLoaded());
+    primedTokens =
+        runKeyed(*model, systemAndToolsInput(false), primedFile, true)
+            .cacheTokens;
+    ASSERT_GT(primedTokens, 0);
+    model->saveCache(primedFile.string());
+  }
+  ASSERT_TRUE(fs::exists(primedFile));
+
+  auto model = loadHybridToolsModel(modelPath, "1");
+  ASSERT_TRUE(model->isLoaded());
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+  const KeyedRun question =
+      runKeyed(*model, systemAndToolsInput(true), primedFile, false);
+  EXPECT_EQ(text->lastCacheReuseForTesting(), static_cast<size_t>(primedTokens))
+      << "the question did not continue from the saved system prompt and "
+         "tools";
+  const KeyedRun cold =
+      runKeyed(*model, systemAndToolsInput(true), coldFile, false);
+  EXPECT_EQ(question.promptTokens, cold.promptTokens - primedTokens);
+
+  model.reset();
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+}
+
+TEST(PrimeSystemAndToolsTest, PrefillIsReusedOnAParallelModel) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridToolsModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr);
+
+  const fs::path coldFile = "prime_tools_parallel_cold_cache.bin";
+  const fs::path primedFile = "prime_tools_parallel_primed_cache.bin";
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+
+  expectPrimedSystemAndToolsAreReused(*model, coldFile, primedFile);
+
+  model.reset();
+  fs::remove(coldFile);
+  fs::remove(primedFile);
+}
+
 // A cache file is promoted only when it holds every byte the save reported:
 // a failed final flush leaves it short.
 TEST(CacheManagerFiles, SavedCompletelyChecksTheSizeOnDisk) {

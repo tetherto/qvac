@@ -125,10 +125,10 @@ export async function handleLoadModel(
 
     // Phase boundary between download and load. The bare load path
     // (`plugin.createModel(...)` / `model.load(false)`) does not accept
-    // an abort signal today, so the only honest cancel hook here is the
-    // pre-load gate: if cancel arrived during download / resolveConfig,
-    // surface `InferenceCancelledError` before sinking time into the
-    // addon work.
+    // an abort signal, so cancel is honored at gates: here, if cancel
+    // arrived during download / resolveConfig, and inside `loadModel`
+    // after its fit check. Both surface `InferenceCancelledError`
+    // before sinking time into the addon work.
     if (ctx.signal.aborted) {
       throw new InferenceCancelledError(requestId)
     }
@@ -170,7 +170,10 @@ export async function handleLoadModel(
         artifacts: Object.keys(pluginArtifacts).length > 0 ? pluginArtifacts : undefined,
         modelName
       },
-      profilingEnabled ? { collectTiming: true } : undefined
+      {
+        ...(profilingEnabled && { collectTiming: true }),
+        request: { signal: ctx.signal, requestId }
+      }
     )
 
     // Load phase soft-cancel limitation: `plugin.createModel(...)` and

@@ -155,15 +155,23 @@ jobs:
           # train PR checks all of them with each train package installed from
           # a tarball of this commit (the `train` source). Its backmerge into
           # the default branch carries the same versions, so it does the same.
+          # A train with fromNpm packages builds only with those packages out
+          # of the workspace, which the default branch keeps, so its backmerge
+          # checks the published train instead and passes once npm has it.
           TRAIN="${TRAIN_INPUT:-}"
+          BACKMERGE=false
           if [ -z "$TRAIN" ] && [[ "${BASE_REF:-}" =~ ^release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             TRAIN="${BASH_REMATCH[1]}"
           elif [ -z "$TRAIN" ] && [ "${BASE_REF:-}" = "$DEFAULT_BRANCH" ] && [ "${HEAD_REPO:-}" = "$REPOSITORY" ] \
             && [[ "${HEAD_REF:-}" =~ ^backmerge/release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             TRAIN="${BASH_REMATCH[1]}"
+            BACKMERGE=true
           fi
           SOURCE=""
           if [ -n "$TRAIN" ]; then SOURCE="${SOURCE_INPUT:-train}"; fi
+          if [ "$BACKMERGE" = "true" ] && [ "$(node .github/scripts/release-train.mjs from-npm "$TRAIN")" != "[]" ]; then
+            SOURCE=published
+          fi
           echo "train=${TRAIN}" >> "$GITHUB_OUTPUT"
           echo "source=${SOURCE}" >> "$GITHUB_OUTPUT"
 

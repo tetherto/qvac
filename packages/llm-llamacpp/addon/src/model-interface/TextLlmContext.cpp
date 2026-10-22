@@ -345,7 +345,18 @@ void TextLlmContext::tokenizeChat(
   // struct by const value turned it into a copy of the whole formatted chat
   // history, reallocated every turn. Everything read from `rendered`
   // afterwards is a different field.
-  PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
+  const Tokenizer tokenize = [this](const std::string& text) {
+    return ::common_tokenize(modelCtx_.lctx, text, false, true);
+  };
+  // A prefill of a system prompt alone, with or without tools, on a template
+  // that renders it, or its tools, only once a user turn exists, caches what
+  // precedes that turn.
+  std::optional<PromptRenderResult> primed =
+      isPrefillOnlyRequest_
+          ? renderWithoutUserTurn(tmpls_.get(), inputs, tokenize)
+          : std::nullopt;
+  PromptRenderResult rendered =
+      primed.has_value() ? std::move(*primed) : getPrompt(tmpls_.get(), inputs);
   prompt = std::move(rendered.prompt);
   if (rendered.toolDefinitionsDropped) {
     ++toolDefinitionsDropped_;
@@ -365,9 +376,6 @@ void TextLlmContext::tokenizeChat(
       rendered.thinkingStartTag,
       rendered.thinkingEndTag,
       fallbackReasoningTags);
-  const Tokenizer tokenize = [this](const std::string& text) {
-    return ::common_tokenize(modelCtx_.lctx, text, false, true);
-  };
   // Template stop strings are per request: replace, never accumulate. No
   // template any qvac package ships populates `additional_stops`, so these
   // lists are empty for those models. It is not empty by construction —

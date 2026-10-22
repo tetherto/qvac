@@ -382,17 +382,17 @@ function makeCtxStub(
   const removed = opts.removed ?? []
   const files = opts.files ?? {}
   const openai = {
-    ephemeralFiles: {
-      remove: (id: string) => {
-        removed.push(id)
-      },
-      get: (id: string) => files[id]
-    },
     ...(opts.cancelOverride ? { cancelOverride: opts.cancelOverride } : {})
   } as unknown as OpenAIState
 
   return {
     logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+    files: {
+      remove: (id: string) => {
+        removed.push(id)
+      },
+      get: (id: string) => files[id]
+    },
     extensions: { openai }
   } as unknown as QvacContext
 }
