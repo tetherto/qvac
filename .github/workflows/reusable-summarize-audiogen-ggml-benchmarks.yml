@@ -28,7 +28,7 @@ jobs:
       # is not a no-op — checkout fails with "Input required and not supplied" —
       # so keep it set explicitly.
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -38,7 +38,7 @@ jobs:
       # rtf-benchmark-*.json files, so per-artifact subdirectories preserve all
       # rows for the recursive aggregator.
       - name: Download desktop benchmark artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         continue-on-error: true
         with:
           pattern: rtf-results-audiogen-ggml-*
@@ -47,7 +47,7 @@ jobs:
       # Every Device Farm row uploads a performance-report.json, so keep each
       # artifact isolated and let the aggregator recurse.
       - name: Download mobile benchmark artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         continue-on-error: true
         with:
           pattern: perf-report-audiogen-ggml-*
@@ -86,7 +86,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload consolidated benchmark report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: audiogen-ggml-performance-findings
           path: |
