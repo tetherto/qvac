@@ -178,11 +178,9 @@ jobs:
           # Validate the ship contract on the committed registry pin first — a
           # pure package.json check with no install — so the Kotlin runtime
           # version, the @qvac/sdk pin, and packages/sdk/package.json are
-          # confirmed to share one version before the pin is swapped. These
-          # are the scripts behind the checkVersionAlignment Gradle task, run
-          # without starting a separate Gradle JVM. Keep this list in sync with
-          # checkVersionAlignment's dependencies in build.gradle.kts.
-          node scripts/verify-runtime-profiles.mjs
+          # confirmed to share one version before the pin is swapped. This is
+          # the script the checkVersionAlignment Gradle task runs, called
+          # directly so no separate Gradle JVM starts.
           node scripts/check-version-alignment.mjs
 
           # @qvac/inference is transitive here (via @qvac/sdk), so an override is

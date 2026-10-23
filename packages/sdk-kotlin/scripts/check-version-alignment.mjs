@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import './verify-runtime-profiles.mjs'
 
 const kotlinRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const runtimePackage = JSON.parse(await fs.readFile(path.join(kotlinRoot, 'package.json'), 'utf8'))

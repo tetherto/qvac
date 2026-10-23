@@ -148,27 +148,22 @@ allprojects {
     }
 }
 
-val verifyAndroidRuntimeProfiles = tasks.register<Exec>("verifyAndroidRuntimeProfiles") {
-    commandLine("node", "$projectDir/scripts/verify-runtime-profiles.mjs")
-    inputs.file(projectDir.parentFile.resolve("sdk/package.json"))
-    inputs.files(projectDir.listFiles { file ->
-        file.name.startsWith("qvac.config") && file.extension == "json"
-    }?.toList().orEmpty())
-    inputs.file(projectDir.resolve("scripts/verify-runtime-profiles.mjs"))
-}
-
+// The script also runs verify-runtime-profiles.mjs, so PR checks get both
+// gates from one node call without starting Gradle.
 val checkVersionAlignment = tasks.register<Exec>("checkVersionAlignment") {
-    dependsOn(verifyAndroidRuntimeProfiles)
     commandLine("node", "$projectDir/scripts/check-version-alignment.mjs")
     inputs.file(projectDir.resolve("package.json"))
     inputs.file(sdkPackageJson)
+    inputs.files(projectDir.listFiles { file ->
+        file.name.startsWith("qvac.config") && file.extension == "json"
+    }?.toList().orEmpty())
     inputs.file(projectDir.resolve("scripts/check-version-alignment.mjs"))
+    inputs.file(projectDir.resolve("scripts/verify-runtime-profiles.mjs"))
 }
 
 tasks.named("check") {
     dependsOn(checkContract)
     dependsOn(checkVersionAlignment)
-    dependsOn(verifyAndroidRuntimeProfiles)
 }
 
 publishing {
