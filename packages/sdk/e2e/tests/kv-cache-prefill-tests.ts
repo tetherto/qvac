@@ -27,7 +27,6 @@ function reuseCase(
     kvCache,
     reload,
     dependency,
-    zero: 0,
     stream: withTools
   }
   const run = (as: string, prime: boolean, cache: string | boolean): Step => ({
@@ -61,11 +60,11 @@ function reuseCase(
     { project: { from: '$prime', path: 'toolCalls', as: 'calls' } },
     { assert: { on: '$calls', named: 'lengthIs', with: { length: 0 } } },
     { project: { from: '$prime', path: 'stats.generatedTokens', as: 'generated' } },
-    { compare: { left: '$generated', right: '$params.zero', named: 'equalStrings' } },
+    { assert: { on: '$generated', named: 'valueIn', with: { values: [0] } } },
     ...(withTools
       ? ([
           { project: { from: '$prime', path: 'stats.toolDefinitionsDropped', as: 'dropped' } },
-          { compare: { left: '$dropped', right: '$params.zero', named: 'equalStrings' } }
+          { assert: { on: '$dropped', named: 'valueIn', with: { values: [0] } } }
         ] as Step[])
       : []),
     ...(reload
