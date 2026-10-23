@@ -41,3 +41,29 @@ speaker-activity VAD events retain `speakerId`. `diarizationThreshold` and
 `diarizationMinSegmentMs` are load-time controls and per-call streaming controls.
 Omitted controls preserve native model defaults. Registry constants and model-output
 validation are pending registry weights.
+
+Parler TTS exposes `coremlDecoder`, `coremlComputeUnits` and `coremlStrict` in
+its model configuration. These are per-model settings; omitted compute units
+and strictness inherit the native environment/defaults. `coremlDecoder: true`
+opts into decoder steps on macOS 15 / iOS 18, while T5 and prompt prefill stay
+on ggml. `coremlComputeUnits: 'cpu_and_ane'` permits CPU and ANE execution and
+does not guarantee that every operation runs on the ANE. The DAC sidecar is
+automatically discovered beside the GGUF. Missing or failing sidecars fall
+back to ggml unless strict mode is enabled. Strict mode requires a usable DAC
+sidecar and, with `coremlDecoder: true`, a decoder sidecar too. It fails without
+Core ML build support or when `PARLER_COREML_DISABLE` is set. The per-call
+`decoderOnCoreml` and `dacOnCoreml` stats distinguish completed Core ML execution from sidecar
+availability (`decoderSidecarLoaded` / `dacSidecarLoaded`). A mixed call
+reports zero for complete Core ML execution. Sentence streams report Core ML
+use only if every reported sentence used it; availability is the last report.
+
+Stage exported bundles beside a local GGUF using the native engine's naming
+convention (`parler-mini-v1-decoder.mlmodelc` and
+`parler-mini-v1-dac.mlmodelc` beside `parler-mini-v1-q8_0.gguf`). Parler bundles
+are not currently distributed by the model registry. Neither `useGPU` nor
+installing the decoder bundle alone enables decoder steps. `assessModelFit`
+returns an unknown fit with `coreml-memory-estimate-unavailable` when Core ML
+memory cannot be projected; it does not reject an otherwise valid load.
+
+See the [public SDK example](../../sdk/examples/tts/parler-coreml.ts) for local
+bundle loading, synthesis, execution stats and cleanup.

@@ -8,7 +8,7 @@ import type {
 } from "./engines/cosyvoice";
 import type { MossSoundEffectFields } from "./engines/mossSoundEffect";
 import type { MossSpeechFields } from "./engines/mossSpeech";
-import type { ParlerDescriptionFields } from "./engines/parler";
+import type { ParlerCoremlFields, ParlerDescriptionFields } from "./engines/parler";
 import type { TTSGgmlFiles } from "./modelFiles";
 import type { SentenceDelimiterPreset } from "./textStreamAccumulator";
 
@@ -19,6 +19,7 @@ export type {
   MossSoundEffectFields,
   MossSpeechFields,
   ParlerDescriptionFields,
+  ParlerCoremlFields,
   TTSConditioningFields,
   TTSGgmlFiles,
   TTSGgmlRuntimeConfig,
@@ -54,6 +55,7 @@ export interface LavaSRDenoiserOptions {
 
 export interface TTSGgmlOptions
   extends ParlerDescriptionFields,
+    ParlerCoremlFields,
     Audio8VoiceFields,
     TTSConditioningFields {
   /** Pocket: generation/context controls; native sampling uses a portable RNG. */
@@ -394,6 +396,18 @@ export interface RuntimeStats {
    * Streams report the last chunk that supplied this field, not a sum.
    */
   codecOnCoreml?: number;
+  /** Parler only: 1 while the decoder sidecar is attached; 0 after fallback retires it. */
+  decoderSidecarLoaded?: number;
+  /** Parler only: 1 while the DAC sidecar is attached; 0 after fallback retires it. */
+  dacSidecarLoaded?: number;
+  /** Parler only: 1 when this synthesis used the Core ML decoder; 0 for ggml or mixed fallback. */
+  decoderOnCoreml?: number;
+  /** Parler only: 1 when this synthesis used the Core ML DAC; 0 for ggml or mixed fallback.
+   * Sentence streams retain the latest availability flags and require all reported sentences to use Core ML for a use flag of 1.
+   * These flags do not identify the hardware Core ML scheduled work on.
+   */
+  dacOnCoreml?: number;
+
   /** Chatterbox only: T3 decode wall time of the last synthesis, in ms. */
   t3Ms?: number;
   /** Chatterbox only: S3Gen + HiFT wall time of the last synthesis, in ms. */

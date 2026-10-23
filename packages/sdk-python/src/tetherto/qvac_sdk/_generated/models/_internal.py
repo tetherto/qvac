@@ -15278,6 +15278,13 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     tts_voice_style_src: Annotated[Any | None, Field(alias="ttsVoiceStyleSrc")] = None
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigParlerCoremlComputeUnits(Enum):
+    all = "all"
+    cpu_and_ane = "cpu_and_ane"
+    cpu_and_gpu = "cpu_and_gpu"
+    cpu_only = "cpu_only"
+
+
 class LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion(Enum):
     command = "command"
     anger = "anger"
@@ -15537,6 +15544,28 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
     tts_engine: Annotated[
         Literal["parler"], Field(alias="ttsEngine", description="TTS engine: Parler.")
     ] = "parler"
+    coreml_decoder: Annotated[
+        bool | None,
+        Field(
+            alias="coremlDecoder",
+            description="Opt in to Parler Core ML decoder steps on macOS 15 / iOS 18; T5 and prefill remain on ggml. Requires a compatible decoder sidecar.",
+        ),
+    ] = None
+    coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigParlerCoremlComputeUnits | None,
+        Field(
+            alias="coremlComputeUnits",
+            description="Compute policy for both Parler Core ML stages. Unset inherits the environment/default. CPU+ANE permits CPU operations; it does not guarantee ANE-only execution.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigParlerCoremlComputeUnits",
+        ),
+    ] = None
+    coreml_strict: Annotated[
+        bool | None,
+        Field(
+            alias="coremlStrict",
+            description="Require a usable Parler DAC sidecar and, when coremlDecoder is true, a usable decoder sidecar; fail instead of falling back. Also fails without Core ML support or when disabled globally. Unset inherits the environment.",
+        ),
+    ] = None
     description: Annotated[
         str | None,
         Field(
@@ -23100,6 +23129,34 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    decoder_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="decoderSidecarLoaded",
+            description="Parler: 1 while its Core ML decoder sidecar remains attached; 0 if absent or retired.",
+        ),
+    ] = None
+    dac_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="dacSidecarLoaded",
+            description="Parler: 1 while its Core ML DAC sidecar remains attached; 0 if absent or retired.",
+        ),
+    ] = None
+    decoder_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="decoderOnCoreml",
+            description="Parler: 1 when this call ran decoder steps on Core ML; 0 for ggml, mixed execution or no native steps. Prefill always remains on ggml.",
+        ),
+    ] = None
+    dac_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="dacOnCoreml",
+            description="Parler: 1 when this call ran DAC decoding on Core ML; 0 for ggml or mixed execution.",
+        ),
+    ] = None
     audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
     total_time: Annotated[float | None, Field(alias="totalTime")] = None
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
@@ -23298,6 +23355,34 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    decoder_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="decoderSidecarLoaded",
+            description="Parler: 1 while its Core ML decoder sidecar remains attached; 0 if absent or retired.",
+        ),
+    ] = None
+    dac_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="dacSidecarLoaded",
+            description="Parler: 1 while its Core ML DAC sidecar remains attached; 0 if absent or retired.",
+        ),
+    ] = None
+    decoder_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="decoderOnCoreml",
+            description="Parler: 1 when this call ran decoder steps on Core ML; 0 for ggml, mixed execution or no native steps. Prefill always remains on ggml.",
+        ),
+    ] = None
+    dac_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="dacOnCoreml",
+            description="Parler: 1 when this call ran DAC decoding on Core ML; 0 for ggml or mixed execution.",
+        ),
+    ] = None
     audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
     total_time: Annotated[float | None, Field(alias="totalTime")] = None
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None

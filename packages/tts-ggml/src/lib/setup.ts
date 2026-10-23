@@ -150,6 +150,9 @@ function settingsFromOptions(options: TTSGgmlOptions): SynthesisSettings {
     maxFrames: options.maxFrames,
     minNewTokens: options.minNewTokens,
     normalizeNumbers: options.normalizeNumbers,
+    coremlDecoder: options.coremlDecoder,
+    coremlComputeUnits: options.coremlComputeUnits,
+    coremlStrict: options.coremlStrict,
     ...mossVoiceSettings(options),
   };
 }

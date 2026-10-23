@@ -34,6 +34,8 @@ export interface SupertonicFitRequest extends TtsFitCommon {
 export interface ParlerFitRequest extends TtsFitCommon {
   engineType: 'parler'
   parlerModelPath: string
+  /** Match the Parler decoder-sidecar load policy. */
+  coremlDecoder?: boolean
   descriptionTokens?: number
   promptTokens?: number
   /** 0 takes the checkpoint's default generation length. */

@@ -32,6 +32,10 @@ export interface StreamAccumulator {
   generatedFrames: number;
   codecSidecarLoaded?: number;
   codecOnCoreml?: number;
+  decoderSidecarLoaded?: number;
+  dacSidecarLoaded?: number;
+  decoderOnCoreml?: number;
+  dacOnCoreml?: number;
 }
 
 export interface SentenceStreamContext {
@@ -323,6 +327,18 @@ function mergeSentenceStreamStats(
     typeof data.totalSamples === "number" ? data.totalSamples : 0;
   accumulator.generatedFrames +=
     typeof data.generatedFrames === "number" ? data.generatedFrames : 0;
+  for (const key of ["decoderSidecarLoaded", "dacSidecarLoaded"] as const) {
+    if (typeof data[key] === "number") accumulator[key] = data[key];
+  }
+  // Complete Core ML execution requires every sentence to have used it. A
+  // capacity fallback can leave the sidecar attached for the next sentence.
+  for (const key of ["decoderOnCoreml", "dacOnCoreml"] as const) {
+    const value = data[key];
+    if (typeof value === "number") {
+      accumulator[key] = accumulator[key] === undefined
+        ? value : Math.min(accumulator[key], value);
+    }
+  }
   if (typeof data.codecSidecarLoaded === "number") {
     accumulator.codecSidecarLoaded = data.codecSidecarLoaded;
   }

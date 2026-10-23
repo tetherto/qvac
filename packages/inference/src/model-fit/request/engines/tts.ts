@@ -108,6 +108,7 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
         engineType: 'parler',
         parlerModelPath: params.modelPath,
         ...common,
+        ...(config.coremlDecoder !== undefined && { coremlDecoder: config.coremlDecoder }),
         ...(config.maxFrames !== undefined && { maxFrames: config.maxFrames })
       })
 

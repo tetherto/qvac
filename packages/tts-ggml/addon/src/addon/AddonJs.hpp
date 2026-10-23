@@ -257,6 +257,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  JSAdapter{}.assertNoPerCallParlerCoreml(args.getJsObject(1, "inputObj"), env);
   auto [type, jsInput] = JsInterface::getInput(args);
 
   if (type != "text") {
@@ -633,6 +634,8 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
     const auto cfg = adapter.buildParlerConfig(request, env);
     tts_cpp::parler::FitOptions options;
     options.model_gguf_path = cfg.modelGgufPath;
+    if (cfg.coremlDecoder.has_value())
+      options.coreml_decoder = *cfg.coremlDecoder;
     options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     integer("descriptionTokens", options.description_tokens);

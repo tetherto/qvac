@@ -281,3 +281,29 @@ test('contract finetune.response: validates terminal stats payload', (t) => {
   const contract = contractValidate('finetune.response', terminal)
   t.ok(contract.valid, `contract accepts terminal stats payload: ${contract.errors}`)
 })
+
+test('contract Parler load config exposes per-model Core ML policy', (t) => {
+  const document: unknown = JSON.parse(
+    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
+  )
+  const load = findSchemaTitle(document, 'LoadModelSrcRequestTtsGgmlModelConfigParler')
+  t.ok(load)
+  if (!load) return
+  const validate = new Ajv2020({ strict: false }).compile(load)
+  t.ok(
+    validate({
+      ttsEngine: 'parler',
+      coremlDecoder: true,
+      coremlComputeUnits: 'cpu_and_ane',
+      coremlStrict: false
+    })
+  )
+  t.ok(validate({ ttsEngine: 'parler', coremlDecoder: false }))
+  for (const invalid of [
+    { coremlDecoder: 'true' },
+    { coremlStrict: 1 },
+    { coremlComputeUnits: 'ane' }
+  ]) {
+    t.is(validate({ ttsEngine: 'parler', ...invalid }), false)
+  }
+})

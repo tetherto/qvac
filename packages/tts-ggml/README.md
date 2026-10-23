@@ -738,7 +738,8 @@ published model set yet; supply your own to opt in.
 | MOSS, MOSS-TTSD | `moss-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec decoder, 25 frames (2 s) per call, keeping its attention cache between calls (macOS 15 / iOS 18) | non-streaming synthesis and streams with `streamChunkTokens` above 25, which ggml decodes faster in one pass | `MOSS_COREML_DISABLE=1` |
 | MOSS-SoundEffect | `moss-sfx-v2-dit.mlmodelc` and `moss-sfx-v2-vae.mlmodelc` | diffusion transformer, one velocity per call; VAE decoder in 320-frame windows | a call that fails on the sidecar, which retires it | `MOSS_COREML_DISABLE=1` |
 | MOSS-Speech | `moss-speech-codec-tokenizer.mlmodelc`, beside the codec GGUF | speech tokenizer (Whisper-VQ encoder), one full 30 s segment per call | segments shorter than 30 s, which ggml encodes faster; so most spoken questions | `MOSS_COREML_DISABLE=1` |
-| Chatterbox, Parler, CosyVoice3, LavaSR | none | — | always | — |
+| Chatterbox, CosyVoice3, LavaSR | none | — | always | — |
+| Parler | `<model>-dac.mlmodelc` and optional `<model>-decoder.mlmodelc` (drop the GGUF quant suffix) | DAC; decoder steps when `coremlDecoder: true` (macOS 15 / iOS 18); T5 and prefill stay on ggml | a failed sidecar, unless strict mode rejects it; see [Parler Core ML sidecars](#parler-core-ml-sidecars) | `PARLER_COREML_DISABLE=1` |
 
 Set the force-ggml variables in the process environment before `load()`.
 Audio8 reports its codec path in `response.stats`: `codecSidecarLoaded` is 1
@@ -928,6 +929,50 @@ hot).  Parler supports Metal GPU offload on Apple and the vendor-selected
 Android GPU backend (`useGPU: true` / `nGpuLayers`), including Vulkan on ARM
 Mali. Unsupported or unavailable backends fall back to CPU. It emits native
 44.1 kHz.
+
+### Parler Core ML sidecars
+
+On Apple platforms, Parler can use optional Core ML decoder and DAC sidecars.
+Set these **top-level constructor options**, or pass them to `reload()`:
+
+```js
+const model = new TTSGgml({
+  files: { parlerModel: './models/parler-mini-v1-q8_0.gguf' },
+  coremlDecoder: true,
+  coremlComputeUnits: 'cpu_and_ane',
+  coremlStrict: false,
+  opts: { stats: true }
+})
+await model.load()
+await model.reload({ coremlDecoder: false })
+```
+
+`coremlDecoder` is a boolean; omitting it keeps the engine's default.
+`coremlComputeUnits` accepts `all`, `cpu_and_ane`, `cpu_and_gpu`, or `cpu_only`;
+omitting it inherits the engine's environment/default policy. `coremlStrict`
+is a boolean: omit it to inherit strict mode, or pass `false` to explicitly
+permit fallback. These options are Parler-only load settings and are rejected
+on per-call APIs. Invalid reload options preserve the previous configuration.
+`assessFit()` accepts `coremlDecoder` to match the load's decoder policy.
+
+Strict mode requires a usable DAC sidecar even when `coremlDecoder` is false;
+enabling the decoder also requires its sidecar. A build without Core ML fails
+in strict mode. Combining strict mode with `PARLER_COREML_DISABLE` remains a
+fatal configuration under the engine's existing policy. On reload, an explicit
+empty `coremlComputeUnits` string restores environment/default inheritance;
+omitting a setting leaves its current value unchanged. In particular,
+`coremlStrict: undefined` preserves the current strict policy.
+
+With stats enabled, `decoderSidecarLoaded` and `dacSidecarLoaded` report `1`
+while the corresponding sidecar remains attached. `decoderOnCoreml` and
+`dacOnCoreml` report `1` only when that synthesis used the corresponding Core ML
+stage; ggml fallback and mixed Core ML/ggml execution report `0`. Sentence
+streams report Core ML execution only if every reported sentence used it;
+sidecar availability retains the last report. These numeric flags describe
+execution paths; they do not
+identify whether Core ML scheduled work on the CPU, GPU, or Neural Engine.
+`backendDevice` / `backendId` continue to identify the ggml backend, so a mixed
+pipeline does not report all stages as Core ML.
 
 ## CosyVoice3 instruct
 

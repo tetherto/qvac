@@ -27,6 +27,7 @@
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/PcmConversion.hpp"
 #include "model-interface/StreamingEnhancer.hpp"
+#include "model-interface/parler/ParlerEngineOptions.hpp"
 
 namespace qvac::ttsggml::parler {
 
@@ -88,6 +89,10 @@ tts_cpp::parler::EngineOptions toEngineOptions(const ParlerConfig& cfg) {
   if (cfg.streamFirstChunkTokens.has_value())
     opts.stream_first_chunk_frames = *cfg.streamFirstChunkTokens;
 
+  if (cfg.coremlDecoder.has_value())
+    opts.coreml_decoder = *cfg.coremlDecoder;
+  opts.coreml_compute_units = cfg.coremlComputeUnits;
+  opts.coreml_strict = cfg.coremlStrict;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   return opts;
 }
@@ -303,6 +308,11 @@ tts_cpp::parler::SynthesisResult runBatchSynthesis(
 
 } // namespace
 
+tts_cpp::parler::EngineOptions
+detail::engineOptionsForTests(const ParlerConfig& cfg) {
+  return toEngineOptions(cfg);
+}
+
 ParlerModel::ParlerModel(ParlerConfig config) : cfg_(std::move(config)) {
   validateConfig(cfg_);
   // load() is deferred to waitForLoadInitialization(); see ChatterboxModel.
@@ -329,6 +339,7 @@ ParlerModel::resolveDescription(const ParlerDescriptionFields& desc) {
 }
 
 void ParlerModel::validateConfig(const ParlerConfig& cfg) {
+  validateCoremlComputeUnits(cfg.coremlComputeUnits);
   if (cfg.modelGgufPath.empty()) {
     throw StatusError(
         general_error::InvalidArgument, "parlerModelPath is required");
@@ -442,6 +453,7 @@ void ParlerModel::validateConfig(const ParlerConfig& cfg) {
 
 void ParlerModel::setConfig(ParlerConfig config) {
   validateConfig(config);
+  std::lock_guard lk(engineMu_);
   cfg_ = std::move(config);
 }
 
@@ -483,6 +495,11 @@ void ParlerModel::loadLocked() {
       backend.device == kBackendDeviceGpu,
       "ParlerModel::load: lavasr denoiser: ");
 
+  decoderSidecarLoaded_ = engine->decoder_on_coreml();
+  dacSidecarLoaded_ = engine->dac_on_coreml();
+  decoderOnCoreml_ = false;
+  dacOnCoreml_ = false;
+  activeConfig_ = cfg_;
   engine_ = std::move(engine);
   backendName_ = backend.name;
   backendDevice_ = backend.device;
@@ -498,6 +515,10 @@ void ParlerModel::loadLocked() {
 
 void ParlerModel::unloadLocked() {
   engine_.reset();
+  decoderSidecarLoaded_ = false;
+  dacSidecarLoaded_ = false;
+  decoderOnCoreml_ = false;
+  dacOnCoreml_ = false;
   enhancer_.reset();
   denoiser_.reset();
   denoiserBackendDevice_ = kBackendDeviceNone;
@@ -522,11 +543,13 @@ ParlerModel::SynthResult ParlerModel::synthesize(const AnyInput& input) {
   std::shared_ptr<tts_cpp::parler::Engine> engine;
   std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer;
   std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser;
+  ParlerConfig cfg;
   {
     std::lock_guard lk(engineMu_);
     engine = engine_;
     enhancer = enhancer_;
     denoiser = denoiser_;
+    cfg = activeConfig_;
   }
   if (!engine) {
     throw createTTSError(
@@ -551,14 +574,14 @@ ParlerModel::SynthResult ParlerModel::synthesize(const AnyInput& input) {
   if (!input.desc.description.empty()) {
     description = resolveDescription(input.desc);
   } else if (hasTemplateField(input.desc)) {
-    if (!cfg_.desc.description.empty()) {
+    if (!cfg.desc.description.empty()) {
       throw StatusError(
           general_error::InvalidArgument,
           "per-call template options (voice/emotion/...) cannot be combined "
           "with a constructor-level description; pass a per-call description "
           "instead");
     }
-    ParlerDescriptionFields merged = cfg_.desc;
+    ParlerDescriptionFields merged = cfg.desc;
     if (!input.desc.voice.empty())
       merged.voice = input.desc.voice;
     if (!input.desc.emotion.empty())
@@ -578,32 +601,42 @@ ParlerModel::SynthResult ParlerModel::synthesize(const AnyInput& input) {
     description = resolveDescription(merged);
   }
 
-  textLength_ = input.text.size();
-
   const EnhancerRates rates =
-      resolveEnhancerRates(enhancer, cfg_.outputSampleRate);
+      resolveEnhancerRates(enhancer, cfg.outputSampleRate);
 
   const auto t0 = std::chrono::steady_clock::now();
   // The streaming callback runs synchronously on this thread, so this plain
   // counter safely tallies the emitted sample count for the stats below.
   std::size_t streamedSamples = 0;
   tts_cpp::parler::SynthesisResult result;
-  if (wasStreaming) {
-    // Streaming needs an explicit description; an empty per-call value
-    // resolves to the constructor default (== engine.default_description).
-    const std::string streamDesc =
-        description.empty() ? resolveDescription(cfg_.desc) : description;
-    result = runStreamingSynthesis(
-        *engine,
-        input.text,
-        streamDesc,
-        input.chunkCallback,
-        enhancer,
-        rates,
-        streamedSamples);
-  } else {
-    result = runBatchSynthesis(*engine, input.text, description);
-    applyBatchPostProcessing(result, denoiser, enhancer, cfg_.outputSampleRate);
+  try {
+    if (wasStreaming) {
+      // Streaming needs an explicit description; an empty per-call value
+      // resolves to the constructor default (== engine.default_description).
+      const std::string streamDesc =
+          description.empty() ? resolveDescription(cfg.desc) : description;
+      result = runStreamingSynthesis(
+          *engine,
+          input.text,
+          streamDesc,
+          input.chunkCallback,
+          enhancer,
+          rates,
+          streamedSamples);
+    } else {
+      result = runBatchSynthesis(*engine, input.text, description);
+      applyBatchPostProcessing(
+          result, denoiser, enhancer, cfg.outputSampleRate);
+    }
+  } catch (...) {
+    // Strict failures may retire a sidecar before throwing. Read availability
+    // from this call's engine, never from a replacement installed by reload.
+    std::lock_guard lk(engineMu_);
+    if (engine_ == engine) {
+      recordSynthesisFailureLocked(
+          engine, engine->decoder_on_coreml(), engine->dac_on_coreml());
+    }
+    throw; // preserve the original structured error and its cause
   }
 
   const auto t1 = std::chrono::steady_clock::now();
@@ -611,19 +644,20 @@ ParlerModel::SynthResult ParlerModel::synthesize(const AnyInput& input) {
   // While streaming, chunks are emitted at streamFinalRate (the enhancer path)
   // or at the engine's native rate; result.sample_rate stays native either way.
   // On the batch path it already reflects denoise/enhance/resample.
-  sampleRate_ =
+  const int sampleRate =
       (wasStreaming && enhancer) ? rates.streamFinalRate : result.sample_rate;
-  totalSamples_ = wasStreaming ? static_cast<int64_t>(streamedSamples)
-                               : static_cast<int64_t>(result.pcm.size());
-  audioDurationMs_ = sampleRate_ > 0
-                         ? (static_cast<double>(totalSamples_) * 1000.0 /
-                            static_cast<double>(sampleRate_))
-                         : 0.0;
-  totalTime_ = std::chrono::duration<double>(t1 - t0).count();
-  realTimeFactor_ =
-      audioDurationMs_ > 0.0 ? (totalTime_ * 1000.0) / audioDurationMs_ : 0.0;
-  tokensPerSecond_ =
-      totalTime_ > 0.0 ? static_cast<double>(textLength_) / totalTime_ : 0.0;
+  const int64_t samples = wasStreaming
+                              ? static_cast<int64_t>(streamedSamples)
+                              : static_cast<int64_t>(result.pcm.size());
+  completeSynthesis(
+      engine,
+      result,
+      std::chrono::duration<double>(t1 - t0).count(),
+      sampleRate,
+      samples,
+      input.text.size(),
+      engine->decoder_on_coreml(),
+      engine->dac_on_coreml());
 
   if (wasStreaming) {
     return {Output{}, true}; // chunks already emitted via chunkCallback
@@ -661,7 +695,44 @@ std::any ParlerModel::process(const std::any& input) {
   return std::any(std::move(out.pcm));
 }
 
+void ParlerModel::completeSynthesis(
+    const std::shared_ptr<tts_cpp::parler::Engine>& engine,
+    const tts_cpp::parler::SynthesisResult& result, double totalSeconds,
+    int sampleRate, int64_t samples, size_t textLength,
+    bool decoderSidecarLoaded, bool dacSidecarLoaded) {
+  std::lock_guard lk(engineMu_);
+  if (engine_ != engine)
+    return;
+  decoderSidecarLoaded_ = decoderSidecarLoaded;
+  dacSidecarLoaded_ = dacSidecarLoaded;
+  // "mixed" includes ggml fallback and must never claim all-Core-ML execution.
+  // The label identifies Core ML policy, not the hardware it actually chose.
+  decoderOnCoreml_ = result.decoder_backend.rfind("coreml-", 0) == 0;
+  dacOnCoreml_ = result.dac_backend.rfind("coreml-", 0) == 0;
+  sampleRate_ = sampleRate;
+  totalSamples_ = samples;
+  audioDurationMs_ =
+      sampleRate > 0 ? static_cast<double>(samples) * 1000.0 / sampleRate : 0.0;
+  totalTime_ = totalSeconds;
+  realTimeFactor_ =
+      audioDurationMs_ > 0.0 ? (totalTime_ * 1000.0) / audioDurationMs_ : 0.0;
+  tokensPerSecond_ =
+      totalTime_ > 0.0 ? static_cast<double>(textLength) / totalTime_ : 0.0;
+}
+
+void ParlerModel::recordSynthesisFailureLocked(
+    const std::shared_ptr<tts_cpp::parler::Engine>& engine,
+    bool decoderSidecarLoaded, bool dacSidecarLoaded) {
+  if (engine_ != engine)
+    return;
+  decoderSidecarLoaded_ = decoderSidecarLoaded;
+  dacSidecarLoaded_ = dacSidecarLoaded;
+  decoderOnCoreml_ = false;
+  dacOnCoreml_ = false;
+}
+
 qvac_lib_inference_addon_cpp::RuntimeStats ParlerModel::runtimeStats() const {
+  std::lock_guard lk(engineMu_);
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
   stats.emplace_back("totalTime", totalTime_);
   stats.emplace_back("tokensPerSecond", tokensPerSecond_);
@@ -671,6 +742,12 @@ qvac_lib_inference_addon_cpp::RuntimeStats ParlerModel::runtimeStats() const {
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId", static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back(
+      "decoderSidecarLoaded", static_cast<int64_t>(decoderSidecarLoaded_));
+  stats.emplace_back(
+      "dacSidecarLoaded", static_cast<int64_t>(dacSidecarLoaded_));
+  stats.emplace_back("decoderOnCoreml", static_cast<int64_t>(decoderOnCoreml_));
+  stats.emplace_back("dacOnCoreml", static_cast<int64_t>(dacOnCoreml_));
   stats.emplace_back(
       "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
   stats.emplace_back(

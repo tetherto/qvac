@@ -11,6 +11,55 @@ const sdkRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const tsc = join(sdkRoot, 'node_modules', 'typescript', 'bin', 'tsc')
 const tscAlias = join(sdkRoot, 'node_modules', '.bin', 'tsc-alias')
 
+await test('feature-package builds resolve the commands self-import before dist exists', () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'qvac-sdk-feature-'))
+  const { config } = ts.readConfigFile(join(sdkRoot, 'tsconfig.json'), (p) =>
+    readFileSync(p, 'utf8')
+  )
+
+  try {
+    mkdirSync(join(fixture, 'src', 'commands'), { recursive: true })
+    writeFileSync(
+      join(fixture, 'package.json'),
+      JSON.stringify({
+        name: '@tetherto/sdk-feature-test',
+        type: 'module',
+        exports: { './commands': './dist/src/commands/index.js' }
+      })
+    )
+    writeFileSync(
+      join(fixture, 'src', 'commands', 'index.ts'),
+      'export const bundleSdk = () => {}\n'
+    )
+    writeFileSync(
+      join(fixture, 'example.ts'),
+      "import { bundleSdk } from '@qvac/sdk/commands'\nbundleSdk()\n"
+    )
+    writeFileSync(
+      join(fixture, 'tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: {
+          module: 'ES2022',
+          moduleResolution: 'bundler',
+          baseUrl: '.',
+          paths: config.compilerOptions.paths,
+          types: [],
+          noEmit: true
+        },
+        include: ['example.ts']
+      })
+    )
+
+    const compile = spawnSync(process.execPath, [tsc, '-p', 'tsconfig.json'], {
+      cwd: fixture,
+      encoding: 'utf8'
+    })
+    assert.equal(compile.status, 0, compile.stderr || compile.stdout)
+  } finally {
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
 await test('tsc-alias emits NodeNext-compatible .js specifiers in declarations', () => {
   const fixture = mkdtempSync(join(tmpdir(), 'qvac-tsc-alias-'))
   const packageRoot = join(fixture, 'node_modules', '@qvac', 'sdk')

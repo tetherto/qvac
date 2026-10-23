@@ -451,6 +451,11 @@ function createParlerModel(
     ...(config.maxFrames !== undefined ? { maxFrames: config.maxFrames } : {}),
     ...(config.minNewTokens !== undefined ? { minNewTokens: config.minNewTokens } : {}),
     ...(config.normalizeNumbers !== undefined ? { normalizeNumbers: config.normalizeNumbers } : {}),
+    ...(config.coremlDecoder !== undefined ? { coremlDecoder: config.coremlDecoder } : {}),
+    ...(config.coremlComputeUnits !== undefined
+      ? { coremlComputeUnits: config.coremlComputeUnits }
+      : {}),
+    ...(config.coremlStrict !== undefined ? { coremlStrict: config.coremlStrict } : {}),
     config: {
       ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
       ...(config.outputSampleRate !== undefined

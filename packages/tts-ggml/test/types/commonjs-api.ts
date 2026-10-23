@@ -134,3 +134,44 @@ const { seconds, ...mossSfxWithoutSeconds } = mossSfxFitRequest
 // @ts-expect-error MOSS sound-effect fit requires seconds
 void TTSGgml.assessFit(mossSfxWithoutSeconds)
 void [mossSfxFitResult, prompt, seconds]
+
+const parlerCoremlOptions: TTSGgmlOptions = {
+  engine: 'parler',
+  coremlDecoder: false,
+  coremlComputeUnits: 'cpu_and_ane',
+  coremlStrict: false
+}
+const invalidParlerCoremlOptions: TTSGgmlOptions = {
+  // @ts-expect-error compute units have a finite public vocabulary
+  coremlComputeUnits: 'ane',
+  // @ts-expect-error explicit boolean required
+  coremlStrict: 'false'
+}
+const parlerFit: TTSGgml.ParlerFitRequest = {
+  engineType: 'parler',
+  parlerModelPath: './parler.gguf',
+  coremlDecoder: false
+}
+const decoderSidecarLoaded: number | undefined = runtimeStats.decoderSidecarLoaded
+const dacSidecarLoaded: number | undefined = runtimeStats.dacSidecarLoaded
+const decoderOnCoreml: number | undefined = runtimeStats.decoderOnCoreml
+const dacOnCoreml: number | undefined = runtimeStats.dacOnCoreml
+type CoremlNotPerJob<T> =
+  Extract<keyof T, 'coremlDecoder' | 'coremlComputeUnits' | 'coremlStrict'> extends never
+    ? true
+    : false
+const coremlNotPerRun: CoremlNotPerJob<TTSGgml.TTSRunInput> = true
+const coremlNotPerStream: CoremlNotPerJob<TTSGgml.SentenceStreamOptions> = true
+const coremlNotPerTextStream: CoremlNotPerJob<TTSGgml.RunStreamingOptions> = true
+void [
+  parlerCoremlOptions,
+  invalidParlerCoremlOptions,
+  parlerFit,
+  decoderSidecarLoaded,
+  dacSidecarLoaded,
+  decoderOnCoreml,
+  dacOnCoreml,
+  coremlNotPerRun,
+  coremlNotPerStream,
+  coremlNotPerTextStream
+]

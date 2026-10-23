@@ -15,6 +15,10 @@ export interface StreamAccumulator {
     generatedFrames: number;
     codecSidecarLoaded?: number;
     codecOnCoreml?: number;
+    decoderSidecarLoaded?: number;
+    dacSidecarLoaded?: number;
+    decoderOnCoreml?: number;
+    dacOnCoreml?: number;
 }
 export interface SentenceStreamContext {
     textStreamMode?: boolean;

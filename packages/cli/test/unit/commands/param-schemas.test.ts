@@ -10,6 +10,26 @@ import {
 import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
+  it('offers Parler Core ML policy through the shared SDK schema', () => {
+    const schema = configSchemaForAddon('tts')
+    assert.ok(schema)
+    const model = configParamModel(schema)
+    assert.equal(model?.kind, 'variants')
+    if (model?.kind !== 'variants') return
+    const parler = model.variants.find((variant) => variant.value === 'parler')
+    assert.ok(parler)
+    for (const name of ['coremlDecoder', 'coremlComputeUnits', 'coremlStrict']) {
+      const field = parler.fields.find((field) => field.name === name)
+      assert.ok(field, `${name} is editable`)
+      assert.ok(field.description)
+    }
+    const units = parler.fields.find((field) => field.name === 'coremlComputeUnits')!
+    assert.equal(validateParam(units, 'cpu_and_ane'), true)
+    assert.notEqual(validateParam(units, 'ane'), true)
+    const decoder = parler.fields.find((field) => field.name === 'coremlDecoder')!
+    assert.equal(coerceParam('false', decoder), false)
+  })
+
   it('exposes GPU backend priorities for LLM, embeddings, and VLA', () => {
     for (const addon of ['llm', 'embeddings', 'vla']) {
       const schema = configSchemaForAddon(addon)

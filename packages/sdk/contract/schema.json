@@ -15963,6 +15963,20 @@
                           "const": "parler",
                           "description": "TTS engine: Parler."
                         },
+                        "coremlDecoder": {
+                          "description": "Opt in to Parler Core ML decoder steps on macOS 15 / iOS 18; T5 and prefill remain on ggml. Requires a compatible decoder sidecar.",
+                          "type": "boolean"
+                        },
+                        "coremlComputeUnits": {
+                          "description": "Compute policy for both Parler Core ML stages. Unset inherits the environment/default. CPU+ANE permits CPU operations; it does not guarantee ANE-only execution.",
+                          "type": "string",
+                          "enum": ["all", "cpu_and_ane", "cpu_and_gpu", "cpu_only"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerCoremlComputeUnits"
+                        },
+                        "coremlStrict": {
+                          "description": "Require a usable Parler DAC sidecar and, when coremlDecoder is true, a usable decoder sidecar; fail instead of falling back. Also fails without Core ML support or when disabled globally. Unset inherits the environment.",
+                          "type": "boolean"
+                        },
                         "description": {
                           "description": "Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
                           "type": "string",
@@ -23173,6 +23187,22 @@
         "stats": {
           "type": "object",
           "properties": {
+            "decoderSidecarLoaded": {
+              "description": "Parler: 1 while its Core ML decoder sidecar remains attached; 0 if absent or retired.",
+              "type": "number"
+            },
+            "dacSidecarLoaded": {
+              "description": "Parler: 1 while its Core ML DAC sidecar remains attached; 0 if absent or retired.",
+              "type": "number"
+            },
+            "decoderOnCoreml": {
+              "description": "Parler: 1 when this call ran decoder steps on Core ML; 0 for ggml, mixed execution or no native steps. Prefill always remains on ggml.",
+              "type": "number"
+            },
+            "dacOnCoreml": {
+              "description": "Parler: 1 when this call ran DAC decoding on Core ML; 0 for ggml or mixed execution.",
+              "type": "number"
+            },
             "audioDuration": {
               "type": "number"
             },
@@ -23370,6 +23400,22 @@
         "stats": {
           "type": "object",
           "properties": {
+            "decoderSidecarLoaded": {
+              "description": "Parler: 1 while its Core ML decoder sidecar remains attached; 0 if absent or retired.",
+              "type": "number"
+            },
+            "dacSidecarLoaded": {
+              "description": "Parler: 1 while its Core ML DAC sidecar remains attached; 0 if absent or retired.",
+              "type": "number"
+            },
+            "decoderOnCoreml": {
+              "description": "Parler: 1 when this call ran decoder steps on Core ML; 0 for ggml, mixed execution or no native steps. Prefill always remains on ggml.",
+              "type": "number"
+            },
+            "dacOnCoreml": {
+              "description": "Parler: 1 when this call ran DAC decoding on Core ML; 0 for ggml or mixed execution.",
+              "type": "number"
+            },
             "audioDuration": {
               "type": "number"
             },

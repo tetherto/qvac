@@ -981,3 +981,23 @@ test('MOSS: missing workload cannot claim a fit; default load remains CPU', (t) 
     false
   )
 })
+
+test('tts: Parler fit carries the explicit Core ML decoder choice', (t) => {
+  for (const coremlDecoder of [true, false]) {
+    const plan = createFitRequest({
+      modelType: ModelType.ttsGgml,
+      modelPath: '/models/parler.gguf',
+      modelConfig: { ttsEngine: 'parler', coremlDecoder },
+      isShardedModel: false
+    })
+    t.ok(plan.supported)
+    if (plan.supported) {
+      t.alike(plan.probe.request, {
+        engineType: 'parler',
+        parlerModelPath: '/models/parler.gguf',
+        nGpuLayers: 0,
+        coremlDecoder
+      })
+    }
+  }
+})

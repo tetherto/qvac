@@ -31,6 +31,12 @@ export type NmtResponse = TranslationNmtcpp.TranslationResponse
  * installed; keep it in step with the addon's `RuntimeStats`.
  */
 export interface TtsStats {
+  /** Parler: sidecar availability after the latest completed call. */
+  decoderSidecarLoaded?: number
+  dacSidecarLoaded?: number
+  /** Parler: 1 only when this call ran the complete stage on Core ML; mixed/fallback is 0. */
+  decoderOnCoreml?: number
+  dacOnCoreml?: number
   audioDurationMs?: number
   totalTime?: number
   realTimeFactor?: number

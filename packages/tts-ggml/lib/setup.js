@@ -111,6 +111,9 @@ function settingsFromOptions(options) {
         maxFrames: options.maxFrames,
         minNewTokens: options.minNewTokens,
         normalizeNumbers: options.normalizeNumbers,
+        coremlDecoder: options.coremlDecoder,
+        coremlComputeUnits: options.coremlComputeUnits,
+        coremlStrict: options.coremlStrict,
         ...(0, moss_1.mossVoiceSettings)(options),
     };
 }

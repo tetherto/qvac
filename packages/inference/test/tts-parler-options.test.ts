@@ -1,5 +1,9 @@
 import test from 'brittle'
-import { ttsRequestSchema } from '@/schemas/text-to-speech'
+import {
+  ttsRequestSchema,
+  ttsParlerLoadConfigSchema,
+  ttsStatsSchema
+} from '@/schemas/text-to-speech'
 import {
   assertParlerJobOptionsSupported,
   getParlerJobOptions
@@ -206,4 +210,33 @@ test('every CosyVoice3 emotion stays accepted per call', (t) => {
       )
     )
   }
+})
+
+test('Parler Core ML load policy preserves omission, explicit false and valid units', (t) => {
+  t.alike(ttsParlerLoadConfigSchema.parse({ ttsEngine: 'parler' }), { ttsEngine: 'parler' })
+  for (const units of ['all', 'cpu_and_ane', 'cpu_and_gpu', 'cpu_only']) {
+    const policy = {
+      ttsEngine: 'parler',
+      coremlDecoder: true,
+      coremlComputeUnits: units,
+      coremlStrict: false
+    }
+    t.alike(ttsParlerLoadConfigSchema.parse(policy), policy)
+  }
+  for (const invalid of [
+    { coremlDecoder: 'true' },
+    { coremlStrict: 1 },
+    { coremlComputeUnits: 'ane' }
+  ]) {
+    t.is(ttsParlerLoadConfigSchema.safeParse({ ttsEngine: 'parler', ...invalid }).success, false)
+  }
+  t.alike(
+    ttsStatsSchema.parse({
+      decoderSidecarLoaded: 1,
+      dacSidecarLoaded: 0,
+      decoderOnCoreml: 0,
+      dacOnCoreml: 0
+    }),
+    { decoderSidecarLoaded: 1, dacSidecarLoaded: 0, decoderOnCoreml: 0, dacOnCoreml: 0 }
+  )
 })

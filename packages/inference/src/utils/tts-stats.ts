@@ -66,6 +66,12 @@ export function collectTtsStats(response: { stats?: AddonTtsStats }): TtsStats {
     ...(stats.codecSidecarLoaded !== undefined && {
       codecSidecarLoaded: stats.codecSidecarLoaded
     }),
-    ...(stats.codecOnCoreml !== undefined && { codecOnCoreml: stats.codecOnCoreml })
+    ...(stats.codecOnCoreml !== undefined && { codecOnCoreml: stats.codecOnCoreml }),
+    ...(stats.decoderSidecarLoaded !== undefined && {
+      decoderSidecarLoaded: stats.decoderSidecarLoaded
+    }),
+    ...(stats.dacSidecarLoaded !== undefined && { dacSidecarLoaded: stats.dacSidecarLoaded }),
+    ...(stats.decoderOnCoreml !== undefined && { decoderOnCoreml: stats.decoderOnCoreml }),
+    ...(stats.dacOnCoreml !== undefined && { dacOnCoreml: stats.dacOnCoreml })
   }
 }

@@ -104,3 +104,12 @@ test('appendPcm: appends each chunk in place, in order', (t) => {
   appendPcm(buffer, new Int16Array([32767, -32768]))
   t.alike(buffer, [1, -2, 3, 32767, -32768])
 })
+
+test('collectTtsStats: preserves Parler availability and actual execution separately', (t) => {
+  const flags = { decoderSidecarLoaded: 1, dacSidecarLoaded: 0, decoderOnCoreml: 0, dacOnCoreml: 0 }
+  t.alike(collectTtsStats({ stats: flags }), flags)
+  t.alike(collectTtsStats({ stats: { decoderOnCoreml: 1, dacOnCoreml: 1 } }), {
+    decoderOnCoreml: 1,
+    dacOnCoreml: 1
+  })
+})

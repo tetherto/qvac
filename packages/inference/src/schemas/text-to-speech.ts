@@ -496,6 +496,24 @@ export const ttsSupertonicRuntimeConfigSchema = z
 // lavasrEnhancerModelSrc field, which the runtime schema never sees).
 const ttsParlerRuntimeConfigShape = {
   ttsEngine: z.literal('parler').describe('TTS engine: Parler.'),
+  coremlDecoder: z
+    .boolean()
+    .optional()
+    .describe(
+      'Opt in to Parler Core ML decoder steps on macOS 15 / iOS 18; T5 and prefill remain on ggml. Requires a compatible decoder sidecar.'
+    ),
+  coremlComputeUnits: z
+    .enum(['all', 'cpu_and_ane', 'cpu_and_gpu', 'cpu_only'])
+    .optional()
+    .describe(
+      'Compute policy for both Parler Core ML stages. Unset inherits the environment/default. CPU+ANE permits CPU operations; it does not guarantee ANE-only execution.'
+    ),
+  coremlStrict: z
+    .boolean()
+    .optional()
+    .describe(
+      'Require a usable Parler DAC sidecar and, when coremlDecoder is true, a usable decoder sidecar; fail instead of falling back. Also fails without Core ML support or when disabled globally. Unset inherits the environment.'
+    ),
   ...ttsParlerDescriptionFieldsShape,
   useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
@@ -1341,9 +1359,33 @@ export const ttsRequestSchema = z
 // run one native job per sentence and the addon's aggregate carries only the
 // four summable fields (totalTime, audioDuration, totalSamples,
 // generatedFrames) and Audio8's two Core ML flags, which keep the value of the
-// last sentence that reported them; the five backend fields below are
+// last sentence that reported them. Parler availability flags keep the latest
+// report, while its use flags are 1 only if every reported sentence used Core ML.
+// The backend fields below are
 // reported by batch synthesis (`stream: false`) only.
 export const ttsStatsSchema = z.object({
+  decoderSidecarLoaded: z
+    .number()
+    .optional()
+    .describe(
+      'Parler: 1 while its Core ML decoder sidecar remains attached; 0 if absent or retired.'
+    ),
+  dacSidecarLoaded: z
+    .number()
+    .optional()
+    .describe('Parler: 1 while its Core ML DAC sidecar remains attached; 0 if absent or retired.'),
+  decoderOnCoreml: z
+    .number()
+    .optional()
+    .describe(
+      'Parler: 1 when this call ran decoder steps on Core ML; 0 for ggml, mixed execution or no native steps. Prefill always remains on ggml.'
+    ),
+  dacOnCoreml: z
+    .number()
+    .optional()
+    .describe(
+      'Parler: 1 when this call ran DAC decoding on Core ML; 0 for ggml or mixed execution.'
+    ),
   audioDuration: z.number().optional(),
   totalTime: z.number().optional(),
   realTimeFactor: z.number().optional(),
