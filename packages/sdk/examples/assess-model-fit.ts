@@ -1,14 +1,12 @@
 /**
- * Which models is this machine likely to run — asked before downloading any
- * weights. Nothing is fetched, loaded or reserved.
+ * Which models fit this machine, asked before downloading any weights. Each
+ * engine's fitter reads the registry's weightless description of a model, so
+ * nothing is fetched beyond tens of KB, loaded or reserved.
  *
- * The header prints the evidence the answer rests on: `system-memory` on a
- * CPU-only or integrated-GPU host, `device-memory` on a discrete card,
- * `device-budget` for the per-process allowance Windows grants on one. Which
- * of those applies depends on where the engine would put the model.
- *
- * `unknown` is a real answer, not an error: the evidence does not support a
- * call either way. Show it as "can't say", never as "no".
+ * Each model gets its own verdict and the memory it takes on each device, and
+ * the set gets one verdict for all of them loaded together, with what it takes
+ * from each memory pool. `unknown` is a valid answer: show it as "can't say",
+ * never as "no".
  */
 
 import {
@@ -20,8 +18,7 @@ import {
   QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL
 } from '@qvac/sdk'
 
-// Sizes the assessment the way it sizes the load: the estimator reads the
-// context out of the config `loadModel` would be given.
+// The fitter sizes the load as `loadModel` would run it, context included.
 const CONTEXT_TOKENS = 8192
 
 // A ladder ending well past what a laptop has, so one screen shows every verdict.
@@ -34,8 +31,8 @@ const CANDIDATES = [
 ]
 
 const VERDICT_MARK: Record<string, string> = {
-  'likely-fits': '✔',
-  'likely-too-large': '✖',
+  fits: '✔',
+  'does-not-fit': '✖',
   unknown: '?'
 }
 
@@ -49,47 +46,24 @@ try {
       modelSrc: model,
       modelType: 'llamacpp-completion' as const,
       modelConfig: { ctx_size: CONTEXT_TOKENS }
-    })),
-    // Declared for aggregation only, not a scheduling instruction: 'sequential'
-    // counts the largest operation peak, 'concurrent' counts one per model.
-    execution: 'sequential',
-    policy: 'interactive-v1'
+    }))
   })
 
-  console.log(`▸ Budget basis: ${result.basis}`)
-  if (result.budget) {
-    console.log(
-      `    ${gib(result.budget.availableAfterReserveBytes)} budget` +
-        ` (${gib(result.budget.totalBytes)} total,` +
-        ` ${gib(result.budget.usedBytes)} in use,` +
-        ` ${gib(result.budget.availableBytes)} free,` +
-        ` ${gib(result.budget.reservedBytes)} held back)`
-    )
-  }
-
-  // Says which device the verdicts assume, when the model would run on a GPU.
-  const placement = result.assumptions.find((line: string) =>
-    line.includes('assumed to execute on')
-  )
-  if (placement) console.log(`▸ ${placement}`)
-
-  console.log(`\n▸ At ${CONTEXT_TOKENS} tokens of context`)
+  console.log(`▸ At ${CONTEXT_TOKENS} tokens of context, each model alone`)
   for (const [index, model] of result.models.entries()) {
-    const mark = VERDICT_MARK[model.verdict]
-    const size = gib(CANDIDATES[index]!.expectedSize).padStart(9)
-    const needs =
-      model.evidence === 'computed-only' && model.floorBytes
-        ? `at least ${gib(model.floorBytes)}`
-        : ''
-    console.log(`  ${mark} ${model.name.padEnd(46)} ${size} on disk  ${needs}`)
-    // Present on every `unknown`, and worth surfacing: it names what is missing.
-    if (model.verdict === 'unknown') {
-      for (const reason of model.reasons) console.log(`      ${reason}`)
+    const candidate = CANDIDATES[index]!
+    const size = gib(candidate.expectedSize).padStart(9)
+    console.log(`  ${VERDICT_MARK[model.status]} ${candidate.name.padEnd(46)} ${size} on disk`)
+    for (const device of model.devices) {
+      console.log(`      ${device.name.padEnd(10)} ${gib(device.usedBytes).padStart(10)}`)
     }
   }
 
-  console.log(`\n▸ All five together, sequentially: ${result.verdict}`)
-  console.log('▸ Advisory only — this does not gate loadModel or reserve anything.')
+  console.log(`\n▸ All five loaded together: ${result.verdict}`)
+  for (const pool of result.pools) {
+    const free = pool.freeBytes === undefined ? 'no free figure' : `of ${gib(pool.freeBytes)} free`
+    console.log(`  ${pool.id.padEnd(14)} ${gib(pool.usedBytes).padStart(10)} ${free}`)
+  }
   process.exit(0)
 } catch (error) {
   console.error('✖', error)
