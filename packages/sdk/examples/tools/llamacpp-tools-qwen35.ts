@@ -4,9 +4,10 @@
  * Qwen3.5 emits tool calls in a Pythonic-XML format:
  *   <tool_call><function=NAME><parameter=KEY>VALUE</parameter></function></tool_call>
  *
- * The dialect is auto-detected from the model name/path when the model file
- * contains "qwen3.5", "qwen3-5", "qwen3.6", or "qwen3-6". Pass
- * toolDialect: "qwen35" explicitly if auto-detection does not pick it up.
+ * The dialect is auto-detected when the model name or file name contains
+ * "qwen3.5", "qwen3-5", "qwen3.6", or "qwen3-6", or when the GGUF architecture is
+ * `qwen35` or `qwen35moe`. Pass toolDialect: "qwen35" explicitly if detection
+ * does not pick it up.
  *
  * Usage:
  *   node dist/examples/tools/llamacpp-tools-qwen35.js <model-url>
