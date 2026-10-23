@@ -1343,9 +1343,10 @@ namespace LlmLlamacpp {
     cache_ram_mib?: NumericLike;
     /**
      * Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'`
-     * drafts with the model's own multi-token-prediction (MTP / NextN) head;
-     * the model must ship its MTP layers (`blk.N.nextn.*`), or the load
-     * fails. `'draft-dflash'` drafts with the DFlash model given as
+     * drafts with the model's own multi-token-prediction (MTP / NextN) head,
+     * or with the external MTP head given as `spec_draft_model`; the model or
+     * the head must ship MTP layers (`blk.N.nextn.*`), or the load fails.
+     * `'draft-dflash'` drafts with the DFlash model given as
      * `spec_draft_model`. Either way the model verifies the draft, so the
      * output keeps the distribution of plain decoding. `'none'` (default)
      * decodes one token per step. Works on single prompts, multimodal
@@ -1353,9 +1354,10 @@ namespace LlmLlamacpp {
      */
     spec_type?: "none" | "draft-mtp" | "draft-dflash";
     /**
-     * Absolute path of the DFlash draft model, as llama-server's
-     * `--spec-draft-model` (`-md`). Required by, and only accepted with,
-     * `spec_type: 'draft-dflash'`. The draft model is placed like the model
+     * Absolute path of the draft model, as llama-server's
+     * `--spec-draft-model` (`-md`): the DFlash model, required by
+     * `spec_type: 'draft-dflash'`, or an external MTP head for
+     * `spec_type: 'draft-mtp'`. The draft model is placed like the model
      * (`device`, `gpu_layers`). Also accepted as `spec-draft-model`.
      */
     spec_draft_model?: string;

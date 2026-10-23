@@ -1,0 +1,24 @@
+{"messages":[{"role":"system","content":"Answer in one short sentence."},{"role":"user","content":"What is the capital of Japan?"},{"role":"assistant","content":"Tokyo is the capital of Japan."}]}
+{"messages":[{"role":"system","content":"Answer in one short sentence."},{"role":"user","content":"How many continents are there?"},{"role":"assistant","content":"There are seven continents."}]}
+{"messages":[{"role":"user","content":"At what temperature does water boil at sea level?"},{"role":"assistant","content":"Water boils at 100 degrees Celsius at sea level."}]}
+{"messages":[{"role":"user","content":"Which planet is closest to the Sun?"},{"role":"assistant","content":"Mercury is the planet closest to the Sun."}]}
+{"messages":[{"role":"user","content":"What is the largest ocean on Earth?"},{"role":"assistant","content":"The Pacific is the largest ocean on Earth."}]}
+{"messages":[{"role":"user","content":"How many bones are in the adult human body?"},{"role":"assistant","content":"An adult human body has 206 bones."}]}
+{"messages":[{"role":"user","content":"What gas do plants absorb from the air?"},{"role":"assistant","content":"Plants absorb carbon dioxide from the air."}]}
+{"messages":[{"role":"user","content":"What is the chemical symbol for iron?"},{"role":"assistant","content":"The chemical symbol for iron is Fe."}]}
+{"messages":[{"role":"user","content":"Which river is the longest in Africa?"},{"role":"assistant","content":"The Nile is the longest river in Africa."}]}
+{"messages":[{"role":"user","content":"How many sides does a hexagon have?"},{"role":"assistant","content":"A hexagon has six sides."}]}
+{"messages":[{"role":"user","content":"What is the speed of light in a vacuum?"},{"role":"assistant","content":"Light travels at about 300,000 kilometres per second in a vacuum."}]}
+{"messages":[{"role":"user","content":"Which metal is liquid at room temperature?"},{"role":"assistant","content":"Mercury is liquid at room temperature."}]}
+{"messages":[{"role":"user","content":"What is the smallest prime number?"},{"role":"assistant","content":"Two is the smallest prime number."}]}
+{"messages":[{"role":"user","content":"How long does the Earth take to orbit the Sun?"},{"role":"assistant","content":"The Earth takes about 365 days to orbit the Sun."}]}
+{"messages":[{"role":"user","content":"What is the hardest natural substance?"},{"role":"assistant","content":"Diamond is the hardest natural substance."}]}
+{"messages":[{"role":"user","content":"Which organ pumps blood through the body?"},{"role":"assistant","content":"The heart pumps blood through the body."}]}
+{"messages":[{"role":"user","content":"What is the main gas in the Earth's atmosphere?"},{"role":"assistant","content":"Nitrogen is the main gas in the Earth's atmosphere."}]}
+{"messages":[{"role":"user","content":"How many degrees are in a right angle?"},{"role":"assistant","content":"A right angle has 90 degrees."}]}
+{"messages":[{"role":"user","content":"Which country has the largest population?"},{"role":"assistant","content":"India has the largest population."}]}
+{"messages":[{"role":"user","content":"What is the freezing point of water in Fahrenheit?"},{"role":"assistant","content":"Water freezes at 32 degrees Fahrenheit."}]}
+{"messages":[{"role":"user","content":"What does DNA stand for?"},{"role":"assistant","content":"DNA stands for deoxyribonucleic acid."}]}
+{"messages":[{"role":"user","content":"Which mountain is the tallest above sea level?"},{"role":"assistant","content":"Mount Everest is the tallest mountain above sea level."}]}
+{"messages":[{"role":"user","content":"How many players are on a football team on the pitch?"},{"role":"assistant","content":"A football team fields eleven players."}]}
+{"messages":[{"role":"user","content":"What is the currency of the United Kingdom?"},{"role":"assistant","content":"The currency of the United Kingdom is the pound sterling."}]}

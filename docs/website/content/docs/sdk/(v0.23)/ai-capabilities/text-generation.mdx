@@ -113,9 +113,37 @@ The following script loads a `parallel: 4` model, fires four completions at once
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/multi_job_completion.py title="multi_job_completion.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Tool call
+
+JS and TS examples here and in [Deferred tool loading](#deferred-tool-loading) import their tool schemas and a mock executor from a sibling `shared` module. Save it next to the example — as `shared.js` for JS, `shared.ts` for TS.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tools/shared.js title="shared.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tools/shared.ts title="shared.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 The following script shows how to provide tool definitions to `completion()`, consume the streaming output, and read the parsed tool calls.
 
@@ -170,6 +198,8 @@ leaves its parameter schema out of the prompt: the model sees only its name and
 description, in a compact catalog carried by a built-in `tool_search` tool, and
 loads the schema when it needs it.
 
+The JavaScript and TypeScript examples below import the same `shared` module shown under [Tool call](#tool-call); save it alongside this example too.
+
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
@@ -186,7 +216,17 @@ loads the schema when it needs it.
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/completion_deferred_tools.py title="completion_deferred_tools.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
+
+The Python example takes the [worker-orchestrated loop](#worker-orchestrated-tool-loop) while the others take the client-side one. Deferring a tool works the same in both languages — the worker builds the catalog and reads back what the conversation has loaded — but running `tool_search` from client code needs the `executeToolSearch` helper, which only the JS SDK exports. On the orchestrated path the worker runs the search itself.
 
 The model calls `tool_search({ query })` with a capability or an exact tool
 name; the SDK searches the registered tools outside inference and appends the
@@ -238,6 +278,10 @@ You create and manage the MCP client, connect it to one or more MCP servers, and
 </Tab>
 </Tabs>
 
+<Callout type="warn">
+MCP is available in the JS/TS client only. The integration lives in the client, not in the worker, so the Python client cannot reach it.
+</Callout>
+
 ### KV cache
 
 The `kvCache` parameter on `completion()` both enables caching and sets the cache key. It accepts:
@@ -283,6 +327,14 @@ The following script enables `kvCache: true` to speed up follow-up turns, and th
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/kv-cache-example.ts title="completion-kv-cache.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/kv_cache.py title="completion_kv_cache.py" lineNumbers
 ```
 </WrapCode>
 </Tab>

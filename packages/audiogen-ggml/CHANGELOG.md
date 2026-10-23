@@ -5,20 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0] - 2026-10-23
 
 ### Added
 
 - Bounded FuzzTest coverage for the JS-adapter number parsers
-  (`parseInteger`, `parseFloat`, `checkedInteger`, `checkedFloat`). Linux C++
-  CI runs the suite after the native build's caches are saved; this addon has
-  no addon-level C++ unit tests yet. The parsers compile without audiogen-cpp,
-  so ASan and LeakSanitizer stay at full strength. No public addon API changes.
+  (`parseInteger`, `parseFloat`, `checkedInteger`, `checkedFloat`)
+  ([#4606](https://github.com/tetherto/qvac/pull/4606)). Linux C++ CI runs the
+  suite after the native build's caches are saved; this addon has no
+  addon-level C++ unit tests yet. The parsers compile without audiogen-cpp, so
+  ASan and LeakSanitizer stay at full strength. No public addon API changes.
 
 ### Changed
 
 - Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
-  the speech addons so they use the same source revision.
+  the speech addons so they use the same source revision
+  ([#5062](https://github.com/tetherto/qvac/pull/5062),
+  [#5194](https://github.com/tetherto/qvac/pull/5194),
+  [#5245](https://github.com/tetherto/qvac/pull/5245)).
+- Move the shared native `speech-cpp` source pin to `2026-10-23#2` across
+  the speech addons so they use the same source revision
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): q8_0 matrix products whose sums exceed
+  the fp16 range no longer come back as infinity, and attention over 32 or
+  more tokens with unpadded lengths is computed correctly. The shared native
+  `ggml-speech` moves to `2026-10-23` across the speech addons
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
 
 ## [0.8.0] - 2026-10-14
 

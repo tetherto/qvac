@@ -28,6 +28,7 @@ import { ensureAddonLoggerReady, getPlugin } from '@/plugins/index'
 import { runAdvisoryFitCheck } from '@/model-fit/load-check'
 import { refusesLoad, resolveModelFitPolicy, runsProbe } from '@/schemas/model-fit-policy'
 import { getConfig } from '@/runtime/state'
+import { resolveToolDialect } from '@/utils/tools/dialect'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { getEngineLogger } from '@/logging/index'
@@ -157,13 +158,19 @@ export async function loadModel(
 
     logger.info(`${modelType} model ${modelId} loaded`)
 
+    const toolDialect =
+      'completionStream' in plugin.handlers
+        ? await resolveToolDialect(modelName, modelPath)
+        : undefined
+
     registerModel(modelId, {
       model: result.model,
       path: modelPath,
       config: modelConfig,
       modelType: modelType as CanonicalModelType,
       name: modelName,
-      fitProbe
+      fitProbe,
+      toolDialect
     })
 
     const loadResult: LoadModelResult =

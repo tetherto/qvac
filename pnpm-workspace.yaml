@@ -15,6 +15,10 @@ packages:
   # workspace avoids an importer the root lockfile has no entry for, which would
   # fail every --frozen-lockfile install.
   - "!packages/sdk-kotlin"
+  # sdk-e2e is the SDK's private e2e consumer and installs its own npm tree
+  # (`install:build`, with the SDK as a `file:` dependency). As a workspace
+  # importer it would need a root lockfile entry for a tree pnpm never installs.
+  - "!packages/sdk-e2e"
   - "packages/registry-server/client"
   - "packages/registry-server/shared"
   - "plugins/*"

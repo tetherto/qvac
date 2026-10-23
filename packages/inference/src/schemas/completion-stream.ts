@@ -7,7 +7,8 @@ import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
 export { completionStatsSchema, type CompletionStats } from '@/schemas/completion-event'
 
 /**
- * Tool-call output dialect. Auto-detected from the model name; pass via
+ * Tool-call output dialect. Detected at load from the model name, then from the
+ * GGUF `general.architecture`, then `"hermes"`; pass via
  * `completion({ toolDialect })` to override.
  *
  * Expected raw model output per dialect:
@@ -296,7 +297,7 @@ const completionClientParamsBaseSchema = completionParamsSchema.extend({
   toolDialect: toolDialectSchema
     .optional()
     .describe(
-      'Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.'
+      'Override auto-detected tool-call dialect. Use when detection from the model name and GGUF architecture picks the wrong parser chain for your model.'
     ),
   responseFormat: responseFormatSchema
     .optional()
