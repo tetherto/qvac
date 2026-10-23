@@ -528,6 +528,30 @@ jobs:
               for(const [k,v] of Object.entries(o)) fs.appendFileSync(process.env.GITHUB_ENV, k+"="+sub(v)+"\n");
             })'
 
+      # Keep the collector on the workflow revision even when tests check out
+      # an older source SHA or an authorized fork that does not contain it.
+      - name: Checkout diffusion diagnostic tooling
+        if: inputs.run_integration_tests && matrix.package == 'diffusion-cpp' && matrix.platform == 'linux' && matrix.arch == 'x64'
+        continue-on-error: true
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: tetherto/qvac
+          ref: ${{ github.workflow_sha }}
+          path: .diffusion-ci-diagnostics
+          persist-credentials: false
+          sparse-checkout: |
+            .github/scripts/capture-diffusion-ci-diagnostics.mjs
+            .github/scripts/collect-cuda-runtime-info.py
+          sparse-checkout-cone-mode: false
+
+      - name: Capture diffusion NVIDIA environment before tests
+        if: inputs.run_integration_tests && matrix.package == 'diffusion-cpp' && matrix.platform == 'linux' && matrix.arch == 'x64'
+        continue-on-error: true
+        shell: bash
+        env:
+          DIAGNOSTIC_WORKDIR: ${{ matrix.workdir }}
+        run: node .diffusion-ci-diagnostics/.github/scripts/capture-diffusion-ci-diagnostics.mjs "$DIAGNOSTIC_WORKDIR" before
+
       - name: Run integration tests (Unix, tee'd)
         if: inputs.run_integration_tests && matrix.useTeeLogging && matrix.platform != 'win32'
         working-directory: ${{ matrix.workdir }}
@@ -603,6 +627,25 @@ jobs:
             eval "$(echo "$QVAC_TEST_ENV" | jq -r 'to_entries[] | "export \(.key)=\(.value|tostring|@sh)"')"
           fi
           npm run "$TEST_SCRIPT" ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }}
+
+      - name: Capture diffusion NVIDIA environment after tests
+        if: always() && inputs.run_integration_tests && matrix.package == 'diffusion-cpp' && matrix.platform == 'linux' && matrix.arch == 'x64'
+        continue-on-error: true
+        shell: bash
+        env:
+          DIAGNOSTIC_WORKDIR: ${{ matrix.workdir }}
+        run: node .diffusion-ci-diagnostics/.github/scripts/capture-diffusion-ci-diagnostics.mjs "$DIAGNOSTIC_WORKDIR" after
+
+      - name: Upload diffusion NVIDIA diagnostics
+        if: always() && inputs.run_integration_tests && matrix.package == 'diffusion-cpp' && matrix.platform == 'linux' && matrix.arch == 'x64'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: diffusion-cpp-nvidia-diagnostics-${{ matrix.os || matrix.platform }}-${{ matrix.arch }}-${{ strategy.job-index }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ matrix.workdir }}/test/results/nvidia-diagnostics
+            ${{ matrix.workdir }}/test-output.log
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload performance report
         if: always() && !cancelled()
