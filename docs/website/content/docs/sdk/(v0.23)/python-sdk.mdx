@@ -7,40 +7,30 @@ schemaType: TechArticle
 
 ## Overview
 
-The Python SDK (`tetherto-qvac-sdk` on PyPI) is the Python client for QVAC.
-It is asyncio-native, drives the worker over `bare-rpc`, and exposes every
-QVAC capability through a typed API.
+The Python SDK (`tetherto-qvac-sdk` on PyPI) is the Python client for QVAC. It is asyncio-native, drives the worker over `bare-rpc`, and exposes every QVAC capability through a typed API.
 
 ## Requirements
 
 - Python `>= 3.10`
-- Node.js `>= v22.17` (to host the worker)
+
+The package below is self-contained: it bundles the QVAC worker and its runtime, so Node.js is not required.
 
 For host-level requirements (OS versions, GPU drivers, Vulkan runtime), see [System requirements](/sdk/system-requirements).
 
 ## Install
 
-<Steps>
-<Step>
-Install the package:
+Install the self-contained package for your platform:
 
 ```bash
-pip install "tetherto-qvac-sdk"
+pip install tetherto-qvac-sdk \
+  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v0.22.0
 ```
+
+pip selects the wheel for your platform and resolves the remaining dependencies from PyPI. `Client()` then finds the bundled worker automatically, with no further setup.
+
+Self-contained wheels ship for darwin-arm64, linux-x64, linux-arm64 and win32-x64. On any other platform, follow the thin install in the [package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-python/README.md).
 
 Optional extras: `vla`, `notebook`.
-</Step>
-
-<Step>
-Install the worker:
-
-```bash
-python -m tetherto.qvac_sdk install-worker
-```
-
-`Client()` finds it automatically after this. To override the location, set `QVAC_WORKER_PATH` or pass `worker_path=` to `Client()`.
-</Step>
-</Steps>
 
 ## Quickstart
 
@@ -61,14 +51,8 @@ source .venv/bin/activate
 <Step>
 Install the package:
 ```bash
-pip install tetherto-qvac-sdk
-```
-</Step>
-
-<Step>
-Install the worker:
-```bash
-python -m tetherto.qvac_sdk install-worker
+pip install tetherto-qvac-sdk \
+  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v0.22.0
 ```
 </Step>
 
@@ -110,10 +94,10 @@ One such example queries the model registry:
 
 ### RPC servers
 
-Serving requires `@qvac/ggml-rpc-server` and a custom worker. In your examples workspace, install the JavaScript SDK and native server package. Replace `<version>` with the version of your installed `tetherto-qvac-sdk` package so the client and worker use the same contract:
+Serving requires `@qvac/ggml-rpc-server` and a custom worker. In your examples workspace, install the JavaScript SDK and native server package, pinned to the same version as the Python client so both speak the same contract:
 
 ```bash
-npm install "@qvac/sdk@<version>" @qvac/ggml-rpc-server
+npm install "@qvac/sdk@0.22.0" @qvac/ggml-rpc-server
 ```
 
 Create `qvac.config.json` with the server provider:

@@ -19,6 +19,7 @@
 #include <common/arg.h>
 #include <common/chat.h>
 #include <common/common.h>
+#include <common/json.h>
 #include <common/log.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
@@ -1113,6 +1114,9 @@ std::string LlamaModel::processConcurrent(
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
     jobStats_[id] = std::move(terminal);
   }
+  if (prompt.outputCallback) {
+    return {};
+  }
   return result.outputs.empty() ? std::string{}
                                 : std::move(result.outputs.front());
 }
@@ -1818,10 +1822,40 @@ std::string optionalString(
   return it->second.get<std::string>();
 }
 
+// The same value in an order-preserving parse of the request, or null when
+// that parse failed or lacks it.
+const common_json* orderedChild(const common_json* parent, const char* key) {
+  if (parent == nullptr || !parent->is_object() || !parent->contains(key)) {
+    return nullptr;
+  }
+  return &parent->at(key);
+}
+
+const common_json* orderedChild(const common_json* parent, size_t idx) {
+  if (parent == nullptr || !parent->is_array() || idx >= parent->size()) {
+    return nullptr;
+  }
+  return &parent->at(idx);
+}
+
+// A tool's schema and a past call's arguments are written out in the caller's
+// key order. picojson's object is a std::map, so its serialize() sorts keys,
+// and fabric builds the tool grammar with object properties in schema order:
+// a sorted schema rejects arguments written in the order the caller declared
+// them. `ordered` is the value from an order-preserving parse of the request;
+// without it the value keeps picojson's order.
+std::string serializeInCallerOrder(
+    const picojson::value& value, const common_json* ordered) {
+  return ordered != nullptr ? ordered->dump() : value.serialize();
+}
+
 // Past tool calls on an assistant turn, and the call a tool result answers, so
 // the chat template renders them in the model's own format instead of the
-// caller flattening them into `content`.
-void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
+// caller flattening them into `content`. `orderedMsg` is the same message from
+// an order-preserving parse, see serializeInCallerOrder.
+void readToolTurnFields(
+    const picojson::object& obj, const common_json* orderedMsg,
+    common_chat_msg& msg) {
   auto calls = obj.find("tool_calls");
   if (calls != obj.end()) {
     if (msg.role != "assistant") {
@@ -1830,7 +1864,10 @@ void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
     if (!calls->second.is<picojson::array>()) {
       throwInvalidToolTurn("tool_calls must be an array");
     }
-    for (const picojson::value& entry : calls->second.get<picojson::array>()) {
+    const picojson::array& entries = calls->second.get<picojson::array>();
+    const common_json* orderedCalls = orderedChild(orderedMsg, "tool_calls");
+    for (size_t idx = 0; idx < entries.size(); ++idx) {
+      const picojson::value& entry = entries[idx];
       if (!entry.is<picojson::object>()) {
         throwInvalidToolTurn("each tool_calls entry must be an object");
       }
@@ -1864,7 +1901,9 @@ void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
         }
         toolCall.arguments = text;
       } else if (args->second.is<picojson::object>()) {
-        toolCall.arguments = args->second.serialize();
+        toolCall.arguments = serializeInCallerOrder(
+            args->second,
+            orderedChild(orderedChild(orderedCalls, idx), "arguments"));
       } else {
         throwInvalidToolTurn(
             "tool_calls arguments must be an object or a JSON object string");
@@ -1899,6 +1938,18 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
 
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
+    // Only read for key order, see serializeInCallerOrder.
+    const common_json orderedJson = common_json::parse_no_throw(input);
+    const common_json* ordered =
+        orderedJson.is_discarded() ? nullptr : &orderedJson;
+    if (ordered == nullptr) {
+      // picojson accepts input common_json rejects: trailing text after the
+      // array, raw invalid UTF-8, numbers like `01`.
+      QLOG_IF(
+          Priority::DEBUG,
+          "[LlamaModel] formatPrompt: request is not strict JSON, so tool "
+          "schemas and call arguments keep sorted key order\n");
+    }
 
     int addMediaPlaceholder = 0;
     bool isNextUser = false;
@@ -1906,6 +1957,7 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
       const auto& subObj = obj[i];
       if (subObj.is<picojson::object>()) {
         picojson::object jsonObj = subObj.get<picojson::object>();
+        const common_json* orderedEntry = orderedChild(ordered, i);
 
         if (jsonObj.find("type") != jsonObj.end() &&
             jsonObj["type"].get<std::string>() == "function") {
@@ -1915,7 +1967,9 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
             tool.description = jsonObj["description"].get<std::string>();
           }
           if (jsonObj.find("parameters") != jsonObj.end()) {
-            tool.parameters = jsonObj["parameters"].serialize();
+            tool.parameters = serializeInCallerOrder(
+                jsonObj["parameters"],
+                orderedChild(orderedEntry, "parameters"));
           }
           tools.push_back(tool);
           continue;
@@ -1992,7 +2046,7 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
           }
         }
         try {
-          readToolTurnFields(jsonObj, newMsg);
+          readToolTurnFields(jsonObj, orderedEntry, newMsg);
         } catch (...) {
           state_->llmContext_->resetMedia();
           throw;

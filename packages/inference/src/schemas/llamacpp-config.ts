@@ -472,10 +472,10 @@ export const embedConfigBaseSchema = z.object({
     .optional()
     .describe('Tokens processed per batch (input throughput). Default 1024.'),
   pooling: z
-    .enum(['none', 'mean', 'cls', 'last', 'rank'])
+    .enum(['none', 'mean', 'cls', 'last'])
     .optional()
     .describe(
-      "Pooling strategy collapsing token embeddings into one sequence vector: `'none'`, `'mean'`, `'cls'`, `'last'`, or `'rank'`. Unset uses the model default."
+      "Pooling strategy collapsing token embeddings into one sequence vector: `'none'`, `'mean'`, `'cls'`, or `'last'`. Unset uses the model default."
     ),
   attention: z
     .enum(['causal', 'non-causal'])

@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Core ML DAC sidecar for Parler-TTS on macOS and iOS: audio decoding runs
+  on Core ML when a `<gguf stem minus quant tag>-dac.mlmodelc` sits beside
+  the GGUF (`parler-mini-v1-q8_0.gguf` -> `parler-mini-v1-dac.mlmodelc`), and
+  falls back to ggml otherwise. `PARLER_COREML_DISABLE` keeps it on ggml.
+
 ### Changed
 
 - Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
+  the speech addons so they use the same source revision.
+- Move the shared native `speech-cpp` source pin to `2026-10-23#2` across
   the speech addons so they use the same source revision.
 - Update the shared native `speech-cpp` source to `2026-10-19`, including
   optional CosyVoice3 Core ML sidecars on Apple platforms. Re-export existing
@@ -41,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - LavaSR denoising can use the Vulkan GPU on supported Android ARM Mali devices
   when GPU inference is enabled, instead of falling back to CPU.
+- Adreno GPUs (Android, OpenCL): q8_0 matrix products whose sums exceed
+  the fp16 range no longer come back as infinity, and attention over 32 or
+  more tokens with unpadded lengths is computed correctly. The shared native
+  `ggml-speech` moves to `2026-10-23` across the speech addons.
+- Parler-TTS reports an error instead of crashing when the model produces
+  non-finite logits.
 
 ## [0.13.0] - 2026-10-14
 
