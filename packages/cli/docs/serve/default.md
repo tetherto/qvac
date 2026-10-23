@@ -408,7 +408,9 @@ image pixels; `bbox` and `confidence` are present when the engine reports them.
 
 Streaming emits `ocr.chunk` events carrying `blocks` as the engine returns them, then one
 `ocr.done` event with `stats`, then `data: [DONE]`. The engine currently returns all of an
-image's blocks at once, so expect a single `ocr.chunk`.
+image's blocks at once, so expect a single `ocr.chunk`. An error before it, such as an image the
+engine cannot decode, returns JSON as usual; a failure after it arrives as a final
+`{ "error": ... }` event.
 
 OCR cannot be cancelled: a client disconnect drops the result, but the image is still read to
 the end.
@@ -423,18 +425,18 @@ curl -sS http://localhost:11434/qvac/v1/ocr \
 
 The [binary input](#binary-inputs) errors apply to `image`, plus:
 
-| HTTP | `error.code`               | When                                          |
-| ---- | -------------------------- | --------------------------------------------- |
-| 400  | `invalid_json`             | Body is not valid JSON                        |
-| 400  | `invalid_multipart`        | Multipart body could not be parsed            |
-| 400  | `missing_model`            | `model` is missing                            |
-| 400  | `missing_image`            | `image` is missing or empty                   |
-| 400  | `unsupported_image_format` | `image` is not a PNG, JPEG or BMP             |
-| 400  | `invalid_request`          | Unknown field, or a flag that is not boolean  |
-| 400  | `invalid_model_type`       | Alias is not an `ocr` model                   |
-| 404  | `model_not_found`          | Unknown alias                                 |
-| 413  | `request_too_large`        | Upload over 100 MB                            |
-| 503  | `model_not_loaded`         | Model not loaded and lazy loading is disabled |
+| HTTP | `error.code`               | When                                             |
+| ---- | -------------------------- | ------------------------------------------------ |
+| 400  | `invalid_json`             | Body is not valid JSON                           |
+| 400  | `invalid_multipart`        | Multipart body could not be parsed               |
+| 400  | `missing_model`            | `model` is missing                               |
+| 400  | `missing_image`            | `image` is missing or empty                      |
+| 400  | `unsupported_image_format` | `image` is not a PNG, JPEG or BMP, or is corrupt |
+| 400  | `invalid_request`          | Unknown field, or a flag that is not boolean     |
+| 400  | `invalid_model_type`       | Alias is not an `ocr` model                      |
+| 404  | `model_not_found`          | Unknown alias                                    |
+| 413  | `request_too_large`        | Upload over 100 MB                               |
+| 503  | `model_not_loaded`         | Model not loaded and lazy loading is disabled    |
 
 ### Configuring an OCR model
 

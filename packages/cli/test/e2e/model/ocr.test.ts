@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { useModelServer } from '../helpers/server.js'
-import { collectSSE, multipart } from '../helpers/http.js'
+import { assertStatusAndError, collectSSE, multipart } from '../helpers/http.js'
 
 const ALIAS = 'test-ocr'
 
@@ -94,4 +94,21 @@ describe('qvac ocr: real OCR model', () => {
     assert.ok(chunks.every((c) => c.object === 'ocr.chunk'))
     assert.match(joined(chunks.flatMap((c) => c.blocks)), /OCR/)
   })
+
+  // Each passes the signature check but cannot be decoded: OpenCV rejects the
+  // truncated PNG, the addon's own BMP reader the junk after `BM`.
+  const UNDECODABLE: Array<[string, Buffer]> = [
+    ['a truncated PNG', IMAGE.subarray(0, 200)],
+    ['BM followed by junk', Buffer.from('BMjunkjunkjunk')]
+  ]
+  for (const [name, bytes] of UNDECODABLE) {
+    for (const stream of [false, true]) {
+      it(`rejects ${name} with stream=${stream}`, { timeout: 30_000 }, async () => {
+        const image = `data:image/png;base64,${bytes.toString('base64')}`
+        const res = await ocr({ model: ALIAS, image, stream })
+        assertStatusAndError(res, 400, 'unsupported_image_format')
+        assert.doesNotMatch(res.body, /\.png/, 'the server temp path must not leak')
+      })
+    }
+  }
 })
