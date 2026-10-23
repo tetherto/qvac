@@ -959,7 +959,7 @@ In fabric, the scoring is part of the library (`llama_get_embeddings_seq` return
 
 **Chose:** An optional `files.projectionModel` on `GGMLBert`, with inputs given as ordered text and media parts, embedded by a `MultimodalEmbedder` that `BertModel` owns. Each input is decoded as one mixed batch of text tokens and media embeddings.
 **Why:** A multimodal embedding model has the same output as a text one, and a model without memory only embeds a mixed input correctly when all of it goes through one decode
-**Cost:** Needs fabric 11259.0.0 (`@qvac/fabric` 0.23.0) or later, which carries upstream #29622 (mixed token and embedding batches). Each multimodal input is one decode, so it is not packed with other inputs.
+**Cost:** Each multimodal input is one decode, so it is not packed with other inputs.
 
 </details>
 
@@ -985,8 +985,7 @@ EmbeddingGemma 2 (upstream llama.cpp #30054) embeds text, images and audio into 
 - ✅ One embedding API for text, images and audio
 - ✅ Text-only use and models without a projection model are unaffected
 - ✅ The projector options of `@qvac/llm-llamacpp` (`image-max-tokens`, `image-min-tokens`, `mmproj-no-audio`, `mmproj-use-gpu` with its Android default, `image-max-megapixels`), with the same keys. The addon takes them out of the config itself, because llama.cpp's argument parser rejects them for an embedding load. Unlike llm, audio loads by default and the image budget is the projector's own (1120 tokens for EmbeddingGemma 2, not llm's 280), so results match llama-server.
-- ❌ Needs fabric 11259.0.0 (`@qvac/fabric` 0.23.0) or later: `llama_batch_ext` with mixed entries (upstream #29622), `llama_process()` and the current mtmd helpers. Earlier fabric does not build this addon.
-- ❌ A multimodal input must fit in one ubatch (`batch_size`). The image-token budget is not capped to the batch automatically, as llama-server does, because the API to read the projector's default (`mtmd_get_memory_usage`) is marked unstable; callers lower it with `image-max-tokens`.
+- ❌ A multimodal input must fit in one ubatch (`batch_size`); a larger one is rejected before decoding with `InputTokensExceedBatchSize`. The image-token budget is not capped to the batch automatically, as upstream llama-server does, because fabric has no API to read the projector's default budget (`image-max-tokens` replaces that default rather than capping it); callers lower it with `image-max-tokens`.
 - ❌ Multimodal inputs are decoded one at a time, not packed into one batch
 - ❌ No video input. mtmd reads video only through ffmpeg.
 
