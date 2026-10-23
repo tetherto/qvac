@@ -3760,10 +3760,6 @@
       "title": "CompletionOrchestrateRequest",
       "type": "object",
       "properties": {
-        "prefill": {
-          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
-          "type": "boolean"
-        },
         "history": {
           "type": "array",
           "items": {
@@ -3856,6 +3852,10 @@
               "minLength": 1
             }
           ]
+        },
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
         },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
@@ -4464,10 +4464,6 @@
       "title": "CompletionStreamRequest",
       "type": "object",
       "properties": {
-        "prefill": {
-          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
-          "type": "boolean"
-        },
         "history": {
           "type": "array",
           "items": {
@@ -4560,6 +4556,10 @@
               "minLength": 1
             }
           ]
+        },
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
         },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",

@@ -3793,12 +3793,6 @@ class CompletionOrchestrateRequestResponseFormatJsonSchema(GeneratedBaseModel):
 
 
 class CompletionOrchestrateRequest(GeneratedBaseModel):
-    prefill: Annotated[
-        bool | None,
-        Field(
-            description="Evaluate the prompt without generating an answer. Requires an enabled KV cache."
-        ),
-    ] = None
     history: Annotated[
         list[CompletionOrchestrateRequestHistoryItem],
         Field(description="Array of conversation messages sent to the model."),
@@ -3811,6 +3805,12 @@ class CompletionOrchestrateRequest(GeneratedBaseModel):
         ),
     ]
     kv_cache: Annotated[bool | KvCache | None, Field(alias="kvCache")] = None
+    prefill: Annotated[
+        bool | None,
+        Field(
+            description="Evaluate the prompt without generating an answer. Requires an enabled KV cache."
+        ),
+    ] = None
     tools: Annotated[
         list[CompletionOrchestrateRequestToolsItem] | None,
         Field(
@@ -4445,12 +4445,6 @@ class CompletionStreamRequestResponseFormatJsonSchema(GeneratedBaseModel):
 
 
 class CompletionStreamRequest(GeneratedBaseModel):
-    prefill: Annotated[
-        bool | None,
-        Field(
-            description="Evaluate the prompt without generating an answer. Requires an enabled KV cache."
-        ),
-    ] = None
     history: Annotated[
         list[CompletionStreamRequestHistoryItem],
         Field(description="Array of conversation messages sent to the model."),
@@ -4463,6 +4457,12 @@ class CompletionStreamRequest(GeneratedBaseModel):
         ),
     ]
     kv_cache: Annotated[bool | KvCache | None, Field(alias="kvCache")] = None
+    prefill: Annotated[
+        bool | None,
+        Field(
+            description="Evaluate the prompt without generating an answer. Requires an enabled KV cache."
+        ),
+    ] = None
     tools: Annotated[
         list[CompletionStreamRequestToolsItem] | None,
         Field(
