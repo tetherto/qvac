@@ -114,8 +114,8 @@ live in `tetherto.qvac_sdk.models`.
 
 - **`Client`** — starts/owns a worker connection; `client.transport` is passed
   to every call.
-- **Ergonomic wrappers** (kwargs + typed results): `load_model`, `unload_model`,
-  `completion`, `translate`, `cancel`, `delete_cache`, `invoke_plugin` /
+- **Ergonomic wrappers** (kwargs + typed results): `load_model`,
+  `assess_model_fit`, `unload_model`, `completion`, `translate`, `cancel`, `delete_cache`, `invoke_plugin` /
   `invoke_plugin_stream`, `model_registry_list` / `_search` / `_get_model`.
   (Tool calling is `completion(tools=...)`; the worker-orchestrated loop is an
   advanced path at `tetherto.qvac_sdk._completion.completion_orchestrate`, not flat-public.)

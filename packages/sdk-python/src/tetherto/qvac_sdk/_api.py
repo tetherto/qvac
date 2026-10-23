@@ -23,6 +23,7 @@ from pydantic import BaseModel, RootModel, ValidationError
 
 from ._generated import methods as _methods
 from ._generated.models import (
+    AssessModelFitRequestModelsItemModelSrc,
     ModelRegistryGetModelResponseModel,
     ModelRegistryListResponseModelsItem,
     ModelRegistrySearchResponseModelsItem,
@@ -51,11 +52,14 @@ from .model_types import (
     assert_model_src_matches_model_type,
     infer_model_type_from_model_src,
     is_model_type_alias,
+    model_src_to_fit_wire,
     model_src_to_wire,
     normalize_model_type,
     to_wire_base64,
 )
 from .schemas import (
+    AssessModelFitRequest,
+    AssessModelFitResponse,
     CancelRequest,
     CancelResponse,
     ClassifyRequest,
@@ -79,7 +83,10 @@ from .schemas import (
     UnloadModelResponse,
 )
 
+# Contract enum values; tests/test_api_literals.py holds them to the generated models.
 ModelFitPolicy = Literal["log", "refuse", "off"]
+ModelFitExecution = Literal["sequential", "concurrent"]
+ModelFitHeadroomPolicy = Literal["interactive-v1"]
 
 
 def _dump(model: Any) -> dict[str, Any]:
@@ -113,6 +120,35 @@ def _config_srcs_to_wire(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _config_srcs_to_wire(item) for key, item in value.items()}
     return model_src_to_wire(value)
+
+
+def _fit_config_to_wire(value: Any) -> Any:
+    """Turn every model descriptor inside a config into the full camelCase
+    descriptor the assessModelFit wire takes."""
+    if isinstance(value, list):
+        return [_fit_config_to_wire(item) for item in value]
+    descriptor = model_src_to_fit_wire(value)
+    if isinstance(descriptor, dict) and isinstance(descriptor.get("src"), str):
+        return AssessModelFitRequestModelsItemModelSrc.model_validate(
+            descriptor
+        ).model_dump(mode="json", by_alias=True, exclude_none=True)
+    if isinstance(value, dict):
+        return {key: _fit_config_to_wire(item) for key, item in value.items()}
+    return value
+
+
+def _canonical_model_type(model_type: str, stacklevel: int) -> str:
+    """The canonical form of `model_type`, warning when it is an alias.
+    `stacklevel` counts from the caller of this function."""
+    if is_model_type_alias(model_type):
+        canonical = normalize_model_type(model_type)
+        warnings.warn(
+            f'Model type "{model_type}" is an alias and will be '
+            f'deprecated. Use "{canonical}" instead.',
+            DeprecationWarning,
+            stacklevel=stacklevel + 1,
+        )
+    return normalize_model_type(model_type)
 
 
 def _first_validation_problem(error: ValidationError, method: str) -> str:
@@ -215,15 +251,7 @@ async def load_model(
             if not resolved_type:
                 raise ModelTypeRequiredError()
 
-        if is_model_type_alias(resolved_type):
-            canonical = normalize_model_type(resolved_type)
-            warnings.warn(
-                f'Model type "{resolved_type}" is an alias and will be '
-                f'deprecated. Use "{canonical}" instead.',
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        resolved_type = normalize_model_type(resolved_type)
+        resolved_type = _canonical_model_type(resolved_type, stacklevel=2)
 
     payload: dict[str, Any] = {"type": "loadModel"}
     if is_reload_config:
@@ -279,6 +307,86 @@ async def load_model(
     if logger is not None:
         _start_model_logging(transport, response.model_id, logger)
     return response.model_id
+
+
+_FIT_CANDIDATE_KEYS = {
+    "model_src": "modelSrc",
+    "model_type": "modelType",
+    "model_config": "modelConfig",
+    "transcription_workload": "transcriptionWorkload",
+    "tts_workload": "ttsWorkload",
+}
+
+
+def _fit_candidate_to_wire(candidate: dict[str, Any]) -> dict[str, Any]:
+    unknown = sorted(set(candidate) - set(_FIT_CANDIDATE_KEYS))
+    if unknown:
+        named = ", ".join(repr(key) for key in unknown)
+        raise RequestValidationError(f"assessModelFit candidate has no {named}")
+
+    model_src = candidate.get("model_src")
+    model_type = candidate.get("model_type")
+    if model_type is None:
+        model_type = infer_model_type_from_model_src(model_src)
+        if not model_type:
+            raise ModelTypeRequiredError()
+
+    wire: dict[str, Any] = {
+        "modelType": _canonical_model_type(model_type, stacklevel=3)
+    }
+    if model_src is not None:
+        wire["modelSrc"] = model_src_to_fit_wire(model_src)
+    if candidate.get("model_config") is not None:
+        wire["modelConfig"] = _fit_config_to_wire(candidate["model_config"])
+    for key in ("transcription_workload", "tts_workload"):
+        if candidate.get(key) is not None:
+            wire[_FIT_CANDIDATE_KEYS[key]] = candidate[key]
+    return wire
+
+
+async def assess_model_fit(
+    transport: Transport,
+    *,
+    models: list[dict[str, Any]],
+    execution: ModelFitExecution | None = None,
+    policy: ModelFitHeadroomPolicy | None = None,
+) -> AssessModelFitResponse:
+    """Ergonomic assessModelFit mirroring JS's `client/api/assess-model-fit.ts`:
+    whether the given models are likely to fit in this device's memory, judged
+    before anything is downloaded.
+
+    - `models` holds one dict per candidate, keyed like `load_model`'s own
+      arguments: `model_src`, `model_type`, `model_config`, plus the fit-only
+      `transcription_workload` and `tts_workload`. Any other key raises
+      RequestValidationError.
+    - `model_src` accepts a plain string, a ModelConstant, or a descriptor
+      dict. `model_type` may be omitted when the descriptor names its engine
+      (raises ModelTypeRequiredError otherwise).
+    - `execution` is "sequential" (the default) or "concurrent": whether the
+      models are assumed to run one at a time or all at once.
+    - `policy` names the headroom policy, how much of the free memory is held
+      back. Unset uses the worker's default, "interactive-v1".
+
+    Advisory only: nothing is downloaded, reserved, or blocked. An `unknown`
+    verdict means the evidence supports no answer either way.
+    """
+    try:
+        # A loop, so the alias warning's stacklevel sees no comprehension frame.
+        candidates = []
+        for candidate in models:
+            candidates.append(_fit_candidate_to_wire(candidate))
+        payload: dict[str, Any] = {"type": "assessModelFit", "models": candidates}
+        if execution is not None:
+            payload["execution"] = execution
+        if policy is not None:
+            payload["policy"] = policy
+        request = AssessModelFitRequest.model_validate(payload)
+    except ValidationError as error:
+        raise RequestValidationError(
+            _first_validation_problem(error, "assessModelFit")
+        ) from error
+
+    return await _methods.assess_model_fit(transport, request)
 
 
 class TranslateRun:
