@@ -37,7 +37,7 @@ function probeCase(family: string, dep: string, measured: boolean): TestDefiniti
 
 export const modelFitLlm = assessCase('llm', 'llm', true)
 export const modelFitEmbeddings = assessCase('embeddings', 'embeddings', true)
-export const modelFitParakeet = assessCase('parakeet', 'parakeet-tdt', false)
+export const modelFitParakeet = assessCase('parakeet', 'parakeet-tdt', true)
 export const modelFitAudiogen = assessCase('audiogen', 'audiogen-turbo', false)
 export const modelFitDiffusion = assessCase('diffusion', 'diffusion', false)
 export const modelFitOcr = assessCase('ocr', 'ocr', false)
@@ -52,14 +52,14 @@ export const modelFitTtsCosyvoice = assessCase('tts-cosyvoice3', 'tts-cosyvoice3
 export const modelFitTtsAudio8 = assessCase('tts-audio8', 'tts-audio8', false)
 export const modelFitTtsSupertonic = assessCase('tts-supertonic', 'tts-supertonic', false)
 
-export const modelFitWhisper = assessCase('whisper', 'whisper', false)
+export const modelFitWhisper = assessCase('whisper', 'whisper', true)
 export const modelFitBci = assessCase('bci', 'bci', false)
 export const modelFitTranslation = assessCase('translation', 'bergamot-en-fr', false)
 
 export const modelFitProbeLlm = probeCase('llm', 'llm', true)
 export const modelFitProbeEmbeddings = probeCase('embeddings', 'embeddings', true)
-export const modelFitProbeParakeet = probeCase('parakeet', 'parakeet-tdt', false)
-export const modelFitProbeWhisper = probeCase('whisper', 'whisper', false)
+export const modelFitProbeParakeet = probeCase('parakeet', 'parakeet-tdt', true)
+export const modelFitProbeWhisper = probeCase('whisper', 'whisper', true)
 export const modelFitProbeBci = probeCase('bci', 'bci', false)
 export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', false)
 export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', false)

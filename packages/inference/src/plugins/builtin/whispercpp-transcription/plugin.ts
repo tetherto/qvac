@@ -20,6 +20,7 @@ import { transcribe, transcribeStream } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildWhisperEngineConfig } from '@/plugins/builtin/asr-ggml/config'
+import { whisperFitRequest } from '@/plugins/builtin/asr-ggml/fit'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
 function createWhisperModel(
@@ -48,6 +49,7 @@ export const whisperPlugin = definePlugin({
   displayName: 'Whisper (whisper.cpp)',
   addonPackage: ADDON_ASR,
   loadConfigSchema: whisperConfigSchema,
+  fitRequest: whisperFitRequest,
   assessFit: ASRGgml.assessFit,
 
   async resolveConfig(cfg: WhisperConfig, ctx: ResolveContext) {

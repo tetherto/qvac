@@ -18,6 +18,7 @@ import { transcribe } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildMossTranscribeEngineConfig } from '@/plugins/builtin/asr-ggml/config'
+import { mossTranscribeFitRequest } from '@/plugins/builtin/asr-ggml/fit'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
 function createMossTranscribeModel(params: CreateModelParams): PluginModelResult {
@@ -45,6 +46,7 @@ export const mossTranscribePlugin = definePlugin({
   displayName: 'MOSS-Transcribe-Diarize',
   addonPackage: ADDON_ASR,
   loadConfigSchema: mossTranscribeConfigSchema,
+  fitRequest: mossTranscribeFitRequest,
   assessFit: ASRGgml.assessFit,
 
   resolveConfig(cfg: MossTranscribeConfig): Promise<ResolveResult<MossTranscribeConfig>> {

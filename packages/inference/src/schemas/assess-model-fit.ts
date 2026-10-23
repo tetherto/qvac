@@ -60,9 +60,7 @@ export type TtsFitWorkload = z.infer<typeof ttsFitWorkloadSchema>
 export const modelFitCandidateSchema = z.object({
   transcriptionWorkload: transcriptionFitWorkloadSchema
     .optional()
-    .describe(
-      'MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.'
-    ),
+    .describe('MOSS fit-only workload. Required for a MOSS verdict; does not configure loading.'),
   modelSrc: modelSrcInputSchema
     .optional()
     .describe(
