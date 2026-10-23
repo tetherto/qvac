@@ -62,6 +62,14 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_flux2_klein.py title="diffusion_flux2_klein.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Ideogram 4
@@ -69,7 +77,7 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 Ideogram 4 uses a split layout with an extra **unconditional diffusion model** (`uncondModelSrc`) alongside the Qwen3-VL LLM text encoder (`llmModelSrc`) and VAE (`vaeModelSrc`). Unlike the other families, its `prompt` must be a **JSON-serialized structured caption** — an object with a `high_level_description`, a `style_description`, and a `compositional_deconstruction` that lays out each element with an explicit bounding box (`bbox`) and, for text elements, the literal `text` to render. Plain-text prompts produce degenerate or placeholder output.
 
 <Callout type="warn">
-Pass the structured caption through `JSON.stringify(...)` when calling `diffusion({ prompt })`. The bounding boxes are expressed in the target canvas coordinate space (`[x0, y0, x1, y1]`), so keep them consistent with the requested `width`/`height`. Failure to abide by the JSON format specified within the examples, or adding NSFW prompts, will result in censored image output.
+Pass the structured caption serialized, not as an object: `JSON.stringify(...)` in JavaScript and TypeScript, or `json.dumps(..., separators=(",", ":"))` in Python, whose default spacing the model does not expect. The bounding boxes are expressed in the target canvas coordinate space (`[x0, y0, x1, y1]`), so keep them consistent with the requested `width`/`height`. Failure to abide by the JSON format specified within the examples, or adding NSFW prompts, will result in censored image output.
 </Callout>
 
 The following script loads Ideogram 4 in split-layout (diffusion model + unconditional model + LLM text encoder + VAE) and generates from a structured caption:
@@ -87,6 +95,14 @@ The following script loads Ideogram 4 in split-layout (diffusion model + uncondi
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-ideogram.ts title="diffusion-ideogram.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_ideogram.py title="diffusion_ideogram.py" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -109,6 +125,14 @@ The following script shows a minimal text-to-image generation example using a si
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-simple.ts title="diffusion-simple.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_simple.py title="diffusion_simple.py" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -136,6 +160,14 @@ The following script loads FLUX.2-klein in split-layout and transforms an input 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-flux2-klein-img2img.ts title="diffusion-flux2-klein-img2img.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_flux2_klein_img2img.py title="diffusion_flux2_klein_img2img.py" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -169,6 +201,14 @@ The following script loads SD 2.1 with an ESRGAN upscaler and generates both a s
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_esrgan_upscale.py title="diffusion_esrgan_upscale.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 #### Standalone
@@ -185,10 +225,6 @@ const [upscaledPng] = await outputs;
 ```
 
 `tile_size` defaults to 128. Increase it to reduce tile seams on large inputs, at the cost of more memory per pass.
-
-<Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
-</Callout>
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
