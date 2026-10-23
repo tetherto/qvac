@@ -249,7 +249,7 @@ const RULES: Rule[] = [
     match: /^model-fit-probe-(?:audiogen|diffusion(?:-esrgan)?|upscaler)$/,
     skip: {
       reason:
-        'Reading the projection needs a resident model, and both sets are too heavy to load on Device Farm devices; the assessment needs no load and still runs',
+        'Reading the load-time fit check needs a resident model, and both sets are too heavy to load on Device Farm devices; the assessment needs no load and still runs',
       platforms: ['mobile']
     }
   },
