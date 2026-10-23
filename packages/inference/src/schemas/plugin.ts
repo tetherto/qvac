@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
 import type { TurboVecIndexProvider } from '@qvac/rag'
+import type { TranscriptionFitWorkload, TtsFitWorkload } from '@/schemas/assess-model-fit'
 import type { ModelSrcInput } from '@/schemas/model-src-utils'
 import type { RuntimeContext } from '@/schemas/runtime-context'
 
@@ -154,6 +155,18 @@ export interface ResolveResult<TConfig = Record<string, unknown>, K extends stri
   artifacts?: Partial<Record<K, string>>
 }
 
+/** A load as `loadModel` would run it, resolved for its engine's fitter. */
+export interface FitLoad {
+  modelPath: string
+  modelConfig: unknown
+  artifacts?: Record<string, string> | undefined
+  isShardedModel: boolean
+  transcriptionWorkload?: TranscriptionFitWorkload | undefined
+  ttsWorkload?: TtsFitWorkload | undefined
+}
+
+export type FitRequestPlan = { request: unknown } | { unknown: string }
+
 export interface QvacPlugin<
   TConfig = Record<string, unknown>,
   TArtifactKeys extends string = string
@@ -164,10 +177,15 @@ export interface QvacPlugin<
   loadConfigSchema: z.ZodType
   createModel: (params: CreateModelParams) => PluginModelResult
   /**
+   * Builds the addon's fit request from a resolved load, or names why the load
+   * cannot be projected. A plugin without it answers every fit with `unknown`.
+   */
+  fitRequest?: (load: FitLoad) => FitRequestPlan
+  /**
    * The engine's own fitter. Carrying it here keeps every addon specifier
    * inside the module graph of the plugin that owns it, so a bundler walking a
-   * host that ships one engine never resolves the others. It returns the
-   * engine's fit result or a Promise of it.
+   * host that ships one engine never resolves the others. It takes what
+   * `fitRequest` built and returns the addon's fit result or a Promise of it.
    */
   assessFit?: (request: never) => unknown
   handlers: Record<string, PluginHandlerDefinition>
@@ -320,6 +338,8 @@ export const pluginDefinitionRuntimeSchema = z
       .min(1, 'addonPackage must be a non-empty string'),
     loadConfigSchema: zodSchemaLikeRuntimeSchema,
     createModel: functionRuntimeSchema,
+    fitRequest: functionRuntimeSchema.optional(),
+    assessFit: functionRuntimeSchema.optional(),
     handlers: z.record(z.string(), pluginHandlerDefinitionRuntimeSchema),
     logging: z
       .object({
