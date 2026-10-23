@@ -103,8 +103,8 @@ jobs:
     env:
       # generate-notice.js reads GH_TOKEN for GitHub API (vcpkg registry
       # portfiles + repo license lookups). qvac-registry-vcpkg is public and the
-      # scan only enumerates top-level packages/* (never packages/sdk/e2e, the
-      # sole @tetherto consumer), so GITHUB_TOKEN is sufficient.
+      # scan only enumerates top-level packages/* and skips packages/sdk-e2e, the
+      # sole @tetherto consumer, so GITHUB_TOKEN is sufficient.
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # NPM_TOKEN must be provisioned as a repo/org secret for the generator's
       # preflight to pass (an unset secret renders as an empty string, which the

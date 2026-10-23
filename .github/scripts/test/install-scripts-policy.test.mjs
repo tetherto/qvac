@@ -49,7 +49,7 @@ const ALLOWED = [
     match: 'npm install --install-links',
     count,
     reason:
-      'packages/sdk/e2e consumer depends on electron and react-native, both of which install through postinstall.',
+      'packages/sdk-e2e consumer depends on electron and react-native, both of which install through postinstall.',
   })),
   {
     file: '.github/actions/run-mobile-integration-tests/build-mobile-app/action.yml',
@@ -78,7 +78,7 @@ const ALLOWED = [
       'Reached only when a package entry sets pkg_manager to something other than npm; no entry does today. The npm branch above passes the flag explicitly. Kept detectable so a revert to the $PM indirection for npm is caught.',
   },
   {
-    file: 'packages/sdk/e2e/package.json',
+    file: 'packages/sdk-e2e/package.json',
     match: '"install:build"',
     count: 1,
     reason:

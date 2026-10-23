@@ -328,6 +328,16 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     JSAdapter adapter;
     modelInput.voice =
         adapter.readAudio8Voice(args.getJsObject(1, "inputObj"), env);
+    auto job = args.getJsObject(1, "inputObj");
+    if (job.getOptionalPropertyAs<js::Boolean, bool>(env, "streamOutput")
+            .value_or(false)) {
+      auto queue = instance.addonCpp->outputQueue;
+      modelInput.chunkCallback =
+          [queue](std::vector<int16_t>&& pcm, int index, bool last) {
+            queue->queueResult(
+                std::any(StreamingPcmChunk{std::move(pcm), index, last}));
+          };
+    }
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
