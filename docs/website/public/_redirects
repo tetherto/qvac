@@ -267,7 +267,7 @@
 # dot-containing path, because the pages they stand for are gone and
 # nothing links them.
 #
-# ORDER MATTERS: the line form must precede the `/sdk/v0.22/*` splat
+# ORDER MATTERS: the line form must precede the `/sdk/v0.21/*` splat
 # below, which would otherwise rewrite the request to an index.html that
 # was never built and drop it on the catch-all 404.
 /sdk/reference/release-notes/            /ecosystem/     301
@@ -319,9 +319,6 @@
 # one, it would not reach the bare form anyway, and a literal line makes a
 # cut visible in the diff. `scripts/cut-line.ts` writes all three rules of
 # the line a cut preserves.
-/sdk/v0.22/        /sdk/v0.22/index.html        200
-/sdk/v0.22         /sdk/v0.22/                  301
-/sdk/v0.22/*       /sdk/v0.22/:splat/index.html 200
 /sdk/v0.21/        /sdk/v0.21/index.html        200
 /sdk/v0.21         /sdk/v0.21/                  301
 /sdk/v0.21/*       /sdk/v0.21/:splat/index.html 200
