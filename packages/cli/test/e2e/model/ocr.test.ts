@@ -21,7 +21,7 @@ const OCR_CONFIG = {
 // Reads "This is a text for testing the OCR implementation, ..." and
 // "Type to enter text".
 const IMAGE = readFileSync(
-  new URL('../../../../sdk/e2e/assets/images/ocr-simple-test-png.png', import.meta.url)
+  new URL('../../../../sdk-e2e/assets/images/ocr-simple-test-png.png', import.meta.url)
 )
 const IMAGE_DATA_URL = `data:image/png;base64,${IMAGE.toString('base64')}`
 
