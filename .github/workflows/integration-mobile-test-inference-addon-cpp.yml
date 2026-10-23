@@ -78,8 +78,9 @@ concurrency:
   # (benchmarks / weekend / on-merge) is keyed per run and never cancels —
   # inputs.platform is only ever set on a manual dispatch. github.workflow is used
   # ONLY on the dispatch branch (where it resolves to this workflow's own name); the
-  # call branch uses run_id, so it can never collide with a caller's group.
-  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  # call branch uses run_id plus a literal package name, so it can never collide
+  # with a caller's group or a sibling mobile call.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-inference-addon-cpp', github.run_id) }}
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 env:
