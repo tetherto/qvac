@@ -45,6 +45,13 @@ async function startServer(): Promise<Server> {
       res.end()
       return
     }
+    if (url === '/unsized.bin') {
+      // No content-length, so the client can't tell a whole body from a cut one.
+      res.writeHead(200)
+      res.write(CONTENT)
+      res.end()
+      return
+    }
     const range = req.headers['range']
     if (range !== undefined) {
       const match = /bytes=(\d+)-/.exec(String(range))
@@ -108,6 +115,47 @@ test('downloadModelFromHttp: resumes a partial download via a Range/206 request'
     bytesEqual(fs.readFileSync(resumedPath) as Buffer, CONTENT),
     'resumed file is complete and correct'
   )
+})
+
+test('downloadModelFromHttp: serves a finished non-GGUF download from cache when offline', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  // CONTENT has no GGUF header, like a whisper.cpp .bin.
+  const url = `${server.base}/ggml-model.bin`
+  const modelPath = await downloadModelFromHttp(url)
+  await server.close()
+
+  t.is(await downloadModelFromHttp(url), modelPath, 'offline load uses the cached file')
+})
+
+test('downloadModelFromHttp: an offline partial is still refused', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  const url = `${server.base}/ggml-partial.bin`
+  const modelPath = await downloadModelFromHttp(url)
+  await server.close()
+  fs.writeFileSync(modelPath, CONTENT.subarray(0, CONTENT.length / 2))
+
+  await t.exception(() => downloadModelFromHttp(url), /Cannot resume partial download/)
+})
+
+test('downloadModelFromHttp: a download of unknown size is not trusted offline', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  const url = `${server.base}/unsized.bin`
+  await downloadModelFromHttp(url)
+  await server.close()
+
+  await t.exception(() => downloadModelFromHttp(url), /Cannot resume partial download/)
 })
 
 test('isResumableTransferError: integrity and insecure failures are terminal, transient network errors resume', (t) => {
