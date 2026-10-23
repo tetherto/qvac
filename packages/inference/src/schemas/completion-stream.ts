@@ -256,10 +256,6 @@ export const historyMessageSchema = z
 export type HistoryMessage = z.infer<typeof historyMessageSchema>
 
 export const completionParamsSchema = z.object({
-  prefill: z
-    .boolean()
-    .optional()
-    .describe('Evaluate the prompt without generating an answer. Requires an enabled KV cache.'),
   history: z
     .array(historyMessageSchema)
     .describe('Array of conversation messages sent to the model.'),
@@ -268,7 +264,11 @@ export const completionParamsSchema = z.object({
     .optional()
     .describe(
       'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to disable.'
-    )
+    ),
+  prefill: z
+    .boolean()
+    .optional()
+    .describe('Evaluate the prompt without generating an answer. Requires an enabled KV cache.')
 })
 
 const completionClientParamsBaseSchema = completionParamsSchema.extend({

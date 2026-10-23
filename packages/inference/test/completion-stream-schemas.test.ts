@@ -174,9 +174,14 @@ test('completion schemas: prefill requires a cache and cannot force tool output'
         )
       }
     }
-    for (const kvCache of [undefined, false, '']) {
-      t.is(schema.safeParse({ ...base, prefill: true, kvCache }).success, false)
+    for (const kvCache of [undefined, false]) {
+      const result = schema.safeParse({ ...base, prefill: true, kvCache })
+      t.ok(
+        !result.success &&
+          result.error.issues.some((issue) => issue.message.includes('prefill requires kvCache'))
+      )
     }
+    t.is(schema.safeParse({ ...base, prefill: true, kvCache: '' }).success, false)
     t.is(schema.safeParse({ ...base, prefill: 'true', kvCache: true }).success, false)
   }
 })

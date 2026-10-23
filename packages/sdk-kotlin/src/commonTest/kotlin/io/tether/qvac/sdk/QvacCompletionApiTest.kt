@@ -283,6 +283,7 @@ class QvacCompletionApiTest {
         val options = QvacCompletionOptions(
             generation = QvacGenerationOptions(temperature = 0.2, predict = 64, seed = 7, reasoningBudget = 0),
             kvCache = QvacKvCache.Enabled(true),
+            prefill = true,
             toolDialect = "hermes",
             requestId = "request-1",
         )
@@ -297,6 +298,7 @@ class QvacCompletionApiTest {
         }
 
         assertEquals("completionOrchestrate", orchestrated.getValue("type").jsonPrimitive.content)
+        assertEquals(JsonPrimitive(true), orchestrated["prefill"])
         assertEquals(3, orchestrated.getValue("maxToolTurns").jsonPrimitive.content.toInt())
         assertEquals(streamed - setOf("type"), orchestrated - setOf("type", "maxToolTurns"))
         val properties = orchestrated.getValue("tools").jsonArray.single().jsonObject

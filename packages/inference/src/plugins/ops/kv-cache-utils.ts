@@ -73,7 +73,7 @@ export async function findMatchingCache(
   configHash: string,
   currentHistory: CacheMessage[]
 ): Promise<{ cacheKey: string; cachePath: string } | null> {
-  if (currentHistory.length <= 1) {
+  if (currentHistory.length === 0) {
     return null
   }
 

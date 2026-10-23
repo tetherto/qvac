@@ -269,6 +269,22 @@ test('completion: auto prefill commits the full normalized history without an as
   clearRegistry()
 })
 
+test('completion: tools-only auto prefill is reused by the first question', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+  const modelId = 'tools-only-prefill'
+  const calls: RecordedCall[] = []
+  const paths: string[] = []
+  registerRecordingModel(modelId, calls, { tools: true }, paths)
+  const complete = completer(modelId, true)
+  await complete([], [areaTool], undefined, true)
+  t.alike(shape(calls[0]!), ['tool'])
+  t.ok(await holdsCommittedBytes(paths[0]), 'tools-only prime is persisted')
+  await complete([user('Find the area.')], [areaTool])
+  t.is(paths[1], paths[0], 'the first user message finds the empty-history prefix')
+  clearRegistry()
+})
+
 test('completion: interrupted auto prefills do not commit new caches', async (t) => {
   const { getCurrentCacheInfo, generateConfigHash } = await import('@/plugins/ops/kv-cache-utils')
   const { normalizeCacheMessage } = await import('@/utils/cache/auto-history')

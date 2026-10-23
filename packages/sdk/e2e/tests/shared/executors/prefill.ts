@@ -9,6 +9,7 @@ interface PrefillParams {
   generationParams?: Parameters<typeof completion>[0]['generationParams']
   kvCache: string | boolean
   reload?: boolean
+  dependency?: string
   stream?: boolean
   prefill?: boolean
 }
@@ -29,7 +30,8 @@ export async function runPrefill(
       return { passed: false, output: 'Expected prefill validation to reject' }
     }
     await cleanup()
-    let modelId = await resources.ensureLoaded('prefill-llm')
+    const dependency = params.dependency ?? 'prefill-llm'
+    let modelId = await resources.ensureLoaded(dependency)
     const run = (history: PrefillParams['history'], kvCache: string | boolean, prefill = false) =>
       completion({
         modelId,
@@ -52,13 +54,13 @@ export async function runPrefill(
       return { passed: false, output: `Invalid priming result: ${JSON.stringify(prime)}` }
     }
     if (params.reload) {
-      await resources.evict('prefill-llm')
-      modelId = await resources.ensureLoaded('prefill-llm')
+      await resources.evict(dependency)
+      modelId = await resources.ensureLoaded(dependency)
     }
     const warm = await run(params.question, params.kvCache)
     const coldTokens = cold.stats?.promptTokens ?? NaN
     const warmTokens = warm.stats?.promptTokens ?? NaN
-    const primedTokens = prime.stats?.promptTokens ?? NaN
+    const primedTokens = prime.stats?.cacheTokens ?? NaN
     if (!(primedTokens > 0 && warmTokens > 0 && coldTokens - warmTokens === primedTokens)) {
       return {
         passed: false,

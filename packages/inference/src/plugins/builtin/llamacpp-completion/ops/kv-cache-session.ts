@@ -337,8 +337,7 @@ export interface StaticCommitResult {
 export interface AutoRenameCommitResult {
   kind: 'autoRename'
   /**
-   * Destination path the addon's pre-response cache file should be
-   * renamed to (computed from `cacheMessages + responseText`).
+   * Destination path for the history covered by the saved cache.
    */
   targetCachePath: string
 }
@@ -598,8 +597,7 @@ export function createKvCacheSession(
     if (state.committed || state.rolledBack) return
 
     if (result.kind === 'static') {
-      // Custom-key path: the addon's save wrote the new cache state at the
-      // same path. Verify the file persisted.
+      // The addon's save wrote the new cache state at the same path.
       const ok = await verifySaveAndRecord(state.cachePath)
       if (!ok) {
         await runRollback(state)
@@ -608,6 +606,7 @@ export function createKvCacheSession(
       state.committed = true
       releaseCachePath(state.cachePath)
       state.releaseWriteLock()
+      if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
       return
     }
 

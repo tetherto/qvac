@@ -16,15 +16,17 @@ function reuseCase(
   name: string,
   kvCache: string | true,
   withTools: boolean,
-  reload = false
+  options: { reload?: boolean; dependency?: string; history?: typeof history } = {}
 ): TestDefinition {
+  const { reload = false, dependency = 'prefill-llm', history: primeHistory = history } = options
   const params = {
-    history,
-    question,
+    history: primeHistory,
+    question: [...primeHistory, question[question.length - 1]!],
     tools: withTools ? tools : [],
     generationParams,
     kvCache,
     reload,
+    dependency,
     zero: 0,
     stream: withTools
   }
@@ -45,10 +47,13 @@ function reuseCase(
     }
   })
   const steps: Step[] = [
-    { useModel: { deps: ['prefill-llm'], as: 'model' } },
-    ...(typeof kvCache === 'string'
-      ? [{ call: { method: 'deleteCache', params: { kvCacheKey: kvCache } } }]
-      : []),
+    { useModel: { deps: [dependency], as: 'model' } },
+    {
+      call: {
+        method: 'deleteCache',
+        params: typeof kvCache === 'string' ? { kvCacheKey: kvCache } : { auto: true }
+      }
+    },
     run('cold', false, false),
     run('prime', true, kvCache),
     { project: { from: '$prime', path: 'text', as: 'empty' } },
@@ -65,8 +70,8 @@ function reuseCase(
       : []),
     ...(reload
       ? ([
-          { call: { method: 'evictResource', params: { dep: 'prefill-llm' } } },
-          { useModel: { deps: ['prefill-llm'], as: 'model' } }
+          { call: { method: 'evictResource', params: { dep: dependency } } },
+          { useModel: { deps: [dependency], as: 'model' } }
         ] as Step[])
       : []),
     run('warm', false, kvCache),
@@ -79,7 +84,7 @@ function reuseCase(
         left: '$coldTokens',
         right: '$warmTokens',
         named: 'prefillReuse',
-        with: { primedTokens: '$prime.stats.promptTokens' }
+        with: { primedTokens: '$prime.stats.cacheTokens' }
       }
     }
   ]
@@ -96,7 +101,7 @@ function reuseCase(
         }
       }
     ],
-    metadata: { category: 'kv-cache', dependency: 'prefill-llm', estimatedDurationMs: 60000 }
+    metadata: { category: 'kv-cache', dependency, estimatedDurationMs: 60000 }
   }
 }
 
@@ -142,8 +147,9 @@ const invalidCases = [
 
 export const kvCachePrefillTests = [
   reuseCase('named', 'prefill-named', true),
-  reuseCase('auto', true, true),
-  reuseCase('reload', 'prefill-reload', true, true),
+  reuseCase('auto', true, true, { dependency: 'prefill-llm-parallel' }),
+  reuseCase('reload', 'prefill-reload', true, { reload: true }),
+  reuseCase('tools-only', true, true, { history: [] }),
   reuseCase('system-only', 'prefill-system-only', false),
   ...invalidCases
 ]

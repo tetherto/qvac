@@ -478,13 +478,13 @@ export async function* completion(
     )
     await session.commitTurn(
       turn,
+      // Renaming to the held path would reacquire its non-reentrant write lock.
       cacheInfo.cachePath === turn.cachePath
         ? { kind: 'static' }
         : { kind: 'autoRename', targetCachePath: cacheInfo.cachePath }
     )
     return result
   }
-  //
   // Tool-call turns: the auto-cache key is derived from
   // `result.responseText`, which here is raw tool-call markup rather
   // than a clean assistant message. There's no safe post-response key
