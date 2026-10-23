@@ -12,6 +12,7 @@ import {
   SDK_LOG_ID,
   cancel,
   classify,
+  close,
   completion,
   createVectorIndex,
   deleteCache,
@@ -124,6 +125,10 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     return { resumed: true }
   },
   state: async () => ({ state: await state() }),
+  close: async () => {
+    await close()
+    return { closed: true }
+  },
 
   // --- rag and vector index ------------------------------------------------
   ragIngest: (params) => ragIngest(params),
@@ -1982,6 +1987,12 @@ export function createStepBindings(resources: ResourceManager): StepBindings {
       if (method === 'evictResource') {
         await resources.evict(String((params as { dep: string }).dep))
         return { evicted: true }
+      }
+      /** Closing the SDK drops every loaded model, so the resource manager forgets them too. */
+      if (method === 'close') {
+        await close()
+        resources.forgetAll()
+        return { closed: true }
       }
       /** A fresh directory the test may write into, and a look at what landed there. */
       if (method === 'scratchDirectory') {

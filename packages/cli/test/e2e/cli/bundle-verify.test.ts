@@ -2,16 +2,21 @@ import { describe, it } from 'node:test'
 import type { TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { mkdir, symlink, access, readdir, lstat, realpath } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { runCli } from '../helpers/cli.js'
 import { tempDir } from '../helpers/tmp.js'
 
 // bundle sdk resolves @qvac/sdk from the project's node_modules and emits a
-// worker bundle + addons manifest; verify bundle then validates that bundle for
-// the host. The exhaustive option matrix lives in the SDK.
+// worker bundle; verify bundle then validates that bundle for the host. The
+// exhaustive option matrix lives in the SDK.
 const INSTALLED_SDK = fileURLToPath(new URL('../../../node_modules/@qvac/sdk', import.meta.url))
 const HOST = `${process.platform}-${process.arch}`
+const DESKTOP_BUNDLE = join('qvac', 'worker', 'index.bundle')
+
+// The harnesses import these by name from the project root, where an install puts them.
+const HOISTED = ['bare-sidecar', 'bare-stow', 'react-native-bare-kit']
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -34,6 +39,10 @@ async function project(t: TestContext): Promise<string> {
   const destScope = join(dir, 'node_modules', '@qvac')
   await mkdir(destScope, { recursive: true })
   await linkInstalledQvacScope(INSTALLED_SDK, destScope)
+  const sdkRequire = createRequire(join(INSTALLED_SDK, 'package.json'))
+  for (const name of HOISTED) {
+    await symlink(dirname(sdkRequire.resolve(`${name}/package`)), join(dir, 'node_modules', name))
+  }
   return dir
 }
 
@@ -74,21 +83,10 @@ describe('cli: bundle sdk → verify bundle (chain)', () => {
       timeoutMs: 300_000
     })
     assert.equal(bundle.code, 0, `bundle sdk failed:\n${bundle.output}`)
-    assert.ok(await exists(join(dir, 'qvac', 'worker.bundle.js')), 'expected qvac/worker.bundle.js')
-    assert.ok(
-      await exists(join(dir, 'qvac', 'addons.manifest.json')),
-      'expected qvac/addons.manifest.json'
-    )
+    assert.ok(await exists(join(dir, DESKTOP_BUNDLE)), `expected ${DESKTOP_BUNDLE}`)
 
     const verify = await runCli(
-      [
-        'verify',
-        'bundle',
-        '--addons-source',
-        join(dir, 'qvac', 'worker.bundle.js'),
-        '--host',
-        HOST
-      ],
+      ['verify', 'bundle', '--addons-source', join(dir, DESKTOP_BUNDLE), '--host', HOST],
       { cwd: dir, timeoutMs: 120_000 }
     )
     assert.equal(verify.code, 0, `verify bundle failed:\n${verify.output}`)
@@ -104,15 +102,15 @@ describe('cli: bundle sdk addon platform packages', () => {
   it('names the platform packages it cannot install and fails without them', async (t) => {
     const dir = await project(t)
 
-    const bundle = await runCli(['bundle', 'sdk', '--host', 'android-arm64'], {
-      cwd: dir,
-      timeoutMs: 300_000
-    })
+    const bundle = await runCli(
+      ['bundle', 'sdk', '--target', 'react-native', '--host', 'android-arm64'],
+      { cwd: dir, timeoutMs: 300_000 }
+    )
 
     assert.notEqual(bundle.code, 0, 'a split addon cannot bundle without its platform package')
     assert.match(bundle.output, /Cannot install the addon platform packages automatically/)
     assert.match(bundle.output, /Bundling without installing them/)
-    assert.match(bundle.output, /HOST_PREBUILDS_MISSING|needs each mobile host's platform package/)
+    assert.match(bundle.output, /HOST_PREBUILDS_MISSING|needs each host's platform package/)
     assert.match(bundle.output, /"@qvac\/tts-ggml-android-arm64": "\d+\.\d+\.\d+"/)
     assert.ok(!(await exists(join(dir, 'package.json'))), 'package.json must not be created')
   })
@@ -120,10 +118,10 @@ describe('cli: bundle sdk addon platform packages', () => {
   it('skips the install with --no-install and names the pins to add', async (t) => {
     const dir = await project(t)
 
-    const bundle = await runCli(['bundle', 'sdk', '--host', 'android-arm64', '--no-install'], {
-      cwd: dir,
-      timeoutMs: 300_000
-    })
+    const bundle = await runCli(
+      ['bundle', 'sdk', '--target', 'react-native', '--host', 'android-arm64', '--no-install'],
+      { cwd: dir, timeoutMs: 300_000 }
+    )
 
     assert.notEqual(bundle.code, 0)
     assert.doesNotMatch(bundle.output, /Cannot install the addon platform packages/)

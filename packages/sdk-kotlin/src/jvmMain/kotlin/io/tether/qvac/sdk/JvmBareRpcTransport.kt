@@ -4,6 +4,8 @@ import io.tether.qvac.sdk.rpc.BareRpcProtocolException
 import io.tether.qvac.sdk.rpc.BareRpcLimits
 import io.tether.qvac.sdk.rpc.JsonLinesDecoder
 import io.tether.qvac.sdk.rpc.JvmBareRpcSession
+import io.tether.qvac.sdk.rpc.JvmSocketChannel
+import io.tether.qvac.sdk.rpc.StowChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withTimeout
@@ -36,6 +38,7 @@ class JvmBareRpcTransport internal constructor(
     private val session: JvmBareRpcSession,
     private val process: Process? = null,
     private val diagnostics: WorkerDiagnostics? = null,
+    private val stow: StowChannel? = null,
     private val rpcLimits: BareRpcLimits = BareRpcLimits(),
     private val json: Json = Json {
         ignoreUnknownKeys = true
@@ -69,16 +72,16 @@ class JvmBareRpcTransport internal constructor(
             if (closed) return@withLock
             closed = true
             try {
-                if (process != null && process.isAlive) {
-                    withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) {
-                        runCatching { session.request("""{"type":"__shutdown__"}""".encodeToByteArray()) }
-                    }
+                if (stow != null && process != null && process.isAlive) {
+                    withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) { runCatching { stow.terminate() } }
                 }
             } finally {
                 try { session.close() } finally {
                     if (process != null && process.isAlive) {
                         withContext(Dispatchers.IO) {
-                            process.destroy()
+                            if (!process.waitFor(PROCESS_EXIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                                process.destroy()
+                            }
                             if (!process.waitFor(PROCESS_EXIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                                 process.destroyForcibly()
                                 process.waitFor(PROCESS_EXIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -144,37 +147,44 @@ class JvmBareRpcTransport internal constructor(
                 )
             }
             return connect(
-                command = listOf(command.bareExecutable, command.workerPath),
+                command = command.argv(),
                 homeDirectory = homeDirectory,
                 config = config,
                 runtimeContext = runtimeContext,
                 timeoutMs = timeoutMs,
                 rpcLimits = rpcLimits,
-                authenticated = command.authenticated,
             )
         }
 
+        /**
+         * Starts [workerPath] with the worker shim of the `@qvac/sdk` it belongs to,
+         * on [bareExecutable] or that SDK's bare-sidecar runtime.
+         */
         suspend fun connect(
             workerPath: String,
-            bareExecutable: String = "bare",
+            bareExecutable: String? = null,
             homeDirectory: String = defaultHomeDirectory(),
             config: JsonObject = JsonObject(emptyMap()),
             runtimeContext: JsonObject? = desktopRuntimeContext(),
             timeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
             rpcLimits: BareRpcLimits = BareRpcLimits(),
-            authenticated: Boolean = true,
         ): JvmBareRpcTransport {
+            val command = JvmWorkerResolver.resolve(workerPath = workerPath, bareExecutable = bareExecutable)
             return connect(
-                command = listOf(bareExecutable, workerPath),
+                command = command.argv(),
                 homeDirectory = homeDirectory,
                 config = config,
                 runtimeContext = runtimeContext,
                 timeoutMs = timeoutMs,
                 rpcLimits = rpcLimits,
-                authenticated = authenticated,
             )
         }
 
+        /**
+         * Starts [command] with this client's loopback port appended. The worker
+         * connects back to it, sending the auth token first when [authenticated],
+         * and speaks bare-stow framing from then on.
+         */
         suspend fun connect(
             command: List<String>,
             homeDirectory: String = defaultHomeDirectory(),
@@ -186,44 +196,49 @@ class JvmBareRpcTransport internal constructor(
         ): JvmBareRpcTransport {
             require(command.isNotEmpty()) { "worker command must not be empty" }
             require(timeoutMs > 0) { "timeoutMs must be positive" }
-            val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
+            val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
             var process: Process? = null
             var diagnostics: WorkerDiagnostics? = null
+            var socket: Socket? = null
             var transport: JvmBareRpcTransport? = null
             try {
                 server.soTimeout = timeoutMs
-                val endpoint = "tcp://127.0.0.1:${server.localPort}"
                 val authToken = UUID.randomUUID().toString() + UUID.randomUUID().toString()
-                val workerEnvironment = buildJsonObject {
-                    put("QVAC_IPC_SOCKET_PATH", endpoint)
-                    put("HOME_DIR", homeDirectory)
-                }.toString()
-
-                val processBuilder = ProcessBuilder(command + workerEnvironment).redirectErrorStream(true)
+                val processBuilder = ProcessBuilder(command + server.localPort.toString())
+                    .redirectErrorStream(true)
                 // Environment, not argv: other local users can read a process's argv.
                 processBuilder.environment().remove(IPC_AUTH_TOKEN_ENV)
                 if (authenticated) processBuilder.environment()[IPC_AUTH_TOKEN_ENV] = authToken
                 process = processBuilder.start()
                 diagnostics = WorkerDiagnostics(process.inputStream)
-                val socket = withContext(Dispatchers.IO) {
+                val accepted = withContext(Dispatchers.IO) {
                     if (authenticated) acceptAuthenticatedWorker(server, authToken, timeoutMs, process)
                     else server.accept()
                 }
+                socket = accepted
                 // Authentication has a deadline; inference RPCs do not inherit it.
-                socket.soTimeout = 0
-                val connected = JvmBareRpcTransport(JvmBareRpcSession(socket, rpcLimits), process, diagnostics, rpcLimits)
+                accepted.soTimeout = 0
+                val stow = StowChannel(JvmSocketChannel(accepted))
+                withTimeout(timeoutMs.toLong()) { stow.awaitReady() }
+                val connected = JvmBareRpcTransport(
+                    JvmBareRpcSession(stow, rpcLimits),
+                    process,
+                    diagnostics,
+                    stow,
+                    rpcLimits,
+                )
                 transport = connected
-                val effectiveRuntimeContext = runtimeContext ?: JsonObject(emptyMap())
-                if (config.isNotEmpty() || effectiveRuntimeContext.isNotEmpty()) {
-                    val response = withTimeout(timeoutMs.toLong()) { connected.call(
-                        buildJsonObject {
-                            put("type", "__init_config")
-                            if (config.isNotEmpty()) put("config", config)
-                            if (effectiveRuntimeContext.isNotEmpty()) put("runtimeContext", effectiveRuntimeContext)
-                        },
-                    ) }
-                    requireSuccessfulWorkerControlResponse("configuration", response)
-                }
+                val response = withTimeout(timeoutMs.toLong()) { connected.call(
+                    buildJsonObject {
+                        put("type", "__init_config")
+                        put("homeDir", homeDirectory)
+                        if (config.isNotEmpty()) put("config", config)
+                        if (runtimeContext != null && runtimeContext.isNotEmpty()) {
+                            put("runtimeContext", runtimeContext)
+                        }
+                    },
+                ) }
+                requireSuccessfulWorkerControlResponse("configuration", response)
                 return connected
             } catch (error: WorkerAuthenticationException) {
                 process?.destroyForcibly()
@@ -236,7 +251,7 @@ class JvmBareRpcTransport internal constructor(
                 )
             } catch (error: Throwable) {
                 process?.destroyForcibly()
-                transport?.close()
+                if (transport != null) transport.close() else socket?.close()
                 throw QvacWorkerStartException("Failed to start QVAC worker", error)
             } finally {
                 server.close()

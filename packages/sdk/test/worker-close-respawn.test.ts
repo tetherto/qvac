@@ -1,7 +1,7 @@
 import test from 'brittle'
 
-// Exercises the close-vs-respawn race: a stale exit handler must not
-// unlink the new worker's socket.
+// Exercises the close-vs-respawn race: a stale close handler must not
+// tear down the new worker.
 test('close() followed by a new SDK call spawns a fresh worker', async function (t) {
   t.timeout(60_000)
 

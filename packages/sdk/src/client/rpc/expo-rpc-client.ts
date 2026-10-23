@@ -1,24 +1,38 @@
 import RPC from 'bare-rpc'
-import type { Duplex, DuplexEvents } from 'bare-stream'
-import type { Worklet } from 'react-native-bare-kit'
-import { RPCConnectionFailedError } from '@/utils/errors-client'
+import type host from 'bare-stow/host'
+import {
+  RPCConnectionFailedError,
+  WorkerCrashedError,
+  WorkerShutdownError,
+  WorkerStartupError
+} from '@/utils/errors-client'
 import { initializeConfig } from '@/client/init-hooks'
 import { resolveConfig } from '@/client/config-loader/resolve-config.expo'
 import { getClientLogger } from '@/logging'
 import { getDeviceInfo } from '@/client/rpc/expo-device-info'
+import { getHomeDir } from '@/client/rpc/expo-home-dir'
 import type { RuntimeContext } from '@qvac/inference/surface'
+
+type WorkerIPC = InstanceType<typeof host.IPC>
+
+/** The bare-stow harness the Expo plugin copies into the SDK during prebuild. */
+interface MobileHarness {
+  start(options?: { timeout?: number }): Promise<{ ipc: WorkerIPC }>
+}
 
 const logger = getClientLogger()
 
+const WORKER_READY_TIMEOUT_MS = 60_000
+
 let rpcInstance: RPC | null = null
 let rpcPromise: Promise<RPC> | null = null
-let workletInstance: Worklet | null = null
-let workletInitialized = false
+let workerIpc: WorkerIPC | null = null
+let workerLifeController: AbortController | null = null
+let closePromise: Promise<void> | null = null
+// Bumped by close(); a start that finishes under an older generation stops its
+// own worker, so a caller waiting on that start never receives a closed client.
+let generation = 0
 let cachedRuntimeContext: RuntimeContext | undefined
-// Set while close() is in flight. Concurrent callers share the same
-// promise instead of double-sending __shutdown__ or re-entering the
-// terminate block on already-null state.
-let closingPromise: Promise<void> | null = null
 
 logger.debug('EXPO RPC Client bundle')
 
@@ -39,188 +53,128 @@ async function getRuntimeContext(): Promise<RuntimeContext> {
   return cachedRuntimeContext
 }
 
-// No child-process exit on Expo (Worklet lifecycle) — `#rpc` interface stub.
-export function getWorkerLifeSignal(): AbortSignal | null {
-  return null
+function loadHarness(): MobileHarness {
+  try {
+    return (require('@qvac/sdk/worker.mobile') as { default: MobileHarness }).default
+  } catch (error) {
+    const message =
+      'Failed to load the mobile worker. Make sure the QVAC Expo plugin is configured. ' +
+      `Add '@qvac/sdk/expo-plugin' to your app.json plugins array. ` +
+      `Error: ${String(error)}`
+    logger.error(message)
+    throw new RPCConnectionFailedError(message, error)
+  }
 }
 
-// No life signal on Expo, so the RPC layer never calls this — `#rpc` interface stub.
-export function notifyChannelClosed(): void {}
-
-export async function getRPC() {
-  if (rpcInstance) {
-    return rpcInstance
+async function startWorker(): Promise<WorkerIPC> {
+  const harness = loadHarness()
+  try {
+    return (await harness.start({ timeout: WORKER_READY_TIMEOUT_MS })).ipc
+  } catch (error) {
+    throw new WorkerStartupError('Worker failed before signalling ready', error)
   }
+}
 
-  if (rpcPromise) {
-    return rpcPromise
-  }
+export function getWorkerLifeSignal(): AbortSignal | null {
+  return workerLifeController?.signal ?? null
+}
 
-  rpcPromise = (async () => {
-    if (workletInstance) {
-      logger.debug('🔄 Reusing existing worklet')
-      rpcInstance = new RPC(workletInstance.IPC as unknown as Duplex<DuplexEvents>, () => {})
-      // Only initialize once per worklet - server state persists
-      if (!workletInitialized) {
-        const runtimeContext = await getRuntimeContext()
-        await initializeConfig(rpcInstance, resolveConfig, runtimeContext)
-        workletInitialized = true
-      }
-      return rpcInstance
+function dropWorker(reason: Error): WorkerIPC | null {
+  const ipc = workerIpc
+  const controller = workerLifeController
+  workerIpc = null
+  workerLifeController = null
+  rpcInstance = null
+  controller?.abort(reason)
+  return ipc
+}
+
+export function notifyChannelClosed(): void {
+  if (!workerLifeController || workerLifeController.signal.aborted) return
+  void dropWorker(new WorkerCrashedError(null, null))?.terminate()
+}
+
+async function ensureRPC(): Promise<RPC> {
+  if (rpcInstance) return rpcInstance
+  if (rpcPromise) return rpcPromise
+  if (closePromise) await closePromise
+
+  const startGeneration = generation
+  const attempt = (async () => {
+    const ipc = await startWorker()
+    let workerError: unknown
+    ipc.on('error', (error: unknown) => {
+      workerError = error
+    })
+    if (startGeneration !== generation) {
+      await ipc.terminate()
+      throw new WorkerShutdownError()
     }
-
-    const { Paths } = await import('expo-file-system')
-    const bareKitModule = await import('react-native-bare-kit')
-
-    const worklet = new bareKitModule.Worklet()
-    workletInstance = worklet
-    logger.debug('Starting new worklet')
-
-    // Load the mobile bundle - generated by expo plugin during prebuild
-    // The expo plugin handles bundle selection:
-    // 1. Uses qvac/worker.bundle.js if exists (user pre-generated)
-    // 2. Generates tree-shaken bundle if qvac.config.* exists
-    // 3. Generates default bundle (all plugins) otherwise
-    let mobileBundle
-    try {
-      mobileBundle = require('@qvac/sdk/worker.mobile.bundle') as unknown
-    } catch (error) {
-      const message =
-        'Failed to load mobile worker bundle. Make sure the QVAC Expo plugin is configured. ' +
-        `Add '@qvac/sdk/expo-plugin' to your app.json plugins array. ` +
-        `Error: ${String(error)}`
-      logger.error(message)
-      throw new RPCConnectionFailedError(message, error instanceof Error ? error : undefined)
-    }
-
-    worklet.start('worker.bundle', mobileBundle as string, [
-      // Normalize arg number across platforms
-      'react-native-bare-kit',
-      'worker.js',
-      JSON.stringify({
-        HOME_DIR: Paths.document.uri.replace('file://', '')
-      })
-    ])
+    workerIpc = ipc
+    workerLifeController = new AbortController()
     logger.info('Worklet started')
-    rpcInstance = new RPC(worklet.IPC as unknown as Duplex<DuplexEvents>, () => {
-      // Use this for async callbacks
+
+    ipc.once('close', () => {
+      if (workerIpc !== ipc) return
+      logger.info('🪦 Bare worklet closed unexpectedly')
+      dropWorker(new WorkerCrashedError(null, null, workerError))
     })
 
-    const runtimeContext = await getRuntimeContext()
-    await initializeConfig(rpcInstance, resolveConfig, runtimeContext)
-    workletInitialized = true
+    const rpc = new RPC(ipc, () => {})
+    await initializeConfig(rpc, resolveConfig, await getRuntimeContext(), await getHomeDir())
+    if (startGeneration !== generation) throw new WorkerShutdownError()
+    if (workerIpc !== ipc) throw new WorkerCrashedError(null, null, workerError)
 
-    return rpcInstance
+    rpcInstance = rpc
+    return rpc
   })()
+  rpcPromise = attempt
 
   try {
-    return await rpcPromise
+    return await attempt
   } catch (error) {
     logger.error(`Failed to initialize RPC: ${String(error)}`)
+    if (startGeneration === generation) {
+      void dropWorker(
+        error instanceof Error ? error : new WorkerCrashedError(null, null, error)
+      )?.terminate()
+    }
     throw error
   } finally {
-    rpcPromise = null
+    if (rpcPromise === attempt) rpcPromise = null
   }
 }
 
-const SHUTDOWN_RPC_TIMEOUT_MS = 10_000
-
-/**
- * Pre-terminate cleanup roundtrip. Sends an internal `__shutdown__` message
- * to the worker so it can clear addon plugin registries (calls each addon's
- * `releaseLogger` → frees env-bound js_ref_t state) and unload all model
- * instances BEFORE we kill the worklet.
- *
- * Without this, the worklet's V8 isolate dies while addon static state still
- * holds js_ref_t handles into it; the next worklet's first `setLogger` call
- * trips a V8 GlobalHandle assertion (brk 0 / SIGTRAP) and the iOS app dies.
- *
- * Best-effort: never throws. Falls through to terminate even on timeout.
- */
-async function sendShutdownMessage(rpc: RPC): Promise<void> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    await Promise.race([
-      (async () => {
-        const req = rpc.request(1)
-        req.send(JSON.stringify({ type: '__shutdown__' }), 'utf8')
-        const response = await req.reply('utf8')
-        const parsed = JSON.parse(String(response)) as {
-          success: boolean
-          error?: string
-        }
-        if (!parsed.success) {
-          throw new Error(parsed.error ?? 'Worker reported cleanup failure')
-        }
-      })(),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () =>
-            reject(
-              new Error(`Worker did not ack __shutdown__ within ${SHUTDOWN_RPC_TIMEOUT_MS}ms`)
-            ),
-          SHUTDOWN_RPC_TIMEOUT_MS
-        )
-      })
-    ])
-  } catch (error) {
-    // Best-effort: log but don't block termination if cleanup fails.
-    logger.warn(
-      `⚠️ Pre-terminate worker cleanup failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    )
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
+export async function getRPC() {
+  return ensureRPC()
 }
 
 export async function close(): Promise<void> {
-  // Concurrent callers (or a getRPC retry that overlaps with a manual
-  // close) share the in-flight close promise instead of each sending
-  // their own __shutdown__ and racing on the terminate block.
-  if (closingPromise) return closingPromise
+  if (closePromise) return closePromise
 
-  closingPromise = (async () => {
+  generation++
+  closePromise = (async () => {
+    const ipc = dropWorker(new WorkerShutdownError())
+    if (!ipc) {
+      const pending = rpcPromise
+      rpcPromise = null
+      await pending?.catch(() => {})
+      return
+    }
+
     logger.info('🧹 Closing RPC client (Expo)')
-
-    // The inference addons self-pin (RTLD_NODELETE, qvac-lib-inference-addon-cpp
-    // >= 1.2.2), so dlclose() during terminate() no longer unmaps addon code
-    // with dangling pthread_key_t destructors. terminate() is therefore safe on
-    // every platform (previously it was skipped on non-iOS to avoid a SIGSEGV in
-    // pthread_key_clean_all), so we always run the full pre-terminate cleanup +
-    // terminate path.
-    if (rpcInstance) {
-      logger.info('🧹 Requesting worker pre-terminate cleanup')
-      await sendShutdownMessage(rpcInstance)
-    }
-
-    rpcInstance = null
-    rpcPromise = null
-    if (workletInstance) {
-      logger.info('🐻🔫 Terminating bare worklet')
-      try {
-        workletInstance.terminate()
-      } catch (error) {
-        logger.debug('Failed to terminate worklet', { error })
-      }
-      workletInstance = null
-      workletInitialized = false
-    }
+    await ipc.terminate()
   })()
 
   try {
-    await closingPromise
+    await closePromise
   } finally {
-    // Reset so a subsequent close() (e.g. after a fresh getRPC spawned
-    // a new worklet) can run again. Body guards on rpcInstance / workletInstance
-    // make a redundant call a no-op if state is already cleared.
-    closingPromise = null
+    closePromise = null
   }
 }
 
 export async function createDuplexSession(payload: string, commandId: number) {
-  const rpc = await getRPC()
+  const rpc = await ensureRPC()
   const req = rpc.request(commandId)
   const requestStream = req.createRequestStream()
   const responseStream = req.createResponseStream({ encoding: 'utf-8' })

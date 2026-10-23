@@ -1,7 +1,4 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import * as fs from 'node:fs'
-import { createRequire } from 'node:module'
-import * as path from 'node:path'
 import type { TestExecutor, TestResult } from './consumer-base.js'
 import type { TestDefinition } from '../types/test-definition.js'
 
@@ -30,11 +27,6 @@ export interface BridgeExecutorOptions {
   log: (message: string) => void
   /** How long to wait for the client's `ready` handshake. */
   readyTimeoutMs?: number
-  /**
-   * Directory to resolve the Bare runtime from, so the client is handed the same binary the JS legs
-   * use. Usually the config directory.
-   */
-  resolveBareFrom?: string
 }
 
 interface BridgeResult {
@@ -68,15 +60,6 @@ function clientEnv(): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MQTT_')))
 }
 
-/** Make the resolved Bare binary executable, the way `bare-runtime` does. */
-function ensureExecutable(binary: string): void {
-  try {
-    fs.accessSync(binary, fs.constants.X_OK)
-  } catch {
-    fs.chmodSync(binary, 0o755)
-  }
-}
-
 export class BridgeExecutor implements TestExecutor {
   private child?: ChildProcessWithoutNullStreams
   private readonly options: BridgeExecutorOptions
@@ -107,7 +90,7 @@ export class BridgeExecutor implements TestExecutor {
 
     const child = spawn(interpreter, args, {
       cwd,
-      env: { ...clientEnv(), ...this.resolveRuntimeEnv(), ...env },
+      env: { ...clientEnv(), ...env },
       stdio: ['pipe', 'pipe', 'pipe']
     })
     this.child = child
@@ -135,35 +118,6 @@ export class BridgeExecutor implements TestExecutor {
     })
 
     await this.waitForReady()
-  }
-
-  /**
-   * Hands the client the same Bare runtime the JS legs use. A non-JS client cannot resolve `bare-
-   * runtime-<platform>-<arch>` through Node, and resolving it here keeps a platform-specific path
-   * out of the config.
-   */
-  private resolveRuntimeEnv(): Record<string, string> {
-    const from = this.options.resolveBareFrom
-    if (!from || process.env.QVAC_BARE_PATH) return {}
-
-    try {
-      // Same resolution the JS client performs: the platform package exports a map of binary name
-      // -> absolute path. Its `exports` field hides package.json, so go through the module rather
-      // than the manifest.
-      const require = createRequire(path.join(from, 'noop.js'))
-      const pkg = `bare-runtime-${process.platform}-${process.arch}`
-      const binaries = require(pkg) as Record<string, string>
-      const binary = binaries.bare
-      if (!binary) throw new Error(`${pkg} exposes no "bare" binary`)
-      ensureExecutable(binary)
-      this.options.log(`   Bare runtime: ${binary}`)
-      return { QVAC_BARE_PATH: binary }
-    } catch {
-      // Not fatal: the client may bundle its own runtime, or the user may set QVAC_BARE_PATH
-      // themselves. Let the client report what it is missing.
-      this.options.log('   Bare runtime not resolvable here; leaving QVAC_BARE_PATH to the client')
-      return {}
-    }
   }
 
   private waitForReady(): Promise<void> {

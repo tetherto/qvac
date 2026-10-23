@@ -4,12 +4,9 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Doomed worker handshakes then exits 100ms later without ever replying.
-// Without the worker-life signal the SDK call hangs forever.
-test('embed() rejects when bare worker dies post-handshake (doomed worker)', async function (t) {
+test('embed() rejects when the worker dies while the call is in flight', async function (t) {
   t.timeout(15_000)
 
-  // WORKER_PATH is resolved at module load — set before importing.
   process.env['QVAC_WORKER_PATH'] = path.resolve(__dirname, 'fixtures/doomed-worker.mjs')
 
   const { embed } = await import('@/client/api/embed')

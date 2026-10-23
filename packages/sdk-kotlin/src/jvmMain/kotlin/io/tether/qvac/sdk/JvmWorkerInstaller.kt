@@ -15,8 +15,8 @@ object JvmWorkerInstaller {
         val prefix = cacheRoot.resolve(SDK_VERSION)
         val sdkRoot = prefix.resolve("node_modules/@qvac/sdk")
         val packageJson = sdkRoot.resolve("package.json")
-        fun hasWorker() = listOf("dist/src/worker/index.js", "dist/server/worker.js")
-            .any { Files.isRegularFile(sdkRoot.resolve(it)) }
+        fun hasWorker() = listOf("dist/src/worker/index.js", "dist/src/worker/tcp-shim.js")
+            .all { Files.isRegularFile(sdkRoot.resolve(it)) }
         if (Files.isRegularFile(packageJson) && hasWorker()) {
             JvmWorkerResolver.requireCompatibleSdk(sdkRoot)
             return sdkRoot

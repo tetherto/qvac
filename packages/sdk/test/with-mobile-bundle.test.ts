@@ -8,7 +8,6 @@ import {
 import {
   MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
-  MOBILE_UNSUPPORTED_MODULES,
   buildMobileBundle,
   mobileHostsForPlatform
 } from '@/expo/plugins/withMobileBundle'
@@ -63,10 +62,6 @@ test('resolvePlatformPackageName: reads slice names from #host-addon for hosts a
   )
   t.is(resolveAddonPlatformPackage('@qvac/other', hostAddon, 'android-arm64'), null)
   t.is(resolvePlatformPackageName(undefined, 'android-arm64'), null)
-})
-
-test('MOBILE_UNSUPPORTED_MODULES: the desktop-only spawn path stays out of mobile bundles', (t) => {
-  t.alike(MOBILE_UNSUPPORTED_MODULES, ['bare-runtime/spawn'])
 })
 
 function androidPrebuildMod(projectRoot: string) {
@@ -135,8 +130,12 @@ test(
       'the bundle is shared by both platforms, so an Android prebuild installs both'
     )
     t.ok(
-      existsSync(join(project.sdkPath, 'dist', 'worker.mobile.bundle.js')),
+      existsSync(join(project.sdkPath, 'dist', 'worker-mobile', 'index.bundle.mjs')),
       'the verified bundle is copied into the SDK'
+    )
+    t.ok(
+      existsSync(join(project.sdkPath, 'dist', 'worker-mobile', 'index.mjs')),
+      'the harness is copied beside it'
     )
   }
 )
