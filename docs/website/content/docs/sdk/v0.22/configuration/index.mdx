@@ -122,7 +122,6 @@ Model types (allowed keys): `llm` | `embeddings` | `whisper` | `parakeet` | `bci
 | `models` | Map of model aliases to model entries (see [`ModelEntry`](#modelentry) below). Required when running the server. | `Record<string, string \| ModelEntry>` | Yes | — |
 | `publicBaseUrl` | Externally reachable origin (e.g., `"https://api.example.com"`). Required for image `response_format=url`. Must start with `http://` or `https://`. The CLI flag `--public-base-url` overrides this value. | `string` | No | — |
 | `cors` | Browser origins trusted to make cross-origin requests. See [`CorsOptions`](#corsoptions). | `CorsOptions` | No | — |
-| `allowedHosts` | Hostnames accepted in the `Host` header besides loopback names, IP addresses, the bind host and the `publicBaseUrl` host. `.example.com` also covers subdomains. `true` accepts any host and turns off DNS-rebinding protection. CLI `--allowed-host` values are added to this list. | `string[] \| true` | No | `[]` |
 | `openai` | Options for the `openai` extension, mounted with `qvac serve --openai`. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
 
 #### `CorsOptions`
