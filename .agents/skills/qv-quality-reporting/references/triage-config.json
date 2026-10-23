@@ -13,6 +13,7 @@
       "pathPrefixes": [
         "packages/inference/",
         "packages/sdk/",
+        "packages/sdk-e2e/",
         "packages/sdk-python/",
         "packages/rag/",
         "packages/ai-sdk-provider/",
