@@ -75,7 +75,13 @@ test('AudioGen native build restores caches, limits builds and propagates failur
   assert.match(source, /hasCcache: true/)
   assert.match(source, /vcpkg-binary-cache-dir/)
   assert.match(source, /vcpkg-toolchain-fingerprint/)
-  assert.match(source, /configure-cpp-build.mjs/)
+  const blocks = source.split('\n      - ')
+  const helper = blocks.find((text) => text.startsWith('name: Checkout C++ build helper (workflow revision)\n'))
+  assert.match(helper, /repository: \$\{\{ github\.repository \}\}/)
+  assert.match(helper, /ref: \$\{\{ github\.workflow_sha \}\}/)
+  assert.match(helper, /sparse-checkout: \.github\/scripts\/configure-cpp-build\.mjs/)
+  assert.match(helper, /path: \.cpp-build-workflow/)
+  assert.match(source, /node \.cpp-build-workflow\/\.github\/scripts\/configure-cpp-build\.mjs/)
   assert.match(source, /npm run build:native/)
   assert.match(source, /npm install --ignore-scripts/)
   assert.match(source, /No addon-level C\+\+ tests yet/)
@@ -94,6 +100,17 @@ test('AudioGen native build restores caches, limits builds and propagates failur
     assert.match(block, /inputs.repository == github.repository/)
     assert.match(block, /inputs.ref == github.ref_name/)
   }
+})
+
+test('coverage jobs load the build helper from the workflow revision', () => {
+  const checkout = step('Checkout C++ build helper (workflow revision)')
+  assert.match(checkout, /if: matrix\.mode == 'coverage'/)
+  assert.match(checkout, /repository: \$\{\{ github\.repository \}\}/)
+  assert.match(checkout, /ref: \$\{\{ github\.workflow_sha \}\}/)
+  assert.match(checkout, /sparse-checkout: \.github\/scripts\/configure-cpp-build\.mjs/)
+  assert.match(checkout, /sparse-checkout-cone-mode: false/)
+  assert.match(checkout, /path: \.cpp-build-workflow/)
+  assert.match(step('Configure C++ build resources'), /node \.cpp-build-workflow\/\.github\/scripts\/configure-cpp-build\.mjs/)
 })
 
 test('AudioGen rejects alternate code in cache-writing events before checkout', () => {
