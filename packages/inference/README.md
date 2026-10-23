@@ -111,7 +111,7 @@ projections. Add `ttsWorkload` beside `modelConfig` on the assessment candidate:
 decoder; reference encoding also needs the codec encoder. Prompt rows must
 cover the complete native prompt, including dialogue and reference rows.
 Missing workloads return an unknown assessment rather than guessing.
-MOSS-Speech has no native fitter and assesses as unknown. Workloads are
+MOSS-Speech has no fitter and assesses as unknown. Workloads are
 fit-only: loading a MOSS model does not accept them, so the fit check before a
 MOSS load is unknown.
 
