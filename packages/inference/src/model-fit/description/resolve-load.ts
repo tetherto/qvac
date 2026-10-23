@@ -1,5 +1,6 @@
 import fs from 'bare-fs'
 
+import { PluginLoadConfigValidationFailedError, PluginNotFoundError } from '@/errors/index'
 import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import {
   ModelType,
@@ -41,9 +42,7 @@ export type ResolvedLoad = {
 }
 
 export type LoadResolution =
-  | ResolvedLoad
-  | { status: 'no-stub'; reason: FitStubUnavailableReason; message?: string }
-  | { status: 'unsupported-load'; detail: string }
+  ResolvedLoad | { status: 'no-stub'; reason: FitStubUnavailableReason; message?: string }
 
 function srcString(modelSrc: ModelSrcInput): string {
   return typeof modelSrc === 'string' ? modelSrc : modelSrc.src
@@ -114,19 +113,22 @@ class NoStubError extends Error {
  *
  * A source already on disk is read directly, since it describes the load more
  * exactly than a stub does. A files-only engine reads only sources on disk.
+ *
+ * @throws {PluginNotFoundError} When no plugin handles the model type.
+ * @throws {PluginLoadConfigValidationFailedError} When the plugin's schema
+ *   refuses the config.
+ * @throws The plugin's own error when its `resolveConfig` refuses the load.
  */
 export async function resolveLoadFromStubs(
   load: LoadDescription,
   options: FitStubOptions = {}
 ): Promise<LoadResolution> {
   const plugin = getPlugin(load.modelType)
-  if (!plugin) {
-    return { status: 'unsupported-load', detail: `no plugin registered for ${load.modelType}` }
-  }
+  if (!plugin) throw new PluginNotFoundError(load.modelType)
 
   const parsed = plugin.loadConfigSchema.safeParse(load.modelConfig ?? {})
   if (!parsed.success) {
-    return { status: 'unsupported-load', detail: formatZodError(parsed.error) }
+    throw new PluginLoadConfigValidationFailedError(load.modelType, formatZodError(parsed.error))
   }
   const modelConfig = parsed.data as Record<string, unknown>
 
@@ -185,15 +187,9 @@ export async function resolveLoadFromStubs(
     }
   } catch (error) {
     await release()
-    if (error instanceof NoStubError) {
-      return error.message === error.reason
-        ? { status: 'no-stub', reason: error.reason }
-        : { status: 'no-stub', reason: error.reason, message: error.message }
-    }
-    // A config the plugin refuses describes a load that would not start either.
-    return {
-      status: 'unsupported-load',
-      detail: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-    }
+    if (!(error instanceof NoStubError)) throw error
+    return error.message === error.reason
+      ? { status: 'no-stub', reason: error.reason }
+      : { status: 'no-stub', reason: error.reason, message: error.message }
   }
 }

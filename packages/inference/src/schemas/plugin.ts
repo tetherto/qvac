@@ -1,7 +1,11 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
 import type { TurboVecIndexProvider } from '@qvac/rag'
-import type { TranscriptionFitWorkload, TtsFitWorkload } from '@/schemas/assess-model-fit'
+import type {
+  ModelFitModelResult,
+  TranscriptionFitWorkload,
+  TtsFitWorkload
+} from '@/schemas/assess-model-fit'
 import type { ModelSrcInput } from '@/schemas/model-src-utils'
 import type { RuntimeContext } from '@/schemas/runtime-context'
 
@@ -178,16 +182,17 @@ export interface QvacPlugin<
   createModel: (params: CreateModelParams) => PluginModelResult
   /**
    * Builds the addon's fit request from a resolved load, or names why the load
-   * cannot be projected. A plugin without it answers every fit with `unknown`.
+   * cannot be projected. A plugin without both it and `assessFit` answers every
+   * fit with `unknown`.
    */
   fitRequest?: (load: FitLoad) => FitRequestPlan
   /**
    * The engine's own fitter. Carrying it here keeps every addon specifier
    * inside the module graph of the plugin that owns it, so a bundler walking a
    * host that ships one engine never resolves the others. It takes what
-   * `fitRequest` built and returns the addon's fit result or a Promise of it.
+   * `fitRequest` built and resolves to the addon's fit result.
    */
-  assessFit?: (request: never) => unknown
+  assessFit?: (request: never) => Promise<ModelFitModelResult>
   handlers: Record<string, PluginHandlerDefinition>
   logging?: PluginLogging | undefined
   capabilities?: QvacPluginCapabilities | undefined

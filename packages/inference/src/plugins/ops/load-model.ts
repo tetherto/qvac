@@ -25,7 +25,7 @@ import {
   InferenceCancelledError
 } from '@/errors/index'
 import { ensureAddonLoggerReady, getPlugin } from '@/plugins/index'
-import { runAdvisoryFitCheck } from '@/model-fit/load-check'
+import { runLoadFitCheck } from '@/model-fit/load-check'
 import { refusesLoad, resolveModelFitPolicy, runsProbe } from '@/schemas/model-fit-policy'
 import { getConfig } from '@/runtime/state'
 import { resolveToolDialect } from '@/utils/tools/dialect'
@@ -111,8 +111,8 @@ export async function loadModel(
   // the native load for device memory.
   const fitPolicy = resolveModelFitPolicy(modelFitPolicy, getConfig().modelFitPolicy)
   const request = options?.request
-  const fitProbe = runsProbe(fitPolicy)
-    ? await runAdvisoryFitCheck(
+  const fitCheck = runsProbe(fitPolicy)
+    ? await runLoadFitCheck(
         {
           modelId,
           modelType: modelType as CanonicalModelType,
@@ -124,13 +124,14 @@ export async function loadModel(
         request !== undefined ? { signal: request.signal } : {}
       )
     : undefined
+  const fitProbe = fitCheck?.probe
 
   if (request?.signal.aborted === true) {
     throw new InferenceCancelledError(request.requestId)
   }
 
   if (refusesLoad(fitPolicy, fitProbe?.verdict)) {
-    throw new ModelFitRefusedError(modelType, fitProbe!.reason, fitProbe!.message)
+    throw new ModelFitRefusedError(modelType, 'does-not-fit', fitCheck?.detail)
   }
 
   // Load the addon's logger before the addon itself runs. Plugins that defer
