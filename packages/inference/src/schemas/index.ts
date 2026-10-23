@@ -99,6 +99,5 @@ export {
 } from '@/schemas/model-types'
 export * from '@/schemas/plugin'
 export * from '@/schemas/registry'
-export * from '@/schemas/model-resource-profile'
 export * from '@/schemas/assess-model-fit'
 export * from '@/schemas/rpc-server'

@@ -1,6 +1,4 @@
-import type { GgufFacts, ModelRegistryEntryAddon, ModelRegistryEngine } from '../../surface'
-
-export type { GgufFacts, KvLayerClass, ModelResourceProfile } from '../../surface'
+import type { ModelRegistryEntryAddon, ModelRegistryEngine } from '../../surface'
 
 export interface ShardInfo {
   isSharded: true
@@ -77,7 +75,6 @@ export interface ProcessedModel extends BlobRef {
   companionSet?: CompanionSetMetadata
   isCompanionOnly?: boolean
   name?: string
-  ggufFacts?: GgufFacts
 }
 
 export interface CurrentModel {
