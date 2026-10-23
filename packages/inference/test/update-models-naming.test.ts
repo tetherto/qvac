@@ -1811,6 +1811,39 @@ test('parakeet: Unified RNN-T GGUF keeps PARAKEET_UNIFIED_<params>_<quant>', (t)
   t.is(exportName, 'PARAKEET_UNIFIED_0_6B_Q8_0')
 })
 
+test('parakeet: TranscribePsy GGUF names the model and keeps the Core ML build distinct', (t) => {
+  const coreKey = Buffer.from('dd'.repeat(32), 'hex')
+  const entry = (path: string, tags: string[]) => ({
+    path,
+    source: 'hf',
+    engine: 'parakeet-transcription',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 300000000,
+    sha256: 'dd'.repeat(32),
+    quantization: 'q8_0',
+    params: '250M',
+    tags,
+    blobBinding: { coreKey, blockOffset: 1, blockLength: 1, byteOffset: 1, byteLength: 300000000 }
+  })
+
+  const plain = processAndName(
+    entry(
+      'qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf',
+      ['transcription', 'parakeet', 'transcribepsy', 'ggml', 'multilingual']
+    )
+  )
+  const coreml = processAndName(
+    entry(
+      'qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf',
+      ['transcription', 'parakeet', 'transcribepsy', 'ggml', 'coreml', 'multilingual']
+    )
+  )
+
+  t.is(plain.exportName, 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0')
+  t.is(coreml.exportName, 'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0')
+})
+
 test('parakeet: Nemotron GGUF includes NEMOTRON in the name', (t) => {
   const coreKey = Buffer.from('dd'.repeat(32), 'hex')
 
