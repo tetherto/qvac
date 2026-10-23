@@ -827,10 +827,9 @@ dispatches to the corresponding `audiogen-cpp` engine.
 - `addon/src/model-interface/minimax/` — desktop-only `MinimaxModel`.
 - Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on the
   `speech-cpp[audiogen]` port.
-- `ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
-  versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
-  `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
-  `ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their
+- Native dependency versions are pinned with vcpkg `overrides` in
+  [vcpkg.json](vcpkg.json), and `package.json` records the `ggml-speech`
+  build as `qvac["ggml-speech"]`. The speech addons ship their
   ggml backends under the same file names, so an app that bundles several of
   them keeps one copy of each: use releases that record the same
   `ggml-speech`.
