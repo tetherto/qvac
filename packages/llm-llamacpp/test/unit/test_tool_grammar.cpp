@@ -4,11 +4,13 @@
 #include <any>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -139,6 +141,74 @@ fs::path multimodalTestImagePath() {
   return "packages/llm-llamacpp/media/fruitPlate.png";
 }
 
+// `update_user_info` from the BFCL report, declared in the caller's order.
+constexpr const char* UPDATE_USER_PARAMETERS =
+    R"({"type":"object","properties":{"user_id":{"type":"integer"},)"
+    R"("update_info":{"type":"object","properties":{)"
+    R"("name":{"type":"string"},"email":{"type":"string"}}},)"
+    R"("database":{"type":"string"}},)"
+    R"("required":["user_id","update_info"]})";
+
+// An optional property declared before the required one.
+constexpr const char* OPTIONAL_FIRST_PARAMETERS =
+    R"({"type":"object","properties":{"database":{"type":"string"},)"
+    R"("user_id":{"type":"integer"}},"required":["user_id"]})";
+
+std::string toolPrompt(const std::string& parameters) {
+  return R"([{"role":"system","content":"You are a helpful assistant. /no_think"},)"
+         R"({"type":"function","name":"update_user_info",)"
+         R"("description":"Update a user's details","parameters":)" +
+         parameters +
+         R"(},{"role":"user","content":"Update user 12345: name John, )"
+         R"(email j@x.io."}])";
+}
+
+std::string toolCall(const std::string& arguments) {
+  return "<tool_call>\n{\"name\": \"update_user_info\", \"arguments\": " +
+         arguments + "}\n</tool_call>";
+}
+
+struct GrammarVerdict {
+  bool accepted = false;
+  // The text the grammar consumed before it rejected the next token.
+  std::string acceptedPrefix;
+};
+
+// Feeds `text` through a grammar sampler built from `gbnf` one token at a
+// time, the way generation would, and checks it ends in an accepting state.
+// The lazy tool grammar's root starts at its trigger, so `text` must too.
+GrammarVerdict checkGrammar(
+    const llama_vocab* vocab, const std::string& gbnf,
+    const std::string& text) {
+  llama_sampler* grammar =
+      llama_sampler_init_grammar(vocab, gbnf.c_str(), "root");
+  if (grammar == nullptr) {
+    throw std::runtime_error("tool grammar failed to parse");
+  }
+  auto allows = [grammar](llama_token token) {
+    llama_token_data data{token, 0.0F, 0.0F};
+    llama_token_data_array candidates{&data, 1, -1, false};
+    llama_sampler_apply(grammar, &candidates);
+    return std::isfinite(data.logit);
+  };
+
+  GrammarVerdict verdict;
+  verdict.accepted = true;
+  for (const llama_token token : common_tokenize(vocab, text, false, true)) {
+    if (!allows(token)) {
+      verdict.accepted = false;
+      break;
+    }
+    llama_sampler_accept(grammar, token);
+    verdict.acceptedPrefix += common_token_to_piece(vocab, token, true);
+  }
+  if (verdict.accepted) {
+    verdict.accepted = allows(llama_vocab_eos(vocab));
+  }
+  llama_sampler_free(grammar);
+  return verdict;
+}
+
 } // namespace
 
 class ToolGrammarModelTest : public ::testing::Test {
@@ -191,6 +261,25 @@ protected:
       throw std::runtime_error("no single-prompt context");
     }
     return ctx->getParams().sampling;
+  }
+
+  // The tool grammar the addon installs for a request offering
+  // `update_user_info` with `parameters`.
+  static std::string
+  renderToolGrammar(LlamaModel& model, const std::string& parameters) {
+    LlamaModel::Prompt prompt;
+    prompt.input = toolPrompt(parameters);
+    model.processPrompt(prompt);
+    const common_params_sampling& s = sampling(model);
+    if (s.grammar.type != COMMON_GRAMMAR_TYPE_TOOL_CALLS) {
+      throw std::runtime_error("no tool grammar was applied");
+    }
+    return s.grammar.grammar;
+  }
+
+  static const llama_vocab* vocab(LlamaModel& model) {
+    return llama_model_get_vocab(
+        LlamaModelTestPeer::llmContext(model)->getModel());
   }
 
   test_common::TestModelPath qwen3Model_;
@@ -526,6 +615,118 @@ TEST_F(ToolGrammarModelTest, PromptParserReadsPastToolCalls) {
   const common_chat_msg& result = parsed.chatMsgs[2];
   EXPECT_EQ(result.tool_call_id, "call_1");
   EXPECT_EQ(result.tool_name, "get_weather");
+}
+
+// A tool's schema and a past call's object arguments keep the caller's key
+// order at every level. fabric builds the tool grammar with object properties
+// in schema order, so a schema re-sorted to `email, name` made the grammar
+// reject `{"name": ..., "email": ...}`.
+TEST_F(ToolGrammarModelTest, PromptParserKeepsCallerKeyOrder) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  const std::string parameters =
+      R"({"type":"object","properties":{"user_id":{"type":"integer"},)"
+      R"("update_info":{"type":"object","properties":{)"
+      R"("name":{"type":"string"},"email":{"type":"string"}}},)"
+      R"("database":{"type":"string","default":"CustomerInfo"}},)"
+      R"("required":["user_id","update_info"]})";
+  const std::string arguments =
+      R"({"user_id":12345,"update_info":{"name":"John","email":"j@x.io"}})";
+  const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
+      *model,
+      R"([{"type":"function","name":"update_user_info","parameters":)" +
+          parameters + "}," +
+          R"({"role":"user","content":"Update user 12345."},)"
+          R"({"role":"assistant","content":"","tool_calls":[)"
+          R"({"name":"update_user_info","arguments":)" +
+          arguments + "}]}]");
+
+  ASSERT_EQ(parsed.tools.size(), 1u);
+  EXPECT_EQ(parsed.tools[0].parameters, parameters);
+  ASSERT_EQ(parsed.chatMsgs.size(), 2u);
+  ASSERT_EQ(parsed.chatMsgs[1].tool_calls.size(), 1u);
+  EXPECT_EQ(parsed.chatMsgs[1].tool_calls[0].arguments, arguments);
+}
+
+// Control for the key-order tests below: arguments written in the declared
+// order are accepted, so a rejection there is the key order and not the
+// harness.
+TEST_F(ToolGrammarModelTest, ToolGrammarAcceptsArgumentsInDeclaredOrder) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  const std::string gbnf = renderToolGrammar(*model, UPDATE_USER_PARAMETERS);
+
+  const GrammarVerdict verdict = checkGrammar(
+      vocab(*model),
+      gbnf,
+      toolCall(
+          R"({"user_id": 12345, "update_info": {"name": "John", )"
+          R"("email": "j@x.io"}, "database": "CustomerInfo"})"));
+  EXPECT_TRUE(verdict.accepted)
+      << "rejected after: " << verdict.acceptedPrefix << "\n\ngrammar:\n"
+      << gbnf;
+}
+
+// Known limitation of fabric's tool grammar, kept so the change is visible
+// when it lands: flip to EXPECT_TRUE(verdict.accepted) once the grammar
+// accepts an object's properties in any order.
+//
+// Both properties of `update_info` are optional, so either order is valid for
+// the schema. The grammar chains optional properties in declared order: once
+// `email` is written, `name` can no longer follow.
+TEST_F(
+    ToolGrammarModelTest,
+    ToolGrammarRejectsNestedOptionalKeysOutOfDeclaredOrder) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  const std::string gbnf = renderToolGrammar(*model, UPDATE_USER_PARAMETERS);
+
+  const GrammarVerdict verdict = checkGrammar(
+      vocab(*model),
+      gbnf,
+      toolCall(
+          R"({"user_id": 12345, "update_info": {"email": "j@x.io", )"
+          R"("name": "John"}, "database": "CustomerInfo"})"));
+  EXPECT_FALSE(verdict.accepted)
+      << "the grammar now accepts optional keys in any order; flip this test";
+  // Rejected at `name`, after `email` went through.
+  EXPECT_NE(
+      verdict.acceptedPrefix.find(R"("update_info": {"email": "j@x.io)"),
+      std::string::npos)
+      << "rejected after: " << verdict.acceptedPrefix;
+  EXPECT_EQ(verdict.acceptedPrefix.find(R"("name": "John")"), std::string::npos)
+      << "rejected after: " << verdict.acceptedPrefix;
+}
+
+// Known limitation of fabric's tool grammar, see the test above.
+//
+// The grammar moves required properties ahead of optional ones, so arguments
+// written in the order the prompt shows them are rejected.
+TEST_F(ToolGrammarModelTest, ToolGrammarRejectsOptionalDeclaredBeforeRequired) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  const std::string gbnf = renderToolGrammar(*model, OPTIONAL_FIRST_PARAMETERS);
+
+  const GrammarVerdict verdict = checkGrammar(
+      vocab(*model),
+      gbnf,
+      toolCall(R"({"database": "CustomerInfo", "user_id": 12345})"));
+  EXPECT_FALSE(verdict.accepted)
+      << "the grammar now accepts optional properties before required ones; "
+         "flip this test";
+  // Rejected at the `database` key, right after the arguments object opens.
+  EXPECT_NE(verdict.acceptedPrefix.find(R"("arguments": {)"), std::string::npos)
+      << "rejected after: " << verdict.acceptedPrefix;
+  EXPECT_EQ(verdict.acceptedPrefix.find("database"), std::string::npos)
+      << "rejected after: " << verdict.acceptedPrefix;
 }
 
 // OpenAI-shaped history leaves `content` null or absent on an assistant turn
