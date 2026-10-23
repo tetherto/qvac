@@ -12,6 +12,16 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): long Parakeet recordings, TranscribePsy
+  among them, no longer lose most of their text after the first window, and
+  attention over 32 or more tokens with unpadded lengths is computed
+  correctly. The shared native `ggml-speech` moves to `2026-10-23` across the
+  speech addons.
+
 ## [0.11.0] - 2026-10-22
 
 ### Added

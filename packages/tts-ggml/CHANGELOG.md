@@ -42,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - LavaSR denoising can use the Vulkan GPU on supported Android ARM Mali devices
   when GPU inference is enabled, instead of falling back to CPU.
 
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): q8_0 matrix products whose sums exceed
+  the fp16 range no longer come back as infinity, and attention over 32 or
+  more tokens with unpadded lengths is computed correctly. The shared native
+  `ggml-speech` moves to `2026-10-23` across the speech addons.
+
 ## [0.13.0] - 2026-10-14
 
 ### Breaking
