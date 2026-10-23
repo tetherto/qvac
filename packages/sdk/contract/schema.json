@@ -4037,7 +4037,7 @@
           "type": "boolean"
         },
         "toolDialect": {
-          "description": "Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.",
+          "description": "Override auto-detected tool-call dialect. Use when detection from the model name and GGUF architecture picks the wrong parser chain for your model.",
           "type": "string",
           "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
           "title": "CompletionOrchestrateRequestToolDialect"
@@ -4737,7 +4737,7 @@
           "type": "boolean"
         },
         "toolDialect": {
-          "description": "Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.",
+          "description": "Override auto-detected tool-call dialect. Use when detection from the model name and GGUF architecture picks the wrong parser chain for your model.",
           "type": "string",
           "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
           "title": "CompletionStreamRequestToolDialect"
