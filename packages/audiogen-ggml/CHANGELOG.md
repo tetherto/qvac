@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
   the speech addons so they use the same source revision.
+- Move the shared native `speech-cpp` source pin to `2026-10-23#2` across
+  the speech addons so they use the same source revision.
 
 ### Fixed
 
