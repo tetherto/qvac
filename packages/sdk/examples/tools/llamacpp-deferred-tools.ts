@@ -13,7 +13,7 @@ import {
   QWEN3_1_7B_INST_Q4
 } from '@qvac/sdk'
 import { z } from 'zod'
-import { weatherSchema, horoscopeSchema, mockExecute } from './shared'
+import { weatherSchema, horoscopeSchema, mockExecute } from './shared.js'
 
 const tools: ToolInput[] = [
   {
