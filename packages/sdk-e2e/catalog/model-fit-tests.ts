@@ -46,11 +46,11 @@ export const modelFitOcr = assessCase('ocr', 'ocr', false)
  * One per voice engine: `assessFit` in `@qvac/tts-ggml` takes a different
  * request shape for each, and sizes each from its own stage checkpoints.
  */
-export const modelFitTtsChatterbox = assessCase('tts-chatterbox', 'tts-chatterbox', false)
-export const modelFitTtsParler = assessCase('tts-parler', 'tts-parler', false)
-export const modelFitTtsCosyvoice = assessCase('tts-cosyvoice3', 'tts-cosyvoice3', false)
-export const modelFitTtsAudio8 = assessCase('tts-audio8', 'tts-audio8', false)
-export const modelFitTtsSupertonic = assessCase('tts-supertonic', 'tts-supertonic', false)
+export const modelFitTtsChatterbox = assessCase('tts-chatterbox', 'tts-chatterbox', true)
+export const modelFitTtsParler = assessCase('tts-parler', 'tts-parler', true)
+export const modelFitTtsCosyvoice = assessCase('tts-cosyvoice3', 'tts-cosyvoice3', true)
+export const modelFitTtsAudio8 = assessCase('tts-audio8', 'tts-audio8', true)
+export const modelFitTtsSupertonic = assessCase('tts-supertonic', 'tts-supertonic', true)
 
 export const modelFitWhisper = assessCase('whisper', 'whisper', true)
 export const modelFitBci = assessCase('bci', 'bci', false)
@@ -61,7 +61,7 @@ export const modelFitProbeEmbeddings = probeCase('embeddings', 'embeddings', tru
 export const modelFitProbeParakeet = probeCase('parakeet', 'parakeet-tdt', true)
 export const modelFitProbeWhisper = probeCase('whisper', 'whisper', true)
 export const modelFitProbeBci = probeCase('bci', 'bci', false)
-export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', false)
+export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', true)
 export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', false)
 export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', false)
 export const modelFitProbeDiffusionEsrgan = probeCase(

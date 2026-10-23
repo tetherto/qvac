@@ -36,6 +36,7 @@ import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { TtsArtifactsRequiredError, LegacyTtsModelDeprecatedError } from '@/errors/index'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
 import { textToSpeechStream } from '@/plugins/builtin/tts-ggml/ops/text-to-speech-stream'
+import { ttsFitRequest } from '@/plugins/builtin/tts-ggml/fit'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import type { TtsOpYield } from '@/utils/tts-stats'
 
@@ -671,6 +672,7 @@ export const ttsPlugin = definePlugin({
   displayName: 'TTS (GGML)',
   addonPackage: ADDON_TTS,
   loadConfigSchema: ttsConfigSchema,
+  fitRequest: ttsFitRequest,
   assessFit: TTSGgml.assessFit,
 
   async resolveConfig(cfg: Record<string, unknown>, ctx: ResolveContext) {
