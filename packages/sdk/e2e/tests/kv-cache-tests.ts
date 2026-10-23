@@ -746,7 +746,342 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
   metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 60000 }
 }
 
+const SEED_SYSTEM = 'You are a helpful assistant. Answer with one short sentence.'
+const SEED_BASE_QUESTION = 'What is the capital of France?'
+const SEED_FOLLOW_UP = 'And what is the capital of Italy? Answer with just the city name.'
+
+/**
+ * A base chat seeds a second chat: the second chat's first turn copies the base cache and
+ * processes only its own message, so it decodes fewer prompt tokens than the same history
+ * on a fresh key. The base still answers afterwards, unchanged.
+ */
+export const kvCacheSeedFromBase: TestDefinition = {
+  testId: 'kv-cache-seed-from-base',
+  params: {
+    baseKey: 'seed-base-session',
+    chatKey: 'seed-chat-session',
+    coldKey: 'seed-cold-session',
+    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 32 }
+  },
+  expectation: { validation: 'contains-any', contains: ['Rome'] },
+  steps: [
+    { useModel: { deps: ['llm'], as: 'model' } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.coldKey' } } },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: [
+            { role: 'system', content: SEED_SYSTEM },
+            { role: 'user', content: SEED_BASE_QUESTION }
+          ],
+          stream: true,
+          kvCache: '$params.baseKey',
+          generationParams: '$params.generationParams'
+        },
+        as: 'baseTurn'
+      }
+    },
+    { project: { from: '$baseTurn', path: 'text', as: 'baseText' } },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: [
+            { role: 'system', content: SEED_SYSTEM },
+            { role: 'user', content: SEED_BASE_QUESTION },
+            { role: 'assistant', content: '$baseText' },
+            { role: 'user', content: SEED_FOLLOW_UP }
+          ],
+          stream: true,
+          kvCache: '$params.chatKey',
+          seedFrom: '$params.baseKey',
+          generationParams: '$params.generationParams'
+        },
+        as: 'seededTurn'
+      }
+    },
+    { project: { from: '$seededTurn', path: 'text', as: 'seededText' } },
+    { project: { from: '$seededTurn', path: 'stats.promptTokens', as: 'seededPromptTokens' } },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: [
+            { role: 'system', content: SEED_SYSTEM },
+            { role: 'user', content: SEED_BASE_QUESTION },
+            { role: 'assistant', content: '$baseText' },
+            { role: 'user', content: SEED_FOLLOW_UP }
+          ],
+          stream: true,
+          kvCache: '$params.coldKey',
+          generationParams: '$params.generationParams'
+        },
+        as: 'coldTurn'
+      }
+    },
+    { project: { from: '$coldTurn', path: 'stats.promptTokens', as: 'coldPromptTokens' } },
+    {
+      assert: {
+        on: '$seededPromptTokens',
+        named: 'belowBudget',
+        with: { budget: '$coldPromptTokens' }
+      }
+    },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: [
+            { role: 'system', content: SEED_SYSTEM },
+            { role: 'user', content: SEED_BASE_QUESTION },
+            { role: 'assistant', content: '$baseText' },
+            { role: 'user', content: 'Repeat the city name only.' }
+          ],
+          stream: true,
+          kvCache: '$params.baseKey',
+          generationParams: '$params.generationParams'
+        },
+        as: 'baseAgain'
+      }
+    },
+    { project: { from: '$baseAgain', path: 'text', as: 'baseAgainText' } },
+    { assert: { on: '$baseAgainText', named: 'nonEmptyText' } },
+    { assert: { on: '$seededText', use: 'expectation' } }
+  ],
+  finally: [
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.coldKey' } } }
+  ],
+  suites: ['smoke'],
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 90000 }
+}
+
+/** `seedFrom` on a chat that already has a cache changes nothing, even when the source is missing. */
+export const kvCacheSeedIgnoredOnceCached: TestDefinition = {
+  testId: 'kv-cache-seed-ignored-once-cached',
+  params: {
+    chatKey: 'seed-ignored-session',
+    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 32 }
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  steps: [
+    { useModel: { deps: ['llm'], as: 'model' } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: [
+            { role: 'system', content: SEED_SYSTEM },
+            { role: 'user', content: SEED_BASE_QUESTION }
+          ],
+          stream: false,
+          kvCache: '$params.chatKey',
+          generationParams: '$params.generationParams'
+        },
+        as: 'firstTurn'
+      }
+    },
+    { project: { from: '$firstTurn', path: 'text', as: 'firstText' } },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: [
+            { role: 'system', content: SEED_SYSTEM },
+            { role: 'user', content: SEED_BASE_QUESTION },
+            { role: 'assistant', content: '$firstText' },
+            { role: 'user', content: SEED_FOLLOW_UP }
+          ],
+          stream: false,
+          kvCache: '$params.chatKey',
+          seedFrom: 'seed-source-that-does-not-exist',
+          generationParams: '$params.generationParams'
+        },
+        as: 'secondTurn'
+      }
+    },
+    { project: { from: '$secondTurn', path: 'text', as: 'text' } },
+    { assert: { on: '$text', use: 'expectation' } }
+  ],
+  finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } }],
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 40000 }
+}
+
+/** The refusals: no named key, a source that does not exist, another system prompt, another tool list. */
+const seedRefusal = (
+  params: Record<string, unknown>,
+  code: number,
+  before: Step[] = [],
+  dep = 'llm'
+): Step[] => [
+  { useModel: { deps: [dep], as: 'model' } },
+  ...before,
+  {
+    callError: {
+      method: 'completion',
+      collect: 'text',
+      params: { modelId: '$model', stream: false, ...params },
+      as: 'err'
+    }
+  },
+  { assert: { on: '$err', named: 'errorMatches', with: { code } } }
+]
+
+export const kvCacheSeedWithoutNamedKey: TestDefinition = {
+  testId: 'kv-cache-seed-without-named-key',
+  params: {},
+  expectation: { validation: 'function', fn: () => true },
+  steps: seedRefusal(
+    {
+      history: [{ role: 'user', content: SEED_BASE_QUESTION }],
+      kvCache: true,
+      seedFrom: 'seed-base-session'
+    },
+    53204
+  ),
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 10000 }
+}
+
+export const kvCacheSeedMissingSource: TestDefinition = {
+  testId: 'kv-cache-seed-missing-source',
+  params: { chatKey: 'seed-missing-source-chat' },
+  expectation: { validation: 'function', fn: () => true },
+  steps: seedRefusal(
+    {
+      history: [{ role: 'user', content: SEED_BASE_QUESTION }],
+      kvCache: '$params.chatKey',
+      seedFrom: 'seed-source-that-does-not-exist'
+    },
+    53205,
+    [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } }]
+  ),
+  finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } }],
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 10000 }
+}
+
+/** A base saved under one system prompt is not a source for a chat under another. */
+export const kvCacheSeedDifferentSystemPrompt: TestDefinition = {
+  testId: 'kv-cache-seed-different-system-prompt',
+  params: {
+    baseKey: 'seed-system-base',
+    chatKey: 'seed-system-chat',
+    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 16 }
+  },
+  expectation: { validation: 'function', fn: () => true },
+  steps: seedRefusal(
+    {
+      history: [
+        { role: 'system', content: 'You are a pirate. Answer in one sentence.' },
+        { role: 'user', content: SEED_BASE_QUESTION }
+      ],
+      kvCache: '$params.chatKey',
+      seedFrom: '$params.baseKey'
+    },
+    53205,
+    [
+      { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+      { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
+      {
+        call: {
+          method: 'completion',
+          collect: 'text',
+          params: {
+            modelId: '$model',
+            history: [
+              { role: 'system', content: SEED_SYSTEM },
+              { role: 'user', content: SEED_BASE_QUESTION }
+            ],
+            stream: false,
+            kvCache: '$params.baseKey',
+            generationParams: '$params.generationParams'
+          },
+          as: 'baseTurn'
+        }
+      }
+    ]
+  ),
+  finally: [
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } }
+  ],
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 30000 }
+}
+
+/** A base saved with one tool list is not a source for a chat with another. */
+export const kvCacheSeedDifferentTools: TestDefinition = {
+  testId: 'kv-cache-seed-different-tools',
+  params: {
+    baseKey: 'seed-tools-base',
+    chatKey: 'seed-tools-chat',
+    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 16 }
+  },
+  expectation: { validation: 'function', fn: () => true },
+  steps: seedRefusal(
+    {
+      history: [
+        { role: 'system', content: SEED_SYSTEM },
+        { role: 'user', content: 'What is 10 + 20?' }
+      ],
+      kvCache: '$params.chatKey',
+      seedFrom: '$params.baseKey',
+      tools: [WEATHER_TOOL]
+    },
+    53206,
+    [
+      { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+      { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
+      {
+        call: {
+          method: 'completion',
+          collect: 'text',
+          params: {
+            modelId: '$model',
+            history: [
+              { role: 'system', content: SEED_SYSTEM },
+              { role: 'user', content: 'What is 10 + 20?' }
+            ],
+            stream: false,
+            kvCache: '$params.baseKey',
+            tools: [CALCULATOR_TOOL],
+            generationParams: '$params.generationParams'
+          },
+          as: 'baseTurn'
+        }
+      }
+    ],
+    'tools'
+  ),
+  finally: [
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } }
+  ],
+  metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 60000 }
+}
+
 export const kvCacheTests = [
+  kvCacheSeedFromBase,
+  kvCacheSeedIgnoredOnceCached,
+  kvCacheSeedWithoutNamedKey,
+  kvCacheSeedMissingSource,
+  kvCacheSeedDifferentSystemPrompt,
+  kvCacheSeedDifferentTools,
   kvCacheCancelKeepsCommittedCache,
   kvCacheConcurrentSameKey,
   kvCacheConcurrentSameKeyAuto,

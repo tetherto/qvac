@@ -400,6 +400,7 @@ export const llmPlugin = definePlugin({
             history: filteredHistory,
             modelId: request.modelId,
             kvCache: request.kvCache,
+            seedFrom: request.seedFrom,
             ...(toolsActive && request.tools && { tools: request.tools }),
             ...(request.generationParams && { generationParams: request.generationParams }),
             ...(toolsActive && { toolDialect: dialect }),

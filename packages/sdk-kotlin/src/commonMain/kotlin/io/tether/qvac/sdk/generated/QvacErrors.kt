@@ -70,8 +70,16 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("INVALID_DELETE_CACHE_PARAMS", reportedCode, message, payload)
     class ServerInvalidImageInput(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("INVALID_IMAGE_INPUT", reportedCode, message, payload)
+    class ServerInvalidSeedFromParams(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("INVALID_SEED_FROM_PARAMS", reportedCode, message, payload)
     class ServerInvalidShardUrlPattern(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("INVALID_SHARD_URL_PATTERN", reportedCode, message, payload)
+    class ServerKvCacheSeedCopyFailed(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("KV_CACHE_SEED_COPY_FAILED", reportedCode, message, payload)
+    class ServerKvCacheSeedSourceNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("KV_CACHE_SEED_SOURCE_NOT_FOUND", reportedCode, message, payload)
+    class ServerKvCacheSeedToolsMismatch(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("KV_CACHE_SEED_TOOLS_MISMATCH", reportedCode, message, payload)
     class ServerLegacyParakeetModelDeprecated(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("LEGACY_PARAKEET_MODEL_DEPRECATED", reportedCode, message, payload)
     class ServerLegacyTtsModelDeprecated(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -325,7 +333,11 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "INVALID_AUDIO_INPUT" && (code == null || code == 52422) -> QvacKnownException.ServerInvalidAudioInput(message, payload, code)
     name == "INVALID_DELETE_CACHE_PARAMS" && (code == null || code == 53201) -> QvacKnownException.ServerInvalidDeleteCacheParams(message, payload, code)
     name == "INVALID_IMAGE_INPUT" && (code == null || code == 52414) -> QvacKnownException.ServerInvalidImageInput(message, payload, code)
+    name == "INVALID_SEED_FROM_PARAMS" && (code == null || code == 53204) -> QvacKnownException.ServerInvalidSeedFromParams(message, payload, code)
     name == "INVALID_SHARD_URL_PATTERN" && (code == null || code == 53010) -> QvacKnownException.ServerInvalidShardUrlPattern(message, payload, code)
+    name == "KV_CACHE_SEED_COPY_FAILED" && (code == null || code == 53207) -> QvacKnownException.ServerKvCacheSeedCopyFailed(message, payload, code)
+    name == "KV_CACHE_SEED_SOURCE_NOT_FOUND" && (code == null || code == 53205) -> QvacKnownException.ServerKvCacheSeedSourceNotFound(message, payload, code)
+    name == "KV_CACHE_SEED_TOOLS_MISMATCH" && (code == null || code == 53206) -> QvacKnownException.ServerKvCacheSeedToolsMismatch(message, payload, code)
     name == "LEGACY_PARAKEET_MODEL_DEPRECATED" && (code == null || code == 52210) -> QvacKnownException.ServerLegacyParakeetModelDeprecated(message, payload, code)
     name == "LEGACY_TTS_MODEL_DEPRECATED" && (code == null || code == 52211) -> QvacKnownException.ServerLegacyTtsModelDeprecated(message, payload, code)
     name == "LIFECYCLE_OPERATION_BLOCKED" && (code == null || code == 53602) -> QvacKnownException.ServerLifecycleOperationBlocked(message, payload, code)

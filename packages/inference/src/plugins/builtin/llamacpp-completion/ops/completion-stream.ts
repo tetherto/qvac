@@ -14,7 +14,11 @@ import {
   logCacheSave,
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
-import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
+import {
+  extractSystemPrompt,
+  generateToolsHash,
+  getCurrentCacheInfo
+} from '@/plugins/ops/kv-cache-utils'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import { shouldCommitCachedTurn } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-state'
 import {
@@ -30,7 +34,7 @@ import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import { buildAutoCacheSaveHistory, type CacheMessage } from '@/utils/index'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
-import { AttachmentNotFoundError } from '@/errors/index'
+import { AttachmentNotFoundError, InvalidSeedFromParamsError } from '@/errors/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { LlmStats } from '@/utils/addon-responses'
@@ -307,12 +311,19 @@ export async function* completion(
     history: requestHistory,
     modelId,
     kvCache,
+    seedFrom,
     tools,
     generationParams,
     responseFormat
   } = params
   const { signal, scope } = opts
   const requestLogger = opts.logger ?? logger
+
+  // A seed names which caller-managed cache to copy into which, so both names
+  // are explicit: the auto key is never returned to the caller.
+  if (seedFrom !== undefined && (typeof kvCache !== 'string' || seedFrom === kvCache)) {
+    throw new InvalidSeedFromParamsError()
+  }
 
   const modelConfig = getModelConfig(modelId)
   const history = seedConfiguredSystemPrompt(requestHistory, modelConfig)
@@ -427,6 +438,8 @@ export async function* completion(
       kind: 'custom',
       customKey: kvCache,
       configHash,
+      toolsHash: generateToolsHash(toolsActive ? toolsToRender : undefined),
+      ...(seedFrom !== undefined && { seedFrom }),
       signal
     })
   } else {

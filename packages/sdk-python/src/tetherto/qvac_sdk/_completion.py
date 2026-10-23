@@ -229,6 +229,7 @@ def completion(
     stream: bool = True,
     generation_params: dict[str, Any] | None = None,
     kv_cache: Any = None,
+    seed_from: str | None = None,
     capture_thinking: bool | None = None,
     emit_raw_deltas: bool | None = None,
     tool_dialect: str | None = None,
@@ -256,6 +257,8 @@ def completion(
         payload["generationParams"] = generation_params
     if kv_cache is not None:
         payload["kvCache"] = kv_cache
+    if seed_from is not None:
+        payload["seedFrom"] = seed_from
     if capture_thinking is not None:
         payload["captureThinking"] = capture_thinking
     if emit_raw_deltas is not None:

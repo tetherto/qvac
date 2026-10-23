@@ -43,11 +43,64 @@ export function generateCacheKey(messages: CacheMessage[]): string {
   return hashString.substring(0, 16)
 }
 
-function resolveCacheFilePath(modelId: string, configHash: string, cacheKey: string): string {
+// Resolves the path without creating its directories; a lookup of a cache
+// that may not exist (a seed source) must leave no empty tree behind.
+export function resolveCacheFilePath(
+  modelId: string,
+  configHash: string,
+  cacheKey: string
+): string {
   const cacheDir = getKVCacheDir()
   const sessionCacheDir = validateAndJoinPath(cacheDir, cacheKey)
   const modelCacheDir = validateAndJoinPath(sessionCacheDir, modelId)
   return path.join(modelCacheDir, `${configHash}.bin`)
+}
+
+// The tool list is not in the cache path (see `generateConfigHash`), so a named
+// cache records the one it was saved with beside its file. Seeding compares it
+// with the request's list; `null` is a cache saved without tools.
+export function generateToolsHash(tools: readonly unknown[] | undefined): string | null {
+  if (tools === undefined || tools.length === 0) return null
+  const hash = crypto.createHash('sha-256')
+  hash.update(Buffer.from(JSON.stringify(tools), 'utf8'))
+  return hash.digest('hex').substring(0, 16)
+}
+
+export function toolsSidecarPath(cachePath: string): string {
+  return `${cachePath}.tools.json`
+}
+
+export async function writeToolsSidecar(
+  cachePath: string,
+  toolsHash: string | null
+): Promise<void> {
+  await fsPromises.writeFile(toolsSidecarPath(cachePath), JSON.stringify({ toolsHash }), 'utf8')
+}
+
+// `undefined` when the cache has no sidecar (saved before sidecars existed, or
+// written outside the engine), which a seed treats as unknown rather than wrong.
+export async function readToolsSidecar(cachePath: string): Promise<string | null | undefined> {
+  let raw: string
+  try {
+    raw = await fsPromises.readFile(toolsSidecarPath(cachePath), 'utf8')
+  } catch {
+    return undefined
+  }
+  try {
+    const parsed = JSON.parse(raw) as { toolsHash?: unknown }
+    if (parsed.toolsHash === null) return null
+    return typeof parsed.toolsHash === 'string' ? parsed.toolsHash : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export async function removeToolsSidecar(cachePath: string): Promise<void> {
+  try {
+    await fsPromises.unlink(toolsSidecarPath(cachePath))
+  } catch {
+    // No sidecar for this path.
+  }
 }
 
 export async function getCacheFilePath(

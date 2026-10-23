@@ -264,6 +264,13 @@ export const completionParamsSchema = z.object({
     .optional()
     .describe(
       'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to disable.'
+    ),
+  seedFrom: z
+    .string()
+    .min(1, 'seedFrom cannot be empty string')
+    .optional()
+    .describe(
+      'Name of another caller-managed cache to start this chat from. On the first turn of a chat whose `kvCache` key has no cache yet, that cache is copied under the key and only the new tail of the conversation is processed; the source is left unchanged. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when it was saved with a different tool list.'
     )
 })
 

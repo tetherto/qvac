@@ -3805,6 +3805,14 @@ class CompletionOrchestrateRequest(GeneratedBaseModel):
         ),
     ]
     kv_cache: Annotated[bool | KvCache | None, Field(alias="kvCache")] = None
+    seed_from: Annotated[
+        str | None,
+        Field(
+            alias="seedFrom",
+            description="Name of another caller-managed cache to start this chat from. On the first turn of a chat whose `kvCache` key has no cache yet, that cache is copied under the key and only the new tail of the conversation is processed; the source is left unchanged. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when it was saved with a different tool list.",
+            min_length=1,
+        ),
+    ] = None
     tools: Annotated[
         list[CompletionOrchestrateRequestToolsItem] | None,
         Field(
@@ -4451,6 +4459,14 @@ class CompletionStreamRequest(GeneratedBaseModel):
         ),
     ]
     kv_cache: Annotated[bool | KvCache | None, Field(alias="kvCache")] = None
+    seed_from: Annotated[
+        str | None,
+        Field(
+            alias="seedFrom",
+            description="Name of another caller-managed cache to start this chat from. On the first turn of a chat whose `kvCache` key has no cache yet, that cache is copied under the key and only the new tail of the conversation is processed; the source is left unchanged. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when it was saved with a different tool list.",
+            min_length=1,
+        ),
+    ] = None
     tools: Annotated[
         list[CompletionStreamRequestToolsItem] | None,
         Field(

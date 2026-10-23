@@ -7,7 +7,11 @@ import {
   getCurrentCacheInfo,
   pruneEmptyCacheDirectories,
   renameCacheFile,
-  deleteCache as deleteCacheUtil
+  deleteCache as deleteCacheUtil,
+  readToolsSidecar,
+  removeToolsSidecar,
+  resolveCacheFilePath,
+  writeToolsSidecar
 } from '@/plugins/ops/kv-cache-utils'
 import {
   isCachePathWithinDirectory,
@@ -25,6 +29,12 @@ import {
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
 import { type AbortSignal } from 'bare-abort-controller'
+import {
+  InvalidSeedFromParamsError,
+  KvCacheSeedCopyFailedError,
+  KvCacheSeedSourceNotFoundError,
+  KvCacheSeedToolsMismatchError
+} from '@/errors/index'
 
 // Used by cross-model paths that have no `RequestContext` (e.g.
 // `deleteKvCacheState`). Per-session call sites receive a logger from
@@ -302,6 +312,8 @@ export interface TurnHandle {
    * committed is there to keep, so an unwind drops whatever this turn wrote.
    */
   readonly createdCache: boolean
+  /** True when this turn started the cache from a copy of `seedFrom`. */
+  readonly seeded: boolean
 }
 
 export interface BeginCustomTurnInput {
@@ -310,6 +322,18 @@ export interface BeginCustomTurnInput {
   customKey: string
   /** Hash of the system prompt; see `generateConfigHash`. */
   configHash: string
+  /**
+   * Hash of the tool list the turn renders (`generateToolsHash`), recorded
+   * beside the file on commit and checked against a seed source's record.
+   */
+  toolsHash?: string | null
+  /**
+   * Name of another caller-managed cache to copy when this key has no cache
+   * yet. Ignored when the key already has one. Refused when the source does
+   * not exist for this model and system prompt, or records a different tool
+   * list.
+   */
+  seedFrom?: string
   /**
    * Request abort signal. When it aborts while this turn is queued behind a
    * same-file peer's write lock, the wait is abandoned so the request's scope
@@ -400,6 +424,9 @@ interface InternalTurnState {
    * to keep.
    */
   createdByThisTurn: boolean
+  /** Written beside the file when a custom-key turn commits. */
+  toolsHash?: string | null
+  seeded: boolean
 }
 
 // ----- factory -----
@@ -428,22 +455,28 @@ export function createKvCacheSession(
     cachePath: string,
     autoCacheKey?: string,
     releaseWriteLock: () => void = () => {},
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    toolsHash?: string | null
   ): TurnHandle {
     const handle: TurnHandle = {
       cachePath,
       get createdCache(): boolean {
         return turnState.get(handle)?.createdByThisTurn ?? false
+      },
+      get seeded(): boolean {
+        return turnState.get(handle)?.seeded ?? false
       }
     }
     turnState.set(handle, {
       cachePath,
       ...(autoCacheKey !== undefined && { autoCacheKey }),
       ...(signal !== undefined && { signal }),
+      ...(toolsHash !== undefined && { toolsHash }),
       releaseWriteLock,
       committed: false,
       rolledBack: false,
-      createdByThisTurn: false
+      createdByThisTurn: false,
+      seeded: false
     })
     markCachePathActive(cachePath)
     return handle
@@ -478,7 +511,7 @@ export function createKvCacheSession(
     // restarts still hit the reuse path.
     let exists = initializedCaches.has(cachePath)
     if (!exists) exists = await adoptPersistedCache(cachePath)
-    const handle = makeHandle(cachePath, undefined, releaseWriteLock, input.signal)
+    const handle = makeHandle(cachePath, undefined, releaseWriteLock, input.signal, input.toolsHash)
 
     try {
       logCacheStatus(input.customKey, exists)
@@ -488,6 +521,14 @@ export function createKvCacheSession(
         // our lock wait, so the addon's own save has somewhere to land.
         await fsPromises.mkdir(path.dirname(cachePath), { recursive: true })
         turnState.get(handle)!.createdByThisTurn = true
+        if (input.seedFrom !== undefined) {
+          await seedFromNamedCache(cachePath, input, input.seedFrom)
+          turnState.get(handle)!.seeded = true
+        }
+      } else if (input.seedFrom !== undefined) {
+        logger.debug(
+          `[kv-cache] seedFrom ignored: "${input.customKey}" already has a cache. path=${cachePath}`
+        )
       }
 
       return handle
@@ -496,6 +537,54 @@ export function createKvCacheSession(
       await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
       releaseWriteLock()
       throw error
+    }
+  }
+
+  // Copies the source file under the target path. The copy, not the source,
+  // is what the addon loads and later writes, so the source is never touched.
+  // The source lock is taken so a turn running on it finishes its save first;
+  // the target lock is already held by the caller.
+  async function seedFromNamedCache(
+    targetPath: string,
+    input: BeginCustomTurnInput,
+    seedFrom: string
+  ): Promise<void> {
+    const { toolsHash, signal } = input
+    const sourcePath = resolveCacheFilePath(modelId, input.configHash, seedFrom)
+    // Same lock as the target (a case-only variant of the key on a
+    // case-insensitive filesystem) would wait on itself.
+    if (lockKeyFor(sourcePath) === lockKeyFor(targetPath)) {
+      throw new InvalidSeedFromParamsError()
+    }
+    const releaseSourceLock = await acquireCachePathWriteLock(sourcePath, signal)
+    try {
+      try {
+        await fsPromises.access(sourcePath)
+      } catch {
+        throw new KvCacheSeedSourceNotFoundError(seedFrom, modelId)
+      }
+      const sourceToolsHash = await readToolsSidecar(sourcePath)
+      if (sourceToolsHash === undefined) {
+        logger.warn(
+          `[kv-cache] seed source "${seedFrom}" records no tool list; seeding without the check. path=${sourcePath}`
+        )
+      } else if (sourceToolsHash !== (toolsHash ?? null)) {
+        throw new KvCacheSeedToolsMismatchError(seedFrom)
+      }
+      try {
+        await fsPromises.copyFile(sourcePath, targetPath)
+      } catch (error) {
+        try {
+          await fsPromises.unlink(targetPath)
+        } catch {
+          // Nothing partial was written.
+        }
+        const detail = error instanceof Error ? error.message : String(error)
+        throw new KvCacheSeedCopyFailedError(seedFrom, detail, error)
+      }
+      logger.info(`[kv-cache] seeded "${input.customKey}" from "${seedFrom}". path=${targetPath}`)
+    } finally {
+      releaseSourceLock()
     }
   }
 
@@ -604,6 +693,16 @@ export function createKvCacheSession(
       if (!ok) {
         await runRollback(state)
         return
+      }
+      if (state.toolsHash !== undefined) {
+        try {
+          await writeToolsSidecar(state.cachePath, state.toolsHash)
+        } catch (sidecarError) {
+          // The cache still works; only a later seed loses the tool-list check.
+          logger.warn(
+            `[kv-cache] Failed to record the tool list beside the cache. path=${state.cachePath} error=${sidecarError instanceof Error ? sidecarError.message : String(sidecarError)}`
+          )
+        }
       }
       state.committed = true
       releaseCachePath(state.cachePath)
@@ -730,6 +829,7 @@ export function createKvCacheSession(
         )
       }
     }
+    await removeToolsSidecar(state.cachePath)
     if (discardCache) {
       try {
         await discardCache(state.cachePath)

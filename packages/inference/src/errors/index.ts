@@ -878,6 +878,38 @@ export class CacheDirNotWritableError extends QvacErrorBase {
   }
 }
 
+export class InvalidSeedFromParamsError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.INVALID_SEED_FROM_PARAMS, undefined, cause))
+  }
+}
+
+export class KvCacheSeedSourceNotFoundError extends QvacErrorBase {
+  constructor(seedFrom: string, modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(ERROR_CODES.KV_CACHE_SEED_SOURCE_NOT_FOUND, [seedFrom, modelId], cause)
+    )
+  }
+}
+
+export class KvCacheSeedToolsMismatchError extends QvacErrorBase {
+  constructor(seedFrom: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.KV_CACHE_SEED_TOOLS_MISMATCH, [seedFrom], cause))
+  }
+}
+
+export class KvCacheSeedCopyFailedError extends QvacErrorBase {
+  constructor(seedFrom: string, details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        ERROR_CODES.KV_CACHE_SEED_COPY_FAILED,
+        details ? [seedFrom, details] : [seedFrom],
+        cause
+      )
+    )
+  }
+}
+
 // ============== System / runtime ==============
 
 export class FFmpegNotAvailableError extends QvacErrorBase {

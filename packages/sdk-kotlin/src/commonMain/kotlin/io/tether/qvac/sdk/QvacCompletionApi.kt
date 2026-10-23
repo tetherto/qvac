@@ -154,6 +154,8 @@ data class QvacCompletionOptions(
     val generation: QvacGenerationOptions = QvacGenerationOptions(predict = -1),
     val stream: Boolean = true,
     val kvCache: QvacKvCache? = null,
+    /** Name of another caller-managed cache to copy on the first turn of a chat with no cache under its `kvCache` key. */
+    val seedFrom: String? = null,
     val captureThinking: Boolean? = null,
     val emitRawDeltas: Boolean? = null,
     /** Worker tool-call dialect name, e.g. "hermes" or "qwen35". */
@@ -272,6 +274,7 @@ fun QvacCompletion.run(
         generationParams = options.generation.toStreamParams(),
         history = history.map { it.toStreamItem() },
         kvCache = options.kvCache?.toWire(),
+        seedFrom = options.seedFrom,
         modelId = modelId,
         requestId = options.requestId,
         responseFormat = options.responseFormat?.toStreamFormat(),
@@ -318,6 +321,7 @@ fun QvacCompletion.orchestrate(
         generationParams = options.generation.toStreamParams(),
         history = history.map { it.toStreamItem() },
         kvCache = options.kvCache?.toWire(),
+        seedFrom = options.seedFrom,
         maxToolTurns = maxToolTurns.toLong(),
         modelId = modelId,
         requestId = options.requestId,

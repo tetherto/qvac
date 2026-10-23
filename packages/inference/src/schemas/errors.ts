@@ -114,6 +114,10 @@ export const ERROR_CODES = {
   INVALID_DELETE_CACHE_PARAMS: 53201,
   CACHE_DIR_NOT_ABSOLUTE: 53202,
   CACHE_DIR_NOT_WRITABLE: 53203,
+  INVALID_SEED_FROM_PARAMS: 53204,
+  KV_CACHE_SEED_SOURCE_NOT_FOUND: 53205,
+  KV_CACHE_SEED_TOOLS_MISMATCH: 53206,
+  KV_CACHE_SEED_COPY_FAILED: 53207,
 
   // Config operations (53,350-53,499)
   CONFIG_ALREADY_SET: 53351,
@@ -602,6 +606,24 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'CACHE_DIR_NOT_WRITABLE',
     message: (cacheDir: string, details?: string) =>
       `Cache directory is not writable: ${cacheDir}${details ? `. ${details}` : ''}`
+  },
+  [ERROR_CODES.INVALID_SEED_FROM_PARAMS]: {
+    name: 'INVALID_SEED_FROM_PARAMS',
+    message: 'seedFrom needs a caller-managed kvCache key other than itself'
+  },
+  [ERROR_CODES.KV_CACHE_SEED_SOURCE_NOT_FOUND]: {
+    name: 'KV_CACHE_SEED_SOURCE_NOT_FOUND',
+    message: (seedFrom: string, modelId: string) =>
+      `No cache named "${seedFrom}" exists for model "${modelId}" with this system prompt`
+  },
+  [ERROR_CODES.KV_CACHE_SEED_TOOLS_MISMATCH]: {
+    name: 'KV_CACHE_SEED_TOOLS_MISMATCH',
+    message: (seedFrom: string) => `Cache "${seedFrom}" was saved with a different tool list`
+  },
+  [ERROR_CODES.KV_CACHE_SEED_COPY_FAILED]: {
+    name: 'KV_CACHE_SEED_COPY_FAILED',
+    message: (seedFrom: string, details?: string) =>
+      `Failed to copy cache "${seedFrom}"${details ? `: ${details}` : ''}`
   },
 
   // Config operations

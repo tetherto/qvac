@@ -305,6 +305,27 @@ completion({
 });
 ```
 
+#### Start a chat from another cache
+
+A caller-managed cache belongs to one key. To start a new chat from what another key already holds, such as an agent's system prompt and tools, pass that key as `seedFrom` on the chat's first turn. The cache is copied under the chat's own key and only the new part of the conversation is processed; the source is left as it is.
+
+```js
+// Turn 1 of "chat-2" starts from everything "base" holds.
+completion({
+  modelId,
+  history: [...baseHistory, { role: "user", content: "First question" }],
+  stream: true,
+  kvCache: "chat-2",
+  seedFrom: "base",
+});
+```
+
+- `seedFrom` needs a string `kvCache` other than itself; it has no meaning for the auto cache.
+- It applies only while `kvCache` has no cache. Once the chat has one, later turns ignore it.
+- The call is refused when no cache named `seedFrom` exists for the model and system prompt, or when that cache was saved with a different tool list.
+- The history has to continue the source's: on hybrid and recurrent models nothing before the point where it diverges can be reused.
+- The copy is a full cache file, written again on every turn of the new chat like any caller-managed cache. Delete it with [`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache) when the chat is done.
+
 On hybrid and recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss), a turn under a caller-managed `kvCache` key whose history diverges from the cache, such as the next turn under a thinking template or a regenerate, continues from a checkpoint instead of reprocessing the whole conversation. Each checkpoint costs host RAM, up to hundreds of MiB on larger models, which model fit checks do not count. Tune them at load time in `modelConfig`:
 
 - `cache_checkpoints`: checkpoints kept per sequence (0–1024, default 1). Editing the user message k-th from the end without reprocessing needs `k + 1`; `0` turns checkpoints off.

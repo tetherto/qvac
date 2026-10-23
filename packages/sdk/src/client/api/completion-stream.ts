@@ -87,6 +87,12 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *     back will miss the cache. Push the canonical string unchanged.
  *   - `cacheableAssistantContent` is omitted on tool-call turns - those
  *     can't be auto-cached today.
+ * @param params.seedFrom - Optional name of another caller-managed cache to start this chat from.
+ *   On the first turn of a chat whose string `kvCache` key has no cache yet, that cache is copied
+ *   under the key and only the new tail of the conversation is processed; the source is left
+ *   unchanged. Ignored once the chat has a cache. Requires a string `kvCache` other than
+ *   `seedFrom` itself. Refused when no cache of that name exists for this model and system
+ *   prompt, or when it was saved with a different tool list.
  * @returns A CompletionRun — consume via `events` / `final`.
  * @example
  * ```typescript
@@ -219,6 +225,7 @@ export function completion(params: CompletionParams): CompletionRun {
         modelId: params.modelId,
         history: params.history.map((message) => ({ ...message, content: message.content ?? '' })),
         kvCache: params.kvCache,
+        seedFrom: params.seedFrom,
         tools: allTools.length > 0 ? allTools : undefined,
         stream: params.stream ?? true,
         generationParams: params.generationParams,
