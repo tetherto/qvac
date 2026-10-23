@@ -38,7 +38,7 @@ function probeCase(family: string, dep: string, measured: boolean): TestDefiniti
 export const modelFitLlm = assessCase('llm', 'llm', true)
 export const modelFitEmbeddings = assessCase('embeddings', 'embeddings', true)
 export const modelFitParakeet = assessCase('parakeet', 'parakeet-tdt', true)
-export const modelFitAudiogen = assessCase('audiogen', 'audiogen-turbo', false)
+export const modelFitAudiogen = assessCase('audiogen', 'audiogen-turbo', true)
 export const modelFitDiffusion = assessCase('diffusion', 'diffusion', false)
 export const modelFitOcr = assessCase('ocr', 'ocr', false)
 export const modelFitTts = assessCase('tts-chatterbox', 'tts-chatterbox', true)
@@ -52,7 +52,7 @@ export const modelFitProbeParakeet = probeCase('parakeet', 'parakeet-tdt', true)
 export const modelFitProbeWhisper = probeCase('whisper', 'whisper', true)
 export const modelFitProbeBci = probeCase('bci', 'bci', true)
 export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', true)
-export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', false)
+export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', true)
 export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', false)
 export const modelFitProbeDiffusionEsrgan = probeCase(
   'diffusion-esrgan',
