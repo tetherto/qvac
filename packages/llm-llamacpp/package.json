@@ -47,6 +47,7 @@
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
     "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1",
+    "benchmarks:vlm": "node benchmarks/vlm-benchmark/run-local.cjs",
     "fuzz:build": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target llm-string-fuzz",
     "fuzz:build:continuous": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=ON && bare-make build --target llm-string-fuzz",
     "fuzz:run": "npm run test:scripts && node scripts/run-cpp-fuzz.js",

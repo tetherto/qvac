@@ -35,13 +35,42 @@ function getMediaPath (filename) {
     if (global.assetPaths[key]) return global.assetPaths[key].replace('file://', '')
     throw new Error(`Asset not found in testAssets: ${filename} (rebuild the app)`)
   }
-  return path.join(__dirname, 'fixture', filename)
+  return path.join(env('QVAC_VLM_FIXTURE_DIR') || path.join(__dirname, 'fixture'), filename)
 }
 
 function env (key) {
   if (typeof os.getEnv === 'function') return os.getEnv(key) || ''
   if (typeof process !== 'undefined' && process.env) return process.env[key] || ''
   return ''
+}
+
+// Engine parameters pinned by run-local.cjs so the addon and llama-server legs
+// run identically (JSON; absent on CI/mobile, where addon defaults apply).
+const PARAMS = (() => {
+  const raw = env('QVAC_VLM_PARAMS')
+  if (!raw) return null
+  try { return JSON.parse(raw) } catch (e) { throw new Error(`QVAC_VLM_PARAMS is not valid JSON: ${e.message}`) }
+})()
+
+// PARAMS -> addon config keys (forwarded to qvac-fabric as --<key> <value>).
+function paramsConfig (device) {
+  if (!PARAMS) return {}
+  const c = {}
+  if (PARAMS.threads != null) c.threads = String(PARAMS.threads)
+  if (PARAMS.batchSize != null) c['batch-size'] = String(PARAMS.batchSize)
+  if (PARAMS.ubatchSize != null) c['ubatch-size'] = String(PARAMS.ubatchSize)
+  if (PARAMS.flashAttn != null) c['flash-attn'] = String(PARAMS.flashAttn)
+  if (PARAMS.cacheTypeK != null) c['cache-type-k'] = String(PARAMS.cacheTypeK)
+  if (PARAMS.cacheTypeV != null) c['cache-type-v'] = String(PARAMS.cacheTypeV)
+  if (PARAMS.fit != null) c.fit = String(PARAMS.fit)
+  if (PARAMS.poll != null) c.poll = String(PARAMS.poll)
+  if (PARAMS.imageMaxTokens != null) c['image-max-tokens'] = String(PARAMS.imageMaxTokens)
+  if (device !== 'cpu') {
+    if (PARAMS.gpuApi != null) c.backend = String(PARAMS.gpuApi)
+    if (PARAMS.gpuLayers != null) c.gpu_layers = String(PARAMS.gpuLayers)
+    if (PARAMS.mmprojGpu != null) c['mmproj-use-gpu'] = PARAMS.mmprojGpu ? 'true' : 'false'
+  }
+  return c
 }
 const isMobile = os.platform() === 'android' || os.platform() === 'ios'
 // On mobile the matrix is selected explicitly via test-groups + perf-tests, so enable
@@ -159,11 +188,15 @@ const HF = (repo, sha, file) => `https://huggingface.co/${repo}/resolve/${sha}/$
 // Map a blob's `source` descriptor to a download plan ensureBlob() can act on:
 //   { modelName, downloadUrl }     — HTTP(S): hf / url / s3 (presigned)
 //   { modelName, fetch(destPath) } — custom downloader: registry (P2P)
+//   { modelName, localPath }       — a file already on disk (desktop only)
 // A literal `downloadUrl` on the blob (legacy shape) still wins.
 function resolveBlob (blob) {
   if (blob.downloadUrl) return { modelName: blob.modelName, downloadUrl: blob.downloadUrl }
   const s = blob.source || {}
   switch (s.type) {
+    case 'local':
+      if (!s.path) throw new Error(`${blob.modelName}: source.type='local' requires source.path`)
+      return { modelName: blob.modelName, localPath: s.path }
     case 'hf':
       return { modelName: blob.modelName, downloadUrl: HF(s.repo, s.sha, s.file) }
     case 'url':
@@ -199,23 +232,36 @@ async function fetchFromRegistry (source, destPath) {
   }
 }
 
-// Download a blob to test/model/, honouring its source descriptor. Mirrors
-// ensureModel()'s cache-by-name behaviour for the custom-fetch (registry) path.
+// Resolve a blob to an absolute file path. Local files are used in place (only
+// when QVAC_VLM_ALLOW_LOCAL=1, set by run-local.cjs, and never on mobile); remote
+// blobs go to test/model/, honouring the source descriptor. Mirrors ensureModel()'s
+// cache-by-name behaviour for the custom-fetch (registry) path.
 async function ensureBlob (blob) {
   const plan = resolveBlob(blob)
-  if (plan.downloadUrl) return ensureModel({ modelName: plan.modelName, downloadUrl: plan.downloadUrl })
+  if (plan.localPath) {
+    if (isMobile || env('QVAC_VLM_ALLOW_LOCAL') !== '1') {
+      throw new Error(`${blob.modelName}: local model files are only accepted by run-local.cjs (QVAC_VLM_ALLOW_LOCAL=1, desktop)`)
+    }
+    if (!fs.existsSync(plan.localPath)) throw new Error(`model file not found: ${plan.localPath}`)
+    return plan.localPath
+  }
+  if (plan.downloadUrl) {
+    const [name, dir] = await ensureModel({ modelName: plan.modelName, downloadUrl: plan.downloadUrl })
+    return path.join(dir, name)
+  }
   const modelDir = path.resolve(__dirname, '../model')
   const modelPath = path.join(modelDir, plan.modelName)
-  if (fs.existsSync(modelPath) && fs.statSync(modelPath).size > 0) return [plan.modelName, modelDir]
+  if (fs.existsSync(modelPath) && fs.statSync(modelPath).size > 0) return modelPath
   fs.mkdirSync(modelDir, { recursive: true })
   console.log(`[download] Fetching ${plan.modelName} from registry...`)
   await plan.fetch(modelPath)
-  return [plan.modelName, modelDir]
+  return modelPath
 }
 
 // Human-readable origin URL for the [VLMMETA] provenance marker.
 function displayUrl (blob) {
   const plan = resolveBlob(blob)
+  if (plan.localPath) return `file://${plan.localPath}`
   if (plan.downloadUrl) return plan.downloadUrl
   const s = blob.source || {}
   return `registry:${s.source || ''}/${s.path || ''}`
@@ -226,7 +272,7 @@ function displayUrl (blob) {
 function sourceType (blob) {
   if (blob.registry) return 'Registry'
   const t = (blob.source && blob.source.type) || ''
-  return ({ hf: 'HF', s3: 'S3', url: 'URL' })[t] || (t || '—')
+  return ({ hf: 'HF', s3: 'S3', url: 'URL', local: 'Local' })[t] || (t || '—')
 }
 
 // Minimal PNG/JPEG dimension reader (no deps, big-endian) for the image table.
@@ -257,15 +303,20 @@ function devicesToRun () {
   return noGpu ? ['cpu'] : ['cpu', 'gpu']
 }
 
-async function runOne (inference, imgPath, prompt) {
+// With PARAMS.perItemPredict the cap follows the item's task (as llama-server
+// and the CLI legs do); otherwise the load-time n_predict applies.
+async function runOne (inference, imgPath, prompt, task) {
   const bytes = new Uint8Array(fs.readFileSync(imgPath))
   const messages = [
     { role: 'system', content: 'You are a helpful assistant.' },
     { role: 'user', type: 'media', content: bytes },
     { role: 'user', content: prompt }
   ]
+  const runOptions = PARAMS && PARAMS.perItemPredict
+    ? { generationParams: { predict: TASK_NPREDICT[task] || DEFAULT_NPREDICT } }
+    : undefined
   const t0 = Date.now()
-  const resp = await inference.run(messages)
+  const resp = await inference.run(messages, runOptions)
   const chunks = []
   let err = null
   resp.onUpdate(d => chunks.push(d)).onError(e => { err = e })
@@ -322,8 +373,8 @@ function runModel (spec) {
   for (const device of devicesToRun()) {
     const dev = device.toUpperCase()
     test(`vlm-matrix ${spec.label} [${dev}]`, { timeout: TEST_TIMEOUT_MIN * 60 * 1000 }, async t => {
-      const [mainName, dir] = await ensureBlob(spec.llm)
-      const [projName] = await ensureBlob(spec.mmproj)
+      const llmPath = await ensureBlob(spec.llm)
+      const mmprojPath = await ensureBlob(spec.mmproj)
       // model-origin provenance (stderr, parsed host-side into the report)
       console.error('[VLMMETA]' + JSON.stringify(stamp(null, {
         cell: axis,
@@ -340,7 +391,7 @@ function runModel (spec) {
       const items = selectedItems()
       const nPredict = Math.max(DEFAULT_NPREDICT, ...items.map(it => TASK_NPREDICT[it.task] || 0))
       const inference = new LlmLlamacpp({
-        files: { model: [path.join(dir, mainName)], projectionModel: path.join(dir, projName) },
+        files: { model: [llmPath], projectionModel: mmprojPath },
         config: {
           device,
           gpu_layers: device === 'cpu' ? '0' : '98',
@@ -350,6 +401,7 @@ function runModel (spec) {
           n_predict: String(nPredict),
           verbosity: '2', // surfaces `image slice encoded in N ms` on native stderr
           'reasoning-budget': '0', // disable Qwen3.5 thinking -> clean direct answers
+          ...paramsConfig(device),
           ...(BACKENDS_DIR ? { backendsDir: BACKENDS_DIR } : {}) // candidate/baseline build swap (scheduler)
         },
         logger: console,
@@ -366,7 +418,7 @@ function runModel (spec) {
         const item = items[0]
         console.error('[VLMSEG]' + JSON.stringify(stamp(null, { cell: axis, source: SOURCE, model: spec.label, device, id: item.id, rep: w }, 0)) + '[/VLMSEG]')
         try {
-          const r = await runOne(inference, getMediaPath(item.image), item.prompt)
+          const r = await runOne(inference, getMediaPath(item.image), item.prompt, item.task)
           const st = r.stats || {}
           emitRow(stamp(null, {
             rss_mb: peakRssMb(),
@@ -385,6 +437,7 @@ function runModel (spec) {
             ms: r.ms,
             decode_tps: st.TPS != null ? st.TPS : null,
             ttft_ms: st.TTFT != null ? st.TTFT : null,
+            pp_tps: st.ppTPS != null ? st.ppTPS : null,
             gen_tokens: st.generatedTokens != null ? st.generatedTokens : null,
             prompt_tokens: st.promptTokens != null ? st.promptTokens : null,
             vision_enc_ms: st.visionEncodeMs != null ? st.visionEncodeMs : null,
@@ -416,7 +469,7 @@ function runModel (spec) {
           // own segment (stderr — same stream as the native timing lines).
           console.error('[VLMSEG]' + JSON.stringify(stamp(rep, { cell: axis, source: SOURCE, model: spec.label, device, id: item.id, rep })) + '[/VLMSEG]')
           try {
-            const r = await runOne(inference, getMediaPath(item.image), item.prompt)
+            const r = await runOne(inference, getMediaPath(item.image), item.prompt, item.task)
             const st = r.stats || {}
             emitRow(stamp(rep, {
               rss_mb: peakRssMb(),
@@ -435,6 +488,7 @@ function runModel (spec) {
               ms: r.ms,
               decode_tps: st.TPS != null ? st.TPS : null,
               ttft_ms: st.TTFT != null ? st.TTFT : null,
+              pp_tps: st.ppTPS != null ? st.ppTPS : null,
               gen_tokens: st.generatedTokens != null ? st.generatedTokens : null,
               prompt_tokens: st.promptTokens != null ? st.promptTokens : null,
               vision_enc_ms: st.visionEncodeMs != null ? st.visionEncodeMs : null,
@@ -455,10 +509,11 @@ function runModel (spec) {
 // two-models runs the QVAC_VLM_MODELS launch param (catalog names, ad-hoc
 // <llm-url>|<mmproj-url> pairs, or json: specs — see models.cjs / CONTRACT.md §3),
 // falling back to the committed config.models pair; several-sources loads the one
-// sourcesModel (the other engines run via cli-fixture-runner.cjs, same log).
+// sourcesModel (the other engines run via cli-fixture-runner.cjs, same log), or the
+// single model in QVAC_VLM_SOURCES_MODEL (same grammar; set by run-local.cjs).
 function runAll () {
   const models = MODE === 'several-sources'
-    ? [config.sourcesModel]
+    ? parseModels(env('QVAC_VLM_SOURCES_MODEL'), config.catalog, [config.sourcesModel]).slice(0, 1)
     : parseModels(env('QVAC_VLM_MODELS'), config.catalog, config.models)
   // When the desktop scheduler drives one (source × model × block) per process it pins
   // the model by index (QVAC_VLM_MODEL_INDEX); otherwise run the whole list.

@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 'use strict'
 
-// Clones and builds llama-mtmd-cli from fabric (qvac fork) and/or
-// upstream (ggml-org/llama.cpp). Writes cli-sources-resolved.json
-// consumed by the orchestrator at benchmark time.
+// Clones and builds llama-mtmd-cli (or llama-server) from fabric (qvac fork)
+// and/or upstream (ggml-org/llama.cpp). Writes cli-sources-resolved.json
+// (server-sources-resolved.json for --target=llama-server) consumed by the
+// orchestrator at benchmark time.
 //
 // Usage:
 //   node scripts/build-cli-sources.js [--sources=fabric,upstream]
 //       [--fabric-ref=v8189.0.2] [--upstream-ref=b8189]
 //       [--backend=cpu|gpu] [--builds-dir=cli-builds] [--force-rebuild]
+//       [--target=llama-mtmd-cli|llama-server] [--gpu-api=metal|vulkan|cuda]
 //
 // --backend=gpu adds the platform-appropriate GGML accelerator flag
-// (Vulkan on linux/win, Metal on darwin) so the CLI legs go through
-// the same GPU code path as the addon's qvac-fabric prebuild.
+// (Vulkan on linux/win, Metal on darwin; --gpu-api overrides) so the CLI
+// legs go through the same GPU code path as the addon's qvac-fabric prebuild.
 
 const fs = require('fs')
 const path = require('path')
@@ -25,8 +27,19 @@ const CLI_SOURCES = require('./cli-source-config')
 // outputs (cli-builds/, cli-sources-resolved.json) live in this dir.
 const BENCH_DIR = __dirname
 const DEFAULT_BUILDS_DIR = path.join(BENCH_DIR, 'cli-builds')
-const RESOLVED_PATH = path.join(BENCH_DIR, 'cli-sources-resolved.json')
-const BINARY_NAME = os.platform() === 'win32' ? 'llama-mtmd-cli.exe' : 'llama-mtmd-cli'
+// llama-server is built for the host CPU (GGML_NATIVE) because the addon's
+// fabric runtime picks the best CPU variant at load time. The benchmark runs it
+// with --no-webui, so the prebuilt web UI is never downloaded or embedded.
+const TARGETS = {
+  'llama-mtmd-cli': { resolved: 'cli-sources-resolved.json', cmakeFlags: {} },
+  'llama-server': {
+    resolved: 'server-sources-resolved.json',
+    cmakeFlags: { LLAMA_BUILD_SERVER: 'ON', GGML_NATIVE: 'ON', LLAMA_BUILD_UI: 'OFF', LLAMA_USE_PREBUILT_UI: 'OFF' }
+  }
+}
+const GPU_API_FLAGS = { metal: 'GGML_METAL', vulkan: 'GGML_VULKAN', cuda: 'GGML_CUDA' }
+const defaultGpuApi = () => os.platform() === 'darwin' ? 'metal' : 'vulkan'
+const binaryName = target => os.platform() === 'win32' ? `${target}.exe` : target
 
 function log (...args) { console.log('[build-cli-sources]', ...args) }
 function logErr (...args) { console.error('[build-cli-sources]', ...args) }
@@ -87,24 +100,26 @@ function resolveRemoteSha (repo, ref) {
   } catch { return null }
 }
 
-function cacheKey (sourceKey, sha, backend) {
-  return `${sourceKey}-${os.platform()}-${os.arch()}-${backend}-${sha.slice(0, 12)}`
+// llama-mtmd-cli on the platform's default GPU API keeps the original key so
+// existing CI caches stay valid.
+function cacheKey (sourceKey, sha, backend, target, gpuApi) {
+  const t = target === 'llama-mtmd-cli' ? '' : `-${target}`
+  const b = backend === 'gpu' && gpuApi !== defaultGpuApi() ? `gpu-${gpuApi}` : backend
+  return `${sourceKey}${t}-${os.platform()}-${os.arch()}-${b}-${sha.slice(0, 12)}`
 }
 
 // Backend-specific cmake flag overlay. We merge these onto the
 // per-source CPU flags so the GPU code paths get compiled in. Vulkan
-// is chosen on linux/win to match the addon's qvac-fabric build
+// is the default on linux/win to match the addon's qvac-fabric build
 // (which links the Vulkan ggml backend); macOS uses Metal natively.
-function backendCmakeFlags (backend) {
+function backendCmakeFlags (backend, gpuApi) {
   if (backend !== 'gpu') return {}
-  if (os.platform() === 'darwin') {
-    return { GGML_METAL: 'ON' }
-  }
-  return { GGML_VULKAN: 'ON' }
+  return { [GPU_API_FLAGS[gpuApi]]: 'ON' }
 }
 
-function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
-  log(`--- ${sourceKey} (${backend}) ---`)
+function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend, target, gpuApi) {
+  const binaryFile = binaryName(target)
+  log(`--- ${sourceKey} ${target} (${backend}${backend === 'gpu' ? `/${gpuApi}` : ''}) ---`)
   log(`repo: ${sourceConfig.repo}`)
   log(`ref:  ${sourceConfig.ref}`)
 
@@ -119,11 +134,11 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
   }
   log(`resolved SHA: ${remoteSha.slice(0, 12)}${bySha ? ' (commit)' : ''}`)
 
-  const mergedFlags = { ...sourceConfig.cmakeFlags, ...backendCmakeFlags(backend) }
+  const mergedFlags = { ...sourceConfig.cmakeFlags, ...TARGETS[target].cmakeFlags, ...backendCmakeFlags(backend, gpuApi) }
 
-  const key = cacheKey(sourceKey, remoteSha, backend)
+  const key = cacheKey(sourceKey, remoteSha, backend, target, gpuApi)
   const cacheDir = path.join(buildsDir, key)
-  const binaryPath = path.join(cacheDir, BINARY_NAME)
+  const binaryPath = path.join(cacheDir, binaryFile)
   const provenancePath = path.join(cacheDir, 'provenance.json')
 
   if (!forceRebuild && fs.existsSync(binaryPath)) {
@@ -134,7 +149,7 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
     return { binaryPath, commitSha: remoteSha, ref: sourceConfig.ref, label: `${sourceConfig.label}@${sourceConfig.ref}`, provenance }
   }
 
-  const tmpDir = path.join(os.tmpdir(), `vlm-bench-build-${sourceKey}-${Date.now()}`)
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `vlm-bench-build-${sourceKey}-`))
   log(`cloning into ${tmpDir}`)
 
   try {
@@ -170,7 +185,7 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
       cwd: tmpDir
     })
 
-    log(`building llama-mtmd-cli (${nproc} threads)`)
+    log(`building ${target} (${nproc} threads)`)
     // Multi-config generators (Visual Studio, Xcode, Ninja Multi-Config)
     // ignore CMAKE_BUILD_TYPE at configure-time and need --config at
     // build-time; single-config generators (Unix Makefiles, plain Ninja)
@@ -179,7 +194,7 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
     // is single-config).
     const generator = process.env.CMAKE_GENERATOR || ''
     const isMultiConfig = /^(Visual Studio|Xcode|Ninja Multi-Config)/.test(generator)
-    const buildArgs = ['--build', buildDir, '--target', 'llama-mtmd-cli', '-j', String(nproc)]
+    const buildArgs = ['--build', buildDir, '--target', target, '-j', String(nproc)]
     if (isMultiConfig) {
       buildArgs.push('--config', 'Release')
     }
@@ -190,15 +205,15 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
     })
 
     const candidatePaths = [
-      path.join(buildDir, 'bin', BINARY_NAME),
-      path.join(buildDir, 'bin', 'Release', BINARY_NAME),
-      path.join(buildDir, BINARY_NAME),
-      path.join(buildDir, 'tools', 'llama-mtmd-cli', BINARY_NAME),
-      path.join(buildDir, 'tools', 'llama-mtmd-cli', 'Release', BINARY_NAME)
+      path.join(buildDir, 'bin', binaryFile),
+      path.join(buildDir, 'bin', 'Release', binaryFile),
+      path.join(buildDir, binaryFile),
+      path.join(buildDir, 'tools', target, binaryFile),
+      path.join(buildDir, 'tools', target, 'Release', binaryFile)
     ]
     const builtBinary = candidatePaths.find((p) => fs.existsSync(p))
     if (!builtBinary) {
-      throw new Error(`llama-mtmd-cli not found after build. Checked: ${candidatePaths.join(', ')}`)
+      throw new Error(`${target} not found after build. Checked: ${candidatePaths.join(', ')}`)
     }
 
     fs.mkdirSync(cacheDir, { recursive: true })
@@ -208,6 +223,7 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
     const stat = fs.statSync(binaryPath)
     const provenance = {
       sourceKey,
+      target,
       repo: sourceConfig.repo,
       ref: sourceConfig.ref,
       commitSha: localSha,
@@ -215,6 +231,7 @@ function buildOne (sourceKey, sourceConfig, buildsDir, forceRebuild, backend) {
       platform: os.platform(),
       arch: os.arch(),
       backend,
+      gpuApi: backend === 'gpu' ? gpuApi : null,
       cmakeFlags: mergedFlags,
       binarySizeMb: Math.round((stat.size / (1024 * 1024)) * 100) / 100
     }
@@ -239,6 +256,15 @@ function main () {
   if (backend !== 'cpu' && backend !== 'gpu') {
     throw new Error(`--backend must be 'cpu' or 'gpu', got '${backend}'`)
   }
+  const target = (args.target || 'llama-mtmd-cli').toString()
+  if (!TARGETS[target]) {
+    throw new Error(`--target must be one of ${Object.keys(TARGETS).join(', ')}, got '${target}'`)
+  }
+  const resolvedPath = path.join(BENCH_DIR, TARGETS[target].resolved)
+  const gpuApi = (args['gpu-api'] || defaultGpuApi()).toString()
+  if (!GPU_API_FLAGS[gpuApi]) {
+    throw new Error(`--gpu-api must be one of ${Object.keys(GPU_API_FLAGS).join(', ')}, got '${gpuApi}'`)
+  }
 
   if (args['fabric-ref']) CLI_SOURCES.fabric.ref = args['fabric-ref']
   if (args['upstream-ref']) CLI_SOURCES.upstream.ref = args['upstream-ref']
@@ -254,15 +280,15 @@ function main () {
       continue
     }
     try {
-      resolved[key] = buildOne(key, cfg, buildsDir, forceRebuild, backend)
+      resolved[key] = buildOne(key, cfg, buildsDir, forceRebuild, backend, target, gpuApi)
     } catch (e) {
       logErr(`failed to build ${key}: ${e.message}`)
       process.exitCode = 1
     }
   }
 
-  fs.writeFileSync(RESOLVED_PATH, JSON.stringify(resolved, null, 2))
-  log(`wrote ${RESOLVED_PATH}`)
+  fs.writeFileSync(resolvedPath, JSON.stringify(resolved, null, 2))
+  log(`wrote ${resolvedPath}`)
   log(`resolved sources: ${Object.keys(resolved).join(', ')}`)
 }
 

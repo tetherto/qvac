@@ -2,11 +2,13 @@
 // Resolve the `matrix_models` launch parameter into the
 // canonical model specs harness.cjs runs ({ label, ctx_size, llm: { source },
 // mmproj: { source } }). Any new model is benchmarkable with zero code changes —
-// a model is just two https URLs (LLM gguf + mmproj gguf).
+// a model is just two blobs (LLM gguf + mmproj gguf), each an https URL or, on
+// desktop, a local file.
 //
 // Grammar (CONTRACT.md §3), tokens comma-separated, forms mix freely:
 //   catalog name        qwen3.5-q8
-//   ad-hoc URL pair     [label=]<llm-url>|<mmproj-url>[@ctx=N]
+//   ad-hoc pair         [label=]<llm>|<mmproj>[@ctx=N]
+//                       each blob: https URL, absolute path, or file:// URL
 //   JSON escape hatch   json:[{label, ctx_size, llm:{source}, mmproj:{source}}, …]
 // The whole value may be wrapped b64:<base64(utf8)> — used for the on-device
 // transport (the device config channel is line/semicolon-delimited).
@@ -51,7 +53,32 @@ function blobFromUrl (url, role) {
   return { modelName, origin: `${file} (URL)`, source: { type: 'url', url } }
 }
 
-// [label=]<llm-url>|<mmproj-url>[@ctx=N]
+// Absolute POSIX path, Windows drive path, or file:// URL.
+function localPathOf (ref) {
+  if (/^file:\/\//i.test(ref)) {
+    const p = decodeURIComponent(ref.replace(/^file:\/\//i, ''))
+    return /^\/[A-Za-z]:[\\/]/.test(p) ? p.slice(1) : p
+  }
+  if (ref.startsWith('/') || /^[A-Za-z]:[\\/]/.test(ref)) return ref
+  return null
+}
+
+// One blob from a local file. The file is used in place (no cache copy), so
+// modelName is its basename and the path travels in source.path.
+function blobFromPath (p) {
+  const file = p.split(/[\\/]/).pop()
+  return { modelName: file, origin: `${file} (local)`, source: { type: 'local', path: p } }
+}
+
+function blobFromRef (ref, role) {
+  ref = String(ref || '').trim()
+  const local = localPathOf(ref)
+  if (local) return blobFromPath(local)
+  if (/^https:\/\//.test(ref)) return blobFromUrl(ref, role)
+  throw new Error(`model ${role} blob must be an https URL or an absolute path (got '${ref.slice(0, 60)}')`)
+}
+
+// [label=]<llm>|<mmproj>[@ctx=N]
 function parsePair (token) {
   let body = token
   let label = null
@@ -68,10 +95,10 @@ function parsePair (token) {
   }
   const parts = body.split('|')
   if (parts.length !== 2) {
-    throw new Error(`model token must be [label=]<llm-url>|<mmproj-url>[@ctx=N] (got '${token.slice(0, 80)}')`)
+    throw new Error(`model token must be [label=]<llm>|<mmproj>[@ctx=N] (got '${token.slice(0, 80)}')`)
   }
-  const llm = blobFromUrl(parts[0], 'llm')
-  const mmproj = blobFromUrl(parts[1], 'mmproj')
+  const llm = blobFromRef(parts[0], 'llm')
+  const mmproj = blobFromRef(parts[1], 'mmproj')
   if (!label) {
     // Derive from the mmproj basename — it's usually the varying part.
     label = mmproj.modelName.replace(/^adhoc-[0-9a-f]{8}-/, '').replace(/\.gguf$/i, '')
@@ -118,7 +145,7 @@ function parseModels (raw, catalog, fallback) {
   const specs = raw.split(',').map(t => t.trim()).filter(Boolean).map(t => {
     if (catalog && catalog[t]) return catalog[t]
     if (t.includes('|')) return parsePair(t)
-    throw new Error(`unknown model '${t}' — not a catalog name (${Object.keys(catalog || {}).join(', ')}) and not an <llm-url>|<mmproj-url> pair`)
+    throw new Error(`unknown model '${t}' — not a catalog name (${Object.keys(catalog || {}).join(', ')}) and not an <llm>|<mmproj> pair`)
   })
   const seen = new Set()
   for (const s of specs) {
@@ -128,4 +155,4 @@ function parseModels (raw, catalog, fallback) {
   return specs
 }
 
-module.exports = { parseModels, parsePair, blobFromUrl }
+module.exports = { parseModels, parsePair, blobFromUrl, blobFromRef }

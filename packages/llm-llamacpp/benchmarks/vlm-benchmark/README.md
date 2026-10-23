@@ -65,6 +65,7 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 | `addon@candidate` | ✅ | ✅ | `…@candidate` + `-f ref=<branch\|tag\|sha>` | Built from `ref` (triggers `prebuild-candidate`). Desktop swaps the prebuild; mobile bundles it. |
 | `addon@baseline` | ✅ | ✅ | `…@baseline` | **Latest published npm release, auto-detected** at run time. Pin a specific version with `-f baseline_npm=<ver>`; `config.defaultBaseline.npm` is only an offline fallback. |
 | `fabric` / `upstream` CLI | ✅ | ❌ | `fabric[@ref]`, `upstream[@ref]` | Native `llama-mtmd-cli`, built per-OS. `ref` = release **tag**, **branch**, or **full 40-char commit SHA**. |
+| **addon vs llama-server** | ✅ local | ❌ | `run-local.cjs` ([LOCAL.md](LOCAL.md)) | llama-server built from the addon's qvac-fabric tag, engine parameters pinned identically on both sides. Image suite plus a text suite (single-stream prefill/decode, concurrency sweep, speculative decoding). Not in CI. |
 | **Auto version parity** | ✅ | n/a | bare `fabric`/`upstream` (no `@ref`) | Auto-picks the **most recent llama.cpp build all requested sources support** (addon's `qvac-fabric` vcpkg pin is the ceiling) and pins everything to it → apples-to-apples by default. |
 | **Manual version** | ✅ | n/a | any explicit `@ref` | Refs used as given (builds may differ). Report's **Engine versions** table labels it *set manually* (no warning). |
 
@@ -98,6 +99,7 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 |---|---|---|---|---|
 | Catalog model | ✅ | ✅ | `-f matrix_models=qwen3.5-f16,qwen3.5-q8,gemma4-q4` | Direct HF URLs (registry entries' canonical sources). |
 | Ad-hoc URL model | ✅ | ✅ | `-f matrix_models=[label=]<llm-url>\|<mmproj-url>[@ctx=N]` | Any model from two https GGUF URLs; no code change. |
+| Local model files | ✅ | ❌ | `run-local.cjs --llm --mmproj` · `QVAC_VLM_ALLOW_LOCAL=1` + `[label=]<llm-path>\|<mmproj-path>` | Absolute paths or `file://` URLs, used in place. Rejected unless `QVAC_VLM_ALLOW_LOCAL=1`; never on mobile. |
 | `json:[…]` model spec | ✅ | ❌ | `-f matrix_models=json:[…]` | For registry/exotic sources — **desktop only** (P2P registry client not on mobile). |
 | samples / task | ✅ | ✅ | `-f matrix_samples=N` · `QVAC_VLM_SAMPLES` | Empty = preset default (mobile 2 / desktop 5). |
 | repeats / sample | ✅ | ✅ | `QVAC_VLM_REPEATS` (local only) | Mean reported. Default 3 desktop / 1 mobile. No dispatch input. |
@@ -129,14 +131,23 @@ models, sources, platforms, samples, timeout) is a `-f` flag — **no commit nee
 dispatch value is forwarded to every leg: desktop via env, phones via the pushed
 `qvacPerfConfig.txt` device-env channel.
 
-**B. Local (desktop, no CI)** — run the harness under `bare` with env overrides:
+**B. Local (desktop, no CI)** — to compare the addon against **llama-server** on your own
+GGUF (+ mmproj) files, use `run-local.cjs`; it handles setup, both engines and the reports,
+for images and for text workloads (single stream, concurrency, speculative decoding).
+See **[LOCAL.md](LOCAL.md)**:
+```bash
+npm run benchmarks:vlm -- --llm /models/model.gguf --mmproj /models/mmproj.gguf
+npm run benchmarks:vlm -- --llm /models/model.gguf --suite text --text-preset standard
+```
+To run the bare harness on its own, from `packages/llm-llamacpp`:
 ```bash
 QVAC_VLM_MATRIX=1 QVAC_VLM_MODE=two-models QVAC_VLM_PRESET=cognitive \
 QVAC_VLM_MODELS=qwen3.5-f16,qwen3.5-q8 QVAC_VLM_SAMPLES=2 \
-bare test/integration/vlm-matrix.test.js
+bare benchmarks/vlm-benchmark/vlm-matrix.test.js
 ```
-All `QVAC_VLM_*` overrides: `MODE`, `PRESET`, `MODELS`, `SCENARIOS`, `SAMPLES`, `REPEATS`,
-`DEVICES`, `TASKS`, `WARMUP_REPEATS`, `NO_GPU`. `node run-desktop.cjs --selfcheck`
+Main `QVAC_VLM_*` overrides (full list: `CONTRACT.md` §2): `MODE`, `PRESET`, `MODELS`,
+`SOURCES_MODEL`, `SCENARIOS`, `SAMPLES`, `REPEATS`, `DEVICES`, `TASKS`, `WARMUP_REPEATS`,
+`NO_GPU`, `FIXTURE_DIR`, `PARAMS`, `ALLOW_LOCAL`, `ENGINE`, `TEST_TIMEOUT_MIN`. `node run-desktop.cjs --selfcheck`
 validates the config/contract wiring without running a model. Several-sources CLIs are
 built + driven by `cli-fixture-runner.cjs`.
 
@@ -270,6 +281,8 @@ env vars, launch grammar); `markers-v2.sample.txt` is its executable sample;
 | `score-check.cjs` | offline re-scoring of real predictions (metric tuning, no inference) |
 | `stage.cjs` | copies harness + config + fixture into `test/integration/` + `testAssets/` for the mobile build |
 | `run-desktop.cjs` | desktop run driver + `--selfcheck` contract guard |
+| `run-local.cjs`, `server-runner.cjs`, `items.cjs`, `gguf.cjs`, `LOCAL.md` | local addon-vs-llama-server benchmark: setup + orchestration, the llama-server leg, shared item selection, guide |
+| `text-workload.cjs`, `text-addon.js`, `text-server.cjs`, `text-report.cjs` | local text suite: shared prompts/presets/job plan, the addon leg (bare), the llama-server leg, the Markdown + HTML report |
 | `CONTRACT.md`, `markers-v2.sample.txt` | the frozen runner↔report contract + sample |
 | `.github/workflows/benchmark-vlm-model-comparison.yml` | the dispatch workflow (desktop legs, mobile, combine) |
 

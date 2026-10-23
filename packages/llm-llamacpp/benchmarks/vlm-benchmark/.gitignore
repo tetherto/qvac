@@ -6,6 +6,9 @@ fixture/*
 # several-sources CLI build artifacts (built at CI time by build-cli-sources.js).
 cli-builds/
 cli-sources-resolved.json
+server-sources-resolved.json
+# run-local.cjs output (logs, report.md, results.json per run).
+results/
 # candidate/baseline addon prebuilds staged by CI (A2); swapped into ./prebuilds.
 builds/
 # misc

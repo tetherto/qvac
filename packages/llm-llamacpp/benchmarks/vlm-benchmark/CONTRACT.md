@@ -42,6 +42,17 @@ source_ref, model, device, block, stability:{kind:'temp'|'probe', value_ms?, wai
 | `QVAC_VLM_SCENARIOS` | CSV of scenario names; **the runner currently executes the first token** (multi-scenario reserved). Empty = `config.defaultScenario` |
 | `QVAC_VLM_SOURCE_ID` / `QVAC_VLM_SOURCE_REF` | stamped into markers by the leg that knows what build it runs |
 | existing | `QVAC_VLM_MODE/PRESET/DEVICES/SAMPLES/REPEATS/TASKS`, `NO_GPU`, `QVAC_VLM_MATRIX` — unchanged |
+| `QVAC_VLM_SOURCES_MODEL` | several-sources only: one model in the §3 grammar, replacing `config.sourcesModel` |
+| `QVAC_VLM_ALLOW_LOCAL` | `1` = accept local-file model blobs (desktop only; set by `run-local.cjs`). Otherwise they are rejected |
+| `QVAC_VLM_FIXTURE_DIR` | desktop fixture image directory (default `fixture/`) |
+| `QVAC_VLM_ENGINE` | `source` label stamped on the harness's markers (default `config.engine`, else `addon`) |
+| `QVAC_VLM_TEST_TIMEOUT_MIN` | per-model brittle test timeout in minutes (default 30); `run-local.cjs` sets it from `--timeout-min` |
+| `QVAC_VLM_PARAMS` | JSON engine parameters shared by the addon leg and `server-runner.cjs`: `ctxSize, threads, batchSize, ubatchSize, flashAttn, cacheTypeK, cacheTypeV, fit, poll, gpuLayers, gpuApi, mmprojGpu, imageMaxTokens, perItemPredict`. Unset = addon defaults (CI, mobile) |
+
+**Local addon-vs-llama-server mode** (`run-local.cjs`, LOCAL.md) has a second marker
+producer: `server-runner.cjs` emits `[VLMMETA]`/`[VLMSEG]`/`[VLMROW]` in this schema with
+`source_id`/`cell` = `llama-server`. Optional row fields: `pp_tps` (prefill tokens/s, both
+legs) and `client_ttft_ms` (llama-server, client-side first-token time).
 
 ## 3 · Launch grammar (`gh workflow run` inputs)
 
@@ -52,6 +63,9 @@ qwen3.5-q8                                        # catalog name (config.cjs cat
 [label=]<llm-url>|<mmproj-url>[@ctx=N]            # ANY new model: two https URLs, zero code changes
 json:[{label, ctx_size, llm:{source}, mmproj:{source}}, …]   # escape hatch (registry sources etc.)
 ```
+
+For local runs (`QVAC_VLM_ALLOW_LOCAL=1`, desktop) a blob may also be an absolute path or
+`file://` URL instead of an https URL (`source.type = 'local'`, reported as Source=Local).
 
 `|` separates the blobs (never appears unencoded in URLs). `huggingface.co/...resolve/<ref>/...`
 URLs are reported as Source=HF with repo+ref (unpinned refs flagged); other URLs as URL/S3.
