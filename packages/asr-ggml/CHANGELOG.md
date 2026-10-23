@@ -16,23 +16,43 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- `assessFit` reports `coremlBytes` for Parakeet models on macOS and iOS: the
+  memory of the Core ML diarizer sidecars a Nemotron 3 Diarization or
+  Sortformer v2.1 workload can load, which the verdict counts on unified
+  memory. It is 0 without sidecars and on other platforms.
+
+## [0.11.1] - 2026-10-23
+
+### Added
+
 - Core ML diarizer sidecars on macOS and iOS: Nemotron 3 Diarization and
   Sortformer v2.1 run their whole network on the Neural Engine when a
-  `<stem>-diarizer-<frames>.mlmodelc` sits beside the GGUF, and fall back to
-  ggml above its capacity or on failure. `PARAKEET_COREML_DIARIZER_DISABLE=1`
-  ignores them. `assessFit` reports the bundles a workload can load as
-  `coremlBytes` and counts them on unified memory.
-
-### Fixed
-
-- Nemotron 3 Diarization loads again. The `speech-cpp` `2026-10-20#1` pin of
-  0.11.0 rejected its GGUF as having no encoder weights.
+  `<model>-diarizer-<frames>.mlmodelc` sits beside the GGUF, and fall back to
+  ggml above its capacity or on failure
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+- Parakeet CTC loads the Mosaic and Mosaic Compact GGUFs, with their optional
+  Core ML encoder sidecar on macOS and iOS
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
 
 ### Changed
 
-- Align the shared native `speech-cpp` source pin to `2026-10-21` across
-  the speech addons. The pinned revision adds the Core ML diarizer sidecars
-  and the Nemotron 3 Diarization loader fix.
+- Move the shared native `speech-cpp` source pin from `2026-10-20#1` to
+  `2026-10-23#2` across the speech addons
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)). Whisper's
+  `assessFit` sizes integrated and unified-memory GPUs that report no capacity
+  of their own against host RAM, and returns the reason
+  `memory-capacity-unavailable` when no capacity is known.
+
+### Fixed
+
+- Nemotron 3 Diarization loads again. The `speech-cpp` `2026-10-20#1` pin
+  rejected its GGUF as having no encoder weights
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+- Adreno GPUs (Android, OpenCL): long Parakeet recordings, TranscribePsy
+  among them, no longer lose most of their text after the first window, and
+  attention over 32 or more tokens with unpadded lengths is computed
+  correctly. The shared native `ggml-speech` moves to `2026-10-23` across the
+  speech addons ([#5326](https://github.com/tetherto/qvac/pull/5326)).
 
 ## [0.11.0] - 2026-10-22
 
