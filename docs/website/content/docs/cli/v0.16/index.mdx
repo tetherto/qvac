@@ -132,15 +132,11 @@ Start the HTTP server. `qvac serve openai` is a deprecated alias for
 | `--allow-unauthenticated` | Permit binding to a non-loopback host without a key |
 | `--cors` | Compatibility validation switch; fails unless `--cors-origin` or `serve.cors.origins` supplies an explicit origin |
 | `--cors-origin <origin>` | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed) |
-| `--allowed-host <host>` | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` also covers subdomains (repeatable) |
-| `--allow-any-host` | Accept any `Host` header, turning off DNS-rebinding protection |
 | `--public-base-url <url>` | Externally reachable origin (required for image `response_format=url`) |
 | `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds same-port loopback origins to CORS, so it requires a fixed `--port`. |
 | `-v, --verbose` | Detailed output |
 
 A non-loopback `--host` requires `--api-key` or `--api-key-file`; the server refuses to start otherwise. Use `--allow-unauthenticated` to override that and start with a warning instead.
-
-Every request, including `/openapi.json`, must carry a `Host` header naming a loopback host, an IP address, the bind host, the `--public-base-url` host or an `--allowed-host` entry; anything else gets `403 host_not_allowed`. This stops a web page that rebinds its own domain to `127.0.0.1` from calling the server. Behind a reverse proxy or under a LAN hostname, list that name with `--allowed-host` or `serve.allowedHosts`.
 
 `--cors` does not enable CORS by itself. It only validates that at least one explicit origin was supplied by CLI or config; `--cors --docs` also fails without one because the docs defaults are not explicit origins. Independently, `--docs` trusts same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. Since those origins come from the configured port, `--docs --port 0` is rejected at startup instead of producing unusable `http://localhost:0` origins.
 
@@ -158,13 +154,12 @@ qvac serve --openai --cors \
 
 ### `qvac configure`
 
-Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go straight to [`qvac serve --openai`](#qvac-serve). It searches the models the SDK provides by name or by capability, including role, addon, and quantization. On a wide terminal, it previews the exact `serve.models` entry for the highlighted result. Pick a model, rename its alias, and set config parameters. The parameter editor shows types and descriptions and validates entries against the SDK's config schema, currently for llama.cpp chat, embedding, and decision models. Use `$EDITOR` to tweak the entry and review it before adding it. Press `Esc` or choose `Back` to step back one menu; `Ctrl+C` aborts without writing. Existing entries are preserved; re-running is idempotent per model.
+Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go straight to [`qvac serve --openai`](#qvac-serve). It searches the models the SDK provides by name or by capability, including role, addon, and quantization. On a wide terminal, it previews the exact `serve.models` entry for the highlighted result. Pick a model, rename its alias, and set config parameters. The parameter editor shows types and descriptions and validates entries against the SDK's config schema, currently for llama.cpp chat and embedding models. Use `$EDITOR` to tweak the entry and review it before adding it. Press `Esc` or choose `Back` to step back one menu; `Ctrl+C` aborts without writing. Existing entries are preserved; re-running is idempotent per model.
 
 ```bash
 qvac configure                 # interactive
 qvac configure --yes           # non-interactive: write a chat + transcription starter
 qvac configure --modality chat --modality image
-qvac configure --modality decision
 ```
 
 | Option | Description |
@@ -177,9 +172,7 @@ qvac configure --modality decision
 
 The picker includes MOSS-SoundEffect and MOSS-Speech starters. MOSS-SoundEffect uses the model source URL with `ttsEngine: "moss-sfx"`; MOSS-Speech includes its codec source. Their conversation and sound-effect controls are available through the [SDK Text-to-Speech API](/sdk/ai-capabilities/text-to-speech); the OpenAI speech endpoint does not represent those controls.
 
-Single-artifact modalities, including chat, embedding, transcription, image, and decision, are runnable as written. Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder. Set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for non-TTY use `--yes` / `--modality`.
-
-The Decision starter selects `LAYA_MULTILINGUAL_322M_Q8_0`. Start it with `qvac serve --openai` and use the [Decisions endpoint](/cli/http-server#decisions) to answer predicate, choice, and score questions about text.
+Single-artifact modalities, including chat, embedding, transcription, and image, are runnable as written. Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder. Set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for non-TTY use `--yes` / `--modality`.
 
 See [HTTP server — Configuration](/cli/http-server#configuration) for the shape of the `serve.models` entries this command writes.
 

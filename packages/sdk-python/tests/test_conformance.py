@@ -1,8 +1,8 @@
 """Cross-client conformance (Phase D of the drift plan).
 
-Runs the shared corpus at packages/sdk/e2e/conformance/cases.json through the
+Runs the shared corpus at packages/sdk-e2e/catalog/conformance/cases.json through the
 Python client against a locally-built worker, asserting the same expectations
-the JS runner (packages/sdk/e2e/conformance/run.mjs) checks. One source of
+the JS runner (packages/sdk-e2e/runners/js/conformance/run.mjs) checks. One source of
 cases for both clients, so they cannot drift on the covered behaviour.
 
 Gated like test_e2e_sdk_parity: needs bare_rpc and a built SDK worker.
@@ -36,7 +36,9 @@ SDK_DIR = os.environ.get(
     "QVAC_POC_SDK_DIR",
     os.path.join(os.path.dirname(__file__), "..", "..", "sdk"),
 )
-CASES_PATH = os.path.join(SDK_DIR, "e2e", "conformance", "cases.json")
+CASES_PATH = os.path.join(
+    SDK_DIR, "..", "sdk-e2e", "catalog", "conformance", "cases.json"
+)
 
 
 def _load_cases() -> list[dict]:

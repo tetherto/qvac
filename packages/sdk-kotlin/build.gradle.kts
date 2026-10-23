@@ -113,10 +113,14 @@ checkContract.configure { dependsOn(testReleaseGate) }
 // Local repositories and PR builds need no credentials. A public Central
 // publication must never silently degrade to unsigned artifacts.
 allprojects {
+    // Task actions capture these locals, not the build script: the
+    // configuration cache cannot serialize a reference to the script object.
+    val publishSigningKey = signingKey
+    val requireSigning = providers.environmentVariable("MAVEN_REQUIRE_SIGNING")
     tasks.matching { it.name == "prepareMavenCentralPublishing" }.configureEach {
         dependsOn(verifyPublishedWorker)
         doFirst {
-            check(signingKey.isPresent && signingKey.get().isNotBlank()) {
+            check(publishSigningKey.isPresent && publishSigningKey.get().isNotBlank()) {
                 "Central deployment requires MAVEN_SIGNING_KEY"
             }
         }
@@ -128,11 +132,15 @@ allprojects {
             if (repository.name == "mavenCentral" || repository.url.scheme != "file")
                 listOf(verifyPublishedWorker) else emptyList()
         })
+        // The configuration cache does not keep the task's repository, so read
+        // what the check needs before the task graph is stored.
+        val repositoryName = providers.provider { repository.name }
+        val repositoryHost = providers.provider { repository.url.host.orEmpty() }
         doFirst {
-            val destination = repository.url.host.orEmpty()
-            if (repository.name == "mavenCentral" || destination.contains("sonatype") || destination.contains("maven.org") ||
-                providers.environmentVariable("MAVEN_REQUIRE_SIGNING").orNull == "true") {
-                check(signingKey.isPresent && signingKey.get().isNotBlank()) {
+            val destination = repositoryHost.get()
+            if (repositoryName.get() == "mavenCentral" || destination.contains("sonatype") || destination.contains("maven.org") ||
+                requireSigning.orNull == "true") {
+                check(publishSigningKey.isPresent && publishSigningKey.get().isNotBlank()) {
                     "Release publication requires MAVEN_SIGNING_KEY"
                 }
             }
@@ -140,40 +148,22 @@ allprojects {
     }
 }
 
-val verifyAndroidRuntimeProfiles = tasks.register<Exec>("verifyAndroidRuntimeProfiles") {
-    commandLine("node", "$projectDir/scripts/verify-runtime-profiles.mjs")
-    inputs.file(projectDir.parentFile.resolve("sdk/package.json"))
+// The script also runs verify-runtime-profiles.mjs, so PR checks get both
+// gates from one node call without starting Gradle.
+val checkVersionAlignment = tasks.register<Exec>("checkVersionAlignment") {
+    commandLine("node", "$projectDir/scripts/check-version-alignment.mjs")
+    inputs.file(projectDir.resolve("package.json"))
+    inputs.file(sdkPackageJson)
     inputs.files(projectDir.listFiles { file ->
         file.name.startsWith("qvac.config") && file.extension == "json"
     }?.toList().orEmpty())
+    inputs.file(projectDir.resolve("scripts/check-version-alignment.mjs"))
     inputs.file(projectDir.resolve("scripts/verify-runtime-profiles.mjs"))
-}
-
-val checkVersionAlignment = tasks.register("checkVersionAlignment") {
-    dependsOn(verifyAndroidRuntimeProfiles)
-    inputs.file(projectDir.resolve("package.json"))
-    inputs.file(sdkPackageJson)
-    doLast {
-        val runtimePackage = projectDir.resolve("package.json").readText()
-        val runtimeVersion = Regex("\"version\"\\s*:\\s*\"([^\"]+)\"")
-            .find(runtimePackage)
-            ?.groupValues
-            ?.get(1)
-        val workerVersion = Regex("\"@qvac/sdk\"\\s*:\\s*\"([^\"]+)\"")
-            .find(runtimePackage)
-            ?.groupValues
-            ?.get(1)
-        check(runtimeVersion == sdkVersion && workerVersion == sdkVersion) {
-            "Kotlin runtime version ($runtimeVersion), @qvac/sdk dependency ($workerVersion), " +
-                "and contract version ($sdkVersion) must match"
-        }
-    }
 }
 
 tasks.named("check") {
     dependsOn(checkContract)
     dependsOn(checkVersionAlignment)
-    dependsOn(verifyAndroidRuntimeProfiles)
 }
 
 publishing {
@@ -221,41 +211,51 @@ tasks.register("verifyMavenPublications") {
     group = "verification"
     description = "Checks sources, real API documentation and checksums for every current publication"
     dependsOn("publishSdkToBuildRepository")
-    doLast {
-        allprojects.forEach { module ->
+    // The configuration cache forbids reading the project model at execution
+    // time. Each entry: coordinates, publication directory, artifact prefix,
+    // then the primary file names.
+    val publicationChecks = providers.provider {
+        allprojects.flatMap { module ->
             val publications = module.extensions.findByType<org.gradle.api.publish.PublishingExtension>()
-                ?.publications?.withType<MavenPublication>() ?: return@forEach
-            publications.forEach { publication ->
+                ?.publications?.withType<MavenPublication>() ?: return@flatMap emptyList()
+            publications.map { publication ->
                 val repo = module.extensions.getByType<org.gradle.api.publish.PublishingExtension>()
                     .repositories.getByName("build") as org.gradle.api.artifacts.repositories.MavenArtifactRepository
                 val directory = File(repo.url).resolve("${publication.groupId.replace('.', '/')}/${publication.artifactId}/${publication.version}")
                 val prefix = "${publication.artifactId}-${publication.version}"
-                listOf("sources", "javadoc").forEach { classifier ->
-                    ZipFile(directory.resolve("$prefix-$classifier.jar")).use { archive ->
-                        check(archive.entries().asSequence().any {
-                            !it.isDirectory && if (classifier == "javadoc") it.name.endsWith("/index.html")
-                            else it.name.endsWith(".kt") || it.name.endsWith(".java")
-                        }) { "${publication.artifactId}: empty $classifier artifact" }
-                    }
-                }
-                val primary = publication.artifacts.filterNot { it.extension.endsWith("asc") }.map { artifact ->
-                    directory.resolve(prefix + (artifact.classifier?.let { "-$it" } ?: "") + ".${artifact.extension}")
-                } + directory.resolve("$prefix.pom")
-                primary.forEach { artifact ->
-                    check(artifact.isFile && artifact.length() > 0) { "Missing publication file: $artifact" }
-                    mapOf("md5" to "MD5", "sha1" to "SHA-1").forEach { (suffix, algorithm) ->
-                        val digest = MessageDigest.getInstance(algorithm)
-                        artifact.inputStream().use { input ->
-                            val buffer = ByteArray(64 * 1024)
-                            var count = input.read(buffer)
-                            while (count >= 0) { digest.update(buffer, 0, count); count = input.read(buffer) }
-                        }
-                        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-                        check(File("$artifact.$suffix").readText().trim() == actual) { "Invalid checksum: $artifact.$suffix" }
-                    }
-                }
-                logger.lifecycle("Verified Maven publication: ${publication.groupId}:${publication.artifactId}:${publication.version}")
+                val primaryNames = publication.artifacts.filterNot { it.extension.endsWith("asc") }.map { artifact ->
+                    prefix + (artifact.classifier?.let { "-$it" } ?: "") + ".${artifact.extension}"
+                } + "$prefix.pom"
+                listOf("${publication.groupId}:${publication.artifactId}:${publication.version}", directory.path, prefix) + primaryNames
             }
+        }
+    }
+    doLast {
+        publicationChecks.get().forEach { entry ->
+            val (coordinates, directoryPath, prefix) = entry
+            val directory = File(directoryPath)
+            listOf("sources", "javadoc").forEach { classifier ->
+                ZipFile(directory.resolve("$prefix-$classifier.jar")).use { archive ->
+                    check(archive.entries().asSequence().any {
+                        !it.isDirectory && if (classifier == "javadoc") it.name.endsWith("/index.html")
+                        else it.name.endsWith(".kt") || it.name.endsWith(".java")
+                    }) { "$coordinates: empty $classifier artifact" }
+                }
+            }
+            entry.drop(3).map { directory.resolve(it) }.forEach { artifact ->
+                check(artifact.isFile && artifact.length() > 0) { "Missing publication file: $artifact" }
+                mapOf("md5" to "MD5", "sha1" to "SHA-1").forEach { (suffix, algorithm) ->
+                    val digest = MessageDigest.getInstance(algorithm)
+                    artifact.inputStream().use { input ->
+                        val buffer = ByteArray(64 * 1024)
+                        var count = input.read(buffer)
+                        while (count >= 0) { digest.update(buffer, 0, count); count = input.read(buffer) }
+                    }
+                    val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                    check(File("$artifact.$suffix").readText().trim() == actual) { "Invalid checksum: $artifact.$suffix" }
+                }
+            }
+            logger.lifecycle("Verified Maven publication: $coordinates")
         }
     }
 }

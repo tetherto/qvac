@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val qvacProfile = providers.gradleProperty("qvacProfile").orElse("aio")
+val qvacProfile = providers.gradleProperty("qvacProfile").filter { it.isNotBlank() }.orElse("aio")
 
 android {
     namespace = "io.tether.qvac.sdk.sample"
@@ -58,4 +58,20 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+}
+
+// The debug build's compile, merge, duplicate-class and dex steps, without
+// stripping native libraries and packaging an APK that CI never installs.
+tasks.register("checkDebugBuild") {
+    group = "verification"
+    dependsOn(
+        "processDebugMainManifest",
+        "processDebugResources",
+        "mergeDebugAssets",
+        "mergeDebugNativeLibs",
+        "checkDebugDuplicateClasses",
+        "mergeExtDexDebug",
+        "mergeLibDexDebug",
+        "mergeProjectDexDebug",
+    )
 }

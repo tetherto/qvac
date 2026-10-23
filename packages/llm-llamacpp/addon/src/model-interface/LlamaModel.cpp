@@ -1114,6 +1114,9 @@ std::string LlamaModel::processConcurrent(
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
     jobStats_[id] = std::move(terminal);
   }
+  if (prompt.outputCallback) {
+    return {};
+  }
   return result.outputs.empty() ? std::string{}
                                 : std::move(result.outputs.front());
 }

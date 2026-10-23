@@ -348,10 +348,15 @@ jobs:
             exit 1
           fi
 
+  # checks-passed needs every check job, and a train skips the ones it does not
+  # list. Without a status function GitHub skips any job below a skipped one,
+  # so each job from here to published-checks names the result it waits for.
   publish-npm:
     name: Publish the train to npm
     needs: [train, checks-passed]
     if: >-
+      !cancelled() &&
+      needs.checks-passed.result == 'success' &&
       needs.train.outputs.dry_run != 'true' &&
       !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
@@ -408,7 +413,10 @@ jobs:
   publish-npm-dry-run:
     name: Publish the train to npm (dry run)
     needs: [train, checks-passed]
-    if: needs.train.outputs.dry_run == 'true'
+    if: >-
+      !cancelled() &&
+      needs.checks-passed.result == 'success' &&
+      needs.train.outputs.dry_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -450,7 +458,10 @@ jobs:
   served:
     name: Wait until npm serves the train
     needs: [train, publish-npm]
-    if: needs.publish-npm.outputs.published == 'true'
+    if: >-
+      !cancelled() &&
+      needs.publish-npm.result == 'success' &&
+      needs.publish-npm.outputs.published == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -469,7 +480,10 @@ jobs:
   published-checks:
     name: Package checks after publish
     needs: [train, served]
-    if: contains(fromJSON(needs.train.outputs.checks), 'package-checks')
+    if: >-
+      !cancelled() &&
+      needs.served.result == 'success' &&
+      contains(fromJSON(needs.train.outputs.checks), 'package-checks')
     permissions:
       contents: read
       packages: read

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { decisionTests } from '../e2e/tests/decision-tests'
-import { RESOURCE_TABLE } from '../e2e/tests/shared/resource-table'
+import { decisionTests } from '../../sdk-e2e/catalog/decision-tests'
+import { RESOURCE_TABLE } from '../../sdk-e2e/catalog/resource-table'
 
 function result(billing = 0.2, noul = 0.3) {
   const base = { confidence: 0.2, answerConfidence: 0.8, action: { actProbability: 0.5 } }

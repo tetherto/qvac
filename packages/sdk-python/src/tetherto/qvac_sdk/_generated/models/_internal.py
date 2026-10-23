@@ -3843,7 +3843,7 @@ class CompletionOrchestrateRequest(GeneratedBaseModel):
         CompletionOrchestrateRequestToolDialect | None,
         Field(
             alias="toolDialect",
-            description="Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.",
+            description="Override auto-detected tool-call dialect. Use when detection from the model name and GGUF architecture picks the wrong parser chain for your model.",
             title="CompletionOrchestrateRequestToolDialect",
         ),
     ] = None
@@ -4489,7 +4489,7 @@ class CompletionStreamRequest(GeneratedBaseModel):
         CompletionStreamRequestToolDialect | None,
         Field(
             alias="toolDialect",
-            description="Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.",
+            description="Override auto-detected tool-call dialect. Use when detection from the model name and GGUF architecture picks the wrong parser chain for your model.",
             title="CompletionStreamRequestToolDialect",
         ),
     ] = None
