@@ -39,7 +39,6 @@ exactly what you mounted.
 At the moment, the OpenAI-compatible extension supports the following QVAC AI capabilities:
 * Text generation — via [Chat](#chat) (`/v1/chat/completions`), [Responses](#responses) (`/v1/responses`, modern), or [Legacy completions](#legacy-completions) (`/v1/completions`).
 * [Text embeddings](#embeddings) — via `/v1/embeddings`.
-* [Decisions](#decisions) via `/v1/decisions`, for predicate, choice, and score questions about text.
 * RAG — via [Files](#files) (`/v1/files`) and [Vector stores](#vector-stores) (`/v1/vector_stores`).
 * [Image generation](#images) — via `/v1/images/generations` and `/v1/images/edits`.
 * [Video generation](#videos) — via `/v1/videos`.
@@ -48,8 +47,6 @@ At the moment, the OpenAI-compatible extension supports the following QVAC AI ca
 * Translation (audio-to-English only) — via [Audio](#audio) (`/v1/audio/translations`, Whisper translate task).
 
 The QVAC surface supports:
-* [System resources](#get-qvacv1system) — via `/qvac/v1/system`: the host's CPU, memory and GPUs.
-* [Model fit](#post-qvacv1modelsfit) — via `/qvac/v1/models/fit`: whether models are likely to fit, before loading them.
 * [Text translation](#post-qvacv1translate) — via `/qvac/v1/translate`, backed by an NMT model.
 
 ## Running the server
@@ -192,8 +189,6 @@ Relevant options are summarized below; run `qvac serve --help` for the exact gen
 | `--allow-unauthenticated` | Permit binding to a non-loopback host without a key |
 | `--cors` | Validate that an explicit trusted origin is configured |
 | `--cors-origin <origin>` | Add a trusted CORS origin (repeatable; no wildcard) |
-| `--allowed-host <host>` | Accept this `Host` header besides loopback, IP addresses and the bind host (repeatable) |
-| `--allow-any-host` | Accept any `Host` header (turns off DNS-rebinding protection) |
 | `--public-base-url <url>` | Externally reachable origin required for image `response_format=url` |
 | `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins (requires a fixed `--port`) |
 | `--ready-fd <fd>` | Write `QVAC_SERVE_READY {"port":…,"pid":…}` to this inherited descriptor once listening |
@@ -218,18 +213,6 @@ qvac serve --openai --cors
 # After
 qvac serve --openai --cors --cors-origin https://app.example.com
 ```
-
-### Host header
-
-CORS only governs cross-origin requests. A page that points its own domain at `127.0.0.1` (DNS rebinding) is same-origin with the server, so the server also checks the `Host` header. Requests are served only when it names a loopback host (`localhost`, `*.localhost`, `127.0.0.0/8`, `[::1]`), an IP address, the bind host, the `--public-base-url` host or an allowed host; the port is ignored. Anything else, `/openapi.json` included, gets `403 host_not_allowed`.
-
-Add names that reach the server through a proxy or DNS with `--allowed-host` or `serve.allowedHosts`. A leading dot covers the domain and its subdomains:
-
-```bash
-qvac serve --openai --allowed-host qvac.internal --allowed-host .corp.example
-```
-
-`--allow-any-host` (or `"allowedHosts": true`) turns the check off.
 
 ## QVAC API
 
@@ -272,114 +255,6 @@ A failed delete returns `500 kv_cache_reclaim_failed`.
 </Callout>
 
 This route needs the QVAC surface mounted. It is absent under `--no-default`, and therefore under the deprecated `qvac serve openai`, which implies it.
-
-### `GET /qvac/v1/system`
-
-Report the capacity of the host the server runs on, backed by the SDK's `getSystemResources()`.
-
-`capabilities` describes the CPU, total memory and each GPU with its graphics drivers.
-`?sample=true` adds `sample`: CPU load, memory in use (system-wide and for the serving process),
-and per-GPU utilization at the time of the request.
-
-Every figure is a metric with a `status`. Only `supported` carries a `value`, with the
-`provenance` it was read from. `unavailable`, `unverified` and `failed` mean the platform could
-not give a trustworthy number, and may carry a `reason`.
-
-```bash
-curl -sS "http://localhost:11434/qvac/v1/system?sample=true"
-```
-
-```json
-{
-  "object": "system",
-  "capabilities": {
-    "cpu": { "status": "supported", "value": { "logicalCores": { "status": "supported", "value": 14, "provenance": { "source": "os" } } } },
-    "memory": { "totalBytes": { "status": "supported", "value": 25769803776, "provenance": { "source": "os" } } },
-    "gpus": { "status": "supported", "value": [] }
-  },
-  "sample": { "sampledAt": 1760870400000, "cpu": { "status": "supported", "value": 0.12, "provenance": { "source": "os" } } }
-}
-```
-
-The example is trimmed; each CPU, memory and GPU object carries every field, each as a metric.
-
-| HTTP | `error.code`              | When                                       |
-| ---- | ------------------------- | ------------------------------------------ |
-| 400  | `invalid_sample`          | `sample` is not `true` or `false`          |
-| 500  | `system_resources_failed` | The SDK could not read system resources    |
-
-### `POST /qvac/v1/models/fit`
-
-Ask whether models are likely to fit in the host's memory before loading them, backed by the
-SDK's `assessModelFit()`. Nothing is downloaded or loaded: each model's weightless registry
-description is fetched (tens of KB) and the engine's own fitter runs against it, falling back to
-a floor computed from catalog facts.
-
-| Field                 | Type                           | Required | Meaning                                                   |
-| --------------------- | ------------------------------ | -------- | --------------------------------------------------------- |
-| `models`              | `object[]`                     | Yes      | Up to 16 models, assessed together under one budget       |
-| `models[].model`      | `string`                       | Yes      | A `serve.models` alias, or an SDK model constant name     |
-| `models[].modelConfig`| `object`                       | No       | Config to assess with, merged over an alias's own config  |
-| `execution`           | `"sequential" \| "concurrent"` | No       | Co-residency assumption; `sequential` by default          |
-| `policy`              | `"interactive-v1"`             | No       | Headroom policy; withholds 20% of available memory        |
-
-An alias is assessed with the config it would load with. `modelConfig` is merged over it key
-by key, nested objects included, so `{"ctx_size": 32768}` asks about a longer context and an
-override inside `contextParams` keeps the alias's other context params. Model sources cannot be given in the request:
-companion sources in `modelConfig` (`*ModelSrc` keys) must name SDK model constants, so a request
-never makes the server read a path or URL of its choosing.
-
-The answer is advisory. `verdict` is `likely-fits`, `likely-too-large` or `unknown`, combined
-across every model under `execution`. `unknown` means the evidence supports neither answer, not
-"no". `models` carries one verdict per entry in request order, and `budget` the memory it was
-judged against.
-
-```bash
-curl -sS http://localhost:11434/qvac/v1/models/fit \
-  -H "Content-Type: application/json" \
-  -d '{"models":[{"model":"my-llm","modelConfig":{"ctx_size":8192}}]}'
-```
-
-```json
-{
-  "object": "model_fit",
-  "verdict": "likely-fits",
-  "basis": "system-memory",
-  "execution": "sequential",
-  "evidence": "native-fit",
-  "budget": {
-    "totalBytes": 25769803776,
-    "usedBytes": 21211299840,
-    "availableBytes": 4558503936,
-    "reservedBytes": 911700787,
-    "availableAfterReserveBytes": 3646803149
-  },
-  "models": [
-    {
-      "model": "my-llm",
-      "name": "QWEN3_600M_INST_Q4",
-      "verdict": "likely-fits",
-      "evidence": "native-fit",
-      "device": "gpu",
-      "reasons": ["..."]
-    }
-  ],
-  "reasons": ["..."],
-  "assumptions": ["..."]
-}
-```
-
-| HTTP | `error.code`        | When                                                          |
-| ---- | ------------------- | ------------------------------------------------------------- |
-| 400  | `invalid_json`      | Body is not valid JSON                                        |
-| 400  | `invalid_models`    | `models` is missing or empty, or an entry is malformed        |
-| 400  | `too_many_models`   | `models` carries more than 16 entries                         |
-| 400  | `invalid_execution` | `execution` is not `sequential` or `concurrent`               |
-| 400  | `invalid_policy`    | `policy` is not `interactive-v1`                              |
-| 400  | `invalid_model_src` | A companion source in `modelConfig` is not an SDK constant    |
-| 400  | `invalid_request`   | The body carries an unknown field                             |
-| 404  | `model_not_found`   | An entry names neither an alias nor an SDK model constant     |
-| 500  | `model_fit_failed`  | The SDK assessment failed                                     |
 
 ### `POST /qvac/v1/translate`
 
@@ -468,7 +343,6 @@ Served by the `--openai` extension. All endpoints follow the [OpenAI API](https:
 | | `GET` | [`/v1/responses/:id/input_items`](#get-v1responsesidinput_items) |
 | [Legacy completions](#legacy-completions) | `POST` | [`/v1/completions`](#post-v1completions) |
 | [Embeddings](#embeddings) | `POST` | [`/v1/embeddings`](#post-v1embeddings) |
-| [Decisions](#decisions) | `POST` | [`/v1/decisions`](#post-v1decisions) |
 | [Audio](#audio) | `POST` | [`/v1/audio/transcriptions`](#post-v1audiotranscriptions) |
 | | `POST` | [`/v1/audio/translations`](#post-v1audiotranslations) |
 | | `POST` | [`/v1/audio/speech`](#post-v1audiospeech) |
@@ -838,6 +712,8 @@ The following Responses-API features are intentionally rejected with `400`: `con
 
 `tool_choice` is supported in the same shapes as chat completions, except that the object form is the Responses API's flattened `{ "type": "function", "name": "get_weather" }`.
 
+`parallel_tool_calls` (default `true`) lets one response carry several function-tool calls; set it to `false` to get at most one.
+
 #### `GET /v1/responses/:id`
 
 Retrieve a previously stored response by id.
@@ -954,110 +830,6 @@ Response:
 <Callout type="info">
 `encoding_format` (only `float` is supported) and `dimensions` are accepted but ignored.
 </Callout>
-
-### Decisions
-
-Answer typed questions about text using a local decision model. The endpoint uses the OpenAI Decisions request and response format, backed by the SDK's [`decide()`](/sdk/ai-capabilities/decisions) capability.
-
-#### `POST /v1/decisions`
-
-Evaluate one input against predicate, choice, and score questions. Body is JSON, and the response is a complete JSON result without streaming.
-
-##### Loaded model
-
-Register a Laya decision checkpoint in `serve.models`. The recommended starter is available through `qvac configure`:
-
-```bash
-qvac configure --modality decision
-qvac serve --openai
-```
-
-This writes the following model entry:
-
-```json title="qvac.config.json"
-{
-  "serve": {
-    "models": {
-      "laya-multilingual-322m-q8-0": {
-        "model": "LAYA_MULTILINGUAL_322M_Q8_0",
-        "type": "llamacpp-decision",
-        "preload": false
-      }
-    }
-  }
-}
-```
-
-The first request loads the model. Set `preload: true` or pass `--model laya-multilingual-322m-q8-0` to load it at startup. The SDK defaults to GPU; add `config: { "device": "cpu" }` to run on CPU.
-
-Named decision model constants select the decision plugin automatically, including models added through "Search all models". For a local GGUF, replace `model` with `src` and set `type: "llamacpp-decision"`. An embedding-only checkpoint cannot answer decision questions.
-
-##### Request
-
-| Field | Description | Required |
-| --- | --- | --- |
-| `model` | Configured decision model alias. | Yes |
-| `input` | Text string or a nonempty array of text conversation items. | Yes |
-| `questions` | Array of 1 to 200 questions, each with `type`, nonempty `instructions`, and an optional `name`. | Yes |
-| `safety_identifier` | Caller metadata, accepted without affecting local inference. | No |
-| `prompt_cache_key` | Caller metadata, accepted without enabling prompt caching. | No |
-
-Each question has one of these types:
-
-- `predicate` estimates the probability that a statement holds.
-- `choice` selects from `choices`, an array of 2 to 255 distinct string or boolean `value` fields with optional `description` fields. Boolean `true` and string `"true"` are distinct choices.
-- `score` takes `levels`, an ordered array of at least two entries, each with a `label` and optional `description`. Level values start at zero; the score is the probability-weighted level index.
-
-Conversation items support user, developer, system, and assistant messages. System messages become developer messages. Content can be a string; content arrays use `input_text` for non-assistant messages and `output_text` or `refusal` for assistant messages. Function and custom tool calls can be included with their matching outputs as evidence. Each output must refer to an earlier call of the same type. The server does not execute tools.
-
-```bash
-curl http://localhost:11434/v1/decisions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "laya-multilingual-322m-q8-0",
-    "input": "I was charged twice. Please refund.",
-    "questions": [
-      {
-        "type": "choice",
-        "name": "route",
-        "instructions": "Which queue should receive this ticket?",
-        "choices": [
-          {"value": "billing", "description": "Payment issues"},
-          {"value": "technical", "description": "Software bugs"}
-        ]
-      },
-      {
-        "type": "score",
-        "name": "severity",
-        "instructions": "How severe is this issue?",
-        "levels": [{"label": "Minor"}, {"label": "Major"}]
-      },
-      {
-        "type": "predicate",
-        "name": "urgent",
-        "instructions": "Does this require immediate human attention?"
-      }
-    ]
-  }'
-```
-
-##### Response
-
-`model` is the configured alias. `answers` is an array in question order; names need not be unique, and unnamed questions return `name: null`.
-
-- Predicate answers contain `probability`.
-- Choice answers contain the selected typed `choice`, `confidence`, and a `probabilities` array with each original `value`.
-- Score answers contain `score`, `confidence`, and a `probabilities` array with each level's numeric `value` and original `label`.
-
-Confidence comes from Laya's entropy-based confidence and is not calibrated to OpenAI's hosted model. The response schema includes `refusal`, but local Laya models do not emit refusal answers.
-
-`usage` contains `input_tokens`, `output_tokens`, and `total_tokens`, plus `input_tokens_details` with `cached_tokens` and `cache_write_tokens`, and `output_tokens_details` with `reasoning_tokens`. Cache and reasoning counts are zero. Internal truncation, option, action, and answer-confidence fields are not included.
-
-##### Local model limits
-
-Local decisions accept text only. Images, files, audio, item references, streaming, and batch inputs are rejected with HTTP 400. Prompt caching is unavailable; non-null `prompt_cache_options` and content `prompt_cache_breakpoint` fields are rejected. Use SDK [`decide()`](/sdk/ai-capabilities/decisions) for batch states or Laya-specific token budgets.
-
-A client disconnect cancels the SDK request. Each model runs one decision request at a time, with up to 64 requests waiting in a FIFO queue. Additional requests return HTTP `429` with error type `rate_limit_error` and code `request_rejected_by_policy`.
 
 ### Audio
 
@@ -1234,9 +1006,8 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
 | `input` | Non-empty string, capped at `serve.openai.audio.speech.maxInputChars` (default `4096`; set to `null` to disable). | Yes |
 | `voice` | Voice id; defaults to `defaultVoice`. | No |
 | `response_format` | `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. | No |
-| `stream_format` | `audio` (default, one audio body) or `sse` (see [Streaming](#streaming-stream_format-sse)). Other values return `400 invalid_stream_format`. | No |
 
-The encoded formats (`mp3`, `opus`, `aac`, `flac`) are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`. When ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`); unknown values return `400 invalid_response_format`. The default stays `wav` so synthesis works on hosts without ffmpeg. `speed` and `instructions` are accepted but ignored — dropped fields are echoed back in the `X-QVAC-Ignored-Params` response header.
+The encoded formats (`mp3`, `opus`, `aac`, `flac`) are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`. When ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`); unknown values return `400 invalid_response_format`. The default stays `wav` so synthesis works on hosts without ffmpeg. `speed`, `instructions`, and `stream_format` are accepted but ignored — dropped fields are echoed back in the `X-QVAC-Ignored-Params` response header.
 
 ##### Response
 
@@ -1250,31 +1021,7 @@ The response body is binary audio. Headers always include:
 | `X-Audio-Channels` | Always `1` (mono). Only sent for `wav`/`pcm`. |
 | `X-Audio-Bits-Per-Sample` | Always `16`. Only sent for `wav`/`pcm`. |
 
-With the default `stream_format: "audio"` the route buffers the full audio before responding.
-
-##### Streaming (`stream_format: "sse"`)
-
-Set `stream_format` to `"sse"` to receive audio as it is synthesized instead of one body at the end. The response is `text/event-stream` with OpenAI's speech events:
-
-```text
-data: {"type":"speech.audio.delta","audio":"<base64 audio chunk>"}
-
-data: {"type":"speech.audio.done","usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}
-```
-
-- Text is split into sentences, and each synthesized chunk arrives as one `speech.audio.delta` event.
-- `response_format` must be `pcm` or `wav`; other formats return `400 unsupported_response_format`. With `wav`, the first delta starts with a RIFF header whose size fields are `0xFFFFFFFF` (unknown length).
-- MOSS-SoundEffect and MOSS-Speech aliases (`ttsEngine` `moss-sfx` / `moss-speech`) are batch-only and return `400 unsupported_stream_format`.
-- `X-Audio-Sample-Rate`, `X-Audio-Channels` and `X-Audio-Bits-Per-Sample` describe the PCM in the deltas.
-- `usage` token counts are always `0`.
-- Errors raised before the first audio chunk return the usual JSON error and status code. A failure after that ends the stream with a final `{"error":{...}}` event and no `speech.audio.done`.
-- The stream has no `[DONE]` sentinel. `speech.audio.done` is the last event.
-
-```bash
-curl -N http://localhost:11434/v1/audio/speech \
-  -H "Content-Type: application/json" \
-  -d '{"model":"my-tts","voice":"alloy","input":"Hello from QVAC.","response_format":"pcm","stream_format":"sse"}'
-```
+The route always **buffers the full audio** before responding (chunked HTTP streaming is tracked as a follow-up).
 
 #### `GET /v1/audio/voices`
 
@@ -1569,7 +1316,7 @@ OpenAI-compatible **async** video generation backed by the SDK's `video()`. Crea
 Two modes are supported:
 
 - **txt2vid** — JSON body with `prompt` only. No image needed.
-- **img2vid** — include `input_reference` as a multipart file field (OpenAI SDK `Uploadable`), or JSON `{ image_url }` (base64 data URI or public HTTP(S) URL), or JSON `{ file_id }` (file uploaded via `POST /v1/files`). Mode is inferred automatically.
+- **img2vid** — include `input_reference` as a multipart file field (OpenAI SDK `Uploadable`), or JSON `{ image_url }` (base64 data URI or HTTP(S) URL), or JSON `{ file_id }` (file uploaded via `POST /v1/files`). Mode is inferred automatically.
 
 The OpenAI sub-routes `/edits`, `/remix`, `/extensions`, and `/characters` are not implemented.
 
@@ -1652,7 +1399,7 @@ curl http://localhost:11434/v1/videos \
   -F "seconds=2"
 ```
 
-JSON with a base64 data URI or public HTTP(S) URL (≤ 100 MB, 30 s fetch timeout). The server refuses loopback, private, link-local and cloud-metadata addresses, including after a redirect or DNS resolution:
+JSON with a base64 data URI or HTTP(S) URL (≤ 100 MB, 30 s fetch timeout):
 
 ```bash
 curl http://localhost:11434/v1/videos \
@@ -1691,11 +1438,11 @@ curl http://localhost:11434/v1/videos \
 | `negative_prompt` | QVAC extension. Negative prompt for the sampler. | No |
 | `cfg_scale` | QVAC extension. Classifier-free guidance scale (Wan range ~5–8). | No |
 | `flow_shift` | QVAC extension. Flow-matching shift; Wan 2.1 T2V needs `3.0` for visible motion. | No |
-| `input_reference` | img2vid reference image. Multipart file field, JSON `{ image_url }` (data URI or public HTTP(S) URL, ≤ 100 MB / 30 s), or JSON `{ file_id }`. When present the job runs in img2vid mode; omit for txt2vid. | No |
+| `input_reference` | img2vid reference image. Multipart file field, JSON `{ image_url }` (data URI or HTTP(S) URL, ≤ 100 MB / 30 s), or JSON `{ file_id }`. When present the job runs in img2vid mode; omit for txt2vid. | No |
 | `strength` | QVAC extension. img2vid denoise strength `[0, 1]`. Only meaningful with `input_reference`. | No |
 
 <Callout type="info">
-**img2vid via `input_reference`** — supply the reference image as a multipart file field named `input_reference` (OpenAI SDK `Uploadable`), or as JSON `{ "image_url": "data:image/jpeg;base64,..." }` (data URI or public HTTP(S) URL up to 100 MB), or as JSON `{ "file_id": "file-…" }` (file uploaded via `POST /v1/files`). Omit `input_reference` entirely for txt2vid.
+**img2vid via `input_reference`** — supply the reference image as a multipart file field named `input_reference` (OpenAI SDK `Uploadable`), or as JSON `{ "image_url": "data:image/jpeg;base64,..." }` (data URI or HTTP(S) URL up to 100 MB), or as JSON `{ "file_id": "file-…" }` (file uploaded via `POST /v1/files`). Omit `input_reference` entirely for txt2vid.
 </Callout>
 
 The `Video` resource returned by `POST` (and by `GET /v1/videos/:id`):
