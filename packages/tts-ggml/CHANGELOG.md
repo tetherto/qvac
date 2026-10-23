@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
-  the speech addons so they use the same source revision.
+- Align the shared native stack to `speech-cpp` `2026-10-23` and `ggml-speech` `2026-10-20`.
+
+- Audio8 streaming methods emit PCM as codec windows finish, with cancellation
+  and no full-waveform replay.
+
 - Update the shared native `speech-cpp` source to `2026-10-19`, including
   optional CosyVoice3 Core ML sidecars on Apple platforms. Re-export existing
   LM sidecars to include the cache feedback fix for consecutive predictions.

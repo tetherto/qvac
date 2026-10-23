@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Align the shared native stack to `speech-cpp` `2026-10-23` and `ggml-speech` `2026-10-20`.
+
 ### Added
 
 - Bounded FuzzTest coverage for the JS-adapter number parsers
@@ -14,11 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CI runs the suite after the native build's caches are saved; this addon has
   no addon-level C++ unit tests yet. The parsers compile without audiogen-cpp,
   so ASan and LeakSanitizer stay at full strength. No public addon API changes.
-
-### Changed
-
-- Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
-  the speech addons so they use the same source revision.
 
 ## [0.8.0] - 2026-10-14
 
@@ -228,7 +227,6 @@ could never select them during a cross-build and mobile bundles failed
 verification with missing prebuilds. They now publish without install filters;
 mobile applications declare the target's platform package as a direct
 dependency pinned to the exact meta package version.
-
 
 ## [0.4.0] - 2026-09-11
 

@@ -341,6 +341,9 @@ class TTSGgml {
     }
     async _dispatchJob(input) {
         const addon = this._requireAddon();
+        if (this._setup.engineType === engineIds_1.ENGINE_AUDIO8 && this._sentenceStream.ctx) {
+            return addon.runJob({ ...input, streamOutput: true });
+        }
         return this._pocket ? this._pocket.runJob(addon, input) : addon.runJob(input);
     }
     async cancel() {
