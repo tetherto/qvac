@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
   the speech addons so they use the same source revision.
+- Move the shared native `speech-cpp` source pin to `2026-10-23#2` across
+  the speech addons. Whisper's `assessFit` sizes integrated and
+  unified-memory GPUs that report no capacity of their own against host RAM,
+  and returns the reason `memory-capacity-unavailable` when no capacity is
+  known.
+
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): q8_0 matrix products whose sums exceed
+  the fp16 range no longer come back as infinity, and attention over 32 or
+  more tokens with unpadded lengths is computed correctly. The shared native
+  `ggml-speech` moves to `2026-10-23` across the speech addons.
 
 ## [0.13.0] - 2026-10-20
 
