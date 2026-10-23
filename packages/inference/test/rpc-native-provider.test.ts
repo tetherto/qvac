@@ -39,6 +39,7 @@ test('published RPC provider starts, serves inventory over TCP, and stops', asyn
 })
 
 test('SDK RPC starts preserve native port allocation and enforce runtime RDMA availability', async (t) => {
+  await close()
   registerRpcServerProvider(ggmlRpcServerProvider)
   try {
     const servers = await Promise.all([
