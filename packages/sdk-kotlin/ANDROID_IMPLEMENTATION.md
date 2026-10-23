@@ -44,7 +44,7 @@ Required local gates:
 ./gradlew checkContract
 ./gradlew jvmTest
 ./gradlew :android-example:testDebugUnitTest
-./gradlew :android-example:assembleDebug
+./gradlew :android-example:checkDebugBuild
 ./gradlew :android-example:compileDebugAndroidTestKotlin
 ```
 

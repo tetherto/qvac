@@ -17,7 +17,7 @@ const CLASSIFICATION_CONFIG = {
 }
 
 const IMAGE = readFileSync(
-  new URL('../../../../sdk/e2e/assets/images/elephant.jpg', import.meta.url)
+  new URL('../../../../sdk-e2e/assets/images/elephant.jpg', import.meta.url)
 )
 const IMAGE_DATA_URL = `data:image/jpeg;base64,${IMAGE.toString('base64')}`
 
