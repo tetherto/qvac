@@ -105,7 +105,7 @@ release flow reach its own cut first.
 Only the SDK has a generated reference; skip this for any other collection.
 
 ```bash
-git switch -c docs/cutoff-<x.y.z> ORG_REMOTE/main
+git switch -c docs/cutoff-<x.y.z> "$(git merge-base ORG_REMOTE/<release-branch> ORG_REMOTE/main)"
 cd docs/website && bun run scripts/generate-api-docs.ts <x.y.z> --force-extract
 ```
 
