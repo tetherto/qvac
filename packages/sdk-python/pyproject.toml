@@ -40,6 +40,10 @@ vla = ["numpy>=1.26"]
 # inputs and outputs (IPython, when present, upgrades live streaming
 # display from stdout to in-cell updates).
 notebook = ["numpy>=1.26", "pandas>=2.2"]
+# Third-party stores a few examples talk to, mirroring the devDependencies the
+# TypeScript examples use for the same pages. Not needed by the client itself:
+# every example that reaches for one guards the lookup and names this install.
+examples = ["pymongo>=4.13", "sqliteai-vector>=1.1"]
 # scripts/build_wheel.py: the self-contained per-platform wheel build.
 release = ["build>=1.2"]
 

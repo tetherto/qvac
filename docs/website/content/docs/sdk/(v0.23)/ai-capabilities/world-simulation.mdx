@@ -55,15 +55,15 @@ Cancelling with `cancel({ requestId })` is block-granular: the current block fin
 ABot-World uses a split layout with four models:
 
 - `ABOT_WORLD_0_5B_Q8_0` — the world-model transformer (DiT). Passed as `modelSrc`.
-- `ABOT_WORLD_0_5B_LF_VAE` — the taehv streaming decoder used on every step. Passed as `modelConfig.taehvModelSrc`.
-- `ABOT_WORLD_0_5B_LF_VAE_F16` — the full-precision VAE that encodes the first frame during `worldCreateScene`. Passed as `modelConfig.vaeModelSrc`.
+- `ABOT_WORLD_0_5B_LF_TAEHV_VAE` — the taehv streaming decoder used on every step. Passed as `modelConfig.taehvModelSrc`.
+- `ABOT_WORLD_0_5B_LF_WAN_VAE` — the full-precision Wan2.2 VAE that encodes the first frame during `worldCreateScene`. Passed as `modelConfig.vaeModelSrc`.
 - `UMT5_XXL_ENC_Q8_0` — the UMT5 text encoder for the prompt. Passed as `modelConfig.t5XxlModelSrc`.
 
 ```ts
 import {
   ABOT_WORLD_0_5B_Q8_0,
-  ABOT_WORLD_0_5B_LF_VAE,
-  ABOT_WORLD_0_5B_LF_VAE_F16,
+  ABOT_WORLD_0_5B_LF_TAEHV_VAE,
+  ABOT_WORLD_0_5B_LF_WAN_VAE,
   UMT5_XXL_ENC_Q8_0,
   loadModel,
 } from "@qvac/sdk";
@@ -73,9 +73,9 @@ const modelId = await loadModel({
   modelType: "sdcpp-generation",
   modelConfig: {
     mode: "world",
-    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
+    taehvModelSrc: ABOT_WORLD_0_5B_LF_TAEHV_VAE,
     t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
-    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
+    vaeModelSrc: ABOT_WORLD_0_5B_LF_WAN_VAE,
     world: { kvCache: true, frameJpegQuality: 85 },
   },
 });
@@ -128,11 +128,15 @@ The following script loads an ABot-World session, creates a world from a first-f
 ```
 </WrapCode>
 </Tab>
-</Tabs>
 
-<Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
-</Callout>
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/abot_world.py title="abot_world.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
