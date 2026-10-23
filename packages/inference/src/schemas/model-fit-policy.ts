@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { NativeProbeVerdict } from '@/schemas/assess-model-fit'
+import type { ModelFitVerdict } from '@/schemas/assess-model-fit'
 
 /**
  * What the engine fitter's verdict does to a load. Only `does-not-fit` blocks
@@ -23,9 +23,6 @@ export function runsProbe(policy: ModelFitPolicy): boolean {
   return policy !== 'off'
 }
 
-export function refusesLoad(
-  policy: ModelFitPolicy,
-  verdict: NativeProbeVerdict | undefined
-): boolean {
+export function refusesLoad(policy: ModelFitPolicy, verdict: ModelFitVerdict | undefined): boolean {
   return policy === 'refuse' && verdict === 'does-not-fit'
 }

@@ -5,16 +5,16 @@ import path from 'bare-path'
 
 import { generateShortHash } from '@/utils/formatting'
 import { callEngineFit } from '@/model-fit/run/engine'
-import type { FitProbeRequest, FitProbeResult } from '@/model-fit/run/engine'
+import type { AddonFit, FitProbeRequest } from '@/model-fit/run/engine'
 
 /**
- * Why a run produced no projection. Every one of these is absence of evidence,
- * so the caller proceeds with the load it was going to run anyway.
+ * Why a run produced no fit. Each one makes the verdict `unknown`, so the
+ * caller proceeds with the load it was going to run anyway.
  */
-export type FitRunUnknownReason = 'cancelled' | 'crashed' | 'invocation-error' | 'timeout'
+export type FitRunUnknownReason = 'cancelled' | 'crashed' | 'marker-error' | 'timeout'
 
 export type FitRunResult =
-  | { status: 'completed'; probe: FitProbeResult }
+  | { status: 'completed'; fit: AddonFit }
   | { status: 'unknown'; reason: FitRunUnknownReason; message: string }
 
 export interface RunFitOptions {
@@ -32,7 +32,7 @@ function describe(error: unknown): string {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error)
 }
 
-/** How long a marker keeps a model off the native path. */
+/** How long a marker keeps a request from calling its fitter. */
 const MARKER_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 /** A fit sits in front of a load, so a fitter that never returns must not hold it. */
@@ -44,13 +44,8 @@ const inFlight = new Map<string, number>()
 /** Requests whose fit timed out and has not returned. */
 const hung = new Set<string>()
 
-/**
- * `marginBytes` is excluded: it carries the bytes of every model resident at
- * the time, so it differs between two attempts at the same load.
- */
 function markerKey(probe: FitProbeRequest): string {
-  const { marginBytes: _margin, ...request } = probe.request as Record<string, unknown>
-  return generateShortHash(JSON.stringify({ engine: probe.engine, request }))
+  return generateShortHash(JSON.stringify(probe))
 }
 
 export function runningMarkerPath(
@@ -144,9 +139,7 @@ async function settle(
 ): Promise<FitRunResult> {
   const key = markerKey(probe)
   try {
-    return { status: 'completed', probe: await callFit(probe) }
-  } catch (error) {
-    return unknown('invocation-error', describe(error))
+    return { status: 'completed', fit: await callFit(probe) }
   } finally {
     const remaining = (inFlight.get(key) ?? 1) - 1
     if (remaining === 0) {
@@ -166,11 +159,18 @@ function bounded(
   timeoutMs: number,
   signal: AbortSignal | undefined
 ): Promise<FitRunResult> {
-  return new Promise((resolve) => {
-    const finish = (result: FitRunResult) => {
+  return new Promise((resolve, reject) => {
+    const settled = () => {
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
+    }
+    const finish = (result: FitRunResult) => {
+      settled()
       resolve(result)
+    }
+    const fail = (error: unknown) => {
+      settled()
+      reject(error)
     }
     const onAbort = () => finish(unknown('cancelled', 'Fit was cancelled'))
     const timer = setTimeout(() => {
@@ -178,7 +178,7 @@ function bounded(
       finish(unknown('timeout', `Fit did not return within ${timeoutMs} ms`))
     }, timeoutMs)
     signal?.addEventListener('abort', onAbort, { once: true })
-    void fit.then(finish)
+    fit.then(finish, fail)
   })
 }
 
@@ -190,14 +190,17 @@ function bounded(
  * by its pid, so a marker whose process is gone is a fit that never finished,
  * while one whose process is alive is a fit still running there. The first
  * unfinished fit of a request leaves `.suspect` and the fit runs again. A
- * second one in a row leaves `.crashed`, and the request skips native until
- * that marker expires.
+ * second one in a row leaves `.crashed`, and the request skips the fitter
+ * until that marker expires.
  *
  * Fits of one request in this process share one marker, removed by the last.
  * An aborted `signal` answers `cancelled` and a fit past `timeoutMs` answers
  * `timeout`, both at once, while the fitter runs on and releases the marker
  * when it returns. Until a timed-out fitter returns, further fits of its
  * request answer `timeout` without calling it again.
+ *
+ * A fitter that rejects, for a model it cannot read or a request it refuses,
+ * rejects this call with its error.
  */
 export async function runFit(
   probe: FitProbeRequest,
@@ -242,7 +245,7 @@ export async function runFit(
       }
       mark(runningMarkerPath(stateDir, probe))
     } catch (error) {
-      return unknown('invocation-error', `Fit marker could not be written: ${describe(error)}`)
+      return unknown('marker-error', `Fit marker could not be written: ${describe(error)}`)
     }
   }
 

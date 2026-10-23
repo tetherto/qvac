@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { toolDialectSchema } from '@/schemas/completion-stream'
-import { nativeProbeFitSchema } from '@/schemas/assess-model-fit'
+import { modelFitProbeSchema } from '@/schemas/assess-model-fit'
 
 // ============== Model info (catalog) ==============
 
@@ -138,7 +138,7 @@ export const loadedModelInfoSchema = z
     name: z.string().optional(),
     path: z.string().optional(),
     toolDialect: toolDialectSchema.optional(),
-    fitProbe: nativeProbeFitSchema
+    fitProbe: modelFitProbeSchema
       .optional()
       .describe(
         "Outcome of the engine fitter's check that ran ahead of this load. Absent when the load set `modelFitPolicy: 'off'`."

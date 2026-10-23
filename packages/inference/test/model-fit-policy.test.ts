@@ -37,7 +37,7 @@ test('modelFitPolicy: only off skips the probe', (t) => {
 test('modelFitPolicy: only a measured refusal under refuse blocks the load', (t) => {
   t.is(refusesLoad('refuse', 'does-not-fit'), true)
   t.is(refusesLoad('refuse', 'unknown'), false)
-  t.is(refusesLoad('refuse', 'fit'), false)
+  t.is(refusesLoad('refuse', 'fits'), false)
   t.is(refusesLoad('refuse', undefined), false)
 
   t.is(refusesLoad('log', 'does-not-fit'), false)
