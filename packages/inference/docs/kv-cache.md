@@ -54,6 +54,9 @@ system prompt and tools again with the user question; the addon reuses their
 token prefix and evaluates the remaining user-turn/template suffix. Named
 caches persist at the same identity. Auto-prefill caches are committed under
 the normalized complete history, without an empty assistant message.
+With `kvCache: true`, the first question moves that cache to the conversation's
+new history, so the prime serves one conversation. Use a named key for reuse
+across conversations, or prime each conversation separately.
 
 Requires `@qvac/llm-llamacpp` 0.64.1 or later for affected no-user templates.
 Arbitrary custom templates may fall back to normal rendering without full
