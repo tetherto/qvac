@@ -148,8 +148,8 @@ describe('detectPackageManager', () => {
 
   it('does not borrow the package manager of an enclosing project that is not its workspace', async () => {
     await withTempDir(async (dir) => {
-      // The SDK e2e layout: a bun-installed package with an npm-installed
-      // consumer app nested under it.
+      // A bun-installed package with an npm-installed consumer app nested
+      // under it.
       writeJson(path.join(dir, 'package.json'), { name: 'sdk' })
       fs.writeFileSync(path.join(dir, 'bun.lock'), '')
       const app = path.join(dir, 'e2e', 'build', 'consumers', 'android')
