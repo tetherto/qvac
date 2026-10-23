@@ -169,9 +169,7 @@ const IMAGE_ADVISORY_PARAMS = [
 export function logImageUnsupportedParams(body: Record<string, unknown>, logger: Logger): void {
   for (const param of IMAGE_ADVISORY_PARAMS) {
     if (body[param] !== undefined) {
-      logger.warn(
-        `Ignoring unsupported OpenAI image param: ${param}=${JSON.stringify(body[param])}`
-      )
+      logger.warn(`Ignoring unsupported OpenAI image param: ${param}`)
     }
   }
 }
