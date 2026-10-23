@@ -779,7 +779,7 @@ Support batch processing natively by accepting both single strings and arrays of
 
 **Memory Efficiency:**
 - Configurable batch size balances throughput vs memory
-- Unified KV cache when `n_parallel = 1` supports up to 64 sequences
+- Unified KV cache when `n_parallel = 1` supports up to `min(256, n_batch, n_ctx)` sequences per batch; a batch is split when it reaches that limit
 - Token-based batching prevents context overflow
 
 ### Trade-offs

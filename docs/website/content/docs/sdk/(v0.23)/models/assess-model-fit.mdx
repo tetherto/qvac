@@ -130,9 +130,9 @@ The longer treatment, including how a GPU changes which memory the budget measur
 
 ## Load-time probe
 
-Once the weights are on disk, [`loadModel()`](/sdk/reference/api#loadmodel) runs the same engine fitter against the real file and the resolved load settings before it loads. It is the stronger evidence once you have the file. Desktop runs it in a disposable child process. Mobile, which cannot spawn one, runs it on a worker thread.
+Once the weights are on disk, [`loadModel()`](/sdk/reference/api#loadmodel) runs the same engine fitter against the real file and the resolved load settings before it loads. It is the stronger evidence once you have the file. The fitter runs in the SDK's worker process on every platform. A fitter that crashes takes the worker down with it.
 
-A crash, timeout, or unsupported configuration resolves to no verdict. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
+A fit that does not finish, because the fitter crashed or the process quit, is retried on the next load with the same settings. A second one in a row resolves to no verdict, as does an unsupported configuration. A fitter that does not return within 30 seconds resolves to no verdict and the load continues. Cancelling a load during its fit stops it before the model loads. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
 
 [`getLoadedModelInfo()`](/sdk/reference/api#getloadedmodelinfo) returns the outcome as `fitProbe`:
 - `verdict` — `fit`, `does-not-fit`, or `unknown`. These are unhedged, unlike the verdicts above, because the probe measured this build against this file.

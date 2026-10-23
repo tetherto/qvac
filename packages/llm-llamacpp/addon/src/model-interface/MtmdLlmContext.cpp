@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <system_error>
+#include <vector>
 
 #include <common/log.h>
 #include <gguf.h>
@@ -45,10 +47,23 @@ bool isFileInitialized(const std::filesystem::path& path) {
 }
 
 // llama-server's `process_mtmd_chunk` post-decode callback: hands each image
-// or audio embedding batch to the speculative state.
-int32_t speculativePostDecode(llama_batch batch, void* userData) {
+// or audio embedding batch to the speculative state. The helper's sub-batch is
+// wrapped, without copying, in the llama_batch SpeculativeRuntime takes; both
+// lay out positions section-major.
+int32_t
+speculativePostDecode(const mtmd_helper_embd_batch* embdBatch, void* userData) {
   const auto* runtime =
       static_cast<const speculative::SpeculativeRuntime*>(userData);
+  const auto nTokens = static_cast<std::size_t>(embdBatch->n_tokens);
+  llama_seq_id seqId = embdBatch->seq_id;
+  std::vector<int32_t> nSeqId(nTokens, 1);
+  std::vector<llama_seq_id*> seqIds(nTokens, &seqId);
+  llama_batch batch{};
+  batch.n_tokens = embdBatch->n_tokens;
+  batch.embd = const_cast<float*>(embdBatch->embd);
+  batch.pos = const_cast<llama_pos*>(embdBatch->pos);
+  batch.n_seq_id = nSeqId.data();
+  batch.seq_id = seqIds.data();
   return runtime->process(batch) ? 0 : 1;
 }
 } // namespace
@@ -397,9 +412,19 @@ void MtmdLlmContext::tokenizeChat(
       inputs.parallel_tool_calls = *renderOverrides_.parallelToolCalls;
     }
   }
+  const Tokenizer tokenize = [this](const std::string& text) {
+    return ::common_tokenize(modelCtx_.lctx, text, false, true);
+  };
+  // See TextLlmContext::tokenizeChat. Media markers must match the loaded
+  // bitmaps, so a request carrying media keeps the full render.
+  std::optional<PromptRenderResult> primed =
+      isPrefillOnlyRequest_ && bitmaps_.entries.empty()
+          ? renderWithoutUserTurn(tmpls_.get(), inputs, tokenize)
+          : std::nullopt;
   // See TextLlmContext::tokenizeChat: not const so the prompt and stop list
   // move out instead of being copied per request.
-  PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
+  PromptRenderResult rendered =
+      primed.has_value() ? std::move(*primed) : getPrompt(tmpls_.get(), inputs);
   formattedChat = std::move(rendered.prompt);
   if (rendered.toolDefinitionsDropped) {
     ++toolDefinitionsDropped_;
@@ -424,9 +449,6 @@ void MtmdLlmContext::tokenizeChat(
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
 
-  const Tokenizer tokenize = [this](const std::string& text) {
-    return ::common_tokenize(modelCtx_.lctx, text, false, true);
-  };
   // Template stop strings are per request: replace, never accumulate. No
   // template any qvac package ships populates `additional_stops`, so these
   // lists are empty for those models — but see TextLlmContext::tokenizeChat:

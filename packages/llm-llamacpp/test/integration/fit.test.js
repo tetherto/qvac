@@ -301,3 +301,43 @@ test('a fit retains the backend while a loaded model unloads', { timeout: 600_00
     await model.unload()
   }
 })
+
+// qwen35 reserves an unused mixed token/embd input branch; gemma4 also scales
+// token rows through a per-row input. The figures are logged for comparison
+// across fabric versions; the assertions hold on any runner.
+// prestage-ignore: Qwen3.5-0.8B-Q8_0.gguf — desktop-only, skipped on mobile
+// prestage-ignore: google_gemma-4-E2B-it-Q4_K_M.gguf — desktop-only, skipped on mobile
+const INPUT_PATH_MODELS = ['Qwen3.5-0.8B-Q8_0.gguf', 'google_gemma-4-E2B-it-Q4_K_M.gguf']
+
+const computeBytes = (fit) => fit.devices.reduce((sum, row) => sum + row.computeBytes, 0)
+const computeMib = (fit) =>
+  fit.devices.map((row) => `${row.name}=${(row.computeBytes / 1048576).toFixed(2)}`).join(' ')
+
+for (const name of INPUT_PATH_MODELS) {
+  test(
+    `the compute projection grows with the ubatch [${name}]`,
+    { timeout: 600_000, skip: isMobile },
+    async (t) => {
+      const [file, dir] = await ensureModel({ modelName: name })
+      const project = (ubatch) =>
+        assess(path.join(dir, file), {
+          'gpu-layers': '999',
+          'ctx-size': '4096',
+          'batch-size': '512',
+          'ubatch-size': ubatch
+        })
+
+      const small = await project('128')
+      const large = await project('512')
+      for (const [ubatch, fit] of [
+        ['128', small],
+        ['512', large]
+      ]) {
+        t.not(fit.status, 'error', `ubatch ${ubatch} is measured`)
+        t.comment(`compute-projection ${name} ctx=4096 ubatch=${ubatch} MiB: ${computeMib(fit)}`)
+      }
+      t.ok(computeBytes(small) > 0, 'a compute buffer is projected')
+      t.ok(computeBytes(large) >= computeBytes(small), 'a larger ubatch never needs less compute')
+    }
+  )
+}

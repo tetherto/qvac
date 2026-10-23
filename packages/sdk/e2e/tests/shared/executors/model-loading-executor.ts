@@ -14,7 +14,10 @@ import {
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
   modelLoadLlmLegacyNoMmapRejected,
+  modelLoadLlmPromptCacheKeys,
+  modelLoadLlmCacheCheckpointsOutOfRangeRejected,
   modelLoadEmbedding,
+  modelLoadEmbeddingRankPoolingRejected,
   modelLoadOcr,
   modelLoadOcrDoctr,
   modelLoadInvalid,
@@ -32,7 +35,10 @@ const modelLoadTests = [
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
   modelLoadLlmLegacyNoMmapRejected,
+  modelLoadLlmPromptCacheKeys,
+  modelLoadLlmCacheCheckpointsOutOfRangeRejected,
   modelLoadEmbedding,
+  modelLoadEmbeddingRankPoolingRejected,
   modelLoadOcr,
   modelLoadOcrDoctr,
   modelLoadInvalid,
@@ -53,7 +59,11 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     [modelLoadLlm.testId]: this.loadLlm.bind(this),
     [modelLoadLlmLoadModeNone.testId]: this.loadLlmWithLoadMode.bind(this),
     [modelLoadLlmLegacyNoMmapRejected.testId]: this.rejectLegacyNoMmap.bind(this),
+    [modelLoadLlmPromptCacheKeys.testId]: this.loadLlmWithPromptCacheKeys.bind(this),
+    [modelLoadLlmCacheCheckpointsOutOfRangeRejected.testId]:
+      this.rejectOutOfRangeCacheCheckpoints.bind(this),
     [modelLoadEmbedding.testId]: this.loadEmbedding.bind(this),
+    [modelLoadEmbeddingRankPoolingRejected.testId]: this.rejectRankPooling.bind(this),
     [modelLoadOcr.testId]: this.loadOcr.bind(this),
     [modelLoadOcrDoctr.testId]: this.loadOcrDoctr.bind(this),
     [modelLoadInvalid.testId]: this.loadInvalid.bind(this),
@@ -316,6 +326,94 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
         }
       }
       // The code is on the error, not in its message.
+      const code = (error as { code?: number }).code
+      return ValidationHelpers.validate(`${code} ${errorMsg}`, expectation)
+    }
+  }
+
+  async loadLlmWithPromptCacheKeys(
+    params: typeof modelLoadLlmPromptCacheKeys.params,
+    expectation: typeof modelLoadLlmPromptCacheKeys.expectation
+  ): Promise<TestResult> {
+    const p = params as {
+      cacheCheckpoints: number
+      cacheCheckpointsMaxBytes: number
+      cacheCheckpointStorage: 'memory' | 'disk'
+      cacheRamMib: number
+    }
+    const dep = 'llm-prompt-cache-keys'
+    try {
+      const modelId = await loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: 'llamacpp-completion',
+        modelConfig: {
+          verbosity: 0,
+          ctx_size: 2048,
+          cache_checkpoints: p.cacheCheckpoints,
+          cache_checkpoints_max_bytes: p.cacheCheckpointsMaxBytes,
+          cache_checkpoint_storage: p.cacheCheckpointStorage,
+          cache_ram_mib: p.cacheRamMib
+        }
+      })
+      this.resources.register(dep, modelId)
+      return ValidationHelpers.validate(modelId, expectation)
+    } finally {
+      await this.resources.evict(dep)
+    }
+  }
+
+  async rejectOutOfRangeCacheCheckpoints(
+    params: typeof modelLoadLlmCacheCheckpointsOutOfRangeRejected.params,
+    expectation: typeof modelLoadLlmCacheCheckpointsOutOfRangeRejected.expectation
+  ): Promise<TestResult> {
+    const { cacheCheckpoints } = params as { cacheCheckpoints: number }
+    const dep = 'llm-cache-checkpoints-out-of-range'
+    try {
+      const modelId = await loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: 'llamacpp-completion',
+        modelConfig: { cache_checkpoints: cacheCheckpoints }
+      })
+      // Should not happen, but release it rather than leak on the failure path.
+      this.resources.register(dep, modelId)
+      await this.resources.evict(dep)
+      return { passed: false, output: 'cache_checkpoints above 1024 should have been rejected' }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
+      // The addon's own range error means the value skipped SDK validation.
+      if (/must be an integer between/.test(errorMsg)) {
+        return {
+          passed: false,
+          output: `cache_checkpoints reached the addon instead of failing SDK validation: ${errorMsg}`
+        }
+      }
+      // The code is on the error, not in its message.
+      const code = (error as { code?: number }).code
+      return ValidationHelpers.validate(`${code} ${errorMsg}`, expectation)
+    }
+  }
+
+  async rejectRankPooling(
+    params: typeof modelLoadEmbeddingRankPoolingRejected.params,
+    expectation: typeof modelLoadEmbeddingRankPoolingRejected.expectation
+  ): Promise<TestResult> {
+    const { pooling } = params as { pooling: string }
+    const dep = 'embedding-rank-pooling'
+    try {
+      const modelId = await loadModel({
+        modelSrc: GTE_LARGE_FP16,
+        modelType: 'llamacpp-embedding',
+        modelConfig: { pooling }
+      } as unknown as Parameters<typeof loadModel>[0])
+      // Should not happen, but release it rather than leak on the failure path.
+      this.resources.register(dep, modelId)
+      await this.resources.evict(dep)
+      return { passed: false, output: 'Rank pooling should have been rejected' }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
+      if (!/pooling/i.test(errorMsg)) {
+        return { passed: false, output: `Expected pooling validation error: ${errorMsg}` }
+      }
       const code = (error as { code?: number }).code
       return ValidationHelpers.validate(`${code} ${errorMsg}`, expectation)
     }

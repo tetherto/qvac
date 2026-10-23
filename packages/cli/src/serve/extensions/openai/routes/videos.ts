@@ -25,6 +25,7 @@ import {
 } from '@/serve/lib/video-transcode'
 import type { QvacContext } from '@/serve/core/context'
 import { openaiState } from '@/serve/extensions/openai/state'
+import { fetchRemoteImage, RemoteImageTooLargeError } from '@/serve/lib/remote-image-fetch'
 
 const descriptions = {
   create: `
@@ -36,7 +37,7 @@ once \`status: completed\`.
 
 **Image-to-video (img2vid):** include \`input_reference\` as one of:
 - a multipart file field (OpenAI SDK \`Uploadable\` — the SDK sends this when you pass a local \`File\`/\`Blob\`)
-- JSON \`{ image_url }\` where \`image_url\` is a base64 data URI (\`data:image/...;base64,...\`) or an HTTP(S) URL (100 MB / 30 s limit)
+- JSON \`{ image_url }\` where \`image_url\` is a base64 data URI (\`data:image/...;base64,...\`) or a public HTTP(S) URL (100 MB / 30 s limit; loopback, private and link-local addresses are refused)
 - JSON \`{ file_id }\` to reference a file uploaded via \`POST /v1/files\`
 
 Mode is inferred from the presence of \`input_reference\` — no explicit \`mode\` field needed.
@@ -103,8 +104,8 @@ function tearDownJob(ctx: QvacContext, job: VideoJob): void {
       })
     }
   }
-  if (job.aviFileId) openai.ephemeralFiles.remove(job.aviFileId)
-  if (job.mp4FileId) openai.ephemeralFiles.remove(job.mp4FileId)
+  if (job.aviFileId) ctx.files.remove(job.aviFileId)
+  if (job.mp4FileId) ctx.files.remove(job.mp4FileId)
 }
 
 export { tearDownJob }
@@ -117,9 +118,8 @@ export async function resolveInputReferenceImage(
   ref: { image_url?: string | undefined; file_id?: string | undefined },
   ctx: QvacContext
 ): Promise<Uint8Array> {
-  const openai = openaiState(ctx)
   if (ref.file_id !== undefined) {
-    const record = openai.ephemeralFiles.get(ref.file_id)
+    const record = ctx.files.get(ref.file_id)
     if (!record) {
       throw new HttpError(
         400,
@@ -167,72 +167,22 @@ export async function resolveInputReferenceImage(
     return new Uint8Array(decoded)
   }
   if (url.startsWith('http://') || url.startsWith('https://')) {
-    let res: Response
     try {
-      res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+      return await fetchRemoteImage(url, { maxBytes: MAX_IMAGE_BYTES, timeoutMs: FETCH_TIMEOUT_MS })
     } catch (err) {
-      const isTimeout =
-        err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
-      if (isTimeout) {
+      if (err instanceof RemoteImageTooLargeError) {
         throw new HttpError(
           400,
           'invalid_input_reference',
-          `input_reference.image_url: timed out after ${FETCH_TIMEOUT_MS / 1000}s.`
+          `input_reference.image_url: ${err.message}.`
         )
       }
-      const message = err instanceof Error ? err.message : String(err)
       throw new HttpError(
         400,
         'invalid_input_reference',
-        `input_reference.image_url: failed to fetch image — ${message}`
+        'input_reference.image_url: could not fetch the image. Only public HTTP(S) hosts are reachable; send a data URI or file_id for other images.'
       )
     }
-    if (!res.ok) {
-      throw new HttpError(
-        400,
-        'invalid_input_reference',
-        `input_reference.image_url: server returned HTTP ${res.status}.`
-      )
-    }
-    const chunks: Uint8Array[] = []
-    let totalBytes = 0
-    const reader = res.body!.getReader()
-    try {
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        totalBytes += value.length
-        if (totalBytes > MAX_IMAGE_BYTES) {
-          await reader.cancel()
-          throw new HttpError(
-            400,
-            'invalid_input_reference',
-            `input_reference.image_url: image exceeds the ${MAX_IMAGE_BYTES / (1024 * 1024)} MB limit.`
-          )
-        }
-        chunks.push(value)
-      }
-    } catch (err) {
-      if (err instanceof HttpError) throw err
-      const isTimeout =
-        err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
-      throw new HttpError(
-        400,
-        'invalid_input_reference',
-        isTimeout
-          ? `input_reference.image_url: timed out after ${FETCH_TIMEOUT_MS / 1000}s.`
-          : `input_reference.image_url: failed reading response body.`
-      )
-    } finally {
-      reader.releaseLock()
-    }
-    const result = new Uint8Array(totalBytes)
-    let offset = 0
-    for (const chunk of chunks) {
-      result.set(chunk, offset)
-      offset += chunk.length
-    }
-    return result
   }
   throw new HttpError(
     400,
@@ -314,7 +264,7 @@ async function runVideoJob(
       throw new Error('video generation produced no output')
     }
 
-    const aviFileId = openai.ephemeralFiles.put({
+    const aviFileId = ctx.files.put({
       data: Buffer.from(buffer),
       fileName: `video-${jobId}.avi`,
       purpose: 'video',
@@ -331,7 +281,7 @@ async function runVideoJob(
 
     // The abort check above already handles DELETE / eviction on the normal
     // path. The store-update return is a second check: if the job is gone we
-    // remove the just-put AVI from ephemeralFiles instead of leaving it to
+    // remove the just-put AVI from the file store instead of leaving it to
     // age out via that store's TTL. Same pattern as the mp4 write below.
     const updated = store.update(jobId, {
       status: 'completed',
@@ -341,7 +291,7 @@ async function runVideoJob(
       aviFileId
     })
     if (!updated) {
-      openai.ephemeralFiles.remove(aviFileId)
+      ctx.files.remove(aviFileId)
       ctx.logger.info(`  video_create job=${jobId} bytes dropped (job torn down during generation)`)
       return
     }
@@ -388,7 +338,7 @@ async function serveContent(
       `Video bytes for job ${job.id} are no longer available.`
     )
   }
-  const aviRecord = openai.ephemeralFiles.get(job.aviFileId)
+  const aviRecord = ctx.files.get(job.aviFileId)
   if (!aviRecord) {
     openai.videoJobsStore.update(job.id, { aviFileId: null, mp4FileId: null })
     throw new HttpError(
@@ -419,7 +369,7 @@ async function serveContent(
 
   let mp4Buffer: Buffer | null = null
   if (job.mp4FileId) {
-    const cached = openai.ephemeralFiles.get(job.mp4FileId)
+    const cached = ctx.files.get(job.mp4FileId)
     if (cached) mp4Buffer = cached.data
     else openai.videoJobsStore.update(job.id, { mp4FileId: null })
   }
@@ -449,7 +399,7 @@ async function serveContent(
       }
       throw err
     }
-    const mp4FileId = openai.ephemeralFiles.put({
+    const mp4FileId = ctx.files.put({
       data: mp4Buffer,
       fileName: `video-${job.id}.mp4`,
       purpose: 'video',
@@ -458,12 +408,12 @@ async function serveContent(
     // The transcode awaited above takes seconds; a DELETE / eviction landing
     // in that window leaves the job gone from the store. Cache the mp4 only
     // if the job is still reachable — otherwise the entry would orphan in
-    // ephemeralFiles until that store's own TTL drops it. We still serve the
+    // the file store until its own TTL drops it. We still serve the
     // bytes for this in-flight request (the client asked, we already paid for
     // the transcode).
     const updated = openai.videoJobsStore.update(job.id, { mp4FileId })
     if (!updated) {
-      openai.ephemeralFiles.remove(mp4FileId)
+      ctx.files.remove(mp4FileId)
       ctx.logger.debug(
         `  video_content job=${job.id} mp4 cache dropped (job torn down during transcode)`
       )

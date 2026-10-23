@@ -474,7 +474,7 @@ A model the fitter cannot read resolves to `status: "error"`; only a broken requ
 
 The `IdMapIndex` vector index, including TurboVec storage, lives in
 [`@qvac/turbovec-ggml`](https://github.com/tetherto/qvac/tree/main/packages/turbovec-ggml). Pair it with `GGMLBert`
-embeddings for retrieval; see [RAG with TurboVec](./examples/ragWithTurboVec.js).
+embeddings for retrieval.
 
 ## Quickstart Example
 
@@ -497,17 +497,8 @@ npm run quickstart
 
 - [Batch Inference](./examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
 - [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
-- [RAG with TurboVec](./examples/ragWithTurboVec.js) – Embeds document chunks, retrieves relevant context with `IdMapIndex` from `@qvac/turbovec-ggml`, and prepares it for an LLM.
 - [Rerank](./examples/rerank.js) – Ranks documents by relevance to a query with a reranker GGUF: `bare examples/rerank.js /path/to/reranker.gguf`.
 - [Laya Decisions](./examples/layaDecisions.js) – Answers `choice`, `score` and `noul` questions about a support ticket, then about several tickets in one call. Takes the path to a Laya GGUF: `bare examples/layaDecisions.js /path/to/laya-multilingual-Q8_0.gguf`.
-
-Run the TurboVec RAG retrieval example on a 64-bit desktop. It imports
-`IdMapIndex` from `@qvac/turbovec-ggml`, a dev dependency here, so install it
-first when running the example outside this package's dev setup:
-```bash
-npm install @qvac/turbovec-ggml
-bare examples/ragWithTurboVec.js
-```
 
 ## Benchmarking
 

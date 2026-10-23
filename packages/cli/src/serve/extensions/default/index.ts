@@ -1,5 +1,8 @@
 import type { ServeExtension } from '@/serve/core/extensions'
 import { routes } from '@/serve/extensions/default/routes'
+import { CHAT_BATCH_FIELD_CODES } from '@/serve/extensions/default/schemas/chat-batch'
+import { MODEL_FIT_FIELD_CODES } from '@/serve/extensions/default/schemas/model-fit'
+import { SYSTEM_FIELD_CODES } from '@/serve/extensions/default/schemas/system'
 import { TRANSLATE_FIELD_CODES } from '@/serve/extensions/default/schemas/translate'
 import { TAG_DESCRIPTIONS } from '@/serve/extensions/default/tags'
 
@@ -7,7 +10,12 @@ const defaultExtension: ServeExtension = {
   name: 'default',
   description: 'QVAC-native REST API',
   tags: TAG_DESCRIPTIONS,
-  errorCodes: TRANSLATE_FIELD_CODES,
+  errorCodes: {
+    ...CHAT_BATCH_FIELD_CODES,
+    ...SYSTEM_FIELD_CODES,
+    ...MODEL_FIT_FIELD_CODES,
+    ...TRANSLATE_FIELD_CODES
+  },
   async register(app) {
     for (const route of routes) {
       await app.register(route)
