@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "CacheLedger.hpp"
@@ -49,8 +50,17 @@ bool hasType(
   return false;
 }
 
-// The speculative types the addon creates a draft context for: an MTP head
-// on the target's weights, or a separate draft model (DFlash).
+// A positive u32 at `key`, or 0.
+int64_t readGgufU32(const gguf_context* ctx, const std::string& key) {
+  const int64_t id = gguf_find_key(ctx, key.c_str());
+  if (id < 0 || gguf_get_kv_type(ctx, id) != GGUF_TYPE_UINT32) {
+    return 0;
+  }
+  return gguf_get_val_u32(ctx, id);
+}
+
+// The speculative types the addon creates a draft context for: MTP, on the
+// target's layers or an external head, or a DFlash model.
 bool hasDraftContext(const common_params_speculative& params) {
   return hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_MTP) || params.has_dft();
 }
@@ -83,6 +93,38 @@ bool allowsPositionGaps(const llama_model* model) {
 
 } // namespace
 
+GgufShape readGgufShape(const std::string& path) {
+  GgufShape shape;
+  gguf_init_params init = {};
+  init.no_alloc = true;
+  gguf_context* ctx = gguf_init_from_file(path.c_str(), init);
+  if (ctx == nullptr) {
+    return shape;
+  }
+  const int64_t arch = gguf_find_key(ctx, "general.architecture");
+  if (arch >= 0 && gguf_get_kv_type(ctx, arch) == GGUF_TYPE_STRING) {
+    const std::string prefix = gguf_get_val_str(ctx, arch);
+    shape.arch = prefix;
+    // As fabric's `n_embd_out()`: a Gemma 4 assistant carries the target's
+    // width in `embedding_length_out` and its own in `embedding_length`.
+    shape.width = readGgufU32(ctx, prefix + ".embedding_length_out");
+    if (shape.width == 0) {
+      shape.width = readGgufU32(ctx, prefix + ".embedding_length");
+    }
+    shape.mtpLayers = readGgufU32(ctx, prefix + ".nextn_predict_layers");
+  }
+  const int64_t tokens = gguf_find_key(ctx, "tokenizer.ggml.tokens");
+  if (tokens >= 0 && gguf_get_kv_type(ctx, tokens) == GGUF_TYPE_ARRAY) {
+    shape.vocab = static_cast<int64_t>(gguf_get_arr_n(ctx, tokens));
+  }
+  gguf_free(ctx);
+  return shape;
+}
+
+bool fitLeavesOutMtpDraft(const GgufShape& draft) {
+  return draft.arch == "gemma4-assistant" && draft.mtpLayers > 0;
+}
+
 SpeculativeConfig
 parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
   SpeculativeConfig result;
@@ -101,9 +143,12 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
   }
   if (const auto draftModel = takeConfigKey(
           config, SPEC_DRAFT_MODEL_KEY, SPEC_DRAFT_MODEL_KEY_DASHED)) {
-    if (result.type != COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) {
+    // A DFlash model, or an external MTP head (llama-server's
+    // `--spec-type draft-mtp -md`).
+    if (!result.enabled()) {
       throw std::invalid_argument(
-          draftModel->first + " requires spec-type \"draft-dflash\"");
+          draftModel->first +
+          " requires spec-type \"draft-mtp\" or \"draft-dflash\"");
     }
     const std::string& path = draftModel->second;
     const auto isSeparator = [](char c) { return c == '/' || c == '\\'; };
@@ -164,6 +209,22 @@ void requireDraftModelFile(const SpeculativeConfig& config) {
         "spec-draft-model is not a regular file: \"" + config.draftModelPath +
         "\"");
   }
+}
+
+std::string mtpHeadMismatch(
+    int64_t headWidth, int64_t targetWidth, int64_t headVocab,
+    int64_t targetVocab) {
+  std::string reason;
+  if (headWidth > 0 && targetWidth > 0 && headWidth != targetWidth) {
+    reason = "hidden width " + std::to_string(headWidth) + ", the model's " +
+             std::to_string(targetWidth);
+  }
+  if (headVocab > 0 && targetVocab > 0 && headVocab != targetVocab) {
+    reason += reason.empty() ? "" : "; ";
+    reason += std::to_string(headVocab) + " tokens, the model's " +
+              std::to_string(targetVocab);
+  }
+  return reason;
 }
 
 void applySpeculativeConfig(
@@ -257,6 +318,67 @@ SpeculativeFitModel::create(const common_params& params) {
   return model;
 }
 
+bool SpeculativeFitModel::addMemory(
+    uint32_t nCtx, const std::vector<ggml_backend_dev_t>& devices,
+    common_device_memory_data_vec& breakdown) const {
+  if (breakdown.size() != devices.size() + 1) {
+    return false;
+  }
+  // Fabric measures the draft side at the target's context.
+  llama_context_params cparams = cparams_;
+  cparams.n_ctx = nCtx;
+  std::vector<ggml_backend_dev_t> draftDevices;
+  uint32_t nLayer = 0;
+  uint32_t nCtxTrain = 0;
+  uint32_t nExpert = 0;
+  common_device_memory_data_vec measured;
+  try {
+    measured = common_get_device_memory_data(
+        extra_.path_model,
+        &mparams_,
+        &cparams,
+        draftDevices,
+        nLayer,
+        nCtxTrain,
+        nExpert,
+        GGML_LOG_LEVEL_INFO);
+  } catch (const std::exception&) {
+    return false;
+  }
+  return addDraftMemory(
+      devices, breakdown, draftDevices, measured, !extra_.shares_model);
+}
+
+bool addDraftMemory(
+    const std::vector<ggml_backend_dev_t>& devices,
+    common_device_memory_data_vec& breakdown,
+    const std::vector<ggml_backend_dev_t>& draftDevices,
+    const common_device_memory_data_vec& measured, bool countWeights) {
+  if (breakdown.size() != devices.size() + 1 ||
+      measured.size() != draftDevices.size() + 1) {
+    return false;
+  }
+  const auto add = [countWeights](
+                       common_device_memory_data& into,
+                       const common_device_memory_data& from) {
+    if (countWeights) {
+      into.model += from.model;
+    }
+    into.context += from.context;
+    into.compute += from.compute;
+  };
+  add(breakdown.back(), measured.back());
+  for (size_t draft = 0; draft < draftDevices.size(); ++draft) {
+    const auto target =
+        std::find(devices.begin(), devices.end(), draftDevices[draft]);
+    if (target != devices.end()) {
+      add(breakdown[static_cast<size_t>(target - devices.begin())],
+          measured[draft]);
+    }
+  }
+  return true;
+}
+
 std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
     common_params& params, llama_model* modelTgt, llama_context* ctxTgt) {
   if (!hasDraftContext(params.speculative)) {
@@ -266,8 +388,26 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
   std::unique_ptr<SpeculativeRuntime> runtime(new SpeculativeRuntime());
   runtime->ctxTgt_ = ctxTgt;
 
+  const bool isMtp =
+      hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP);
   {
     common_params paramsDft = common_base_params_to_speculative(params);
+    // Checked from the head's header, before fabric loads it.
+    if (isMtp && params.speculative.has_dft()) {
+      const GgufShape head = readGgufShape(paramsDft.model.path);
+      const std::string mismatch = mtpHeadMismatch(
+          head.width,
+          llama_model_n_embd_out(modelTgt),
+          head.vocab,
+          llama_vocab_n_tokens(llama_model_get_vocab(modelTgt)));
+      if (!mismatch.empty()) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(UnableToLoadModel),
+            "[Speculative] the MTP head '" + paramsDft.model.path +
+                "' does not match the model: " + mismatch + "\n");
+      }
+    }
     runtime->specInit_ =
         common_speculative_init_from_params(paramsDft, modelTgt, ctxTgt);
     if (params.speculative.has_dft() &&
@@ -280,15 +420,17 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
     }
     runtime->ctxDft_ = runtime->specInit_->context();
     if (runtime->ctxDft_ == nullptr) {
+      std::string message = "[Speculative] failed to create the draft context";
+      if (isMtp && params.speculative.has_dft()) {
+        message = "[Speculative] failed to create the MTP context; '" +
+                  paramsDft.model.path +
+                  "' has no MTP layers or they could not be loaded";
+      } else if (isMtp) {
+        message = "[Speculative] failed to create the MTP context; the model "
+                  "has no MTP layers or they could not be loaded";
+      }
       throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(UnableToLoadModel),
-          params.speculative.has_dft()
-              ? std::string(
-                    "[Speculative] failed to create the draft context\n")
-              : std::string(
-                    "[Speculative] failed to create the MTP context; the model "
-                    "has no MTP layers or they could not be loaded\n"));
+          ADDON_ID, toString(UnableToLoadModel), message + "\n");
     }
     params.speculative.draft.ctx_tgt = ctxTgt;
     params.speculative.draft.ctx_dft = runtime->ctxDft_;
