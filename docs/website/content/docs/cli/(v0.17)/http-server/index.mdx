@@ -50,6 +50,7 @@ At the moment, the OpenAI-compatible extension supports the following QVAC AI ca
 The QVAC surface supports:
 * [Batch chat completion](#post-qvacv1chatbatch) — via `/qvac/v1/chat/batch`, several prompts decoded together on one LLM.
 * [Text translation](#post-qvacv1translate) — via `/qvac/v1/translate`, backed by an NMT model.
+* [RAG controls](#rag-controls) — chunking, ingest, reindex, workspaces and vector indexes via `/qvac/v1/rag/*`.
 
 ## Running the server
 
@@ -483,6 +484,99 @@ Configure a translation model with its engine and direction:
   }
 }
 ```
+
+### RAG controls
+
+`/qvac/v1/rag/*` covers the RAG work [Vector stores](#vector-stores) cannot express: chunking options, ingest by embedding alias, reindex, workspace management, and raw vector indexes. It is not a second search path: search a workspace with `POST /v1/vector_stores/{id}/search`. Workspace names follow the vector store id rule, `[a-zA-Z0-9_-]{1,64}`, and the two share one namespace.
+
+| Method | Path | SDK call |
+| --- | --- | --- |
+| `POST` | `/qvac/v1/rag/chunk` | `ragChunk()` |
+| `GET` | `/qvac/v1/rag/workspaces` | `ragListWorkspaces()` |
+| `POST` | `/qvac/v1/rag/workspaces/{workspace}/ingest` | `ragIngest()` |
+| `POST` | `/qvac/v1/rag/workspaces/{workspace}/reindex` | `ragReindex()` |
+| `POST` | `/qvac/v1/rag/workspaces/{workspace}/close` | `ragCloseWorkspace()` |
+| `DELETE` | `/qvac/v1/rag/workspaces/{workspace}` | `ragDeleteWorkspace()` |
+| `POST` | `/qvac/v1/rag/vector_indexes` | `createVectorIndex()` |
+| `POST` | `/qvac/v1/rag/vector_indexes/load` | `loadVectorIndex()` |
+| `GET` | `/qvac/v1/rag/vector_indexes[/{id}]` | — |
+| `DELETE` | `/qvac/v1/rag/vector_indexes/{id}` | `index.dispose()` |
+| `POST` | `/qvac/v1/rag/vector_indexes/{id}/{operation}` | `add`, `search`, `remove`, `contains`, `write` |
+
+#### Chunking and ingest
+
+`POST /qvac/v1/rag/chunk` splits `documents` (one string or an array) without embedding or storing them, so `chunkOpts` can be tuned before an ingest. `chunkOpts` takes the SDK's `chunkSize`, `chunkOverlap`, `chunkStrategy` (`character`, `paragraph`) and `splitStrategy` (`character`, `word`, `token`, `sentence`, `line`); unset fields use the SDK defaults.
+
+`POST /qvac/v1/rag/workspaces/{workspace}/ingest` chunks, embeds and stores `documents` with the embedding alias named in `model`, creating the workspace on first use. `chunk: false` embeds each document whole. A workspace holds one embedding model, so a later ingest with a different alias returns `embedding_model_mismatch`. Vector store search embeds the query with the default embedding model, so ingest with that alias to search there.
+
+```bash
+curl http://localhost:11434/qvac/v1/rag/workspaces/handbook/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-embed","documents":["First section...","Second section..."],"chunkOpts":{"chunkStrategy":"paragraph","chunkSize":256,"chunkOverlap":32}}'
+```
+
+Response:
+
+```json
+{
+  "object": "rag.ingest",
+  "workspace": "handbook",
+  "model": "my-embed",
+  "processed": [{ "status": "fulfilled", "id": "c3a1..." }],
+  "droppedIndices": []
+}
+```
+
+#### Workspaces
+
+`reindex` rebalances the search index after large ingests. It needs a minimum number of stored chunks (16 by default); with fewer, `reindexed` is `false` and `details` says why. `GET /qvac/v1/rag/workspaces` lists every workspace on disk with whether it is loaded. `close` releases a workspace from memory and keeps its data; `DELETE` closes it if needed and removes its data. Calls on one workspace run one at a time.
+
+#### Vector indexes
+
+A vector index holds vectors under unsigned 64-bit ids and nothing else; keep the documents elsewhere and map hit ids back to them. Pair it with [Embeddings](#embeddings). Scores are dot products, so L2-normalize rows and queries for cosine similarity.
+
+* **Create** with `dim` and an optional `storage`: `turbovec-q4` (default) or `turbovec-q2`, which need a dimension divisible by 8 and at most 1024, or `f32`, `q8`, `q4` for any dimension.
+* **Ids** are decimal strings or safe integers, and come back as strings. `2^64 - 1` is reserved. An add refuses repeated ids and ids the index already holds.
+* **Search** takes `queries` (rows of length `dim`) and `k`, and returns one hit list per row, by descending score then id.
+* **Snapshots**: `write` and `load` take a `snapshot` name, stored as `vector-indexes/<snapshot>.qvi` under the QVAC data directory. A request never names a path.
+* Indexes live in worker memory until deleted or the server stops, at most 64 at once.
+
+```bash
+curl http://localhost:11434/qvac/v1/rag/vector_indexes \
+  -H "Content-Type: application/json" -d '{"dim":768}'
+
+curl http://localhost:11434/qvac/v1/rag/vector_indexes/vi_.../search \
+  -H "Content-Type: application/json" -d '{"queries":[[...]],"k":5}'
+```
+
+Search response:
+
+```json
+{ "object": "vector_index.search", "results": [[{ "id": "2", "score": 0.83 }]] }
+```
+
+#### Errors
+
+Each route lists its own codes in `/openapi.json`.
+
+| HTTP | `error.code` | When |
+| --- | --- | --- |
+| 400 | `invalid_json`, `invalid_request` | Body is not valid JSON, or carries an unknown field |
+| 400 | `invalid_workspace`, `invalid_snapshot` | A name is not `[a-zA-Z0-9_-]{1,64}` |
+| 400 | `invalid_documents`, `invalid_chunk`, `invalid_chunk_opts` | Ingest or chunk input is missing or malformed |
+| 400 | `missing_model`, `invalid_model_type` | `model` is missing, or not an embedding alias |
+| 400 | `embedding_model_mismatch` | The workspace was built with another embedding alias |
+| 400 | `invalid_dim`, `invalid_storage` | `dim` or `storage` is invalid, or they do not suit each other |
+| 400 | `invalid_ids`, `invalid_vectors`, `invalid_k` | Ids, rows or `k` are malformed, or rows do not match `dim` |
+| 404 | `model_not_found` | Unknown alias |
+| 404 | `workspace_not_found`, `vector_index_not_found` | No workspace or open index by that name |
+| 404 | `snapshot_not_found` | The snapshot is missing, corrupt, or not an index |
+| 409 | `too_many_vector_indexes` | 64 indexes are already open |
+| 500 | `rag_*_failed`, `vector_index_failed` | The SDK call failed |
+| 503 | `vector_index_unavailable` | No registered plugin provides a vector index |
+| 503 | `model_not_loaded`, `model_load_failed` | The embedding model is not loaded, or failed to load |
+
+These routes need the QVAC surface mounted. They are absent under `--no-default`.
 
 ## OpenAI-compatible API
 

@@ -59,7 +59,7 @@ test/e2e/
   core/               shape-agnostic server behavior, in-process & modelless
     routing-cors-auth.test.ts, model-load-config.test.ts
   default/            /qvac/v1/* route tests, in-process & modelless
-    chat-batch.test.ts, kv-cache.test.ts, system-model-fit.test.ts, translate.test.ts
+    chat-batch.test.ts, kv-cache.test.ts, rag.test.ts, system-model-fit.test.ts, translate.test.ts
   openai/             /v1/* route tests, in-process & modelless
     *-validation.test.ts, models, models-catalog, audio-*
   cli/                commands, serve lifecycle & flag behavior (spawned binary)
@@ -71,6 +71,7 @@ test/e2e/
     translate.test.ts             in-process: Bergamot NMT translation
     system-model-fit.test.ts      in-process: host resources and pre-load model fit
     chat-batch.test.ts            in-process: batch chat on a parallel:2 LLM
+    rag.test.ts                   in-process: RAG ingest/reindex/workspaces, vector index over embeddings
 ```
 
 ## Concurrency

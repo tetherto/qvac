@@ -258,13 +258,20 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const id = decodeId(req.params.id)
       const ragInfo = await safeListWorkspaces(ctx)
       const hadMeta = openai.vectorStores.get(id) !== null
-      const workspaceExists = ragInfo.workspaces.some((w) => w.name === id)
+      const workspace = ragInfo.workspaces.find((w) => w.name === id)
+      const workspaceExists = workspace !== undefined
       if (!hadMeta && !workspaceExists) {
         throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
       }
       if (workspaceExists) {
         try {
-          await ragDeleteWorkspace({ workspace: id })
+          // The SDK refuses to delete a loaded workspace, and an ingest through
+          // /qvac/v1/rag leaves it loaded.
+          if (workspace.open) {
+            await ragCloseWorkspace({ workspace: id, deleteOnClose: true })
+          } else {
+            await ragDeleteWorkspace({ workspace: id })
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           ctx.logger.error(`Failed to delete RAG workspace "${id}": ${message}`)
