@@ -609,7 +609,8 @@ runs:
           MAPPED_PKG=$(node -e '
             const [manifestPath, suffix] = process.argv.slice(1)
             const map = (require(manifestPath).imports || {})["#host-addon"] || {}
-            const entry = suffix === "ios" ? map.ios : (map.android || {}).arm64
+            const pick = (v) => Array.isArray(v) ? v.find((e) => typeof e === "string") : v // 0.19/0.20-era lists
+            const entry = pick(suffix === "ios" ? map.ios : (map.android || {}).arm64)
             process.stdout.write(typeof entry === "string" ? entry : "")
           ' "$PACKED_MANIFEST" "$PLATFORM_SUFFIX" 2>/dev/null || echo "")
           # The map is registry-controlled, so it may only confirm the name the

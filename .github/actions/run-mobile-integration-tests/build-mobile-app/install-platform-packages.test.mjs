@@ -91,6 +91,18 @@ test('resolvePlatformPackageName reads the arm64 arm on Android and the flat iOS
   assert.equal(resolvePlatformPackageName(undefined, 'android'), null);
 });
 
+test('resolvePlatformPackageName takes the first entry of a fallback list (fabric 0.19/0.20)', () => {
+  const map = {
+    ios: ['@qvac/fabric-ios', './addon-unavailable.js'],
+    android: { arm64: ['@qvac/fabric-android-arm64', './addon-unavailable.js'], default: './addon-unavailable.js' },
+    default: './addon-unavailable.js',
+  };
+  assert.equal(resolvePlatformPackageName(map, 'android'), '@qvac/fabric-android-arm64');
+  assert.equal(resolvePlatformPackageName(map, 'ios'), '@qvac/fabric-ios');
+  assert.equal(resolvePlatformPackageName({ ios: ['./addon-unavailable.js'] }, 'ios'), null);
+  assert.equal(resolvePlatformPackageName({ ios: [] }, 'ios'), null);
+});
+
 test('mangledAddonName matches the module name cmake-bare derives', () => {
   assert.equal(mangledAddonName('@qvac/fabric-android-arm64'), 'qvac__fabric-android-arm64');
   assert.equal(mangledAddonName('plain-ios'), 'plain-ios');

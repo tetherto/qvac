@@ -669,6 +669,35 @@ for (const entry of FOREIGN_MAP_ENTRIES) {
   })
 }
 
+for (const platform of ['Android', 'iOS']) {
+  test(`a split addon whose #host-addon map uses fallback lists resolves on ${platform}`, () => {
+    const run = runStep({
+      addonName: '@qvac/asr-ggml',
+      packageVersion: '@qvac/asr-ggml@0.5.0',
+      force: 'true',
+      platform,
+      npmEnv: { ...SPLIT, MOCK_NPM_HOST_ADDON_LIST: '1' },
+    })
+
+    assert.equal(run.status, 0, run.output)
+    const slice = platform === 'iOS' ? 'asr-ggml-ios' : 'asr-ggml-android-arm64'
+    assert.match(run.invocations, new RegExp(`spec=@qvac/${slice}@0\\.5\\.0`))
+  })
+}
+
+test('a fallback list naming a foreign package first is still refused', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: { ...SPLIT, MOCK_NPM_HOST_ADDON_LIST: '1', MOCK_NPM_HOST_ADDON_ANDROID: '@evil/payload' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /#host-addon map does not name @qvac\/asr-ggml-android-arm64/)
+  assert.equal(run.androidPrebuildInstalled, false)
+})
+
 test('a split meta without a #host-addon map is refused', () => {
   const run = runStep({
     addonName: '@qvac/asr-ggml',

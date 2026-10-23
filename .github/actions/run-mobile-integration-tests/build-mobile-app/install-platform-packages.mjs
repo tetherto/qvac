@@ -47,9 +47,14 @@ export const PLATFORMS = Object.keys(TARGET_HOSTS);
 // collapses onto one package, matching the publish-time slices.
 export function resolvePlatformPackageName(hostAddon, platform) {
   const branch = readImportsBranch(hostAddon, platform);
-  const name = platform === 'android' ? readImportsBranch(branch, 'arm64') : branch;
+  const name = firstTarget(platform === 'android' ? readImportsBranch(branch, 'arm64') : branch);
   if (typeof name !== 'string' || name.startsWith('.')) return null;
   return name;
+}
+
+// Fabric 0.19/0.20 publish fallback lists, e.g. ["@qvac/fabric-ios", "./addon-unavailable.js"].
+function firstTarget(value) {
+  return Array.isArray(value) ? value.find((entry) => typeof entry === 'string') : value;
 }
 
 function readImportsBranch(value, key) {

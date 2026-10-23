@@ -238,9 +238,16 @@ elif [ -n "${MOCK_NPM_SPLIT:-}" ]; then
   # MOCK_NPM_NO_HOST_ADDON drops it, to exercise the name guard.
   ANDROID_ENTRY="${MOCK_NPM_HOST_ADDON_ANDROID:-$NAME-android-arm64}"
   IOS_ENTRY="${MOCK_NPM_HOST_ADDON_IOS:-$NAME-ios}"
+  # MOCK_NPM_HOST_ADDON_LIST publishes each entry as a fallback list, as 0.19/0.20-era packages did.
+  ANDROID_JSON="\"$ANDROID_ENTRY\""
+  IOS_JSON="\"$IOS_ENTRY\""
+  if [ -n "${MOCK_NPM_HOST_ADDON_LIST:-}" ]; then
+    ANDROID_JSON="[$ANDROID_JSON,\"./addon-unavailable.js\"]"
+    IOS_JSON="[$IOS_JSON,\"./addon-unavailable.js\"]"
+  fi
   IMPORTS=""
   if [ -z "${MOCK_NPM_NO_HOST_ADDON:-}" ]; then
-    IMPORTS=",\"imports\":{\"#host-addon\":{\"android\":{\"arm64\":\"$ANDROID_ENTRY\",\"default\":\"./addon-unavailable.js\"},\"ios\":\"$IOS_ENTRY\",\"default\":\"./addon-unavailable.js\"}}"
+    IMPORTS=",\"imports\":{\"#host-addon\":{\"android\":{\"arm64\":$ANDROID_JSON,\"default\":\"./addon-unavailable.js\"},\"ios\":$IOS_JSON,\"default\":\"./addon-unavailable.js\"}}"
   fi
   printf '{"name":"%s","version":"%s","optionalDependencies":{%s}%s}\n' \
     "$NAME" "$VERSION_JSON" "$OPTIONAL" "$IMPORTS" > "$STAGE/package/package.json"
