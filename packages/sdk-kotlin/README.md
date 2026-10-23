@@ -253,7 +253,8 @@ closes the connection rather than letting later requests use a partial frame.
 
 The committed `qvac.config*.json` files define the immutable published profiles.
 The Gradle `aio`, `assistant`, `llm`, `speech`, `vision`, `media`, and `robotics`
-product flavors build those profiles reproducibly.
+product flavors build those profiles reproducibly. Pass `-PqvacProfile=<name>` to
+build and publish only one of them.
 
 ## Desktop JVM
 

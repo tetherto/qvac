@@ -1,5 +1,5 @@
 import { ModelAlreadyRegisteredError, ModelNotFoundError } from '@/errors/index'
-import type { CanonicalModelType, NativeProbeFit } from '@/schemas/index'
+import type { CanonicalModelType, NativeProbeFit, ToolDialect } from '@/schemas/index'
 import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
@@ -36,6 +36,7 @@ interface LocalOptions {
   modelType: CanonicalModelType
   name?: string | undefined
   fitProbe?: NativeProbeFit | undefined
+  toolDialect?: ToolDialect | undefined
 }
 
 export type ModelEntry = { id: string; local: LocalOptions }
@@ -52,6 +53,7 @@ export function registerModel(
     modelType: CanonicalModelType
     name?: string | undefined
     fitProbe?: NativeProbeFit | undefined
+    toolDialect?: ToolDialect | undefined
   }
 ): void {
   if (modelRegistry.has(id)) {
@@ -67,7 +69,8 @@ export function registerModel(
       config: options.config,
       modelType: options.modelType,
       name: options.name,
-      fitProbe: options.fitProbe
+      fitProbe: options.fitProbe,
+      toolDialect: options.toolDialect
     }
   })
 
