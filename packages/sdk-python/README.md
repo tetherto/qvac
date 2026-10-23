@@ -226,7 +226,7 @@ worker; hand-write per language only what is irreducibly client-side, and never
   Python once used `lingua`, JS `@qvac/langdetect-text`).
 - **Version lock-step.** This package's version *is* the `@qvac/sdk` version it
   was generated against.
-- **Conformance corpus.** `../sdk/e2e/conformance/cases.json` is run by both a
+- **Conformance corpus.** `../sdk-e2e/catalog/conformance/cases.json` is run by both a
   JS runner and `tests/test_conformance.py`, so the two clients are diffed
   against the same cases.
 

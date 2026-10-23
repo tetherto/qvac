@@ -8,7 +8,8 @@
     "sdk_sources_release": ["workspace", "published"],
     "depends_on": [
       "packages/inference",
-      "packages/registry-server/lib/generated"
+      "packages/registry-server/lib/generated",
+      "packages/sdk-e2e"
     ]
   },
   {
@@ -45,6 +46,12 @@
   {
     "package": "test-suite",
     "path": "packages/test-suite"
+  },
+  {
+    "package": "sdk-e2e",
+    "path": "packages/sdk-e2e",
+    "checks": ["format", "check:catalog"],
+    "depends_on": ["packages/sdk/contract"]
   },
   {
     "package": "opencode-plugin",

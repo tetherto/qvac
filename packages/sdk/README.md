@@ -329,10 +329,10 @@ npm i path/to/qvac-sdk-0.21.0.tgz
 
 The SDK test suite is organized into two buckets by runtime:
 
-| Bucket            | Runtime   | Location | Command                                |
-| ----------------- | --------- | -------- | -------------------------------------- |
-| Unit              | Node      | `test/`  | `npm run test:unit`                    |
-| Client (consumer) | Node / RN | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
+| Bucket            | Runtime   | Location      | Command                                            |
+| ----------------- | --------- | ------------- | -------------------------------------------------- |
+| Unit              | Node      | `test/`       | `npm run test:unit`                                |
+| Client (consumer) | Node / RN | `../sdk-e2e/` | See [`../sdk-e2e/README.md`](../sdk-e2e/README.md) |
 
 See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 

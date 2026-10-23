@@ -268,8 +268,8 @@ reads one definition at a time off stdin and answers with a verdict.
 consumers: {
   external: [
     { name: 'python', platform: 'desktop-python', mode: 'bridge',
-      interpreter: '../../sdk-python/.venv/bin/python',
-      args: ['-m', 'qvac_e2e.runner'], cwd: './python' }
+      interpreter: '../sdk-python/.venv/bin/python',
+      args: ['-m', 'qvac_e2e.runner'], cwd: './runners/python' }
   ]
 }
 ```
@@ -309,8 +309,8 @@ npm run check
 npm run build
 ```
 
-Its in-repo consumer is `packages/sdk/e2e`, which holds the SDK's e2e test definitions and
-`qvac-test.config.js`.
+Its in-repo consumer is `packages/sdk-e2e`, which holds the SDK's e2e catalog, the JS and Python
+runners for it, and `qvac-test.config.js`.
 
 ## CI integration
 
@@ -321,7 +321,7 @@ In this monorepo that consumer is `.github/workflows/test-sdk.yml`, which builds
 desktop, Electron, Snap, Android, and iOS. Its `test-suite-source` input selects where this framework comes
 from for a given run:
 
-- `manifest` — whatever `packages/sdk/e2e/package.json` declares (the default)
+- `manifest` — whatever `packages/sdk-e2e/package.json` declares (the default)
 - `branch` — build and pack `packages/test-suite` from the checked-out ref, then install that tarball
 - `npm` — resolve a published version or dist-tag via `test-suite-version`
 
