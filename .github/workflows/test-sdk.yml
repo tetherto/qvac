@@ -515,7 +515,7 @@ jobs:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           sparse-checkout: |
-            packages/sdk/e2e/package.json
+            packages/sdk-e2e/package.json
             packages/test-suite
             .github/actions/sdk-e2e-prepare-test-suite
           sparse-checkout-cone-mode: false
@@ -530,7 +530,7 @@ jobs:
         env:
           TEST_SUITE_SOURCE: ${{ inputs.test-suite-source || 'manifest' }}
           TEST_SUITE_VERSION: ${{ inputs.test-suite-version || '' }}
-          PROJECT_DIRECTORY: packages/sdk/e2e
+          PROJECT_DIRECTORY: packages/sdk-e2e
           TEST_SUITE_DIRECTORY: packages/test-suite
           ARTIFACT_DIRECTORY: ${{ runner.temp }}/sdk-e2e-test-suite-package
           CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
@@ -560,7 +560,7 @@ jobs:
     with:
       consumer: desktop
       project-directory: "packages/sdk"
-      working-directory: "packages/sdk/e2e"
+      working-directory: "packages/sdk-e2e"
       platforms: ${{ needs.resolve.outputs.desktop-platforms }}
       rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
@@ -591,7 +591,7 @@ jobs:
     with:
       consumer: python
       project-directory: "packages/sdk"
-      working-directory: "packages/sdk/e2e"
+      working-directory: "packages/sdk-e2e"
       platforms: ${{ needs.resolve.outputs.python-platforms }}
       rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
@@ -618,7 +618,7 @@ jobs:
     with:
       consumer: electron
       project-directory: "packages/sdk"
-      working-directory: "packages/sdk/e2e"
+      working-directory: "packages/sdk-e2e"
       platforms: ${{ needs.resolve.outputs.electron-platforms }}
       rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
@@ -644,7 +644,7 @@ jobs:
     uses: ./.github/workflows/test-snap-sdk.yml
     with:
       project-directory: "packages/sdk"
-      working-directory: "packages/sdk/e2e"
+      working-directory: "packages/sdk-e2e"
       platforms: ${{ needs.resolve.outputs.snap-platforms }}
       rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
@@ -712,7 +712,7 @@ jobs:
     uses: ./.github/workflows/test-android-sdk.yml
     with:
       project-directory: "packages/sdk"
-      working-directory: "packages/sdk/e2e"
+      working-directory: "packages/sdk-e2e"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
       filter: ${{ needs.resolve.outputs.filter-android || inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -746,7 +746,7 @@ jobs:
     uses: ./.github/workflows/test-ios-sdk.yml
     with:
       project-directory: "packages/sdk"
-      working-directory: "packages/sdk/e2e"
+      working-directory: "packages/sdk-e2e"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
       filter: ${{ needs.resolve.outputs.filter-ios || inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
