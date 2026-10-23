@@ -184,7 +184,7 @@ jobs:
             echo "<details><summary>Full diff</summary>"
             echo ""
             echo '```diff'
-            printf '%s\n' "$patch" | head -n "$budget"
+            sed -n "1,${budget}p" <<<"$patch"
             if [ "$(printf '%s\n' "$patch" | wc -l)" -gt "$budget" ]; then
               echo "..."
               echo "# truncated at ${budget} lines — read the rest at"
