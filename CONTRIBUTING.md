@@ -56,6 +56,15 @@ side, re-run `pnpm install --lockfile-only`, and commit the regenerated file.
 
 Version bumps require CHANGELOG.md updates with version, date, changes by category (✨ Features, 🐛 Fixes, 🔧 Changed, etc.), and PR links.
 
+## Error code reservations
+
+Before adding a package's first numeric error code, reserve its block in
+[`packages/error/code-ranges.json`](packages/error/code-ranges.json), including
+packages maintained outside this repository. Follow the
+[`@qvac/error` allocation workflow](packages/error/README.md#error-code-conventions)
+and run `npm run errors:check`. The `/qv-error-code-reserve` skill can prepare the
+change. Retired and unused reserved numbers remain occupied.
+
 ## Development
 
 - For the standard development workflow used in this monorepo, see [`/docs/gitflow.md`](./docs/gitflow.md).

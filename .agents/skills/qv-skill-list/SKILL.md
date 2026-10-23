@@ -112,6 +112,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 |-------|---------|----------|
 | [`qv-holepunch-dev`](../qv-holepunch-dev/SKILL.md) | Holepunch/P2P/Bare/Pear API discovery via docs.pears.com and `gh`. | Hypercore, Hyperswarm, Autobase, Bare, Pear development. **Auto** |
 | [`qv-notice-generate`](../qv-notice-generate/SKILL.md) | NOTICE files and third-party attributions for monorepo packages. | License compliance, release NOTICE updates. **Auto** |
+| [`qv-error-code-reserve`](../qv-error-code-reserve/SKILL.md) | Reserve numeric error code blocks in the shared registry. | New package or external product, allocation expansion, occupied ranges. **Auto** |
 
 ---
 
@@ -161,6 +162,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Publish a Solutions page from a use case | `qv-docs-solution-create` |
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
+| Reserve or inspect error code ranges | `qv-error-code-reserve` |
 | Update the docs website after an SDK/CLI change | `qv-docs-update` |
 | Cut the next docs line after a release | `qv-docs-line-cut` |
 | Check if a QIP is needed | `qv-qip-triage` |

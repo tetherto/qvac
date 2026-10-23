@@ -22,8 +22,7 @@ const { name, version } = require("../package.json") as {
   version: string;
 };
 
-// Allocated error code range: 8101..8200
-// (translation-nmtcpp uses 8001..9000 broadly; ocr-onnx claims its own block.)
+// Reservations are maintained in packages/error/code-ranges.json.
 export const ERR_CODES = Object.freeze({
   FAILED_TO_LOAD_WEIGHTS: 8101,
   FAILED_TO_CANCEL: 8102,
