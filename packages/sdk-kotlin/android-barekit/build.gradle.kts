@@ -18,15 +18,10 @@ mavenPublishing {
     publishToMavenCentral(automaticRelease = false,
         validateDeployment = com.vanniktech.maven.publish.DeploymentValidation.PUBLISHED)
 }
-dokka {
-    // All runtime profiles expose the same Kotlin sources; document them once.
-    dokkaSourceSets.configureEach { suppress.set(name != "aioRelease") }
-}
-
 val runtimeRoot = rootProject.layout.projectDirectory
 val bareKitRoot = runtimeRoot.dir("node_modules/react-native-bare-kit/android/libs/bare-kit")
 data class RuntimeProfile(val name: String, val configFile: String, val artifactId: String, val pomName: String)
-val runtimeProfiles = listOf(
+val allRuntimeProfiles = listOf(
     RuntimeProfile("aio", "qvac.config.json", "qvac-sdk-android", "QVAC SDK for Android"),
     RuntimeProfile("assistant", "qvac.config.assistant.json", "qvac-sdk-android-assistant", "QVAC Android Assistant SDK"),
     RuntimeProfile("llm", "qvac.config.llm.json", "qvac-sdk-android-llm", "QVAC Android LLM SDK"),
@@ -35,6 +30,19 @@ val runtimeProfiles = listOf(
     RuntimeProfile("media", "qvac.config.media.json", "qvac-sdk-android-media", "QVAC Android Media SDK"),
     RuntimeProfile("robotics", "qvac.config.robotics.json", "qvac-sdk-android-robotics", "QVAC Android Robotics SDK"),
 )
+// -PqvacProfile=<name> builds and publishes only that profile. Without it, or
+// when it is blank, every profile is built, as a release needs.
+val selectedProfile = providers.gradleProperty("qvacProfile").filter { it.isNotBlank() }.orNull
+val runtimeProfiles = if (selectedProfile == null) allRuntimeProfiles else listOf(
+    allRuntimeProfiles.singleOrNull { it.name == selectedProfile }
+        ?: error("Unknown qvacProfile '$selectedProfile'; expected one of ${allRuntimeProfiles.map { it.name }}")
+)
+
+dokka {
+    // All runtime profiles expose the same Kotlin sources; document them once.
+    val documentedSourceSet = "${runtimeProfiles.first().name}Release"
+    dokkaSourceSets.configureEach { suppress.set(name != documentedSourceSet) }
+}
 
 android {
     namespace = "io.tether.qvac.sdk.barekit"

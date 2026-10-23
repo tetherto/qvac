@@ -10,5 +10,6 @@ if [[ -z "$sdk_version" ]]; then
 fi
 
 # consumer-smoke has one product flavour per published runtime artifact.
-./gradlew --no-daemon -p consumer-smoke clean :app:assembleDebug \
-  -PqvacVersion="$sdk_version"
+# Extra arguments go to Gradle, e.g. -PqvacProfile=aio to check one artifact.
+./gradlew --no-daemon -p consumer-smoke clean :app:checkDebugBuild \
+  -PqvacVersion="$sdk_version" "$@"
