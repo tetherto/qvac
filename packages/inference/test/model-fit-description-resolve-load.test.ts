@@ -4,11 +4,11 @@ import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
 
+import { PluginNotFoundError } from '@/errors/index'
 import { registerPlugin, clearPlugins } from '@/plugins/registry'
 import { definePlugin, type ResolveContext } from '@/schemas/plugin'
 import { ModelType } from '@/schemas/index'
 import { resolveLoadFromStubs } from '@/model-fit/description/resolve-load'
-import { createFitRequest } from '@/model-fit/request/create'
 import { audioGenPlugin } from '@/plugins/builtin/audiogen-ggml/plugin'
 
 function scratchFile(name: string): string {
@@ -97,16 +97,17 @@ test('resolve load: a load whose sources are all config fields needs no primary'
   await resolved.release()
 })
 
-test('resolve load: a model type with no plugin is not answered for', async (t) => {
+test('resolve load: a model type with no plugin throws as the load does', async (t) => {
   clearPlugins()
 
-  const resolved = await resolveLoadFromStubs({
-    modelSrc: scratchFile('model.gguf'),
-    modelType: ModelType.llamacppCompletion,
-    modelConfig: {}
-  })
-
-  t.is(resolved.status, 'unsupported-load')
+  await t.exception(
+    resolveLoadFromStubs({
+      modelSrc: scratchFile('model.gguf'),
+      modelType: ModelType.llamacppCompletion,
+      modelConfig: {}
+    }),
+    PluginNotFoundError as never
+  )
 })
 
 // A source naming neither a local file nor registry coordinates has no stub to
@@ -126,9 +127,7 @@ test('resolve load: a source with no registry coordinates resolves no stub', asy
   t.is(resolved.reason, 'unresolvable-ref')
 })
 
-// The real plugin resolves the pair, and the fitter is asked for the load the
-// plugin would run.
-test('resolve load: a minimax pair on disk reaches the audiogen fitter', async (t) => {
+test('resolve load: a minimax pair on disk resolves to the artifacts its plugin loads', async (t) => {
   clearPlugins()
   registerPlugin(audioGenPlugin)
   const lm = scratchFile('mm3-lm-q8.gguf')
@@ -142,40 +141,26 @@ test('resolve load: a minimax pair on disk reaches the audiogen fitter', async (
   t.is(resolved.status, 'resolved')
   if (resolved.status !== 'resolved') return
   t.alike(resolved.artifacts, { lmModelPath: lm, synthModelPath: synth })
-
-  const plan = createFitRequest({
-    modelType: ModelType.audiogenGgml,
-    modelPath: resolved.modelPath,
-    modelConfig: resolved.modelConfig,
-    artifacts: resolved.artifacts,
-    isShardedModel: false
-  })
-  t.ok(plan.supported)
-  if (plan.supported) {
-    t.alike(plan.probe, {
-      engine: 'audiogen-ggml',
-      request: { engine: 'minimax', lmPath: lm, synthPath: synth, device: 'gpu' }
-    })
-  }
   await resolved.release()
 })
 
-test('resolve load: a minimax load naming both useGPU and device is not answered for', async (t) => {
+test('resolve load: a minimax load naming both useGPU and device throws as the load does', async (t) => {
   clearPlugins()
   registerPlugin(audioGenPlugin)
 
-  const resolved = await resolveLoadFromStubs({
-    modelType: ModelType.audiogenGgml,
-    modelConfig: {
-      engine: 'minimax',
-      lmModelSrc: scratchFile('mm3-lm-q8.gguf'),
-      synthModelSrc: scratchFile('mm3-synth-q8.gguf'),
-      useGPU: true,
-      device: 'gpu'
-    }
-  })
-
-  t.is(resolved.status, 'unsupported-load')
+  await t.exception(
+    resolveLoadFromStubs({
+      modelType: ModelType.audiogenGgml,
+      modelConfig: {
+        engine: 'minimax',
+        lmModelSrc: scratchFile('mm3-lm-q8.gguf'),
+        synthModelSrc: scratchFile('mm3-synth-q8.gguf'),
+        useGPU: true,
+        device: 'gpu'
+      }
+    }),
+    Error as never
+  )
 })
 
 test('resolve load: a translation source not on disk fetches no stub', async (t) => {

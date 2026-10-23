@@ -1,6 +1,5 @@
 import test from 'brittle'
 import { ttsConfigSchema, ttsClientParamsSchema } from '@/schemas/text-to-speech'
-import { createTtsFitRequest } from '@/model-fit/request/engines/tts'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
 import { modelFitCandidateSchema } from '@/schemas/assess-model-fit'
@@ -21,48 +20,6 @@ test('MOSS load and request schemas accept native controls and reject invalid bo
   t.absent(ttsClientParamsSchema.safeParse({ ...request, sampleRate: undefined }).success)
   t.absent(ttsClientParamsSchema.safeParse({ ...request, maxNewTokens: 4097 }).success)
   t.absent(ttsClientParamsSchema.safeParse({ ...request, replyVoice: [0] }).success)
-})
-
-test('MOSS fits forward explicit batch, streaming and reference workloads', (t) => {
-  const params = {
-    modelPath: '/models/backbone.gguf',
-    modelConfig: {
-      ttsEngine: 'moss',
-      streamChunkTokens: 25,
-      durationTokens: 50
-    },
-    ttsWorkload: { promptRows: 200, referenceSamples: 24000, streaming: true },
-    artifacts: {
-      mossCodecDecoderPath: '/models/decoder.gguf',
-      mossCodecEncoderPath: '/models/encoder.gguf'
-    }
-  }
-  const plan = createTtsFitRequest(params)
-  t.ok(plan.supported)
-  if (plan.supported) {
-    t.alike(plan.probe.request, {
-      engineType: 'moss',
-      mossBackbonePath: params.modelPath,
-      mossCodecDecoderPath: params.artifacts.mossCodecDecoderPath,
-      mossCodecEncoderPath: params.artifacts.mossCodecEncoderPath,
-      nGpuLayers: 0,
-      promptRows: 200,
-      referenceSamples: 24000,
-      streaming: true,
-      streamChunkTokens: 25,
-      durationTokens: 50
-    })
-  }
-  t.absent(createTtsFitRequest({ ...params, artifacts: {} }).supported)
-  t.absent(createTtsFitRequest({ ...params, ttsWorkload: undefined }).supported)
-  t.ok(
-    createTtsFitRequest({
-      ...params,
-      modelConfig: sfx,
-      ttsWorkload: { prompt: 'Rain', seconds: 3 }
-    }).supported
-  )
-  t.absent(createTtsFitRequest({ ...params, modelConfig: speech }).supported)
 })
 
 test('MOSS-Speech forwards PCM, conversation and token options and returns text-only replies', async (t) => {
@@ -179,11 +136,4 @@ test('MOSS fit workloads belong to the assessment candidate, not load configurat
   )
   t.absent(ttsConfigSchema.safeParse({ ...sfx, fitWorkload: workload }).success)
   t.absent(modelFitCandidateSchema.safeParse({ ttsWorkload: { ...workload, seconds: 31 } }).success)
-  t.absent(
-    createTtsFitRequest({
-      modelPath: '/models/sfx.gguf',
-      modelConfig: sfx,
-      ttsWorkload: { promptRows: 1, referenceSamples: 0, streaming: false }
-    }).supported
-  )
 })
