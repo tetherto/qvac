@@ -180,7 +180,8 @@ jobs:
           # version, the @qvac/sdk pin, and packages/sdk/package.json are
           # confirmed to share one version before the pin is swapped. These
           # are the scripts behind the checkVersionAlignment Gradle task, run
-          # without starting a separate Gradle JVM.
+          # without starting a separate Gradle JVM. Keep this list in sync with
+          # checkVersionAlignment's dependencies in build.gradle.kts.
           node scripts/verify-runtime-profiles.mjs
           node scripts/check-version-alignment.mjs
 
@@ -211,14 +212,3 @@ jobs:
             verifyMavenPublications
           ./scripts/verify-maven-consumers.sh
           popd
-
-      - name: Upload Maven repository and example APK
-        if: steps.detect.outputs.has_changes == 'true'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: qvac-sdk-kotlin-${{ github.sha }}
-          path: |
-            packages/sdk-kotlin/build/maven-repository
-            packages/sdk-kotlin/android-example/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 7
