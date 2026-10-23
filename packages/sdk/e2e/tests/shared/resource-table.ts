@@ -21,6 +21,13 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 2048 }
   },
 
+  // The same model without its MTP layers, drafted for by `llm-mtp`'s head.
+  'llm-no-mtp': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { verbosity: 0, ctx_size: 2048 }
+  },
+
   'llm-batch': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llm',

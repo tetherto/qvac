@@ -11240,7 +11240,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     spec_type: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigSpecType | None,
         Field(
-            description="Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head; the model must ship its MTP layers, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, which it requires. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`.",
+            description="Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head, or with an external MTP head given as `draftModelSrc`; the head, when given, otherwise the model, must ship MTP layers, and a head must match the model, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, which it requires. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSpecType",
         ),
     ] = None
@@ -11279,7 +11279,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc | None,
         Field(
             alias="draftModelSrc",
-            description="DFlash draft model source, as llama-server's `--spec-draft-model`. Required by, and only accepted with, `spec_type: 'draft-dflash'`. Placed like the model (`device`, `gpu_layers`). Model fit checks do not count its memory yet, so leave room for it.",
+            description="Draft model source, as llama-server's `--spec-draft-model`: the DFlash model, required by `spec_type: 'draft-dflash'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. Placed like the model (`device`, `gpu_layers`). Model fit checks count an MTP head's memory but not a DFlash model's or a Gemma 4 assistant's, so leave room for those.",
         ),
     ] = None
     image_tile_mode: Annotated[

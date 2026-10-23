@@ -3,6 +3,7 @@ import {
   loadModel,
   unloadModel,
   QWEN3_5_0_8B_MTP_Q4_K_M,
+  QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   type CompletionStats
 } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
@@ -10,11 +11,13 @@ import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   speculativeDecodingDraftNMaxOutOfRangeRejected,
   speculativeDecodingMtp,
+  speculativeDecodingMtpExternalHead,
   speculativeDecodingNone,
   speculativeDecodingTests
 } from '../../speculative-decoding-tests.js'
 
 type CompletesParams = { prompt: string }
+type Source = typeof QWEN3_5_0_8B_MTP_Q4_K_M | typeof QWEN3_5_0_8B_MULTIMODAL_Q4_K_M
 
 /** The executor body of the step-defined tests, for consumers without the step interpreter. */
 export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
@@ -24,16 +27,28 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
 
   protected handlers = {
     [speculativeDecodingMtp.testId]: this.mtp.bind(this),
+    [speculativeDecodingMtpExternalHead.testId]: this.mtpExternalHead.bind(this),
     [speculativeDecodingNone.testId]: this.none.bind(this),
     [speculativeDecodingDraftNMaxOutOfRangeRejected.testId]: this.rejectDraftNMax.bind(this)
   } as never
 
   async mtp(params: unknown, expectation: unknown): Promise<TestResult> {
-    const { result, stats } = await this.completesWith(
-      params as CompletesParams,
-      expectation,
-      'draft-mtp'
+    return this.drafts(
+      await this.completesWith(params as CompletesParams, expectation, 'draft-mtp')
     )
+  }
+
+  // The base model has no MTP layers; the MTP model's head drafts for it.
+  async mtpExternalHead(params: unknown, expectation: unknown): Promise<TestResult> {
+    return this.drafts(
+      await this.completesWith(params as CompletesParams, expectation, 'draft-mtp', {
+        modelSrc: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+        draftModelSrc: QWEN3_5_0_8B_MTP_Q4_K_M
+      })
+    )
+  }
+
+  private drafts({ result, stats }: { result: TestResult; stats: CompletionStats | undefined }) {
     if (!result.passed) return result
     const drafted = stats?.draftTokens
     const accepted = stats?.draftAcceptedTokens
@@ -79,11 +94,23 @@ export class SpeculativeDecodingExecutor extends AbstractModelExecutor<
     }
   }
 
-  private async completesWith(p: CompletesParams, expectation: unknown, specType: string) {
+  private async completesWith(
+    p: CompletesParams,
+    expectation: unknown,
+    specType: string,
+    {
+      modelSrc = QWEN3_5_0_8B_MTP_Q4_K_M,
+      draftModelSrc
+    }: { modelSrc?: Source; draftModelSrc?: Source } = {}
+  ) {
     const modelId = await loadModel({
-      modelSrc: QWEN3_5_0_8B_MTP_Q4_K_M,
+      modelSrc,
       modelType: 'llamacpp-completion',
-      modelConfig: { ctx_size: 2048, spec_type: specType as 'draft-mtp' | 'none' }
+      modelConfig: {
+        ctx_size: 2048,
+        spec_type: specType as 'draft-mtp' | 'none',
+        ...(draftModelSrc ? { draftModelSrc } : {})
+      }
     })
     try {
       const final = await completion({

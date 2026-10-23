@@ -3,9 +3,14 @@ import type { Step, TestDefinition } from '@qvac/test-suite'
 const PLANETS_PROMPT =
   'List the planets of the solar system in order from the Sun, comma separated.'
 
-/** Loads the MTP model with the given speculative config, then runs one greedy completion. */
-const completesWith = (modelConfig: Record<string, unknown>): Step[] => [
-  { modelSource: { dep: 'llm-mtp', as: 'src' } },
+/** Loads `dep` with the given speculative config, then runs one greedy completion. */
+const completesWith = (
+  modelConfig: Record<string, unknown>,
+  dep = 'llm-mtp',
+  sources: Step[] = []
+): Step[] => [
+  { modelSource: { dep, as: 'src' } },
+  ...sources,
   {
     call: {
       method: 'loadModel',
@@ -41,6 +46,31 @@ export const speculativeDecodingMtp: TestDefinition = {
   suites: ['smoke'],
   steps: [
     ...completesWith({ ctx_size: 2048, spec_type: 'draft-mtp' }),
+    { project: { from: '$stats', path: 'draftTokens', as: 'draftTokens' } },
+    { assert: { on: '$draftTokens', named: 'atLeast', with: { value: 1 } } },
+    {
+      assert: {
+        on: '$stats',
+        named: 'atLeastField',
+        with: { field: 'draftTokens', atLeast: 'draftAcceptedTokens' }
+      }
+    }
+  ],
+  finally: unloads,
+  metadata: { category: 'speculative-decoding', dependency: 'none', estimatedDurationMs: 300000 }
+}
+
+export const speculativeDecodingMtpExternalHead: TestDefinition = {
+  testId: 'speculative-decoding-mtp-external-head',
+  params: { prompt: PLANETS_PROMPT },
+  expectation: { validation: 'contains-all', contains: ['Mercury', 'Venus', 'Earth'] },
+  steps: [
+    // The base model has no MTP layers; the MTP model's head drafts for it.
+    ...completesWith(
+      { ctx_size: 2048, spec_type: 'draft-mtp', draftModelSrc: '$head.modelSrc' },
+      'llm-no-mtp',
+      [{ modelSource: { dep: 'llm-mtp', as: 'head' } }]
+    ),
     { project: { from: '$stats', path: 'draftTokens', as: 'draftTokens' } },
     { assert: { on: '$draftTokens', named: 'atLeast', with: { value: 1 } } },
     {
@@ -108,6 +138,7 @@ export const speculativeDecodingDraftNMaxOutOfRangeRejected: TestDefinition = {
 
 export const speculativeDecodingTests = [
   speculativeDecodingMtp,
+  speculativeDecodingMtpExternalHead,
   speculativeDecodingNone,
   speculativeDecodingDraftNMaxOutOfRangeRejected
 ]

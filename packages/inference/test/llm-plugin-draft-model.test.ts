@@ -81,6 +81,23 @@ test('llm plugin createModel: the draft model path reaches the addon as spec_dra
   t.is(model._projectionModelPath, '/models/mmproj.gguf')
 })
 
+test('llm plugin createModel: an external MTP head reaches the addon as spec_draft_model', async (t) => {
+  const { llmPlugin } = await import('@/plugins/builtin/llamacpp-completion/plugin')
+  const modelId = 'llm-plugin-mtp-head-test'
+  t.teardown(() => unregisterAddonLogger(modelId))
+
+  const result = llmPlugin.createModel({
+    modelId,
+    modelPath: '/models/model.gguf',
+    modelConfig: { spec_type: 'draft-mtp' },
+    artifacts: { draftModelPath: '/models/mtp-head.gguf' }
+  })
+  const model = result.model as unknown as LlamacppDebugModel
+
+  t.is(model._config['spec_draft_model'], '/models/mtp-head.gguf')
+  t.is(model._config['spec_type'], 'draft-mtp')
+})
+
 test('llm plugin createModel: no draft model path sends no spec_draft_model', async (t) => {
   const { llmPlugin } = await import('@/plugins/builtin/llamacpp-completion/plugin')
   const modelId = 'llm-plugin-no-draft-model-test'

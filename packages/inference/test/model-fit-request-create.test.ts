@@ -160,6 +160,22 @@ test('completion: the speculative keys and the draft model path reach the fit', 
   t.is(config['spec_draft_model'], '/models/dflash.gguf')
 })
 
+test('completion: an external MTP head reaches the fit as spec_draft_model', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.llamacppCompletion,
+    modelPath: '/models/model.gguf',
+    modelConfig: { ...COMPLETION_CONFIG, spec_type: 'draft-mtp' },
+    artifacts: { draftModelPath: '/models/mtp-head.gguf' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
+  const config = plan.probe.request.config ?? {}
+  t.is(config['spec_type'], 'draft-mtp')
+  t.is(config['spec_draft_model'], '/models/mtp-head.gguf')
+})
+
 test('completion: no draft model artifact sends no spec_draft_model to the fit', (t) => {
   const plan = completionRequest({ spec_type: 'draft-mtp' })
 

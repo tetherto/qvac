@@ -60,7 +60,7 @@ export function createLlamaFitRequest(params: LlamaFitRequestParams): FitRequest
       ...fitConfig
     } = modelConfig
     const config = transformLlmConfig(fitConfig as LlmConfig)
-    // The fit reads the DFlash draft model like the load does.
+    // The fit reads the draft model (DFlash model or external MTP head) like the load does.
     const draftModelPath = params.artifacts?.['draftModelPath']
     if (draftModelPath) config['spec_draft_model'] = draftModelPath
     const llm: LlmLlamacpp.FitRequest = { ...request, config }
