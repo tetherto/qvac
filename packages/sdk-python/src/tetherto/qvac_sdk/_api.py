@@ -6,13 +6,9 @@ JS convenience functions do on top of the raw generated stubs
 
 Asyncio-native, matching the JS SDK and tetherto.qvac_sdk._transport.Transport.
 
-Only the wrappers whose entire behavior is reproducible from the wire
-request/response schemas are here (cancel, unload_model, invoke_plugin(_stream),
-model_registry_*, delete_cache). Wrappers with real client-side state or
-logic beyond the wire contract (completion's tool/MCP orchestration,
-loadModel's type inference, translate's language detection, vla's tensor
-marshaling, the duplex streaming session model, ...) are tracked separately
-and intentionally not ported here.
+The wrappers with larger client-side machinery live in their own modules:
+completion's tool/MCP orchestration in `_completion`, vla's tensor marshaling
+in `vla`, and the duplex streaming sessions in `sessions`.
 """
 
 from __future__ import annotations
@@ -21,7 +17,7 @@ import asyncio
 import uuid
 import warnings
 from collections.abc import AsyncIterator, Callable
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, RootModel, ValidationError
 
@@ -83,6 +79,8 @@ from .schemas import (
     UnloadModelResponse,
 )
 
+ModelFitPolicy = Literal["log", "refuse", "off"]
+
 
 def _dump(model: Any) -> dict[str, Any]:
     return model.model_dump(mode="json", by_alias=True, exclude_unset=True)
@@ -117,14 +115,14 @@ def _config_srcs_to_wire(value: Any) -> Any:
     return model_src_to_wire(value)
 
 
-def _first_validation_problem(error: ValidationError) -> str:
-    """One line describing why a load request was refused."""
+def _first_validation_problem(error: ValidationError, method: str) -> str:
+    """One line describing why a request was refused."""
     problems = error.errors()
     if not problems:
-        return "loadModel request failed validation"
+        return f"{method} request failed validation"
     problem = problems[0]
     where = ".".join(str(part) for part in problem.get("loc", ()))
-    return f"loadModel request failed validation: {where}: {problem.get('msg')}"
+    return f"{method} request failed validation: {where}: {problem.get('msg')}"
 
 
 def _unwrap_root(value: Any) -> Any:
@@ -178,6 +176,7 @@ async def load_model(
     on_progress: Callable[[ModelProgressResponse], None] | None = None,
     request_id: str | None = None,
     seed: bool | None = None,
+    model_fit_policy: ModelFitPolicy | None = None,
     logger: Any = None,
 ) -> str:
     """Ergonomic loadModel mirroring JS's `client/api/load-model.ts`:
@@ -195,6 +194,10 @@ async def load_model(
     - `request_id` is client-generated when omitted and threaded onto the
       wire so `cancel(request_id=...)` can target this load; pass your own
       to hold the id before awaiting.
+    - `model_fit_policy` overrides, for this load, what the engine fitter's
+      verdict does: "log" reports it and loads anyway, "refuse" rejects a load
+      the fitter projects will not fit, "off" skips the check. Unset uses the
+      engine config ("log").
     - `on_progress` switches to the streaming call shape and receives each
       ModelProgressResponse.
     - `logger` (anything stdlib-logging-shaped) starts a background logging
@@ -241,6 +244,8 @@ async def load_model(
             payload["modelName"] = model_name
         if seed is not None:
             payload["seed"] = seed
+        if model_fit_policy is not None:
+            payload["modelFitPolicy"] = model_fit_policy
     if model_config is not None:
         payload["modelConfig"] = _config_srcs_to_wire(model_config)
 
@@ -249,7 +254,9 @@ async def load_model(
     except ValidationError as error:
         # JS validates load parameters against its own schema and refuses with
         # REQUEST_VALIDATION_FAILED, so the caller gets an SDK error carrying a code.
-        raise RequestValidationError(_first_validation_problem(error)) from error
+        raise RequestValidationError(
+            _first_validation_problem(error, "loadModel")
+        ) from error
     _reject_unknown_config_keys(payload, request)
 
     if on_progress is not None:
