@@ -47,9 +47,10 @@ jobs:
         # that no longer exists.)
         #
         # The development line is not built: it sits outside `content/docs/`,
-        # so a broken link or invalid frontmatter in it surfaces on the cutoff
-        # PR rather than on the feature PR that wrote it. That is the accepted
-        # cost of keeping unreleased pages off the site.
+        # which is what keeps unreleased pages off the site. The checks that do
+        # not need a render read it anyway — `tests/link-integrity.test.ts`
+        # resolves its links and requires a title on every page — so what
+        # surfaces only on the cutoff PR is malformed MDX.
         run: bun run build
 
       - name: Run docs tests

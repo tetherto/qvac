@@ -338,9 +338,11 @@ Only for a package with a versioned documentation collection —
 nothing versioned and skips this step.
 
 A release publishes the documentation line written for it. Invoke
-`qv-docs-cutoff` with the version being released and that one collection. It
-opens **one** PR into `main`, separate from the release PR, and reports its
-URL. Do not approve or merge it: the documentation engineer reviews it, and
+`qv-docs-cutoff` with the version being released, that one collection, and the
+release branch — `release-<package>-<x.y.z>`, which is what tells it the release
+base, since the cutoff publishes the tree the release was cut from and not
+`main`'s tip. It opens **one** PR into `main`, separate from the release PR, and
+reports its URL. Do not approve or merge it: the documentation engineer reviews it, and
 that review is the only gate on the documentation side of the release.
 
 This is the same step a release train runs at `docs/ci/RELEASE-TRAIN.md` step

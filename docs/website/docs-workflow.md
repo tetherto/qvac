@@ -225,10 +225,27 @@ line last cut, a missing development line, a destination already on disk, and a
 working tree that already carries changes.
 
 On a collection's **first cut** under this model, there is no development line
-yet: the version being released is still the parenthesized folder. The cut then
-only copies that folder to `content/_unpublished/<collection>/next/` and
-changes nothing else — no manifest edit, no redirect, no rename. From the next
-cutoff on it behaves as above.
+yet: the version being released is still the parenthesized folder. The cut
+splits that folder in two instead of moving anything, and needs the release base
+— the commit the version being released was cut from — to know where the split
+falls:
+
+```bash
+bun run scripts/cut-line.ts <collection> <version being released> --from <release base>
+```
+
+The group becomes the base's tree, so the line published documents the version
+being released; everything the group gained after the base becomes the
+development line, because it documents the version after it. `reference/` is
+excluded from the reset on both sides: it is generated, and the cutoff
+regenerated it against this same base. No manifest edit, no redirect, no
+rename. From the next cutoff on the cut behaves as above, and `--from` is
+refused.
+
+The split exists because the scheme this one replaces let the group accumulate
+everything merged since it was cut, including what landed after the release
+branch came off `main`. Freezing that as published is the drift the line model
+prevents, so the first cut is where it gets undone.
 
 The opened line keeps the API summary it copied, because the PR that
 regenerates it is reviewed as a diff: a summary diffed against the previous
@@ -403,16 +420,18 @@ The two branches show different versions, and that is the point:
 | `main` (staging) | every line published so far | the tip of `main` |
 | `docs-production` (production) | the same, as of the last promotion | a commit already on `main` |
 
-Between two cutoffs the two branches show the same set of lines. The sprint's
-feature documentation goes into the development line, which is not built, so
-merging it changes nothing a reader can see. What does change production
-between cutoffs is a correction to a published line, which is exactly what
-should reach readers immediately.
+Between two cutoffs the two branches show the same **set of lines**. The
+sprint's feature documentation goes into the development line, which is not
+built, so merging it changes nothing a reader can see.
 
-So the commit being promoted is not delicate: any commit from the cutoff that
-published the version up to just before the next cutoff publishes the same
-lines. Promote the cutoff's merge commit once the version is on npm, and
-`main`'s tip for a correction after that.
+That is a statement about which versions are published, and about nothing else.
+**Production is always promoted to one named commit, never to whatever `main`
+points at.** The commit is the tree the operator verified on staging, and
+anything merged after it is unverified: a dependency bump, a component change,
+a bad MDX edit anywhere in the site can break the build or the pages without
+touching a line folder at all. Promoting the tip would publish that, and the
+fast-forward semantics would not notice — they protect the branch's history,
+not the content.
 
 Either way production is a fast-forward of a reviewed, already-on-`main`
 commit, so the two branches never diverge historically.
@@ -481,14 +500,19 @@ never by merging a PR into `docs-production`. The workflow advances
 semantics: if the branches have diverged it fails instead of creating a
 merge commit, so `docs-production` stays a pure pointer into `main`'s history.
 
-**Which commit:** the merge commit of the cutoff PR, once the version it
-publishes is on npm. After that, `main`'s tip until the next cutoff — between
-cutoffs the published lines do not change, so a tip promotion carries
-corrections and nothing else. The one commit never to promote is one at or
-after the next cutoff before that version has shipped. The workflow rejects a
-commit that is not contained in `main`, so only reviewed, merged work can be
-promoted, and its preflight prints the content diff this promotion publishes
-so you read the prose before approving it.
+**Which commit:** one you verified on staging, named explicitly. At a release
+that is the merge commit of the cutoff PR, promoted once the version it
+publishes is on npm. For a correction between cutoffs it is that correction's
+own merge commit. Never `main`'s tip as a shorthand for either: the input
+exists so the promoted tree is the one inspected, not the one that happens to
+be on `main` when the environment approval lands, which may be several merges
+later.
+
+The commit also must not be at or after the next cutoff while that version has
+not shipped — that would publish a line for packages nobody can install. The
+workflow rejects a commit that is not contained in `main`, so only reviewed,
+merged work can be promoted, and its preflight prints the content diff this
+promotion publishes so you read the prose before approving it.
 
 The person promoting is responsible for confirming staging is healthy and
 that the docs PR Checks have passed on `main` before running the workflow.
@@ -554,7 +578,7 @@ pair an edit against.
 
 **Triggers:** Manual `workflow_dispatch` only. It never runs automatically on a merge to `main`.
 
-**Input:** the commit to promote — the cutoff PR's merge commit once the version is on npm, or `main`'s tip for a correction between cutoffs.
+**Input:** the commit to promote, named explicitly and required — the cutoff PR's merge commit once the version is on npm, or a correction's own merge commit between cutoffs. It is the tree you verified on staging, which is the whole reason the input exists.
 
 **What it does:**
 - Validates the requested commit in an ungated job that cannot push: it must exist, be contained in `main`, and be strictly ahead of `docs-production`
@@ -575,6 +599,8 @@ pair an edit against.
 **Who:** the release's **tech lead** runs `qv-docs-cutoff`, which opens one PR right after the release branch is cut. The **documentation engineer** reviews and merges it, then promotes it once the version is on npm.
 
 **When:** on the day the version's release branch is cut. Not when the release publishes, days later — though a cut run late is no longer a correctness problem, only a late one: the sprint's prose was going into the development line either way.
+
+**Off which commit:** the release base — `git merge-base <remote>/<release-branch> <remote>/main` — and not `main`'s tip. The tip carries whatever merged after the release branch came off, which ships in the version after this one. The PR still targets `main`; only its base commit is pinned.
 
 **What the PR carries**, per collection the release moves:
 
@@ -634,13 +660,13 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `api-docs/render.ts` | -- | Phase 2: Nunjucks rendering of `single-page.njk` from `api-data.json` |
 | `api-docs/audit-tsdoc.ts` | `docs:audit-tsdoc` | TSDoc completeness audit (standalone or via extraction) |
 | `generate-release-notes.ts` | `docs:generate-release-notes` | **Dormant**, kept on disk. Rendered a release-notes page of the SDK's newest line; the site publishes no such page any more. Do not call it. |
-| `cut-line.ts` | -- | Publishes the line of the version being released: preserves the outgoing one, copies the development line in as the new one, and updates the manifest, the redirects, the currency marker, and the opened line's release-notes link. The development line stays in place. A convenience for the hand procedure in `README.md`, never a dependency. |
+| `cut-line.ts` | -- | Publishes the line of the version being released: preserves the outgoing one, copies the development line in as the new one, and updates the manifest, the redirects, the currency marker, and the opened line's release-notes link. The development line stays in place. On a collection's first cut it takes `--from <release base>` and splits the group instead. A convenience for the hand procedure in `README.md`, never a dependency. |
 | `update-versions-list.ts` | -- | **Retired**, kept for reference. Rebuilt `src/lib/versions.ts` from the series siblings on disk; that file is now hand-edited. |
 | `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the development line's API summary using the monorepo SDK's `package.json` version (no version bump) |
 | `create-version-bundle.ts` | -- | **Retired**, kept for reference. Copied the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx`. |
 | `lib/release-shared.ts` | -- | Shared helpers for the generators: version parsing, the manifest reader, `developmentLineDir`, and `referenceDirFor` / `apiPageFor` / `releaseNotesPageFor`, which resolve the development line's reference folder and refuse a version that has already shipped |
 | `lib/changelog-parser.ts` | -- | **Dormant**, kept on disk. Changelog parsing for the release-notes page generator, its only caller. |
-| `lib/link-validator.ts` | -- | Internal link extraction + resolution (used by the link-integrity test) |
+| `lib/link-validator.ts` | -- | Internal link extraction + resolution, for the docs tree and for the development line the build never renders (used by the link-integrity test) |
 
 > AI-assisted authoring (drafting descriptions or examples) happens
 > locally via Cursor skills — never inside this pipeline. Output of
@@ -766,10 +792,11 @@ If the cut has already been committed, reset the branch and re-run both steps ra
 
 ### Correct a published page without waiting for the next release
 
-Merge the correction to `main` through a normal PR, then run the promotion
-workflow on `main`'s tip. Between two cutoffs `main` publishes the same lines
-production already shows, so the promotion carries the correction and nothing
-else.
+Merge the correction to `main` through a normal PR, verify it on staging, then
+run the promotion workflow on **that merge commit**. Between two cutoffs `main`
+publishes the same lines production already shows, so the promotion carries the
+correction and whatever else merged up to that commit — which is why the commit
+is named rather than taken from the tip.
 
 The one window where this does not hold is between a cutoff and that version
 reaching npm: promoting then would publish a line for packages nobody can

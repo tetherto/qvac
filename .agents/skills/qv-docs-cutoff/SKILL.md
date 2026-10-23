@@ -83,29 +83,63 @@ entry — and check the moment:
 - If `<x.y>` **equals** it and the collection has no
   `content/_unpublished/<collection>/next/`, this is the collection's **first
   cut** under this model: the group still holds the version under development,
-  so the cut only opens the development line. Expect no manifest or redirect
-  change.
+  so the cut splits it instead of moving it — the release base becomes the line
+  published and what came after it becomes the development line. Expect no
+  manifest or redirect change.
 - If `<x.y>` equals it and the development line exists, stop and report: this
   cutoff already ran.
 - If `<x.y>` is below it, stop and ask. The collection is a release ahead.
 
-Confirm the tree is clean (`git status --porcelain` empty) and fetch:
-
-```bash
-git fetch ORG_REMOTE main
-```
+Confirm the tree is clean (`git status --porcelain` empty). A dirty tree means
+release work is still uncommitted: stop, and let the release flow reach its own
+cut first.
 
 The PR comes off `main` so it carries documentation alone. The release's own
 version bump, changelog and NOTICE live on the release head branch and stay
-there. A dirty tree means release work is still uncommitted: stop, and let the
-release flow reach its own cut first.
+there.
 
-### Step 2: Regenerate the API summary of the version being released
+### Step 2: Resolve the release base
+
+The cutoff publishes the tree the release was cut from, never `main`'s tip.
+Anything merged since the release branch came off `main` ships in the version
+after this one, and publishing it as this one is the drift the line model
+exists to prevent.
+
+Name the release's head branch:
+
+- Invoked from `qv-release-train`: `release-train-<train>-<anchor version>`.
+- Invoked from `qv-sdk-changelog` or by hand: `release-<package>-<x.y.z>`.
+
+```bash
+git fetch ORG_REMOTE main <release-branch>
+git merge-base ORG_REMOTE/<release-branch> ORG_REMOTE/main
+```
+
+That commit is `<release base>` below. If the branch does not resolve, stop and
+report: the release has not cut its own branch yet, and a cutoff before it has
+no tree to publish.
+
+### Step 3: Regenerate the API summary of the version being released
 
 Only the SDK has a generated reference; skip this for any other collection.
 
+Branch from the release base, so the summary is extracted from the source the
+release ships and the development line copied below holds the prose as it stood
+at the cut:
+
 ```bash
-git switch -c docs/cutoff-<x.y.z> "$(git merge-base ORG_REMOTE/<release-branch> ORG_REMOTE/main)"
+git switch -c docs/cutoff-<x.y.z> <release base>
+cd docs/website && bun run scripts/generate-api-docs.ts <x.y.z> --force-extract
+```
+
+On a collection's **first cut**, branch from `ORG_REMOTE/main` instead. The
+release base there predates the line folders and the manifest entry the cut
+reads — the previous cut ran late, which is the reason this model replaced it.
+The base still reaches the cut, as `--from` in Step 4, which reads it out of
+history rather than from the working tree:
+
+```bash
+git switch -c docs/cutoff-<x.y.z> ORG_REMOTE/main
 cd docs/website && bun run scripts/generate-api-docs.ts <x.y.z> --force-extract
 ```
 
@@ -122,17 +156,17 @@ the new version while describing the previous one:
 git diff --stat -- content
 ```
 
-### Step 3: Cut each collection
+### Step 4: Cut each collection
 
-Invoke `qv-docs-line-cut`, passing the version and the collections resolved in
-Step 1. It runs `scripts/cut-line.ts` once per collection, commits each cut on
-its own, and verifies the result.
+Invoke `qv-docs-line-cut`, passing the version, the collections resolved in
+Step 1, and the release base from Step 2. It runs `scripts/cut-line.ts` once per
+collection, commits each cut on its own, and verifies the result.
 
-The API summary from Step 2 goes in with the first commit. The cut copies the
+The API summary from Step 3 goes in with the first commit. The cut copies the
 development line after it, so the published line carries the summary just
 generated and the development line keeps it as its starting point.
 
-### Step 4: Open one PR
+### Step 5: Open one PR
 
 ```bash
 git push -u ORG_REMOTE docs/cutoff-<x.y.z>
@@ -144,7 +178,7 @@ summary was re-extracted, and the evidence `qv-docs-line-cut` measured.
 One PR, not two: nothing here renames a folder another commit writes into, so
 there is no ordering to protect and no stacked base to retarget.
 
-### Step 5: Hand it over
+### Step 6: Hand it over
 
 Report:
 
@@ -165,7 +199,9 @@ incoherent tree.
 
 - [ ] Collections derived from the packages being released, via the manifest
 - [ ] Per collection, `<x.y>` checked against the line last cut
-- [ ] Branch cut from `ORG_REMOTE/main`, tree clean at the start
+- [ ] Release base resolved from the release's own head branch, not assumed
+- [ ] Branch cut from the release base — from `ORG_REMOTE/main` on a first cut,
+      which passes the base to `cut-line.ts` instead — tree clean at the start
 - [ ] The API summary regenerated into the line being published, body changed
 - [ ] One `cut-line.ts` invocation and one commit per collection
 - [ ] `npm run build` clean and `vitest` green before the PR is opened

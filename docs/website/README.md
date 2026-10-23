@@ -80,6 +80,11 @@ line last cut, a missing development line, a destination already on disk, and a
 working tree that already carries changes — the cut is reviewed as its own
 diff. Review what it did, then `npm run build` and `npm test`.
 
+A collection's **first cut** under this model is the exception: there is no
+development line to publish yet, so the cut splits the group between the two
+lines and takes `--from <release base>` to know where the split falls. See
+"Cutting a documentation line" in [`docs-workflow.md`](docs-workflow.md).
+
 The command is a convenience, not a dependency. What it does is the following,
 and doing it by hand is the same cut. For `@qvac/sdk` releasing `0.18`, with
 `0.17` the line last cut:

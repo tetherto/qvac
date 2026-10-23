@@ -1,6 +1,6 @@
 ---
 name: qv-docs-line-cut
-description: Cut the documentation line of the version being released in each collection the release moves — run scripts/cut-line.ts per collection, commit each cut on its own, verify it mechanically, and measure the evidence the PR body quotes. Use at a release cutoff (step 3 of qv-docs-cutoff), or when invoking /qv-docs-line-cut.
+description: Cut the documentation line of the version being released in each collection the release moves — run scripts/cut-line.ts per collection, commit each cut on its own, verify it mechanically, and measure the evidence the PR body quotes. Use at a release cutoff (step 4 of qv-docs-cutoff), or when invoking /qv-docs-line-cut.
 ---
 
 # Documentation Line Cut
@@ -26,7 +26,7 @@ around it: which collections to cut, what to measure, and what the PR has to
 prove. Every command runs from `docs/website` unless stated otherwise.
 
 **Invoked from a flow, not by hand.** `qv-docs-cutoff` calls this skill as its
-step 3, on a branch that already carries the regenerated API summary. It is
+step 4, on a branch that already carries the regenerated API summary. It is
 model-invocable for that reason. A human running `/qv-docs-line-cut` directly
 is the exception — an out-of-band cut — and Step 1 is what refuses one made at
 the wrong moment.
@@ -47,7 +47,7 @@ that is not a versioned collection, listing the ones that are.
 
 ## When to use
 
-- Step 3 of `qv-docs-cutoff`, which is itself step 6 of
+- Step 4 of `qv-docs-cutoff`, which is itself step 6 of
   [`docs/ci/RELEASE-TRAIN.md`](../../../docs/ci/RELEASE-TRAIN.md) or step 1 of
   the release flow in [`docs/gitflow.md`](../../../docs/gitflow.md).
 - `/qv-docs-line-cut` invoked directly.
@@ -73,8 +73,9 @@ collection:
 - `<x.y>` **above** the line last cut → the cut is due. The ordinary case.
 - `<x.y>` **equal** to it, with no `content/_unpublished/<collection>/next/` →
   the collection's **first cut** under this model. The group still holds the
-  version under development, so the cut only opens the development line from
-  it; nothing is published and the manifest does not change.
+  version under development, so the cut splits it: the release base becomes the
+  line published, and what the group gained after the base becomes the
+  development line. No folder moves and the manifest does not change.
 - `<x.y>` equal to it, with a development line present → stop. This cut
   already ran.
 - `<x.y>` **below** it → stop and ask. The collection is a release ahead.
@@ -100,6 +101,18 @@ git -C ../.. commit -m "docs: publish the <Collection> v<x.y> documentation line
 The version passed is the one being **released** — the line the cut opens, not
 a successor to compute.
 
+On a collection's **first cut**, pass the release base resolved by
+`qv-docs-cutoff`. The script reads the group as it stood at that commit out of
+history, so the branch does not have to sit on it:
+
+```bash
+bun run scripts/cut-line.ts <slug> v<x.y> --from <release base>
+```
+
+It is required there and refused everywhere else. A first cut has a group to
+split and no development line to publish; every later cut publishes a copy of
+the development line, which only ever held the version being released.
+
 The commit between collections is not optional: `cut-line.ts` refuses a working
 tree that already carries changes under `docs/website`, because a cut is
 reviewed as its own diff. That refusal is what makes one commit per collection
@@ -107,11 +120,12 @@ the natural granularity, and it scales linearly — N collections, N runs, N
 commits.
 
 The script prints every path it touched. Expect the preserved folder, the
-opened folder, the manifest, the redirects and the pages it relabelled — or,
-on a first cut, the development line alone. It refuses, before writing
-anything, a slug that is not a versioned collection, a version carrying a patch
-component, a version not above the line last cut, a missing development line,
-a destination already on disk, and a dirty tree.
+opened folder, the manifest, the redirects and the pages it relabelled — or, on
+a first cut, the development line and the group it was split from. It refuses,
+before writing anything, a slug that is not a versioned collection, a version
+carrying a patch component, a version not above the line last cut, a missing
+development line, a first cut with no release base, a release base on a cut
+that does not split a group, a destination already on disk, and a dirty tree.
 
 ### Step 3: Verify each cut mechanically
 
@@ -142,6 +156,36 @@ a copy, not a rename, since the development line it came from is still there.
 A collection with neither marker nor release link reports nothing from the
 `diff -r` and exits 0. A line with no marker is a valid line, not a failure.
 
+On a collection's **first cut** the two trees are not copies of each other —
+the split is the whole point — so verify both halves against the release base
+instead. The script names the folder the base held; `<base line>` below is it.
+
+What the group gained after the base, which the cut has to move out of the line
+published:
+
+```bash
+git diff --stat "<release base>:docs/website/content/docs/<slug>/(<base line>)" \
+  "HEAD~1:docs/website/content/docs/<slug>/(v<x.y>)" -- ':(exclude)reference'
+```
+
+The same diff against the cut reports **nothing**: the line published is the
+base's tree outside `reference/`, which is generated and kept.
+
+```bash
+git diff --stat "<release base>:docs/website/content/docs/<slug>/(<base line>)" \
+  "HEAD:docs/website/content/docs/<slug>/(v<x.y>)" -- ':(exclude)reference'
+```
+
+And the development line carries exactly what the first diff measured:
+
+```bash
+diff -r 'content/docs/<slug>/(v<x.y>)' content/_unpublished/<slug>/next
+```
+
+Nothing is lost between the two halves. Quote the first diff's file list in the
+PR body: it is the evidence that the version published documents itself and the
+sprint's later work went forward rather than out.
+
 ### Step 4: Check for a hardcoded line
 
 ```bash
@@ -169,9 +213,9 @@ because CI runs it separately with `continue-on-error`; it reads `packages/sdk`
 and never touches `content/`.
 
 The development line is not built. Nothing under `content/_unpublished/` is,
-and that is the point — but it means a broken link or malformed MDX written
-during the sprint surfaces here, on the cut, rather than in the PR that wrote
-it. Fix it on this branch.
+and that is the point — but `tests/link-integrity.test.ts` reads it anyway, so
+a broken link or a page with no title is rejected on the PR that wrote it. What
+still surfaces only here is malformed MDX, which needs a render to find.
 
 ### Step 6: Hand over the evidence
 
@@ -199,6 +243,8 @@ because the commits are script output.
 - [ ] Roster read from `src/lib/versions.ts`, not assumed
 - [ ] Per collection, the version being released checked against the line last cut
 - [ ] One `cut-line.ts` invocation and one commit per collection
+- [ ] On a first cut, `--from <release base>` passed and both halves verified
+      against it
 - [ ] `diff -r` run per collection against the development line, output recorded
 - [ ] Opened line's `reference/meta.json` links its own minor's GitHub release
 - [ ] Development line still in place after every cut

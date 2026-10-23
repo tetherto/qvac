@@ -92,8 +92,12 @@ per-package workflow. The next train moves it above that version.
    `pnpm-lock.yaml` from it.
 
    The documentation site has one step here. **Run `qv-docs-cutoff` right
-   after cutting the train branch**, passing the version being released; it
-   opens one PR into `main` and reports its URL. The documentation engineer
+   after cutting the train branch**, passing the new version of each
+   collection's package and the train branch itself — `@qvac/sdk` and
+   `@qvac/cli` are the two documented today, and a train that moves neither
+   cuts nothing. The branch is what tells it the release base: the cutoff
+   publishes the tree the train was cut from, not `main`'s tip. It opens one PR
+   into `main` and reports its URL. The documentation engineer
    reviews and merges it. That review is how the documentation side of the
    release is verified — no CI check does it — so do not approve or merge it
    yourself. The checks they run are in
@@ -134,13 +138,16 @@ per-package workflow. The next train moves it above that version.
    `main` would name versions that the checks of later PRs cannot install. If
    the run fails before publishing, fix it with a PR into the train branch
    (see [Recovery](#recovery)) and carry the same commit to the backmerge.
-9. Promote the documentation to production, once the versions are on npm. Run
-   `promote-docs-production.yml` on the merge commit of step 6's PR, after the
-   preflight prints the content diff. Promoting before npm would publish
-   documentation for a version nobody can install; promoting a later commit
-   would publish whatever else merged into `main` meanwhile. The procedure is
-   in [`docs/website/docs-workflow.md`](../website/docs-workflow.md),
-   "Promoting to production".
+9. Promote the documentation to production, once the versions are on npm.
+   Verify that tree on staging, then run `promote-docs-production.yml` on the
+   merge commit of step 6's PR, reading the content diff its preflight prints.
+   Name that commit, never `main`'s tip: promoting before npm would publish
+   documentation for a version nobody can install, and promoting a later commit
+   would publish whatever else merged into `main` meanwhile — including a change
+   that breaks the build or the pages without touching a line at all. The
+   procedure is in
+   [`docs/website/docs-workflow.md`](../website/docs-workflow.md),
+   "Production (manual promotion)".
 
 ## Checks
 
