@@ -12,6 +12,15 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [Unreleased]
+
+### Added
+
+- `assessFit` reports `coremlBytes` for Parakeet models on macOS and iOS: the
+  memory of the Core ML diarizer sidecars a Nemotron 3 Diarization or
+  Sortformer v2.1 workload can load, which the verdict counts on unified
+  memory. It is 0 without sidecars and on other platforms.
+
 ## [0.11.1] - 2026-10-23
 
 ### Added
