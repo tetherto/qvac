@@ -19,6 +19,7 @@ import { forwardModelExecution } from '@/profiling/model-execution'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
+import { embedFitRequest } from '@/plugins/builtin/llamacpp-embedding/fit'
 
 async function getIdMapIndex() {
   try {
@@ -72,6 +73,7 @@ export const embeddingsPlugin = definePlugin({
   displayName: 'Embeddings (llama.cpp)',
   addonPackage: ADDON_EMBEDDING,
   loadConfigSchema: embedConfigBaseSchema,
+  fitRequest: embedFitRequest,
   assessFit: embedAssessFit,
 
   createModel(params: CreateModelParams): PluginModelResult {
