@@ -1,5 +1,34 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- External MTP heads: `spec-type: 'draft-mtp'` accepts `spec-draft-model`, as
+  llama-server's `--spec-type draft-mtp -md <head>`, to draft for a model
+  without MTP layers, or a Gemma 4 assistant for its Gemma 4 model. The head
+  is placed like the model, and the load's fit and `assessFit` count its
+  weights and context; fabric cannot measure a Gemma 4 assistant, so they
+  leave it out. A head with another hidden width or vocabulary than the
+  model fails the load, and `assessFit` refuses it with `unsupported-config`
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
+### Fixed
+
+- `assessFit` with `spec-type: 'draft-mtp'` now counts the MTP draft context
+  in its per-device figures (`devices`, `deviceBytes`, `hostBytes`), not only
+  in its verdict, so their totals match what the load uses. As in fabric's
+  fit, the draft side's rows follow the placement the load asked for
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` refuses `spec-type: 'draft-mtp'` on a model without MTP layers
+  with `unsupported-config`, as the load fails, instead of projecting the
+  load without the MTP context
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` reports `model-unreadable` for a `spec-draft-model` that is not
+  a regular file, such as a directory, as the load rejects it, instead of
+  projecting the load without it
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
 ## [0.64.1] - 2026-10-23
 
 ### Fixed

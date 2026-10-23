@@ -6104,8 +6104,8 @@ packages:
     resolution: {integrity: sha512-dPYBGEXtgLceRFMfGaF2/rqR86/xMxMyrM9ootO/gaRKL/z2uNHJs7aP7IOBtnJF8eUCt5qwMzbKfrKgDIxPLg==}
     engines: {bare: '>=1.7.0'}
 
-  bare-tls@3.1.7:
-    resolution: {integrity: sha512-AMw8tJlb3LhzAmhgXRcjDrTlNxR3gXXyj6G8eU9iwvCFtiUBD8MxAW7bwunA1gXDukgo40A970jX0APc2jMU7A==}
+  bare-tls@3.1.13:
+    resolution: {integrity: sha512-/4npvvjS1ocM9pNLFwbTLXZbpgtawuC7f98jM2ckUnajODVCdNZNImjWb5snI4L2Xe5vWGdwseMgt+PGCMSs4A==}
     engines: {bare: '>=1.7.0'}
 
   bare-tty@5.1.2:
@@ -16029,7 +16029,7 @@ snapshots:
     dependencies:
       bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
-      bare-tls: 3.1.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-tls: 3.1.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -16042,7 +16042,7 @@ snapshots:
     dependencies:
       bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
-      bare-tls: 3.1.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-tls: 3.1.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -16713,7 +16713,7 @@ snapshots:
       - bare-events
       - react-native-b4a
 
-  bare-tls@3.1.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
+  bare-tls@3.1.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
     dependencies:
       bare-net: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
