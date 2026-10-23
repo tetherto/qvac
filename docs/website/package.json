@@ -4,7 +4,7 @@
   "description": "Official documentation and single source of truth for QVAC",
   "private": true,
   "scripts": {
-    "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/*/*.ts ../../packages/sdk/examples/*/*/*.ts",
+    "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/*/*.ts ../../packages/sdk/examples/*/*/*.ts && bun run scripts/copy-example-assets.ts",
     "build": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links --ignore '/**/v[0-9]*' && bun run scripts/check-redirects.ts && bun run scripts/check-artifacts.ts && bun run scripts/check-navbar-links.ts && bun run scripts/check-breadcrumb-row.ts",
     "build:static": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links --ignore '/**/v[0-9]*' && bun run scripts/check-redirects.ts && bun run scripts/check-artifacts.ts && bun run scripts/check-navbar-links.ts && bun run scripts/check-breadcrumb-row.ts",
     "dev": "npm run prebuild:examples && next dev --turbo -p 3001",

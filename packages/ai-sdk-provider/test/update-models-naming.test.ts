@@ -42,6 +42,16 @@ const cases = [
     expected: 'PARAKEET_EOU_120M_V1_F16'
   },
   {
+    path: 'qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf',
+    quantization: 'q8_0',
+    expected: 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0'
+  },
+  {
+    path: 'qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf',
+    quantization: 'q8_0',
+    expected: 'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0'
+  },
+  {
     path: 'ggml/parakeet/parakeet-unified-en-0.6b.q8_0.gguf',
     quantization: 'q8_0',
     expected: 'PARAKEET_UNIFIED_0_6B_Q8_0'

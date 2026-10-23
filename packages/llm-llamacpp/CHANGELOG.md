@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.64.2] - 2026-10-23
+
+### Added
+
+- External MTP heads: `spec-type: 'draft-mtp'` accepts `spec-draft-model`, as
+  llama-server's `--spec-type draft-mtp -md <head>`, to draft for a model
+  without MTP layers, or a Gemma 4 assistant for its Gemma 4 model. The head
+  is placed like the model, and the load's fit and `assessFit` count its
+  weights and context; fabric cannot measure a Gemma 4 assistant, so they
+  leave it out. A head with another hidden width or vocabulary than the
+  model fails the load, and `assessFit` refuses it with `unsupported-config`
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
+### Fixed
+
+- `assessFit` with `spec-type: 'draft-mtp'` now counts the MTP draft context
+  in its per-device figures (`devices`, `deviceBytes`, `hostBytes`), not only
+  in its verdict, so their totals match what the load uses. As in fabric's
+  fit, the draft side's rows follow the placement the load asked for
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` refuses `spec-type: 'draft-mtp'` on a model without MTP layers
+  with `unsupported-config`, as the load fails, instead of projecting the
+  load without the MTP context
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` reports `model-unreadable` for a `spec-draft-model` that is not
+  a regular file, such as a directory, as the load rejects it, instead of
+  projecting the load without it
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
+## [0.64.1] - 2026-10-23
+
+### Fixed
+
+- Tool schemas and past tool-call arguments now keep the caller's key order.
+  They were sorted alphabetically before reaching the chat template, so the
+  tool-call grammar rejected arguments written in the declared order and models
+  dropped fields, wrote broken values or never finished the call. The README's
+  tool-calling section documents the order the grammar enforces
+  ([#5272](https://github.com/tetherto/qvac/pull/5272)).
+- A single streamed `run()` on a model loaded with `parallel >= 2` no longer
+  repeats its complete answer as the final chunk. Text and tool-call markup
+  are delivered once, while batch results and terminal statistics are preserved
+  ([#5295](https://github.com/tetherto/qvac/pull/5295)).
+- Prefilling a system prompt and tools with `prefill: true` now preserves a
+  reusable prefix on chat templates that require a user turn, including Qwen3.5.
+  The prefill generates no answer; a later text or image question can reuse the
+  prefix when the system prompt, tools and rendering settings match. Templates
+  without a safe reusable prefix retain normal rendering
+  ([#5256](https://github.com/tetherto/qvac/pull/5256)).
+
 ## [0.64.0] - 2026-10-20
 
 ### Added

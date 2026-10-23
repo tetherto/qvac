@@ -58,6 +58,10 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 Validation rules: prompt `id`s must be unique within a batch, and a prompt's `responseFormat` (`json_object` / `json_schema`) cannot be combined with `tools` or `mcp` (tools already constrain output via their parameter schema).
 </Callout>
 
+<Callout type="warn">
+The features above describe the JS/TS `BatchCompletionRun`. The Python client exposes the frame stream underneath it: each frame carries the interleaved `events`, one frame carries the assigned `ids`, and the final frame carries the batch-level `stats`. Group the events by prompt id yourself, as the Python example does — there is no run object with `byId()` or ordered `results`.
+</Callout>
+
 ## Example
 
 The following script loads a model with `parallel: 4`, submits several prompts in one `batchCompletion()` call, consumes the merged event stream, and reads the ordered results and batch-level stats:
@@ -78,11 +82,15 @@ The following script loads a model with `parallel: 4`, submits several prompts i
 ```
 </WrapCode>
 </Tab>
-</Tabs>
 
-<Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
-</Callout>
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/batch_completion.py title="batch_completion.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
