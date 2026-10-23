@@ -251,7 +251,7 @@
     "bare-link": "^4.0.1",
     "bare-net": "^2.3.2",
     "bare-os": "^3.6.2",
-    "bare-pack": "^2.0.1",
+    "bare-pack": "^3.0.2",
     "bare-path": "^3.0.1",
     "bare-rpc": "^1.3.2",
     "bare-runtime": "^1.34.1",
