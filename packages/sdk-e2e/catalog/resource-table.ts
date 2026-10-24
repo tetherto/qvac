@@ -88,6 +88,18 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { ctx_size: 4096, tools: true }
   },
 
+  'prefill-llm': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { ctx_size: 4096, tools: true, parallel: 1 }
+  },
+
+  'prefill-llm-parallel': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { ctx_size: 4096, tools: true, parallel: 2 }
+  },
+
   'tools-qwen35': {
     on: ['desktop', 'electron', 'snap'],
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
