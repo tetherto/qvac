@@ -44,6 +44,7 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       - name: Run health-check unit tests
         run: node --test .github/scripts/test/docs-website-health-check.test.mjs
@@ -63,6 +64,7 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       - name: Probe docs.qvac.tether.io
         # `_redirects` is pulled from the `docs-production` branch (what Sevalla

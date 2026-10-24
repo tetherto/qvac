@@ -148,7 +148,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
         with:
-          node-version: 22
+          node-version: lts/*
+          check-latest: true
 
       - name: Install Bare tooling
         run: npm install -g --force bare bare-make@1.8.0

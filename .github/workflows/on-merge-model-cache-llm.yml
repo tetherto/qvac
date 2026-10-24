@@ -78,6 +78,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       # Inputs must stay identical to integration-test-llm-llamacpp.yml's call.
       # The key comes from the package name and manifest hash, the cache version
@@ -127,6 +128,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       # Inputs must stay identical to the seed step's: `path` feeds the cache
       # version, so a different one silently probes a different entry.

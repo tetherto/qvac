@@ -51,6 +51,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
       - name: Run cache-models action unit tests
         run: node --test .github/actions/cache-models/test/*.test.mjs
       - name: Run seed-and-presign action unit tests
@@ -89,6 +90,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
       - name: Run perf-report unit tests
         run: node --test scripts/perf-report/__tests__/*.test.js
 
@@ -107,6 +109,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
       - name: Run CI script unit tests
         run: node --test scripts/ci/__tests__/*.test.cjs
       - name: Validate shared agent configuration
@@ -129,6 +132,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
       - name: Verify pinned models are reachable and unchanged
         run: |
           node .github/actions/cache-models/check-manifest-availability.mjs \

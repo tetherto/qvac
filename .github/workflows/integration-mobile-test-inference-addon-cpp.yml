@@ -246,7 +246,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: lts/*
+          check-latest: true
           package-manager-cache: false
       - name: Install Bare tooling
         run: npm install -g --force bare bare-make@1.8.0
@@ -316,7 +317,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: lts/*
+          check-latest: true
           package-manager-cache: false
 
       - name: Install Bare tooling
@@ -366,7 +368,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: lts/*
+          check-latest: true
           package-manager-cache: false
 
       - name: Install Bare tooling
@@ -617,7 +620,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: lts/*
+          check-latest: true
           package-manager-cache: false
 
       # Overlay the data onto the CLEAN framework. upload-to-devicefarm then runs
