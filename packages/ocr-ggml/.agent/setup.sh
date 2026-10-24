@@ -174,12 +174,6 @@ setup_claude() {
     copy_plain "$SCRIPT_DIR/settings.json" "$REPO_ROOT/.claude/settings.json"
   fi
 
-  # MCP: print instructions (Claude Code uses user-level config)
-  echo ""
-  echo "  MCP servers are defined in .agent/mcp.json."
-  echo "  To configure Claude Code, add them to ~/.claude/settings.json under 'mcpServers'."
-  echo "  See .agent/mcp.json for the server definitions."
-  echo ""
   echo "Claude Code setup complete."
 }
 
@@ -193,7 +187,7 @@ setup_cursor() {
   # Conduct → always-applied .mdc rule
   wrap_mdc_rule \
     "$SCRIPT_DIR/conduct.md" \
-    "Agent Code of Conduct — scope, quality gates, retry policy, Asana updates, code style, CI validation, and prohibited actions" \
+    "Agent Code of Conduct — scope, quality gates, retry policy, chat reports, code style, CI validation, and prohibited actions" \
     "true" \
     "$REPO_ROOT/.cursor/rules/agent-conduct.mdc"
 
@@ -216,15 +210,6 @@ setup_cursor() {
   # Cursor discovers repository skills directly from .agents/skills. Only the
   # package-specific OCR skills need generated compatibility copies.
   copy_skills "$SCRIPT_DIR/skills" "$REPO_ROOT/.cursor/skills"
-
-  # MCP: generate .cursor/mcp.json from .agent/mcp.json
-  # Cursor uses mcpServers at the top level (not nested under "servers")
-  node -e "
-    const src = require('$SCRIPT_DIR/mcp.json');
-    const out = { mcpServers: src.servers };
-    process.stdout.write(JSON.stringify(out, null, 2) + '\n');
-  " > "$REPO_ROOT/.cursor/mcp.json"
-  echo "  generated: .cursor/mcp.json"
 
   echo ""
   echo "Cursor setup complete."
