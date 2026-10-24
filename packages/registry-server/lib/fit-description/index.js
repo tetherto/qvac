@@ -7,12 +7,16 @@ const { describeBciEmbedder } = require('./bci-embedder')
 const { describeIndicTrans } = require('./nmt')
 const { describeMarianModel, describeMarianShortlist } = require('./marian')
 const { describeSentencePiece } = require('./sentencepiece')
+const { describeEsrgan } = require('./esrgan')
 
 const WHISPER_ENGINE = '@qvac/transcription-whispercpp'
 const BCI_ENGINE = '@qvac/bci-whispercpp'
 const NMT_ENGINE = '@qvac/translation-nmtcpp'
 
 const DESCRIBERS_BY_EXTENSION = {
+  '.pth': {
+    '@qvac/diffusion-cpp': [describeEsrgan]
+  },
   '.bin': {
     [WHISPER_ENGINE]: [describeWhisperModel, describeWhisperVad],
     [BCI_ENGINE]: [describeWhisperModel, describeBciEmbedder],

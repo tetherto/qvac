@@ -141,7 +141,8 @@ function fitBlobContent(filePath, engine) {
  * Writes the weightless description of an artifact next to it: a GGUF holding
  * the tensor inventory and the settings with the tokenizer tables left out, a
  * safetensors' JSON header, or, for the `.bin` and `.spm` artifacts of the
- * whisper.cpp, BCI and nmt.cpp engines, a GGUF with no data section holding
+ * whisper.cpp, BCI and nmt.cpp engines and supported ESRGAN `.pth` checkpoints,
+ * a GGUF with no data section holding
  * the file's settings, its tensor inventory and its vocabulary sizes.
  *
  * `engine` picks the reader for the extensions several engines share.

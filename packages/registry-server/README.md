@@ -265,7 +265,8 @@ corestore/
 #### Weightless Descriptions
 
 Alongside every GGUF and safetensors artifact, and the `.bin` and `.spm`
-artifacts of the whisper.cpp, BCI and nmt.cpp engines, ingest stores a
+artifacts of the whisper.cpp, BCI and nmt.cpp engines, and supported ESRGAN
+`.pth` checkpoints, ingest stores a
 weightless description of it, which is what an engine's dry-run fitter reads to
 project memory use before any weights are downloaded.
 
@@ -305,6 +306,14 @@ description and no pointer.
 
 Every file is described on its own, each shard of a split model included.
 
+For `@qvac/diffusion-cpp`, ESRGAN `.pth` checkpoints in the PyTorch ZIP,
+pickle-protocol-2 layout get a header-only GGUF containing their tensor names,
+types and dimensions. The reader supports contiguous FloatStorage and HalfStorage
+tensors in uncompressed ZIP entries, as used by the catalog's RealESRGAN and
+RealESRNet checkpoints. It reads the directory, local headers and pickle metadata
+without loading tensor payloads or executing pickle globals. Unsupported
+serializations, other tensor types and malformed archives get no description.
+
 Records without a pointer are filled in with `npm run fill:fit-blobs`. It reads
 each artifact from the blob core the record names, taking only blocks the writer
 already holds, and from the record's source when the writer holds none of it.
@@ -318,6 +327,11 @@ can be taken in batches:
 npm run fill:fit-blobs -- --dry-run
 npm run fill:fit-blobs -- --filter qwen3.5 --limit 20
 ```
+
+After deploying support for ESRGAN descriptions, preview and fill existing
+checkpoints with `--filter esrgan --limit 3`, using `--dry-run` first. New ingests
+receive descriptions automatically. SDK pre-download ESRGAN fitting also needs
+the inference integration that forwards the checkpoint and upscaler settings.
 
 `--force` also considers records that already carry a pointer, replacing a
 description whose checksum no longer matches its artifact.

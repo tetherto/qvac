@@ -15,6 +15,7 @@ const { AUTOBASE_NAMESPACE, QVAC_MAIN_REGISTRY } = require('../../shared/constan
 const { createTempStorage, waitFor } = require('../helpers/test-utils')
 const { buildGguf, buildSafetensors } = require('../helpers/gguf-fixture')
 const { buildWhisperBin } = require('../helpers/bin-fixtures')
+const { buildPth } = require('../helpers/pth-fixture')
 const { fitBlobContent } = require('../../lib/fit-blob')
 
 const DISPATCH_ADD_INDEXER = `@${QVAC_MAIN_REGISTRY}/add-indexer`
@@ -961,6 +962,49 @@ test('fillFitBlobs adds a pointer to records ingested without one', async (t) =>
       source: model.source
     })
     t.alike(afterForce.fitBlobBinding, retrieved.fitBlobBinding, 'the pointer is untouched')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('ESRGAN descriptions survive ingest and fill without replacing the weights', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+    const artifact = buildPth()
+    const engine = '@qvac/diffusion-cpp'
+    const current = await addLocalArtifact(ctx, {
+      filename: 'current.pth',
+      buffer: artifact,
+      engine
+    })
+    const expected = await fitBlobFor(t, 'current.pth', artifact, engine)
+    t.ok(current.fitBlobBinding, 'ingest publishes an ESRGAN description')
+    t.alike(await readBlob(ctx.service, current.fitBlobBinding), expected)
+
+    const originalUpload = ctx.service._uploadFitBlob
+    let legacy
+    try {
+      ctx.service._uploadFitBlob = () => null
+      legacy = await addLocalArtifact(ctx, { filename: 'legacy.pth', buffer: artifact, engine })
+    } finally {
+      ctx.service._uploadFitBlob = originalUpload
+    }
+    t.absent(legacy.fitBlobBinding, 'the existing record starts without a description')
+    const dryRun = await ctx.service.fillFitBlobs({ dryRun: true })
+    t.alike(dryRun.paths, [legacy.path], 'only the unfilled checkpoint is selected')
+    const filled = await ctx.service.fillFitBlobs()
+    await flushAutobases(ctx.service.base)
+    t.is(filled.filled, 1)
+    t.alike(filled.skipped, [])
+    const record = await ctx.service.getModelByKey({ path: legacy.path, source: legacy.source })
+    t.alike(await readBlob(ctx.service, record.fitBlobBinding), expected)
+    t.alike(record.blobBinding, legacy.blobBinding, 'the checkpoint binding is unchanged')
+    const repeated = await ctx.service.fillFitBlobs()
+    t.is(repeated.selected, 0, 'backfill is idempotent')
   } finally {
     await cleanupService(ctx)
   }

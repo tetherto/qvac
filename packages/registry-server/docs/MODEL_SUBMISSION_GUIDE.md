@@ -100,10 +100,14 @@ How sync works:
 
 Ingest stores a weightless description of GGUF and safetensors artifacts, and of
 the `.bin` and `.spm` artifacts of the whisper.cpp, BCI and nmt.cpp engines,
+and supported ESRGAN `.pth` checkpoints for `@qvac/diffusion-cpp`,
 holding their settings and tensor list, and points the record at it through
 `fitBlobBinding`. Clients fetch it to project memory use before downloading a
 model. Nothing is required of a submission for this to happen beyond the right
-`engine`, which picks the reader for a `.bin`.
+`engine`, which picks the reader for a `.bin` or `.pth`. ESRGAN descriptions
+support PyTorch ZIP archives with uncompressed entries, protocol-2 pickle
+metadata and contiguous FloatStorage or HalfStorage tensors. Legacy non-ZIP
+checkpoints and other serializations keep the existing no-description behavior.
 
 Other formats get none, and so does a file that does not parse as its engine's
 format, so such a submission will have no `fitBlobBinding`. That is expected and
