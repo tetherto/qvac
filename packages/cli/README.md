@@ -71,13 +71,13 @@ qvac doctor [options]
 
 **Options:**
 
-| Flag            | Description                                                       |
-| --------------- | ----------------------------------------------------------------- |
-| `--deep`        | Start the installed SDK worker and verify its heartbeat.          |
-| `--json`        | Output the report as JSON.                                        |
-| `-q, --quiet`   | Suppress stdout — only set the exit code.                         |
-| `-v, --verbose` | Include bounded worker stdout/stderr when a deep check fails.     |
-| `--offline`     | Skip GitHub and npm registry lookups in the `engines.bare` check. |
+| Flag            | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| `--deep`        | Check native prerequisites, then verify the installed SDK worker heartbeat. |
+| `--json`        | Output the report as JSON.                                                  |
+| `-q, --quiet`   | Suppress stdout — only set the exit code.                                   |
+| `-v, --verbose` | Include bounded worker stdout/stderr when a deep check fails.               |
+| `--offline`     | Skip GitHub and npm registry lookups in the `engines.bare` check.           |
 
 **What it checks:**
 
@@ -102,6 +102,16 @@ qvac doctor [options]
   `react-native-bare-kit` release to upgrade to and, per package, an override
   that pins a release that runs on the current Bare. See
   [Bare runtime detection](#verify-bundle) for where versions come from.
+- **Linux native prerequisites (`--deep`)** — uses `readelf` (binutils) to
+  inspect current-host x64/arm64 prebuilds in the installed SDK dependency tree,
+  before starting a worker. Checks `$ORIGIN`/RUNPATH, `LD_LIBRARY_PATH`, the
+  loader cache and standard library directories. Missing required libraries
+  fail the check; optional GPU/RPC backend requirements are warnings. Fabric's
+  declared provider and preload are checked by SONAME, not by filename.
+  Unresolved package dependencies produce a separate warning, never an OS
+  package recommendation. The scan is limited to 15 seconds and does not check
+  symbol versions or replace the heartbeat. If binutils is unavailable or the
+  scan is incomplete, the report says so and the heartbeat still runs.
 - **SDK runtime (`--deep`)** — starts the installed SDK in an isolated Node.js
   process, performs a worker heartbeat, and closes it. The probe is bounded to
   45 seconds and classifies common Bare, native library, CPU instruction,

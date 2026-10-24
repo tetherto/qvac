@@ -745,7 +745,8 @@ describe('deep SDK runtime probe', () => {
       const report = await runDoctor({ projectRoot: fixture.projectRoot, deep: true, quiet: true })
       const section = report.sections.at(-1)
       assert.equal(section?.id, 'deep')
-      assert.equal(section?.checks[0]?.status, 'pass')
+      assert.equal(section?.checks[0]?.id, 'native-libraries')
+      assert.equal(section?.checks.find((check) => check.id === 'sdk-runtime')?.status, 'pass')
     } finally {
       fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
     }
