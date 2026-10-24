@@ -31,6 +31,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'node:url';
+import { cutLineFolders } from './lib/sample-lines.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'out');
@@ -41,15 +42,16 @@ const MAIN_SITE = 'https://qvac.tether.io';
 /**
  * One page per collection, plus a cut line of each versioned collection. The
  * bar is chrome, so a handful of pages drawn from every layout the site has
- * is enough to show it does not vary.
+ * is enough to show it does not vary. The lines come from the manifest, so a
+ * cut or a retirement does not have to edit this list.
  */
 const PAGES = [
   'ecosystem/index.html',
   'sdk/index.html',
   'cli/index.html',
   'resources/index.html',
-  'sdk/v0.19/index.html',
-  'cli/v0.13/index.html',
+  `sdk/${cutLineFolders('/sdk')[0]}/index.html`,
+  `cli/${cutLineFolders('/cli')[0]}/index.html`,
 ];
 
 /**

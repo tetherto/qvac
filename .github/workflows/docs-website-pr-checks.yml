@@ -37,14 +37,20 @@ jobs:
         run: bun install
 
       - name: Build and validate
-        # The API summary lives at `content/docs/sdk/(v0.20)/reference/api.mdx`,
-        # with one copy per cut line under `content/docs/sdk/v0.19/reference/`
-        # and `content/docs/sdk/v0.18/reference/`. Each is committed to the
-        # repo and refreshed locally by the `qv-sdk-changelog` skill (Step 8)
-        # during SDK release prep, so every PR checkout already has them on
-        # disk — no placeholder step is needed here. (The historical
-        # placeholder targeted `content/docs/sdk/api/`, a path the build never
-        # read and that no longer exists.)
+        # The API summary lives at `content/docs/sdk/(v0.23)/reference/api.mdx`,
+        # with one copy per cut line under `content/docs/sdk/v0.22/reference/`
+        # and the lines below it. Each is committed to the repo and refreshed
+        # locally during the release cutoff (see `docs/ci/RELEASE-TRAIN.md`
+        # step 6), so every PR checkout already has them on disk — no
+        # placeholder step is needed here. (The historical placeholder
+        # targeted `content/docs/sdk/api/`, a path the build never read and
+        # that no longer exists.)
+        #
+        # The development line is not built: it sits outside `content/docs/`,
+        # which is what keeps unreleased pages off the site. The checks that do
+        # not need a render read it anyway — `tests/link-integrity.test.ts`
+        # resolves its links and requires a title on every page — so what
+        # surfaces only on the cutoff PR is malformed MDX.
         run: bun run build
 
       - name: Run docs tests
@@ -62,3 +68,69 @@ jobs:
         env:
           SDK_PATH: ${{ github.workspace }}/packages/sdk
         run: bun run vitest run tests/tsdoc-completeness.test.ts
+
+  published-lines:
+    # Say when a PR edits a line that has already been cut.
+    #
+    # Feature documentation belongs in the development line, outside the site
+    # at `content/_unpublished/<collection>/next/`. Everything under
+    # `content/docs/<collection>/` has been cut: either it is a version the
+    # site already serves, or it is the version being released and awaiting
+    # promotion. Editing one is legitimate — correcting a shipped release's
+    # pages is the reason the folders are kept — so this never blocks. It only
+    # says what the edit implies, because only a human can tell a correction
+    # from documentation written into the wrong line.
+    #
+    # There is no rename check here any more. A cut copies the development line
+    # into the collection and leaves it in place, so no line folder is deleted
+    # and git has no deletion to pair a pre-cutoff edit against: the path a
+    # feature PR writes to is the same before and after a cutoff, and the edit
+    # lands in the line it was written for. The failure that needed catching
+    # (QVAC-27286) cannot occur under that shape.
+    name: Published lines advisory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          # The diff needs both ends; the default depth of 1 has neither.
+          fetch-depth: 0
+
+      - name: Report edits to lines already cut
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        working-directory: .
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HEAD_SHA:-}" ]; then
+            echo "Not a pull request; nothing to report."
+            exit 0
+          fi
+
+          # A collection whose development line does not exist yet has not had
+          # its first cut under this model: its group still holds the version
+          # under development, so editing it is what a feature PR is supposed
+          # to do. Skip it. This retires with the last bootstrap cut.
+          paths=()
+          for collection in sdk cli; do
+            if [ -d "docs/website/content/_unpublished/${collection}/next" ]; then
+              paths+=("docs/website/content/docs/${collection}/")
+            fi
+          done
+
+          if [ ${#paths[@]} -eq 0 ]; then
+            echo "No collection has a development line yet; nothing to report."
+            exit 0
+          fi
+
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          changed=$(git diff --name-only "$base" "$HEAD_SHA" -- "${paths[@]}" || true)
+
+          if [ -z "$changed" ]; then
+            echo "This PR edits no line that has been cut."
+            exit 0
+          fi
+
+          echo "::warning::This PR edits documentation lines that have already been cut. Correcting a release's pages is legitimate; documenting a new feature is not — that belongs in content/_unpublished/<collection>/next/. If the correction also applies to the line under development, apply it there too, or it will not survive the next cutoff."
+          printf '%s\n' "$changed"

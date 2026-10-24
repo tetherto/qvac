@@ -5,10 +5,10 @@
  * An AI capability page is registered in four places, and only one of them
  * fails loudly:
  *
- *   1. content/docs/sdk/<line>/ai-capabilities/<slug>.mdx   the page
+ *   1. <sdk-line>/ai-capabilities/<slug>.mdx              the page
  *   2. content/docs/ecosystem/index.mdx                     a <Card> in the grid, plus the icon import
- *   3. content/docs/sdk/<line>/index.mdx                    a bullet under "### AI tasks"
- *   4. content/docs/sdk/<line>/ai-capabilities/meta.json    the sidebar entry
+ *   3. <sdk-line>/index.mdx                               a bullet under "### AI tasks"
+ *   4. <sdk-line>/ai-capabilities/meta.json              the sidebar entry
  *
  * Forget the icon import in (2) and the build breaks. Forget the card, the
  * bullet, or the meta.json entry and everything passes: the page renders at a
@@ -17,9 +17,11 @@
  * silent failure mode this script exists to catch, and no other command in the
  * repo covers it.
  *
- * `<line>` is the collection's current documentation line, the folder written
- * in parentheses. It is resolved at runtime: the folder changes at every
- * release, and a stale constant would check a shipped version instead.
+ * `<sdk-line>` is the SDK's development line, outside the site at
+ * `content/_unpublished/sdk/next/`. It is resolved at runtime rather than
+ * written down, because a collection awaiting its first cut under this model
+ * still holds the version under development in its parenthesized folder, and
+ * a stale constant would check a shipped version instead.
  *
  * The sidebar moved out of `src/lib/custom-tree.ts` when the SDK became a
  * versioned collection. A line now declares its own navigation in `meta.json`,
@@ -72,11 +74,24 @@ for (let i = 0; i < args.length; i++) {
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REPO = repoRoot ?? path.resolve(SCRIPT_DIR, "..", "..", "..", "..");
 const WEBSITE = path.join(REPO, "docs", "website");
-const DOCS_CONTENT = path.join(WEBSITE, "content", "docs");
+const CONTENT = path.join(WEBSITE, "content");
 
-/** The parenthesized folder: the line answering the version-less addresses. */
-function currentLineOf(collection: string): string {
-  const dir = path.join(DOCS_CONTENT, collection);
+/**
+ * The line the collection is writing, relative to `content/`: the development
+ * line, outside the site at `content/_unpublished/<collection>/next/`.
+ *
+ * The fallback covers a collection whose development line does not exist yet,
+ * which is every collection until its first cut under this model: there the
+ * parenthesized folder still holds the version under development. It retires
+ * with the last bootstrap cut.
+ */
+function lineOf(collection: string): string {
+  const development = path.join("_unpublished", collection, "next");
+  if (fs.existsSync(path.join(CONTENT, development))) {
+    return development.split(path.sep).join("/");
+  }
+
+  const dir = path.join(CONTENT, "docs", collection);
   if (!fs.existsSync(dir)) {
     console.error(`check-capability-parity: no collection at ${dir}`);
     process.exit(2);
@@ -88,19 +103,19 @@ function currentLineOf(collection: string): string {
 
   if (groups.length !== 1) {
     console.error(
-      `check-capability-parity: ${collection} has ${groups.length} current lines (${groups.join(", ") || "none"}); exactly one folder must be parenthesized`,
+      `check-capability-parity: ${collection} has ${groups.length} lines cut as a group (${groups.join(", ") || "none"}); exactly one folder must be parenthesized`,
     );
     process.exit(2);
   }
-  return groups[0]!;
+  return `docs/${collection}/${groups[0]!}`;
 }
 
-const SDK_LINE = currentLineOf("sdk");
-const SDK_DIR = path.join(DOCS_CONTENT, "sdk", SDK_LINE);
+const SDK_LINE = lineOf("sdk");
+const SDK_DIR = path.join(CONTENT, SDK_LINE);
 
 const CAPABILITIES_DIR = path.join(SDK_DIR, "ai-capabilities");
 const CAPABILITIES_META = path.join(CAPABILITIES_DIR, "meta.json");
-const ECOSYSTEM_MDX = path.join(DOCS_CONTENT, "ecosystem", "index.mdx");
+const ECOSYSTEM_MDX = path.join(CONTENT, "docs", "ecosystem", "index.mdx");
 const SDK_INDEX_MDX = path.join(SDK_DIR, "index.mdx");
 
 /** Where the grid and the bullets point: the version-less capability URL. */
@@ -247,14 +262,14 @@ function check(r: Registers): Finding[] {
     if (!r.bullets.has(slug)) {
       findings.push({
         slug,
-        detail: `no bullet linking ${CAPABILITY_URL_PREFIX}${slug} under "### AI tasks" in sdk/${SDK_LINE}/index.mdx`,
+        detail: `no bullet linking ${CAPABILITY_URL_PREFIX}${slug} under "### AI tasks" in ${SDK_LINE}/index.mdx`,
         accepted: false,
       });
     }
     if (!navSet.has(slug)) {
       findings.push({
         slug,
-        detail: `not listed in sdk/${SDK_LINE}/ai-capabilities/meta.json — the page would be reachable by URL and invisible in navigation`,
+        detail: `not listed in ${SDK_LINE}/ai-capabilities/meta.json — the page would be reachable by URL and invisible in navigation`,
         accepted: false,
       });
     }
@@ -282,7 +297,7 @@ function check(r: Registers): Finding[] {
     if (!pageSet.has(slug)) {
       findings.push({
         slug,
-        detail: `bullet in sdk/${SDK_LINE}/index.mdx points at a non-existent page`,
+        detail: `bullet in ${SDK_LINE}/index.mdx points at a non-existent page`,
         accepted: false,
       });
     }
@@ -358,7 +373,7 @@ if (asJson) {
 console.log(`=== AI capability registration parity — SDK ${SDK_LINE} ===\n`);
 console.log(`  pages    ${registers.pages.length}`);
 console.log(`  cards    ${registers.cards.size}   (ecosystem/index.mdx)`);
-console.log(`  bullets  ${registers.bullets.size}   (sdk/${SDK_LINE}/index.mdx)`);
+console.log(`  bullets  ${registers.bullets.size}   (${SDK_LINE}/index.mdx)`);
 console.log(`  nav      ${registers.nav.length}   (ai-capabilities/meta.json)\n`);
 
 for (const f of accepted) {

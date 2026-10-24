@@ -246,17 +246,13 @@ If it reports problems, fix them — `npx prettier --write` on the same paths, o
 `npm run format:fix` — and re-run the check until it passes clean. Do this before
 moving on so the release commit carries only prettier-clean markdown.
 
-**Downstream rendering note:** the docs site reads `CHANGELOG_LLM.md`
-**verbatim** and inlines it under a `### @qvac/<pkg>` subsection of the
-release-notes page of the SDK's current documentation line (one
-`reference/release-notes.mdx` per line — see
-`docs/website/docs-workflow.md`). Each headline you write becomes a
-section header on the public docs site (with two levels of demotion to
-fit the nesting), so phrase them as standalone reader-facing prose, not
-internal categories. **Keep headings emoji-free** (e.g. `## Breaking
-Changes`, not `## 💥 Breaking Changes`) — emoji prefixes leak verbatim
-into the public headers; the only allowed emoji is the `📦 **NPM:**`
-line. See the format guide for the full rule.
+**Downstream rendering note:** what you write here is what the public reads.
+`CHANGELOG_LLM.md` is the body of the GitHub release for this version, and the
+documentation site's sidebar links each line straight at it. Phrase every
+headline as standalone reader-facing prose, not an internal category. **Keep
+headings emoji-free** (e.g. `## Breaking Changes`, not `## 💥 Breaking
+Changes`); the only allowed emoji is the `📦 **NPM:**` line. See the format
+guide for the full rule.
 
 ### Step 5: Generate `announcement-post.txt` (mandatory)
 
@@ -334,108 +330,28 @@ cd packages/sdk-python
 published. Include sdk-python generated updates in the release commit. The Python
 client does not get its own changelog — history lives in `packages/sdk/CHANGELOG.md`.
 
-### Step 8: Generate site docs (only when `--package=sdk`)
+### Step 8: Cut the documentation line of the version being released
 
-Generate the documentation-site API reference and release notes for the new
-version **in the same working tree**, so the changelog PR also carries the docs
-update. This replaces the old standalone `docs-release.yml` workflow (which
-opened a second, separate docs PR). Skip this step entirely for any other
-`--package` value — only the SDK release drives the versioned docs site.
+Only for a package with a versioned documentation collection —
+`@qvac/sdk` → `/sdk`, `@qvac/cli` → `/cli`, per
+`docs/website/src/lib/versions.ts`. Any other `--package` value documents
+nothing versioned and skips this step.
 
-Generation is **deterministic**: it runs the existing `docs/website` scripts
-(TypeDoc + Nunjucks render + verbatim `CHANGELOG_LLM.md` inlining). No LLM is
-involved in producing the API reference or release notes here — Step 4 already
-authored `CHANGELOG_LLM.md`, and this step only renders it into the site.
+A release publishes the documentation line written for it. Invoke
+`qv-docs-cutoff` with the version being released, that one collection, and the
+release branch — `release-<package>-<x.y.z>`, which is what tells it the release
+base, since the cutoff publishes the tree the release was cut from and not
+`main`'s tip. It opens **one** PR into `main`, separate from the release PR, and
+reports its URL. Do not approve or merge it: the documentation engineer reviews it, and
+that review is the only gate on the documentation side of the release.
 
-**Precondition — the line is already cut (fail-stop):**
+This is the same step a release train runs at `docs/ci/RELEASE-TRAIN.md` step
+6; the only difference is that a train cuts every collection it moves and this
+cuts one.
 
-The site publishes one **documentation line** per SDK minor: a folder under
-`content/docs/sdk/` holding a complete page tree. The current line's folder is
-parenthesised — `(v0.21)` — and answers the version-less paths; every older
-line's is plain. The line for the version you are releasing was cut by the
-documentation engineer right after the *previous* release deployed, so it
-already exists when you reach this step.
-
-The generators write into the current line, read from
-`docs/website/src/lib/versions.ts`. They refuse a version that is not that
-line's, before writing anything:
-
-```
-Refusing to write v0.21 pages into v0.20, the current line of /sdk.
-  v0.21 has no line yet. Cut it before documenting the release:
-    bun run scripts/cut-line.ts sdk v0.21
-```
-
-That message means the cut has not happened. **STOP and ask the documentation
-engineer to cut the line.** Do not run the cut inside a release PR, and do not
-work around the refusal — without it, the release notes of the version that
-already shipped are overwritten, and the build and the test suite both still
-pass.
-
-**Prerequisites:**
-
-- `docs/website` dependencies installed (`cd docs/website && npm install`).
-- `SDK_PATH` set in `docs/website/.env` pointing at the SDK package root
-  (`packages/sdk`, the directory containing `index.ts` and `tsconfig.json`).
-  Copy `docs/website/.env.example` to `.env` if it doesn't exist yet.
-  `CHANGELOG_REPO_ROOT` defaults to the repo root, so no override is needed
-  when running inside the monorepo.
-
-**1. Generate the API reference + release notes.** Which commands depends on
-whether this is a minor or a patch.
-
-Minor (`X.Y.0`) — render both pages:
-
-```bash
-cd docs/website
-bun run scripts/generate-api-docs.ts <version> --force-extract
-bun run scripts/generate-release-notes.ts <version>
-```
-
-Patch (`X.Y.Z`, `Z >= 1`) — append the `## vX.Y.Z` section and leave the API
-summary alone, because the public API is frozen at the minor boundary:
-
-```bash
-cd docs/website
-bun run scripts/generate-release-notes.ts <version> --append-patch
-```
-
-Either way it writes only, with `(v<X.Y>)` the current line's folder:
-
-- `docs/website/content/docs/sdk/(v<X.Y>)/reference/api.mdx` (**minor only**)
-- `docs/website/content/docs/sdk/(v<X.Y>)/reference/release-notes.mdx`
-
-Nothing else. `src/lib/versions.ts` and `public/_redirects` belong to the cut,
-not to a release — a release must leave both untouched.
-
-Those paths are generated here on release. Capability/CLI/config/runtime prose
-is `/qv-docs-update` on the feature PR. Do not hand-edit `reference/**`.
-
-**2. Verify the site still builds (mandatory):**
-
-```bash
-cd docs/website
-npm run build
-```
-
-A clean build confirms nothing on the website broke. Treat a build failure as
-**fail-stop**: surface the error and do NOT proceed to commit until it's fixed.
-
-**Staging follows the same convention as the other steps.** Like every other
-step, this one only generates files — it never runs `git add` or `git commit`.
-The pages above are part of the release commit (same as Step 7's
-version files: "Include … in the release commit"), and every
-generation/build byproduct is gitignored — exactly like Step 5's
-`announcement-post.txt` — so a normal `git status` review shows only the
-committable files. Let the user review before committing. Generated + gitignored
-byproducts (do not `git add` them):
-
-- `docs/website/scripts/api-docs/api-data.json` (written by `generate-api-docs.ts`)
-- `docs/website/.next/`, `.source/`, `out/`, `dist/` (from `npm run build`)
-- `docs/website/next-env.d.ts`
-- `packages/sdk/dist/` (from the `prebuild:examples` build step)
-
-See `docs/website/docs-workflow.md` for the full pipeline reference.
+The documentation does not reach production on merge. After the version is on
+npm, the merged commit goes to `promote-docs-production.yml` — step 3 of the
+release flow in `docs/gitflow.md`, not before.
 
 ## CLI Parameters
 
@@ -465,18 +381,6 @@ Generates changelog files in `packages/<package>/changelog/<version>/`:
 Additionally:
 
 - `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest), preferring `CHANGELOG_LLM.md` (human-readable) from each version folder when available, falling back to `CHANGELOG.md`
-
-When `--package=sdk`, Step 8 also generates the documentation-site pages of the
-SDK's current documentation line (commit these alongside the changelog), with
-`(v<X.Y>)` its folder:
-
-- `docs/website/content/docs/sdk/(v<X.Y>)/reference/api.mdx` – API reference
-  MDX, **minor releases only**
-- `docs/website/content/docs/sdk/(v<X.Y>)/reference/release-notes.mdx` –
-  Release notes MDX
-
-Nothing else. The version manifest (`src/lib/versions.ts`) and the redirects
-(`public/_redirects`) belong to the line cut, which happens outside a release.
 
 ## Tag Format
 
@@ -536,11 +440,11 @@ Before completing:
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
 - [ ] NOTICE updated; JS section not emptied by a failed install
 - [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
-- [ ] When `--package=sdk`: the line for this version was already cut (no generator refusal), site docs generated via `generate-api-docs.ts` + `generate-release-notes.ts`, `npm run build` passed, and `git status` shows only that line's `reference/api.mdx` (minor) and `reference/release-notes.mdx` as committable docs changes — never `src/lib/versions.ts` or `public/_redirects` (byproducts gitignored)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions
 - [ ] Root file is deterministic (fully regenerated)
+- [ ] For a package with a versioned docs collection: `qv-docs-cutoff` invoked, its PR URL reported, neither approved nor merged
 - [ ] Org remote (`upstream` when that is tetherto/qvac) is the push target, not the fork
 
 ## References
@@ -550,5 +454,5 @@ Before completing:
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
 - NOTICE generation: `.agents/skills/qv-notice-generate/SKILL.md`
 - sdk @qvac/inference version: `.agents/skills/qv-sdk-inference-version/SKILL.md`
-- Docs site pipeline (Step 8): `docs/website/docs-workflow.md`
 - Release PR branch naming (org `release-*` push / Merge Guard): `.agents/skills/qv-sdk-pr-create/SKILL.md`
+- Documentation cutoff: `.agents/skills/qv-docs-cutoff/SKILL.md`

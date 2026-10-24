@@ -3,12 +3,15 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  baselineFrom,
   cutLine,
   cutManifest,
   cutRedirects,
-  emptyReleaseNotes,
   relabelTitle,
+  retargetReleaseNotesLink,
+  type Baseline,
 } from '../scripts/cut-line';
+import { DEVELOPMENT_LINE } from '../scripts/lib/release-shared';
 import { DOCUMENTED_SOFTWARE } from '../src/lib/versions';
 
 /**
@@ -30,6 +33,18 @@ const NEXT = (() => {
   const [major, minor] = CURRENT.replace(/^v/, '').split('.');
   return `v${major}.${Number(minor) + 1}`;
 })();
+/** The line cut before the current one, which is what a release base holds. */
+const PREVIOUS = sdk.versions[1]!.version;
+
+/** What a first cut has to leave out of the line it publishes. */
+const AFTER = {
+  page: 'after-the-release-base.mdx',
+  prose: '---\ntitle: Written after the release base\n---\n\nBody.\n',
+  summary: '---\ntitle: API Summary — regenerated for this release\n---\n',
+};
+
+const developmentDir = (root: string, slug = 'sdk') =>
+  path.join(root, 'content', '_unpublished', slug, DEVELOPMENT_LINE);
 
 describe('the manifest edit', () => {
   const manifest = [
@@ -151,52 +166,140 @@ describe('the currency marker', () => {
   });
 });
 
-describe('the release notes of the line being opened', () => {
-  const page = [
-    '---',
-    'title: SDK Release Notes — v0.21.x (latest)',
-    'sidebarTitle: Release notes',
-    'icon: Tag',
-    'description: Release notes for QVAC SDK v0.20.3.',
-    '---',
-    '',
-    '## v0.20.3',
-    '',
-    'What the previous line shipped.',
-    '',
-  ].join('\n');
+describe('the release-notes link of the line being opened', () => {
+  const meta = (tag: string) =>
+    [
+      '{',
+      '  "title": "Reference",',
+      '  "pages": [',
+      '    "api",',
+      `    "external:[Release Notes](https://github.com/tetherto/qvac/releases/tag/${tag})"`,
+      '  ]',
+      '}',
+      '',
+    ].join('\n');
 
-  const emptied = emptyReleaseNotes(page, 'v0.21', '@qvac/sdk')!;
-
-  it('drops the previous line\'s notes, which it shares nothing with', () => {
-    expect(emptied).not.toContain('## v0.20.3');
-    expect(emptied).not.toContain('What the previous line shipped.');
+  it('names the opened line\'s own tag, not the one it was copied from', () => {
+    expect(
+      retargetReleaseNotesLink(meta('sdk-v0.22.0'), 'sdk', 'v0.23'),
+    ).toContain('/releases/tag/sdk-v0.23.0)');
   });
 
-  it('keeps the frontmatter, so the page stays in the sidebar', () => {
-    expect(emptied).toContain('title: SDK Release Notes — v0.21.x (latest)');
-    expect(emptied).toContain('sidebarTitle: Release notes');
-    expect(emptied).toContain('icon: Tag');
+  it('leaves the rest of the entry alone', () => {
+    const retargeted = retargetReleaseNotesLink(
+      meta('sdk-v0.22.0'),
+      'sdk',
+      'v0.23',
+    )!;
+    expect(retargeted).toContain('"api"');
+    expect(retargeted).toContain('external:[Release Notes](');
+    expect(retargeted).not.toContain('sdk-v0.22.0');
   });
 
-  it('describes the line it opens, not the release it copied', () => {
-    expect(emptied).toContain('description: Release notes for @qvac/sdk v0.21.');
-    expect(emptied).not.toContain('v0.20.3.');
+  it('reports a file carrying no such entry, which is every other collection', () => {
+    const cli = '{\n  "title": "Reference",\n  "pages": ["api"]\n}\n';
+    expect(retargetReleaseNotesLink(cli, 'cli', 'v0.18')).toBeNull();
   });
 
-  it('says the line has not shipped, rather than rendering blank', () => {
-    expect(emptied).toContain('v0.21 has not been released yet.');
+  it('matches the slug literally, so a metacharacter cannot stand for a letter', () => {
+    expect(retargetReleaseNotesLink(meta('sdk-v0.22.0'), 'sd.', 'v0.23')).toBeNull();
+  });
+});
+
+describe('the release base, read out of history', () => {
+  let baseline: Baseline;
+
+  beforeAll(() => {
+    baseline = baselineFrom('HEAD', 'sdk');
   });
 
-  it('writes a description when the page carried none', () => {
-    const bare = '---\ntitle: SDK Release Notes — v0.21.x\n---\n\n## v0.20.3\n';
-    expect(emptyReleaseNotes(bare, 'v0.21', '@qvac/sdk')).toContain(
-      'description: Release notes for @qvac/sdk v0.21.',
+  afterAll(async () => {
+    await fs.rm(baseline.dir, { recursive: true, force: true });
+  });
+
+  it('reports the line the group was at that commit', () => {
+    expect(baseline.version).toBe(CURRENT);
+  });
+
+  it('materializes the page tree, not the folder that held it', async () => {
+    const materialized = await pagesOf(baseline.dir);
+    expect(materialized).toContain('index.mdx');
+    expect(materialized).toContain(path.join('reference', 'api.mdx'));
+    expect(materialized).toEqual(
+      await pagesOf(path.join(WEBSITE, 'content', 'docs', 'sdk', `(${CURRENT})`)),
     );
   });
 
-  it('reports a page with no frontmatter to keep, rather than emptying it', () => {
-    expect(emptyReleaseNotes('## v0.20.3\n', 'v0.21', '@qvac/sdk')).toBeNull();
+  it('refuses a ref that does not resolve', () => {
+    expect(() => baselineFrom('not-a-commit', 'sdk')).toThrow(
+      /does not resolve/,
+    );
+  });
+});
+
+describe("a collection's first cut, which splits the group in two", () => {
+  let root: string;
+  let baseline: Baseline;
+  let result: Awaited<ReturnType<typeof cutLine>>;
+  const group = () => path.join(root, 'content', 'docs', 'sdk', `(${CURRENT})`);
+
+  beforeAll(async () => {
+    root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-first-'));
+    await copyTree(root);
+    // The release base, captured before the sprint's later work landed.
+    baseline = await baselineOf(root);
+    // What merged into the group after the release base: a page of its own, an
+    // edit to an existing one, and a regenerated summary.
+    await fs.writeFile(path.join(group(), AFTER.page), AFTER.prose);
+    await fs.writeFile(path.join(group(), 'index.mdx'), AFTER.prose);
+    await fs.writeFile(
+      path.join(group(), 'reference', 'api.mdx'),
+      AFTER.summary,
+    );
+    result = await cutLine({ root, slug: 'sdk', version: CURRENT, baseline });
+  }, 30_000);
+
+  afterAll(async () => {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(baseline.dir, { recursive: true, force: true });
+  });
+
+  it('opens the development line from the group as it stands', async () => {
+    expect(await pagesOf(developmentDir(root))).toContain(AFTER.page);
+    expect(
+      await fs.readFile(path.join(developmentDir(root), 'index.mdx'), 'utf-8'),
+    ).toBe(AFTER.prose);
+  });
+
+  it('resets the group to the release base, so it documents the release', async () => {
+    expect(await pagesOf(group())).not.toContain(AFTER.page);
+    expect(await fs.readFile(path.join(group(), 'index.mdx'), 'utf-8')).toBe(
+      await fs.readFile(path.join(baseline.dir, 'index.mdx'), 'utf-8'),
+    );
+  });
+
+  it('keeps the generated summary, which the cutoff regenerated for this release', async () => {
+    expect(
+      await fs.readFile(path.join(group(), 'reference', 'api.mdx'), 'utf-8'),
+    ).toBe(AFTER.summary);
+  });
+
+  it('leaves the group where it is, because it already holds the release', async () => {
+    await expect(fs.stat(group())).resolves.toBeTruthy();
+  });
+
+  it('touches neither the manifest nor the redirects, since no line moved', async () => {
+    expect(result.changed).toEqual([
+      path.join('content', '_unpublished', 'sdk', DEVELOPMENT_LINE),
+      path.join('content', 'docs', 'sdk', `(${CURRENT})`),
+    ]);
+    expect(result.preserved).toBeNull();
+  });
+
+  it('refuses a second time, because the development line is already open', async () => {
+    await expect(
+      cutLine({ root, slug: 'sdk', version: CURRENT, baseline }),
+    ).rejects.toThrow(/already carries a development line/);
   });
 });
 
@@ -206,17 +309,14 @@ describe('a cut against a copy of the tree', () => {
 
   beforeAll(async () => {
     root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-'));
-    for (const relative of [
-      path.join('content', 'docs', 'sdk'),
-      path.join('src', 'lib', 'versions.ts'),
-      path.join('public', '_redirects'),
-    ]) {
-      const to = path.join(root, relative);
-      await fs.mkdir(path.dirname(to), { recursive: true });
-      await fs.cp(path.join(WEBSITE, relative), to, { recursive: true });
-    }
+    await copyTree(root);
+    // The state a steady-state cut starts from: the collection has been cut
+    // once, so its development line exists and holds the sprint's work.
+    const baseline = await baselineOf(root);
+    await cutLine({ root, slug: 'sdk', version: CURRENT, baseline });
+    await fs.rm(baseline.dir, { recursive: true, force: true });
     result = await cutLine({ root, slug: 'sdk', version: NEXT });
-  }, 30_000);
+  }, 60_000);
 
   afterAll(async () => {
     await fs.rm(root, { recursive: true, force: true });
@@ -231,17 +331,19 @@ describe('a cut against a copy of the tree', () => {
     ).rejects.toThrow();
   });
 
-  it('opens the new line complete, at the same paths', async () => {
-    const pagesOf = async (folder: string) =>
-      (
-        await fs.readdir(path.join(root, 'content', 'docs', 'sdk', folder), {
-          recursive: true,
-        })
-      ).sort();
-    expect(await pagesOf(`(${NEXT})`)).toEqual(await pagesOf(CURRENT));
+  it('opens the released line complete, at the same paths', async () => {
+    expect(await pagesOf(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`))).toEqual(
+      await pagesOf(path.join(root, 'content', 'docs', 'sdk', CURRENT)),
+    );
   });
 
-  it('declares both lines in the manifest, the new one current', async () => {
+  it('leaves the development line in place, which is what makes the path stable', async () => {
+    expect(await pagesOf(developmentDir(root))).toEqual(
+      await pagesOf(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`)),
+    );
+  });
+
+  it('declares both lines in the manifest, the released one as the group', async () => {
     const manifest = await fs.readFile(
       path.join(root, 'src', 'lib', 'versions.ts'),
       'utf-8',
@@ -260,63 +362,43 @@ describe('a cut against a copy of the tree', () => {
     expect(redirects).toContain(`/sdk/${CURRENT}/*       /sdk/${CURRENT}/:splat/index.html`);
   });
 
-  it('moves the currency marker from the preserved line to the opened one', async () => {
-    const titleIn = async (folder: string) =>
-      (
-        await fs.readFile(
-          path.join(root, 'content', 'docs', 'sdk', folder, 'reference', 'api.mdx'),
-          'utf-8',
-        )
-      )
-        .split('\n')
-        .find((line) => line.startsWith('title:'));
+  it('moves the currency marker from the preserved line to the released one', async () => {
+    expect(await titleIn(path.join(root, 'content', 'docs', 'sdk', CURRENT))).toBe(
+      `title: API Summary — ${CURRENT}.x`,
+    );
+    expect(
+      await titleIn(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`)),
+    ).toBe(`title: API Summary — ${NEXT}.x (latest)`);
+  });
 
-    expect(await titleIn(CURRENT)).toBe(`title: API Summary — ${CURRENT}.x`);
-    expect(await titleIn(`(${NEXT})`)).toBe(
+  it('leaves the development line carrying the released marker, for the next cut to move', async () => {
+    expect(await titleIn(developmentDir(root))).toBe(
       `title: API Summary — ${NEXT}.x (latest)`,
     );
   });
 
-  it('opens the line with empty release notes and the summary intact', async () => {
-    const pageIn = (folder: string, page: string) =>
-      fs.readFile(
-        path.join(root, 'content', 'docs', 'sdk', folder, 'reference', page),
-        'utf-8',
-      );
+  it('opens the line with the summary the development line carried', async () => {
+    const summaryOf = (dir: string) =>
+      fs.readFile(path.join(dir, 'reference', 'api.mdx'), 'utf-8');
 
-    const notes = await pageIn(`(${NEXT})`, 'release-notes.mdx');
-    expect(notes).toContain(`${NEXT} has not been released yet.`);
-    expect(notes).toContain(`description: Release notes for @qvac/sdk ${NEXT}.`);
-    expect(notes).not.toContain(`## ${CURRENT}.0`);
-
-    // The summary is the opposite case: the release renders it over the copy,
-    // and the diff against the previous line is what makes that review work.
-    expect(await pageIn(`(${NEXT})`, 'api.mdx')).toBe(
-      (await pageIn(CURRENT, 'api.mdx')).replace(
-        `${CURRENT}.x`,
-        `${NEXT}.x (latest)`,
-      ),
+    expect(await summaryOf(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`))).toBe(
+      await summaryOf(developmentDir(root)),
     );
   });
 
-  it('empties the opened line\'s notes only, never the preserved one\'s', async () => {
-    const notes = (from: string, folder: string) =>
-      fs.readFile(
-        path.join(
-          from, 'content', 'docs', 'sdk', folder, 'reference', 'release-notes.mdx',
-        ),
-        'utf-8',
-      );
-    const body = (page: string) => page.slice(page.indexOf('\n---\n') + 5);
-
-    expect(body(await notes(root, CURRENT))).toBe(
-      body(await notes(WEBSITE, `(${CURRENT})`)),
+  it("points the released line's release-notes link at its own tag", async () => {
+    expect(await tagIn(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`))).toBe(
+      `sdk-${NEXT}.0`,
     );
+    expect(await tagIn(path.join(root, 'content', 'docs', 'sdk', CURRENT))).toBe(
+      `sdk-${CURRENT}.0`,
+    );
+    expect(await tagIn(developmentDir(root))).toBe(`sdk-${NEXT}.0`);
   });
 
   it('reports what it changed', () => {
+    expect(result.released).toBe(NEXT);
     expect(result.preserved).toBe(CURRENT);
-    expect(result.opened).toBe(NEXT);
     expect(result.changed).toContain(path.join('src', 'lib', 'versions.ts'));
     expect(result.changed).toContain(path.join('public', '_redirects'));
   });
@@ -342,14 +424,40 @@ describe('a cut it cannot make reviewable', () => {
     );
   });
 
-  it('refuses a version that is not above the current line', async () => {
-    await expect(against('sdk', CURRENT)).rejects.toThrow(/is not above/);
+  it('refuses a version below the line last cut', async () => {
+    await expect(against('sdk', 'v0.1')).rejects.toThrow(/is not above/);
+  });
+
+  it('refuses to publish a line the development line cannot supply', async () => {
+    await expect(against('sdk', NEXT)).rejects.toThrow(/no development line/);
+  });
+
+  it('refuses a first cut with no release base to split the group against', async () => {
+    const root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-baseless-'));
+    await copyTree(root);
+    await expect(
+      cutLine({ root, slug: 'sdk', version: CURRENT }),
+    ).rejects.toThrow(/needs the release base/);
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it('refuses a release base on a cut that has a development line to publish', async () => {
+    await expect(
+      cutLine({
+        root: path.join(tmpdir(), 'cut-line-unreachable'),
+        slug: 'sdk',
+        version: NEXT,
+        baseline: { dir: tmpdir(), version: CURRENT },
+      }),
+    ).rejects.toThrow(/Drop --from/);
   });
 
   it('refuses a destination already on disk', async () => {
     const root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-occupied-'));
-    // Only the folder a cut would create: the refusal has to land before the
-    // manifest is even read, so nothing else needs to be there.
+    // The development line a cut reads from, plus the one folder a cut would
+    // create: the refusal has to land before the manifest is even read, so
+    // nothing else needs to be there.
+    await fs.mkdir(developmentDir(root), { recursive: true });
     await fs.mkdir(path.join(root, 'content', 'docs', 'sdk', CURRENT), {
       recursive: true,
     });
@@ -359,3 +467,45 @@ describe('a cut it cannot make reviewable', () => {
     await fs.rm(root, { recursive: true, force: true });
   });
 });
+
+/**
+ * The group as it stood at the release base: a copy taken before the test
+ * writes the sprint's later work into the tree. The real command materializes
+ * this out of git; what the cut sees is a directory either way.
+ */
+async function baselineOf(root: string, slug = 'sdk'): Promise<Baseline> {
+  const dir = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-baseline-'));
+  await fs.cp(path.join(root, 'content', 'docs', slug, `(${CURRENT})`), dir, {
+    recursive: true,
+  });
+  return { dir, version: PREVIOUS };
+}
+
+/** The pieces of the real tree a cut reads and writes. */
+async function copyTree(root: string): Promise<void> {
+  for (const relative of [
+    path.join('content', 'docs', 'sdk'),
+    path.join('src', 'lib', 'versions.ts'),
+    path.join('public', '_redirects'),
+  ]) {
+    const to = path.join(root, relative);
+    await fs.mkdir(path.dirname(to), { recursive: true });
+    await fs.cp(path.join(WEBSITE, relative), to, { recursive: true });
+  }
+}
+
+async function pagesOf(dir: string): Promise<string[]> {
+  return (await fs.readdir(dir, { recursive: true })).sort();
+}
+
+async function titleIn(dir: string): Promise<string | undefined> {
+  return (await fs.readFile(path.join(dir, 'reference', 'api.mdx'), 'utf-8'))
+    .split('\n')
+    .find((line) => line.startsWith('title:'));
+}
+
+async function tagIn(dir: string): Promise<string | undefined> {
+  return (
+    await fs.readFile(path.join(dir, 'reference', 'meta.json'), 'utf-8')
+  ).match(/\/releases\/tag\/([^)]+)\)/)?.[1];
+}
