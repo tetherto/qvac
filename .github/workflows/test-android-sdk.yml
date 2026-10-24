@@ -153,7 +153,7 @@ jobs:
     outputs:
       comment-ids: ${{ steps.report.outputs.comment-ids }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: .github/actions/sdk-e2e-report-start
           sparse-checkout-cone-mode: false
@@ -195,7 +195,7 @@ jobs:
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
         working-directory: .
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
@@ -208,16 +208,16 @@ jobs:
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # 7.1.0
         with:
           node-version: 22
 
-      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # 6.1.0
         with:
           java-version: "17"
           distribution: "temurin"
 
-      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # 4.0.4
         with:
           # Drops `tools` from the action's default: the obsolete SDK Tools
           # package is gone from Google's repository and fails provisioning.
@@ -346,7 +346,7 @@ jobs:
           fi
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: consumer-apk-android
           path: ${{ inputs.working-directory }}/build/consumers/android/consumer.apk
@@ -368,7 +368,7 @@ jobs:
           echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
           exit 1
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
@@ -376,7 +376,7 @@ jobs:
           sparse-checkout: ${{ inputs.working-directory }}/device-farm
 
       - name: Checkout trusted Device Farm selector
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.workflow_sha }}
@@ -386,13 +386,13 @@ jobs:
           path: .workflow
 
       - name: Download APK artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           name: consumer-apk-android
           path: ./apk
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # 6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -552,7 +552,7 @@ jobs:
           echo "safe-name=${SAFE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload run ARN
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: device-farm-arn-${{ env.E2E_RUN_ID }}-${{ steps.save-arn.outputs.safe-name }}
           path: ${{ steps.save-arn.outputs.safe-name }}.txt
@@ -571,20 +571,20 @@ jobs:
           echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
           exit 1
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: .github/actions/sdk-device-farm-wait-for-running
           sparse-checkout-cone-mode: false
 
       - name: Download run ARNs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           pattern: device-farm-arn-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
           merge-multiple: true
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # 6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -618,7 +618,7 @@ jobs:
           echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
           exit 1
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
@@ -632,7 +632,7 @@ jobs:
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # 7.1.0
         with:
           node-version: 22
 
@@ -778,7 +778,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: results-android
           path: ${{ inputs.working-directory }}/reports/
@@ -786,7 +786,7 @@ jobs:
 
       - name: Download baseline (best-effort)
         if: always() && github.event.pull_request.base.ref != ''
-        uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477 # v27
         continue-on-error: true
         with:
           workflow: test-android-sdk.yml
@@ -852,7 +852,7 @@ jobs:
 
       - name: Upload report section
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: report-section-android
           path: |
@@ -863,7 +863,7 @@ jobs:
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: baseline-android
           path: ${{ inputs.working-directory }}/reports/results-*.json
@@ -879,7 +879,7 @@ jobs:
       - name: Download run ARNs for cancellation cleanup
         if: cancelled()
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           pattern: device-farm-arn-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
@@ -887,7 +887,7 @@ jobs:
 
       - name: Configure AWS credentials for cancellation cleanup
         if: cancelled()
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # 6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -911,13 +911,13 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # 6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Download run ARNs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           pattern: device-farm-arn-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
@@ -982,7 +982,7 @@ jobs:
 
       - name: Upload Device Farm logs
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: device-farm-logs-android-${{ env.E2E_RUN_ID }}
           path: ./device-farm-logs/
@@ -1000,7 +1000,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: .github/actions/sdk-e2e-report-finalize
           sparse-checkout-cone-mode: false
@@ -1028,7 +1028,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: .github/actions/sdk-e2e-report-finalize
           sparse-checkout-cone-mode: false
