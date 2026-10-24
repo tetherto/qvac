@@ -3,10 +3,12 @@ import fs from 'fs'
 import { createRequire } from 'module'
 import os from 'os'
 import path from 'path'
+import { promisify } from 'util'
 
 const require = createRequire(import.meta.url)
 const PLUGIN_PATH = path.join(import.meta.dirname, '../src/electron-forge/index.cjs')
 
+const QvacForgePlugin = require(PLUGIN_PATH)
 const {
   createIgnore,
   diffAddons,
@@ -254,6 +256,73 @@ test('runBundleAndVerify: bundleSdk failure is wrapped in QvacForgePluginError',
       }),
     /bundleSdk failed: bare-pack exploded/
   )
+})
+
+// ============================================
+// Forge plugin contract
+// ============================================
+
+test('QvacForgePlugin: loads on the installed @electron-forge/plugin-base', (t) => {
+  // plugin-base 8 is ESM-only; the CJS plugin reaches it through require(esm).
+  const { PluginBase } = require('@electron-forge/plugin-base')
+  const plugin = new QvacForgePlugin()
+  t.ok(plugin instanceof PluginBase)
+  t.is(plugin.__isElectronForgePlugin, true, 'Forge recognizes the instance as a plugin')
+  t.is(plugin.name, 'qvac')
+  t.is(typeof plugin.getHooks().resolveForgeConfig, 'function')
+})
+
+// ============================================
+// createPruneHook: Packager 18 and 19+ hook conventions
+// ============================================
+
+function makeBuildPath(t: { teardown: (fn: () => void) => void }) {
+  const buildPath = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-forge-'))
+  t.teardown(() => fs.rmSync(buildPath, { recursive: true, force: true }))
+  for (const host of ['darwin-arm64', 'linux-x64']) {
+    const dir = path.join(buildPath, 'node_modules', 'x', 'prebuilds', host)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'x.bare'), '')
+  }
+  const addonDir = path.join(buildPath, 'node_modules', '@qvac', 'ocr-ggml')
+  fs.mkdirSync(addonDir, { recursive: true })
+  fs.writeFileSync(path.join(addonDir, 'package.json'), '{}')
+  return buildPath
+}
+
+function remaining(buildPath: string) {
+  const nodeModules = path.join(buildPath, 'node_modules')
+  return {
+    prebuilds: fs.readdirSync(path.join(nodeModules, 'x', 'prebuilds')).sort(),
+    addonKept: fs.existsSync(path.join(nodeModules, '@qvac', 'ocr-ggml'))
+  }
+}
+
+test('createPruneHook: Packager 19+ object form prunes before the promise resolves', async (t) => {
+  const hook = new QvacForgePlugin().createPruneHook(['@qvac/ocr-ggml'])
+  const buildPath = makeBuildPath(t)
+
+  await hook({ buildPath, electronVersion: '40.0.0', platform: 'linux', arch: 'x64' })
+
+  t.alike(remaining(buildPath), { prebuilds: ['linux-x64'], addonKept: false })
+})
+
+test('createPruneHook: Packager 18 positional form prunes before calling done', async (t) => {
+  const hook = new QvacForgePlugin().createPruneHook(['@qvac/ocr-ggml'])
+  const buildPath = makeBuildPath(t)
+
+  // Forge 7 runs afterPrune hooks through util.promisify with these args.
+  await promisify(hook)(buildPath, '40.0.0', 'darwin', 'arm64')
+
+  t.alike(remaining(buildPath), { prebuilds: ['darwin-arm64'], addonKept: false })
+})
+
+test('createPruneHook: failures reject the promise or reach done', async (t) => {
+  const hook = new QvacForgePlugin().createPruneHook()
+
+  // A missing buildPath fails with a native TypeError, which plain t.exception rethrows.
+  await t.exception.all(hook({ platform: 'linux', arch: 'x64' }), /"path" argument/)
+  await t.exception.all(promisify(hook)(undefined, '40.0.0', 'linux', 'x64'), /"path" argument/)
 })
 
 // ============================================

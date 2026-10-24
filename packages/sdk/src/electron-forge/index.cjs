@@ -632,7 +632,7 @@ class QvacForgePlugin extends PluginBase {
 
     if (config.logLevel) setLogLevel(config.logLevel)
 
-    // Cache for resolveForgeConfig double-fire (package + make).
+    // Cache for Forge 7's resolveForgeConfig double-fire (package + make).
     this._cache = null
     this._pruneHook = null
 
@@ -691,7 +691,7 @@ class QvacForgePlugin extends PluginBase {
     forgeConfig.packagerConfig.ignore = createIgnore(exclusions, existingIgnore)
 
     // 5. afterPrune hook for prebuild pruning + excluded addon dir cleanup.
-    //    Forge calls resolveForgeConfig multiple times during `make` (once for
+    //    Forge 7 calls resolveForgeConfig multiple times during `make` (once for
     //    `Loading configuration`, then again for `Preparing to package`). We
     //    must not append the hook on each pass, otherwise Packager's afterPrune
     //    fires it N times and we walk the already-pruned tree on every repeat.
@@ -748,8 +748,14 @@ class QvacForgePlugin extends PluginBase {
     }
   }
 
+  /**
+   * Electron Packager 19+ (Forge 8) calls each hook with one
+   * `{ buildPath, electronVersion, platform, arch }` object and awaits it.
+   * Packager 18 (Forge 7) passes positional args and a `done` callback.
+   * The returned hook accepts both.
+   */
   createPruneHook(exclusions = []) {
-    return (buildPath, electronVersion, platform, arch, done) => {
+    const prune = async ({ buildPath, platform, arch }) => {
       logger.info(`Pruning prebuilds for ${platform}-${arch}...`)
 
       try {
@@ -764,12 +770,15 @@ class QvacForgePlugin extends PluginBase {
             `Removed ${cleanup.removed} excluded addon dir${cleanup.removed === 1 ? '' : 's'} (~${cleanupMb} MB reclaimed)`
           )
         }
-
-        done()
       } catch (err) {
         logger.error(`Prebuild pruning failed: ${err.message}`)
-        done(err)
+        throw err
       }
+    }
+
+    return (hookArgs, electronVersion, platform, arch, done) => {
+      if (typeof hookArgs === 'object' && hookArgs !== null) return prune(hookArgs)
+      prune({ buildPath: hookArgs, platform, arch }).then(() => done(), done)
     }
   }
 }
