@@ -1,3 +1,4 @@
+import Buffer from 'bare-buffer'
 import type {
   CompletionOrchestrateRequest,
   CompletionOrchestrateResponse,
@@ -32,7 +33,7 @@ const MAX_TOOL_RESULT_LINE_BYTES = 16 * 1024 * 1024
  * and the reader stops holding the request stream open.
  */
 export class ToolResultReader {
-  private buffer = ''
+  private buffer = Buffer.alloc(0)
   private readonly results = new Map<string, ToolCallbackResult>()
   private readonly waiters = new Map<string, (result: ToolCallbackResult) => void>()
   private failed: Error | undefined
@@ -49,18 +50,22 @@ export class ToolResultReader {
       while (!this.closed) {
         const next = await this.iterator.next()
         if (next.done) break
-        this.buffer += next.value.toString()
+        this.buffer = Buffer.concat([this.buffer, next.value])
         let nl: number
-        while ((nl = this.buffer.indexOf('\n')) !== -1) {
-          const line = this.buffer.slice(0, nl)
-          this.buffer = this.buffer.slice(nl + 1)
+        while ((nl = this.buffer.indexOf(0x0a)) !== -1) {
+          // A transport chunk can end inside a UTF-8 character. Decode complete lines only.
+          const line = this.buffer.toString('utf8', 0, nl)
+          this.buffer = Buffer.from(this.buffer.subarray(nl + 1))
           if (line.trim()) this.accept(line)
         }
         if (this.buffer.length > MAX_TOOL_RESULT_LINE_BYTES) {
           throw new CompletionFailedError('tool result frame exceeds the maximum size')
         }
       }
-      if (!this.closed && this.buffer.trim()) this.accept(this.buffer)
+      if (!this.closed) {
+        const tail = this.buffer.toString()
+        if (tail.trim()) this.accept(tail)
+      }
     } catch (error) {
       this.failWaiters(error instanceof Error ? error : new Error(String(error)))
     }
@@ -113,7 +118,7 @@ export class ToolResultReader {
   close(): void {
     if (this.closed) return
     this.closed = true
-    this.buffer = ''
+    this.buffer = Buffer.alloc(0)
     this.results.clear()
     if (!this.failed) this.failWaiters(new CompletionFailedError('tool result stream closed'))
     void this.iterator.return?.()
