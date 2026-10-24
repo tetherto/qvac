@@ -2222,7 +2222,7 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
     parallel_tool_calls: Annotated[
         bool | None,
         Field(
-            description="Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
+            description="Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
         ),
     ] = None
 
@@ -3705,7 +3705,7 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
     parallel_tool_calls: Annotated[
         bool | None,
         Field(
-            description="Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
+            description="Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
         ),
     ] = None
 
@@ -4353,7 +4353,7 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     parallel_tool_calls: Annotated[
         bool | None,
         Field(
-            description="Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
+            description="Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
         ),
     ] = None
 
