@@ -19,6 +19,7 @@ import {
 } from '../utils/process-manager.js'
 import { ensureBroker, type BrokerHandle } from '../utils/local-broker.js'
 import { writeLocalMobileEnv } from '../utils/env-writer.js'
+import { externalRunEnv, runExternalPrepare } from '../utils/external-consumer.js'
 import {
   detectAndroidDevices,
   installAndroidApk,
@@ -288,9 +289,13 @@ export async function runLocalDesktop(opts: LocalOptions) {
 
 interface ExternalOptions extends LocalOptions {
   name: string
+  skipBuild?: boolean
 }
 
-/** Producer plus one external (non-JS) client, both on this machine. */
+/**
+ * Producer plus one external (non-JS) client. The client runs on this machine, or, in mqtt mode,
+ * wherever its launcher puts it -- a device, for an app.
+ */
 export async function runLocalExternal(opts: ExternalOptions) {
   try {
     console.log(`🔌 run:local:external (${opts.name})\n`)
@@ -298,6 +303,27 @@ export async function runLocalExternal(opts: ExternalOptions) {
     const { runId, configDir, reportDir, brokerHandle } = await setupLocal(opts)
     const cliPath = resolveCliPath()
     const tracked: TrackedProcess[] = []
+
+    // Before the producer: it gives consumers a fixed window to register, and a build is longer.
+    const config = await loadConfig(configDir)
+    const entry = config.consumers.external?.find((c) => c.name === opts.name)
+    if (entry?.prepare) {
+      if (opts.skipBuild) {
+        console.log('⏭️  Skipping the prepare step (--skip-build)\n')
+      } else {
+        try {
+          runExternalPrepare(
+            configDir,
+            entry,
+            externalRunEnv(entry, runId, buildMqttConnectionConfig(config))
+          )
+        } catch (error) {
+          // Nothing else is running yet, but a broker this command started would outlive it.
+          brokerHandle.cleanup()
+          throw error
+        }
+      }
+    }
 
     const producer = spawnTracked(
       'node',

@@ -65,14 +65,26 @@ await ensureHostPrebuilds('android-arm64', modulesRoot)
 // differ in the monorepo, where the worker comes from ../sdk but the Kotlin
 // runtime's own node_modules is a separate tree; for a standalone consumer they
 // are the same. ensureHostPrebuilds installs into this tree too.
-const bundle = await bundleSdk({
-  projectRoot: modulesRoot,
-  configPath,
-  ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
-  hosts: ['android-arm64'],
-  defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
-  quiet: true
-})
+//
+// bare-pack keys every file in the bundle by its path from the working
+// directory. Run from here, the workspace SDK beside this package would be keyed
+// `/../sdk/...`, which the worklet resolves past the bundle root and cannot read
+// -- so the bundle is packed from the tree it is built from.
+const workingDirectory = process.cwd()
+process.chdir(modulesRoot)
+let bundle
+try {
+  bundle = await bundleSdk({
+    projectRoot: modulesRoot,
+    configPath,
+    ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
+    hosts: ['android-arm64'],
+    defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
+    quiet: true
+  })
+} finally {
+  process.chdir(workingDirectory)
+}
 
 const verification = await verifyBundle({
   projectRoot: modulesRoot,

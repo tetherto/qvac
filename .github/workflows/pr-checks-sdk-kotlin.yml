@@ -83,6 +83,7 @@ jobs:
               "packages/inference/src/schemas/",
               "packages/sdk/src/worker/",
               "packages/sdk-e2e/catalog/conformance/",
+              "packages/sdk-e2e/runners/kotlin/",
               "packages/sdk/contract/",
               "packages/sdk/package.json",
               ".github/workflows/pr-checks-sdk-kotlin.yml",
@@ -217,4 +218,11 @@ jobs:
             :android-example:compileDebugAndroidTestKotlin \
             verifyMavenPublications
           ./scripts/verify-maven-consumers.sh -PqvacProfile="$QVAC_PROFILE"
+          popd
+
+          # The Kotlin e2e app compiles against this SDK: an API change that breaks it, or its
+          # interpreter's unit tests, fails here rather than on the next Device Farm run. The app
+          # runs the all-in-one profile; unit tests need neither npm nor the e2e package.
+          pushd packages/sdk-e2e/runners/kotlin
+          ../../../sdk-kotlin/gradlew --no-daemon -PqvacProfile=aio :app:testDebugUnitTest
           popd

@@ -261,15 +261,27 @@ qvac-test report:matrix --report desktop=reports/desktop.json --report python=re
 ## Non-JS clients
 
 An entry under `consumers.external` launches a client the framework does not
-build. The framework keeps MQTT, the queue, timeouts and reporting; the client
-reads one definition at a time off stdin and answers with a verdict.
+build. In `bridge` mode the framework keeps MQTT, the queue, timeouts and
+reporting; the client reads one definition at a time off stdin and answers with
+a verdict.
+
+In `mqtt` mode the client speaks the consumer protocol to the broker itself,
+the way an app on a device has to. The framework only starts the configured
+command, with the run in its environment (`QVAC_RUN_ID`, `QVAC_TEST_PLATFORM`,
+`QVAC_MQTT_BROKER_URL`, and `QVAC_MQTT_USERNAME` / `QVAC_MQTT_PASSWORD` /
+`QVAC_MQTT_SESSION_EXPIRY` when set), and lives as long as it does. An optional
+`prepare` step, such as building the app, runs to completion before
+`run:local:external` starts the producer; `--skip-build` skips it.
 
 ```js
 consumers: {
   external: [
     { name: 'python', platform: 'desktop-python', mode: 'bridge',
       interpreter: '../sdk-python/.venv/bin/python',
-      args: ['-m', 'qvac_e2e.runner'], cwd: './runners/python' }
+      args: ['-m', 'qvac_e2e.runner'], cwd: './runners/python' },
+    { name: 'kotlin-android', platform: 'kotlin-android', mode: 'mqtt',
+      prepare: { interpreter: 'node', args: ['runners/kotlin/scripts/device.mjs', 'prepare'] },
+      interpreter: 'node', args: ['runners/kotlin/scripts/device.mjs', 'run'] }
   ]
 }
 ```

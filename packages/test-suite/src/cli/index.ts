@@ -114,7 +114,9 @@ program
 
 program
   .command('run:consumer:external')
-  .description('Run a non-JS consumer over the stdin/stdout bridge (e.g., the Python runner)')
+  .description(
+    'Run a non-JS consumer: over the stdin/stdout bridge (e.g., the Python runner), or one that speaks MQTT itself'
+  )
   .requiredOption('--runId <id>', 'Unique run identifier (must match producer)')
   .requiredOption('--name <name>', 'Name of the external consumer in consumers.external')
   .option('--mqtt-broker <url>', 'MQTT broker URL (overrides config)')
@@ -255,6 +257,7 @@ addLocalOpts(program.command('run:local:desktop'))
 addLocalOpts(program.command('run:local:external'))
   .description('Run producer + a configured external (non-JS) consumer locally')
   .requiredOption('--name <name>', 'Name of the external consumer in consumers.external')
+  .option('--skip-build', "Skip the consumer's prepare step (reuse what it built last time)")
   .action(runLocalExternal)
 
 addLocalOpts(program.command('run:local:python'))

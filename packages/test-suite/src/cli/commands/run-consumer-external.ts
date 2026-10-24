@@ -22,7 +22,9 @@ export async function runConsumerExternal(options: ExternalConsumerOptions) {
 
     const configDir = path.resolve(options.config)
 
-    console.log(`🚀 Running external consumer "${entry.name}" (${entry.platform})...\n`)
+    console.log(
+      `🚀 Running external consumer "${entry.name}" (${entry.platform}, ${entry.mode})...\n`
+    )
 
     const __filename = fileURLToPath(import.meta.url)
     const __dirname = path.dirname(__filename)
