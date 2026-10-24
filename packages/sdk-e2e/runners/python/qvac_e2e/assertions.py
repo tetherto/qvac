@@ -702,6 +702,19 @@ def fields_present(value: Any, args: dict[str, Any]) -> StepResult:
     return StepResult.ok(f"{len(fields)} field(s) present")
 
 
+def fields_absent(value: Any, args: dict[str, Any]) -> StepResult:
+    """None of the named fields is present on the value."""
+    if not isinstance(value, dict):
+        return StepResult.fail(f"expected an object, got {type(value).__name__}")
+    fields: list[str] = args.get("fields") or []
+    # Value, not key: pydantic dumps every unset optional field as None, while JS
+    # sees the wire object, where an unreported field is simply missing.
+    present = [field for field in fields if value.get(field) is not None]
+    if present:
+        return StepResult.fail(f"unexpected fields: {', '.join(present)}")
+    return StepResult.ok(f"{len(fields)} field(s) absent")
+
+
 def fields_match(value: Any, args: dict[str, Any]) -> StepResult:
     """Two records agree on the named fields."""
     left = value if isinstance(value, dict) else {}
@@ -949,6 +962,7 @@ ASSERTIONS: dict[str, Callable[[Any, dict[str, Any]], StepResult]] = {
     "streamedEachId": streamed_each_id,
     "noToolCallsFor": no_tool_calls_for,
     "fieldsPresent": fields_present,
+    "fieldsAbsent": fields_absent,
     "fieldsMatch": fields_match,
     "errorIsStructured": error_is_structured,
     "nonEmptyText": non_empty_text,
