@@ -59,7 +59,8 @@ test/e2e/
   core/               shape-agnostic server behavior, in-process & modelless
     routing-cors-auth.test.ts, model-load-config.test.ts
   default/            /qvac/v1/* route tests, in-process & modelless
-    chat-batch.test.ts, kv-cache.test.ts, system-model-fit.test.ts, translate.test.ts, ocr.test.ts
+    chat-batch.test.ts, kv-cache.test.ts, system-model-fit.test.ts, translate.test.ts, ocr.test.ts,
+    upscale.test.ts
   openai/             /v1/* route tests, in-process & modelless
     *-validation.test.ts, models, models-catalog, audio-*
   cli/                commands, serve lifecycle & flag behavior (spawned binary)
@@ -72,6 +73,7 @@ test/e2e/
     ocr.test.ts                   in-process: EasyOCR text recognition
     system-model-fit.test.ts      in-process: host resources and pre-load model fit
     chat-batch.test.ts            in-process: batch chat on a parallel:2 LLM
+    upscale.test.ts               in-process: ESRGAN image upscale
 ```
 
 ## Concurrency

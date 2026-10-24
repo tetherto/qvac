@@ -5,6 +5,7 @@ import modelFit from '@/serve/extensions/default/routes/model-fit'
 import ocr from '@/serve/extensions/default/routes/ocr'
 import system from '@/serve/extensions/default/routes/system'
 import translate from '@/serve/extensions/default/routes/translate'
+import upscale from '@/serve/extensions/default/routes/upscale'
 
 // Mount order determines the order of paths in the OpenAPI document.
 export const routes: readonly FastifyPluginAsyncZod[] = [
@@ -13,5 +14,6 @@ export const routes: readonly FastifyPluginAsyncZod[] = [
   system,
   modelFit,
   translate,
-  ocr
+  ocr,
+  upscale
 ]

@@ -9,14 +9,15 @@ described in [README.md](README.md) and applies here. Its own configuration live
 
 ## Endpoints
 
-| Method   | Path                  | Notes                                   |
-| -------- | --------------------- | --------------------------------------- |
-| `POST`   | `/qvac/v1/chat/batch` | Batch chat completion (LLM)             |
-| `DELETE` | `/qvac/v1/kv_cache`   | Reclaim automatic KV cache              |
-| `GET`    | `/qvac/v1/system`     | Host CPU, memory and GPU capacity       |
-| `POST`   | `/qvac/v1/models/fit` | Whether models fit, before loading them |
-| `POST`   | `/qvac/v1/translate`  | Text translation (NMT model)            |
-| `POST`   | `/qvac/v1/ocr`        | Text recognition in an image            |
+| Method   | Path                      | Notes                                   |
+| -------- | ------------------------- | --------------------------------------- |
+| `POST`   | `/qvac/v1/chat/batch`     | Batch chat completion (LLM)             |
+| `DELETE` | `/qvac/v1/kv_cache`       | Reclaim automatic KV cache              |
+| `GET`    | `/qvac/v1/system`         | Host CPU, memory and GPU capacity       |
+| `POST`   | `/qvac/v1/models/fit`     | Whether models fit, before loading them |
+| `POST`   | `/qvac/v1/translate`      | Text translation (NMT model)            |
+| `POST`   | `/qvac/v1/ocr`            | Text recognition in an image            |
+| `POST`   | `/qvac/v1/images/upscale` | Image upscaling (ESRGAN model)          |
 
 ## Binary inputs
 
@@ -455,3 +456,68 @@ The [binary input](#binary-inputs) errors apply to `image`, plus:
 
 The detector model is derived from the recognizer; set `config.detectorModelSrc` to override
 it. `OCR_DOCTR` selects the language-agnostic DocTR pipeline.
+
+## `POST /qvac/v1/images/upscale`
+
+Upscale an image with an ESRGAN model, backed by the SDK's `upscale()`.
+
+`model` names a `serve.models` alias whose endpoint category is `upscale`: an
+`sdcpp-generation` model with `config.mode: "upscale"`. Send JSON or
+`multipart/form-data`; `image` takes any of the [binary input](#binary-inputs) forms.
+
+| Field     | Type         | Required | Meaning                                                                            |
+| --------- | ------------ | -------- | ---------------------------------------------------------------------------------- |
+| `model`   | `string`     | Yes      | A `serve.models` alias with endpoint category `upscale`                            |
+| `image`   | binary input | Yes      | The PNG or JPEG to upscale                                                         |
+| `repeats` | `integer`    | No       | Passes to run, 1 to 4 (default 1); each multiplies both sides by the model's scale |
+
+The response has the `/v1/images` shape, with one PNG:
+
+```json
+{
+  "created": 1767225600,
+  "output_format": "png",
+  "size": "2048x2048",
+  "data": [{ "b64_json": "iVBORw0KGgo..." }]
+}
+```
+
+Upscaling cannot be cancelled: a client disconnect drops the result, but the
+image is still upscaled to the end.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/images/upscale \
+  -F model=upscaler -F image=@photo.png -F repeats=1
+```
+
+### Errors
+
+| HTTP | `error.code`               | When                                                   |
+| ---- | -------------------------- | ------------------------------------------------------ |
+| 400  | `invalid_json`             | Body is not valid JSON                                 |
+| 400  | `missing_model`            | `model` is missing                                     |
+| 400  | `missing_image`            | `image` is missing                                     |
+| 400  | `unsupported_image_format` | `image` is not a PNG or JPEG                           |
+| 400  | `invalid_image`            | `image` has a PNG or JPEG header but cannot be decoded |
+| 400  | `invalid_repeats`          | `repeats` is not an integer from 1 to 4                |
+| 400  | `invalid_request`          | The body carries an unknown field                      |
+| 400  | `invalid_model_type`       | Alias is not an `upscale` model                        |
+| 404  | `model_not_found`          | Unknown alias                                          |
+| 503  | `model_not_loaded`         | Model not loaded and lazy loading is disabled          |
+
+`image` can also fail with the [binary input](#binary-inputs) codes.
+
+### Configuring an upscale model
+
+```json
+{
+  "serve": {
+    "models": {
+      "upscaler": {
+        "model": "REALESRGAN_X4PLUS",
+        "config": { "mode": "upscale", "upscaler": { "tile_size": 128 } }
+      }
+    }
+  }
+}
+```
