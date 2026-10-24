@@ -137,6 +137,21 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
       `Vulkan module must not depend on ${lib}* (dlopen must work on stock distros)`
     )
   }
+
+  const cudaPath = path.join(PREBUILDS_DIR, target, moduleName, 'libqvac-diffusion-ggml-cuda.so')
+  t.ok(fs.existsSync(cudaPath), `CUDA DL backend module present: ${cudaPath}`)
+  const cudaNeeded = elfNeeded(fs.readFileSync(cudaPath))
+  t.comment(`libqvac-diffusion-ggml-cuda.so NEEDED: ${cudaNeeded.join(', ')}`)
+  t.ok(
+    cudaNeeded.find((n) => n.startsWith('libcudart.')),
+    'CUDA module links libcudart'
+  )
+  for (const lib of FORBIDDEN_RUNTIME) {
+    t.absent(
+      cudaNeeded.find((n) => n.startsWith(lib)),
+      `CUDA module must not depend on ${lib}*`
+    )
+  }
 })
 
 // File-level layout checks above prove the module EXISTS; this proves Linux
@@ -146,11 +161,9 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
 // registration is PROCESS-GLOBAL and happens on the first model load in the
 // suite, so this test cannot rely on catching the one-time
 // `load_backend: loaded Vulkan backend from ...` line — instead it requests
-// `main-gpu: 0`, whose resolution walks the live ggml device registry on
-// EVERY load and logs the resolved backend name: it can only resolve to
-// Vulkan0 if the DL module actually registered (same log-capture pattern as
-// main-gpu-backend.test.js). If registration broke, resolution falls back
-// to CPU and the assertion fails.
+// `backend: 'vulkan0'`, which requires that named backend to be registered.
+// Device index zero may be CUDA on a Linux release, so it is not a stable
+// way to select Vulkan. An unavailable explicit backend fails model load.
 test(
   'linux GPU host registers the Vulkan backend through the DL module',
   { timeout: 600000 },
@@ -187,7 +200,7 @@ test(
         files: { model: path.join(modelDir, modelName) },
         config: {
           device: 'gpu',
-          'main-gpu': 0,
+          backend: 'vulkan0',
           threads: 4,
           prediction: 'v',
           verbosity: 2
@@ -196,20 +209,20 @@ test(
       })
       await model.load()
 
-      // The main-gpu resolver enumerates the live ggml device registry at
-      // this load; on a Vulkan-capable host it can only report a Vulkan
-      // backend if the DL module was dlopen'd and registered. C++ log lines
-      // are marshalled to the JS event loop asynchronously, so poll like
-      // main-gpu-backend.test.js does instead of reading synchronously.
+      // Successful load with an explicit Vulkan assignment proves the
+      // registered device is usable. The assignment is also logged by the
+      // addon, with C++ messages marshalled asynchronously to JS.
       const deadline = Date.now() + 5000
       let resolvedLine = null
       while (!resolvedLine && Date.now() < deadline) {
-        resolvedLine = logs.find((line) => line.includes("main-gpu resolved to backend 'Vulkan"))
+        resolvedLine = logs.find((line) =>
+          line.includes("Explicit stable-diffusion backend assignment 'vulkan0'")
+        )
         if (!resolvedLine) await new Promise((resolve) => setTimeout(resolve, 50))
       }
       t.ok(
         resolvedLine,
-        `ggml device registry resolved a Vulkan backend (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
+        `explicit Vulkan backend loaded (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
       )
     } finally {
       if (model) await model.unload().catch(() => {})

@@ -15,7 +15,13 @@
     },
     {
       "name": "stable-diffusion-cpp",
-      "version>=": "2026-08-11#7"
+      "version>=": "2026-08-11#7",
+      "features": [
+        {
+          "name": "cuda",
+          "platform": "linux"
+        }
+      ]
     },
     "stb"
   ],

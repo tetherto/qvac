@@ -143,6 +143,57 @@ directory.
 
 ## Building for Different Platforms
 
+### DGX Spark and RTX 5090 CUDA
+
+Linux builds request CUDA through `vcpkg.json`, so the CUDA toolkit is required
+for the default Linux source build as well as `build:cuda`. The Linux vcpkg
+toolchain selects the matching Clang host compiler for nvcc.
+
+For native Linux ARM64 builds on GB10 or Linux x64 builds on RTX 5090, put
+the versioned LLVM executables and the actual CUDA toolkit directory on
+PATH so the Linux triplet resolves the intended compilers. Build native
+CUDA cubins and install the backend modules alongside the addon:
+
+```bash
+export PATH=/usr/lib/llvm-22/bin:/usr/local/cuda/bin:$PATH
+export CUDAHOSTCXX=/usr/lib/llvm-22/bin/clang++
+export CUDAARCHS=121a # DGX Spark; use 120a for RTX 5090
+export CUDAToolkit_ROOT=/usr/local/cuda
+export VCPKG_ROOT=/path/to/vcpkg
+npm run build:ts
+bare-make generate -D SD_CUDA=ON -D CMAKE_CUDA_ARCHITECTURES="$CUDAARCHS"
+bare-make build
+bare-make install
+npm run link:platform
+```
+
+`CUDAARCHS` also reaches the vcpkg ggml sub-build; the top-level architecture
+flag alone does not configure that separate build. The registry port searches
+`/usr/local/cuda/bin/nvcc` first, so verify the compiler it actually selects in
+the vcpkg logs and ggml `CMakeCache.txt`. The tested Spark toolchain uses LLVM
+22, libc++, CUDA 13.3, and driver 580.178.04. The Linux toolchain supplies
+nvcc's `-allow-unsupported-compiler` flag for the newer Clang host compiler.
+
+Ensure `libqvac-diffusion-ggml-cuda.so` is installed under
+`prebuilds/linux-arm64/qvac__diffusion-cpp-linux-arm64/` on Spark or
+`prebuilds/linux-x64/qvac__diffusion-cpp-linux-x64/` on an x64 PC, and that `ldd`
+resolves its CUDA libraries. GPU selection and weight residency are
+independent; the CUDA example explicitly sets both to `cuda0`. See the
+package README's measured CUDA recipe for assets and generation commands.
+
+Release builds retain ggml's non-native architecture list, including both
+SM120a and SM121a, rather than the single-device `CUDAARCHS` setting above.
+The existing prebuild workflow enables `SD_CUDA` for both Linux legs and
+packages them together; post-artifact validation requires CUDA and Vulkan
+modules on each leg before the merged artifact can be published.
+
+The native generation benchmark ran on Bare runtime 1.31.0. Current unit-test
+dependencies include `bare-dns`, which requires runtime 1.33.0 or newer;
+the package unit/script tests passed on runtime 1.35.0. Use a separate local
+tools installation when upgrading the test runtime on a machine with
+unrelated Bare services. Verify `bare --version` rather than assuming the
+npm launcher package version equals the runtime version.
+
 Native builds (building for the same platform you're running on) work out of the box.
 
 Cross-compilation:

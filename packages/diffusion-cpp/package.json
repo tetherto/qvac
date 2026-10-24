@@ -36,6 +36,8 @@
     "example": "bare examples/load-model.js",
     "walk:world": "bare examples/world-walk-server.js",
     "generate": "bare examples/generate-image.js",
+    "generate:flux2-cuda": "bare examples/generate-image-flux2-cuda.js",
+    "generate:flux2-spark": "npm run generate:flux2-cuda",
     "generate:sd2": "bare examples/generate-image-sd2.js",
     "generate:esrgan": "bare examples/generate-image-esrgan-upscale.js",
     "generate:sdxl": "bare examples/generate-image-sdxl.js",

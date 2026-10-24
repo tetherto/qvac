@@ -425,6 +425,16 @@ embeds in bare/Node apps.
 
 ## Validation
 
+Linux x64 CI temporarily defaults to `vulkan0` for the three
+resident-versus-CPU-streamed/disk parity cases (KV off/on). Their shared scene
+creation, fit assessments and walks use this explicit backend; the original
+frame comparisons and tolerance still apply. Other ABot lanes and model tests
+keep their normal backend selection, including CUDA. This isolates the
+intermittent CUDA parity failure tracked in [diagnostic PR #5264](https://github.com/tetherto/qvac/pull/5264);
+it does not establish CUDA parity correctness. Restore the CI default to `gpu`
+once that investigation is resolved. Local runs default to `gpu`; set
+`ABOT_PARITY_BACKEND=cuda0` to reproduce CUDA parity explicitly.
+
 The `test/integration/abot-world.test.js` lanes (guard, fixed-scene walk,
 world generation, variations) run on the Linux x64 GPU pool in CI, and
 `test/unit/world-input-validation.test.js` covers the full key/params input

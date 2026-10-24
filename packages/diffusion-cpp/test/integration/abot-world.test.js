@@ -365,6 +365,10 @@ function framesAre(blocks, width, height, magic) {
 
 let streamingScene
 const residentWalks = new Map()
+// Temporarily keep Linux CI parity on Vulkan while CUDA drift is investigated:
+// https://github.com/tetherto/qvac/pull/5264. Other ABot lanes keep their backend.
+// Keep the CI default here: PR workflows read project metadata from main.
+const parityBackend = proc.env.ABOT_PARITY_BACKEND || (canFetchRegistry ? 'vulkan0' : 'gpu')
 
 async function provisionStreamingScene(t) {
   const provisioned = await provisionWorldGeneration(t)
@@ -377,7 +381,11 @@ async function provisionStreamingScene(t) {
   const { dir, taehvPath, vaePath, t5Xxl } = provisioned
   const scenePath = path.join(dir, 'scene-streaming-e2e.safetensors')
   const files = { model: path.join(dir, DIT_NAME), taehv: taehvPath, scene: scenePath }
-  const scene = new WorldStableDiffusion({ files, config: { backend: 'gpu' }, logger: console })
+  const scene = new WorldStableDiffusion({
+    files,
+    config: { backend: parityBackend },
+    logger: console
+  })
   try {
     const creation = await scene.createScene({
       prompt:
@@ -415,6 +423,7 @@ for (const lane of [
     `ABot-World: ${lane.name} matches resident frames across history updates`,
     { skip, timeout: 2_400_000 },
     async (t) => {
+      t.comment(`ABot parity backend: ${parityBackend}`)
       streamingScene ??= provisionStreamingScene(t)
       const files = await streamingScene
       if (!files) return
@@ -444,7 +453,7 @@ for (const lane of [
         const fit = await assessFit({
           mode: 'world',
           files,
-          config: { backend: 'gpu', ...config },
+          config: { backend: parityBackend, ...config },
           workload: { walkSteps: 4 }
         })
         t.ok(
@@ -454,7 +463,7 @@ for (const lane of [
         t.ok(fit.report.includes('4 walk steps'), 'the explicit length reaches the engine')
         const world = new WorldStableDiffusion({
           files,
-          config: { backend: 'gpu', seed: 42, verbosity: 3, ...config },
+          config: { backend: parityBackend, seed: 42, verbosity: 3, ...config },
           logger: console
         })
         try {

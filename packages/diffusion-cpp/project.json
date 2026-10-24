@@ -28,7 +28,8 @@
           "artifactNamePrefix": "sd-cpp-",
           "includeVulkanSdk": true,
           "includeCuda": true,
-          "includeCudaArm64": true
+          "includeCudaArm64": true,
+          "postArtifactBuildCommand": "if [ \"$BUILD_PLATFORM\" = linux ]; then node scripts/verify-prebuild-linking.mjs prebuilds; fi"
         }
       },
       "inputs": [
