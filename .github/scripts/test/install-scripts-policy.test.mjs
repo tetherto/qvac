@@ -119,15 +119,14 @@ const PENDING = [
     ['.github/workflows/cpp-tests-llm.yml', 2],
     ['.github/workflows/cpp-tests-model-fit.yml', 1],
     ['.github/workflows/cpp-tests-nx.yml', 2],
-    ['.github/workflows/cpp-tests-vla.yml', 1],
     ['.github/workflows/integration-mobile-test-inference-addon-cpp.yml', 3],
     ['.github/workflows/integration-test-asr-ggml.yml', 1],
     ['.github/workflows/integration-test-audiogen-ggml.yml', 1],
     ['.github/workflows/integration-test-llm-llamacpp.yml', 1],
-    ['.github/workflows/integration-test-vla.yml', 1],
     ['.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml', 1],
     ['.github/workflows/reusable-prebuilds.yml', 2],
     ['.github/actions/cpp-lint/action.yaml', 1],
+    // The CI contract's job templates, carrying over vla's old cpp-tests and integration sites unchanged.
   ].map(([file, count]) => ({
     file,
     match: 'npm install',

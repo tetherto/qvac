@@ -45,11 +45,11 @@ A runner may also be deferred on one platform only, by keying `deferred` by plat
 
 ### Running a deferred runner on device
 
-`validate-devices` builds its runner allowlist from `.<platform>` too, so a manual `workflow_dispatch` with `-f tests=runPi05Test` is rejected as an unknown runner — the deferral is enforced at both ends. To run pi05 on device from a branch:
+The mobile workflow's device check builds its runner allowlist from `.<platform>` too, so a manual `workflow_dispatch` with `-f tests=runPi05Test` is rejected as an unknown runner — the deferral is enforced at both ends. To run pi05 on device from a branch:
 
 1. Move `runPi05Test` out of `deferred` into a group in `test-groups.json` (or into a platform-scoped `deferred` for the other platform).
 2. Relax `_skipMobilePi05` in `test/integration/pi05.test.js` — it skips both pi05 cases on mobile regardless of scheduling, so step 1 alone runs zero tests and passes green.
-3. Dispatch `integration-mobile-test-vla.yml` with `-f tests=runPi05Test` to collapse the run to a single spec.
+3. Dispatch `mobile-tests.yml` with `-f packages=vla-ggml -f tests=runPi05Test` to collapse the run to a single spec.
 
 Step 1 alone is what CI validates; step 2 is why deferral is recorded here rather than enforced only by the skip.
 
@@ -63,4 +63,4 @@ which runs in the ungated `ts-checks` PR job, so a scheduling mistake is caught 
 
 ## Running the Tests
 
-The mobile tester app drives the auto-generated entrypoints to execute the desired test scenarios on-device. The CI mobile workflow (`integration-mobile-test-vla.yml`) builds the app, uploads to AWS Device Farm, and shards using `test-groups.json`.
+The mobile tester app drives the auto-generated entrypoints to execute the desired test scenarios on-device. The CI mobile workflow (`mobile-tests.yml`, dispatched with `-f packages=vla-ggml`) builds the app, uploads to AWS Device Farm, and shards using `test-groups.json`.

@@ -1,0 +1,70 @@
+name: Select projects
+
+# The only place that reads packages' CI settings, always from the trusted ref.
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: Comma-separated targets to return a matrix for
+        type: string
+        required: true
+      packages:
+        description: Comma-separated package names or directories; empty selects by change
+        type: string
+        default: ""
+      combine:
+        description: Extra matrices for targets sharing a job, e.g. desktop=test:integration+test:backend
+        type: string
+        default: ""
+      configs:
+        description: Comma-separated leg configurations to keep, e.g. ios-arm64; empty keeps every leg
+        type: string
+        default: ""
+    outputs:
+      matrices:
+        description: JSON object of target to matrix rows
+        value: ${{ jobs.select.outputs.matrices }}
+      projects:
+        description: JSON array of selected packages with their gate key
+        value: ${{ jobs.select.outputs.projects }}
+      runners:
+        description: JSON map of reusable-runner-names.yml runner key to label
+        value: ${{ jobs.select.outputs.runners }}
+      any:
+        description: true when any package was selected
+        value: ${{ jobs.select.outputs.any }}
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      matrices: ${{ steps.select.outputs.matrices }}
+      projects: ${{ steps.select.outputs.projects }}
+      runners: ${{ steps.select.outputs.runners }}
+      any: ${{ steps.select.outputs.any }}
+    steps:
+      # Actions and settings both come from here, so this is a full checkout of the trusted ref.
+      - name: Checkout actions and settings
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-pnpm@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - shell: bash
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter .
+      - id: select
+        shell: bash
+        env:
+          TARGETS: ${{ inputs.targets }}
+          PACKAGES: ${{ inputs.packages }}
+          COMBINE: ${{ inputs.combine }}
+          CONFIGS: ${{ inputs.configs }}
+          NX_DAEMON: "false"
+          NX_NO_CLOUD: "true"
+        run: node .github/scripts/select-projects.mjs

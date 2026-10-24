@@ -27,7 +27,6 @@ on:
       - "packages/translation-nmtcpp/**"
       - "packages/tts-ggml/**"
       - "packages/turbovec-ggml/**"
-      - "packages/vla-ggml/**"
   workflow_dispatch:
     inputs:
       package:
@@ -49,7 +48,6 @@ on:
           - translation-nmtcpp
           - tts-ggml
           - turbovec-ggml
-          - vla-ggml
       npm_tag:
         description: "NPM dist-tag override (release publish only, default: latest)"
         required: false
@@ -114,7 +112,6 @@ jobs:
             translation-nmtcpp: packages/translation-nmtcpp/**
             tts-ggml: packages/tts-ggml/**
             turbovec-ggml: packages/turbovec-ggml/**
-            vla-ggml: packages/vla-ggml/**
 
       - name: Compute per-package config rows
         id: rows
@@ -515,7 +512,7 @@ jobs:
         with:
           workdir: ${{ matrix.workdir }}
           # `|| 'latest'` restores the five packages that forced it on a push;
-          # only vla-ggml sets npmTagOverride, and an empty tag would otherwise
+          # no package here sets npmTagOverride, and an empty tag would otherwise
           # leave the dist-tag to be derived.
           tag: ${{ matrix.npmTagOverride || inputs.npm_tag || 'latest' }}
 

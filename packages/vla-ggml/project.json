@@ -1,40 +1,21 @@
 {
   "name": "@qvac/vla-ggml",
   "root": "packages/vla-ggml",
+  "tags": ["ci:contract"],
   "targets": {
-    "on-pr": {
+    "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'carved out of on-pr-nx.yml; orchestrated by on-pr-vla.yml (fabric overlay needs fabric built before its consumers, which one flat prebuild matrix cannot express)'",
-        "cwd": "packages/vla-ggml",
-        "ci": {
-          "carveOut": true,
-          "hasCppLint": true,
-          "includeRocmSdk": true,
-          "hasTsChecks": true,
-          "tsChecksMode": "dts+lint",
-          "hasFabricLockstep": true
-        }
+        "command": "pnpm run lint",
+        "cwd": "packages/vla-ggml"
       }
     },
-    "build": {
+    "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run build",
-        "cwd": "packages/vla-ggml",
-        "ci": {
-          "artifactNamePrefix": "vla-",
-          "linuxExtraPackages": "libxi-dev libxtst-dev libxrandr-dev",
-          "includeVulkanSdk": true
-        }
-      },
-      "inputs": [
-        "default",
-        "!{projectRoot}/prebuilds/**"
-      ],
-      "outputs": [
-        "{projectRoot}/prebuilds"
-      ]
+        "command": "pnpm run test:dts",
+        "cwd": "packages/vla-ggml"
+      }
     },
     "test:unit": {
       "executor": "nx:run-commands",
@@ -43,97 +24,356 @@
         "cwd": "packages/vla-ggml"
       }
     },
-    "test:integration": {
+    "verify:generated": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:integration",
-        "cwd": "packages/vla-ggml",
-        "ci": {
-          "testCommandSuffix": true,
-          "useTeeLogging": true,
-          "dualRegistry": true,
-          "tolerateSigsegv": true,
-          "linuxArmApt": ["mesa-vulkan-drivers"],
-          "windowsVulkan": { "setSdk": true, "addPath": true },
-          "modelCache": [
-            {
-              "paths": "packages/vla-ggml/model/vla",
-              "hashFilesGlob": "packages/vla-ggml/project.json",
-              "warm": "false"
-            }
-          ],
-          "modelS3": [
-            { "src": "qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf", "dest": "model/vla/smolvla-libero-vision-q8.gguf", "skipOnCacheHit": true },
-            { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/pi05-base-q-aggressive.gguf", "dest": "model/vla/pi05/pi05-base-q-aggressive.gguf" },
-            { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/fixture.safetensors", "dest": "test/pi05-oracle/fixture.safetensors" },
-            { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/activations.safetensors", "dest": "test/pi05-oracle/activations.safetensors" },
-            { "src": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf", "dest": "model/vla/groot/groot-q8_vf16.gguf" },
-            { "src": "qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors", "dest": "test/groot-oracle/activations_v4.safetensors" }
-          ],
-          "modelEnv": {
-            "QVAC_VLA_MODEL": "{workspace}/{workdir}/model/vla/smolvla-libero-vision-q8.gguf",
-            "PI05_TEST_GGUF": "{workspace}/{workdir}/model/vla/pi05/pi05-base-q-aggressive.gguf",
-            "PI05_TEST_FIXTURE": "{workspace}/{workdir}/test/pi05-oracle/fixture.safetensors",
-            "PI05_TEST_ACTIVATIONS": "{workspace}/{workdir}/test/pi05-oracle/activations.safetensors",
-            "GROOT_TEST_GGUF": "{workspace}/{workdir}/model/vla/groot/groot-q8_vf16.gguf",
-            "GROOT_TEST_ACTIVATIONS_V4": "{workspace}/{workdir}/test/groot-oracle/activations_v4.safetensors"
-          },
-          "platforms": [
-            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" },
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
-            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm" },
-            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-24.04-arm" },
-            { "os": "macos-15-xlarge", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
-            { "os": "macos-15-large", "platform": "darwin", "arch": "x64", "runner": "macos-15-large", "modelCache": false, "modelS3": false, "modelEnv": false },
-            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
-          ]
-        }
-      }
-    },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run lint",
+        "command": "pnpm run check:generated",
         "cwd": "packages/vla-ggml"
       }
     },
-    "test:cpp": {
+    "ci:setup": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:cpp",
+        "command": "node ci/configure-registries.mjs",
+        "cwd": "packages/vla-ggml"
+      }
+    },
+    "ci:system": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^ci:system"],
+      "options": {
         "cwd": "packages/vla-ggml",
-        "ci": {
-          "mode": "standard",
-          "windowsVsGenerator": true,
-          "dualRegistry": true,
-          "vulkan": { "os": "ubuntu-24.04", "shell": "bash", "path": "/opt/vulkansdk/x86_64" },
-          "platforms": [
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
-            { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
-            { "os": "macos-15-intel", "platform": "darwin", "arch": "x64" },
-            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
+        "parallel": false,
+        "forwardAllArgs": false,
+        "commands": ["echo no system packages"]
+      },
+      "configurations": {
+        "linux-x64": {
+          "commands": [
+            "dpkg -s libxi-dev libxtst-dev libxrandr-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev)"
+          ]
+        },
+        "linux-x64-gpu": {
+          "commands": [
+            "dpkg -s libxi-dev libxtst-dev libxrandr-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev)"
+          ]
+        },
+        "linux-arm64": {
+          "commands": [
+            "dpkg -s libxi-dev libxtst-dev libxrandr-dev mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev mesa-vulkan-drivers)"
+          ]
+        },
+        "linux-arm64-2404": {
+          "commands": [
+            "dpkg -s libxi-dev libxtst-dev libxrandr-dev mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev mesa-vulkan-drivers)"
           ]
         }
       }
     },
-    "on-merge": {
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": ["@qvac/fabric"],
+          "target": "link:platform"
+        }
+      ],
+      "options": {
+        "cwd": "packages/vla-ggml",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm run build:ts",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+            "forwardAllArgs": true
+          },
+          {
+            "command": "pnpm exec bare-make build",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make install",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--platform=linux --arch=x64",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-arm64": {
+          "args": "--platform=linux --arch=arm64",
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "ios-arm64": {
+          "args": "--platform=ios --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-arm64-simulator": {
+          "args": "--platform=ios --arch=arm64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-x64-simulator": {
+          "args": "--platform=ios --arch=x64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--platform=darwin --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-x64": {
+          "args": "--platform=darwin --arch=x64",
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "args": "--platform=win32 --arch=x64",
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      },
+      "inputs": ["default", "!{projectRoot}/prebuilds/**"],
+      "outputs": ["{projectRoot}/prebuilds"]
+    },
+    "cpp:lint": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": ["@qvac/fabric"],
+          "target": "link:platform"
+        }
+      ],
+      "options": {
+        "cwd": "packages/vla-ggml",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm exec bare-make generate -D ENABLE_VULKAN=OFF",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base}",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
+      }
+    },
+    "cpp:build": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": ["@qvac/fabric"],
+          "target": "link:platform"
+        }
+      ],
+      "options": {
+        "cwd": "packages/vla-ggml",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm exec bare-make generate -D BUILD_TESTING=ON",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make build --target addon-test",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      }
+    },
+    "cpp:tests": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["cpp:build"],
+      "options": {
+        "cwd": "packages/vla-ggml",
+        "command": "node ci/run-cpp-tests.mjs"
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 60
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "cwd": "packages/vla-ggml",
+        "command": "pnpm exec node ci/run-integration.mjs"
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-arm64": {
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "linux-arm64-2404": {
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "ci": {
+            "runner": "macos_15_large"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        }
+      }
+    },
+    "test:backend": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "cwd": "packages/vla-ggml",
+        "command": "pnpm exec node ci/run-backend.mjs"
+      },
+      "configurations": {
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        }
+      }
+    },
+    "test:mobile": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/vla-ggml",
-        "ci": {
-          "verifyGenerated": true,
-          "nameTransform": "none",
-          "repoName": "vla",
-          "testGateMode": "none",
-          "npmTagOverride": "latest"
+        "command": "pnpm exec node ci/prepare-mobile.mjs"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "devicefarmProject": "LLAMACPP_EMBED",
+          "enablesPerf": true,
+          "mochaTimeoutMs": 4200000,
+          "perTestTimeoutMinutes": {
+            "Android": 60
+          },
+          "perfReport": {
+            "title": "VLA Mobile Performance Report",
+            "merge": true
+          }
+        }
+      }
+    },
+    "cache:models": {
+      "executor": "nx:noop"
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "vla"
         }
       }
     }
   },
-  "implicitDependencies": [
-    "inference-addon-cpp",
-    "lint-cpp",
-    "qvac-addon-cmake"
-  ]
+  "implicitDependencies": ["inference-addon-cpp", "lint-cpp", "qvac-addon-cmake"]
 }

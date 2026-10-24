@@ -110,13 +110,14 @@ export function selectNewestBotStatus(statuses, context) {
 // on-pr-nx is the producer for every consolidated package.
 export const NX_PRODUCER = '.github/workflows/on-pr-nx.yml'
 
-// These three are carved out of on-pr-nx and keep their own orchestrators.
-// Per-package, not a flat allowlist: on-pr-vla.yml must not be able to post for
-// classification-ggml. Keys use the PREBUILD_KEYS spelling, so `vla`.
+// These three are carved out of on-pr-nx: two keep their own orchestrators, and
+// vla is built by the CI contract's pr-build-test.yml. Per-package, not a flat
+// allowlist: pr-build-test.yml must not be able to post for classification-ggml.
+// Keys use the PREBUILD_KEYS spelling, so `vla`.
 export const CARVED_OUT_PRODUCERS = {
   fabric: '.github/workflows/on-pr-fabric.yml',
   'classification-ggml': '.github/workflows/on-pr-classification-ggml.yml',
-  vla: '.github/workflows/on-pr-vla.yml',
+  vla: '.github/workflows/pr-build-test.yml',
 }
 
 // Trust only a fresh run of this package's own producer: rejects superseded
@@ -151,6 +152,12 @@ export function evaluatePackage(
   lookupRun,
   contextPrefix = 'qvac/prebuild',
 ) {
+  const newest = newestTrustedStatus(statuses, pkg, prUpdatedEpoch, lookupRun, contextPrefix)
+  return newest ? classifyState(newest.state) : 'pending'
+}
+
+// Newest status from a fresh run of the package's producer, or null while pending.
+export function newestTrustedStatus(statuses, pkg, prUpdatedEpoch, lookupRun, contextPrefix = 'qvac/prebuild') {
   // Trusted+fresh first, then newest: newest-first would let another workflow's
   // co-post mask the real producer.
   const context = `${contextPrefix}-${pkg}`
@@ -164,14 +171,11 @@ export function evaluatePackage(
     // it would let an older success outrank a newer failure, so the gate would
     // pass on a 502. Go back to pending instead and let verify.mjs retry to its
     // deadline, which is what turns persistent failure into a hard fail.
-    if (run === LOOKUP_FAILED) return 'pending'
+    if (run === LOOKUP_FAILED) return null
     if (isRunFresh(run, pkg, prUpdatedEpoch)) trusted.push(s)
   }
-  if (trusted.length === 0) return 'pending'
-  const newest = trusted.reduce((best, s) =>
-    Date.parse(s.updated_at) >= Date.parse(best.updated_at) ? s : best,
-  )
-  return classifyState(newest.state)
+  if (trusted.length === 0) return null
+  return trusted.reduce((best, s) => (Date.parse(s.updated_at) >= Date.parse(best.updated_at) ? s : best))
 }
 
 // The verify.mjs poll loop, with I/O and timing injected so the retry / deadline

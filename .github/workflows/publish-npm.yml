@@ -1,0 +1,236 @@
+name: Publish to npm
+
+# Release publishing for packages on the CI contract: a push to release-<dir>-x.y.z builds and publishes that package alone.
+on:
+  push:
+    branches: [release-*, "!release-train-*"]
+    paths: ["packages/**"]
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated package names or directories to publish
+        type: string
+        required: true
+      npm_tag:
+        description: npm dist-tag override; empty uses the package's own, else latest
+        type: string
+        default: ""
+      dry_run:
+        description: Build and pack without publishing or tagging
+        type: boolean
+        default: false
+  # Registers the workflow from a branch; every job is off for this event.
+  pull_request:
+    paths: [.github/workflows/publish-npm.yml]
+
+permissions: {}
+
+concurrency:
+  group: publish-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  select:
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: build,verify:generated,publish
+      packages: ${{ inputs.packages }}
+
+  logic:
+    needs: select
+    if: needs.select.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      publish_release: ${{ startsWith(github.ref_name, 'release-') }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - if: startsWith(github.ref_name, 'release-')
+        uses: ./.github/actions/release-check-branch
+        with:
+          packages: ${{ toJSON(fromJSON(needs.select.outputs.projects).*.slug) }}
+
+  # git diff runs in the workspace root, so the pushed release commit is checked out there, as on the old path.
+  release-merge-guard:
+    needs: [select, logic]
+    if: startsWith(github.ref_name, 'release-')
+    name: release-merge-guard ${{ matrix.project.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.select.outputs.projects) }}
+    steps:
+      - name: Checkout source and actions
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: ${{ matrix.project.slug }}
+          package-json-path: ${{ matrix.project.dir }}/package.json
+          changelog-path: ${{ matrix.project.dir }}/CHANGELOG.md
+
+  verify:
+    needs: select
+    if: toJSON(fromJSON(needs.select.outputs.matrices)['verify:generated']) != '[]'
+    name: verify:generated ${{ matrix.row.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices)['verify:generated'] }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          path: src
+          persist-credentials: "false"
+      # As pr-checks runs it: the newest Node LTS, a workspace install, and the target through Nx.
+      - uses: tetherto/qvac-actions/setup-node@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-pnpm@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      - shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          NX_DAEMON: "false"
+          NX_NO_CLOUD: "true"
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec nx run "$PROJECT:verify:generated" --outputStyle=stream
+
+  build:
+    needs: [select, logic]
+    if: toJSON(fromJSON(needs.select.outputs.matrices).build) != '[]'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).build) }}
+
+  publish:
+    needs: [select, logic, release-merge-guard, verify, build]
+    if: >-
+      always() && !cancelled() && needs.logic.result == 'success' && toJSON(fromJSON(needs.select.outputs.matrices).publish) != '[]' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+      (needs.verify.result == 'success' || needs.verify.result == 'skipped') &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs.logic.outputs.publish_release == 'true' || inputs.dry_run)
+    name: publish ${{ matrix.row.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ !inputs.dry_run && 'npm' || '' }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices).publish }}
+    outputs:
+      published_version: ${{ steps.publish.outputs.version }}
+    env:
+      WORKDIR: src/${{ matrix.row.dir }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          path: src
+          persist-credentials: "false"
+      # The legs straight into place, which is what a merged bundle would hold.
+      - if: contains(matrix.row.targets, 'build')
+        uses: tetherto/qvac-actions/download-artifact@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          pattern: prebuild-${{ matrix.row.slug }}-*
+          path: ${{ runner.temp }}/prebuilds
+          merge-multiple: "true"
+      - if: contains(matrix.row.targets, 'build')
+        uses: ./.github/actions/prebuilds-place
+        with:
+          staging: ${{ runner.temp }}/prebuilds/${{ matrix.row.dir }}/prebuilds
+          workdir: ${{ env.WORKDIR }}
+          extra-dirs: ${{ join(matrix.row.meta.prebuildExtraDirs, ' ') }}
+      # Again at the last step: whatever the selection did, a release ref publishes its own package at its own version.
+      - if: startsWith(github.ref_name, 'release-')
+        uses: ./.github/actions/release-check-branch
+        with:
+          packages: ${{ toJSON(fromJSON(needs.select.outputs.matrices).publish.*.slug) }}
+          workdir: ${{ env.WORKDIR }}
+      # npm 11.5 or newer for OIDC trusted publishing; the newest Node LTS ships it.
+      - uses: tetherto/qvac-actions/setup-node@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          registry-url: https://registry.npmjs.org/
+          scope: "@qvac"
+      - id: dist-tag
+        uses: tetherto/qvac-actions/npm-release-dist-tag@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          workdir: ${{ env.WORKDIR }}
+          tag: ${{ inputs.npm_tag || 'latest' }}
+      - id: publish
+        if: ${{ !inputs.dry_run }}
+        uses: tetherto/qvac-actions/npm-release-publish@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          workdir: ${{ env.WORKDIR }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
+      - if: inputs.dry_run
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          DIST_TAG: ${{ steps.dist-tag.outputs.tag }}
+        run: |
+          npm pack --dry-run --ignore-scripts --json > "$RUNNER_TEMP/pack.json"
+          {
+            echo "## Dry run: $(jq -r '.[0].id' "$RUNNER_TEMP/pack.json") with tag $DIST_TAG"
+            echo
+            echo '```'
+            jq -r '.[0].files[] | "\(.size)\t\(.path)"' "$RUNNER_TEMP/pack.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  create-tag:
+    needs: [select, publish]
+    if: needs.publish.result == 'success' && needs.publish.outputs.published_version != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices).publish }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: ${{ matrix.row.meta.publish.tagPrefix }}
+      published_version: ${{ needs.publish.outputs.published_version }}

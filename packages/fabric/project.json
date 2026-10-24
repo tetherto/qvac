@@ -14,11 +14,62 @@
         }
       }
     },
+    "ci:system": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "^ci:system"
+      ],
+      "options": {
+        "cwd": "packages/fabric",
+        "parallel": false,
+        "forwardAllArgs": false,
+        "commands": [
+          "echo no system packages"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "commands": [
+            "dpkg -s libibverbs-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libibverbs-dev)"
+          ]
+        },
+        "linux-x64-gpu": {
+          "commands": [
+            "dpkg -s libibverbs-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libibverbs-dev)"
+          ]
+        },
+        "linux-arm64": {
+          "commands": [
+            "dpkg -s libibverbs-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libibverbs-dev)"
+          ]
+        },
+        "linux-arm64-2404": {
+          "commands": [
+            "dpkg -s libibverbs-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libibverbs-dev)"
+          ]
+        }
+      }
+    },
     "build": {
       "executor": "nx:run-commands",
+      "dependsOn": [],
       "options": {
-        "command": "pnpm run build",
         "cwd": "packages/fabric",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+            "forwardAllArgs": true
+          },
+          {
+            "command": "pnpm exec bare-make build",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make install",
+            "forwardAllArgs": false
+          }
+        ],
         "ci": {
           "artifactNamePrefix": "fabric-",
           "includeVulkanSdk": true,
@@ -30,6 +81,35 @@
           "linuxExtraPackages": "libibverbs-dev"
         }
       },
+      "configurations": {
+        "linux-x64": {
+          "args": "--platform=linux --arch=x64"
+        },
+        "linux-arm64": {
+          "args": "--platform=linux --arch=arm64"
+        },
+        "android-arm64": {
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared"
+        },
+        "ios-arm64": {
+          "args": "--platform=ios --arch=arm64"
+        },
+        "ios-arm64-simulator": {
+          "args": "--platform=ios --arch=arm64 --simulator"
+        },
+        "ios-x64-simulator": {
+          "args": "--platform=ios --arch=x64 --simulator"
+        },
+        "darwin-arm64": {
+          "args": "--platform=darwin --arch=arm64"
+        },
+        "darwin-x64": {
+          "args": "--platform=darwin --arch=x64"
+        },
+        "win32-x64": {
+          "args": "--platform=win32 --arch=x64"
+        }
+      },
       "inputs": [
         "default",
         "!{projectRoot}/prebuilds/**"
@@ -37,6 +117,16 @@
       "outputs": [
         "{projectRoot}/prebuilds"
       ]
+    },
+    "link:platform": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
+      "options": {
+        "cwd": "packages/fabric",
+        "command": "pnpm run link:platform"
+      }
     },
     "test:integration": {
       "executor": "nx:run-commands",
@@ -61,7 +151,10 @@
           "nameTransform": "none",
           "repoName": "fabric",
           "testGateMode": "none",
-          "prebuildExtraDirs": ["include", "share"],
+          "prebuildExtraDirs": [
+            "include",
+            "share"
+          ],
           "slicePlatformPackages": true
         }
       }

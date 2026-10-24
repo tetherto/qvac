@@ -132,7 +132,25 @@ jobs:
               - ".github/workflows/prebuilds-fabric.yml"
             vla:
               - "packages/vla-ggml/**"
-              - ".github/workflows/prebuilds-vla.yml"
+              - ".github/workflows/pr-build-test.yml"
+              - ".github/workflows/_*.yml"
+              - ".github/scripts/select-projects.mjs"
+              - ".github/actions/ci-route-stages/**"
+              - ".github/actions/models-cache-key/**"
+              - ".github/actions/models-download/**"
+              - ".github/actions/pr-check-trust/**"
+              - ".github/actions/prebuilds-check-exports/**"
+              - ".github/actions/prebuilds-check-windows-runtime/**"
+              - ".github/actions/prebuilds-strip/**"
+              - ".github/actions/setup-apple-clang/**"
+              - ".github/actions/setup-cuda/**"
+              - ".github/actions/setup-rocm/**"
+              - ".github/actions/setup-vulkan/**"
+              - ".github/actions/setup-windows-host/**"
+              - ".github/actions/vcpkg-bootstrap/**"
+              - ".github/actions/vcpkg-cache-setup/**"
+              - ".github/actions/vcpkg-cache-sync/**"
+              - ".github/actions/vcpkg-toolchain-hash/**"
 
       # Package dir names mostly match the filter/job key (packages/<key>),
       # except vla (packages/vla-ggml) - mapped explicitly here so

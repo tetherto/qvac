@@ -71,6 +71,14 @@ overrides:
   "@qvac/diffusion-cpp-darwin-arm64": "-"
   "@qvac/diffusion-cpp-darwin-x64": "-"
   "@qvac/diffusion-cpp-win32-x64": "-"
+  # bare-make's LLVM resource packages find their own directory (clang's
+  # resource dir) through require-asset, which needs 1.2.4 and a
+  # bare-module-resolve with directory support (1.12.6). Older pins resolve it
+  # to index.js and clang loses its builtin headers; a fresh npm install gets both.
+  "llvm-runtime-resources-darwin>require-asset": "^1.2.4"
+  "llvm-runtime-resources-linux>require-asset": "^1.2.4"
+  "llvm-runtime-resources-win32>require-asset": "^1.2.4"
+  "require-asset>bare-module-resolve": "^1.12.6"
 
 blockExoticSubdeps: true
 

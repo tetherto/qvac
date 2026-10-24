@@ -1,0 +1,23 @@
+name: Strip binaries
+description: Drop static libraries and strip debug info from a package's prebuilds; fail if any binary keeps it.
+
+inputs:
+  platform:
+    description: linux, android, darwin, ios or win32
+    required: true
+  workdir:
+    description: Directory holding prebuilds/
+    required: true
+  extra-names:
+    description: Newline-separated extensionless executables to strip too
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        WORKDIR: ${{ inputs.workdir }}
+        EXTRA_NAMES: ${{ inputs.extra-names }}
+      run: node "$GITHUB_ACTION_PATH/prebuilds-strip.mjs"

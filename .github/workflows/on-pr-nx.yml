@@ -180,8 +180,7 @@ jobs:
                 "model-fit":           "model-fit-pr-head-ts-checks / ts-checks",
                 "ocr-ggml":            "ocr-ggml-pr-head-ts-checks / ts-checks",
                 "translation-nmtcpp":  "translation-nmtcpp-pr-head-ts-checks / ts-checks",
-                "turbovec-ggml":       "turbovec-ggml-pr-head-ts-checks / ts-checks",
-                "vla-ggml":            "vla-pr-head-ts-checks / ts-checks"
+                "turbovec-ggml":       "turbovec-ggml-pr-head-ts-checks / ts-checks"
               }[.package] // error("no ts check name mapped for \(.package)")
             )}] | unique_by(.package)')"
             echo "fabric=$(echo "$M" | jq -c '[.[] | select(.hasFabricLockstep == true)]')"

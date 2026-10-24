@@ -3,7 +3,28 @@
   "analytics": false,
   "targetDefaults": {
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "metadata": {
+        "toolchain": {
+          "android": {
+            "ndk": "29.0.14206865",
+            "apiLevel": "34",
+            "aptPackages": "gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld"
+          },
+          "llvm": { "linux": "22", "windows": "22.1.0" },
+          "cuda": "13.0.3",
+          "rocm": {
+            "version": "7.13.0",
+            "gfx": "gfx1151",
+            "sha256": "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
+          },
+          "hostSetup": {
+            "linux-x64": ["cuda", "rocm"],
+            "linux-arm64": ["cuda"],
+            "win32-x64": ["cuda"]
+          }
+        }
+      }
     }
   },
   "release": {

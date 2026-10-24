@@ -1,0 +1,142 @@
+name: Cache warm
+
+# Seeds the model and vcpkg caches that PR runs only restore. Push and schedule dispatch this workflow, because
+# the release environment blocks a called workflow's jobs when the caller was triggered by push or schedule.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/*/vcpkg.json"
+      - "packages/*/vcpkg-configuration.json"
+      - "packages/*/test/integration/models.manifest.json"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - ".github/workflows/cache-warm.yml"
+      - ".github/workflows/_cpp-tests.yml"
+      - ".github/actions/vcpkg-toolchain-hash/**"
+      - ".github/actions/vcpkg-cache-setup/**"
+      - ".github/actions/models-cache-key/**"
+      - ".github/actions/models-download/**"
+  # Every 2 days: the cache server prunes an entry after 5 days without an upload or a download.
+  schedule:
+    - cron: "17 6 */2 * *"
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated package names or directories; empty warms every package on the contract
+        type: string
+        default: ""
+  # Registers the workflow from a branch; every job is off for this event.
+  pull_request:
+    paths: [.github/workflows/cache-warm.yml]
+
+permissions: {}
+
+# Never cancel: a cancelled run leaves a cache cold.
+concurrency:
+  group: cache-warm-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run cache-warm.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+
+  select:
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: cache:models,build,cpp:tests
+      packages: ${{ inputs.packages }}
+
+  # One entry per package and target that restores models; a hit is still downloaded, which resets the prune clock.
+  models:
+    needs: select
+    if: toJSON(fromJSON(needs.select.outputs.matrices)['cache:models']) != '[]'
+    name: models ${{ matrix.row.slug }} ${{ matrix.target }}
+    runs-on: ${{ fromJSON(needs.select.outputs.runners).linux_ubuntu2404_x64 }}
+    environment: release
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices)['cache:models'] }}
+        target: [test:integration, test:backend, cpp:tests]
+    env:
+      WORKDIR: src/${{ matrix.row.dir }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          path: src
+          persist-credentials: "false"
+      - uses: tetherto/qvac-actions/setup-node@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - id: models
+        uses: ./.github/actions/models-cache-key
+        with:
+          workdir: ${{ env.WORKDIR }}
+          target: ${{ matrix.target }}
+      - if: steps.models.outputs.paths != ''
+        uses: tetherto/qvac-actions/configure-aws-credentials@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+      - if: steps.models.outputs.paths != ''
+        uses: tetherto/qvac-actions/cache@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          key: ${{ steps.models.outputs.key }}
+          path: ${{ steps.models.outputs.paths }}
+          enable-cross-os-archive: "true"
+      - if: steps.models.outputs.paths != ''
+        uses: ./.github/actions/models-download
+        with:
+          workdir: ${{ env.WORKDIR }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          target: ${{ matrix.target }}
+
+  # The prebuilds cpp:tests restores.
+  build:
+    needs: select
+    if: toJSON(fromJSON(needs.select.outputs.matrices)['cpp:tests']) != '[]'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).build) }}
+
+  # cpp:build writes the vcpkg caches on a trusted run; cpp:tests runs too, as the old warmer's dispatch did.
+  vcpkg:
+    needs: [select, build]
+    if: toJSON(fromJSON(needs.select.outputs.matrices)['cpp:tests']) != '[]'
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/_cpp-tests.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['cpp:tests']) }}
+      trusted: true

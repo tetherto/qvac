@@ -1,0 +1,84 @@
+name: PR checks
+
+# Lint, typecheck, unit tests and generated files for the changed packages on the CI contract and their dependents,
+# run through Nx from the PR's own targets: no secrets here, so the PR's tree is safe to execute and forks get real results.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated package names or directories; empty selects every package on the contract
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: lint,typecheck,test:unit,verify:generated
+      packages: ${{ inputs.packages }}
+
+  checks:
+    needs: select
+    if: needs.select.outputs.any == 'true'
+    name: checks (${{ matrix.project.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NX_DAEMON: "false"
+      NX_NO_CLOUD: "true"
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.select.outputs.projects) }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: Checkout pull request
+        uses: tetherto/qvac-actions/checkout@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: src
+          persist-credentials: "false"
+      - uses: tetherto/qvac-actions/setup-node@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-pnpm@56f083d185a861b7e830b6818f666dccb00682d3  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      # A workspace install, so a package checks against its dependencies' sources in this PR, not their published builds.
+      - name: Install
+        working-directory: src
+        run: pnpm install --frozen-lockfile
+      # One step per target; nx run-many skips a target the package does not declare.
+      - name: lint
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.project.name }}
+        run: pnpm exec nx run-many -t lint -p "$PROJECT" --outputStyle=stream
+      - name: typecheck
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.project.name }}
+        run: pnpm exec nx run-many -t typecheck -p "$PROJECT" --outputStyle=stream
+      - name: test:unit
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.project.name }}
+        run: pnpm exec nx run-many -t test:unit -p "$PROJECT" --outputStyle=stream
+      - name: verify:generated
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.project.name }}
+        run: pnpm exec nx run-many -t verify:generated -p "$PROJECT" --outputStyle=stream

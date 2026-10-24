@@ -409,8 +409,8 @@ unreliable. Scope by your PR's head commit instead:
 
 ```bash
 PKG=llm-llamacpp   # the package directory name, i.e. packages/<PKG>
-WF=llm-llamacpp    # workflow slug: integration-mobile-test-<WF>.yml. Not always
-                   # $PKG — integration-mobile-test-vla.yml builds packages/vla-ggml.
+WF=llm-llamacpp    # workflow slug: integration-mobile-test-<WF>.yml. vla has none:
+                   # it is on the CI contract, so see the vla note below.
 PR=4519            # your PR number
 BRANCH=$(git branch --show-current)
 
@@ -553,10 +553,12 @@ The native addons, including `model-fit`, publish from `on-merge-nx.yml`, so the
 found by branch rather than by a per-addon workflow name.
 
 For every addon except one, `GPR_NAME` is just `$WF-mono`. **`vla` is the
-exception:** its mobile workflow is `integration-mobile-test-vla.yml`, but the
-package is `@qvac/vla-ggml`, so `WF=vla` and `GPR_NAME=vla-ggml-mono`. If
-unsure, read `addon-npm-name` from the mobile workflow and append `-mono` to the
-part after the slash.
+exception:** it is on the CI contract, so its GPR builds come from
+`publish-gpr.yml` and its mobile runs from dispatching `mobile-tests.yml` with
+`-f packages=vla-ggml`, which takes `prebuild_run_id` from a `pr-build-test.yml`
+run. The package is `@qvac/vla-ggml`, so `GPR_NAME=vla-ggml-mono`. If unsure,
+read `addon-npm-name` from the mobile workflow and append `-mono` to the part
+after the slash.
 
 An empty `$PKG` means either that run published nothing — usually because you
 dispatched from a branch outside `tmp-*`/`feature-*`, since `workflow_dispatch`
