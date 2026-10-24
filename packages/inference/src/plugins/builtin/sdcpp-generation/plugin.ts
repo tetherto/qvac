@@ -132,7 +132,7 @@ export const diffusionPlugin = definePlugin({
     cfg: SdcppConfig,
     ctx: ResolveContext
   ): Promise<ResolveResult<SdcppConfig, DiffusionArtifactKey>> {
-    if (cfg.projectionModelSrc && cfg.mode !== 'diffusion' && cfg.mode !== undefined) {
+    if (cfg.projectionModelSrc && cfg.mode !== 'diffusion') {
       throw new ModelLoadFailedError(
         'modelConfig.projectionModelSrc requires diffusion mode. ' +
           "Use mode: 'diffusion' or remove projectionModelSrc."
