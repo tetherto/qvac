@@ -6,6 +6,7 @@ import { Readable } from 'bare-stream'
 import Buffer from 'bare-buffer'
 import { getEngineLogger } from '@/logging/index'
 import { type AudioFormat } from '@/schemas/index'
+import { ConfigValidationFailedError } from '@/errors/index'
 
 const logger = getEngineLogger()
 
@@ -59,7 +60,21 @@ export async function decodeAudioToStream(
   })
 
   try {
-    await decoder.load()
+    await decoder.load().catch((error: unknown) => {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'MODULE_NOT_FOUND' &&
+        'specifier' in error &&
+        error.specifier === 'bare-ffmpeg'
+      ) {
+        throw new ConfigValidationFailedError(
+          'Encoded audio requires bare-ffmpeg. Set includeAudioDecoder: true, remove --defer bare-ffmpeg, and rebuild the bundle, or provide raw PCM audio.',
+          error
+        )
+      }
+      throw error
+    })
 
     const audioStream = fs.createReadStream(inputPath)
     // bare-fs read streams are async-iterable over Buffer at runtime; the
