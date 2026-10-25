@@ -240,7 +240,7 @@ importers:
   packages/classification-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.23.0
+        specifier: ^0.23.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -271,11 +271,11 @@ importers:
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/fabric-ios':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -314,20 +314,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-win32-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
 
   packages/cli:
     dependencies:
@@ -557,7 +557,7 @@ importers:
   packages/embed-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.23.0
+        specifier: ^0.23.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -573,11 +573,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/fabric-ios':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -634,20 +634,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-win32-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
 
   packages/error:
     devDependencies:
@@ -694,7 +694,7 @@ importers:
   packages/ggml-rpc-server:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.23.0
+        specifier: ^0.23.1
         version: link:../fabric
       bare-net:
         specifier: ^2.3.2
@@ -704,11 +704,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/fabric-ios':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -750,20 +750,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-win32-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
 
   packages/inference:
     dependencies:
@@ -974,7 +974,7 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.23.0
+        specifier: ^0.23.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -990,11 +990,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/fabric-ios':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -1054,20 +1054,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-win32-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
 
   packages/logging:
     dependencies:
@@ -1100,7 +1100,7 @@ importers:
   packages/model-fit:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.23.0
+        specifier: ^0.23.1
         version: link:../fabric
       bare-fs:
         specifier: ^4.5.1
@@ -1116,11 +1116,11 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/fabric-ios':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -1165,20 +1165,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-win32-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
 
   packages/ocr-ggml:
     dependencies:
@@ -1186,7 +1186,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.23.0
+        specifier: ^0.23.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -1217,11 +1217,11 @@ importers:
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/fabric-ios':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/registry-client':
         specifier: ^0.4.0
         version: 0.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -1269,20 +1269,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-win32-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
 
   packages/qvac-ci:
     dependencies:
@@ -1899,7 +1899,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.23.0
+        specifier: ^0.23.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -1924,11 +1924,11 @@ importers:
         version: 2.4.6
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/fabric-ios':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -1976,20 +1976,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-win32-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
 
   packages/tts-ggml:
     dependencies:
@@ -2082,15 +2082,15 @@ importers:
   packages/turbovec-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.23.0
+        specifier: ^0.23.1
         version: link:../fabric
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/fabric-ios':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -2147,20 +2147,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-win32-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
 
   packages/vla-ggml:
     dependencies:
@@ -2168,7 +2168,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.23.0
+        specifier: ^0.23.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -2184,11 +2184,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@qvac/fabric-ios':
-        specifier: 0.23.0
-        version: 0.23.0
+        specifier: 0.23.1
+        version: 0.23.1
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -2245,20 +2245,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-linux-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
       '@qvac/fabric-win32-x64':
-        specifier: ^0.23.0
-        version: 0.23.0
+        specifier: ^0.23.1
+        version: 0.23.1
 
   plugins/openclaw:
     dependencies:
@@ -4593,6 +4593,10 @@ packages:
     resolution: {integrity: sha512-bDEbfNBKBgib8gyiAm6fktYuQo5kajvke84RiPpm2UxK0EBinDMqxh2A67umV5+4Opru7l5hD05sRr3naMf2Rw==}
     engines: {bare: '>=1.24.0'}
 
+  '@qvac/fabric-android-arm64@0.23.1':
+    resolution: {integrity: sha512-90jEXajp8O5TqXOZWtoFyNY4HneOgnnetx8t8oNVoVKjxsfDwCAaAAQee80tx9K77t/FmJFrOIIG5a7oh8xBAg==}
+    engines: {bare: '>=1.24.0'}
+
   '@qvac/fabric-darwin-arm64@0.22.0':
     resolution: {integrity: sha512-VveZlg8vEg02tT6fP9va6yojgyENyvAgOzWh+H8my444wGWUQtk+F1h82F/F/wSPeTFxsJaC29BsztJWM5Rk6A==}
     engines: {bare: '>=1.24.0'}
@@ -4601,6 +4605,12 @@ packages:
 
   '@qvac/fabric-darwin-arm64@0.23.0':
     resolution: {integrity: sha512-At6EsJG0Sx78+bsqZMyvzgN2bX2/Z8/oy6cy7ub4KYZAW7pY1sYjkfUzCWoY7f4H8roYS36CH4FcjVofzShHIQ==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@qvac/fabric-darwin-arm64@0.23.1':
+    resolution: {integrity: sha512-epL983xtp7t8Hyy3RItK6q7chZ0PdjlTcZWZ89o9nzvdqo7p54F0de00WNyuM4VDlOTrttsPHbw26t5Bc9W01Q==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [darwin]
@@ -4617,12 +4627,22 @@ packages:
     cpu: [x64]
     os: [darwin]
 
+  '@qvac/fabric-darwin-x64@0.23.1':
+    resolution: {integrity: sha512-y2RGtz7SKQzwYIqFHBoC79HxwSXv9o765nczozpMadgjAZc0vQKCCcYGfNVvH5vmaIQ0rHhIxPvv2Aa8GJGsrg==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [darwin]
+
   '@qvac/fabric-ios@0.22.0':
     resolution: {integrity: sha512-JSjz82zfR0jkJdJhxcpwEutZ5WEw3VZUvgMrhYPawZHD1pgN9SQDsdMgu9shay5mA0Kfc4M7jyOAw6/LR8ATOw==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/fabric-ios@0.23.0':
     resolution: {integrity: sha512-dTYH8oMor8STNo+ibFBg4f+w6j9zI8uOXHhTHKAWAmNv22/GH0yA5lsGjUWF1A3I4PeN7r+u0b/jXYOwu9bAQA==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/fabric-ios@0.23.1':
+    resolution: {integrity: sha512-Dui79DmZdE8zjD6z69W/4OlnTmWHdlNTSvonld7w7AcwwbVwfcw2v7jH7IAPl6WkWdzk1H1Oadhl7FPPhz3hWg==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/fabric-linux-arm64@0.22.0':
@@ -4634,6 +4654,13 @@ packages:
 
   '@qvac/fabric-linux-arm64@0.23.0':
     resolution: {integrity: sha512-gT+rblmS6je/8OPbZVTlDSmoLY+FQoVEjJqppzdQbNxkZna+uyflDQaDdCMFiO+s6y238AM7ULC6pGBL2Qw+TA==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@qvac/fabric-linux-arm64@0.23.1':
+    resolution: {integrity: sha512-48h6B7J3UfZT5NdhDdRNGSGQLnSLk+SylldZFKkr5qx94ZEy37DyeAP1Ivnew28QEeSBLmjwNVhK7Nz7zVTx5g==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [linux]
@@ -4653,6 +4680,13 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@qvac/fabric-linux-x64@0.23.1':
+    resolution: {integrity: sha512-do0zVeIaT8EZ1wyTtxVIGuY0JNlilfSv+H/FwNE97O7CYql+DjEwUD/8rC4+vEZyG1iB+ApCHbHJcemOzqtbBQ==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
   '@qvac/fabric-win32-x64@0.22.0':
     resolution: {integrity: sha512-6z73O2CJNffTzcOTBrSb2NSCbzE6nh5EgkHie/5gVWVLDlLmXMBVH/+t+RX7siBW6/rYx0xfLi8L7yHuiflTew==}
     engines: {bare: '>=1.24.0'}
@@ -4661,6 +4695,12 @@ packages:
 
   '@qvac/fabric-win32-x64@0.23.0':
     resolution: {integrity: sha512-sEJGORipV3Bk8wWT/LhhwS0P2P/CnXz1DmBqjPhO9OufypwD5WPbW9w9V7B6lnA8aKroSlBhRjuFf99KyimHtw==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@qvac/fabric-win32-x64@0.23.1':
+    resolution: {integrity: sha512-dEJ/GgxVhS8dH+YtoP57d8a+koghMdTD2oKvu+YIwproHtKsIZQBWiqOOZr4x/mNK8RYQ9SuIOyPjvHpvlzt9w==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [win32]
@@ -14385,12 +14425,18 @@ snapshots:
   '@qvac/fabric-android-arm64@0.22.0':
     optional: true
 
-  '@qvac/fabric-android-arm64@0.23.0': {}
+  '@qvac/fabric-android-arm64@0.23.0':
+    optional: true
+
+  '@qvac/fabric-android-arm64@0.23.1': {}
 
   '@qvac/fabric-darwin-arm64@0.22.0':
     optional: true
 
   '@qvac/fabric-darwin-arm64@0.23.0':
+    optional: true
+
+  '@qvac/fabric-darwin-arm64@0.23.1':
     optional: true
 
   '@qvac/fabric-darwin-x64@0.22.0':
@@ -14399,15 +14445,24 @@ snapshots:
   '@qvac/fabric-darwin-x64@0.23.0':
     optional: true
 
+  '@qvac/fabric-darwin-x64@0.23.1':
+    optional: true
+
   '@qvac/fabric-ios@0.22.0':
     optional: true
 
-  '@qvac/fabric-ios@0.23.0': {}
+  '@qvac/fabric-ios@0.23.0':
+    optional: true
+
+  '@qvac/fabric-ios@0.23.1': {}
 
   '@qvac/fabric-linux-arm64@0.22.0':
     optional: true
 
   '@qvac/fabric-linux-arm64@0.23.0':
+    optional: true
+
+  '@qvac/fabric-linux-arm64@0.23.1':
     optional: true
 
   '@qvac/fabric-linux-x64@0.22.0':
@@ -14416,10 +14471,16 @@ snapshots:
   '@qvac/fabric-linux-x64@0.23.0':
     optional: true
 
+  '@qvac/fabric-linux-x64@0.23.1':
+    optional: true
+
   '@qvac/fabric-win32-x64@0.22.0':
     optional: true
 
   '@qvac/fabric-win32-x64@0.23.0':
+    optional: true
+
+  '@qvac/fabric-win32-x64@0.23.1':
     optional: true
 
   '@qvac/fabric@0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)':
