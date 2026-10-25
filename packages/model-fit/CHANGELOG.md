@@ -11,6 +11,9 @@
   `0.x` version locks the minor, so `^0.22.0` would not have resolved `0.23.0`
   on its own. The native API changes, so the native addon is rebuilt against
   the 0.23.0 headers.
+- The mobile dev dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` take a caret, `^0.23.1`, instead of an exact pin, so a
+  later fabric patch no longer needs a manifest change.
 - Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
   `@qvac/fabric-ios` to `0.23.1` together.
 

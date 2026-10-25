@@ -45,8 +45,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ggml-rpc-server#readme",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.23.1",
-    "@qvac/fabric-ios": "0.23.1",
+    "@qvac/fabric-android-arm64": "^0.23.1",
+    "@qvac/fabric-ios": "^0.23.1",
     "@types/node": "^24.2.1",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.9.0",
