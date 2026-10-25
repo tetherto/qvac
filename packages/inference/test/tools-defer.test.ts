@@ -9,8 +9,7 @@ import {
   loadedToolNames,
   partitionTools,
   resolveDeferredTools,
-  searchDeferredTools,
-  withDeferredToolChoice
+  searchDeferredTools
 } from '@/utils/tools/defer'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
 import type { McpClient } from '@/schemas/mcp-adapter'
@@ -191,7 +190,7 @@ test('a search result names what it loaded and carries the full schemas', (t) =>
   t.absent('group' in parsed.tools[0]!, 'registration-only fields do not reach the model')
 })
 
-test('a loaded tool becomes callable and stays out of the prompt', (t) => {
+test('a loaded tool is declared in the prompt', (t) => {
   const history = [
     { role: 'user', content: 'open an issue' },
     { role: 'assistant', content: '<call tool_search>' },
@@ -202,50 +201,36 @@ test('a loaded tool becomes callable and stays out of the prompt', (t) => {
 
   const resolved = resolveDeferredTools(INVENTORY, history)
   t.alike(
-    resolved?.callableTools.map((item) => item.name),
-    ['get_weather', TOOL_SEARCH_NAME, 'create_issue'],
-    'the parser accepts the loaded tool'
-  )
-  t.alike(
     resolved?.toolsToRender.map((item) => item.name),
-    ['get_weather', TOOL_SEARCH_NAME],
-    'the prompt block is unchanged, so the prefix in front of it still matches'
+    ['get_weather', TOOL_SEARCH_NAME, 'create_issue'],
+    'the loaded tool is rendered after tool_search, so the grammar and parser both accept it'
+  )
+  t.absent(
+    'deferLoading' in resolved!.toolsToRender[2]!,
+    'registration-only fields do not reach the model'
   )
 })
 
-test('the tool-call grammar is off only once a deferred tool is loaded', (t) => {
-  const fresh = [{ role: 'user', content: 'open an issue' }]
-  const loaded = [
-    ...fresh,
+test('loaded tools render in registration order, not load order', (t) => {
+  const first = executeToolSearch(INVENTORY, { query: 'list_prs' }, [])
+  const history = [
+    { role: 'user', content: 'list prs, then open an issue' },
     { role: 'assistant', content: '<call tool_search>' },
-    { role: 'tool', content: executeToolSearch(INVENTORY, { query: 'create_issue' }, []) }
+    { role: 'tool', content: first },
+    { role: 'assistant', content: '<call tool_search>' },
+    {
+      role: 'tool',
+      content: executeToolSearch(INVENTORY, { query: 'create_issue' }, [
+        { role: 'tool', content: first }
+      ])
+    }
   ]
 
-  const freshResolution = resolveDeferredTools(INVENTORY, fresh)
-  const loadedResolution = resolveDeferredTools(INVENTORY, loaded)
-
-  t.is(
-    withDeferredToolChoice(undefined, freshResolution),
-    undefined,
-    'nothing loaded yet: every callable name is in the grammar'
-  )
-  const params: { temp: number; tool_choice?: string } = { temp: 0 }
   t.alike(
-    withDeferredToolChoice(params, loadedResolution),
-    { temp: 0, tool_choice: 'none' },
-    'a loaded name is not in the grammar, so it must not be enforced'
+    resolveDeferredTools(INVENTORY, history)?.toolsToRender.map((item) => item.name),
+    ['get_weather', TOOL_SEARCH_NAME, 'create_issue', 'list_prs'],
+    'the block is the same for the same loaded set, whatever order the searches ran in'
   )
-  t.alike(
-    withDeferredToolChoice({ tool_choice: 'auto' }, loadedResolution),
-    { tool_choice: 'none' },
-    'an explicit "auto" is the default and gets the same treatment'
-  )
-  t.alike(
-    withDeferredToolChoice({ tool_choice: 'required' }, loadedResolution),
-    { tool_choice: 'required' },
-    'a stronger caller choice is kept'
-  )
-  t.is(withDeferredToolChoice(undefined, null), undefined, 'nothing defers')
 })
 
 test('loading the same tool twice appends no second definition', (t) => {

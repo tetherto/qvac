@@ -259,22 +259,24 @@ export function loadedToolNames(history: readonly HistoryMessage[]): Set<string>
 }
 
 export type DeferredResolution = {
-  /** Definitions that go into the prompt: always-loaded tools plus `tool_search`. */
+  /**
+   * Definitions that go into the prompt and the parser: always-loaded tools,
+   * `tool_search`, and whatever history has loaded.
+   */
   toolsToRender: Tool[]
-  /** Names the model may call now: rendered tools plus whatever history has loaded. */
-  callableTools: Tool[]
   /** The full deferred inventory, for `tool_search` to search over. */
   deferred: Tool[]
 }
 
 /**
- * Split a registered tool list into what the prompt carries and what the
- * parser accepts.
+ * Split a registered tool list into what the prompt carries and what
+ * `tool_search` searches over.
  *
- * Loaded definitions stay out of `toolsToRender` on purpose. They live in the
- * history as tool results, which appends to the prefix instead of rewriting
- * the block at the front of it — a tool loaded mid-conversation must not cost
- * a re-prefill of everything before it.
+ * A loaded definition is declared in the tools block like any other tool, in
+ * registration order. A schema that sits only in a `tool` result, outside the
+ * block and the tool-call grammar, is not reliably called by small models: they
+ * search for it again instead. Declaring it changes the block at the front of
+ * the prompt, so the turn after a search re-prefills from there.
  *
  * Returns `null` when nothing defers, so the existing path is untouched.
  */
@@ -287,37 +289,14 @@ export function resolveDeferredTools(
   if (deferred.length === 0) return null
 
   const loaded = loadedToolNames(history)
-  const rendered = [...alwaysLoaded.map(toWireTool), buildToolSearchTool(deferred)]
   return {
-    toolsToRender: rendered,
-    callableTools: [
-      ...rendered,
+    toolsToRender: [
+      ...alwaysLoaded.map(toWireTool),
+      buildToolSearchTool(deferred),
       ...deferred.filter((tool) => loaded.has(tool.name)).map(toWireTool)
     ],
     deferred: [...deferred]
   }
-}
-
-/**
- * Generation params for a turn whose history may have loaded deferred definitions.
- *
- * The addon builds its tool-call grammar from the rendered tools only, and a
- * loaded definition lives in the history rather than that block, so under the
- * default grammar the model can never produce the name it just loaded. Unless
- * the caller asked for more than the default, those turns run with the grammar
- * off and the parser, which does accept loaded names, validates the call.
- */
-export function withDeferredToolChoice<T extends { tool_choice?: string | undefined }>(
-  generationParams: T | undefined,
-  resolution: DeferredResolution | null
-): T | undefined {
-  const toolChoice = generationParams?.tool_choice
-  // An explicit "auto" is the default, which is exactly the grammar that cannot reach a loaded tool.
-  if (toolChoice !== undefined && toolChoice !== 'auto') return generationParams
-  if (!resolution || resolution.callableTools.length === resolution.toolsToRender.length) {
-    return generationParams
-  }
-  return { ...(generationParams ?? ({} as T)), tool_choice: 'none' }
 }
 
 /**

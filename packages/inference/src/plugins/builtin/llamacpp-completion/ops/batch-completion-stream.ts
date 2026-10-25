@@ -20,12 +20,7 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { normalizeCompletionStats } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import { prependToolsToHistory } from '@/utils/tool-integration'
-import {
-  resolveDeferredTools,
-  toWireTool,
-  withDeferredToolChoice,
-  type DeferredResolution
-} from '@/utils/tools/defer'
+import { resolveDeferredTools, toWireTool, type DeferredResolution } from '@/utils/tools/defer'
 
 const logger = getEngineLogger()
 
@@ -129,9 +124,9 @@ function buildBatchPrompt(
 ): AddonBatchPrompt {
   const history = seedConfiguredSystemPrompt(prompt.history, options.modelConfig)
   const deferred = resolveDeferredTools(prompt.tools, history)
-  const mergedGenerationParams = withDeferredToolChoice(
-    mergeGenerationParams(prompt.generationParams, prompt.responseFormat),
-    options.toolsEnabled ? deferred : null
+  const mergedGenerationParams = mergeGenerationParams(
+    prompt.generationParams,
+    prompt.responseFormat
   )
   return {
     ...(prompt.id !== undefined && { id: prompt.id }),
