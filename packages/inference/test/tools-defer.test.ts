@@ -233,6 +233,31 @@ test('loaded tools render in registration order, not load order', (t) => {
   )
 })
 
+test('a loaded tool whose name is already declared is not declared again', (t) => {
+  const inventory = [
+    tool('search', 'Search the web'),
+    tool('search', 'Search the issue tracker', { deferLoading: true }),
+    tool('lookup', 'Look up a record', { deferLoading: true }),
+    tool('lookup', 'Look up a user', { deferLoading: true })
+  ]
+  const history = [
+    { role: 'tool', content: executeToolSearch(inventory, { query: 'search' }, []) },
+    { role: 'tool', content: executeToolSearch(inventory, { query: 'lookup' }, []) }
+  ]
+
+  const rendered = resolveDeferredTools(inventory, history)?.toolsToRender
+  t.alike(
+    rendered?.map((item) => item.name),
+    ['search', TOOL_SEARCH_NAME, 'lookup'],
+    'one definition per name: the addon rejects a prompt that declares a name twice'
+  )
+  t.alike(
+    rendered?.map((item) => item.description),
+    ['Search the web', rendered?.[1]?.description, 'Look up a record'],
+    'the first registration of a name wins'
+  )
+})
+
 test('loading the same tool twice appends no second definition', (t) => {
   const first = executeToolSearch(INVENTORY, { query: 'create_issue' }, [])
   const history = [{ role: 'tool', content: first }]

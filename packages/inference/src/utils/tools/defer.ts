@@ -289,12 +289,18 @@ export function resolveDeferredTools(
   if (deferred.length === 0) return null
 
   const loaded = loadedToolNames(history)
+  // A name the prompt already declares is not declared again: the addon rejects
+  // a prompt with two tools of one name, and the parser resolves a call to the
+  // first anyway.
+  const declared = new Set(alwaysLoaded.map((tool) => tool.name))
+  const loadedTools: Tool[] = []
+  for (const tool of deferred) {
+    if (!loaded.has(tool.name) || declared.has(tool.name)) continue
+    declared.add(tool.name)
+    loadedTools.push(toWireTool(tool))
+  }
   return {
-    toolsToRender: [
-      ...alwaysLoaded.map(toWireTool),
-      buildToolSearchTool(deferred),
-      ...deferred.filter((tool) => loaded.has(tool.name)).map(toWireTool)
-    ],
+    toolsToRender: [...alwaysLoaded.map(toWireTool), buildToolSearchTool(deferred), ...loadedTools],
     deferred: [...deferred]
   }
 }
