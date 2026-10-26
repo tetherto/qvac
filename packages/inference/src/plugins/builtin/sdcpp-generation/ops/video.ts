@@ -220,10 +220,21 @@ export async function* video(
         })
       : await model.run({ ...runParams, mode: 'txt2vid' })
 
+  let drained = false
+  ctx.scope.defer(async () => {
+    if (drained) return
+    onAbort()
+    try {
+      await response.await()
+    } catch {
+      // Preserve the stream's original failure or consumer exit.
+    }
+  })
+
   let outputIndex = 0
 
   for await (const chunk of response.iterate()) {
-    if (ctx.signal.aborted) break
+    if (ctx.signal.aborted) continue
     if (chunk instanceof Uint8Array) {
       yield {
         type: 'videoStream',
@@ -246,6 +257,7 @@ export async function* video(
       }
     }
   }
+  drained = true
 
   const responseWithStats = response as unknown as ResponseWithStats
   return { stats: toVideoStats(responseWithStats.stats) }

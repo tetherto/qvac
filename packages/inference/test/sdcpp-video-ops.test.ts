@@ -855,6 +855,81 @@ test('video op: broad cancel routes through registry and calls model.cancel', as
   )
 })
 
+test('video op: early consumer exit settles native work before releasing admission', async (t) => {
+  const [{ diffusionPlugin }, { video: videoOp }, { RequestRejectedByPolicyError }] =
+    await Promise.all([
+      import('@/plugins/builtin/sdcpp-generation/plugin'),
+      import('@/plugins/builtin/sdcpp-generation/ops/video'),
+      import('@/errors')
+    ])
+  let cancelCalls = 0
+  let awaitCalls = 0
+  let settleStarted: () => void = () => {}
+  let release: () => void = () => {}
+  const settling = new Promise<void>((resolve) => {
+    settleStarted = resolve
+  })
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  await withRegisteredVideoModel(
+    async () => ({
+      iterate: async function* () {
+        yield '{"step":1,"total":2}'
+        yield new Uint8Array([82, 73, 70, 70])
+      },
+      await: async () => {
+        awaitCalls++
+        settleStarted()
+        await gate
+        throw new Error('Native generation cancelled')
+      }
+    }),
+    async (modelId) => {
+      const request = {
+        modelId,
+        mode: 'txt2vid' as const,
+        prompt: 'A running fox.',
+        video_frames: 5
+      }
+      const stream = diffusionPlugin.handlers.videoStream.handler(
+        request
+      ) as AsyncGenerator<VideoStreamResponse>
+      try {
+        const first = await stream.next()
+        t.is(first.value?.step, 1, 'the consumer receives a progress frame')
+        const closing = stream.return(undefined as never)
+        const cleanupStarted = await Promise.race([
+          settling.then(() => true),
+          closing.then(() => false)
+        ])
+        t.ok(cleanupStarted, 'closing the stream waits for native settlement')
+        if (!cleanupStarted) return
+
+        t.is(cancelCalls, 1, 'early exit cancels native generation once')
+        t.is(awaitCalls, 1, 'early exit awaits the native response')
+        await t.exception(
+          () => videoOp(request).next(),
+          RequestRejectedByPolicyError as unknown as new () => Error
+        )
+
+        release()
+        await closing
+        const { chunks } = await collectVideo(videoOp(request))
+        t.is(chunks[1]?.data, 'UklGRg==', 'the model admits a request after cleanup')
+        t.is(cancelCalls, 1, 'a completed generation needs no cancellation')
+      } finally {
+        release()
+        await stream.return(undefined as never)
+      }
+    },
+    async () => {
+      cancelCalls++
+    }
+  )
+})
+
 test('video outputs allow an immediate next generation on the same model', async (t) => {
   const [
     { diffusionPlugin },
