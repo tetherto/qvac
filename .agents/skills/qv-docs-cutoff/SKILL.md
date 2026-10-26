@@ -21,9 +21,12 @@ A cutoff publishes the line of the version being released, in **one** PR into
 - the manifest and the redirects follow
 
 The development line is addressed by a fixed name rather than by its number,
-and that is what makes the cutoff cheap: no line folder is deleted, so git has
-no deletion to pair a pre-cutoff edit against, and a feature PR that straddles
-the cutoff merges clean into the line it was written for.
+and that is what makes the cutoff cheap for the sprint's own work: the line is
+neither renamed nor deleted, so a feature PR that straddles the cutoff merges
+clean into the path it was written to.
+
+The outgoing group **is** renamed, so a PR that writes anywhere else is exposed
+— that is the window Step 1 inventories.
 
 ## When to use
 
@@ -86,6 +89,31 @@ entry — and check the moment:
 Confirm the tree is clean (`git status --porcelain` empty). A dirty tree means
 release work is still uncommitted: stop, and let the release flow reach its own
 cut first.
+
+Inventory the open PRs the cutoff will strand, per collection:
+
+```bash
+gh pr list --state open --limit 200 --json number,title,url,files \
+  --jq '[.[] | select(any(.files[].path;
+    startswith("docs/website/content/docs/<collection>/") or
+    startswith("docs/website/content/_unpublished/<collection>/next/")))
+    | "\(.number)\t\(.title)\t\(.url)"] | .[]'
+```
+
+Report the list and the choice it forces, per PR, without acting on it:
+
+- Writing the development line, and documenting a feature of **this** release:
+  merge it before the cut, or the release ships without it.
+- Writing the development line, and documenting the **next** release: nothing
+  to do. It lands where it was written.
+- Writing the outgoing group: it must be rebased after the cutoff merges. Until
+  then its edits have two identical rename candidates, and git can replay them
+  into either line (QVAC-27286). `Documentation lines` in
+  `.github/workflows/docs-website-pr-checks.yml` refuses the merge while that
+  is true, so the rebase is enforced rather than remembered.
+
+Cutting with PRs outstanding is a decision, not an error. Proceed once the list
+has been read.
 
 The PR comes off `main` so it carries documentation alone. The release's own
 version bump, changelog and NOTICE live on the release head branch and stay
@@ -180,6 +208,7 @@ incoherent tree.
 
 - [ ] Collections derived from the packages being released, via the manifest
 - [ ] Per collection, `<x.y>` checked against the line last cut
+- [ ] Open PRs writing either line inventoried and reported, per collection
 - [ ] Release base resolved from the release's own head branch, not assumed
 - [ ] Branch cut from the release base, tree clean at the start
 - [ ] The API summary regenerated into the line being published, body changed

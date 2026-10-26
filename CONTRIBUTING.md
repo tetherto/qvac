@@ -27,9 +27,11 @@ docs/website/content/_unpublished/cli/next/
 
 Nothing under `_unpublished/` is built or served, so your prose is invisible on the site until the release cutoff publishes that line, with the version it belongs to. Review it in the PR diff, or preview it locally with the symlink described in [docs/website/docs-workflow.md](docs/website/docs-workflow.md), "Previewing the development line".
 
-The path never changes. A cutoff copies the development line into the collection rather than renaming it, so a PR opened before a cutoff and merged after it needs no rebase and no relocation: it lands in the version whose sprint it was written in, either way. There is no window to avoid, including the days between a cutoff and the npm release.
+The path never changes. A cutoff copies the development line into the collection rather than renaming it, so a feature PR opened before a cutoff and merged after it needs no relocation: its edits land in the path they were written to, either way.
 
-If your PR changes a file under `content/docs/`, the `Published lines advisory` check says so in a warning. Editing a shipped release's folder on purpose is fine — a factual correction to published documentation belongs there, and reaches production with the next promotion. The warning exists so a feature's documentation does not land there by mistake.
+**What a cutoff does change is which release that path belongs to.** Your feature's documentation ships with your feature only if it merges before the cutoff of that release. Write it in the same PR as the code, which is what makes the two move together. If it follows in a separate PR and a cutoff lands first, the prose stays in the development line and reaches users a release late: move it into the published line's folder — `content/docs/<collection>/<line>/` — and tell the documentation engineer, because production serves the line promoted at the release, not `main`.
+
+Two checks cover the folder you are writing to. `Documentation lines` refuses the merge when a cutoff landed after your branch came off and your PR writes documentation, because the layout you wrote against no longer exists; rebase to clear it, and rebase rather than *Update branch*, since a merge commit lets git relocate the edits by similarity. The same job also warns whenever a PR changes a file under `content/docs/`. Editing a shipped release's folder on purpose is fine — a factual correction to published documentation belongs there, and reaches production with the next promotion. The warning exists so a feature's documentation does not land there by mistake.
 
 ## PR Labels
 

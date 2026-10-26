@@ -517,7 +517,7 @@ Two GitHub Actions workflows touch the docs: one validates docs PRs, one manuall
 - Runs `bun run build` to validate the site compiles
 - Runs Vitest tests (sidebar consistency, link integrity, single-page rendering, the cut) excluding TSDoc completeness tests that require SDK source
 - Optionally installs the SDK and runs the TSDoc completeness audit in warning mode
-- Runs `Published lines advisory` in a second job, described below
+- Runs `Documentation lines` in a second job, described below
 
 **Purpose:** Catches build errors and broken links in docs PRs before merge.
 
@@ -525,24 +525,44 @@ The API summary page is committed to the repo, so PR checkouts always have it on
 
 **Neither the build nor the tests cover the development line.** Nothing under `content/_unpublished/` is built, so a broken link or malformed MDX written during the sprint surfaces at the cutoff, on the PR that publishes it, rather than in the PR that wrote it. That is the price of keeping the line out of the site, and the cutoff is where it gets paid.
 
-**`Published lines advisory`** is the second job, and it only warns. It names
-every file the PR changes under `content/docs/<collection>/` — every folder
-there is a release that already shipped — and points at
-`content/_unpublished/<collection>/next/` as where a feature's documentation
-belongs.
+**`Documentation lines`** is the second job, and it runs two checks on where a
+PR writes.
 
-It cannot be a failure, because a factual correction to a shipped release's
-documentation is legitimate and only a human can tell it apart from a
-misplaced edit.
+The first only warns. It names every file the PR changes under
+`content/docs/<collection>/` — every folder there is a release that already
+shipped — and points at `content/_unpublished/<collection>/next/` as where a
+feature's documentation belongs. It cannot be a failure, because a factual
+correction to a shipped release's documentation is legitimate and only a human
+can tell it apart from a misplaced edit.
 
-There is no check against a cutoff landing under a branch any more, and none
-is needed. The job that used to do that existed because a cut renamed the
-folder a branch was writing into, and git replayed the branch's edits into the
-*preserved* folder by rename detection — no conflict, green merge, and a
-shipped release documenting features it never had (QVAC-27286). A cut renames
-nothing across versions now: the line a feature PR writes to has a fixed path
-that the cutoff copies rather than moves, so there is no rename for git to
-pair an edit against.
+The second refuses the merge, and covers the window a cutoff opens. A feature
+PR crosses a cutoff safely: it writes to the development line, which the cut
+copies and leaves in place, so its path means the same thing before and after.
+Two other shapes do not:
+
+- **A correction to the published line.** The cut renames the outgoing group —
+  `(vX.Y)` becomes `vX.Y` — beside a new `(vX.Y+1)` whose pages are
+  byte-identical wherever the sprint changed nothing. Every page the PR edits
+  then has two exact rename candidates, and git replays the edit into one of
+  them: no conflict, green merge, and a shipped release documenting a feature
+  it never had. That is QVAC-27286, and it is reachable at every cut, not only
+  the first.
+- **Documentation that was meant to ship with the release.** It merges clean,
+  into the line after the one it documents, so the release ships with the gap.
+
+Neither produces a conflict, so neither is visible to whoever merges. The check
+reads the parenthesized folder — the line last cut, whose name only a cutoff
+changes — at the parent of the PR's oldest commit and at the base branch's
+head, and fails when they differ while the PR writes documentation. It anchors
+on the branch point rather than the merge-base because *Update branch* moves
+the merge-base past the cutoff and carries the misplacement in with it, which
+would turn a merge-base check green at the moment the damage is done. A rebase
+is what clears it.
+
+The structural fix is to stop renaming: a fixed group folder name would make a
+cut a copy plus an overwrite, leaving git no deletion to pair an edit against.
+That moves the manifest, the redirects, the breadcrumbs and their tests, so for
+now the check is what stands between the window and a silent merge.
 
 ### 2. Promote docs to production (manual)
 

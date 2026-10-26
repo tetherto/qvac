@@ -71,24 +71,35 @@ jobs:
         run: bun run vitest run tests/tsdoc-completeness.test.ts
 
   published-lines:
-    # Say when a PR edits a line that has already been cut.
+    # Two checks on where a PR writes documentation: one that reports, one that
+    # blocks.
     #
     # Feature documentation belongs in the development line, outside the site
     # at `content/_unpublished/<collection>/next/`. Everything under
     # `content/docs/<collection>/` has been cut: either it is a version the
     # site already serves, or it is the version being released and awaiting
     # promotion. Editing one is legitimate — correcting a shipped release's
-    # pages is the reason the folders are kept — so this never blocks. It only
-    # says what the edit implies, because only a human can tell a correction
-    # from documentation written into the wrong line.
+    # pages is the reason the folders are kept — so the first step never
+    # blocks. It only says what the edit implies, because only a human can tell
+    # a correction from documentation written into the wrong line.
     #
-    # There is no rename check here any more. A cut copies the development line
-    # into the collection and leaves it in place, so no line folder is deleted
-    # and git has no deletion to pair a pre-cutoff edit against: the path a
-    # feature PR writes to is the same before and after a cutoff, and the edit
-    # lands in the line it was written for. The failure that needed catching
-    # (QVAC-27286) cannot occur under that shape.
-    name: Published lines advisory
+    # The second step blocks, and covers the window a cutoff opens. A feature
+    # PR is safe across a cutoff: it writes to the development line, which the
+    # cut copies and leaves in place, so its path is the same before and after
+    # and the edit lands where it was written. Two other shapes are not:
+    #
+    #   - A correction PR writes to the outgoing group, and the cut renames it
+    #     — `(vX.Y)` becomes `vX.Y` — beside a new `(vX.Y+1)` whose pages are
+    #     byte-identical wherever the sprint changed nothing. Every page the PR
+    #     edits then has two exact rename candidates and git picks one, so the
+    #     correction can land in a version it was not written for. That is
+    #     QVAC-27286 again, reproduced on this repo with `git merge-tree`.
+    #   - A development-line PR that was meant to ship with the release merges
+    #     clean, but into the line after it, so the release ships with the gap.
+    #
+    # Neither produces a conflict, so neither is visible to whoever merges.
+    # Stopping the PR and asking is what makes the choice a human one.
+    name: Documentation lines
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -124,3 +135,66 @@ jobs:
 
           echo "::warning::This PR edits documentation lines that have already been cut. Correcting a release's pages is legitimate; documenting a new feature is not — that belongs in content/_unpublished/<collection>/next/. If the correction also applies to the line under development, apply it there too, or it will not survive the next cutoff."
           printf '%s\n' "$changed"
+
+      - name: Refuse documentation written against a line layout a cutoff has changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        working-directory: .
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HEAD_SHA:-}" ]; then
+            echo "Not a pull request; nothing to check."
+            exit 0
+          fi
+
+          # The commit this PR's work was written against. Not the merge-base:
+          # the "Update branch" button moves that past the cutoff and takes the
+          # misplacement in with it, so a merge-base check turns green at the
+          # moment the damage is done. The parent of the PR's oldest own commit
+          # moves only under a rebase, which is the fix being asked for.
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          commits=$(git log --reverse --no-merges --format=%H "$merge_base..$HEAD_SHA")
+          if [ -z "$commits" ]; then
+            echo "This PR carries no commit of its own; nothing to check."
+            exit 0
+          fi
+          origin="${commits%%$'\n'*}^"
+          if ! git rev-parse --verify --quiet "$origin" > /dev/null; then
+            echo "The branch point is not in this checkout; nothing to check."
+            exit 0
+          fi
+
+          # A cut's signature in the tree, read per collection: the
+          # parenthesized folder is the line last cut, and a cutoff is the only
+          # thing that changes its name. No `head`/`-m1` here — closing the
+          # pipe early kills `ls-tree` with SIGPIPE under `pipefail`.
+          group_at() {
+            git ls-tree --full-tree --name-only "$1:docs/website/content/docs/$2" 2> /dev/null \
+              | grep -E '^\(v[0-9]+\.[0-9]+\)$' || true
+          }
+
+          stale=""
+          for collection in sdk cli; do
+            if [ -z "$(git diff --name-only "$origin" "$HEAD_SHA" -- \
+              "docs/website/content/docs/${collection}/" \
+              "docs/website/content/_unpublished/${collection}/next/")" ]; then
+              continue
+            fi
+            was=$(group_at "$origin" "$collection")
+            now=$(group_at "$BASE_SHA" "$collection")
+            if [ "$was" = "$now" ]; then
+              continue
+            fi
+            stale="${stale}  ${collection}: the line last cut was ${was:-none} when this branch came off, and is ${now:-none} now"$'\n'
+          done
+
+          if [ -z "$stale" ]; then
+            echo "No cutoff has landed since this branch came off; the lines this PR writes to still mean what they meant."
+            exit 0
+          fi
+
+          printf '%s' "$stale"
+          echo "::error::A cutoff landed after this branch came off, so this PR's documentation was written against a line layout that no longer exists. Rebase onto the base branch — rebase, not 'Update branch': a merge commit lets git relocate the edits by similarity, which is the failure this check exists to stop. Then place each change in the line it documents: a correction to a released version in docs/website/content/docs/<collection>/<line>/, and documentation for the version still being written in docs/website/content/_unpublished/<collection>/next/. If the change belongs to the version that was just cut, it goes in that line's folder and reaches production with the next promotion."
+          exit 1
