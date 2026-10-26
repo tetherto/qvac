@@ -196,11 +196,9 @@ function buildTextToSpeechStreamRequest(
  * - `stream: false` — collect all PCM samples and resolve once via
  *   `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.
  * - `stream: true` (default) — yield PCM through `result.chunkStream`
- *   (`AsyncGenerator<Float32Array>`, one chunk per response frame) or
- *   `result.bufferStream` (`AsyncGenerator<number>`, one sample at a time) as
- *   it arrives; both carry the same samples in the same order, and
- *   `chunkStream` is the cheaper of the two for long audio. `buffer` resolves
- *   to an empty array.
+ *   (`AsyncGenerator<Float32Array>`, one chunk per frame) or
+ *   `result.bufferStream` (`AsyncGenerator<number>`, one sample at a time).
+ *   `buffer` resolves to an empty array.
  * - `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`
  *   (`AsyncGenerator<TtsSentenceChunkUpdate>`) so callers can mux per-sentence
  *   metadata with the audio. Multiple consumers can iterate the response
@@ -224,7 +222,7 @@ function buildTextToSpeechStreamRequest(
  * from the terminal frame. All three resolve — with `undefined` when the run
  * produced none — rather than reject. In `stream: true` mode (the default) the
  * run starts lazily: nothing is sent until `chunkStream` or `bufferStream` is
- * first iterated (they share one run, so iterate one of them), so
+ * first iterated, so
  * `done`, `sampleRate`, `stats` and `stopReason` stay pending until then. In
  * `stream: false` and `sentenceStream: true` modes the run starts immediately.
  * Read `sampleRate` rather than assuming the engine default: `outputSampleRate`
@@ -396,15 +394,6 @@ async function* sentenceBufferStream(source: AsyncGenerator<TtsResponse>): Async
   }
 }
 
-/**
- * One `Float32Array` per frame that carries audio, in arrival order, until
- * the terminal frame. The engine hands the worker a `Float32Array` per frame
- * and the wire carries it as a JSON array of numbers; this restores the typed
- * view without a generator step per sample. Pure over its source so it can be
- * unit-tested with a hand-rolled frame sequence.
- *
- * Exported for test use; not part of the public SDK surface.
- */
 export async function* pcmChunksOf(
   source: AsyncIterable<TtsResponse>
 ): AsyncGenerator<Float32Array> {
@@ -416,12 +405,6 @@ export async function* pcmChunksOf(
   }
 }
 
-/**
- * Flattens a chunk stream back to one sample per step. Shares the source
- * iterator, so once this is iterated the chunk stream is consumed with it.
- *
- * Exported for test use; not part of the public SDK surface.
- */
 export async function* samplesOf(
   chunks: AsyncIterable<Float32Array>
 ): AsyncGenerator<number> {
@@ -465,9 +448,7 @@ function plainStreamTts(
   })
   done.catch(() => {})
   const side = createTtsSideChannel()
-  // One lazy run feeds both views: the chunk stream owns the RPC and the
-  // sample stream flattens it, so whichever a caller iterates starts the run
-  // and sees every frame.
+  // Both views share one lazy run; iterating either starts it.
   const chunkStream = plainTtsChunkStream(request, options, resolveDone, rejectDone, side)
 
   return {
@@ -550,9 +531,7 @@ async function* emptyBufferStream(): AsyncGenerator<number> {
   // Non-streaming mode exposes no incremental buffer stream.
 }
 
-async function* emptyChunkStream(): AsyncGenerator<Float32Array> {
-  // Non-streaming mode exposes no incremental chunk stream.
-}
+async function* emptyChunkStream(): AsyncGenerator<Float32Array> {}
 
 async function collectTtsBuffer(
   request: TtsRequest,

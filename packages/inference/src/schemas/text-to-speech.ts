@@ -1511,20 +1511,11 @@ export type TextToSpeechStreamClientParams = z.output<
 export interface TextToSpeechStreamResult {
   /** MOSS-Speech reply text; resolved when the run finishes. */
   text: Promise<string | undefined>
-  /**
-   * PCM samples one at a time. Convenient for small clips; for anything longer
-   * prefer `chunkStream`, which delivers the same samples in the frames the
-   * engine produced them without a generator step per sample.
-   */
   bufferStream: AsyncGenerator<number>
   /**
-   * The same PCM as `bufferStream`, one `Float32Array` per response frame
-   * (a sentence in `sentenceStream` mode, otherwise whatever the engine emits
-   * at once). Concatenating the chunks in order yields exactly the samples of
-   * `bufferStream`; the first chunk arrives as soon as the first frame does.
-   * In `stream: true` mode without `sentenceStream`, `bufferStream` is a view
-   * over this stream, so iterate one of the two, not both. Empty when
-   * `stream: false`.
+   * The PCM of `bufferStream` as one `Float32Array` per response frame.
+   * Shares the run with `bufferStream` in plain streaming mode, so iterate one
+   * of the two. Empty when `stream: false`.
    */
   chunkStream: AsyncGenerator<Float32Array>
   chunkUpdates?: AsyncGenerator<TtsSentenceChunkUpdate>
