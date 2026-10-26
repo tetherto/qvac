@@ -85,6 +85,15 @@ export type CompletionGenerationParams = GenerationParams & {
   json_schema?: string
 }
 
+export function withParallelToolCalls(
+  generationParams: CompletionGenerationParams | undefined
+): CompletionGenerationParams {
+  return {
+    ...generationParams,
+    parallel_tool_calls: generationParams?.parallel_tool_calls ?? true
+  }
+}
+
 type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill'> & {
   generationParams?: CompletionGenerationParams
 }
@@ -343,6 +352,8 @@ export async function* completion(
       }
     }
   }
+  mergedGenerationParams = withParallelToolCalls(mergedGenerationParams)
+
   const model = getModel(modelId)
 
   // Per-request hard cancel: under continuous batching the model runs several
