@@ -292,7 +292,7 @@ test('a deferred tool the prompt could not declare is never offered', (t) => {
   )
 })
 
-test('a clashing name loaded by history is not declared, whatever order it loaded in', (t) => {
+test('a clashing name from legacy history stays loaded but is not declared', (t) => {
   // Results naming every tool, as an older version or a hand-built history
   // could hold, in reverse registration order.
   const history = [...CLASHING].reverse().map((item) => ({
@@ -303,6 +303,11 @@ test('a clashing name loaded by history is not declared, whatever order it loade
   }))
 
   const rendered = resolveDeferredTools(CLASHING, history)?.toolsToRender
+  t.alike(
+    [...loadedToolNames(history)],
+    [...new Set([...CLASHING].reverse().map((item) => item.name))],
+    'legacy results still contribute every loaded name'
+  )
   t.alike(
     rendered?.map((item) => item.name),
     ['search', 'get_weather', TOOL_SEARCH_NAME, 'search-web', 'read.file', 'list-prs'],
