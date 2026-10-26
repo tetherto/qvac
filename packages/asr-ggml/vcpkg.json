@@ -108,13 +108,12 @@
   "overrides": [
     {
       "name": "ggml-speech",
-      "version": "2026-10-07",
-      "port-version": 1
+      "version": "2026-10-23"
     },
     {
       "name": "speech-cpp",
-      "version": "2026-10-20",
-      "port-version": 1
+      "version": "2026-10-23",
+      "port-version": 2
     }
   ]
 }

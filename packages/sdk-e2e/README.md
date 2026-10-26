@@ -1,0 +1,441 @@
+# SDK Tests
+
+SDK dogfooding tests built on [`@qvac/test-suite`](../test-suite), the test-orchestration framework
+that lives in this monorepo at `packages/test-suite`.
+A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
+(packaged Electron main process), strict Snap, or mobile (Bare + React Native).
+
+## Layout
+
+The package keeps what every SDK client must do apart from how each client does it:
+
+| Path                          | Holds                                                                                              |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`catalog/`](./catalog)       | The client-neutral catalog: test definitions, platform skips, the resource table, platform policy  |
+| `catalog/resources/`          | The table and policy as JSON for clients that do not read TypeScript, and the recorded skip matrix |
+| `catalog/conformance/`        | The API-level corpus the JS, Python and Kotlin clients each run                                    |
+| [`runners/js/`](./runners/js) | The JS client: desktop, Electron, Snap and mobile consumers, and their executors                   |
+| `runners/python/`             | The Python client: an interpreter for the declarative bodies, and hand-written bodies for the rest |
+| `assets/`, `fixtures/`        | Data the tests read                                                                                |
+| `scripts/`                    | Build helpers and the catalog gates                                                                |
+
+The catalog imports nothing from a runner or a client. `catalog/tsconfig.json` type-checks it on its own
+as part of `npm run typecheck`: an import from `runners/` fails there, and so does one from `@qvac/sdk`,
+which resolves to an empty module. The wire shapes the catalog needs — tool dialects, index storages,
+decision requests and results — are declared in [`catalog/wire-types.ts`](./catalog/wire-types.ts).
+Two checks hold them to the SDK: `check:contract` compares them with the wire contract in
+`packages/sdk/contract/schema.json`, and the JS executors that hand them to the SDK are type-checked
+against its own types.
+
+## Running locally
+
+```bash
+cd packages/sdk-e2e
+npm run install:build                # installs deps + builds tests
+cp .env.example .env                 # only needed if you want to point at a remote broker
+
+npx qvac-test run:local:desktop
+npx qvac-test run:local:electron --filter completion-
+npx qvac-test run:local:snap --filter snap-
+npx qvac-test run:local:android
+npx qvac-test run:local:ios
+npx qvac-test run:local:python
+```
+
+**MQTT broker.** `run:local:*` requires a broker serving WebSockets on port 8080 and MQTT/TCP on 1883.
+If nothing is detected on localhost, the command prompts to install `aedes` + `websocket-stream` globally and
+keeps an embedded broker alive while tests are running. Bring your own broker if you prefer — just expose
+`ws://...:8080` and `mqtt://...:1883`.
+
+**Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`,
+`--include`, `--runId`. `--suite`, `--exclude-suite` and `--filter` narrow each other;
+`--include` takes exact testIds and adds them on top, so it is how you run a suite plus a
+specific test. An id it cannot find fails the run rather than being skipped. It needs
+`@qvac/test-suite` 0.11.2 or newer.
+Mobile and Electron add `--skip-build` (see below). Run `npx qvac-test run:local:<platform> --help` for the
+full list.
+
+**Platform prerequisites.**
+
+- iOS: Xcode + connected device trusted in Xcode. Team ID auto-detected; override with `QVAC_IOS_TEAM_ID`.
+- Android: `adb` + USB-debuggable device.
+- Desktop: Node 22+.
+- Python: Node 22+, plus a virtualenv the config expects at
+  `packages/sdk-python/.venv` with the client installed from source:
+
+  ```bash
+  python3 -m venv packages/sdk-python/.venv
+  packages/sdk-python/.venv/bin/python -m pip install -e "packages/sdk-python[dev]"
+  ```
+
+  The leg runs the same worker bundle the desktop leg does, so
+  `npm run bundle:sdk` (part of `install:build:full`) has to have run.
+
+- Electron: Node 22+, Electron Forge dependencies, and a desktop runner capable of launching packaged Electron
+  apps. The config declares `macos`, `windows`, and `linux`; local runs package the current host target unless
+  `--platform` / `--arch` are supplied.
+- Snap: Linux with Snapcraft, snapd, a working LXD setup, Xvfb or a graphical session, and permission to
+  install local snaps with `sudo snap install --dangerous`.
+
+### Rebuilding after changes
+
+Which rebuild command you run depends on what changed.
+
+| You changed                               | Command                                 | Rebuild packaged apps?                           |
+| ----------------------------------------- | --------------------------------------- | ------------------------------------------------ |
+| Inference source (`packages/inference/`)  | `npm run install:build:full`            | Yes — `--skip-build` will miss the change        |
+| SDK source (`packages/sdk/`)              | `npm run install:build:full`            | Yes — `--skip-build` will miss the change        |
+| Test code or assets here                  | `npm run install:build`                 | Yes for mobile and Electron                      |
+| Framework source (`packages/test-suite/`) | `npm run sync:test-suite`, then rebuild | Yes — the app copies the framework at build time |
+| Only the producer side (filter, suite)    | none                                    | No — use `--skip-build`                          |
+
+- `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
+- `install:build:sdk` is a faster opt-in shortcut: it builds `packages/sdk/` (`prepare:sdk`, through the
+  SDK's workspace link to `packages/inference`), clears the SDK snapshot, reconciles `@qvac/inference` if it
+  was previously pinned (see below), then reinstalls and bundles — skipping the inference pack and leaving
+  the e2e tree's `@qvac/inference` on its published range. Only reach for it when you know your local
+  `packages/inference` matches what's published; when the SDK is ahead of that release, the e2e install
+  fails with `ERESOLVE` and `install:build:full` is the way through. CI always builds inference from the
+  branch, so anything else can pass here and still fail there.
+- `install:build:full` builds the whole local chain — `packages/inference` → `packages/sdk` → this package — and is
+  the one to run when in doubt. `packages/sdk` pins `@qvac/inference` to a published range, so the script
+  packs the local inference to a tarball, swaps the spec in for the install, and restores the manifest
+  afterwards (the working tree stays clean even on failure or Ctrl-C).
+- **Mobile needs the same inference pinned separately.** It installs its own npm tree later, after
+  `install:build:full` has already restored `packages/sdk/package.json` — so it also writes an
+  `@qvac/inference` npm `override` into `@qvac/test-suite`'s consumer template
+  (`scripts/pin-consumer-inference.mjs`). Without it, mobile silently gets the published inference and
+  crashes at bootstrap (`SyntaxError: ... does not provide an export named ...`) while desktop passes.
+  Re-apply or drop with `npm run pin:consumer-inference` / `unpin:consumer-inference`.
+- **A second `install:build:full`/`install:build:sdk` run can serve stale inference.** npm doesn't
+  re-resolve a cached `file:` dependency just because its spec or tarball content changed.
+  `scripts/reconcile-e2e-inference.mjs` forces a fresh resolve before each install — unconditionally in
+  `install:build:full`, only when needed in `install:build:sdk`.
+- **Mobile requires a fresh APK/IPA** to pick up either SDK or test-code changes — the baked app bundle
+  contains the compiled test executors and the SDK. Omit `--skip-build` to rebuild.
+- **Electron requires a fresh Forge package** to pick up SDK, test-code, or `fixtures/qvac.config.electron.json`
+  changes. Omit `--skip-build` to rebuild.
+- **Snap requires a fresh strict Snap** after SDK, test, Electron package, or `snap/snapcraft.yaml` changes.
+- **`--skip-build` is for fast iteration that doesn't touch compiled code**: re-running the same build with
+  a different `--filter` or `--suite`, or just re-running to debug flakiness. The producer reads
+  definitions fresh each run, so filter / suite changes are picked up without rebuilding.
+
+### Resetting the local tree
+
+`clean:*` scripts are split by what they throw away, so a routine reset doesn't cost you more than it needs
+to:
+
+| Script               | Removes                                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clean:build`        | `dist`, `build`, `out`, `qvac`, `.sdk-e2e`, the generated `snap/*` build dirs, and the mobile consumer pin (it names a tarball in `.sdk-e2e`) |
+| `clean:config`       | Generated `qvac.config*.json`                                                                                                                 |
+| `clean:cache`        | `.qvac-cache` (downloaded models), `.qvac-worker-backup`, `rag-hyperdb`, `rag-turbovec`                                                       |
+| `clean:dependencies` | `node_modules` / lockfiles here, in `packages/sdk`, and in `packages/inference`                                                               |
+| `clean:all`          | All of the above                                                                                                                              |
+
+**`clean:cache` and `clean:all` discard downloaded models.** If `cacheDirectory` is configured to a local
+path (CI always does this; see `.github/workflows/test-node-sdk.yml`), that's where `run:bootstrap:*`
+pre-downloads them — running a bootstrap step and then `clean:cache`/`clean:all`, or the reverse, throws
+that work away. Reach for `clean:build` alone for a routine "rebuild my scripts" reset.
+
+### Electron local smoke
+
+Electron e2e packages this directory as an Electron Forge app (`forge.config.cjs`), starts the configured
+consumer entry from the Electron main process, and uses `@qvac/sdk/electron-forge` to bundle the SDK plugins
+declared in `fixtures/qvac.config.electron.json`.
+
+```bash
+npm run install:build:full
+npx qvac-test run:local:electron --filter completion-
+```
+
+The Electron consumer registers the desktop/shared executor set, so standard filters such as `completion-`,
+`embedding-`, `translation-`, or `model-` route through the same test definitions used by desktop.
+
+The full Electron pass intentionally skips `diffusion-`, `finetune-`, `no-lingering-bare-`, and
+`vla-` tests. These suites are resource-heavy or depend on process/lifecycle behavior that is not stable inside
+the packaged Electron worker model: diffusion and VLA require heavyweight model execution, finetune can monopolize
+the worker during long-running operations, and
+no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with Electron's
+packaged worker lock.
+
+`classification-` runs in Electron through the shared Node executor and bundled `@qvac/classification-ggml`
+weights; no registry model pre-download is required.
+
+### Strict Snap e2e
+
+The Snap target wraps the Linux Electron package in `snap/snapcraft.yaml` with strict confinement. Test code,
+the SDK worker, addons, fixtures, and assets are included under the read-only `$SNAP` mount. Generated config,
+models, Corestore state, and worker locks use writable `$SNAP_USER_COMMON`.
+
+Electron is deliberately used as the packaging vehicle because the affected Workbench runtime is Electron and
+Electron Forge produces a self-contained application containing the SDK worker and native addons. The desktop
+Node consumer runs from the host checkout and depends on the host Node.js installation, so wrapping it would
+create an artificial package that does not exercise the production addon-packaging boundary. Snap remains a
+separate test-framework consumer for installation, confinement, environment, and refresh behavior, while reusing
+the same model/addon test surface and skip policy as the regular Electron consumer.
+
+```bash
+npm run install:build:full
+npx qvac-test run:local:snap --filter snap-
+```
+
+`snap-storage-common-root` verifies that strict Snap rewrites `HOME` to revision-specific
+`SNAP_USER_DATA` while the SDK worker creates `.qvac/.worker.lock` under `SNAP_USER_COMMON`. Desktop,
+mobile, and non-Snap Electron consumers skip this platform-only test.
+
+CI additionally builds two distinct local Snap artifacts and runs `scripts/run-snap-refresh-test.mjs`.
+The first revision records its home/common paths and creates SDK registry Corestore data; the second revision
+must have a different revision home while preserving and reopening those SDK-owned files from common storage.
+After that preflight, the normal MQTT consumer runs the Electron-supported SDK model and addon tests inside the
+installed Snap.
+
+GPU inference uses Canonical's `graphics-core22` content interface and wrapper, with `mesa-core22` as the default
+userspace driver provider. The refresh harness and CI explicitly connect this provider for locally built,
+unsigned Snaps before launching them; the `opengl` plug alone exposes device access but does not supply the
+matching Vulkan userspace drivers required by the native inference backends.
+
+Use `QVAC_TEST_SNAP_SUDO=0` when snap administration does not require `sudo`. Set
+`QVAC_TEST_SNAP_KEEP_INSTALLED=1` to preserve the package and common data after refresh diagnostics.
+
+### Custom plugin bundling
+
+[`fixtures/echo-plugin/`](./fixtures/echo-plugin) is a pure-JS custom plugin (no native addon) used to exercise
+the SDK plugin system end-to-end: `qvac.config.*` → `bundleSdk` → worker registration → `invokePlugin` /
+`invokePluginStream`. It's declared as a `custom-echo-plugin` dependency (`file:./fixtures/echo-plugin`) and
+listed in the `plugins` array of `fixtures/qvac.config.e2e.json` and
+`fixtures/qvac.config.electron.json`,
+the same way a real app would add a third-party or in-repo custom plugin. `PluginExecutor`
+([`runners/js/shared/executors/plugin-executor.ts`](./runners/js/shared/executors/plugin-executor.ts)) calls the plugin's
+own client wrapper (`custom-echo-plugin/client`) for the happy-path tests, mirroring how a real consumer would
+use a custom plugin rather than calling `invokePlugin` directly.
+
+Both `qvac.config.*` files list built-in plugins explicitly, not just `custom-echo-plugin/plugin`: an empty
+or missing `plugins` array bundles all built-ins by default, but as soon as it's non-empty only the listed
+plugins are included (see `resolvePluginSpecifiers` in `@qvac/sdk/commands/bundle`). Omitting the built-ins here
+would silently drop LLM/whisper/OCR/etc. plugin registration from the workers. The Electron config intentionally
+omits `sdcpp-generation` and `ggml-vla` because those addons are skipped by both the regular Electron and Snap
+consumers.
+
+Each platform bundles the worker with the plugin included through its normal build path:
+
+- **Desktop** — `npm run bundle:sdk` (folded into `install:build:full`) calls `bundleSdk` programmatically
+  for the machine's own host (equivalent to `npx qvac bundle sdk --host <host>`, without requiring
+  `@qvac/cli` as a dependency) and writes
+  `qvac/worker.entry.mjs` at the project root, which is the SDK's standard priority-3 worker resolution path.
+- **Electron** — `forge.config.cjs` configures `@qvac/sdk/electron-forge` with
+  `configPath: fixtures/qvac.config.electron.json`; the Forge plugin runs `bundleSdk` automatically during
+  `electron-forge package`. Snap reuses this packaged Linux application and plugin set.
+- **Mobile** — `qvac-test.config.js` sets `consumers.mobile.qvacConfig` to `fixtures/qvac.config.e2e.json`.
+  `qvac-test build:consumer:mobile` copies that file into the generated Expo project root as `qvac.config.json`
+  before `expo prebuild`, so the SDK's `withMobileBundle` Expo plugin discovers it and bundles the same plugin
+  set as desktop.
+
+**Local sequencing:** desktop and Electron share `qvac/worker.entry.mjs` (and `qvac.config.json`) at the project
+root. `forge.config.cjs` snapshots whatever's there before Electron overwrites it and restores it in
+`postPackage`, so `run:local:desktop` and `run:local:electron` can run in any order without clobbering each
+other's bundle.
+
+## Running in CI
+
+### Label-triggered on PRs
+
+See [`.github/workflows/on-pr-test-sdk.yml`](../../.github/workflows/on-pr-test-sdk.yml).
+
+- `test-e2e-smoke` — runs the `smoke` suite **plus the tests this PR touched**, on desktop and
+  mobile consumers. The smoke suite is only a fraction of the catalog, so without this a green
+  smoke run says nothing about tests the PR added or changed. "Touched" means changed files under
+  `packages/sdk-e2e/{catalog,runners/js,fixtures,assets}`, plus an inference engine directory, an SDK
+  `client/api` file, and a handler module registered in `registry.ts`. Source with no declared link
+  to a test maps to nothing and leaves a plain smoke run.
+  A PR comment reports what was added, and anything
+  the impact mapper could not attribute. See
+  [Smoke runs cover the tests a PR touched](../../docs/ci/LABELS.md#smoke-runs-cover-the-tests-a-pr-touched).
+  To check locally what a smoke run would add for your branch — this is the same code CI runs, so
+  it answers "which tests will this PR pull in?" before you push:
+
+  ```bash
+  node scripts/impacted-tests.mjs --base main --head HEAD
+  ```
+
+  It reads the TypeScript sources while `run:producer` loads `dist/catalog`, so run `npm run build`
+  first if you want the two to agree locally. CI always builds before the producer.
+
+- `test-e2e-full` — runs the full catalog on desktop and mobile consumers.
+- Both labels build `packages/inference` and test it together with `packages/sdk` from the authorized PR HEAD.
+- Release-branch PRs with SDK or inference changes auto-run the same desktop and mobile suite.
+- Success applies the `e2e-tested` label.
+
+These three are **base runs**: each records its per-platform failure set into a hidden state
+comment on the PR, which is what the rerun label below consumes.
+
+### Re-running only the tests that failed
+
+- `test-e2e-rerun-failed` — re-runs just the tests that failed on the last base run, on the
+  platforms where they failed. A platform that was green is not started at all: one failure
+  on Windows and one on Linux means two tests on two runners, with macOS, Android, and iOS
+  skipped entirely.
+
+The label needs no new commit — the rerun always tests the current PR HEAD, so it verifies a
+pushed fix or, on an unchanged commit, checks for flakiness. It is removed automatically once
+the run picks it up, so the next attempt is a single click, and it never applies `e2e-tested`.
+
+Wait for the **QVAC E2E — base run recorded** comment before applying it. The base failure set
+is not known until every family finishes, so a rerun labelled while the base run is still going
+is rejected with a comment saying so (it cannot cancel the base run — reruns use their own
+concurrency group).
+
+The plan is anchored to the base run, not to the previous rerun: every attempt re-runs the
+same set until a new `test-e2e-smoke` / `test-e2e-full` run replaces the base.
+
+See [Re-running failed SDK e2e tests](../../docs/ci/LABELS.md#re-running-failed-sdk-e2e-tests)
+for the full behaviour table, including what happens when no base is recorded, the base is
+green, or a recorded test no longer exists.
+
+### Manual runs
+
+Open [Actions → QVAC Tests (sdk) → Run workflow](https://github.com/tetherto/qvac/actions/workflows/test-sdk.yml)
+and submit the form.
+
+Select any combination of the platform checkboxes. Desktop, Android, and iOS are selected by default.
+Electron and strict Snap runs are manual-only and must be selected explicitly.
+
+Non-obvious inputs:
+
+- **"Use workflow from" (GitHub's own selector) vs `test-version`** — these are independent. The selector
+  picks the branch that supplies the _workflow YAML_; `test-version` is the git ref that gets checked out for
+  the _code under test_ (and the e2e package). Leave `test-version` blank to test the same branch the
+  workflow was loaded from. Set it to test workflow edits from one branch against SDK code on another.
+- `inference-source` controls the `@qvac/inference` package used by every selected platform:
+  - `branch` builds and packs `packages/inference` from `test-version`. The resulting tarball is produced once
+    and reused by desktop, Electron, Snap, Android, and iOS jobs, so SDK and inference changes from that ref are
+    tested together.
+  - `npm` resolves the public `@qvac/inference` package. Set `inference-version` to a version/range or dist-tag;
+    blank means `latest`.
+  - `manifest` preserves the dependency already declared in `packages/sdk/package.json`.
+- The npm selector is resolved to one immutable version before platform fan-out. The exact branch SHA/package
+  version is shown in the workflow summary and PR test comments.
+- `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
+- `desktop-platforms`, `electron-platforms`, and `snap-platforms` — advanced JSON runner overrides,
+  pre-filled with the workflow defaults. Narrow them to specific runners only when debugging.
+
+The remaining inputs (`filter`, `exclude-suite`, timeouts, device pools, and `cache-models`) are described
+in the form.
+
+### How the CI legs are laid out
+
+`test-sdk.yml` fans out one reusable workflow per family, and each family gets one job per runner:
+
+- `test-node-sdk.yml` runs desktop, Electron, and Python. Their job is the same apart from a few steps.
+- `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and the in-snap model cache are
+  its own steps, so none of them show up as skipped steps on the other families' jobs.
+- `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm.
+
+The runner-hosted families take their shared steps from the `sdk-e2e-node-*` composite actions in
+`.github/actions`: `leg` resolves the platform and rerun filter, `prepare` installs and builds, `run`
+drives the consumer and producer, and `results` uploads the `results-<family>-<platform>` artifacts. The
+report comments and failed-test reruns read those artifacts. Change a shared step in its action, and a
+family-specific step in that family's workflow. The jobs check these actions out from the commit the
+workflow was loaded from, not from `test-version`, so a PR branch or tag that predates them still runs.
+
+Desktop, Electron, and Python stay separate jobs on the same runner label. Merging them into one job per
+OS would run the three in sequence, end every other client's results when one fails, and change the
+`results-<family>-<platform>` contract that reports and reruns read. Electron would not share the desktop
+model cache either, because it bootstraps a different set of models.
+
+## Developing new tests
+
+- **Definitions** live in [`catalog/<feature>-tests.ts`](./catalog), aggregated in
+  [`catalog/test-definitions.ts`](./catalog/test-definitions.ts). Each entry is a `TestDefinition` with `testId`,
+  `params`, `expectation`, optional `suites`, and `metadata`.
+- **Prefer a declarative body.** A definition with `steps` is run by the shared
+  step interpreter, so the Python client runs the same body as the JS one. A JS
+  consumer runs it only when its entry sets `executor.stepBindings`; on any other
+  the definition goes to the executors. Mobile has no interpreter, because the
+  bindings import `node:*`, so a step-only test needs a mobile executor or a
+  `mobile` skip. The operations and what a client must do with them are specified in
+  [`@qvac/test-suite`'s conformance spec](../test-suite/docs/conformance.md);
+  the per-platform naming is in [`catalog/platform-vocabulary.md`](./catalog/platform-vocabulary.md)
+  and the suite tags in [`catalog/suite-tags.md`](./catalog/suite-tags.md). An
+  executor stays the right answer only for bodies that cannot be data.
+- **Which model a key means** is in [`catalog/resource-table.ts`](./catalog/resource-table.ts),
+  not in the consumer entries. Regenerate the JSON copy with `npm run emit:resource-table`.
+- **Before pushing**, run the cheap gates:
+
+  ```bash
+  npm run format        # fix with format:fix
+  npm run typecheck     # includes the catalog on its own
+  npm run check:catalog # builds the catalog alone and runs every catalog gate
+  ```
+
+  The SDK pod checks run `format` and `check:catalog` here. `check:catalog` needs
+  no SDK build: it runs `check:resource-table`, `check:step-dependencies`,
+  `check:skip-matrix`, `check:contract` and `qvac-test catalog:validate`, each of
+  which also runs on its own after `npm run build:catalog`.
+
+  `check:skip-matrix` compares the platform policy against the recorded set in
+  [`catalog/resources/skip-matrix.json`](./catalog/resources/skip-matrix.json). A
+  deliberate change is recorded with `node scripts/check-skip-matrix.mjs --write`
+  and committed alongside the rule that caused it.
+
+- **Working on the framework too?** `package.json` pins `@qvac/test-suite` to a
+  published range, and a build resolves that range — which is what you want
+  unless the change under test is in `packages/test-suite` itself. For that case
+  run `npm run sync:test-suite` by hand; nothing calls it for you. It updates
+  this checkout only — a packaged app takes its own copy when it is built, so a
+  sync alone changes nothing on a phone or in an Electron bundle. The order is
+  sync first, then rebuild the consumer without `--skip-build`: the mobile build
+  installs the published package into `build/consumers/<platform>` and then
+  overwrites it from here (`adoptHostFramework`). An install or a rebuild of
+  this package puts the published framework back, so re-run the sync after
+  either. CI makes the same choice through the `test-suite-source` input, which
+  is `branch` for the SDK e2e PR runs.
+- **Executors — pick one of three locations based on runtime requirements:**
+  - [`runners/js/shared/executors/`](./runners/js/shared/executors) — **default**. Pure SDK API calls, no Node stdlib,
+    no RN APIs. Runs on both desktop and mobile. Example:
+    [`completion-executor.ts`](./runners/js/shared/executors/completion-executor.ts).
+  - [`runners/js/shared/executors/node/`](./runners/js/shared/executors/node) — needs `node:fs`, `node:path`, `process.cwd()`,
+    or other Node-only APIs. Example: [`rag-executor.ts`](./runners/js/shared/executors/node/rag-executor.ts) reads
+    documents from disk.
+  - [`runners/js/mobile/executors/`](./runners/js/mobile/executors) — needs React Native-specific asset loading
+    (`Platform`, bundled assets). Example:
+    [`mobile/executors/ocr-executor.ts`](./runners/js/mobile/executors/ocr-executor.ts).
+- Register new executors in [`runners/js/desktop/consumer.ts`](./runners/js/desktop/consumer.ts),
+  [`runners/js/mobile/consumer.ts`](./runners/js/mobile/consumer.ts), and/or reuse those executors from
+  [`runners/js/electron/consumer.ts`](./runners/js/electron/consumer.ts) as applicable; the Snap runs the Electron
+  consumer. Platform skips are data in [`catalog/platform-skips.ts`](./catalog/platform-skips.ts), not
+  executors.
+- **Smoke suite policy.** If a new feature introduces core functionality that has no existing smoke coverage,
+  tag **1-2** tests with `suites: ["smoke"]` — preferring the most representative, fastest, least-flaky test.
+  Verify it passes predictably on both desktop and mobile before tagging. Smoke must stay focused and fast; do
+  not tag additional tests for a feature that is already covered.
+- Assets go under [`assets/`](./assets). Update [`qvac-test.config.js`](./qvac-test.config.js)
+  `consumers.mobile.assets.patterns` if the new files aren't covered by existing globs.
+- One-time setup (model pre-download, warmup) goes in the exported `bootstrap()` function of each consumer
+  entry.
+
+## Troubleshooting
+
+- **No device detected** — `adb devices` (Android) or `xcrun devicectl list devices` (iOS). USB
+  trust/debugging must be enabled.
+- **Electron packaged app missing** — rerun without `--skip-build`, or pass the exact host target:
+  `npx qvac-test run:local:electron --platform macos --arch arm64 --filter completion-`.
+- **iOS signing errors** — open [`build/consumers/ios/ios/QVACTestConsumer.xcworkspace`](./) in Xcode once and
+  set the Team under Signing & Capabilities, or export `QVAC_IOS_TEAM_ID`. If Xcode keeps failing, change
+  `QVAC_IOS_BUNDLE_ID` to a suffix unique to your Apple account.
+- **MQTT broker unreachable** — the embedded broker needs `aedes` + `websocket-stream`. `run:local:*` offers
+  to install them globally; accept, or run `npm install -g aedes websocket-stream` yourself.
+- **Manual iOS build fallback** — when the automated flow fails, build from the generated Xcode workspace
+  manually:
+
+  ```bash
+  npx qvac-test build:consumer:ios --runId <run-id> --config .
+  cd build/consumers/ios/ios
+  xcodebuild \
+    -workspace QVACTestConsumer.xcworkspace \
+    -scheme QVACTestConsumer \
+    -configuration Release \
+    -destination 'id=<device-udid>'
+  ios-deploy --bundle ~/Library/Developer/Xcode/DerivedData/<derived-data-dir>/Build/Products/Release-iphoneos/QVACTestConsumer.app
+  npx qvac-test run:producer --runId <run-id> --config .
+  ```

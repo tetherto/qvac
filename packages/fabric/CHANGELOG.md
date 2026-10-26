@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.23.1] - 2026-10-24
+
+### Fixed
+
+- Fit: a draft model that borrows tensors from the target is measured next to
+  it and sized at the target's context. A borrowed tensor of a different width
+  fails the fit and context creation with an error instead of a ggml assert.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11259.0.0` -> `11259.0.1`. No API removals;
+  native consumers do not need source changes.
+- Backend modules loaded under `GGML_BACKEND_DL` (CUDA, Vulkan, CPU variants)
+  forward their logs to the process logger, so `ggml_log_set` /
+  `llama_log_set` verbosity applies to them instead of every level going to
+  stderr.
+- Faster Metal decode: few-row MMA mat-mul for the remaining quant types, a
+  faster MXFP4 mat-vec, fused `RMS_NORM`+`MUL` and residual `ADD` into
+  single-row Q4_0/MXFP4 mat-vecs, fused per-head `RMS_NORM`+`MUL`+`ROPE`
+  (+ K-cache `SET_ROWS`), and full-threadgroup unary/binary/GLU launches.
+
+### Added
+
+- OpenCL kernels for the speech ops `GRU`, `ZERO_UPSAMPLE`, `CHANNEL_SHUFFLE`,
+  `AFFINE_PRELU` and `SNAKE`.
+- `common_get_extra_device_memory_data` in `common/fit.h`, reporting the device
+  memory of a fit's extra (draft) model.
+
 ## [0.23.0] - 2026-10-20
 
 ### Breaking

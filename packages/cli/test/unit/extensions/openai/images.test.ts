@@ -143,6 +143,18 @@ describe('extractImageGenerationParams', () => {
 })
 
 describe('logImageUnsupportedParams', () => {
+  it('does not log private advisory values', () => {
+    const { warnings, logger } = makeLogger()
+    logImageUnsupportedParams(
+      { user: 'private-person@example.invalid', style: 'private text\nforged log line' },
+      logger
+    )
+    assert.deepEqual(warnings, [
+      'Ignoring unsupported OpenAI image param: style',
+      'Ignoring unsupported OpenAI image param: user'
+    ])
+  })
+
   it('does not warn on empty body', () => {
     const { warnings, logger } = makeLogger()
     logImageUnsupportedParams({}, logger)

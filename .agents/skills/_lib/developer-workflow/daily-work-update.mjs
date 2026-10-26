@@ -2,7 +2,6 @@
 
 import { execFileSync } from "node:child_process";
 import { groupActivities, normalizeDiaryEntries, renderDailyUpdate } from "./activity.mjs";
-import { findTaskByTicket, searchTasks } from "./asana.mjs";
 import { loadConfig } from "./config.mjs";
 import { readDiaryRange } from "./diary.mjs";
 import { classifyMyPRs, collectPRActivity } from "../pr-skills/pr-activity.mjs";
@@ -137,33 +136,6 @@ function reviewEventsForDay(date, config) {
   return out;
 }
 
-async function enrichTickets(items, config) {
-  const cache = new Map();
-  const tickets = [
-    ...new Set(items.map((item) =>
-      item.ticket || extractTicket(`${item.title} ${item.summary}`, config),
-    ).filter(Boolean)),
-  ];
-  await Promise.all(tickets.map(async (ticket) => {
-    try {
-      cache.set(ticket, await findTaskByTicket(config, ticket));
-    } catch {
-      cache.set(ticket, null);
-    }
-  }));
-  for (const item of items) {
-    const ticket = item.ticket || extractTicket(`${item.title} ${item.summary}`, config);
-    if (!ticket) continue;
-    item.ticket = ticket;
-    const task = cache.get(ticket);
-    if (task) {
-      item.ticketTitle = task.name;
-      item.ticketUrl = task.permalink_url;
-    }
-  }
-  return items;
-}
-
 async function githubActivityForDay(date, config, prState = null) {
   const out = [];
   try {
@@ -201,7 +173,12 @@ async function githubActivityForDay(date, config, prState = null) {
   return out;
 }
 
-function preferLinkedDiaryActivity(items) {
+export function prepareActivities(items, config) {
+  for (const item of items) {
+    if (!item.ticket) {
+      item.ticket = extractTicket(`${item.title || ""} ${item.summary || ""}`, config);
+    }
+  }
   const linkedUrls = new Set(
     items
       .filter((item) => item.source === "diary" && item.ticket && item.url)
@@ -211,44 +188,6 @@ function preferLinkedDiaryActivity(items) {
   return items.filter((item) =>
     !(item.source === "github" && !item.ticket && item.url && linkedUrls.has(item.url)),
   );
-}
-
-async function asanaActivityForDay(date) {
-  const out = [];
-  const config = loadConfig();
-  if (!config.asana?.workspace?.gid || !config.asana?.project?.gid || !config.asana?.user?.gid) {
-    return out;
-  }
-  try {
-    const tasks = await searchTasks({
-      workspace: config.asana.workspace.gid,
-      "assignee.any": config.asana.user.gid,
-      "projects.any": config.asana.project.gid,
-      completed: "true",
-      completed_on: date,
-      opt_fields:
-        "gid,name,completed,permalink_url,custom_fields.name,custom_fields.display_value",
-      limit: "50",
-    });
-    for (const task of tasks) {
-      const ticket = (task.custom_fields || []).find(
-        (field) => field.gid === config.asana?.customFields?.ticket?.gid ||
-          field.name === config.ticket?.customFieldName,
-      )?.display_value;
-      out.push({
-        source: "asana",
-        kind: "task",
-        verb: "completed",
-        ticket,
-        title: task.name,
-        summary: task.name,
-        url: task.permalink_url,
-      });
-    }
-  } catch {
-    // Asana is optional for daily output.
-  }
-  return out;
 }
 
 function collectPRState() {
@@ -304,14 +243,12 @@ async function main() {
   const diaries = readDiaryRange({ from: date, to: date });
   const diaryActivities = normalizeDiaryEntries(diaries);
   const githubActivities = await githubActivityForDay(date, config, prState);
-  const asanaActivities = await asanaActivityForDay(date);
   const queueActivities = prQueueActivity(prState);
-  const allActivities = preferLinkedDiaryActivity(await enrichTickets([
+  const allActivities = prepareActivities([
     ...diaryActivities,
     ...githubActivities,
-    ...asanaActivities,
     ...queueActivities,
-  ], config));
+  ], config);
   const unlinked = allActivities.filter(
     (item) => !item.ticket && !item.pr && !item.issue && !item.url,
   );

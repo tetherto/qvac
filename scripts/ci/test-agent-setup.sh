@@ -45,7 +45,6 @@ run_ocr_setup() {
     "$root/packages/ocr-ggml/.agent/setup.sh"
   printf '%s\n' '# OCR conduct' > "$root/packages/ocr-ggml/.agent/conduct.md"
   printf '%s\n' '{}' > "$root/packages/ocr-ggml/.agent/settings.json"
-  printf '%s\n' '{"servers":{}}' > "$root/packages/ocr-ggml/.agent/mcp.json"
 
   (
     cd "$root"
