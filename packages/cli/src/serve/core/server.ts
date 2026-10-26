@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
+import multipart from '@fastify/multipart'
 import { z } from 'zod'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
@@ -29,6 +30,8 @@ import errorHandlerPlugin from '@/serve/core/plugins/error-handler'
 import { HttpError } from '@/serve/lib/http-error'
 
 const MAX_BODY_BYTES = 100 * 1024 * 1024
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+const MAX_UPLOAD_FILES = 10
 
 export interface CoreServerOptions {
   host: string
@@ -130,6 +133,11 @@ export async function createCoreServer(
   }
 
   await app.register(cancelBridgePlugin)
+
+  // On the root instance so every extension's routes can take uploads.
+  await app.register(multipart, {
+    limits: { fileSize: MAX_UPLOAD_BYTES, files: MAX_UPLOAD_FILES }
+  })
 
   if (options.apiKey) {
     const apiKey = options.apiKey

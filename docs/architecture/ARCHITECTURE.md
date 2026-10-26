@@ -292,6 +292,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | `cli` | `@qvac/cli` | CLI tooling (`qvac bundle sdk`, verification, release helpers) |
 | `ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider integration |
 | `test-suite` | `@qvac/test-suite` | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving the SDK e2e suites across desktop, Electron, Snap, Android, and iOS |
+| `sdk-e2e` | - | Private, unpublished SDK e2e suite: the test catalog, its executors and consumers, and the cross-client conformance corpus |
 | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode integration |
 | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw integration |
 | `docs/website` | - | Documentation site (Next.js / Fumadocs) |
@@ -310,7 +311,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | `diffusion-cpp` | `@qvac/diffusion-cpp` | Image/video generation and upscaling |
 | `audiogen-ggml` | `@qvac/audiogen-ggml` | Text-conditioned audio generation |
 | `vla-ggml` | `@qvac/vla-ggml` | Vision-language-action inference |
-| `classification-ggml` | `@qvac/classification-ggml` | Image classification |
+| `classification-ggml` | `@qvac/classification-ggml` | MobileNet image classification and MegaLoc image embeddings |
 
 **Support Libraries**
 

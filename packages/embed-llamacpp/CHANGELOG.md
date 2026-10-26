@@ -1,6 +1,27 @@
 # Changelog
 
-## [Unreleased]
+## [0.52.0] - 2026-10-20
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.23.0`, which carries
+  `qvac-fabric` `11018.2.0` -> `11259.0.0`, a rebase onto upstream llama.cpp
+  b11259 ([#5171](https://github.com/tetherto/qvac/pull/5171)). A caret on a
+  `0.x` version locks the minor, so `^0.22.0` would not have resolved `0.23.0`
+  on its own. The native API changes, so the native addon is rebuilt against
+  the 0.23.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.23.0` together.
+- No API change for this package.
+
+### Removed
+
+- The RAG with TurboVec example and its desktop integration test, with the
+  `@qvac/turbovec-ggml` dev dependency they needed
+  ([#5259](https://github.com/tetherto/qvac/pull/5259)). Both packages pin
+  `@qvac/fabric` by minor, so the dev dependency held this package on the
+  previous fabric until `@qvac/turbovec-ggml` was released. Neither was
+  published, and `IdMapIndex` still lives in `@qvac/turbovec-ggml`.
 
 ### Fixed
 

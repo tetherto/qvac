@@ -517,7 +517,17 @@ This example loads the registry-hosted ACE-Step models, reports progress, genera
 </Callout>
 
 <Tabs>
-<Tab value="ts" label="TypeScript" default>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/audiogen/generate-music.js title="generate-music.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-music.ts title="generate-music.ts" lineNumbers
@@ -540,6 +550,18 @@ This example loads the registry-hosted ACE-Step models, reports progress, genera
 
 The cover example takes an existing recording (any FFmpeg-decodable file), an optional timbre reference, and a new caption, and writes the `cover-nofsq` result as WAV:
 
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/audiogen/generate-cover.js title="generate-cover.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-cover.ts title="generate-cover.ts" lineNumbers
@@ -547,9 +569,23 @@ The cover example takes an existing recording (any FFmpeg-decodable file), an op
 ```
 
 </WrapCode>
+</Tab>
+</Tabs>
 
 The edit example takes an existing recording plus a source and a target caption, runs a Flow-Edit followed by a Repaint of seconds 10–20, and writes the result as WAV:
 
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/audiogen/edit-music.js title="edit-music.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/edit-music.ts title="edit-music.ts" lineNumbers
@@ -557,9 +593,23 @@ The edit example takes an existing recording plus a source and a target caption,
 ```
 
 </WrapCode>
+</Tab>
+</Tabs>
 
 The understand example takes an existing recording and prints the caption, musical metadata, and recovered code count the LM reports for it:
 
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/audiogen/understand-music.js title="understand-music.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/understand-music.ts title="understand-music.ts" lineNumbers
@@ -567,6 +617,8 @@ The understand example takes an existing recording and prints the caption, music
 ```
 
 </WrapCode>
+</Tab>
+</Tabs>
 
 ### MiniMax-Music3
 

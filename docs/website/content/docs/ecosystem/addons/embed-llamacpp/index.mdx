@@ -246,7 +246,7 @@ The following additional options apply to `GGMLBert`. Laya rejects them at load.
 | Parameter         | Range / Type                                | Default                      | Description                                           |
 |-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
 | ctx_size          | 0 – model-dependent                         | model default                | Runtime context window; capped to the model's trained context size |
-| pooling           | `"none"`, `"mean"`, `"cls"`, `"last"`, or `"rank"` | model default                | Pooling type for embeddings                           |
+| pooling           | `"none"`, `"mean"`, `"cls"`, or `"last"`    | model default                | Pooling type for embeddings                           |
 | attention         | `"causal"` or `"non-causal"`                | model default                | Attention type for embeddings                         |
 | embd_normalize    | integer                                     | 2                            | Embedding normalization (-1=none, 0=max abs int16, 1=taxicab, 2=euclidean, >2=p-norm) |
 | backend           | comma-separated backend names               | automatic                    | GPU backend priority: cuda, vulkan, metal, opencl, or auto; cannot be combined with split-mode |

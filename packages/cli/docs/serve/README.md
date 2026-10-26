@@ -78,6 +78,15 @@ currently loaded. Unloading an alias frees its resources but keeps it configured
 next request loads it again. There is no "load" endpoint — send a normal request, or set
 `preload: true`.
 
+Model-load failures return `503 model_load_failed`. If the worker exits during
+startup, the response names its exit code or signal. If startup times out while
+the worker is still running, the response reports a startup timeout.
+Full diagnostics, including worker stderr, are written to the server's error log;
+the HTTP response contains only the startup summary. Check the terminal running
+`qvac serve` or your service's captured stderr for the cause.
+A per-load deadline set with `serve.load.timeoutMs` returns
+`503 model_load_timeout` instead.
+
 ### Load management (`serve.load`)
 
 Tune lazy-load behavior under `serve.load` in `qvac.config.*` (each has a CLI
@@ -95,6 +104,43 @@ flag override):
   "serve": {
     "load": { "lazy": true, "concurrency": 1, "timeoutMs": 600000, "cancelOnDisconnect": true },
     "models": { "my-llm": { "model": "QWEN3_600M_INST_Q4" } }
+  }
+}
+```
+
+## Endpoint categories
+
+Each alias gets an endpoint category from its model type, and a route only accepts aliases of
+its own category (`400 invalid_model_type` otherwise). `GET /v1/models/catalog` reports it as
+`role`.
+
+| Model type                                                                                     | Category            |
+| ---------------------------------------------------------------------------------------------- | ------------------- |
+| `llamacpp-completion`, `llm`                                                                   | `chat`              |
+| `llamacpp-embedding`, `embeddings`                                                             | `embedding`         |
+| `llamacpp-decision`                                                                            | `decision`          |
+| `whispercpp-transcription`, `parakeet-transcription`, `moss-transcribe`, `whisper`, `parakeet` | `transcription`     |
+| `whispercpp-audio-translation`                                                                 | `audio-translation` |
+| `bci-whispercpp-transcription`, `bci`                                                          | `bci`               |
+| `nmtcpp-translation`, `nmt`                                                                    | `translation`       |
+| `tts-ggml`, `onnx-tts`, `tts`                                                                  | `speech`            |
+| `ggml-ocr`, `ocr`                                                                              | `ocr`               |
+| `ggml-classification`, `classification`                                                        | `classification`    |
+| `audiogen-ggml`, `audiogen`                                                                    | `audiogen`          |
+| `ggml-vla`, `vla`                                                                              | `vla`               |
+| `sdcpp-generation`, `diffusion`                                                                | by `config.mode`    |
+| `sdcpp-video`                                                                                  | `video`             |
+
+An `sdcpp-generation` model serves one operation, chosen by `config.mode`: `diffusion` (the
+default) is `image`, and `video`, `upscale` and `world` are categories of the same name. Any other
+`mode` fails at startup.
+
+```json
+{
+  "serve": {
+    "models": {
+      "upscaler": { "model": "REALESRGAN_X4PLUS", "config": { "mode": "upscale" } }
+    }
   }
 }
 ```

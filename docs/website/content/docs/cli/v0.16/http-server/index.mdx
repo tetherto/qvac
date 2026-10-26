@@ -39,7 +39,6 @@ exactly what you mounted.
 At the moment, the OpenAI-compatible extension supports the following QVAC AI capabilities:
 * Text generation — via [Chat](#chat) (`/v1/chat/completions`), [Responses](#responses) (`/v1/responses`, modern), or [Legacy completions](#legacy-completions) (`/v1/completions`).
 * [Text embeddings](#embeddings) — via `/v1/embeddings`.
-* [Decisions](#decisions) via `/v1/decisions`, for predicate, choice, and score questions about text.
 * RAG — via [Files](#files) (`/v1/files`) and [Vector stores](#vector-stores) (`/v1/vector_stores`).
 * [Image generation](#images) — via `/v1/images/generations` and `/v1/images/edits`.
 * [Video generation](#videos) — via `/v1/videos`.
@@ -190,8 +189,6 @@ Relevant options are summarized below; run `qvac serve --help` for the exact gen
 | `--allow-unauthenticated` | Permit binding to a non-loopback host without a key |
 | `--cors` | Validate that an explicit trusted origin is configured |
 | `--cors-origin <origin>` | Add a trusted CORS origin (repeatable; no wildcard) |
-| `--allowed-host <host>` | Accept this `Host` header besides loopback, IP addresses and the bind host (repeatable) |
-| `--allow-any-host` | Accept any `Host` header (turns off DNS-rebinding protection) |
 | `--public-base-url <url>` | Externally reachable origin required for image `response_format=url` |
 | `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins (requires a fixed `--port`) |
 | `--ready-fd <fd>` | Write `QVAC_SERVE_READY {"port":…,"pid":…}` to this inherited descriptor once listening |
@@ -216,18 +213,6 @@ qvac serve --openai --cors
 # After
 qvac serve --openai --cors --cors-origin https://app.example.com
 ```
-
-### Host header
-
-CORS only governs cross-origin requests. A page that points its own domain at `127.0.0.1` (DNS rebinding) is same-origin with the server, so the server also checks the `Host` header. Requests are served only when it names a loopback host (`localhost`, `*.localhost`, `127.0.0.0/8`, `[::1]`), an IP address, the bind host, the `--public-base-url` host or an allowed host; the port is ignored. Anything else, `/openapi.json` included, gets `403 host_not_allowed`.
-
-Add names that reach the server through a proxy or DNS with `--allowed-host` or `serve.allowedHosts`. A leading dot covers the domain and its subdomains:
-
-```bash
-qvac serve --openai --allowed-host qvac.internal --allowed-host .corp.example
-```
-
-`--allow-any-host` (or `"allowedHosts": true`) turns the check off.
 
 ## QVAC API
 
@@ -358,7 +343,6 @@ Served by the `--openai` extension. All endpoints follow the [OpenAI API](https:
 | | `GET` | [`/v1/responses/:id/input_items`](#get-v1responsesidinput_items) |
 | [Legacy completions](#legacy-completions) | `POST` | [`/v1/completions`](#post-v1completions) |
 | [Embeddings](#embeddings) | `POST` | [`/v1/embeddings`](#post-v1embeddings) |
-| [Decisions](#decisions) | `POST` | [`/v1/decisions`](#post-v1decisions) |
 | [Audio](#audio) | `POST` | [`/v1/audio/transcriptions`](#post-v1audiotranscriptions) |
 | | `POST` | [`/v1/audio/translations`](#post-v1audiotranslations) |
 | | `POST` | [`/v1/audio/speech`](#post-v1audiospeech) |
@@ -728,6 +712,8 @@ The following Responses-API features are intentionally rejected with `400`: `con
 
 `tool_choice` is supported in the same shapes as chat completions, except that the object form is the Responses API's flattened `{ "type": "function", "name": "get_weather" }`.
 
+`parallel_tool_calls` (default `true`) lets one response carry several function-tool calls; set it to `false` to get at most one.
+
 #### `GET /v1/responses/:id`
 
 Retrieve a previously stored response by id.
@@ -844,110 +830,6 @@ Response:
 <Callout type="info">
 `encoding_format` (only `float` is supported) and `dimensions` are accepted but ignored.
 </Callout>
-
-### Decisions
-
-Answer typed questions about text using a local decision model. The endpoint uses the OpenAI Decisions request and response format, backed by the SDK's [`decide()`](/sdk/ai-capabilities/decisions) capability.
-
-#### `POST /v1/decisions`
-
-Evaluate one input against predicate, choice, and score questions. Body is JSON, and the response is a complete JSON result without streaming.
-
-##### Loaded model
-
-Register a Laya decision checkpoint in `serve.models`. The recommended starter is available through `qvac configure`:
-
-```bash
-qvac configure --modality decision
-qvac serve --openai
-```
-
-This writes the following model entry:
-
-```json title="qvac.config.json"
-{
-  "serve": {
-    "models": {
-      "laya-multilingual-322m-q8-0": {
-        "model": "LAYA_MULTILINGUAL_322M_Q8_0",
-        "type": "llamacpp-decision",
-        "preload": false
-      }
-    }
-  }
-}
-```
-
-The first request loads the model. Set `preload: true` or pass `--model laya-multilingual-322m-q8-0` to load it at startup. The SDK defaults to GPU; add `config: { "device": "cpu" }` to run on CPU.
-
-Named decision model constants select the decision plugin automatically, including models added through "Search all models". For a local GGUF, replace `model` with `src` and set `type: "llamacpp-decision"`. An embedding-only checkpoint cannot answer decision questions.
-
-##### Request
-
-| Field | Description | Required |
-| --- | --- | --- |
-| `model` | Configured decision model alias. | Yes |
-| `input` | Text string or a nonempty array of text conversation items. | Yes |
-| `questions` | Array of 1 to 200 questions, each with `type`, nonempty `instructions`, and an optional `name`. | Yes |
-| `safety_identifier` | Caller metadata, accepted without affecting local inference. | No |
-| `prompt_cache_key` | Caller metadata, accepted without enabling prompt caching. | No |
-
-Each question has one of these types:
-
-- `predicate` estimates the probability that a statement holds.
-- `choice` selects from `choices`, an array of 2 to 255 distinct string or boolean `value` fields with optional `description` fields. Boolean `true` and string `"true"` are distinct choices.
-- `score` takes `levels`, an ordered array of at least two entries, each with a `label` and optional `description`. Level values start at zero; the score is the probability-weighted level index.
-
-Conversation items support user, developer, system, and assistant messages. System messages become developer messages. Content can be a string; content arrays use `input_text` for non-assistant messages and `output_text` or `refusal` for assistant messages. Function and custom tool calls can be included with their matching outputs as evidence. Each output must refer to an earlier call of the same type. The server does not execute tools.
-
-```bash
-curl http://localhost:11434/v1/decisions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "laya-multilingual-322m-q8-0",
-    "input": "I was charged twice. Please refund.",
-    "questions": [
-      {
-        "type": "choice",
-        "name": "route",
-        "instructions": "Which queue should receive this ticket?",
-        "choices": [
-          {"value": "billing", "description": "Payment issues"},
-          {"value": "technical", "description": "Software bugs"}
-        ]
-      },
-      {
-        "type": "score",
-        "name": "severity",
-        "instructions": "How severe is this issue?",
-        "levels": [{"label": "Minor"}, {"label": "Major"}]
-      },
-      {
-        "type": "predicate",
-        "name": "urgent",
-        "instructions": "Does this require immediate human attention?"
-      }
-    ]
-  }'
-```
-
-##### Response
-
-`model` is the configured alias. `answers` is an array in question order; names need not be unique, and unnamed questions return `name: null`.
-
-- Predicate answers contain `probability`.
-- Choice answers contain the selected typed `choice`, `confidence`, and a `probabilities` array with each original `value`.
-- Score answers contain `score`, `confidence`, and a `probabilities` array with each level's numeric `value` and original `label`.
-
-Confidence comes from Laya's entropy-based confidence and is not calibrated to OpenAI's hosted model. The response schema includes `refusal`, but local Laya models do not emit refusal answers.
-
-`usage` contains `input_tokens`, `output_tokens`, and `total_tokens`, plus `input_tokens_details` with `cached_tokens` and `cache_write_tokens`, and `output_tokens_details` with `reasoning_tokens`. Cache and reasoning counts are zero. Internal truncation, option, action, and answer-confidence fields are not included.
-
-##### Local model limits
-
-Local decisions accept text only. Images, files, audio, item references, streaming, and batch inputs are rejected with HTTP 400. Prompt caching is unavailable; non-null `prompt_cache_options` and content `prompt_cache_breakpoint` fields are rejected. Use SDK [`decide()`](/sdk/ai-capabilities/decisions) for batch states or Laya-specific token budgets.
-
-A client disconnect cancels the SDK request. Each model runs one decision request at a time, with up to 64 requests waiting in a FIFO queue. Additional requests return HTTP `429` with error type `rate_limit_error` and code `request_rejected_by_policy`.
 
 ### Audio
 

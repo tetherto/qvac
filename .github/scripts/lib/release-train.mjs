@@ -1,8 +1,9 @@
 // Release trains: nx release groups that publish together from one
 // release-train-<train>-<x.y.z> branch. Group membership lives in nx.json;
-// .github/release-trains.json says which groups form a train, which group's
-// version names the branch, which package gets the GitHub release, and which
-// checks must pass before and after publishing.
+// .github/release-trains.json says which groups form a train, which group's or
+// project's version names the branch, which workspace packages the train
+// installs from npm, which package gets the GitHub release, and which checks
+// must pass before and after publishing.
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,14 +34,35 @@ export function loadTrain (name, catalog, nxJson) {
   const groups = nxJson.release?.groups ?? {}
   for (const group of train.groups) {
     if (!groups[group]) throw new Error(`Train '${name}' names release group '${group}', which nx.json does not declare`)
-    const other = Object.keys(catalog).find((n) => n !== name && catalog[n].groups.includes(group))
-    if (other) throw new Error(`Release group '${group}' is in both '${name}' and '${other}'`)
   }
-  // The branch carries one version for the anchor group, so its members must share it.
-  if (!train.groups.includes(train.anchorGroup) || groups[train.anchorGroup].projectsRelationship !== 'fixed') {
-    throw new Error(`Train '${name}': anchorGroup '${train.anchorGroup}' must be one of its groups and "fixed"`)
+  // A package in two trains is released by the smaller one, or by the larger
+  // one when that one releases (trainsByPackage in agent-stack-plan.mjs). That
+  // needs one of the two to hold every group of the other.
+  for (const other of Object.keys(catalog)) {
+    if (other === name) continue
+    const shared = train.groups.find((group) => catalog[other].groups.includes(group))
+    if (shared && !holdsAll(train.groups, catalog[other].groups) && !holdsAll(catalog[other].groups, train.groups)) {
+      throw new Error(`Trains '${name}' and '${other}' share release group '${shared}', so one must hold every group of the other`)
+    }
   }
   const projects = train.groups.flatMap((group) => groups[group].projects)
+  // The branch carries one version: the anchor project's, or the anchor
+  // group's, whose members must then share it.
+  let anchorProjects
+  if (train.anchorProject !== undefined) {
+    if (train.anchorGroup !== undefined || !projects.includes(train.anchorProject)) {
+      throw new Error(`Train '${name}': anchorProject ${train.anchorProject} must be in the train, and replaces anchorGroup`)
+    }
+    anchorProjects = [train.anchorProject]
+  } else if (train.groups.includes(train.anchorGroup) && groups[train.anchorGroup].projectsRelationship === 'fixed') {
+    anchorProjects = groups[train.anchorGroup].projects
+  } else {
+    throw new Error(`Train '${name}': anchorGroup '${train.anchorGroup}' must be one of its groups and "fixed"`)
+  }
+  const fromNpm = train.fromNpm ?? []
+  if (!Array.isArray(fromNpm) || fromNpm.some((dir) => typeof dir !== 'string' || !/^[\w.-]+(\/[\w.-]+)*$/.test(dir))) {
+    throw new Error(`Train '${name}': fromNpm must list package directories, such as "packages/sdk"`)
+  }
   if (train.githubRelease && !projects.includes(train.githubRelease.project)) {
     throw new Error(`Train '${name}': githubRelease project ${train.githubRelease.project} is not in the train`)
   }
@@ -55,11 +77,44 @@ export function loadTrain (name, catalog, nxJson) {
   return {
     name,
     projects,
-    anchorProjects: groups[train.anchorGroup].projects,
+    anchorProjects,
+    fromNpm,
     githubRelease: train.githubRelease ?? null,
     checks,
     packageChecks: train.packageChecks ?? null,
   }
+}
+
+function holdsAll (groups, others) {
+  return others.every((group) => groups.includes(group))
+}
+
+// The `packages:` entries of pnpm-workspace.yaml, unquoted.
+export function workspaceEntries (workspaceYaml) {
+  const entries = []
+  let inPackages = false
+  for (const line of workspaceYaml.split('\n')) {
+    if (/^\S/.test(line)) inPackages = line.startsWith('packages:')
+    const match = inPackages && /^\s+-\s+(["']?)(.*)\1\s*$/.exec(line)
+    if (match) entries.push(match[2])
+  }
+  return entries
+}
+
+// Adds a `!<dir>` entry for each directory the workspace still holds, after
+// the last `packages:` entry.
+export function excludeFromWorkspace (workspaceYaml, dirs) {
+  const missing = dirs.filter((dir) => !workspaceEntries(workspaceYaml).includes(`!${dir}`))
+  if (!missing.length) return workspaceYaml
+  const lines = workspaceYaml.split('\n')
+  const start = lines.findIndex((line) => line.startsWith('packages:'))
+  if (start === -1) throw new Error('pnpm-workspace.yaml has no packages: list')
+  let last = start
+  for (let i = start + 1; i < lines.length && !/^\S/.test(lines[i]); i++) {
+    if (/^\s+-\s/.test(lines[i])) last = i
+  }
+  lines.splice(last + 1, 0, ...missing.map((dir) => `  - "!${dir}"`))
+  return lines.join('\n')
 }
 
 export function slugOf (name) {
@@ -129,10 +184,22 @@ export function rangeErrors (manifests, versions) {
   return errors
 }
 
-export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt, versionPlans = [], manifests }) {
+export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt, versionPlans = [], manifests, workspace = '', fromNpm = [] }) {
   // nx applies every plan file on disk, so a committed plan would bump the
   // next train again.
   const errors = versionPlans.map((path) => `${path} is committed; delete it, nx would apply it again`)
+  // pnpm links a workspace package whenever its version satisfies the range,
+  // so the train builds against an npm version only if the package is outside
+  // the workspace.
+  const entries = workspaceEntries(workspace)
+  for (const { dir, name } of fromNpm) {
+    if (!name) errors.push(`${dir}/package.json does not exist; fix fromNpm in the '${branch.train}' train`)
+    else if (train.projects.includes(name)) errors.push(`${name} is in the '${branch.train}' train, so it cannot come from npm`)
+    else if (!entries.includes(`!${dir}`)) {
+      errors.push(`${dir} is in the pnpm workspace, but the '${branch.train}' train installs ${name} from npm. ` +
+        `Run \`node .github/scripts/release-train.mjs exclude ${branch.train}\` and \`pnpm install --lockfile-only\`, and commit both files`)
+    }
+  }
   for (const project of train.anchorProjects) {
     const version = versionAtHead(project)
     if (version !== branch.version) {

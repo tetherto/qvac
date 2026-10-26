@@ -9,6 +9,7 @@ import { parseServeConfig, unknownServeKeys } from '@/serve/core/config'
 import { resolveServeApiKey } from '@/serve/core/api-key'
 import { checkNetworkExposure, validateServeStartup } from '@/serve/core/startup'
 import { createModelRegistry } from '@/serve/core/model-registry'
+import { createEphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
 import { createLoadManager, defaultLoadFn } from '@/serve/core/load-manager'
 import { preloadModels, shouldRefuseStart } from '@/serve/core/lifecycle'
 import type { QvacContext } from '@/serve/core/context'
@@ -104,6 +105,11 @@ async function buildServerParts(
     serveConfig,
     loadManager,
     logger,
+    files: createEphemeralFilesStore(undefined, {
+      onEvict: (id, reason) => {
+        logger.warn(`ephemeral file evicted id=${id} reason=${reason}`)
+      }
+    }),
     extensions: {},
     get loadModelOverride() {
       return overrideRef.current

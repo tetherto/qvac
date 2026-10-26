@@ -4037,7 +4037,7 @@
           "type": "boolean"
         },
         "toolDialect": {
-          "description": "Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.",
+          "description": "Override auto-detected tool-call dialect. Use when detection from the model name and GGUF architecture picks the wrong parser chain for your model.",
           "type": "string",
           "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
           "title": "CompletionOrchestrateRequestToolDialect"
@@ -4737,7 +4737,7 @@
           "type": "boolean"
         },
         "toolDialect": {
-          "description": "Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.",
+          "description": "Override auto-detected tool-call dialect. Use when detection from the model name and GGUF architecture picks the wrong parser chain for your model.",
           "type": "string",
           "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
           "title": "CompletionStreamRequestToolDialect"
@@ -12366,6 +12366,35 @@
                       "description": "Enable tool calling via the model's jinja chat template. Default false.",
                       "type": "boolean"
                     },
+                    "cache_checkpoints": {
+                      "description": "Prompt-cache checkpoints kept per sequence on hybrid / recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss) whose context exceeds the window, one per cached request at the end of its history (0–1024). Default 1, which serves the next turn and a regenerate; editing the user message k-th from the end without reprocessing the whole conversation needs `k + 1`. Regenerates and edits restore a checkpoint only under a caller-managed string `kvCache` key. `0` disables them. Each checkpoint holds a copy of the recurrent or sliding-window state of its sequence in host RAM (on disk with `cache_checkpoint_storage: 'disk'`), up to hundreds of MiB on larger models, so memory grows with this value and with `parallel` unless `cache_checkpoints_max_bytes` caps it. Model fit checks do not count it. The newest one is also saved in the `cacheKey` file, so a conversation reloaded in a new process continues from it. Ignored by other models.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1024
+                    },
+                    "cache_checkpoints_max_bytes": {
+                      "description": "Byte budget for the checkpoints kept per sequence; the oldest are dropped until the rest fit. `0` (default) is unlimited. The load fails when the budget cannot hold `cache_checkpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window).",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "cache_checkpoint_storage": {
+                      "description": "Where checkpoints and the per-request rollback snapshot are kept: `'memory'` (default) in host RAM, `'disk'` in files under `cache_checkpoint_dir`, which it requires.",
+                      "type": "string",
+                      "enum": ["memory", "disk"],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigCacheCheckpointStorage"
+                    },
+                    "cache_checkpoint_dir": {
+                      "description": "Writable directory for checkpoint files, required with `cache_checkpoint_storage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "cache_ram_mib": {
+                      "description": "Host-RAM budget, in MiB, for cached conversations that are not running (0–1048576). Default 0 (off). A conversation the model switches away from (another `kvCache` key, or a slot eviction with `parallel >= 2`) is kept in RAM, so returning to its caller-managed string `kvCache` key skips reading its `cacheKey` file. Model fit checks do not count this memory.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048576
+                    },
                     "cache-type-k": {
                       "description": "KV-cache key quantization type (`f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …). Unset selects a backend-safe default.",
                       "type": "string"
@@ -13268,7 +13297,7 @@
                       "title": "LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig"
                     },
                     "backendsDir": {
-                      "description": "Android only: override the default ggml backend prebuilds directory. Defaults to `<addon>/prebuilds`.",
+                      "description": "Android and Linux: the directory scanned, as given, for the ggml backend modules. Defaults to the directory next to the loaded addon module.",
                       "type": "string"
                     },
                     "embedderModelSrc": {
@@ -13743,9 +13772,9 @@
                       "maximum": 9007199254740991
                     },
                     "pooling": {
-                      "description": "Pooling strategy collapsing token embeddings into one sequence vector: `'none'`, `'mean'`, `'cls'`, `'last'`, or `'rank'`. Unset uses the model default.",
+                      "description": "Pooling strategy collapsing token embeddings into one sequence vector: `'none'`, `'mean'`, `'cls'`, or `'last'`. Unset uses the model default.",
                       "type": "string",
-                      "enum": ["none", "mean", "cls", "last", "rank"],
+                      "enum": ["none", "mean", "cls", "last"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling"
                     },
                     "attention": {

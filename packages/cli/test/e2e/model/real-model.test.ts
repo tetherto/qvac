@@ -27,7 +27,7 @@ const wavField = {
 }
 function timedWavField() {
   const fixturePath = fileURLToPath(
-    new URL('../../../../sdk/e2e/assets/audio/transcription-short-wav.wav', import.meta.url)
+    new URL('../../../../sdk-e2e/assets/audio/transcription-short-wav.wav', import.meta.url)
   )
   assert.ok(existsSync(fixturePath), `Timed transcription fixture is missing: ${fixturePath}`)
   return {
@@ -1145,7 +1145,7 @@ describe('videos (HTTP layer only; lazy-load stubbed to fail)', () => {
       await post('/v1/videos', {
         model: E2E.video,
         prompt: 'subject turns',
-        input_reference: { image_url: 'http://127.0.0.1:1/v1/models' }
+        input_reference: { image_url: 'https://example.com/reference.png' }
       }),
       'model_load_failed'
     )

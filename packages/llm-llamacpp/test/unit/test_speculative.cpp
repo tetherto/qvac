@@ -1,9 +1,11 @@
+#include <array>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include <gguf.h>
 #include <gtest/gtest.h>
 #include <llama.h>
 
@@ -26,6 +28,34 @@ SpeculativeConfig parse(ConfigMap config) {
 // Absolute on every platform: "/models/x" has no drive on Windows.
 std::string absoluteModelPath(const char* name) {
   return (std::filesystem::temp_directory_path() / name).string();
+}
+
+// A header-only GGUF with `arch`'s widths and MTP layers (0 leaves a key out)
+// and `vocab` tokens, written to a temporary file.
+std::string writeHeadHeader(
+    const char* name, const char* arch, uint32_t width, uint32_t widthOut,
+    size_t vocab, uint32_t mtpLayers = 0) {
+  gguf_context* ctx = gguf_init_empty();
+  gguf_set_val_str(ctx, "general.architecture", arch);
+  if (width != 0) {
+    gguf_set_val_u32(
+        ctx, (std::string(arch) + ".embedding_length").c_str(), width);
+  }
+  if (widthOut != 0) {
+    gguf_set_val_u32(
+        ctx, (std::string(arch) + ".embedding_length_out").c_str(), widthOut);
+  }
+  if (mtpLayers != 0) {
+    gguf_set_val_u32(
+        ctx, (std::string(arch) + ".nextn_predict_layers").c_str(), mtpLayers);
+  }
+  std::vector<const char*> tokens(vocab, "t");
+  gguf_set_arr_str(ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
+  const std::string path = absoluteModelPath(name);
+  const bool written = gguf_write_to_file(ctx, path.c_str(), true);
+  gguf_free(ctx);
+  EXPECT_TRUE(written) << path;
+  return path;
 }
 
 } // namespace
@@ -69,6 +99,97 @@ TEST(SpeculativeConfigTest, ParsesDraftDflashWithItsDraftModel) {
   EXPECT_TRUE(config.empty());
 }
 
+TEST(SpeculativeConfigTest, ParsesDraftMtpWithAnExternalHead) {
+  const std::string headPath = absoluteModelPath("mtp-head.gguf");
+  ConfigMap config{{"spec-type", "draft-mtp"}, {"spec_draft_model", headPath}};
+  const SpeculativeConfig parsed = parseSpeculativeConfig(config);
+  EXPECT_EQ(parsed.type, COMMON_SPECULATIVE_TYPE_DRAFT_MTP);
+  EXPECT_EQ(parsed.draftModelPath, headPath);
+  EXPECT_TRUE(config.empty());
+  // The head is optional for MTP: without one the model's own layers draft.
+  EXPECT_TRUE(parse({{"spec-type", "draft-mtp"}}).draftModelPath.empty());
+  // It is held to the same path rules as a DFlash model.
+  EXPECT_THROW(
+      parse({{"spec-type", "draft-mtp"}, {"spec-draft-model", "mtp.gguf"}}),
+      std::invalid_argument);
+}
+
+TEST(SpeculativeConfigTest, AnMtpHeadMustMatchTheModel) {
+  EXPECT_EQ(mtpHeadMismatch(5120, 5120, 248320, 248320), "");
+  // A head for another model of the family: fabric would abort on the width.
+  EXPECT_EQ(
+      mtpHeadMismatch(1024, 2048, 248320, 248320),
+      "hidden width 1024, the model's 2048");
+  EXPECT_EQ(
+      mtpHeadMismatch(1024, 1024, 248320, 151936),
+      "248320 tokens, the model's 151936");
+  EXPECT_EQ(
+      mtpHeadMismatch(1024, 2048, 248320, 151936),
+      "hidden width 1024, the model's 2048; 248320 tokens, the model's 151936");
+  // A value missing from the head's header is not compared.
+  EXPECT_EQ(mtpHeadMismatch(0, 2048, 0, 151936), "");
+}
+
+TEST(SpeculativeConfigTest, AnMtpHeadIsReadAtTheWidthItDraftsFrom) {
+  // A Qwen MTP head has no `embedding_length_out`; its own width is read.
+  const std::string qwen =
+      writeHeadHeader("qwen35-head.gguf", "qwen35", 1024, 0, 8, 1);
+  const GgufShape qwenShape = readGgufShape(qwen);
+  EXPECT_EQ(qwenShape.width, 1024);
+  EXPECT_EQ(qwenShape.vocab, 8);
+  EXPECT_EQ(qwenShape.mtpLayers, 1);
+  EXPECT_EQ(
+      mtpHeadMismatch(qwenShape.width, 2048, qwenShape.vocab, 8),
+      "hidden width 1024, the model's 2048");
+
+  // A Gemma 4 assistant runs at its own width and reads the target's hidden
+  // states, whose width is in `embedding_length_out`.
+  const std::string gemma = writeHeadHeader(
+      "gemma4-assistant.gguf", "gemma4-assistant", 1024, 5376, 8, 4);
+  const GgufShape gemmaShape = readGgufShape(gemma);
+  EXPECT_EQ(gemmaShape.width, 5376);
+  EXPECT_EQ(gemmaShape.mtpLayers, 4);
+  EXPECT_EQ(mtpHeadMismatch(gemmaShape.width, 5376, gemmaShape.vocab, 8), "");
+  EXPECT_EQ(
+      mtpHeadMismatch(gemmaShape.width, 2816, gemmaShape.vocab, 8),
+      "hidden width 5376, the model's 2816");
+
+  // An unreadable file has no shape, so nothing is compared.
+  const GgufShape missing =
+      readGgufShape(absoluteModelPath("no-such-head.gguf"));
+  EXPECT_EQ(missing.width, 0);
+  EXPECT_EQ(missing.vocab, 0);
+  EXPECT_EQ(missing.mtpLayers, 0);
+
+  std::filesystem::remove(qwen);
+  std::filesystem::remove(gemma);
+}
+
+TEST(SpeculativeConfigTest, AFitLeavesOutOnlyAGemma4Assistant) {
+  // fabric cannot measure a Gemma 4 assistant on its own, but it loads.
+  const std::string gemma = writeHeadHeader(
+      "gemma4-assistant.gguf", "gemma4-assistant", 1024, 5376, 8, 4);
+  // Any other MTP draft that cannot be measured fails the load.
+  const std::string qwen =
+      writeHeadHeader("qwen35-head.gguf", "qwen35", 1024, 0, 8, 1);
+  const std::string noLayers =
+      writeHeadHeader("qwen35-no-mtp.gguf", "qwen35", 1024, 0, 8);
+  const std::string gemmaNoLayers = writeHeadHeader(
+      "gemma4-assistant-no-mtp.gguf", "gemma4-assistant", 1024, 5376, 8);
+
+  EXPECT_EQ(readGgufShape(gemma).arch, "gemma4-assistant");
+  EXPECT_TRUE(fitLeavesOutMtpDraft(readGgufShape(gemma)));
+  EXPECT_FALSE(fitLeavesOutMtpDraft(readGgufShape(qwen)));
+  EXPECT_FALSE(fitLeavesOutMtpDraft(readGgufShape(noLayers)));
+  EXPECT_FALSE(fitLeavesOutMtpDraft(readGgufShape(gemmaNoLayers)));
+  EXPECT_FALSE(fitLeavesOutMtpDraft(
+      readGgufShape(absoluteModelPath("no-such-head.gguf"))));
+
+  for (const std::string& path : {gemma, qwen, noLayers, gemmaNoLayers}) {
+    std::filesystem::remove(path);
+  }
+}
+
 TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
   EXPECT_THROW(parse({{"spec-type", "draft-dflash"}}), std::invalid_argument);
   EXPECT_THROW(
@@ -78,12 +199,12 @@ TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
   EXPECT_THROW(
       parse({{"spec-type", "draft-dflash"}, {"spec_draft_model", ""}}),
       std::invalid_argument);
-  // A draft model belongs to draft-dflash only.
-  EXPECT_THROW(
-      parse({{"spec-type", "draft-mtp"}, {"spec-draft-model", "/m/d.gguf"}}),
-      std::invalid_argument);
+  // A draft model needs a speculative type.
   EXPECT_THROW(
       parse({{"spec-draft-model", "/m/d.gguf"}}), std::invalid_argument);
+  EXPECT_THROW(
+      parse({{"spec-type", "none"}, {"spec-draft-model", "/m/d.gguf"}}),
+      std::invalid_argument);
   // Network shares and device paths are not local files.
   EXPECT_THROW(
       parse(
@@ -310,7 +431,108 @@ TEST(SpeculativeConfigTest, FitCountsTheDflashModelOnItsOwn) {
   EXPECT_FALSE(extra->shares_model);
   EXPECT_STREQ(extra->path_model, "/models/dflash.gguf");
   EXPECT_NE(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
+  EXPECT_FALSE(fit->isMtp());
   EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
+}
+
+TEST(SpeculativeConfigTest, FitCountsAnExternalMtpHeadOnItsOwn) {
+  common_params params;
+  params.model.path = "/models/target.gguf";
+  params.n_gpu_layers = 12;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP,
+          .draftModelPath = "/models/mtp-head.gguf"},
+      params);
+  // Placed like the target, as llama-server's -md.
+  EXPECT_EQ(params.speculative.draft.mparams.path, "/models/mtp-head.gguf");
+  EXPECT_EQ(params.speculative.draft.n_gpu_layers, 12);
+  const auto fit = SpeculativeFitModel::create(params);
+  ASSERT_NE(fit, nullptr);
+  const common_fit_extra_model* extra = fit->extra();
+  // An MTP context on the head's own weights, as fabric's load fits it.
+  EXPECT_FALSE(extra->shares_model);
+  EXPECT_STREQ(extra->path_model, "/models/mtp-head.gguf");
+  EXPECT_EQ(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
+  EXPECT_TRUE(fit->isMtp());
+  EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
+}
+
+namespace {
+
+// Device handles are only compared, never dereferenced.
+ggml_backend_dev_t fakeDevice(size_t index) {
+  static std::array<char, 3> handles{};
+  return reinterpret_cast<ggml_backend_dev_t>(&handles.at(index));
+}
+
+common_device_memory_data
+memoryRow(size_t model, size_t context, size_t compute) {
+  return {
+      .total = 0,
+      .free = 0,
+      .model = model,
+      .context = context,
+      .compute = compute};
+}
+
+void expectRow(
+    const common_device_memory_data& row, size_t model, size_t context,
+    size_t compute) {
+  EXPECT_EQ(row.model, model);
+  EXPECT_EQ(row.context, context);
+  EXPECT_EQ(row.compute, compute);
+}
+
+} // namespace
+
+TEST(SpeculativeFitMemoryTest, DraftRowsAddToTheTargetRowOfTheirDevice) {
+  const std::vector<ggml_backend_dev_t> devices{fakeDevice(0), fakeDevice(1)};
+  common_device_memory_data_vec breakdown{
+      memoryRow(100, 10, 1), memoryRow(200, 20, 2), memoryRow(300, 30, 3)};
+  // The draft side runs on the second device and on one the target does not
+  // use, listed in another order.
+  const std::vector<ggml_backend_dev_t> draftDevices{
+      fakeDevice(1), fakeDevice(2)};
+  const common_device_memory_data_vec measured{
+      memoryRow(5, 6, 7), memoryRow(50, 60, 70), memoryRow(8, 9, 10)};
+  ASSERT_TRUE(addDraftMemory(devices, breakdown, draftDevices, measured, true));
+  expectRow(breakdown[0], 100, 10, 1);
+  expectRow(breakdown[1], 205, 26, 9);
+  // The host row is added whole.
+  expectRow(breakdown[2], 308, 39, 13);
+}
+
+TEST(SpeculativeFitMemoryTest, SharedWeightsAreLeftOut) {
+  const std::vector<ggml_backend_dev_t> devices{fakeDevice(0)};
+  common_device_memory_data_vec breakdown{
+      memoryRow(100, 10, 1), memoryRow(300, 30, 3)};
+  const common_device_memory_data_vec measured{
+      memoryRow(100, 4, 5), memoryRow(300, 6, 7)};
+  // An MTP context on the target's own layers: its weights are the target's.
+  ASSERT_TRUE(addDraftMemory(devices, breakdown, devices, measured, false));
+  expectRow(breakdown[0], 100, 14, 6);
+  expectRow(breakdown[1], 300, 36, 10);
+}
+
+TEST(SpeculativeFitMemoryTest, RowsWithoutAHostRowAreRefused) {
+  const std::vector<ggml_backend_dev_t> devices{fakeDevice(0)};
+  common_device_memory_data_vec breakdown{
+      memoryRow(100, 10, 1), memoryRow(300, 30, 3)};
+  // A draft measurement missing its host row.
+  EXPECT_FALSE(
+      addDraftMemory(devices, breakdown, devices, {memoryRow(1, 1, 1)}, true));
+  // A target breakdown missing its host row.
+  common_device_memory_data_vec noHostRow{memoryRow(100, 10, 1)};
+  EXPECT_FALSE(addDraftMemory(
+      devices,
+      noHostRow,
+      devices,
+      {memoryRow(1, 1, 1), memoryRow(1, 1, 1)},
+      true));
+  expectRow(breakdown[0], 100, 10, 1);
+  expectRow(breakdown[1], 300, 30, 3);
+  expectRow(noHostRow[0], 100, 10, 1);
 }
 
 TEST(SpeculativeSequenceTest, MaxDraftLeavesRoomAndRespectsBudget) {

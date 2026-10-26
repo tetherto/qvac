@@ -3,6 +3,7 @@
 #include <any>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <functional>
 #include <future>
 #include <memory>
@@ -666,10 +667,15 @@ inline FitResult runFit(FitRequest request) {
   } catch (const std::exception&) {
     return errorResult("unsupported-config");
   }
-  // The DFlash draft model is a second file the fit reads; probed like the
-  // target model above.
+  // The draft model (DFlash or an MTP head) is a second file the fit reads;
+  // probed like the target above. The load requires a regular file, and
+  // `fopen` opens a directory on POSIX.
   if (const std::string& draftPath = loadParams.speculative.draft.mparams.path;
       !draftPath.empty()) {
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(draftPath, error)) {
+      return errorResult("model-unreadable");
+    }
     if (std::FILE* file = std::fopen(draftPath.c_str(), "rb")) {
       std::fclose(file);
     } else {
@@ -744,6 +750,20 @@ inline FitResult runFit(FitRequest request) {
       qvac_lib_inference_addon_llama::speculative::SpeculativeFitModel::create(
           loadParams);
 
+  // The load refuses an external MTP head for another model; so does the
+  // projection, comparing the same header values.
+  if (speculativeFit && speculativeFit->isMtp() &&
+      !speculativeFit->extra()->shares_model) {
+    namespace spec = qvac_lib_inference_addon_llama::speculative;
+    const auto head = spec::readGgufShape(speculativeFit->extra()->path_model);
+    const auto target = spec::readGgufShape(modelPath);
+    if (!spec::mtpHeadMismatch(
+             head.width, target.width, head.vocab, target.vocab)
+             .empty()) {
+      return errorResult("unsupported-config");
+    }
+  }
+
   common_params_fit_status status{};
   try {
     status = common_fit_params(
@@ -801,6 +821,20 @@ inline FitResult runFit(FitRequest request) {
     measured = false;
     devices.clear();
     breakdown.clear();
+  }
+  // The figures count the draft side, as the verdict does; one fabric cannot
+  // measure (DFlash, a Gemma 4 assistant) stays out of both. Any other MTP
+  // draft that cannot be measured, such as one without MTP layers, fails the
+  // load, so it is refused. A failed fit leaves `n_ctx` 0, which the load
+  // resolves to the trained context.
+  const uint32_t draftCtx = cparams.n_ctx != 0 ? cparams.n_ctx : trainCtx;
+  if (measured && speculativeFit &&
+      !speculativeFit->addMemory(draftCtx, devices, breakdown) &&
+      speculativeFit->isMtp() &&
+      !qvac_lib_inference_addon_llama::speculative::fitLeavesOutMtpDraft(
+          qvac_lib_inference_addon_llama::speculative::readGgufShape(
+              speculativeFit->extra()->path_model))) {
+    return errorResult("unsupported-config");
   }
 
   // The probe returns one row per device the model was assigned to, then a

@@ -1,0 +1,29 @@
+{
+  "reference": "Original MegaLoc, CPU FP32",
+  "source_revision": "5fe0dd697c4a70ba3e23607f6716ab3c606b16db",
+  "torch_version": "2.13.0+cu130",
+  "checkpoint_sha256": "d4f9f2bcb60018f91eb6a8e061ed054fd55654e10c2569cf13841ea986ffb4f8",
+  "cases": [
+    {
+      "name": "upscale",
+      "width": 64,
+      "height": 48,
+      "reference": "megaloc-upscale-f32.bin",
+      "sha256": "337b8a2dd5bfa7a3539c614e20c67cd1dd53ec63cbc835fc16330c090411352a"
+    },
+    {
+      "name": "downscale",
+      "width": 640,
+      "height": 480,
+      "reference": "megaloc-downscale-f32.bin",
+      "sha256": "b79c1e1f1989b5b71362016856414d61c9edbb02cedcdfdd3b45b18ab30eb1d2"
+    },
+    {
+      "name": "identity",
+      "width": 322,
+      "height": 322,
+      "reference": "megaloc-identity-f32.bin",
+      "sha256": "dca33f65278fb7125315e0312bd71257bf574b28807332d4fb9bb44b6326a4f5"
+    }
+  ]
+}

@@ -130,9 +130,9 @@ The longer treatment, including how a GPU changes which memory the budget measur
 
 ## Load-time probe
 
-Once the weights are on disk, [`loadModel()`](/sdk/reference/api#loadmodel) runs the same engine fitter against the real file and the resolved load settings before it loads. It is the stronger evidence once you have the file. Desktop runs it in a disposable child process. Mobile, which cannot spawn one, runs it on a worker thread.
+Once the weights are on disk, [`loadModel()`](/sdk/reference/api#loadmodel) runs the same engine fitter against the real file and the resolved load settings before it loads. It is the stronger evidence once you have the file. The fitter runs in the SDK's worker process on every platform. A fitter that crashes takes the worker down with it.
 
-A crash, timeout, or unsupported configuration resolves to no verdict. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
+A fit that does not finish, because the fitter crashed or the process quit, is retried on the next load with the same settings. A second one in a row resolves to no verdict, as does an unsupported configuration. A fitter that does not return within 30 seconds resolves to no verdict and the load continues. Cancelling a load during its fit stops it before the model loads. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
 
 [`getLoadedModelInfo()`](/sdk/reference/api#getloadedmodelinfo) returns the outcome as `fitProbe`:
 - `verdict` — `fit`, `does-not-fit`, or `unknown`. These are unhedged, unlike the verdicts above, because the probe measured this build against this file.
@@ -180,11 +180,19 @@ The following script asks which of five Qwen3 models this machine is likely to r
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/assess_model_fit.py title="assess_model_fit.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Load-time probe
 
-The following script loads Qwen3.5 0.8B at 4k context, which the fitter projects to fit, and reprints the `[advisory-fit:…]` verdicts from the SDK log stream. Set `QVAC_FIT_DEMO_ATTEMPT_OVERSIZED=1` to also load gpt-oss-20B at 128k context with an f32 KV cache, which it projects not to fit and loads anyway:
+The following script loads gpt-oss-20B at 128k context with an f32 KV cache under `modelFitPolicy: 'refuse'`, so the fitter's verdict decides the load instead of merely annotating it, and reprints the `[advisory-fit:…]` verdicts from the SDK log stream:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -202,11 +210,15 @@ The following script loads Qwen3.5 0.8B at 4k context, which the fitter projects
 ```
 </WrapCode>
 </Tab>
-</Tabs>
 
-<Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
-</Callout>
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/advisory_model_fit.py title="advisory_model_fit.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).

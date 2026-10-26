@@ -54,8 +54,8 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-sdk-pr-status`](../qv-sdk-pr-status/SKILL.md) | Team SDK pod PR dashboard. | SDK pod PR queue. **Manual:** `/qv-sdk-pr-status` |
 | [`qv-sdk-changelog`](../qv-sdk-changelog/SKILL.md) | Changelogs for SDK pod packages (tag-based GitFlow). | Release prep, `CHANGELOG_LLM.md`. **Auto** |
 | [`qv-sdk-backmerge`](../qv-sdk-backmerge/SKILL.md) | Open backmerge PR (release version bump + changelog → `main`). | After SDK release PR; often chained from `qv-sdk-pr-create`. **Auto** |
-| [`qv-release-train`](../qv-release-train/SKILL.md) | Release a whole dependency chain from one branch and one publish run. | Engine + SDK + agent stack moving together. **Auto** |
-| [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk/e2e` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
+| [`qv-release-train`](../qv-release-train/SKILL.md) | Release a train's packages (`.github/release-trains.json`) from one branch and one publish run. | Packages of a train moving together. **Auto** |
+| [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk-e2e` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
 | [`qv-sdk-update-models`](../qv-sdk-update-models/SKILL.md) | Regen SDK `models.ts` from live registry and open a `[mod]` PR; optional provider/python cascade. | After registry model updates; `/qv-sdk-update-models`. **Manual** |
 | [`qv-agent-stack-sync`](../qv-agent-stack-sync/SKILL.md) | Plan / draft-cascade / promote the SDK → CLI → AI SDK provider → OpenCode + OpenClaw release chain. | Agent-stack release prep; `/qv-agent-stack-sync --plan`. **Auto** |
 
@@ -93,8 +93,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 |-------|---------|----------|
 | [`qv-dev-diary-setup`](../qv-dev-diary-setup/SKILL.md) | Opt-in local dev diary (`~/.config/qvac-pr-skills/`). | Enable diary, `diary --init`, configure capture. **Manual:** `/qv-dev-diary-setup` |
 | [`qv-dev-diary`](../qv-dev-diary/SKILL.md) | Read, inspect, append diary entries. | View today's log, add notes after setup. **Manual:** `/qv-dev-diary` |
-| [`qv-daily-work-update`](../qv-daily-work-update/SKILL.md) | Personal EOD update from diary + GitHub + PR state (+ optional Asana). | Personal standup / "what did I do today". **Manual:** `/qv-daily-work-update` |
-| [`qv-asana-sync`](../qv-asana-sync/SKILL.md) | Look up and update Asana tasks (status, comments, PR links). | Sync Asana task, move status, validate config. **Manual:** `/qv-asana-sync` |
+| [`qv-daily-work-update`](../qv-daily-work-update/SKILL.md) | Personal EOD update from diary + GitHub + PR state. | Personal standup / "what did I do today". **Manual:** `/qv-daily-work-update` |
 
 ---
 
@@ -102,7 +101,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 
 | Skill | Purpose | Use when |
 |-------|---------|----------|
-| [`qv-quality-reporting`](../qv-quality-reporting/SKILL.md) | Run deterministic quality analysis, triage cohesive debt groups, and prepare approval-gated Asana proposals. | Initial debt triage, recurring quality review, or twice-monthly reporting setup. **Manual:** `/qv-quality-reporting` |
+| [`qv-quality-reporting`](../qv-quality-reporting/SKILL.md) | Run deterministic quality analysis, triage cohesive debt groups, and prepare proposals. | Initial debt triage, recurring quality review, or twice-monthly reporting setup. **Manual:** `/qv-quality-reporting` |
 
 ---
 
@@ -154,7 +153,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | SDK release changelog | `qv-sdk-changelog` |
 | Addon release changelog | `qv-addon-changelog` |
 | Backmerge after SDK release | `qv-sdk-backmerge` |
-| Release engine + SDK + agent stack together | `qv-release-train` |
+| Release the packages of a release train together | `qv-release-train` |
 | Sync CLI/provider/OpenCode/OpenClaw to SDK | `qv-agent-stack-sync` |
 | New SDK e2e tests | `qv-sdk-e2e-create` |
 | Registry Autobase/HyperDB help | `qv-registry-autobase-patterns` |
