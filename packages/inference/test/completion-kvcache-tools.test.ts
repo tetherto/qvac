@@ -31,6 +31,7 @@ type RecordedCall = {
   messages: { role?: string; type?: string; name?: string; content?: string }[]
   prefill: boolean
   toolChoice?: string | undefined
+  parallelToolCalls?: boolean | undefined
 }
 
 type ToolDef = {
@@ -159,13 +160,14 @@ function registerRecordingModel(
         opts?: {
           prefill?: boolean
           cacheKey?: string
-          generationParams?: { tool_choice?: string }
+          generationParams?: { tool_choice?: string; parallel_tool_calls?: boolean }
         }
       ) {
         calls.push({
           messages: prompt as RecordedCall['messages'],
           prefill: opts?.prefill === true,
-          toolChoice: opts?.generationParams?.tool_choice
+          toolChoice: opts?.generationParams?.tool_choice,
+          parallelToolCalls: opts?.generationParams?.parallel_tool_calls
         })
         if (cachePaths && opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         conversations.hold(opts?.cacheKey)
@@ -587,6 +589,30 @@ test('completion: kv-cache sends the full tool block under a named tool_choice',
   t.is(turnCalls[0]!.toolChoice, 'calculate_triangle_area', 'the name reaches the addon')
   t.alike(toolNames(turnCalls[0]!), fullBlock, 'the named turn sends every tool')
   t.alike(toolNames(turnCalls[1]!), fullBlock, 'the next turn sends every tool')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: parallel_tool_calls reaches the addon as true unless the caller sets it', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `parallel-tool-calls-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, undefined)
+  const question = user('Area of a triangle, base 10 height 5?')
+  await complete([question], [areaTool])
+  await complete([question], [areaTool], { parallel_tool_calls: false })
+  await complete([question])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[0]!.parallelToolCalls, true, 'unset reaches the addon as true')
+  t.is(turnCalls[1]!.parallelToolCalls, false, 'an explicit false is kept')
+  t.is(turnCalls[2]!.parallelToolCalls, true, 'a turn without tools carries the default too')
 
   unregisterModel(modelId)
   clearRegistry()

@@ -518,13 +518,18 @@ await deleteCache({ kvCacheKey: "my-session", modelId: "model-abc123" });
 
 ### `diffusion`
 
-Generates images using a loaded diffusion model.
+Generates images from text prompts and optional reference images using a loaded diffusion model.
 
 **Signature**:
 
 ```ts
 function diffusion(params: DiffusionClientParams): DiffusionResult;
 ```
+
+**Throws**:
+
+- `InferenceCancelledError`: Generation was cancelled.
+- `RequestRejectedByPolicyError`: The model is already generating an image or video.
 
 **Example**:
 ```ts
@@ -556,6 +561,19 @@ const { outputs } = diffusion({
   init_images: [refA, refB],
   width: 768,
   height: 768,
+});
+
+// Qwen-Image-2.1 reference editing
+const { outputs: edited } = diffusion({
+  modelId,
+  prompt: "Place the two referenced people together in one office.",
+  init_images: [refA, refB],
+  width: 512,
+  height: 512,
+  steps: 30,
+  cfg_scale: 6,
+  sampling_method: "euler",
+  seed: 42,
 });
 
 // LoRA adapter for this generation (absolute path required).
