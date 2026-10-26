@@ -6,13 +6,13 @@ import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { multipartToBody } from '@/serve/lib/multipart'
 import { requireModel } from '@/serve/core/plugins/require-model'
+import { openaiState } from '@/serve/extensions/openai/state'
 import {
   imagesGenerationsBody,
   imagesEditsBody,
   extractImageGenerationParams,
   extractImageEditParams,
   logImageUnsupportedParams,
-  logImageEditExtraWarnings,
   assertSupportedImageOutputParams,
   coerceMultipartFields,
   InvalidImagePromptError,
@@ -145,7 +145,7 @@ async function runAndRespond(
       `n=${params.batch_count ?? 1} response_format=${responseFormat} stream=${wantsStream}`
   )
 
-  const result = diffusion(params)
+  const result = (openaiState(ctx).diffusionOverride ?? diffusion)(params)
   const drainProgress = async (): Promise<void> => {
     try {
       for await (const tick of result.progressStream) {
@@ -225,8 +225,9 @@ Optional: \`prompt\`, \`size\`, \`response_format\`, \`n\`, \`strength\`, \`stre
 returns 400 \`mask_not_supported\` — the underlying diffusion engine has no mask
 channel. Use a prompt-only edit (full-image img2img) instead.
 
-**Multiple images via \`image[]\`** are accepted but only the first is used;
-the rest produce a warning log line.
+**Multiple images** sent as repeated \`image\` or \`image[]\` files are forwarded
+in upload order as SDK \`init_images\`. Use a model with multi-reference support,
+such as FLUX.2 or Qwen-Image-2.1. A single file uses SDK \`init_image\`.
 
 Same output / \`response_format=url\` / streaming caveats as
 \`POST /v1/images/generations\`.
@@ -314,18 +315,18 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         throw err
       }
 
-      const firstImage = imageFiles[0]!.buffer
-      const extraImageCount = imageFiles.length - 1
-
       let params: DiffusionClientParams
       try {
-        params = extractImageEditParams(coerced, firstImage, req.qvacModel!.sdkModelId)
+        params = extractImageEditParams(
+          coerced,
+          imageFiles.map((file) => file.buffer),
+          req.qvacModel!.sdkModelId
+        )
       } catch (err) {
         mapImageParamError(err)
       }
 
       logImageUnsupportedParams(coerced, app.qvac.logger)
-      logImageEditExtraWarnings(coerced, { extraImageCount }, app.qvac.logger)
 
       await runAndRespond(reply, app.qvac, {
         logLabel: 'image_edit',

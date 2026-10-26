@@ -59,10 +59,11 @@ export function createLlamaFitRequest(params: LlamaFitRequestParams): FitRequest
       cache_ram_mib: _cacheRamMib,
       ...fitConfig
     } = modelConfig
-    const llm: LlmLlamacpp.FitRequest = {
-      ...request,
-      config: transformLlmConfig(fitConfig as LlmConfig)
-    }
+    const config = transformLlmConfig(fitConfig as LlmConfig)
+    // The fit reads the draft model (DFlash model or external MTP head) like the load does.
+    const draftModelPath = params.artifacts?.['draftModelPath']
+    if (draftModelPath) config['spec_draft_model'] = draftModelPath
+    const llm: LlmLlamacpp.FitRequest = { ...request, config }
     return { supported: true, probe: { engine: 'llm-llamacpp', request: llm } }
   }
 
