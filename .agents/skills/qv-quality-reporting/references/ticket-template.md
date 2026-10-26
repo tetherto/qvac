@@ -1,13 +1,9 @@
 # Quality Proposal Contract
 
 Use this contract for `.quality/proposals.json` and the corresponding human
-review. The file is ignored local state; it must not contain Asana task IDs,
-private links, tokens, assignees, or due dates.
-
-The helper separately maintains `.quality/reporting-state.json` with group keys,
-actions, and deterministic evidence hashes. That ignored checkpoint suppresses
-an immediate replay of the same creation or update while Asana search catches
-up. It is not a ticket registry and must never contain Asana task IDs or links.
+review. The file is ignored local state. Keep private task links, credentials,
+assignees, and due dates out of it. Proposals are local review artifacts, and a
+human handles any task-tracker lookup or update.
 
 ## Machine shape
 
@@ -21,7 +17,7 @@ up. It is not a ticket registry and must never contain Asana task IDs or links.
       "id": "quality-001",
       "groupKey": "inference-consumer-wrapper-complexity",
       "candidateIds": ["hotspot-v1:..."],
-      "action": "create",
+      "action": "remediation",
       "title": "Reduce overlapping complexity in inference consumer wrapper",
       "priority": "P2",
       "owner": "SDK",
@@ -38,15 +34,14 @@ up. It is not a ticket registry and must never contain Asana task IDs or links.
 }
 ```
 
-Allowed actions are:
+Allowed actions describe local review only:
 
-- `create`: create a new task only when no exact group marker already exists;
-- `comment`: add a material-regression comment to an existing marked task;
-- `resolution-notice`: display for human review only; never mutate or complete a
-  task.
+- `remediation`: propose work for a new actionable group;
+- `regression-review`: explain a material regression in an existing group;
+- `resolution-notice`: flag an apparent resolution for human review.
 
 Proposal IDs are short review handles, stable only within the generated batch.
-`groupKey` is the durable, descriptive identity used for reconciliation.
+`groupKey` is the durable, descriptive identity used to compare local reports.
 
 ## Human form
 
@@ -65,15 +60,9 @@ Evidence: <compact path/rule/churn list>
 Keep summaries diagnostic, not prescriptive. Do not promise that a refactor will
 fix behavior unless the evidence demonstrates a behavior defect.
 
-## Ticket notes and marker
+## Evidence identity
 
-For `create`, the helper builds ticket notes from the proposal and appends:
-
-```text
-QVAC-QUALITY-GROUP: <groupKey>
-QVAC-QUALITY-FINDINGS: <sorted comma-separated fingerprints>
-```
-
-For `comment`, describe only what materially worsened since the prior report and
-include the same group marker. The helper searches the configured Asana project
-for the exact marker before any write.
+Retain `groupKey` and sorted `findingFingerprints` in the local proposal so a
+human can trace it to the deterministic audit. For regressions, describe what
+materially worsened since the prior local report. Do not search an external task
+tracker to match these identifiers.
