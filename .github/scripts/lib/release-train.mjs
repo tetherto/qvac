@@ -262,12 +262,11 @@ export function parseLsRemote (output, tag) {
   return direct
 }
 
-// Each tag goes on the commit npm records as the version's gitHead.
-export function planTags (moved, { releaseProject, remoteCommit, gitHeadOf }) {
+// Each tag goes on the commit npm records as the version's gitHead, including
+// the tag the GitHub release is created on.
+export function planTags (moved, { remoteCommit, gitHeadOf }) {
   const plan = { create: [], existing: [], conflicts: [] }
   for (const project of moved) {
-    // create-github-release.yml makes this one.
-    if (project.name === releaseProject) continue
     const tag = tagFor(project.name, project.version)
     const target = gitHeadOf(project)
     const commit = remoteCommit(tag)

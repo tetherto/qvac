@@ -10,7 +10,7 @@
 //   release-train.mjs stage <package-dir> <tarball-dir>
 //   release-train.mjs publish <moved-json> [--dry-run]
 //   release-train.mjs wait <moved-json> <tarball-dir>
-//   release-train.mjs tag <train> <moved-json> [--push]
+//   release-train.mjs tag <moved-json> [--push]
 //
 // resolve prints the train and the packages whose version moved between the two
 // commits; publish, wait and tag take that list. Inside a workflow the results
@@ -270,11 +270,15 @@ function stagePackage ([dir, tarballDir]) {
 function publishTrain ([movedJson], options) {
   const moved = JSON.parse(movedJson ?? '[]')
   const head = capture('git', ['rev-parse', 'HEAD']).trim()
-  const errors = []
+  // A re-run of failed jobs does not resolve the train again, so a version
+  // published since then is checked here.
+  const gitHeads = new Map(moved.map((project) => [project.name, npmView(`${project.name}@${project.version}`, 'gitHead')]))
+  const errors = publishedElsewhere(moved, (project) => gitHeads.get(project.name), head)
   const pending = []
   for (const project of moved) {
-    if (isPublished(project.name, project.version)) {
-      console.log(`${project.name}@${project.version} is already on npm; skipped`)
+    const view = gitHeads.get(project.name)
+    if (view.found) {
+      if (view.value === head) console.log(`${project.name}@${project.version} is already on npm from this commit; skipped`)
       continue
     }
     const { value: latest } = npmView(project.name, 'dist-tags.latest')
@@ -286,7 +290,6 @@ function publishTrain ([movedJson], options) {
   if (errors.length) fail(errors)
   if (pending.length === 0) {
     console.log('Nothing to publish.')
-    setOutputs({ published: false })
     return
   }
 
@@ -301,12 +304,11 @@ function publishTrain ([movedJson], options) {
       '--exclude-task-dependencies', '--tag=latest', '--access=public']
     if (options['dry-run']) args.push('--dry-run')
     if (run('pnpm', args, { stdio: 'inherit' }).status !== 0) {
-      fail(['Publish failed. Re-run the workflow: versions already on npm are skipped.'])
+      fail(['Publish failed. Re-run the workflow: versions already on npm from this commit are skipped.'])
     }
   } finally {
     restores.forEach((restore) => restore())
   }
-  setOutputs({ published: !options['dry-run'] })
 }
 
 // npm answers E404 for a version for some time after publishing it, so the
@@ -338,10 +340,8 @@ function waitServed ([movedJson, tarballDir]) {
   if (errors.length) fail(errors)
 }
 
-function tagTrain ([name, movedJson], options) {
-  const resolved = train(name)
+function tagTrain ([movedJson], options) {
   const plan = planTags(JSON.parse(movedJson ?? '[]'), {
-    releaseProject: resolved.githubRelease?.project,
     remoteCommit: (tag) => parseLsRemote(capture('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`, `refs/tags/${tag}^{}`]), tag),
     gitHeadOf: (project) => {
       const { found, value } = npmView(`${project.name}@${project.version}`, 'gitHead')

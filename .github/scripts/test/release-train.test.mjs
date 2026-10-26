@@ -282,9 +282,9 @@ test('tags each package at its npm gitHead, once, and fails on a tag elsewhere',
     { name: '@qvac/ai-sdk-provider', version: '0.10.0' },
   ]
   const onOrigin = { 'cli-v0.16.0': HEAD, 'ai-sdk-provider-v0.10.0': OTHER }
-  const plan = planTags(moved, { releaseProject: '@qvac/sdk', remoteCommit: (tag) => onOrigin[tag] ?? null, gitHeadOf: () => HEAD })
+  const plan = planTags(moved, { remoteCommit: (tag) => onOrigin[tag] ?? null, gitHeadOf: () => HEAD })
   assert.deepEqual(plan, {
-    create: [{ tag: 'inference-v0.21.0', commit: HEAD }],
+    create: [{ tag: 'inference-v0.21.0', commit: HEAD }, { tag: 'sdk-v0.21.0', commit: HEAD }],
     existing: ['cli-v0.16.0'],
     conflicts: [{ tag: 'ai-sdk-provider-v0.10.0', commit: OTHER, expected: HEAD }],
   })

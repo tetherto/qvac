@@ -31,8 +31,8 @@ per-package workflow. The next train moves it above that version.
   - `fromNpm`: directories of workspace packages the train depends on but
     builds and checks against the version on npm (see
     [Making a release](#making-a-release))
-  - `githubRelease`: the one package that gets a GitHub release; the others get
-    a `<slug>-v<version>` tag
+  - `githubRelease`: the one package that also gets a GitHub release, on its
+    tag. Every package gets a `<slug>-v<version>` tag.
   - `checks`: the check jobs in `release-train.yml` that must pass
   - `packageChecks`: the per-package check config `package-checks` runs
 
@@ -100,8 +100,8 @@ per-package workflow. The next train moves it above that version.
       npm
    5. with the `sdk-python` check, publishes `tetherto-qvac-sdk` after the
       `pypi` approval
-   6. tags each package, creates the `githubRelease` package's GitHub release
-      and, with `sdk-python`, attaches the fat wheels
+   6. tags each package, then creates the `githubRelease` package's GitHub
+      release on its tag and, with `sdk-python`, attaches the fat wheels
 8. Merge the backmerge PR once the push run has published to npm. Before that,
    `main` would name versions that the checks of later PRs cannot install. If
    the run fails before publishing, fix it with a PR into the train branch
@@ -151,8 +151,11 @@ below npm's `latest`. The run measures the train from the merge base with
 same. A dry run publishes, tags and releases nothing, and needs no approval:
 `pnpm publish --dry-run` runs in its own job, with no environment and no
 `id-token`. Publishing runs only on a push or a dispatch without `dry_run`, in
-the job that holds the `npm` environment. Both jobs wait for `checks-passed`,
-which requires the build and every check the train lists.
+the job that holds the `npm` environment. Both jobs wait for `checks-passed`
+(`Train checks passed`). It fails when the train does not resolve or the run
+is not authorized (a draft PR is not), and otherwise requires the build and
+every check the train lists. It never ends as skipped, because a required
+check that is skipped counts as passed.
 
 ## Publishing
 
@@ -161,15 +164,19 @@ which requires the build and every check the train lists.
 - `gitHead` in each published manifest is the commit it was built from. Each
   tag goes on that commit, the GitHub release's tag included.
 - npm's sha of each published tarball must match the tarball the build job
-  packed.
-- A version npm already has is skipped.
+  packed, compared once npm serves the version.
+- A version npm already has from this commit (its `gitHead`) is skipped; one
+  from another commit stops the run.
 
 ## Recovery
 
 - **Nothing published yet** (a check failed, or the approval was rejected): fix
   it with a PR into the same branch.
-- **Partly published, transient error**: re-run the workflow on the same
-  commit. Versions on npm from that commit are skipped.
+- **Partly published, or a job after publishing failed, transient error**:
+  re-run the failed jobs on the same commit. Versions on npm from that commit
+  are skipped, and every job after publishing runs again: it skips tags already
+  at npm's `gitHead` and files PyPI already has, and updates the notes of an
+  existing GitHub release.
 - **Partly published, fix needs a new commit**: the branch can no longer
   publish. Cut a new train with new versions for the packages npm already has;
   the others can keep theirs.
