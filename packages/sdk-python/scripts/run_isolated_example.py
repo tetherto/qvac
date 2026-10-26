@@ -35,9 +35,9 @@ from typing import Any
 
 # Top-level module names the examples may import: this package plus the
 # distributions pyproject.toml declares under `dependencies` and the `vla` /
-# `notebook` extras. Anything absent and outside this set is treated as a
-# missing module rather than quietly fabricated, which is what catches an
-# import of a sibling helper that no longer exists.
+# `notebook` / `examples` extras. Anything absent and outside this set is
+# treated as a missing module rather than quietly fabricated, which is what
+# catches an import of a sibling helper that no longer exists.
 STUBBABLE = frozenset(
     {
         "tetherto",
@@ -47,6 +47,8 @@ STUBBABLE = frozenset(
         "numpy",
         "pandas",
         "IPython",
+        "pymongo",
+        "sqlite_vector",
     }
 )
 

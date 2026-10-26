@@ -82,7 +82,7 @@ jobs:
               "packages/inference/package.json",
               "packages/inference/src/schemas/",
               "packages/sdk/src/worker/",
-              "packages/sdk/e2e/conformance/",
+              "packages/sdk-e2e/catalog/conformance/",
               "packages/sdk/contract/",
               "packages/sdk/package.json",
               ".github/workflows/pr-checks-sdk-kotlin.yml",
@@ -149,6 +149,13 @@ jobs:
       - name: Build the in-repo @qvac/sdk and run the Kotlin checks
         if: steps.detect.outputs.has_changes == 'true'
         shell: bash
+        env:
+          # Passed as -PqvacProfile to both Gradle runs. PRs into a release
+          # branch, and manual runs, leave it empty and build every published
+          # runtime profile. Other PRs build the all-in-one profile only; the
+          # other profiles are subsets of it. Under Merge Guard's workflow_call
+          # the pull_request context is the caller's PR.
+          QVAC_PROFILE: ${{ !(github.event_name == 'workflow_dispatch' || startsWith(github.event.pull_request.base.ref, 'release-')) && 'aio' || '' }}
         run: |
           set -euo pipefail
 
@@ -178,8 +185,10 @@ jobs:
           # Validate the ship contract on the committed registry pin first — a
           # pure package.json check with no install — so the Kotlin runtime
           # version, the @qvac/sdk pin, and packages/sdk/package.json are
-          # confirmed to share one version before the pin is swapped.
-          ./gradlew --no-daemon checkVersionAlignment
+          # confirmed to share one version before the pin is swapped. This is
+          # the script the checkVersionAlignment Gradle task runs, called
+          # directly so no separate Gradle JVM starts.
+          node scripts/check-version-alignment.mjs
 
           # @qvac/inference is transitive here (via @qvac/sdk), so an override is
           # allowed (npm rejects one for a direct dependency), and it points the
@@ -195,24 +204,17 @@ jobs:
           # on npm still installs.
           npm install --ignore-scripts --legacy-peer-deps --no-package-lock "../sdk/${sdk_tgz}"
 
-          ./gradlew --no-daemon \
+          # The configuration cache lets tasks of one project run in parallel.
+          # buildWorkspaceSdk is excluded because the steps above already
+          # built packages/sdk/dist from this commit.
+          ./gradlew --no-daemon --configuration-cache \
+            -x :android-barekit:buildWorkspaceSdk \
+            -PqvacProfile="$QVAC_PROFILE" \
             checkContract \
             jvmTest \
             :android-example:testDebugUnitTest \
-            :android-example:assembleDebug \
+            :android-example:checkDebugBuild \
             :android-example:compileDebugAndroidTestKotlin \
             verifyMavenPublications
-          ./scripts/verify-maven-consumers.sh
+          ./scripts/verify-maven-consumers.sh -PqvacProfile="$QVAC_PROFILE"
           popd
-
-      - name: Upload Maven repository and example APK
-        if: steps.detect.outputs.has_changes == 'true'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: qvac-sdk-kotlin-${{ github.sha }}
-          path: |
-            packages/sdk-kotlin/build/maven-repository
-            packages/sdk-kotlin/android-example/build/outputs/apk/debug/*.apk
-            packages/sdk-kotlin/consumer-smoke/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 7

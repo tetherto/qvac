@@ -52,7 +52,10 @@ permissions:
   contents: read
 
 # Package config lives in .github/sdk-pod-checks.json
-# Scripts (format, lint, typecheck, build, test:unit) are auto-detected from each package's package.json
+# Scripts (format, lint, typecheck, build, test:unit) are auto-detected from each package's package.json.
+# An entry's optional `checks` list narrows them to the named ones, for a package
+# whose other scripts need a tree this job does not build. A name outside that set
+# is a package script run as its own check, after them, and must exist.
 
 # Literal prefix, not github.workflow: under workflow_call that resolves to the
 # caller's name, so every workflow Merge Guard calls would share one group and
@@ -145,6 +148,7 @@ jobs:
               | .tests_bare //= false
               | .sdk_sources //= ["default"]
               | .sdk_sources_release //= .sdk_sources
+              | .checks //= null
               | .package as $pkg
               | .sources = (if ($event == "workflow_dispatch"
                                 or ($base | startswith("release-" + $pkg + "-")))
@@ -432,7 +436,16 @@ jobs:
             PM=$(echo "$PACKAGES" | jq -r ".[$i].pkg_manager")
             TESTS_BARE=$(echo "$PACKAGES" | jq -r ".[$i].tests_bare")
             SOURCES=$(echo "$PACKAGES" | jq -r ".[$i].sources[]")
+            CHECKS=$(echo "$PACKAGES" | jq -c ".[$i].checks")
             i=$((i + 1))
+
+            # Whether the entry's `checks` list (absent = all) includes this script.
+            want() {
+              [ "$CHECKS" = "null" ] || echo "$CHECKS" | jq -e --arg s "$1" 'index($s) != null' > /dev/null
+            }
+            # The entry's own scripts: `checks` names outside the standard set.
+            EXTRA_CHECKS=$(echo "$CHECKS" | jq -r '(. // [])[]
+              | select(IN("format", "lint", "typecheck", "build:types", "build", "test:unit", "test:bare", "test:e2e") | not)')
 
             echo "::group::SDK pod checks - $PKG"
             cd "$WS/$P_PATH"
@@ -517,16 +530,19 @@ jobs:
                 run "npm install (peer resolution) $src" sdk_npm_install_check
               fi
 
-              run "format $src" npm run --if-present format
-              run "lint $src" npm run --if-present lint
-              run "typecheck $src" npm run --if-present typecheck
-              run "build:types $src" npm run --if-present build:types
-              run "build $src" npm run --if-present build
-              run "test:unit $src" npm run --if-present test:unit
-              if [ "$TESTS_BARE" = "true" ]; then
+              want format && run "format $src" npm run --if-present format
+              want lint && run "lint $src" npm run --if-present lint
+              want typecheck && run "typecheck $src" npm run --if-present typecheck
+              want build:types && run "build:types $src" npm run --if-present build:types
+              want build && run "build $src" npm run --if-present build
+              want test:unit && run "test:unit $src" npm run --if-present test:unit
+              if [ "$TESTS_BARE" = "true" ] && want test:bare; then
                 run "test:bare $src" npm run --if-present test:bare
               fi
-              run "test:e2e $src" npm run --if-present test:e2e
+              want test:e2e && run "test:e2e $src" npm run --if-present test:e2e
+              for script in $EXTRA_CHECKS; do
+                run "$script $src" npm run "$script"
+              done
               src_idx=$((src_idx + 1))
             done
 

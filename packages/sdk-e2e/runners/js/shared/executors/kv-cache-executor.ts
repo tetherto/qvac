@@ -1,0 +1,1044 @@
+import { cancel, completion, deleteCache } from '@qvac/sdk'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
+import { AbstractModelExecutor } from './abstract-model-executor.js'
+import { kvCacheTests } from '../../../../catalog/kv-cache-tests.js'
+import { callWhenAddonIdle } from '../utils/addon-idle.js'
+
+interface ChatMessage {
+  role: string
+  content: string
+}
+
+interface DeclaredTool {
+  name: string
+  parameters?: { required?: string[] }
+}
+
+type ToolTurnOutcome =
+  | { ok: true; response: string; toolName: string; cacheTokens: number }
+  | { ok: false; output: string }
+
+// One tool-calling turn over a named cache. The call must name a declared tool
+// and carry its required arguments; `label` names the turn in a failure.
+async function runToolTurn(
+  modelId: string,
+  cacheKey: string,
+  history: ChatMessage[],
+  tools: DeclaredTool[],
+  generationParams: Record<string, unknown> | undefined,
+  label: string
+): Promise<ToolTurnOutcome> {
+  const declared = new Map(tools.map((tool) => [tool.name, tool.parameters?.required ?? []]))
+  const result = completion({
+    modelId,
+    history: [...history],
+    stream: true,
+    kvCache: cacheKey,
+    tools: tools as never,
+    ...(generationParams && { generationParams })
+  })
+
+  let response = ''
+  for await (const token of result.tokenStream) {
+    response += token
+  }
+
+  const toolCalls = result.toolCalls ? await result.toolCalls : []
+  const call = toolCalls.find((candidate) => declared.has(candidate.name))
+  if (!call) {
+    return {
+      ok: false,
+      output:
+        `${label} emitted no call to a declared tool. ` +
+        `Got: [${toolCalls.map((candidate) => candidate.name).join(', ')}]`
+    }
+  }
+  const missingArgs = (declared.get(call.name) ?? []).filter((key) => !(key in call.arguments))
+  if (missingArgs.length > 0) {
+    return {
+      ok: false,
+      output: `${label} call '${call.name}' is missing required arguments: ${missingArgs.join(', ')}`
+    }
+  }
+
+  const stats = await result.stats
+  const cacheTokens = ((stats as Record<string, unknown>)?.cacheTokens as number) ?? 0
+  return { ok: true, response, toolName: call.name, cacheTokens }
+}
+
+export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> {
+  pattern = /^kv-cache-/
+
+  protected handlers = Object.fromEntries(
+    kvCacheTests.map((test) => {
+      if (test.testId === 'kv-cache-delete-and-reuse')
+        return [test.testId, this.deleteAndReuse.bind(this)]
+      if (test.testId === 'kv-cache-session-switch')
+        return [test.testId, this.sessionSwitch.bind(this)]
+      if (test.testId === 'kv-cache-different-system-prompts')
+        return [test.testId, this.differentSystemPrompts.bind(this)]
+      if (test.testId === 'kv-cache-stats-verification')
+        return [test.testId, this.statsVerification.bind(this)]
+      if (test.testId === 'kv-cache-tools-sequential-save')
+        return [test.testId, this.toolsSequentialSave.bind(this)]
+      if (test.testId === 'kv-cache-tool-set-change')
+        return [test.testId, this.toolSetChange.bind(this)]
+      if (test.testId === 'kv-cache-warm-tool-choice-required')
+        return [test.testId, this.warmToolChoiceRequired.bind(this)]
+      if (test.testId === 'kv-cache-cancel-then-new-prompt')
+        return [test.testId, this.cancelThenNewPrompt.bind(this)]
+      if (test.testId === 'kv-cache-cancel-keeps-committed-cache')
+        return [test.testId, this.cancelKeepsCommittedCache.bind(this)]
+      if (
+        test.testId === 'kv-cache-concurrent-same-key' ||
+        test.testId === 'kv-cache-concurrent-same-key-auto'
+      )
+        return [test.testId, this.concurrentSameKey.bind(this)]
+      if (test.testId === 'kv-cache-auto-concurrency')
+        return [test.testId, this.autoCacheConcurrency.bind(this)]
+      if (
+        test.testId.startsWith('kv-cache-delete-') ||
+        test.testId === 'kv-cache-hypercore-deletion'
+      ) {
+        return [test.testId, this.deleteCacheOp.bind(this)]
+      }
+      return [test.testId, this.kvCompletion.bind(this)]
+    })
+  ) as never
+
+  async deleteCacheOp(
+    params: { deleteAll?: boolean; kvCacheKey?: string; modelIdToDelete?: string },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    try {
+      let result: { success: boolean }
+      if (params.deleteAll) {
+        result = await deleteCache({ all: true })
+      } else if (params.kvCacheKey) {
+        const opts: { kvCacheKey: string; modelId?: string } = { kvCacheKey: params.kvCacheKey }
+        if (params.modelIdToDelete) opts.modelId = params.modelIdToDelete
+        result = await deleteCache(opts)
+      } else {
+        return { passed: false, output: 'No delete params provided' }
+      }
+      return ValidationHelpers.validate(result.success ? 'success' : 'failed', expectation)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Delete cache failed: ${errorMsg}` }
+    }
+  }
+
+  // Retry on a policy-reject so a slot left by a previously wedged test does not poison this one.
+  private runCompletion(
+    modelId: string,
+    params: {
+      history: ChatMessage[]
+      stream?: boolean
+      kvCache?: string | boolean
+      tools?: unknown[]
+    }
+  ): Promise<string> {
+    return callWhenAddonIdle(async () => {
+      const result = completion({
+        modelId,
+        history: params.history,
+        stream: params.stream ?? false,
+        kvCache: params.kvCache as never,
+        ...(params.tools ? { tools: params.tools as never } : {})
+      })
+
+      if (params.stream) {
+        let fullText = ''
+        for await (const token of result.tokenStream) {
+          fullText += token
+        }
+        return fullText
+      }
+      return result.text
+    })
+  }
+
+  async kvCompletion(
+    params: {
+      history: ChatMessage[]
+      stream?: boolean
+      kvCache?: string | boolean
+      tools?: unknown[]
+    },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm')
+
+    try {
+      const text = await this.runCompletion(modelId, params)
+      return ValidationHelpers.validate(text, expectation)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `KV cache completion failed: ${errorMsg}` }
+    }
+  }
+
+  // Fires several completions sharing one kvCache key at once on a parallel>1
+  // model and proves the per-cache-path lock serializes them: their decode
+  // intervals must never overlap (peak overlap 1), and all must still succeed.
+  // Called directly (not via callWhenAddonIdle) so the requests race for real.
+  async concurrentSameKey(
+    params: {
+      history: ChatMessage[]
+      kvCache: string | boolean
+      generationParams?: Record<string, unknown>
+    },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm-batch')
+    const CONCURRENCY = 2
+
+    const fire = () => {
+      const run = completion({
+        modelId,
+        history: params.history,
+        stream: true,
+        kvCache: params.kvCache as never,
+        ...(params.generationParams ? { generationParams: params.generationParams as never } : {})
+      })
+      let start = 0
+      return (async () => {
+        let text = ''
+        for await (const token of run.tokenStream) {
+          if (start === 0) start = Date.now()
+          text += token
+        }
+        return { start, end: Date.now(), text }
+      })()
+    }
+
+    let intervals: Array<{ start: number; end: number; text: string }>
+    try {
+      intervals = await Promise.all(Array.from({ length: CONCURRENCY }, fire))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Concurrent same-key completion threw: ${msg}` }
+    }
+
+    const empty = intervals.filter((i) => i.text.length === 0).length
+    if (empty > 0) {
+      return {
+        passed: false,
+        output: `${empty}/${CONCURRENCY} same-key completions produced no output`
+      }
+    }
+
+    // Peak number of decode intervals live at once; ties resolve end-before-
+    // start so back-to-back turns don't read as overlap.
+    const events = intervals.flatMap(({ start, end }) => [
+      { t: start, delta: 1 },
+      { t: end, delta: -1 }
+    ])
+    events.sort((a, b) => a.t - b.t || a.delta - b.delta)
+    let live = 0
+    let peakOverlap = 0
+    for (const event of events) {
+      live += event.delta
+      if (live > peakOverlap) peakOverlap = live
+    }
+
+    if (peakOverlap > 1) {
+      return {
+        passed: false,
+        output:
+          `Same-key cached completions overlapped (peak ${peakOverlap}); the ` +
+          `per-cache-path lock did not serialize them`
+      }
+    }
+
+    const failed = intervals
+      .map((i) => ValidationHelpers.validate(i.text, expectation))
+      .find((result) => !result.passed)
+    if (failed) {
+      return { passed: false, output: `Same-key completion failed expectation: ${failed.output}` }
+    }
+
+    return {
+      passed: true,
+      output: `Same-key cached completions serialized (peak overlap ${peakOverlap}) and both succeeded`
+    }
+  }
+
+  // Auto-cache turns must decode concurrently at the engine level — both with
+  // each other (cached-vs-cached) and alongside plain completions without
+  // starving them. Gates on the engine's own avgConcurrentSeq metric.
+  async autoCacheConcurrency(
+    params: { generationParams?: Record<string, unknown> },
+    _expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm-batch')
+    const TOPICS = ['oceans', 'mountains', 'deserts', 'forests']
+
+    const fire = (content: string, useCache: boolean) => {
+      const run = completion({
+        modelId,
+        history: [{ role: 'user', content }],
+        stream: true,
+        ...(useCache ? { kvCache: true } : {}),
+        ...(params.generationParams ? { generationParams: params.generationParams as never } : {})
+      } as never) as { tokenStream: AsyncIterable<string>; stats: Promise<unknown> }
+      return (async () => {
+        let text = ''
+        let firstTokenAt = 0
+        // Record lastTokenAt per token (the last DECODED token), not after the
+        // stream closes: a cached stream closes only after its post-decode KV
+        // commit/rename, so a stream-close timestamp would stretch the decode
+        // window across the commit and falsely count commit-phase overlap as
+        // decode overlap.
+        let lastTokenAt = 0
+        for await (const t of run.tokenStream) {
+          const now = Date.now()
+          if (firstTokenAt === 0) firstTokenAt = now
+          lastTokenAt = now
+          text += t
+        }
+        const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
+        return {
+          text,
+          avgConcurrentSeq: stats?.avgConcurrentSeq,
+          useCache,
+          firstTokenAt,
+          lastTokenAt
+        }
+      })()
+    }
+
+    type Result = {
+      text: string
+      avgConcurrentSeq?: number
+      useCache: boolean
+      firstTokenAt: number
+      lastTokenAt: number
+    }
+    const maxSeq = (group: Result[]) =>
+      group.reduce<number>(
+        (m, r) =>
+          typeof r.avgConcurrentSeq === 'number' && r.avgConcurrentSeq > m ? r.avgConcurrentSeq : m,
+        0
+      )
+
+    // Phase 1 — cached-vs-cached native concurrency. Fire only different-history
+    // auto-cache turns (distinct cache paths, so distinct per-path locks). With
+    // no plain requests in flight, a cached response's engine avgConcurrentSeq
+    // can exceed 1 only by decoding alongside ANOTHER cached response — a direct
+    // native proof that cached turns don't serialize, which client-side token
+    // windows can't give (they stay open through post-decode commit/final).
+    let cachedOnly: Result[]
+    try {
+      cachedOnly = await Promise.all(TOPICS.map((t) => fire(`Tell me about ${t} in detail.`, true)))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Cached-only auto turns threw: ${msg}` }
+    }
+    const cachedEmpty = cachedOnly.filter((r) => r.text.length === 0).length
+    if (cachedEmpty > 0) {
+      return {
+        passed: false,
+        output: `${cachedEmpty}/${cachedOnly.length} cached-only turns produced no output`
+      }
+    }
+    const cachedOnlySeq = maxSeq(cachedOnly)
+    if (cachedOnlySeq <= 1) {
+      return {
+        passed: false,
+        output: `Different-history auto-cache turns serialized (engine avgConcurrentSeq ${cachedOnlySeq.toFixed(2)} <= 1 with no plain traffic)`
+      }
+    }
+
+    // Phase 2 — mixed starvation. Interleave cached and plain so both kinds land
+    // in the first `parallel` admission window; the plain turns must not starve
+    // behind the cached ones.
+    let results: Result[]
+    try {
+      results = await Promise.all(
+        TOPICS.flatMap((topic) => [
+          fire(`Tell me about ${topic} in detail.`, true),
+          fire(`Name one fact about ${topic}.`, false)
+        ])
+      )
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Mixed auto-cache + plain completions threw: ${msg}` }
+    }
+    const empty = results.filter((r) => r.text.length === 0).length
+    if (empty > 0) {
+      return {
+        passed: false,
+        output: `${empty}/${results.length} mixed completions produced no output`
+      }
+    }
+    const auto = results.filter((r) => r.useCache)
+    const plain = results.filter((r) => !r.useCache)
+    const plainSeq = maxSeq(plain)
+    if (plainSeq <= 1) {
+      return {
+        passed: false,
+        output: `Plain completions starved behind auto-cache turns (engine avgConcurrentSeq ${plainSeq.toFixed(2)} <= 1)`
+      }
+    }
+
+    // Per-request proof: a plain request produced tokens while an auto-cache
+    // request was still decoding, not after it released a serializing lock.
+    const overlaps = plain.some((p) =>
+      auto.some((a) => p.firstTokenAt < a.lastTokenAt && a.firstTokenAt < p.lastTokenAt)
+    )
+    if (!overlaps) {
+      return {
+        passed: false,
+        output: 'No plain completion produced tokens while an auto-cache turn was still decoding'
+      }
+    }
+
+    return {
+      passed: true,
+      output: `Auto-cache turns decode concurrently with each other (cached-only avgConcurrentSeq ${cachedOnlySeq.toFixed(2)}) and don't starve plain completions (plain avgConcurrentSeq ${plainSeq.toFixed(2)}, token windows overlap)`
+    }
+  }
+
+  async sessionSwitch(
+    params: { sessions: Array<{ key: string; message: string }>; stream: boolean },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm')
+
+    try {
+      const responses: string[] = []
+      for (const session of params.sessions) {
+        const text = await this.runCompletion(modelId, {
+          history: [
+            { role: 'system', content: 'You are a helpful math assistant. Be brief.' },
+            { role: 'user', content: session.message }
+          ],
+          stream: params.stream,
+          kvCache: session.key
+        })
+        responses.push(text)
+      }
+
+      const allResponded = responses.every((r) => r.length > 0)
+      const result = `Session switching: ${responses.length} responses, all valid: ${allResponded}`
+      return ValidationHelpers.validate(result, expectation)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Session switch failed: ${errorMsg}` }
+    }
+  }
+
+  async differentSystemPrompts(
+    params: { cacheKey: string; systemPrompts: string[]; userMessage: string; stream: boolean },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm')
+
+    try {
+      const responses: string[] = []
+      for (const systemPrompt of params.systemPrompts) {
+        const text = await this.runCompletion(modelId, {
+          history: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: params.userMessage }
+          ],
+          stream: params.stream,
+          kvCache: params.cacheKey
+        })
+        responses.push(text)
+      }
+
+      const allResponded = responses.every((r) => r.length > 0)
+      const result = `Different system prompts: ${responses.length} responses, all valid: ${allResponded}`
+      return ValidationHelpers.validate(result, expectation)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `System prompt test failed: ${errorMsg}` }
+    }
+  }
+
+  async deleteAndReuse(
+    params: { cacheKey: string; history: ChatMessage[]; stream: boolean },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm')
+
+    try {
+      try {
+        await deleteCache({ kvCacheKey: params.cacheKey })
+      } catch {
+        /* ignore */
+      }
+
+      const text1 = await this.runCompletion(modelId, {
+        history: params.history,
+        stream: params.stream,
+        kvCache: params.cacheKey
+      })
+
+      await deleteCache({ kvCacheKey: params.cacheKey })
+
+      const text2 = await this.runCompletion(modelId, {
+        history: params.history,
+        stream: params.stream,
+        kvCache: params.cacheKey
+      })
+
+      const result = `Delete and reuse: both calls successful (${text1.length} + ${text2.length} chars)`
+      return ValidationHelpers.validate(result, expectation)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Delete and reuse failed: ${errorMsg}` }
+    }
+  }
+
+  async statsVerification(
+    params: { cacheKey: string; messages: string[]; stream: boolean },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm')
+
+    try {
+      try {
+        await deleteCache({ kvCacheKey: params.cacheKey })
+      } catch {
+        /* ignore */
+      }
+
+      const history: ChatMessage[] = [
+        { role: 'system', content: 'You are a helpful assistant. Be brief.' }
+      ]
+
+      let firstCacheTokens = 0
+      let secondCacheTokens = 0
+
+      for (let i = 0; i < params.messages.length; i++) {
+        history.push({ role: 'user', content: params.messages[i]! })
+
+        const result = completion({
+          modelId,
+          history: [...history],
+          stream: true,
+          kvCache: params.cacheKey
+        })
+
+        let response = ''
+        for await (const token of result.tokenStream) {
+          response += token
+        }
+
+        const stats = await result.stats
+        const cacheTokens = ((stats as Record<string, unknown>)?.cacheTokens as number) ?? 0
+
+        if (i === 0) firstCacheTokens = cacheTokens
+        else secondCacheTokens = cacheTokens
+
+        history.push({ role: 'assistant', content: response })
+      }
+
+      const cacheUsed = secondCacheTokens > firstCacheTokens || secondCacheTokens > 0
+      const result = `Cache tokens: first=${firstCacheTokens}, second=${secondCacheTokens}, used: ${cacheUsed}`
+      if (!cacheUsed) {
+        return { passed: false, output: `KV cache not used across turns. ${result}` }
+      }
+      return ValidationHelpers.validate(result, expectation)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Stats verification failed: ${errorMsg}` }
+    }
+  }
+
+  async cancelThenNewPrompt(
+    params: {
+      cacheKey: string
+      firstUserMessage: string
+      secondUserMessage: string
+      expectedAnswerContains: string
+      cancelAfterTokens?: number
+      generationParams?: Record<string, unknown>
+    },
+    _expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm')
+    const cancelAfterTokens = params.cancelAfterTokens ?? 3
+
+    try {
+      try {
+        await deleteCache({ kvCacheKey: params.cacheKey })
+      } catch {}
+
+      const firstRun = completion({
+        modelId,
+        history: [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          { role: 'user', content: params.firstUserMessage }
+        ],
+        stream: true,
+        kvCache: params.cacheKey
+      })
+
+      let receivedTokens = 0
+      let cancelInvoked = false
+      let cancelSucceeded = false
+      let cancelError: Error | null = null
+
+      try {
+        for await (const _ of firstRun.tokenStream) {
+          receivedTokens++
+          if (!cancelInvoked && receivedTokens >= cancelAfterTokens) {
+            cancelInvoked = true
+            try {
+              await cancel({ operation: 'inference', modelId })
+              cancelSucceeded = true
+            } catch (err) {
+              cancelError = err instanceof Error ? err : new Error(String(err))
+              break
+            }
+          }
+        }
+      } catch (streamErr) {
+        if (!cancelInvoked) {
+          const msg = streamErr instanceof Error ? streamErr.message : String(streamErr)
+          return {
+            passed: false,
+            output:
+              `First completion stream rejected before cancel could be issued ` +
+              `(received ${receivedTokens} tokens): ${msg}`
+          }
+        }
+      }
+
+      if (cancelError !== null) {
+        return {
+          passed: false,
+          output:
+            `cancel() rejected mid-stream after ${receivedTokens} tokens, so the ` +
+            `kv-cache regression scenario was never exercised: ${cancelError.message}`
+        }
+      }
+
+      if (!cancelSucceeded) {
+        return {
+          passed: false,
+          output: `First completion ended before cancel (received ${receivedTokens} tokens, expected >=${cancelAfterTokens})`
+        }
+      }
+
+      // Wrap in callWhenAddonIdle: after cancel() the slot frees asynchronously,
+      // so calling completion() directly can race with the cancelled job's cleanup.
+      const secondText = await callWhenAddonIdle(async () => {
+        const run = completion({
+          modelId,
+          history: [
+            { role: 'system', content: 'You are a helpful assistant.' },
+            { role: 'user', content: params.secondUserMessage }
+          ],
+          stream: true,
+          kvCache: params.cacheKey,
+          ...(params.generationParams && { generationParams: params.generationParams })
+        } as never)
+        let text = ''
+        for await (const token of run.tokenStream) {
+          text += token
+        }
+        return text
+      })
+
+      const trimmed = secondText.trim()
+      if (trimmed.length === 0) {
+        return {
+          passed: false,
+          output:
+            'Second completion on the same kvCache key returned an empty response ' +
+            'after cancelling the previous streaming turn. Expected the new prompt ' +
+            'to produce output independent of the cancelled turn.'
+        }
+      }
+      const expected = params.expectedAnswerContains
+      if (!trimmed.toLowerCase().includes(expected.toLowerCase())) {
+        return {
+          passed: false,
+          output:
+            `Second completion on the same kvCache key did not include the expected ` +
+            `token ${JSON.stringify(expected)} after cancelling the previous ` +
+            `streaming turn. Got ${secondText.length} chars: ` +
+            `${JSON.stringify(secondText.slice(0, 200))}`
+        }
+      }
+
+      return {
+        passed: true,
+        output:
+          `Cancel-then-new-prompt OK: cancelled after ${receivedTokens} tokens, ` +
+          `second turn produced ${secondText.length} chars containing ${JSON.stringify(expected)}`
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Cancel-then-new-prompt failed: ${errorMsg}` }
+    }
+  }
+
+  // Runs `messages` as consecutive turns on one cache key, cancelling the turn
+  // at `cancelTurn` mid-stream. The cancelled turn is discarded, so the last
+  // turn continues from the committed history and must still be warm: it has
+  // to send far fewer prompt tokens than the same history costs with
+  // `kvCache: false`, or the cancel destroyed the committed cache.
+  async cancelKeepsCommittedCache(
+    params: {
+      cacheKey: string
+      messages: string[]
+      cancelTurn: number
+      expectedAnswerContains: string
+      cancelAfterTokens?: number
+      generationParams?: Record<string, unknown>
+    },
+    _expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm')
+    const cancelAfterTokens = params.cancelAfterTokens ?? 3
+    const generationParams = params.generationParams as never
+    const history: ChatMessage[] = [{ role: 'system', content: 'You are a helpful assistant.' }]
+
+    const start = (turnHistory: ChatMessage[], kvCache: string | false) =>
+      completion({
+        modelId,
+        history: turnHistory,
+        stream: true,
+        kvCache: kvCache as never,
+        generationParams
+      })
+
+    const finish = async (run: { tokenStream: AsyncIterable<string>; stats: Promise<unknown> }) => {
+      let text = ''
+      for await (const token of run.tokenStream) text += token
+      const stats = (await run.stats) as { promptTokens?: number } | undefined
+      return { text, promptTokens: stats?.promptTokens }
+    }
+
+    if (params.cancelTurn >= params.messages.length) {
+      return { passed: false, output: 'cancelTurn must leave a later turn to measure' }
+    }
+
+    try {
+      try {
+        await deleteCache({ kvCacheKey: params.cacheKey })
+      } catch {
+        /* fresh start */
+      }
+
+      let warm: { text: string; promptTokens?: number } | null = null
+      let lastHistory: ChatMessage[] = []
+      let cancelledAfter = 0
+
+      for (const [index, content] of params.messages.entries()) {
+        history.push({ role: 'user', content })
+
+        if (index + 1 === params.cancelTurn) {
+          const run = start(history, params.cacheKey)
+          try {
+            for await (const _ of run.tokenStream) {
+              cancelledAfter++
+              if (cancelledAfter === cancelAfterTokens) await cancel({ requestId: run.requestId })
+            }
+          } catch (streamErr) {
+            if (cancelledAfter < cancelAfterTokens) throw streamErr
+          }
+          if (cancelledAfter < cancelAfterTokens) {
+            return {
+              passed: false,
+              output: `Turn ${index + 1} ended after ${cancelledAfter} tokens, before it could be cancelled at ${cancelAfterTokens}`
+            }
+          }
+          history.pop()
+          continue
+        }
+
+        lastHistory = [...history]
+        warm = await callWhenAddonIdle(() => finish(start(lastHistory, params.cacheKey)))
+        history.push({ role: 'assistant', content: warm.text })
+      }
+
+      const cold = await callWhenAddonIdle(() => finish(start(lastHistory, false)))
+
+      if (warm === null) {
+        return { passed: false, output: 'No uncancelled turn ran' }
+      }
+      const expected = params.expectedAnswerContains
+      if (!warm.text.toLowerCase().includes(expected.toLowerCase())) {
+        return {
+          passed: false,
+          output: `The last turn did not include ${JSON.stringify(expected)}. Got: ${JSON.stringify(warm.text.slice(0, 200))}`
+        }
+      }
+      if (typeof warm.promptTokens !== 'number' || typeof cold.promptTokens !== 'number') {
+        return {
+          passed: false,
+          output: `promptTokens missing from stats (warm=${warm.promptTokens}, cold=${cold.promptTokens})`
+        }
+      }
+      const summary = `promptTokens: cold=${cold.promptTokens}, warm after cancel=${warm.promptTokens}`
+      if (warm.promptTokens * 2 >= cold.promptTokens) {
+        return {
+          passed: false,
+          output: `Cancelling turn ${params.cancelTurn} destroyed the committed cache: the last turn re-sent the history. ${summary}`
+        }
+      }
+      return {
+        passed: true,
+        output: `Committed cache survived a cancel after ${cancelledAfter} tokens. ${summary}`
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Cancel-keeps-committed-cache failed: ${errorMsg}` }
+    }
+  }
+
+  async toolsSequentialSave(
+    params: {
+      cacheKey: string
+      tools: unknown[]
+      messages: string[]
+      stream: boolean
+      generationParams?: Record<string, unknown>
+    },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    let toolsModelId = await this.resources.ensureLoaded('tools')
+    const declaredTools = new Map(
+      (
+        params.tools as Array<{
+          name: string
+          parameters?: { required?: string[] }
+        }>
+      ).map((tool) => [tool.name, tool.parameters?.required ?? []])
+    )
+
+    try {
+      try {
+        await deleteCache({ kvCacheKey: params.cacheKey })
+      } catch {
+        /* ignore ENOENT */
+      }
+
+      const history: ChatMessage[] = [
+        { role: 'system', content: 'You are a helpful assistant with access to tools. Be brief.' }
+      ]
+
+      let firstCacheTokens = 0
+      let secondCacheTokens = 0
+
+      for (let i = 0; i < params.messages.length; i++) {
+        history.push({ role: 'user', content: params.messages[i]! })
+
+        const result = completion({
+          modelId: toolsModelId,
+          history: [...history],
+          stream: true,
+          kvCache: params.cacheKey,
+          tools: params.tools as never,
+          ...(params.generationParams && { generationParams: params.generationParams })
+        })
+
+        let response = ''
+        for await (const token of result.tokenStream) {
+          response += token
+        }
+
+        const toolCalls = result.toolCalls ? await result.toolCalls : []
+        const declaredCall = toolCalls.find((call) => declaredTools.has(call.name))
+        if (!declaredCall) {
+          return {
+            passed: false,
+            output:
+              `Tool completion ${i + 1} emitted no call matching a declared tool after ` +
+              `${i === 0 ? 'cache creation' : 'model reload and cache reuse'}. ` +
+              `Got: [${toolCalls.map((call) => call.name).join(', ')}]`
+          }
+        }
+
+        const requiredArgs = declaredTools.get(declaredCall.name) ?? []
+        const missingArgs = requiredArgs.filter((key) => !(key in declaredCall.arguments))
+        if (missingArgs.length > 0) {
+          return {
+            passed: false,
+            output:
+              `Tool completion ${i + 1} call '${declaredCall.name}' is missing required ` +
+              `arguments after ${i === 0 ? 'cache creation' : 'model reload and cache reuse'}: ` +
+              `${missingArgs.join(', ')}`
+          }
+        }
+
+        const stats = await result.stats
+        const cacheTokens = ((stats as Record<string, unknown>)?.cacheTokens as number) ?? 0
+
+        if (i === 0) {
+          firstCacheTokens = cacheTokens
+          history.push({ role: 'assistant', content: response })
+
+          // Evict and reload the model to clear the in-memory KV cache.
+          // Without this, the addon keeps the session in RAM and the second
+          // call would see increased cacheTokens even if the disk save failed.
+          await this.resources.evict('tools')
+          toolsModelId = await this.resources.ensureLoaded('tools')
+        } else {
+          secondCacheTokens = cacheTokens
+          history.push({ role: 'assistant', content: response })
+        }
+      }
+
+      // After model reload, the only source of cached tokens is the on-disk
+      // file. If the save was silently rejected (missing path) or not awaited,
+      // secondCacheTokens will be ≤ firstCacheTokens (system-prompt-only).
+      if (secondCacheTokens <= firstCacheTokens) {
+        return {
+          passed: false,
+          output: `KV-cache not persisted to disk between tool-calling completions: second call cache tokens (${secondCacheTokens}) must exceed first call (${firstCacheTokens}). The cache save was likely silently rejected by the addon (missing cache path or unawaited response).`
+        }
+      }
+      const result = `Tools sequential save: first=${firstCacheTokens}, second=${secondCacheTokens}, cache persisted to disk: true`
+      return ValidationHelpers.validate(result, expectation)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Tools sequential save failed: ${errorMsg}` }
+    }
+  }
+
+  // A tool set that changes between turns on one named key reuses the same
+  // cache file up to where the prompts differ, and the turn after that is warm
+  // again under the new set. A fresh file would report no cached tokens on the
+  // turn that changed the set.
+  async toolSetChange(
+    params: {
+      cacheKey: string
+      tools: unknown[]
+      changedTools: unknown[]
+      messages: string[]
+      generationParams?: Record<string, unknown>
+      addedTool: string
+    },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('tools')
+    const toolSets = [params.tools, params.changedTools, params.changedTools] as DeclaredTool[][]
+
+    try {
+      try {
+        await deleteCache({ kvCacheKey: params.cacheKey })
+      } catch {
+        /* ignore ENOENT */
+      }
+
+      const history: ChatMessage[] = [
+        { role: 'system', content: 'You are a helpful assistant with access to tools. Be brief.' }
+      ]
+      const cacheTokens: number[] = []
+
+      for (const [index, message] of params.messages.entries()) {
+        history.push({ role: 'user', content: message })
+        const turn = await runToolTurn(
+          modelId,
+          params.cacheKey,
+          history,
+          toolSets[index]!,
+          params.generationParams,
+          `Turn ${index + 1}`
+        )
+        if (!turn.ok) return { passed: false, output: turn.output }
+        if (index === 1 && turn.toolName !== params.addedTool) {
+          return {
+            passed: false,
+            output: `Turn 2 called '${turn.toolName}' instead of the tool the changed set added ('${params.addedTool}')`
+          }
+        }
+        cacheTokens.push(turn.cacheTokens)
+        history.push({ role: 'assistant', content: turn.response })
+      }
+
+      const [, second, third] = cacheTokens
+      if (second! < 1) {
+        return {
+          passed: false,
+          output: `The changed tool set opened a fresh cache instead of reusing the file: turn 2 reported ${second} cached tokens`
+        }
+      }
+      if (third! <= second!) {
+        return {
+          passed: false,
+          output: `The cache was not re-established under the changed tool set: turn 3 reported ${third} cached tokens, turn 2 ${second}`
+        }
+      }
+      return ValidationHelpers.validate(
+        `Tool set change: cacheTokens=${cacheTokens.join(',')}`,
+        expectation
+      )
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Tool set change failed: ${errorMsg}` }
+    }
+  }
+
+  // `tool_choice: 'required'` on a warm turn forces a call: the grammar is armed
+  // from the tool block every turn carries, so a prompt that would otherwise be
+  // answered in prose calls the tool, and the turn still reuses the cache.
+  async warmToolChoiceRequired(
+    params: {
+      cacheKey: string
+      tools: unknown[]
+      messages: string[]
+      generationParams?: Record<string, unknown>
+      requiredGenerationParams: Record<string, unknown>
+    },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('tools')
+    const tools = params.tools as DeclaredTool[]
+
+    try {
+      try {
+        await deleteCache({ kvCacheKey: params.cacheKey })
+      } catch {
+        /* ignore ENOENT */
+      }
+
+      const history: ChatMessage[] = [
+        { role: 'system', content: 'You are a helpful assistant with access to tools. Be brief.' },
+        { role: 'user', content: params.messages[0]! }
+      ]
+      const first = await runToolTurn(
+        modelId,
+        params.cacheKey,
+        history,
+        tools,
+        params.generationParams,
+        'Turn 1'
+      )
+      if (!first.ok) return { passed: false, output: first.output }
+
+      history.push({ role: 'assistant', content: first.response })
+      history.push({ role: 'user', content: params.messages[1]! })
+      const second = await runToolTurn(
+        modelId,
+        params.cacheKey,
+        history,
+        tools,
+        params.requiredGenerationParams,
+        'Turn 2 (tool_choice required)'
+      )
+      if (!second.ok) return { passed: false, output: second.output }
+      if (second.cacheTokens < 1) {
+        return {
+          passed: false,
+          output: `The warm turn under tool_choice 'required' reused no cached tokens`
+        }
+      }
+      return ValidationHelpers.validate(
+        `Warm tool_choice required: call=${second.toolName} cacheTokens=${second.cacheTokens}`,
+        expectation
+      )
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Warm tool_choice required failed: ${errorMsg}` }
+    }
+  }
+}

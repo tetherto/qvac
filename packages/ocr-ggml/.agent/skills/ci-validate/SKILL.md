@@ -57,4 +57,4 @@ If running as part of an automated pipeline (not interactive):
 1. Analyze the failure logs using the classification guide in `.agent/knowledge/ci-validation.md`
 2. If **infra failure**: fix the CI/config issue, commit and push, re-trigger (go to Step 2)
 3. If **code logic failure**: stop and report back with the error logs, affected platforms, and which source files need attention
-4. If the **same infra failure persists more than 5 times** after fixes: document on the Asana task with full error logs, what was tried, and which platforms are affected — then STOP
+4. If the **same infra failure persists more than 5 times** after fixes: report in chat with full error logs, what was tried, and which platforms are affected — then STOP
