@@ -12,6 +12,10 @@ export interface LlmStats {
   // Renders in this request that provably left the supplied tool definitions
   // out; 0 when no tools were sent.
   toolDefinitionsDropped?: number
+  // Speculative decoding: draft tokens proposed and accepted; set only when
+  // the model was loaded with `spec_type`.
+  draftTokens?: number
+  draftAcceptedTokens?: number
   backendDevice?: 'cpu' | 'gpu'
   stopReason?:
     'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'

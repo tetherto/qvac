@@ -18,6 +18,7 @@ import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-execut
 import { TranslationExecutor } from '../shared/executors/translation-executor.js'
 import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor.js'
 import { HttpEmbeddingExecutor } from '../shared/executors/http-embedding-executor.js'
+import { SpeculativeDecodingExecutor } from '../shared/executors/speculative-decoding-executor.js'
 import { KvCacheExecutor } from '../shared/executors/kv-cache-executor.js'
 import { MobileLoggingExecutor } from './executors/logging-executor.js'
 import { RegistryExecutor } from '../shared/executors/registry-executor.js'
@@ -239,6 +240,7 @@ export const executor = createExecutor({
     new MobileLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
+    new SpeculativeDecodingExecutor(resources),
     new KvCacheExecutor(resources),
     new MobileParakeetStreamExecutor(resources),
     new MobileParakeetExecutor(resources),

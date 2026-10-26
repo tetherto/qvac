@@ -18,6 +18,7 @@ import { TranslationExecutor } from '../shared/executors/translation-executor.js
 import { TranslationBergamotCacheExecutor } from '../shared/executors/translation-bergamot-cache-executor.js'
 import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor.js'
 import { HttpEmbeddingExecutor } from '../shared/executors/http-embedding-executor.js'
+import { SpeculativeDecodingExecutor } from '../shared/executors/speculative-decoding-executor.js'
 import { KvCacheExecutor } from '../shared/executors/kv-cache-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { TranscriptionExecutor } from '../shared/executors/node/transcription-executor.js'
@@ -166,6 +167,7 @@ export const executor = createExecutor({
     new NodeLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
+    new SpeculativeDecodingExecutor(resources),
     new KvCacheExecutor(resources),
     new ParakeetStreamExecutor(resources),
     new ParakeetExecutor(resources),
