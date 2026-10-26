@@ -9,7 +9,7 @@ schemaType: HowTo
 
 Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `batchCompletion()`, `embed()`, `decide()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`, `audioGen()`), workspace operations (`rag*()`), and resource-acquisition calls (`loadModel()`, `downloadAsset()`). The cancel surface differs by operation — see the coverage callout below for which path applies to which call.
 
-The mental model is: **the primary path is `requestId`** — pass the run's `requestId` to `cancel()` to stop that exact call. **The `modelId` path is an escape hatch** — use it for model unload, app shutdown, admin sweeps, or for ops whose addons cannot interrupt mid-decode (`translate`, `textToSpeech`, `ocr`, `diffusion`, `upscale`).
+Use `requestId` to stop a specific call when the operation exposes one. Use `modelId` for model unload, app shutdown, admin sweeps, or an operation such as `diffusion()` whose returned run has no public `requestId`. Whether cancellation interrupts native computation depends on the operation's addon.
 
 <Callout title="Coverage" type="info">
 **Targeted cancel by `requestId` — only the cancelled call stops**: `completion()`, `batchCompletion()`, LLM `translate()`, `audioGen()`, `loadModel()`, `downloadAsset()`, `startRpcServer()`, `discoverRpcServers()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
@@ -18,7 +18,9 @@ The mental model is: **the primary path is `requestId`** — pass the run's `req
 
 `decide()` supports hard cancellation by `requestId`. Each model runs one decision request at a time and queues concurrent calls FIFO. Cancelling an active call interrupts its native job; cancelling a queued call removes it before native work starts and leaves the active job running.
 
-**Broad cancel by `modelId`** additionally covers NMT `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, and `upscale()`. These accept `cancel({ modelId })` but their addons cannot interrupt mid-decode — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, and the C++ work runs to completion in the background.
+**Image generation** supports hard cancellation through `cancel({ modelId, kind: "diffusion" })`. It interrupts the active native job and suppresses subsequent output. The run's `outputs` and `stats` promises reject with `InferenceCancelledError`, and `progressStream` throws the same error. Image and video generation admit one request per model; concurrent calls reject with `RequestRejectedByPolicyError`. After cancelling an image generation, await the original run's settlement before starting another call.
+
+**Broad cancel by `modelId`** additionally covers NMT `translate()`, `textToSpeech()`, `ocr()`, and `upscale()`. These accept `cancel({ modelId })` but their addons cannot interrupt mid-decode — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, and the C++ work runs to completion in the background.
 
 **Duplex sessions** — `transcribeStream(...)` and `textToSpeechStream(...)` use `.destroy()` on the returned session.
 
@@ -112,7 +114,9 @@ await cancel({ operation: "embeddings", modelId });
 
 Broad cancel terminates **every** in-flight request matching the target on the model simultaneously. Prefer the targeted `{ requestId }` form when you do have a `requestId` — it scopes the cancellation precisely and avoids killing unrelated work that happens to share the model.
 
-For ops whose addon does not support mid-decode abort (`translate`, `textToSpeech`, `ocr`, `diffusion`, `upscale`), broad cancel by `modelId` is the only cancel path, and it is **soft** — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, but the underlying C++ work runs to completion in the background. The client's promise still rejects with `InferenceCancelledError`; just don't expect the model to stop computing immediately.
+Image generation uses `cancel({ modelId, kind: "diffusion" })` for hard cancellation. The `diffusion` kind also matches active video requests on that model. Awaiting `cancel()` signals the abort but does not wait for native cleanup; await settlement of the original image run before reusing the model. Ending its `progressStream` consumption alone does not stop generation.
+
+For ops whose addon does not support mid-decode abort (NMT `translate`, `textToSpeech`, `ocr`, `upscale`), broad cancel by `modelId` is the only cancel path, and it is **soft** — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, but the underlying C++ work runs to completion in the background. The client's promise still rejects with `InferenceCancelledError`; just don't expect the model to stop computing immediately.
 
 AudioGen is different: targeted or broad cancellation is **hard**. The plugin calls the ACE-Step model's cancel operation, interrupting active generation rather than only suppressing subsequent stream frames.
 
