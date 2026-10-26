@@ -61,7 +61,7 @@ export const modelFitProbeDiffusionEsrgan = probeCase(
 )
 export const modelFitProbeUpscaler = probeCase('upscaler', 'upscaler', false)
 export const modelFitProbeOcr = probeCase('ocr', 'ocr', true)
-export const modelFitProbeTranslation = probeCase('translation', 'bergamot-en-fr', false)
+export const modelFitProbeTranslation = probeCase('translation', 'bergamot-en-fr', true)
 
 /**
  * Two measured engines assessed as one set, so their rows from two addons are
