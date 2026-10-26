@@ -8463,33 +8463,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc()
-    data class Value62C01D8A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8A) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc()
+    data class Value7C1F454E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454E) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Value62C01D8A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8A>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Value7C1F454E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454E>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Value62C01D8A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8A>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Value7C1F454E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454E>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8A(
+data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454E(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8500,33 +8500,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc62C01D8AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8538,6 +8538,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon 
     @SerialName("bci-whispercpp-transcription") `BCIWHISPERCPPTRANSCRIPTION`,
     @SerialName("llamacpp-embedding") `LLAMACPPEMBEDDING`,
     @SerialName("llamacpp-decision") `LLAMACPPDECISION`,
+    @SerialName("llamacpp-rerank") `LLAMACPPRERANK`,
     @SerialName("nmtcpp-translation") `NMTCPPTRANSLATION`,
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
