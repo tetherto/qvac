@@ -60,11 +60,17 @@ describe('configure: param-schemas', () => {
     assert.ok(schema)
     const world = paramFields(schema).find((field) => field.name === 'world')
     assert.ok(world?.objectFields)
-    for (const name of ['paramsBackend', 'maxVram', 'streamLayers', 'verbosity']) {
+    for (const name of ['fitSteps', 'paramsBackend', 'maxVram', 'streamLayers', 'verbosity']) {
       const field = world.objectFields.find((field) => field.name === name)
       assert.ok(field, `${name} is editable`)
       assert.ok(field.description)
     }
+    const fitSteps = world.objectFields.find((field) => field.name === 'fitSteps')!
+    assert.equal(validateParam(fitSteps, '1'), true)
+    assert.equal(validateParam(fitSteps, '1000000'), true)
+    assert.notEqual(validateParam(fitSteps, '0'), true)
+    assert.notEqual(validateParam(fitSteps, '1.5'), true)
+    assert.notEqual(validateParam(fitSteps, '1000001'), true)
     const budget = world.objectFields.find((field) => field.name === 'maxVram')!
     assert.equal(validateParam(budget, '-1'), true)
     assert.equal(validateParam(budget, 'cuda0=2'), true)
