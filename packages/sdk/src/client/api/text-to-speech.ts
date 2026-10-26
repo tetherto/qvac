@@ -367,13 +367,12 @@ function sentenceStreamTts(
   // deferred subscribing until the generators were iterated, the first
   // consumer could trim the queue before the second ever registered,
   // silently dropping earlier frames.
-  const bufferSubscription = multicast.subscribe()
-  const pcmChunkSubscription = multicast.subscribe()
+  const audio = sentenceAudioViews(multicast.subscribe())
   const chunkSubscription = multicast.subscribe()
 
   return {
-    bufferStream: sentenceBufferStream(bufferSubscription),
-    chunkStream: pcmChunksOf(pcmChunkSubscription),
+    bufferStream: audio.bufferStream,
+    chunkStream: audio.chunkStream,
     chunkUpdates: sentenceChunkUpdates(chunkSubscription),
     buffer: Promise.resolve([]),
     done: multicast.done,
@@ -385,13 +384,16 @@ function sentenceStreamTts(
   }
 }
 
-async function* sentenceBufferStream(source: AsyncGenerator<TtsResponse>): AsyncGenerator<number> {
-  for await (const m of source) {
-    if (m.buffer.length > 0) {
-      yield* m.buffer
-    }
-    if (m.done) break
-  }
+// Both audio views share ONE multicast subscription, so an un-iterated
+// `chunkStream` cannot pin the queue for a caller that drains `bufferStream`
+// and `chunkUpdates` only. Exported for test use; not part of the public
+// surface.
+export function sentenceAudioViews(subscription: AsyncGenerator<TtsResponse>): {
+  bufferStream: AsyncGenerator<number>
+  chunkStream: AsyncGenerator<Float32Array>
+} {
+  const chunkStream = pcmChunksOf(subscription)
+  return { bufferStream: samplesOf(chunkStream), chunkStream }
 }
 
 export async function* pcmChunksOf(

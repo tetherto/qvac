@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { pcmChunksOf, samplesOf } from '@/client/api/text-to-speech'
+import { TtsMulticast, pcmChunksOf, samplesOf, sentenceAudioViews } from '@/client/api/text-to-speech'
 import type { TtsResponse } from '@qvac/sdk'
 
 // Push-controlled frame source (same shape as tts-multicast.test.ts) so the
@@ -106,4 +106,43 @@ test('sample view and chunk view share one run', async (t) => {
   for await (const s of samples) seen.push(s)
   t.alike(seen, [1, 2, 3])
   t.is((await chunks.next()).done, true, 'the chunk iterator is consumed with the sample view')
+})
+
+function queueSize(mc: TtsMulticast): number {
+  return (mc as unknown as { queue: TtsResponse[] }).queue.length
+}
+
+test('an un-iterated chunkStream does not pin the sentence-mode multicast queue', async (t) => {
+  const source = createPushSource()
+  const mc = new TtsMulticast(source.iterable)
+  const audio = sentenceAudioViews(mc.subscribe())
+  const updates = mc.subscribe()
+  for (let i = 0; i < 100; i++) source.push(frame([i, i + 0.5], { done: i === 99 }))
+  source.end()
+
+  let samples = 0
+  for await (const _ of audio.bufferStream) samples++
+  for await (const m of updates) if (m.done) break
+  await mc.done
+
+  t.is(samples, 200)
+  t.is(queueSize(mc), 0, 'every frame was released although chunkStream was never iterated')
+  t.is((await audio.chunkStream.next()).done, true)
+})
+
+test('draining chunkStream instead of bufferStream releases the queue too', async (t) => {
+  const source = createPushSource()
+  const mc = new TtsMulticast(source.iterable)
+  const audio = sentenceAudioViews(mc.subscribe())
+  const updates = mc.subscribe()
+  for (let i = 0; i < 100; i++) source.push(frame([i], { done: i === 99 }))
+  source.end()
+
+  let chunks = 0
+  for await (const _ of audio.chunkStream) chunks++
+  for await (const m of updates) if (m.done) break
+  await mc.done
+
+  t.is(chunks, 100)
+  t.is(queueSize(mc), 0)
 })
