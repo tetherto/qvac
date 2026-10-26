@@ -27,17 +27,9 @@ The writable surface is defined in [references/docs-scope.md](references/docs-sc
 
 One constraint from that file shapes every phase, so it is repeated here. The SDK and the CLI are each cut into one documentation line per version, and this skill writes to the line still being **written** — never to one already cut. That line sits outside the site, at `content/_unpublished/<collection>/next/`, where nothing builds it and no URL reaches it until the release cutoff publishes it. Every folder under `content/docs/<collection>/` is a version that already shipped.
 
-The name is fixed rather than versioned, so the path a feature PR writes to is the same before and after a cutoff. Resolve it each run anyway, because a collection awaiting its first cut under this model still holds the version under development in its parenthesized folder:
+The name is fixed rather than versioned, so the path a feature PR writes to is the same before and after a cutoff.
 
-```bash
-# The development line, when it exists:
-ls -d docs/website/content/_unpublished/sdk/next
-
-# Otherwise — only until that collection's first cut — the group:
-ls docs/website/content/docs/sdk | grep '^(v'
-```
-
-The two scripts that read the docs — the Phase 4 router and the Phase 6 parity gate — resolve it the same way and exit 2 if a collection without a development line has anything other than exactly one parenthesized folder. Page paths below are written `<sdk-line>/…` and `<cli-line>/…` for the resolved folders; the routing map uses the `<sdk-line>/` placeholder the router expands.
+The two scripts that read the docs — the Phase 4 router and the Phase 6 parity gate — resolve it the same way and exit 2 if a collection carries no development line. Page paths below are written `<sdk-line>/…` and `<cli-line>/…` for the resolved folders; the routing map uses the `<sdk-line>/` placeholder the router expands.
 
 ## Pipeline objects
 

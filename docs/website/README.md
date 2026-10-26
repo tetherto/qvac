@@ -80,11 +80,6 @@ line last cut, a missing development line, a destination already on disk, and a
 working tree that already carries changes — the cut is reviewed as its own
 diff. Review what it did, then `npm run build` and `npm test`.
 
-A collection's **first cut** under this model is the exception: there is no
-development line to publish yet, so the cut splits the group between the two
-lines and takes `--from <release base>` to know where the split falls. See
-"Cutting a documentation line" in [`docs-workflow.md`](docs-workflow.md).
-
 The command is a convenience, not a dependency. What it does is the following,
 and doing it by hand is the same cut. For `@qvac/sdk` releasing `0.18`, with
 `0.17` the line last cut:
@@ -137,17 +132,6 @@ the sidebar entry as an external link to that minor's GitHub release:
 The copy brought the development line's tag with it, so rewrite it to the line
 being opened. The tag exists within days: the release follows the cutoff, and
 production is not promoted until it has.
-
-**The first cut of a collection** under this model is different, because there
-is no development line yet — the parenthesized folder still holds the version
-under development. That cut only copies it:
-
-```bash
-cp -r 'content/docs/sdk/(v0.23)' content/_unpublished/sdk/next
-```
-
-No rename, no manifest edit, no redirect. From the next cutoff on, the cut
-behaves as above.
 
 Everything else follows: the sidebars come from the `meta.json` files the copy
 brought with it, and the switcher, canonicals, agent artifacts, `versions.json`,

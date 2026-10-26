@@ -53,11 +53,6 @@ export function developmentLineDir(
  * overwrite the record of a release — a full render replaces the page — and
  * the tree that results still builds and still tests clean. Refusing here is
  * what enforces the rule that a cut line is never regenerated.
- *
- * The fallback covers a collection whose development line does not exist yet,
- * which is every collection until its first cut under this model. There the
- * group still holds the version under development, so that is where generated
- * pages belong. It retires with the last bootstrap cut.
  */
 export function referenceDirFor(
   version: string | SemVer,
@@ -79,19 +74,10 @@ export function referenceDirFor(
   const development = developmentLineDir("sdk", root);
 
   if (!existsSync(development)) {
-    if (current.version !== line) {
-      throw new Error(
-        `Refusing to write ${line} pages into ${current.version}, the line ` +
-          `/sdk is writing.\n` +
-          (ahead
-            ? `  ${line} has no line yet. Cut ${current.version} before ` +
-              `documenting ${line}:\n` +
-              `    bun run scripts/cut-line.ts sdk ${current.version}\n`
-            : `  ${line} has already shipped. A cut line is what the site ` +
-              `serves and is never regenerated.\n`),
-      );
-    }
-    return path.join(root, "content", "docs", "sdk", current.folder, "reference");
+    throw new Error(
+      `/sdk has no development line at ${development}, so there is nowhere ` +
+        `to write generated pages.`,
+    );
   }
 
   if (!ahead) {

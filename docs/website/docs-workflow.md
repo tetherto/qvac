@@ -169,11 +169,6 @@ Refusing to write v0.20 pages into the development line of /sdk.
   content/docs/sdk/(v0.22)/ directly to correct it.
 ```
 
-Until a collection has had its first cut under this model, it has no
-development line yet and the generator writes into the parenthesized folder,
-which still holds the version under development. That fallback retires with
-the last bootstrap cut.
-
 ### Previewing the development line
 
 Nothing under `content/_unpublished/` is built, so the line being written does
@@ -223,29 +218,6 @@ replay is the defect QVAC-27286 fixed by hand.
 It refuses a collection that is not versioned, a version that is not above the
 line last cut, a missing development line, a destination already on disk, and a
 working tree that already carries changes.
-
-On a collection's **first cut** under this model, there is no development line
-yet: the version being released is still the parenthesized folder. The cut
-splits that folder in two instead of moving anything, and needs the release base
-— the commit the version being released was cut from — to know where the split
-falls:
-
-```bash
-bun run scripts/cut-line.ts <collection> <version being released> --from <release base>
-```
-
-The group becomes the base's tree, so the line published documents the version
-being released; everything the group gained after the base becomes the
-development line, because it documents the version after it. `reference/` is
-excluded from the reset on both sides: it is generated, and the cutoff
-regenerated it against this same base. No manifest edit, no redirect, no
-rename. From the next cutoff on the cut behaves as above, and `--from` is
-refused.
-
-The split exists because the scheme this one replaces let the group accumulate
-everything merged since it was cut, including what landed after the release
-branch came off `main`. Freezing that as published is the drift the line model
-prevents, so the first cut is where it gets undone.
 
 The opened line keeps the API summary it copied, because the PR that
 regenerates it is reviewed as a diff: a summary diffed against the previous
@@ -660,7 +632,7 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `api-docs/render.ts` | -- | Phase 2: Nunjucks rendering of `single-page.njk` from `api-data.json` |
 | `api-docs/audit-tsdoc.ts` | `docs:audit-tsdoc` | TSDoc completeness audit (standalone or via extraction) |
 | `generate-release-notes.ts` | `docs:generate-release-notes` | **Dormant**, kept on disk. Rendered a release-notes page of the SDK's newest line; the site publishes no such page any more. Do not call it. |
-| `cut-line.ts` | -- | Publishes the line of the version being released: preserves the outgoing one, copies the development line in as the new one, and updates the manifest, the redirects, the currency marker, and the opened line's release-notes link. The development line stays in place. On a collection's first cut it takes `--from <release base>` and splits the group instead. A convenience for the hand procedure in `README.md`, never a dependency. |
+| `cut-line.ts` | -- | Publishes the line of the version being released: preserves the outgoing one, copies the development line in as the new one, and updates the manifest, the redirects, the currency marker, and the opened line's release-notes link. The development line stays in place. A convenience for the hand procedure in `README.md`, never a dependency. |
 | `update-versions-list.ts` | -- | **Retired**, kept for reference. Rebuilt `src/lib/versions.ts` from the series siblings on disk; that file is now hand-edited. |
 | `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the development line's API summary using the monorepo SDK's `package.json` version (no version bump) |
 | `create-version-bundle.ts` | -- | **Retired**, kept for reference. Copied the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx`. |
@@ -753,10 +725,6 @@ version under development, and the version named has already shipped.
 the site serves is never regenerated — a full render would replace the record
 of a release, and the tree that results still builds and still tests clean,
 which is why the refusal exists. Do not cut a line to make it go away.
-
-The sibling refusal, before a collection's first cut, names the parenthesized
-folder instead: there is no development line yet, so the generator accepts the
-version that folder holds and nothing else.
 
 ### Build stops with no error and no log
 

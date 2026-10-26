@@ -18,10 +18,7 @@
  * repo covers it.
  *
  * `<sdk-line>` is the SDK's development line, outside the site at
- * `content/_unpublished/sdk/next/`. It is resolved at runtime rather than
- * written down, because a collection awaiting its first cut under this model
- * still holds the version under development in its parenthesized folder, and
- * a stale constant would check a shipped version instead.
+ * `content/_unpublished/sdk/next/`.
  *
  * The sidebar moved out of `src/lib/custom-tree.ts` when the SDK became a
  * versioned collection. A line now declares its own navigation in `meta.json`,
@@ -79,35 +76,16 @@ const CONTENT = path.join(WEBSITE, "content");
 /**
  * The line the collection is writing, relative to `content/`: the development
  * line, outside the site at `content/_unpublished/<collection>/next/`.
- *
- * The fallback covers a collection whose development line does not exist yet,
- * which is every collection until its first cut under this model: there the
- * parenthesized folder still holds the version under development. It retires
- * with the last bootstrap cut.
  */
 function lineOf(collection: string): string {
   const development = path.join("_unpublished", collection, "next");
-  if (fs.existsSync(path.join(CONTENT, development))) {
-    return development.split(path.sep).join("/");
-  }
-
-  const dir = path.join(CONTENT, "docs", collection);
-  if (!fs.existsSync(dir)) {
-    console.error(`check-capability-parity: no collection at ${dir}`);
-    process.exit(2);
-  }
-  const groups = fs
-    .readdirSync(dir, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && /^\(v\d+\.\d+\)$/.test(e.name))
-    .map((e) => e.name);
-
-  if (groups.length !== 1) {
+  if (!fs.existsSync(path.join(CONTENT, development))) {
     console.error(
-      `check-capability-parity: ${collection} has ${groups.length} lines cut as a group (${groups.join(", ") || "none"}); exactly one folder must be parenthesized`,
+      `check-capability-parity: ${collection} has no development line at content/${development}`,
     );
     process.exit(2);
   }
-  return `docs/${collection}/${groups[0]!}`;
+  return development.split(path.sep).join("/");
 }
 
 const SDK_LINE = lineOf("sdk");

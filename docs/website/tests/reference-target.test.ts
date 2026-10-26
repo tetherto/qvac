@@ -116,30 +116,17 @@ describe('a collection with a development line', () => {
   });
 });
 
-describe('a collection awaiting its first cut, which has no development line', () => {
+describe('a collection with no development line', () => {
   let root: string;
   beforeAll(() => {
     root = treeWith(false);
   });
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  it('resolves the group, which still holds the version under development', () => {
-    expect(referenceDirFor(releaseOf(current.version), root)).toBe(
-      join(root, 'content', 'docs', 'sdk', current.folder, 'reference'),
-    );
-  });
-
-  it('refuses a version ahead of it, and says which cut is missing', () => {
-    expect(() => referenceDirFor(coming, root)).toThrow(/has no line yet/);
-    expect(() => referenceDirFor(coming, root)).toThrow(/cut-line\.ts sdk/);
-  });
-
-  it('refuses a version that has already shipped', () => {
-    const older = sdk.versions.find(
-      (entry) => entry.version !== current.version,
-    )!;
-    expect(() => referenceDirFor(releaseOf(older.version), root)).toThrow(
-      /already shipped/,
+  it('refuses every version, since there is nowhere to write', () => {
+    expect(() => referenceDirFor(coming, root)).toThrow(/no development line/);
+    expect(() => referenceDirFor(releaseOf(current.version), root)).toThrow(
+      /no development line/,
     );
   });
 });

@@ -80,14 +80,7 @@ Per collection, read the line last cut from the manifest — the parenthesized
 entry — and check the moment:
 
 - If `<x.y>` is **above** it, the cutoff is due. This is the ordinary case.
-- If `<x.y>` **equals** it and the collection has no
-  `content/_unpublished/<collection>/next/`, this is the collection's **first
-  cut** under this model: the group still holds the version under development,
-  so the cut splits it instead of moving it — the release base becomes the line
-  published and what came after it becomes the development line. Expect no
-  manifest or redirect change.
-- If `<x.y>` equals it and the development line exists, stop and report: this
-  cutoff already ran.
+- If `<x.y>` **equals** it, stop and report: this cutoff already ran.
 - If `<x.y>` is below it, stop and ask. The collection is a release ahead.
 
 Confirm the tree is clean (`git status --porcelain` empty). A dirty tree means
@@ -132,21 +125,9 @@ git switch -c docs/cutoff-<x.y.z> <release base>
 cd docs/website && bun run scripts/generate-api-docs.ts <x.y.z> --force-extract
 ```
 
-On a collection's **first cut**, branch from `ORG_REMOTE/main` instead. The
-release base there predates the line folders and the manifest entry the cut
-reads — the previous cut ran late, which is the reason this model replaced it.
-The base still reaches the cut, as `--from` in Step 4, which reads it out of
-history rather than from the working tree:
-
-```bash
-git switch -c docs/cutoff-<x.y.z> ORG_REMOTE/main
-cd docs/website && bun run scripts/generate-api-docs.ts <x.y.z> --force-extract
-```
-
 This writes one file, into the line that is about to be published:
-`content/_unpublished/sdk/next/reference/api.mdx` — or, on the collection's
-first cut, `content/docs/sdk/(v<x.y>)/reference/api.mdx`. The destination is
-resolved, never passed; a version whose line has already been cut is refused.
+`content/_unpublished/sdk/next/reference/api.mdx`. The destination is resolved,
+never passed; a version whose line has already been cut is refused.
 
 **Confirm the body changed, not just the title.** `--force-extract` re-runs
 TypeDoc; a diff of one line means it did not, and the page would then advertise
@@ -158,9 +139,9 @@ git diff --stat -- content
 
 ### Step 4: Cut each collection
 
-Invoke `qv-docs-line-cut`, passing the version, the collections resolved in
-Step 1, and the release base from Step 2. It runs `scripts/cut-line.ts` once per
-collection, commits each cut on its own, and verifies the result.
+Invoke `qv-docs-line-cut`, passing the version and the collections resolved in
+Step 1. It runs `scripts/cut-line.ts` once per collection, commits each cut on
+its own, and verifies the result.
 
 The API summary from Step 3 goes in with the first commit. The cut copies the
 development line after it, so the published line carries the summary just
@@ -200,8 +181,7 @@ incoherent tree.
 - [ ] Collections derived from the packages being released, via the manifest
 - [ ] Per collection, `<x.y>` checked against the line last cut
 - [ ] Release base resolved from the release's own head branch, not assumed
-- [ ] Branch cut from the release base — from `ORG_REMOTE/main` on a first cut,
-      which passes the base to `cut-line.ts` instead — tree clean at the start
+- [ ] Branch cut from the release base, tree clean at the start
 - [ ] The API summary regenerated into the line being published, body changed
 - [ ] One `cut-line.ts` invocation and one commit per collection
 - [ ] `npm run build` clean and `vitest` green before the PR is opened

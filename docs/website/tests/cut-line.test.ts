@@ -3,13 +3,11 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  baselineFrom,
   cutLine,
   cutManifest,
   cutRedirects,
   relabelTitle,
   retargetReleaseNotesLink,
-  type Baseline,
 } from '../scripts/cut-line';
 import { DEVELOPMENT_LINE } from '../scripts/lib/release-shared';
 import { DOCUMENTED_SOFTWARE } from '../src/lib/versions';
@@ -33,16 +31,6 @@ const NEXT = (() => {
   const [major, minor] = CURRENT.replace(/^v/, '').split('.');
   return `v${major}.${Number(minor) + 1}`;
 })();
-/** The line cut before the current one, which is what a release base holds. */
-const PREVIOUS = sdk.versions[1]!.version;
-
-/** What a first cut has to leave out of the line it publishes. */
-const AFTER = {
-  page: 'after-the-release-base.mdx',
-  prose: '---\ntitle: Written after the release base\n---\n\nBody.\n',
-  summary: '---\ntitle: API Summary — regenerated for this release\n---\n',
-};
-
 const developmentDir = (root: string, slug = 'sdk') =>
   path.join(root, 'content', '_unpublished', slug, DEVELOPMENT_LINE);
 
@@ -206,103 +194,6 @@ describe('the release-notes link of the line being opened', () => {
   });
 });
 
-describe('the release base, read out of history', () => {
-  let baseline: Baseline;
-
-  beforeAll(() => {
-    baseline = baselineFrom('HEAD', 'sdk');
-  });
-
-  afterAll(async () => {
-    await fs.rm(baseline.dir, { recursive: true, force: true });
-  });
-
-  it('reports the line the group was at that commit', () => {
-    expect(baseline.version).toBe(CURRENT);
-  });
-
-  it('materializes the page tree, not the folder that held it', async () => {
-    const materialized = await pagesOf(baseline.dir);
-    expect(materialized).toContain('index.mdx');
-    expect(materialized).toContain(path.join('reference', 'api.mdx'));
-    expect(materialized).toEqual(
-      await pagesOf(path.join(WEBSITE, 'content', 'docs', 'sdk', `(${CURRENT})`)),
-    );
-  });
-
-  it('refuses a ref that does not resolve', () => {
-    expect(() => baselineFrom('not-a-commit', 'sdk')).toThrow(
-      /does not resolve/,
-    );
-  });
-});
-
-describe("a collection's first cut, which splits the group in two", () => {
-  let root: string;
-  let baseline: Baseline;
-  let result: Awaited<ReturnType<typeof cutLine>>;
-  const group = () => path.join(root, 'content', 'docs', 'sdk', `(${CURRENT})`);
-
-  beforeAll(async () => {
-    root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-first-'));
-    await copyTree(root);
-    // The release base, captured before the sprint's later work landed.
-    baseline = await baselineOf(root);
-    // What merged into the group after the release base: a page of its own, an
-    // edit to an existing one, and a regenerated summary.
-    await fs.writeFile(path.join(group(), AFTER.page), AFTER.prose);
-    await fs.writeFile(path.join(group(), 'index.mdx'), AFTER.prose);
-    await fs.writeFile(
-      path.join(group(), 'reference', 'api.mdx'),
-      AFTER.summary,
-    );
-    result = await cutLine({ root, slug: 'sdk', version: CURRENT, baseline });
-  }, 30_000);
-
-  afterAll(async () => {
-    await fs.rm(root, { recursive: true, force: true });
-    await fs.rm(baseline.dir, { recursive: true, force: true });
-  });
-
-  it('opens the development line from the group as it stands', async () => {
-    expect(await pagesOf(developmentDir(root))).toContain(AFTER.page);
-    expect(
-      await fs.readFile(path.join(developmentDir(root), 'index.mdx'), 'utf-8'),
-    ).toBe(AFTER.prose);
-  });
-
-  it('resets the group to the release base, so it documents the release', async () => {
-    expect(await pagesOf(group())).not.toContain(AFTER.page);
-    expect(await fs.readFile(path.join(group(), 'index.mdx'), 'utf-8')).toBe(
-      await fs.readFile(path.join(baseline.dir, 'index.mdx'), 'utf-8'),
-    );
-  });
-
-  it('keeps the generated summary, which the cutoff regenerated for this release', async () => {
-    expect(
-      await fs.readFile(path.join(group(), 'reference', 'api.mdx'), 'utf-8'),
-    ).toBe(AFTER.summary);
-  });
-
-  it('leaves the group where it is, because it already holds the release', async () => {
-    await expect(fs.stat(group())).resolves.toBeTruthy();
-  });
-
-  it('touches neither the manifest nor the redirects, since no line moved', async () => {
-    expect(result.changed).toEqual([
-      path.join('content', '_unpublished', 'sdk', DEVELOPMENT_LINE),
-      path.join('content', 'docs', 'sdk', `(${CURRENT})`),
-    ]);
-    expect(result.preserved).toBeNull();
-  });
-
-  it('refuses a second time, because the development line is already open', async () => {
-    await expect(
-      cutLine({ root, slug: 'sdk', version: CURRENT, baseline }),
-    ).rejects.toThrow(/already carries a development line/);
-  });
-});
-
 describe('a cut against a copy of the tree', () => {
   let root: string;
   let result: Awaited<ReturnType<typeof cutLine>>;
@@ -310,11 +201,6 @@ describe('a cut against a copy of the tree', () => {
   beforeAll(async () => {
     root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-'));
     await copyTree(root);
-    // The state a steady-state cut starts from: the collection has been cut
-    // once, so its development line exists and holds the sprint's work.
-    const baseline = await baselineOf(root);
-    await cutLine({ root, slug: 'sdk', version: CURRENT, baseline });
-    await fs.rm(baseline.dir, { recursive: true, force: true });
     result = await cutLine({ root, slug: 'sdk', version: NEXT });
   }, 60_000);
 
@@ -432,26 +318,6 @@ describe('a cut it cannot make reviewable', () => {
     await expect(against('sdk', NEXT)).rejects.toThrow(/no development line/);
   });
 
-  it('refuses a first cut with no release base to split the group against', async () => {
-    const root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-baseless-'));
-    await copyTree(root);
-    await expect(
-      cutLine({ root, slug: 'sdk', version: CURRENT }),
-    ).rejects.toThrow(/needs the release base/);
-    await fs.rm(root, { recursive: true, force: true });
-  });
-
-  it('refuses a release base on a cut that has a development line to publish', async () => {
-    await expect(
-      cutLine({
-        root: path.join(tmpdir(), 'cut-line-unreachable'),
-        slug: 'sdk',
-        version: NEXT,
-        baseline: { dir: tmpdir(), version: CURRENT },
-      }),
-    ).rejects.toThrow(/Drop --from/);
-  });
-
   it('refuses a destination already on disk', async () => {
     const root = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-occupied-'));
     // The development line a cut reads from, plus the one folder a cut would
@@ -468,23 +334,11 @@ describe('a cut it cannot make reviewable', () => {
   });
 });
 
-/**
- * The group as it stood at the release base: a copy taken before the test
- * writes the sprint's later work into the tree. The real command materializes
- * this out of git; what the cut sees is a directory either way.
- */
-async function baselineOf(root: string, slug = 'sdk'): Promise<Baseline> {
-  const dir = await fs.mkdtemp(path.join(tmpdir(), 'cut-line-baseline-'));
-  await fs.cp(path.join(root, 'content', 'docs', slug, `(${CURRENT})`), dir, {
-    recursive: true,
-  });
-  return { dir, version: PREVIOUS };
-}
-
 /** The pieces of the real tree a cut reads and writes. */
 async function copyTree(root: string): Promise<void> {
   for (const relative of [
     path.join('content', 'docs', 'sdk'),
+    path.join('content', '_unpublished', 'sdk', DEVELOPMENT_LINE),
     path.join('src', 'lib', 'versions.ts'),
     path.join('public', '_redirects'),
   ]) {

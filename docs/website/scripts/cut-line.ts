@@ -29,20 +29,12 @@
  *
  * Usage:
  *   bun run scripts/cut-line.ts <collection> <version being released>
- *   bun run scripts/cut-line.ts <collection> <version being released> --from <ref>
  *
  *   bun run scripts/cut-line.ts sdk v0.24
  *   bun run scripts/cut-line.ts cli 0.18
- *   bun run scripts/cut-line.ts sdk v0.23 --from "$(git merge-base ORG_REMOTE/release-train-sdk-0.23.0 ORG_REMOTE/main)"
- *
- * `--from` is the release base: the commit the version being released was cut
- * from. A collection's first cut requires it and every later cut refuses it —
- * see the first-cut branch of `cutLine`.
  */
 
 import * as fs from "fs/promises";
-import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
-import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { fileURLToPath } from "node:url";
@@ -62,29 +54,13 @@ export interface CutRequest {
   slug: string;
   /** The version being released, `vX.Y`. Its line is the one the cut opens. */
   version: string;
-  /**
-   * The collection's group as it stood at the release base. Required on a
-   * collection's first cut and refused on every later one.
-   */
-  baseline?: Baseline;
-}
-
-/** A collection's group, materialized out of history. */
-export interface Baseline {
-  /** A directory holding that group's page tree. */
-  dir: string;
-  /** The line the folder was, `vX.Y` — the line released before this one. */
-  version: string;
 }
 
 export interface CutResult {
   /** The version released, whose line the cut published. */
   released: string;
-  /**
-   * The line that lost the group. `null` on a collection's first cut under
-   * this model, where the version being released already holds the group.
-   */
-  preserved: string | null;
+  /** The line that lost the group. */
+  preserved: string;
   /** Paths changed, relative to the root, in the order they were touched. */
   changed: string[];
 }
@@ -365,98 +341,6 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
   const development = developmentLineDir(slug, root);
   const hasDevelopmentLine = await exists(development);
 
-  // A collection's first cut under this model. The group still holds the
-  // version under development, as it did before the development line moved out
-  // of the site, so the version being released is already the group and no
-  // folder moves. The cut has to do two things instead: create the line the
-  // next sprint writes in, and split the group's contents between the two.
-  //
-  // The split is the whole reason this branch takes a release base. Under the
-  // scheme being replaced, the group accumulated everything merged since it was
-  // cut, including whatever landed after the release branch came off main — so
-  // the group on disk is not the tree the version being released ships. Freezing
-  // it as published would be the drift this model exists to prevent, performed
-  // by the very commit that introduces the model.
-  //
-  // Unreachable once every collection has been cut once.
-  if (released === current.version) {
-    if (hasDevelopmentLine) {
-      throw new Error(
-        `'${slug}' already carries a development line at ` +
-          `${path.relative(root, development)}, so ${released} has been cut ` +
-          `already. A cut opens the line of the version that comes next.`,
-      );
-    }
-    const group = path.join(collectionDir, `(${released})`);
-    if (!(await exists(group))) {
-      throw new Error(
-        `${path.relative(root, group)} does not exist, so there is no line to ` +
-          `open the development line from.`,
-      );
-    }
-    const { baseline } = request;
-    if (!baseline) {
-      throw new Error(
-        `The first cut of '${slug}' needs the release base, the commit ` +
-          `${released} was cut from, so the line it publishes is that tree and ` +
-          `not main's.\n` +
-          `  bun run scripts/cut-line.ts ${slug} ${released} --from ` +
-          `"$(git merge-base <remote>/<release-branch> <remote>/main)"`,
-      );
-    }
-    if (!(await exists(baseline.dir))) {
-      throw new Error(`${baseline.dir} does not exist.`);
-    }
-
-    // The group carries everything written since it was cut. What was written
-    // after the release base documents the version that comes next, so the
-    // development line is seeded from the group as it stands — before the reset
-    // takes that work back out of the published line.
-    await fs.cp(group, development, { recursive: true });
-
-    // `reference/` is excluded from the reset on both sides: it is generated,
-    // never written, and its correct content is the summary the cutoff just
-    // regenerated against this same release base — not the one the previous cut
-    // left behind in history.
-    const generated = "reference";
-    for (const entry of await fs.readdir(group)) {
-      if (entry === generated) continue;
-      await fs.rm(path.join(group, entry), { recursive: true, force: true });
-    }
-    for (const entry of await fs.readdir(baseline.dir)) {
-      if (entry === generated) continue;
-      await fs.cp(
-        path.join(baseline.dir, entry),
-        path.join(group, entry),
-        { recursive: true },
-      );
-    }
-
-    // Best-effort, like every other relabel here: the pages restored are the
-    // previous line's, so any that name their series name the wrong one. Today
-    // that is only the generated summary, which the reset kept, so this
-    // normally touches nothing.
-    const relabelled = await relabelLine(group, baseline.version, released);
-
-    return {
-      released,
-      preserved: null,
-      changed: [
-        path.relative(root, development),
-        path.relative(root, group),
-        ...relabelled.map((page) => path.relative(root, page)),
-      ],
-    };
-  }
-
-  if (request.baseline) {
-    throw new Error(
-      `'${slug}' has been cut before, so there is no group to reset: the line ` +
-        `published is a copy of the development line, which only ever held the ` +
-        `version being released. Drop --from.`,
-    );
-  }
-
   if (!isAbove(line, parseLine(current.version))) {
     throw new Error(
       `${released} is not above ${current.version}, the line '${slug}' last ` +
@@ -553,82 +437,6 @@ async function exists(target: string): Promise<boolean> {
   }
 }
 
-function git(args: string[]): string {
-  return execFileSync("git", args, {
-    cwd: DOCS_WEBSITE_DIR,
-    encoding: "utf-8",
-    maxBuffer: 64 * 1024 * 1024,
-    // Captured rather than inherited: a refusal here is reported as this
-    // script's own message, not as git's.
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-}
-
-/**
- * Materialize a collection's group as it stood at `ref`, into a temporary
- * directory.
- *
- * The folder is located rather than named: at the release base the group is
- * whichever line was current then, which is not the line being cut — the first
- * cut of `v0.23` reads a tree whose group is `(v0.22)`. That is also why the
- * line's own number is returned with it.
- *
- * `--full-tree` is required: `ls-tree` otherwise filters its output through the
- * prefix of the working directory, and nothing under a subtree of
- * `content/docs/` starts with `docs/website/`.
- */
-export function baselineFrom(ref: string, slug: string): Baseline {
-  const prefix = git(["rev-parse", "--show-prefix"]).trim();
-  const collection = `${prefix}content/docs/${slug}`;
-
-  let entries: string[];
-  try {
-    entries = git(["ls-tree", "--full-tree", "--name-only", `${ref}:${collection}`])
-      .trim()
-      .split("\n");
-  } catch {
-    throw new Error(
-      `'${ref}' does not resolve, or carries no ${slug} collection. Pass the ` +
-        `commit the release was cut from.`,
-    );
-  }
-
-  const groups = entries.filter((entry) => /^\(v\d+\.\d+\)$/.test(entry));
-  if (groups.length !== 1) {
-    throw new Error(
-      `'${slug}' has ${groups.length} parenthesized line folders at ${ref}, ` +
-        `and a cut reads exactly one.`,
-    );
-  }
-  const group = groups[0]!;
-  const tree = `${collection}/${group}`;
-  const files = git([
-    "ls-tree",
-    "--full-tree",
-    "-r",
-    "--name-only",
-    `${ref}:${tree}`,
-  ])
-    .trim()
-    .split("\n")
-    .filter(Boolean);
-
-  const dir = mkdtempSync(path.join(os.tmpdir(), `cut-line-${slug}-`));
-  for (const file of files) {
-    const target = path.join(dir, file);
-    mkdirSync(path.dirname(target), { recursive: true });
-    writeFileSync(
-      target,
-      execFileSync("git", ["show", `${ref}:${tree}/${file}`], {
-        cwd: DOCS_WEBSITE_DIR,
-        maxBuffer: 64 * 1024 * 1024,
-      }),
-    );
-  }
-
-  return { dir, version: group.slice(1, -1) };
-}
-
 /**
  * Refuse a cut made on top of other work. The cut is reviewed as a diff, and a
  * diff carrying unrelated edits is not one an operator can check.
@@ -651,14 +459,10 @@ function refuseDirtyTree(root: string): void {
 }
 
 if (import.meta.main) {
-  const argv = process.argv.slice(2);
-  const at = argv.indexOf("--from");
-  const ref = at === -1 ? undefined : argv[at + 1];
-  const [slug, version, ...rest] =
-    at === -1 ? argv : [...argv.slice(0, at), ...argv.slice(at + 2)];
-  if (!slug || !version || rest.length > 0 || (at !== -1 && !ref)) {
+  const [slug, version, ...rest] = process.argv.slice(2);
+  if (!slug || !version || rest.length > 0) {
     console.log(
-      "Usage: bun run scripts/cut-line.ts <collection> <version being released> [--from <ref>]",
+      "Usage: bun run scripts/cut-line.ts <collection> <version being released>",
     );
     console.log("");
     console.log("  bun run scripts/cut-line.ts sdk v0.24");
@@ -667,29 +471,14 @@ if (import.meta.main) {
     console.log("line cut before it, opens this one as a copy of the");
     console.log("development line, and updates the manifest, the redirects and");
     console.log("the currency marker. The development line stays where it is.");
-    console.log("");
-    console.log("--from names the release base, the commit the version being");
-    console.log("released was cut from. A collection's first cut needs it, to");
-    console.log("split its group between the line it publishes and the line it");
-    console.log("opens; every later cut refuses it.");
     process.exit(slug && version ? 1 : 0);
   }
 
   try {
     refuseDirtyTree(DOCS_WEBSITE_DIR);
-    const baseline = ref ? baselineFrom(ref, slug) : undefined;
-    const result = await cutLine({
-      root: DOCS_WEBSITE_DIR,
-      slug,
-      version,
-      baseline,
-    });
+    const result = await cutLine({ root: DOCS_WEBSITE_DIR, slug, version });
     console.log(
-      result.preserved === null
-        ? `Split the ${slug} group: (${result.released}) reset to ` +
-          `(${baseline!.version}) at ${ref}, development line opened from ` +
-          `what came after it.`
-        : `Cut ${slug}: ${result.released} opened, ${result.preserved} preserved.`,
+      `Cut ${slug}: ${result.released} opened, ${result.preserved} preserved.`,
     );
     for (const change of result.changed) console.log(`  ${change}`);
     console.log("");

@@ -128,39 +128,19 @@ const ROUTING_MAP = path.join(SKILL_DIR, "references", "routing-map.yaml");
 // constant would silently route a whole run at a released version.
 // ---------------------------------------------------------------------------
 
-const LINE_GROUP_RE = /^\(v\d+\.\d+\)$/;
-
 /**
- * The line a collection is writing, relative to `content/`.
- *
- * The fallback covers a collection whose development line does not exist yet,
- * which is every collection until its first cut under this model: there the
- * group still holds the version under development. It retires with the last
- * bootstrap cut.
+ * The line a collection is writing, relative to `content/`: its development
+ * line, outside the site at `content/_unpublished/<collection>/next/`.
  */
 function lineOf(collection: string): string {
   const development = path.join("_unpublished", collection, "next");
-  if (fs.existsSync(path.join(CONTENT, development))) {
-    return development.split(path.sep).join("/");
-  }
-
-  const dir = path.join(CONTENT, "docs", collection);
-  if (!fs.existsSync(dir)) {
-    console.error(`route-docs-targets: no collection at ${dir}`);
-    process.exit(2);
-  }
-  const groups = fs
-    .readdirSync(dir, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && LINE_GROUP_RE.test(e.name))
-    .map((e) => e.name);
-
-  if (groups.length !== 1) {
+  if (!fs.existsSync(path.join(CONTENT, development))) {
     console.error(
-      `route-docs-targets: ${collection} has ${groups.length} lines cut as a group (${groups.join(", ") || "none"}); exactly one folder must be parenthesized`,
+      `route-docs-targets: ${collection} has no development line at content/${development}`,
     );
     process.exit(2);
   }
-  return `docs/${collection}/${groups[0]!}`;
+  return development.split(path.sep).join("/");
 }
 
 const SDK_LINE = lineOf("sdk");

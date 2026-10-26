@@ -109,21 +109,10 @@ jobs:
             exit 0
           fi
 
-          # A collection whose development line does not exist yet has not had
-          # its first cut under this model: its group still holds the version
-          # under development, so editing it is what a feature PR is supposed
-          # to do. Skip it. This retires with the last bootstrap cut.
           paths=()
           for collection in sdk cli; do
-            if [ -d "docs/website/content/_unpublished/${collection}/next" ]; then
-              paths+=("docs/website/content/docs/${collection}/")
-            fi
+            paths+=("docs/website/content/docs/${collection}/")
           done
-
-          if [ ${#paths[@]} -eq 0 ]; then
-            echo "No collection has a development line yet; nothing to report."
-            exit 0
-          fi
 
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           changed=$(git diff --name-only "$base" "$HEAD_SHA" -- "${paths[@]}" || true)

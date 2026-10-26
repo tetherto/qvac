@@ -34,17 +34,7 @@ content/docs/cli/v0.13/          cut
 
 The name is fixed — `next`, not the version — so that the path stays the same across a cutoff. A PR opened before the cutoff and merged after it lands in the line it was written for, with no rename for git to replay it through.
 
-Resolve the line each run rather than assuming it, because a collection that has not had its first cut under this model yet still holds the version under development in its parenthesized folder:
-
-```bash
-# The development line, when it exists:
-ls -d docs/website/content/_unpublished/sdk/next
-
-# Otherwise — only until that collection's first cut — the group:
-ls docs/website/content/docs/sdk | grep '^(v'   # -> (v0.20)
-```
-
-`docs/website/src/lib/versions.ts` is the manifest that declares the cut lines, and `tests/line-structure.test.ts` fails the build if it and the folders disagree. `<sdk-line>` and `<cli-line>` below stand for the resolved folders. `route-docs-targets.ts` and `check-capability-parity.ts` resolve them the same way and exit 2 if a collection without a development line has anything other than exactly one parenthesized folder. `collect-source-changes.sh` reads only `packages/**` and never needs them.
+`docs/website/src/lib/versions.ts` is the manifest that declares the cut lines, and `tests/line-structure.test.ts` fails the build if it and the folders disagree. `<sdk-line>` and `<cli-line>` below stand for the development lines. `route-docs-targets.ts` and `check-capability-parity.ts` resolve them the same way and exit 2 if a collection carries no development line. `collect-source-changes.sh` reads only `packages/**` and never needs them.
 
 ## Allowlist — freely editable
 
@@ -93,7 +83,7 @@ docs/website/content/docs/resources/**
 packages/**                                    # source is never edited
 ```
 
-The two collection globs deny every line that has been cut, which is everything the site serves. They cannot collide with the allowlist: the line this skill writes to is outside `content/docs/` entirely. A collection awaiting its first cut under this model is the one exception — there `<sdk-line>` resolves into `content/docs/sdk/(vX.Y)/`, and the allowlist's named paths win over the glob for that folder alone.
+The two collection globs deny every line that has been cut, which is everything the site serves. They cannot collide with the allowlist: the line this skill writes to is outside `content/docs/` entirely.
 
 `reference/**` gets an explicit entry because it is the most tempting wrong answer. The API summary is produced from the SDK source by the generators in `docs/website/scripts/`, in every line, and the release-notes entry beside it is a link to that minor's GitHub release rather than a page. A hand-written patch there is overwritten at the next release cutoff.
 

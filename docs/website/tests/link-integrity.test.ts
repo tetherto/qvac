@@ -192,18 +192,14 @@ describe('the development line, which the build does not see', () => {
       slug,
       'next',
     )
-    // Every collection until its first cut under this model. The line is what
-    // a cut creates, so there is nothing to check before then.
-    const whenOpen = fs.existsSync(lineDir) ? it : it.skip
-
-    whenOpen('has no broken internal links', async () => {
+    it('has no broken internal links', async () => {
       const broken = await validateDevelopmentLine(slug, lineDir, DOCS_BASE)
       const details = broken.map((b) => `  ${b.source} → ${b.target}`).join('\n')
       expect(broken, `Found ${broken.length} broken link(s):\n${details}`)
         .toEqual([])
     })
 
-    whenOpen('carries a title on every page, which Fumadocs requires', () => {
+    it('carries a title on every page, which Fumadocs requires', () => {
       const untitled = walk(lineDir).filter(
         (file) => titleOf(fs.readFileSync(file, 'utf-8')) === null,
       )
@@ -211,8 +207,8 @@ describe('the development line, which the build does not see', () => {
     })
   })
 
-  // The real lines are empty until the first cutoff opens them, so what the
-  // check actually rejects is pinned against a tree built here.
+  // The real lines carry no break, so what the check actually rejects is
+  // pinned against a tree built here.
   describe('against a line written to fail', () => {
     let lineDir: string
 
