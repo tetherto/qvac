@@ -64,7 +64,9 @@ export async function decodeAudioToStream(
     const audioStream = fs.createReadStream(inputPath)
     // bare-fs read streams are async-iterable over Buffer at runtime; the
     // decoder types its input as AsyncIterable<Buffer>.
-    const response = decoder.run(audioStream as unknown as AsyncIterable<Buffer>)
+    const response = decoder.run(audioStream as unknown as AsyncIterable<Buffer>, {
+      retainOutput: false
+    })
 
     return decoderResponseToStream(response, {
       inputPath,

@@ -23,6 +23,10 @@ required plugins explicitly. `audiogen-ggml` can also produce PCM or WAV without
 FFmpeg. Compressed audio file decoding and compressed audiogen output formats
 require `bare-ffmpeg` to be bundled.
 
+Decoded audio input streams consume PCM updates without retaining a second
+history in the decoder response. The decoder still buffers the encoded input,
+and downstream stream queues can retain decoded PCM.
+
 MOSS transcription uses the `moss-transcribe` model type and plugin. It supports
 batch transcription, with optional `maxThreads`, `useGPU` (Metal), and
 `backendsDir` model configuration. Per-request `hotwords` or `prompt` and
