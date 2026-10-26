@@ -15,16 +15,15 @@ git clone https://github.com/tetherto/qvac
 cd qvac
 /setup claude                                      # general repository skills for Claude only
 bash packages/ocr-ggml/.agent/setup.sh claude      # opt in to the OCR pilot
-/orchestrate <task>                                # run the OCR pipeline for an Asana task
+/orchestrate <task>                                # run the OCR pipeline from supplied requirements
 ```
 
 Use `cursor` or `all` instead of `claude` with the package setup script to
 install the OCR pilot for those targets. Users who do not want the OCR pilot do
 not run the package script.
 
-The `<task>` argument accepts an Asana task ID or full URL:
-- `1213560067347874`
-- `https://app.asana.com/0/1234567890/1213560067347874`
+The `<task>` argument accepts a task description or a path to a local
+requirements file.
 
 ## Directory Layout
 
@@ -32,7 +31,6 @@ The `<task>` argument accepts an Asana task ID or full URL:
 .agent/
 ├── README.md               # This file
 ├── conduct.md              # Behavioral rules for all agents
-├── mcp.json                # Shared MCP server definitions (Asana)
 ├── settings.json           # Canonical settings (permission allowlist)
 ├── setup.sh                # Installs the opt-in OCR config for Claude or Cursor
 ├── agents/                 # Agent definitions
@@ -72,14 +70,13 @@ Not all features work identically in both tools:
 | Skills (`/release`, `/ci-validate`, `/commit-trace`) | Yes | Yes |
 | Knowledge files (CI, vcpkg, etc.) | Yes (`.claude/knowledge/`) | Yes (`.cursor/rules/knowledge/*.mdc`) |
 | Conduct rules | Yes (`.claude/agent-conduct.md`) | Yes (`.cursor/rules/agent-conduct.mdc`) |
-| MCP (Asana) | Manual setup (`~/.claude/settings.json`) | Auto-generated (`.cursor/mcp.json`) |
 | Agent definitions (implementer, reviewer, etc.) | Yes (`.claude/agents/`, named launch) | Partial (`.cursor/rules/agents/*.mdc`, as Task sub-agent prompts) |
 | `/orchestrate` (multi-agent pipeline) | Yes (named agent spawning) | Partial (via Task tool sub-agents, no model control) |
 | Model selection per agent (`opus` / `sonnet`) | Yes | No — Cursor Task tool only supports `fast` or inherited default |
 | Persistent agent memory | Yes (`memory: project`) | No — sub-agents have no persistent memory |
 | `/loop` (CI polling) | Yes (built-in) | No — use `Shell` with `gh run watch` or manual polling |
 
-**Cursor users** get skills, knowledge, conduct rules, agent prompts, and Asana MCP. Agent definitions are available as `.mdc` reference prompts that can be passed to `Task(subagent_type="generalPurpose")` sub-agents. The `/orchestrate` pipeline works with modifications — it delegates phases to Task sub-agents instead of named agents. Limitations: no per-agent model selection, no persistent agent memory, no `/loop` built-in.
+**Cursor users** get skills, knowledge, conduct rules, and agent prompts. Agent definitions are available as `.mdc` reference prompts that can be passed to `Task(subagent_type="generalPurpose")` sub-agents. The `/orchestrate` pipeline works with modifications — it delegates phases to Task sub-agents instead of named agents. Limitations: no per-agent model selection, no persistent agent memory, no `/loop` built-in.
 
 ## How Setup Works
 
@@ -93,7 +90,6 @@ pilot assets:
 | `agents/*.md` | `.claude/agents/` (named agents) | `.cursor/rules/agents/*.mdc` (Task sub-agent prompts) |
 | `skills/*/SKILL.md` | `.claude/skills/` | `.cursor/skills/` |
 | `settings.json` | `.claude/settings.json` | — (not applicable) |
-| `mcp.json` | — (manual `~/.claude/settings.json`) | `.cursor/mcp.json` (reformatted) |
 
 Agent files copied to Cursor have Claude-specific frontmatter (`model`, `color`,
 `memory`) stripped and `.claude/` path references replaced with Cursor
@@ -103,18 +99,18 @@ separate repository-wide skill setup and Claude link migration behavior.
 ## Full Pipeline (`/orchestrate`)
 
 ```
-Phase 0:    Setup         Parse Asana URL → read task → create feature branch
+Phase 0:    Setup         Read supplied requirements → create feature branch
 Phase 1:    Implement     implementer agent → write code, verify build/tests
 Phase 1.5:  Analyze       Auto-detect if tests and CI are needed
 Phase 1.75: Test          test-writer agent → add tests (if needed)
 Phase 2:    CI            ci-validator agent → cross-platform CI (if native addon)
 Phase 3:    Review        code-reviewer agent → review diff, fix issues
 Phase 4:    Re-validate   ci-validator agent → re-run CI if reviewer made fixes
-Phase 5:    PR            Push branch, create PR, link to Asana
-Phase 6:    Report        Summary, mark Asana task complete
+Phase 5:    PR            Push branch, create PR, report PR link in chat
+Phase 6:    Report        Summary and completion status in chat
 ```
 
-The orchestrator stops and reports at any failure point. The Asana task is updated with status at every stop.
+The orchestrator stops and reports at any failure point. The current status is reported in chat at every stop.
 
 ### When Tests Are Added
 
@@ -123,7 +119,7 @@ The orchestrator stops and reports at any failure point. The Asana task is updat
 | New public API / exported functions | Yes |
 | New feature with user-facing behavior | Yes |
 | Bug fix (regression test) | Yes |
-| Asana acceptance criteria describe testable behavior | Yes |
+| Supplied acceptance criteria describe testable behavior | Yes |
 | Refactoring with no behavior change | No |
 | Docs / config / CI only | No |
 | Implementer already added tests | No |
@@ -177,7 +173,7 @@ For multiple independent tasks, run agents in parallel with non-overlapping file
 Rules:
 - Parallel tasks **must not** modify the same files
 - Review diffs between waves — cheapest moment to catch wrong approaches
-- Check Asana for agent comments flagging ambiguity
+- Check chat reports for questions about ambiguous requirements
 
 ## Troubleshooting
 
@@ -185,61 +181,10 @@ Rules:
 |---|---|
 | Agent stops for permission prompt | Add the operation to `.agent/settings.json`, rerun the OCR package setup script |
 | Build gate fails | Check output, fix manually or in new session, re-run |
-| Agent modifies wrong files | Make file scopes more explicit in Asana task |
-| Agent stops on ambiguity | Answer the question in Asana, re-run |
+| Agent modifies wrong files | Supply explicit file scopes in chat or local requirements |
+| Agent stops on ambiguity | Answer the question in chat, re-run |
 | CI fails after push | Check `gh run list`; fix if related, note if not |
-| Agent can't connect to Asana | See [Asana connection troubleshooting](#asana-connection-troubleshooting) below |
 | `gh: command not found` or PR creation fails | See [GitHub CLI troubleshooting](#github-cli-gh-troubleshooting) below |
-
-### Asana Connection Troubleshooting
-
-If `/orchestrate` fails at Phase 0 because the agent cannot read the Asana task (authentication error, empty response, or MCP server not available), follow these steps:
-
-#### 1. Generate a Personal Access Token
-
-1. Go to **https://app.asana.com/0/my-apps**
-2. Click **"Create new token"**
-3. Name it (e.g. `cursor-agent` or `claude-agent`)
-4. Copy the token immediately — it is only shown once
-
-#### 2. Set the token in your environment
-
-Add this to your shell profile (`~/.bashrc`, `~/.zshrc`, or equivalent):
-
-```bash
-export ASANA_ACCESS_TOKEN="<your-token>"
-```
-
-Reload the shell:
-
-```bash
-source ~/.bashrc   # or: source ~/.zshrc
-```
-
-#### 3. Tool-specific setup
-
-**Cursor**: The MCP config (`.cursor/mcp.json`) references `${ASANA_ACCESS_TOKEN}` from the environment. After exporting the token, **restart Cursor** (or reload the window) so the MCP server picks it up.
-
-**Claude Code**: Add the token to `~/.claude/settings.json` under the `mcpServers.asana.env` key, or export it in your shell before launching Claude Code.
-
-#### 4. Verify the token works
-
-```bash
-curl -s -H "Authorization: Bearer $ASANA_ACCESS_TOKEN" \
-  https://app.asana.com/api/1.0/users/me
-```
-
-You should see a JSON response with your Asana user info. If you get `401 Unauthorized`, the token is invalid or expired — generate a new one.
-
-#### Common issues
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| `ASANA_ACCESS_TOKEN` is empty | Token not exported in current shell | Add `export` line to shell profile and reload |
-| MCP server not available (Cursor) | Cursor launched before token was set | Restart Cursor after exporting the token |
-| MCP server not available (Claude Code) | Token not in `~/.claude/settings.json` | Add token to settings or export in shell |
-| `401 Unauthorized` from API | Token expired or revoked | Generate a new token at https://app.asana.com/0/my-apps |
-| Agent falls back to WebFetch | MCP server not connected | Verify token is set, restart the tool, re-run `/setup` |
 
 ### GitHub CLI (`gh`) Troubleshooting
 

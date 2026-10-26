@@ -1,6 +1,8 @@
 'use strict'
 
+const fs = require('bare-fs')
 const path = require('bare-path')
+const process = require('bare-process')
 const test = require('brittle')
 
 const ASRGgml = require('../../index.js')
@@ -27,8 +29,22 @@ const PROJECTED_FIELDS = [
   'hostBytes'
 ]
 
+const APPLE_PLATFORMS = ['darwin', 'ios']
+const QUANTIZATION_SUFFIX = /[.-](?:f16|f32|bf16|q[0-9]_[0-9k]|mxfp4|nvfp4)$/
+
 function sumRows(fit) {
   return fit.deviceBytes + fit.hostBytes
+}
+
+function diarizerSidecarPattern(modelPath) {
+  const stem = path.basename(modelPath, '.gguf').replace(QUANTIZATION_SUFFIX, '')
+  const escaped = stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`^${escaped}-diarizer-[0-9]+\\.mlmodelc$`)
+}
+
+function hasDiarizerSidecar(modelPath) {
+  const pattern = diarizerSidecarPattern(modelPath)
+  return fs.readdirSync(path.dirname(modelPath)).some((name) => pattern.test(name))
 }
 
 test('a whisper projection is internally consistent', { timeout: TEST_TIMEOUT_MS }, async (t) => {
@@ -131,6 +147,24 @@ test(
     for (const field of PROJECTED_FIELDS) {
       t.is(descriptions[field], files[field], `${field} matches`)
     }
+  }
+)
+
+test(
+  'a Nemotron 3 Diarization projection charges its staged Core ML diarizers',
+  { timeout: TEST_TIMEOUT_MS },
+  async (t) => {
+    const modelPath = process.env.QVAC_TEST_NEMOTRON_DIARIZATION_GGUF
+    if (!modelPath || !fs.existsSync(modelPath)) {
+      t.pass('Set QVAC_TEST_NEMOTRON_DIARIZATION_GGUF to run this model test')
+      return
+    }
+
+    const fit = await ASRGgml.assessFit({ modelPath, audioSeconds: 30, backendsDir })
+    const charged = APPLE_PLATFORMS.includes(process.platform) && hasDiarizerSidecar(modelPath)
+
+    t.not(fit.status, 'error', 'the model was projected')
+    t.is(fit.coremlBytes > 0, charged, 'sidecars are charged exactly when Core ML can load them')
   }
 )
 

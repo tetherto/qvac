@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from tetherto.qvac_sdk import AssessModelFitRequest, Client, assess_model_fit
+from tetherto.qvac_sdk import Client, assess_model_fit
 from tetherto.qvac_sdk.models import (
     QWEN3_1_7B_INST_Q4,
     QWEN3_4B_INST_Q4_K_M,
@@ -52,38 +52,18 @@ async def main() -> int:
     async with Client() as client:
         t = client.transport
         try:
-            # The generated stub takes the wire request, so fields are camelCase
-            # and the constant is spelled out field by field: JS's assessModelFit
-            # wrapper only infers `modelType` and hands the whole descriptor
-            # through. The checksum is what matches a candidate to its catalog
-            # profile, so a bare `src` string would cost the profile and leave
-            # `name` as the full registry:// URL. `modelConfig` collides with
-            # pydantic's own attribute, so build the request from a dict.
-            request = AssessModelFitRequest.model_validate(
-                {
-                    "type": "assessModelFit",
-                    "models": [
-                        {
-                            "modelSrc": {
-                                "src": model.src,
-                                "name": model.name,
-                                "sha256Checksum": model.sha256_checksum,
-                                "registryPath": model.registry_path,
-                                "registrySource": model.registry_source,
-                            },
-                            "modelType": "llamacpp-completion",
-                            "modelConfig": {"ctx_size": CONTEXT_TOKENS},
-                        }
-                        for model in CANDIDATES
-                    ],
-                    # Declared for aggregation only, not a scheduling instruction:
-                    # "sequential" counts the largest operation peak, "concurrent"
-                    # counts one per model.
-                    "execution": "sequential",
-                    "policy": "interactive-v1",
-                }
+            result = await assess_model_fit(
+                t,
+                models=[
+                    {"model_src": model, "model_config": {"ctx_size": CONTEXT_TOKENS}}
+                    for model in CANDIDATES
+                ],
+                # Declared for aggregation only, not a scheduling instruction:
+                # "sequential" counts the largest operation peak, "concurrent"
+                # counts one per model.
+                execution="sequential",
+                policy="interactive-v1",
             )
-            result = await assess_model_fit(t, request)
 
             print(f"▸ Budget basis: {result.basis.value}")
             if result.budget:
@@ -109,8 +89,6 @@ async def main() -> int:
 
             print(f"\n▸ At {CONTEXT_TOKENS} tokens of context")
             for index, model in enumerate(result.models):
-                # The generated verdict/evidence fields are enums, not strings:
-                # `model.verdict == "unknown"` is always False, so read `.value`.
                 mark = VERDICT_MARK[model.verdict.value]
                 size = gib(CANDIDATES[index].expected_size).rjust(9)
                 computed_only = (

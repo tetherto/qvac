@@ -19,7 +19,7 @@ git diff main...HEAD
 git log main..HEAD --oneline
 ```
 
-If an Asana task ID is provided, read the task for context on expected behavior and acceptance criteria.
+Use the requirements supplied in chat or local files for expected behavior and acceptance criteria.
 
 ### Step 2: Identify the package type and test framework
 

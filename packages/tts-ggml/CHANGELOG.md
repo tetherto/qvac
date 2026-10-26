@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Audio8 streaming methods emit PCM as codec windows finish, with cancellation
+  and no full-waveform replay.
+
 - Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
   the speech addons so they use the same source revision
   ([#5245](https://github.com/tetherto/qvac/pull/5245)).

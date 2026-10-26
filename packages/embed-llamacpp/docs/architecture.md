@@ -31,6 +31,7 @@
 - [Decision 7: TypeScript Definitions](#decision-7-typescript-definitions)
 - [Decision 8: Laya Decisions as a Separate Model Class](#decision-8-laya-decisions-as-a-separate-model-class)
 - [Decision 9: Reranking in the Addon, Not in Fabric](#decision-9-reranking-in-the-addon-not-in-fabric)
+- [Decision 10: Multimodal Embeddings in GGMLBert](#decision-10-multimodal-embeddings-in-ggmlbert)
 
 ### Technical Debt
 - [Limited Error Context](#1-limited-error-context)
@@ -167,7 +168,7 @@ classDiagram
     class GGMLBert {
         +constructor(args: GGMLBertArgs)
         +load() Promise~void~
-        +run(text) Promise~QvacResponse~
+        +run(input) Promise~QvacResponse~
         +cancel() Promise~void~
         +unload() Promise~void~
         +getState() object
@@ -509,8 +510,8 @@ sequenceDiagram
     participant Model as BertModel
     participant Llama as llama.cpp
     
-    JS->>IF: run(text or text[])
-    IF->>Bind: runJob({type:'text'|'sequences', input})
+    JS->>IF: run(text, text[], parts or {inputs})
+    IF->>Bind: runJob({type:'text'|'sequences'|'multimodal', input})
     Bind->>Addon: runJob(input) [lock mutex]
     Addon->>Addon: Enqueue job
     Addon->>Addon: cv.notify_one()
@@ -951,6 +952,45 @@ In fabric, the scoring is part of the library (`llama_get_embeddings_seq` return
 
 ---
 
+## Decision 10: Multimodal Embeddings in GGMLBert
+
+<details>
+<summary>⚡ TL;DR</summary>
+
+**Chose:** An optional `files.projectionModel` on `GGMLBert`, with inputs given as ordered text and media parts, embedded by a `MultimodalEmbedder` that `BertModel` owns. Each input is decoded as one mixed batch of text tokens and media embeddings.
+**Why:** A multimodal embedding model has the same output as a text one, and a model without memory only embeds a mixed input correctly when all of it goes through one decode
+**Cost:** Each multimodal input is one decode, so it is not packed with other inputs.
+
+</details>
+
+### Context
+
+EmbeddingGemma 2 (upstream llama.cpp #30054) embeds text, images and audio into one vector space. It loads its image and audio towers from a projection model (mmproj) through llama.cpp's mtmd library, which fabric already ships and exports. The model keeps no memory between batches. Upstream #29622 lets one batch carry both token IDs and embeddings, and llama-server's `add_prompt_mixed()` uses that for memory-less models.
+
+### Decision
+
+- **Same class, optional file:** `files.projectionModel` on `GGMLBert`, the name `@qvac/llm-llamacpp` uses. Without it, nothing changes.
+- **Ordered parts, only in `{ inputs }`:** a multimodal input is an array of strings and `{ media: Uint8Array }` parts, inside `{ inputs: [...] }`. The addon passes them to `mtmd_tokenize_from_parts()`, so callers never write mtmd's media marker. A bare array keeps its one meaning, one embedding per string, and an array holding media is rejected. An input without media takes the text path.
+- **Projector options need a projection model:** the options are taken out of the config and validated by one function, used by both load and `assessFit`. Set without `files.projectionModel`, they fail the load with `InvalidConfiguration`, as llama.cpp's argument parser rejected them before, and `assessFit` refuses them, so load and fit agree.
+- **A component, not a model class:** `BertModel` creates a `MultimodalEmbedder` in `onLoaded` when a projection model is given. A model loaded with one still embeds plain text through the text path, and load, stats and cancel stay in one place.
+- **One mixed batch per input:** each media chunk is encoded and its embedding rows are added next to the text tokens, in prompt order and with llama-server's positions, to one `llama_batch_ext` (which copies them), for one `llama_process()`.
+
+### Rationale
+
+- The output and the job flow are those of text embeddings, so a second class would duplicate them.
+- Ordered parts keep media placement exact, and keep mtmd's marker out of the public API.
+- Following `add_prompt_mixed()` keeps the result equal to llama-server's for the same input.
+
+### Trade-offs
+- ✅ One embedding API for text, images and audio
+- ✅ Text-only use and models without a projection model are unaffected
+- ✅ The projector options of `@qvac/llm-llamacpp` (`image-max-tokens`, `image-min-tokens`, `mmproj-no-audio`, `mmproj-use-gpu` with its Android default, `image-max-megapixels`), with the same keys. The addon takes them out of the config itself, because llama.cpp's argument parser rejects them for an embedding load. Unlike llm, audio loads by default and the image budget is the projector's own (1120 tokens for EmbeddingGemma 2, not llm's 280), so results match llama-server.
+- ❌ A multimodal input must fit in one ubatch (`batch_size`); a larger one is rejected before decoding with `InputTokensExceedBatchSize`. The image-token budget is not capped to the batch automatically, as upstream llama-server does, because fabric has no API to read the projector's default budget (`image-max-tokens` replaces that default rather than capping it); callers lower it with `image-max-tokens`.
+- ❌ Multimodal inputs are decoded one at a time, not packed into one batch
+- ❌ No video input. mtmd reads video only through ffmpeg.
+
+---
+
 # Technical Debt
 
 ### 1. Limited Error Context
@@ -964,4 +1004,4 @@ In fabric, the scoring is part of the library (`llama_get_embeddings_seq` return
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-10-12
+**Last Updated:** 2026-10-20
