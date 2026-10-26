@@ -47,7 +47,6 @@
         "pcre2",
         "pixman",
         "pthread",
-        "brotli",
         "bzip2",
         "gperf",
         "libsystemd",
@@ -78,6 +77,14 @@
         "wil",
         "gtest",
         "spirv-headers"
+      ]
+    },
+    {
+      "kind": "git",
+      "baseline": "61d7eaeb094a6acbc23d9c2e54de9208175fda47",
+      "repository": "https://github.com/microsoft/vcpkg",
+      "packages": [
+        "brotli"
       ]
     }
   ]

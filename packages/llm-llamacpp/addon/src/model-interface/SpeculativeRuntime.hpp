@@ -79,11 +79,6 @@ struct GgufShape {
 /// fabric's `n_embd_out()`, else `embedding_length`.
 GgufShape readGgufShape(const std::string& path);
 
-/// Whether a fit that cannot measure this MTP draft leaves it out instead of
-/// refusing the projection: only a Gemma 4 assistant with MTP layers, which
-/// fabric cannot measure on its own but loads.
-bool fitLeavesOutMtpDraft(const GgufShape& draft);
-
 /// Why an external MTP head cannot draft for the target, or empty. Fabric
 /// aborts on a width mismatch. A value of 0 is unknown and not compared.
 std::string mtpHeadMismatch(
@@ -118,12 +113,17 @@ public:
     return cparams_.ctx_type == LLAMA_CONTEXT_TYPE_MTP;
   }
 
-  /// Measures the draft side at context `nCtx` and adds it to `breakdown`,
-  /// the target's rows on `devices` (see `addDraftMemory`). As in fabric's
-  /// fit, it is measured at the requested placement, not the fitted one.
-  /// False, with `breakdown` untouched, when it cannot be measured.
+  /// Measures the draft side as fabric's fit does, at the context of
+  /// `cparamsTarget` and, for a draft that borrows from the target (a Gemma 4
+  /// assistant, a DFlash model without its own embeddings), next to the
+  /// target model, then adds it to `breakdown`, the target's rows on
+  /// `devices` (see `addDraftMemory`). As in fabric's fit, it is measured at
+  /// the requested placement, not the fitted one. False, with `breakdown`
+  /// untouched, when it cannot be measured.
   bool addMemory(
-      uint32_t nCtx, const std::vector<ggml_backend_dev_t>& devices,
+      const char* pathTarget, const llama_model_params& mparamsTarget,
+      const llama_context_params& cparamsTarget,
+      const std::vector<ggml_backend_dev_t>& devices,
       common_device_memory_data_vec& breakdown) const;
 
 private:

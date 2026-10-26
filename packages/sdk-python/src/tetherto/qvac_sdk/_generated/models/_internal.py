@@ -2644,6 +2644,10 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
     tool_definitions_dropped: Annotated[
         float | None, Field(alias="toolDefinitionsDropped")
     ] = None
+    draft_tokens: Annotated[float | None, Field(alias="draftTokens")] = None
+    draft_accepted_tokens: Annotated[
+        float | None, Field(alias="draftAcceptedTokens")
+    ] = None
     backend_device: Annotated[
         BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice
         | None,
@@ -2778,6 +2782,10 @@ class BatchCompletionStreamResponseStats(GeneratedBaseModel):
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
     tool_definitions_dropped: Annotated[
         float | None, Field(alias="toolDefinitionsDropped")
+    ] = None
+    draft_tokens: Annotated[float | None, Field(alias="draftTokens")] = None
+    draft_accepted_tokens: Annotated[
+        float | None, Field(alias="draftAcceptedTokens")
     ] = None
     backend_device: Annotated[
         BatchCompletionStreamResponseStatsBackendDevice | None,
@@ -3990,6 +3998,10 @@ class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseM
     tool_definitions_dropped: Annotated[
         float | None, Field(alias="toolDefinitionsDropped")
     ] = None
+    draft_tokens: Annotated[float | None, Field(alias="draftTokens")] = None
+    draft_accepted_tokens: Annotated[
+        float | None, Field(alias="draftAcceptedTokens")
+    ] = None
     backend_device: Annotated[
         CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice | None,
         Field(
@@ -4626,6 +4638,10 @@ class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel)
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
     tool_definitions_dropped: Annotated[
         float | None, Field(alias="toolDefinitionsDropped")
+    ] = None
+    draft_tokens: Annotated[float | None, Field(alias="draftTokens")] = None
+    draft_accepted_tokens: Annotated[
+        float | None, Field(alias="draftAcceptedTokens")
     ] = None
     backend_device: Annotated[
         CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice | None,
@@ -10578,6 +10594,12 @@ class FitTarget1(RootModel[str]):
     ]
 
 
+class LoadModelSrcRequestLlamacppCompletionModelConfigSpecType(Enum):
+    none = "none"
+    draft_mtp = "draft-mtp"
+    draft_dflash = "draft-dflash"
+
+
 class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -10680,6 +10702,114 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc(
     ] = None
     addon: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc(GeneratedBaseModel):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon
         | Literal["vad"]
         | None,
         Field(
@@ -11107,11 +11237,49 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             le=2147483647,
         ),
     ] = None
+    spec_type: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigSpecType | None,
+        Field(
+            description="Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head, or with an external MTP head given as `draftModelSrc`; the head, when given, otherwise the model, must ship MTP layers, and a head must match the model, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, which it requires. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`.",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigSpecType",
+        ),
+    ] = None
+    spec_draft_n_max: Annotated[
+        int | None,
+        Field(
+            description="Longest draft per step (1–64, default 3). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+            ge=1,
+            le=64,
+        ),
+    ] = None
+    spec_draft_n_min: Annotated[
+        int | None,
+        Field(
+            description="Shortest draft worth verifying (0–64, default 0, at most `spec_draft_n_max`); shorter drafts are dropped. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+            ge=0,
+            le=64,
+        ),
+    ] = None
+    spec_draft_p_min: Annotated[
+        float | None,
+        Field(
+            description="Minimum draft-head probability for a token to extend the draft (0–1, default 0). Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
     projection_model_src: Annotated[
         str | LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc | None,
         Field(
             alias="projectionModelSrc",
             description="Multimodal projection (mmproj / vision encoder) model source; multimodal models only.",
+        ),
+    ] = None
+    draft_model_src: Annotated[
+        str | LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc | None,
+        Field(
+            alias="draftModelSrc",
+            description="Draft model source, as llama-server's `--spec-draft-model`: the DFlash model, required by `spec_type: 'draft-dflash'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. Placed like the model (`device`, `gpu_layers`). Model fit checks count an MTP head's memory but not a DFlash model's or a Gemma 4 assistant's, so leave room for those.",
         ),
     ] = None
     image_tile_mode: Annotated[
