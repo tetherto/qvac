@@ -222,13 +222,15 @@ export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt
 
 // A version on npm was published from the commit in its gitHead. Publishing the
 // rest of the train from another commit would mix sources in one release.
+// gitHeadOf returns { found, value } for the version on npm.
 export function publishedElsewhere (moved, gitHeadOf, head) {
   const errors = []
   for (const project of moved) {
-    const gitHead = gitHeadOf(project)
-    if (gitHead && gitHead !== head) {
-      errors.push(`${project.name}@${project.version} was published from ${gitHead}, not ${head}; cut a new train branch`)
-    }
+    const { found, value: gitHead } = gitHeadOf(project)
+    if (!found || gitHead === head) continue
+    errors.push(gitHead
+      ? `${project.name}@${project.version} was published from ${gitHead}, not ${head}; cut a new train branch`
+      : `${project.name}@${project.version} is on npm without a gitHead, so it was not published from ${head}; cut a new train branch`)
   }
   return errors
 }

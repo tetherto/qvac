@@ -241,9 +241,16 @@ const HEAD = 'a'.repeat(40)
 const OTHER = 'b'.repeat(40)
 
 test('refuses to publish the rest of a train from another commit', () => {
-  const gitHeads = { '@qvac/inference': OTHER, '@qvac/sdk': HEAD }
-  assert.deepEqual(publishedElsewhere(MOVED, (project) => gitHeads[project.name] ?? null, HEAD), [
+  const views = { '@qvac/inference': { found: true, value: OTHER }, '@qvac/sdk': { found: true, value: HEAD } }
+  assert.deepEqual(publishedElsewhere(MOVED, (project) => views[project.name] ?? { found: false, value: null }, HEAD), [
     `@qvac/inference@0.22.0 was published from ${OTHER}, not ${HEAD}; cut a new train branch`,
+  ])
+})
+
+test('treats a version npm has without a gitHead as published elsewhere, and one it does not have as unpublished', () => {
+  const views = { '@qvac/inference': { found: true, value: null }, '@qvac/sdk': { found: false, value: null } }
+  assert.deepEqual(publishedElsewhere(MOVED, (project) => views[project.name] ?? { found: false, value: null }, HEAD), [
+    `@qvac/inference@0.22.0 is on npm without a gitHead, so it was not published from ${HEAD}; cut a new train branch`,
   ])
 })
 

@@ -62,7 +62,9 @@ function gitShow (sha, path) {
   return result.status === 0 ? result.stdout : null
 }
 
-// E404 means both "no such package" and "no such version".
+// E404 means both "no such package" and "no such version", and also a version
+// npm has accepted but does not serve yet. `found` keeps that apart from a field
+// the version does not have, where `value` is null.
 function npmView (spec, field) {
   const result = run('npm', ['view', spec, field, '--json', '--prefer-online'])
   if (result.status !== 0) {
@@ -70,14 +72,14 @@ function npmView (spec, field) {
     try {
       code = JSON.parse(result.stdout).error?.code
     } catch {}
-    if (code === 'E404') return null
+    if (code === 'E404') return { found: false, value: null }
     throw new Error(`npm view ${spec} failed (exit ${result.status}): ${result.stderr || result.stdout}`)
   }
-  return result.stdout.trim() ? JSON.parse(result.stdout) : null
+  return { found: true, value: result.stdout.trim() ? JSON.parse(result.stdout) : null }
 }
 
 function isPublished (name, version) {
-  return npmView(`${name}@${version}`, 'version') !== null
+  return npmView(`${name}@${version}`, 'version').found
 }
 
 function setOutputs (outputs) {
@@ -275,7 +277,7 @@ function publishTrain ([movedJson], options) {
       console.log(`${project.name}@${project.version} is already on npm; skipped`)
       continue
     }
-    const latest = npmView(project.name, 'dist-tags.latest')
+    const { value: latest } = npmView(project.name, 'dist-tags.latest')
     if (latest && compareVersions(project.version, latest) < 0) {
       errors.push(`${project.name}@${project.version} is below npm's latest ${latest}; release an older line through its own workflow`)
     }
@@ -318,20 +320,20 @@ function waitServed ([movedJson, tarballDir]) {
   const deadline = Date.now() + 10 * 60 * 1000
   const errors = []
   for (const project of moved) {
-    let shasum = null
+    let view = { found: false }
     for (;;) {
       try {
-        shasum = npmView(`${project.name}@${project.version}`, 'dist.shasum')
+        view = npmView(`${project.name}@${project.version}`, 'dist.shasum')
       } catch (error) {
         console.log(error.message)
       }
-      if (shasum) break
+      if (view.found) break
       if (Date.now() > deadline) fail([`npm does not serve ${project.name}@${project.version} after 10 minutes`])
       spawnSync('sleep', ['10'])
     }
     console.log(`npm serves ${project.name}@${project.version}`)
     const expected = sha1(join(tarballDir, index[project.name]))
-    if (shasum !== expected) errors.push(`${project.name}@${project.version} on npm has sha1 ${shasum}; the built tarball has ${expected}`)
+    if (view.value !== expected) errors.push(`${project.name}@${project.version} on npm has sha1 ${view.value}; the built tarball has ${expected}`)
   }
   if (errors.length) fail(errors)
 }
@@ -342,9 +344,10 @@ function tagTrain ([name, movedJson], options) {
     releaseProject: resolved.githubRelease?.project,
     remoteCommit: (tag) => parseLsRemote(capture('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`, `refs/tags/${tag}^{}`]), tag),
     gitHeadOf: (project) => {
-      const gitHead = npmView(`${project.name}@${project.version}`, 'gitHead')
-      if (!gitHead) throw new Error(`${project.name}@${project.version} has no gitHead on npm`)
-      return gitHead
+      const { found, value } = npmView(`${project.name}@${project.version}`, 'gitHead')
+      if (!found) throw new Error(`npm does not serve ${project.name}@${project.version}`)
+      if (!value) throw new Error(`${project.name}@${project.version} has no gitHead on npm`)
+      return value
     },
   })
   for (const tag of plan.existing) console.log(`${tag} is already on origin at its npm gitHead`)
