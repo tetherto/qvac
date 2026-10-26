@@ -76,6 +76,7 @@ export interface DuplexPluginHandlerDefinition<
  *
  * Built-in artifact keys:
  * - `projectionModelPath` - LLM multimodal projection model
+ * - `draftModelPath` - LLM speculative-decoding draft model (DFlash model or external MTP head)
  * - `vadModelPath` - Whisper voice activity detection model
  * - `s3genPath` - TTS (Chatterbox GGML) S3Gen + HiFT GGUF
  * - `referenceAudioPath` - TTS (Chatterbox GGML) path to reference WAV file for voice cloning

@@ -9,14 +9,15 @@ described in [README.md](README.md) and applies here. Its own configuration live
 
 ## Endpoints
 
-| Method   | Path                  | Notes                                   |
-| -------- | --------------------- | --------------------------------------- |
-| `POST`   | `/qvac/v1/chat/batch` | Batch chat completion (LLM)             |
-| `DELETE` | `/qvac/v1/kv_cache`   | Reclaim automatic KV cache              |
-| `GET`    | `/qvac/v1/system`     | Host CPU, memory and GPU capacity       |
-| `POST`   | `/qvac/v1/models/fit` | Whether models fit, before loading them |
-| `POST`   | `/qvac/v1/translate`  | Text translation (NMT model)            |
-| `POST`   | `/qvac/v1/ocr`        | Text recognition in an image            |
+| Method   | Path                       | Notes                                   |
+| -------- | -------------------------- | --------------------------------------- |
+| `POST`   | `/qvac/v1/chat/batch`      | Batch chat completion (LLM)             |
+| `DELETE` | `/qvac/v1/kv_cache`        | Reclaim automatic KV cache              |
+| `GET`    | `/qvac/v1/system`          | Host CPU, memory and GPU capacity       |
+| `POST`   | `/qvac/v1/models/fit`      | Whether models fit, before loading them |
+| `POST`   | `/qvac/v1/translate`       | Text translation (NMT model)            |
+| `POST`   | `/qvac/v1/ocr`             | Text recognition in an image            |
+| `POST`   | `/qvac/v1/classifications` | Image classification                    |
 
 ## Binary inputs
 
@@ -455,3 +456,73 @@ The [binary input](#binary-inputs) errors apply to `image`, plus:
 
 The detector model is derived from the recognizer; set `config.detectorModelSrc` to override
 it. `OCR_DOCTR` selects the language-agnostic DocTR pipeline.
+
+## `POST /qvac/v1/classifications`
+
+Classify an image with a classification model, backed by the SDK's `classify()`.
+
+`model` names a `serve.models` alias whose endpoint category is `classification`. Send the
+request as JSON or `multipart/form-data`.
+
+| Field   | Type               | Required | Meaning                                                        |
+| ------- | ------------------ | -------- | -------------------------------------------------------------- |
+| `model` | `string`           | Yes      | A `serve.models` alias with endpoint category `classification` |
+| `image` | file, data URL, id | Yes      | A PNG or JPEG, in any [binary input](#binary-inputs) form      |
+| `top_k` | `integer`          | No       | Return only the K most likely labels. Default: every label     |
+
+`results` ranks the labels by `confidence`, highest first.
+
+```json
+{
+  "object": "classification",
+  "model": "classifier",
+  "results": [
+    { "label": "food", "confidence": 0.93 },
+    { "label": "other", "confidence": 0.05 },
+    { "label": "report", "confidence": 0.02 }
+  ]
+}
+```
+
+Classification cannot be cancelled: a client disconnect drops the result, but the image is
+still classified.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/classifications \
+  -F model=classifier \
+  -F image=@photo.jpg \
+  -F top_k=1
+```
+
+### Errors
+
+The [binary input](#binary-inputs) errors apply to `image`, plus:
+
+| HTTP | `error.code`               | When                                          |
+| ---- | -------------------------- | --------------------------------------------- |
+| 400  | `invalid_json`             | Body is not valid JSON                        |
+| 400  | `invalid_multipart`        | Multipart body could not be parsed            |
+| 400  | `missing_model`            | `model` is missing                            |
+| 400  | `missing_image`            | `image` is missing or empty                   |
+| 400  | `unsupported_image_format` | `image` is not a PNG or JPEG, or is corrupt   |
+| 400  | `invalid_request`          | Unknown field, or `top_k` not a positive int  |
+| 400  | `invalid_model_type`       | Alias is not a `classification` model         |
+| 404  | `model_not_found`          | Unknown alias                                 |
+| 413  | `request_too_large`        | Upload over 100 MB                            |
+| 503  | `model_not_loaded`         | Model not loaded and lazy loading is disabled |
+
+### Configuring a classification model
+
+```json
+{
+  "serve": {
+    "models": {
+      "classifier": { "type": "ggml-classification" }
+    }
+  }
+}
+```
+
+An alias without `src` loads the addon's bundled MobileNetV3-Small, whose labels are `food`,
+`report` and `other`. Set `src` to the path of a GGUF classifier to use your own; its labels
+come from the GGUF metadata.

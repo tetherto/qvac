@@ -1,6 +1,7 @@
 import type { ServeExtension } from '@/serve/core/extensions'
 import { routes } from '@/serve/extensions/default/routes'
 import { CHAT_BATCH_FIELD_CODES } from '@/serve/extensions/default/schemas/chat-batch'
+import { CLASSIFICATIONS_FIELD_CODES } from '@/serve/extensions/default/schemas/classifications'
 import { MODEL_FIT_FIELD_CODES } from '@/serve/extensions/default/schemas/model-fit'
 import { OCR_FIELD_CODES } from '@/serve/extensions/default/schemas/ocr'
 import { SYSTEM_FIELD_CODES } from '@/serve/extensions/default/schemas/system'
@@ -16,7 +17,8 @@ const defaultExtension: ServeExtension = {
     ...SYSTEM_FIELD_CODES,
     ...MODEL_FIT_FIELD_CODES,
     ...TRANSLATE_FIELD_CODES,
-    ...OCR_FIELD_CODES
+    ...OCR_FIELD_CODES,
+    ...CLASSIFICATIONS_FIELD_CODES
   },
   async register(app) {
     for (const route of routes) {

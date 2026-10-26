@@ -53,6 +53,7 @@ The QVAC surface supports:
 * [Model fit](#post-qvacv1modelsfit) — via `/qvac/v1/models/fit`: whether models are likely to fit, before loading them.
 * [Text translation](#post-qvacv1translate) — via `/qvac/v1/translate`, backed by an NMT model.
 * [OCR](#post-qvacv1ocr) — via `/qvac/v1/ocr`, text recognition in an image.
+* [Image classification](#post-qvacv1classifications) — via `/qvac/v1/classifications`, ranked labels for an image.
 
 ## Running the server
 
@@ -671,6 +672,74 @@ the recognizer; `OCR_DOCTR` selects the language-agnostic DocTR pipeline.
   }
 }
 ```
+
+### `POST /qvac/v1/classifications`
+
+Classify an image with a classification model, backed by the SDK's `classify()`.
+
+`model` names a `serve.models` alias whose endpoint category is `classification`. Send the
+request as JSON or `multipart/form-data`.
+
+| Field   | Type               | Required | Meaning                                                        |
+| ------- | ------------------ | -------- | -------------------------------------------------------------- |
+| `model` | `string`           | Yes      | A `serve.models` alias with endpoint category `classification` |
+| `image` | file, data URL, id | Yes      | A PNG or JPEG, in any [binary input](#binary-inputs) form      |
+| `top_k` | `integer`          | No       | Return only the K most likely labels. Default: every label     |
+
+`results` ranks the labels by `confidence`, highest first.
+
+```json
+{
+  "object": "classification",
+  "model": "classifier",
+  "results": [
+    { "label": "food", "confidence": 0.93 },
+    { "label": "other", "confidence": 0.05 },
+    { "label": "report", "confidence": 0.02 }
+  ]
+}
+```
+
+Classification cannot be cancelled: a client disconnect drops the result, but the image is
+still classified.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/classifications \
+  -F model=classifier \
+  -F image=@photo.jpg \
+  -F top_k=1
+```
+
+The [binary input](#binary-inputs) errors apply to `image`, plus:
+
+| HTTP | `error.code`               | When                                          |
+| ---- | -------------------------- | --------------------------------------------- |
+| 400  | `invalid_json`             | Body is not valid JSON                        |
+| 400  | `invalid_multipart`        | Multipart body could not be parsed            |
+| 400  | `missing_model`            | `model` is missing                            |
+| 400  | `missing_image`            | `image` is missing or empty                   |
+| 400  | `unsupported_image_format` | `image` is not a PNG or JPEG, or is corrupt |
+| 400  | `invalid_request`          | Unknown field, or `top_k` not a positive int  |
+| 400  | `invalid_model_type`       | Alias is not a `classification` model         |
+| 404  | `model_not_found`          | Unknown alias                                 |
+| 413  | `request_too_large`        | Upload over 100 MB                            |
+| 503  | `model_not_loaded`         | Model not loaded and lazy loading is disabled |
+
+Configure a classification model:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "classifier": { "type": "ggml-classification" }
+    }
+  }
+}
+```
+
+An alias without `src` loads the addon's bundled MobileNetV3-Small, whose labels are `food`,
+`report` and `other`. Set `src` to the path of a GGUF classifier to use your own; its labels
+come from the GGUF metadata.
 
 ## OpenAI-compatible API
 
@@ -1657,7 +1726,7 @@ curl http://localhost:11434/v1/images/edits \
 
 | Field | Description |
 | --- | --- |
-| `image` (or `image[]`) | Source image file. **Required.** If multiple files are sent, only the first is used (warning logged). |
+| `image` (or `image[]`) | Source image files. **Required.** Multiple files are forwarded in upload order; the model must support multiple references. |
 | `model`, `prompt` | Same as JSON variants. **Required.** |
 | `size` | `WIDTHxHEIGHT` (multiples of 8) or `auto`. |
 | `n` | Positive integer. |
@@ -1665,6 +1734,18 @@ curl http://localhost:11434/v1/images/edits \
 | `strength` | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric returns `400 invalid_strength`. |
 | `response_format` | `b64_json` (default) or `url` (requires `--public-base-url`). |
 | `stream` | When `true`, response is `text/event-stream` (see Streaming above). |
+
+For multi-reference editing with FLUX.2 or Qwen-Image-2.1, send repeated `image[]` files:
+
+```bash
+curl http://localhost:11434/v1/images/edits \
+  -F "image[]=@reference-a.png" \
+  -F "image[]=@reference-b.png" \
+  -F "model=my-diffusion" \
+  -F "prompt=Place the referenced subjects together in one scene."
+```
+
+The server passes every reference as SDK `init_images` in upload order. A single file uses `init_image`. Configure the model with its required companion files and prediction settings before sending edits.
 
 <Callout type="warn">
 `mask` / `mask[]` is rejected with `400 mask_not_supported`. The diffusion engine has no mask channel, so masked inpainting cannot be honored — it would silently re-render the entire image.

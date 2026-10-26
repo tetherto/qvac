@@ -507,3 +507,101 @@ test('llmConfigSchema: an explicit gpu_layers is kept', (t) => {
   t.is(llmConfigSchema.parse({ gpu_layers: 20 }).gpu_layers, 20)
   t.is(llmConfigSchema.parse({ fit: true, gpu_layers: 20 }).gpu_layers, 20)
 })
+
+test('llmConfigBaseSchema: accepts every spec_type value', (t) => {
+  for (const value of ['none', 'draft-mtp', 'draft-dflash']) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_type: value }).success, true)
+  }
+  t.is(llmConfigBaseSchema.safeParse({ spec_type: 'draft-eagle' }).success, false)
+})
+
+test('llmConfigBaseSchema: bounds the speculative draft limits at the addon ranges', (t) => {
+  for (const value of [1, 64]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_max: value }).success, true)
+  }
+  for (const value of [0, 65, 2.5]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_max: value }).success, false)
+  }
+  for (const value of [0, 64]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_min: value }).success, true)
+  }
+  for (const value of [-1, 65, 1.5]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_min: value }).success, false)
+  }
+  for (const value of [0, 0.75, 1]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_p_min: value }).success, true)
+  }
+  for (const value of [-0.1, 1.1]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_p_min: value }).success, false)
+  }
+})
+
+test('llmConfigBaseSchema: leaves the n_min / n_max relation to the addon', (t) => {
+  t.is(
+    llmConfigBaseSchema.safeParse({
+      spec_type: 'draft-mtp',
+      spec_draft_n_max: 2,
+      spec_draft_n_min: 5
+    }).success,
+    true
+  )
+})
+
+test('llmConfigSchema: injects no speculative defaults', (t) => {
+  const result = llmConfigSchema.parse({})
+  t.absent('spec_type' in result)
+  t.absent('spec_draft_n_max' in result)
+})
+
+test('loadModelOptionsToRequestSchema: accepts draft-dflash with a draftModelSrc for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: {
+        spec_type: 'draft-dflash',
+        spec_draft_n_max: 7,
+        draftModelSrc: 'https://example.com/dflash.gguf'
+      }
+    }).success,
+    true
+  )
+})
+
+test('loadModelOptionsToRequestSchema: accepts draft-mtp with a draftModelSrc for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { spec_type: 'draft-mtp', draftModelSrc: 'https://example.com/mtp.gguf' }
+    }).success,
+    true
+  )
+})
+
+test('llmConfigSchema: rejects a draftModelSrc without speculative decoding', (t) => {
+  for (const config of [
+    { draftModelSrc: 'https://example.com/dflash.gguf' },
+    { spec_type: 'none', draftModelSrc: 'https://example.com/dflash.gguf' }
+  ]) {
+    const result = llmConfigSchema.safeParse(config)
+    t.is(result.success, false)
+    t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
+  }
+})
+
+test('llmConfigSchema: accepts a draftModelSrc with speculative decoding', (t) => {
+  for (const spec_type of ['draft-mtp', 'draft-dflash'] as const) {
+    t.is(
+      llmConfigSchema.safeParse({ spec_type, draftModelSrc: 'https://example.com/draft.gguf' })
+        .success,
+      true
+    )
+  }
+})
+
+test('llmConfigBaseSchema: leaves the draftModelSrc / spec_type pairing to the merged config', (t) => {
+  t.is(
+    llmConfigBaseSchema.safeParse({ draftModelSrc: 'https://example.com/draft.gguf' }).success,
+    true
+  )
+  t.ok(llmConfigBaseSchema.pick({ draftModelSrc: true }))
+})
