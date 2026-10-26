@@ -74,9 +74,7 @@ const skipMtpHeads = optIn('QVAC_RUN_SPECULATIVE_MTP_HEADS', 'External MTP heads
 const tolerateDivergence = readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '1'
 
 // `draft` is the `spec-draft-model`. The 27B variants download their models
-// on first use, so their tests get room for that. `unmeasured` marks a draft
-// fabric cannot measure, which a fit leaves out; drop it from the Gemma 4
-// assistant once fabric measures a draft that borrows from the model.
+// on first use, so their tests get room for that.
 const VARIANTS = [
   { label: 'MTP', target: MTP_MODEL, type: 'draft-mtp' },
   {
@@ -114,7 +112,6 @@ const VARIANTS = [
     target: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
     type: 'draft-mtp',
     draft: 'gemma-4-E2B-it-assistant-Q8_0.gguf',
-    unmeasured: true,
     skip: skipMtpHeads
   },
   {
@@ -378,8 +375,9 @@ safeTest('MTP with an image prompt', { timeout: 900_000 }, async (t) => {
   }
 })
 
-// A projection with a draft model is a verdict; only a draft fabric can
-// measure adds to the figures. Kept here rather than in fit.test.js because
+// A projection with a draft model is a verdict, and the draft model is in
+// its figures, including one that borrows from the model (a Gemma 4
+// assistant, a DFlash drafter). Kept here rather than in fit.test.js because
 // the variants' models are opt-in.
 for (const variant of VARIANTS.filter((v) => v.draft)) {
   safeTest(
@@ -400,17 +398,14 @@ for (const variant of VARIANTS.filter((v) => v.draft)) {
       })
 
       t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
-      const total = (projection) =>
-        projection.devices.reduce(
-          (sum, row) => sum + row.modelBytes + row.contextBytes + row.computeBytes,
-          0
-        )
-      t.comment(`${variant.label}: plain ${total(plain)} bytes, speculative ${total(fit)} bytes`)
-      if (variant.unmeasured) {
-        t.ok(total(fit) >= total(plain), 'the unmeasured draft takes nothing away')
-      } else if (variant.type === 'draft-mtp') {
-        t.ok(total(fit) > total(plain), 'the MTP head and its context are in the figures')
-      }
+      // Speculation also resizes the model's output buffers, so compute can
+      // shrink by more than a small draft adds; its weights are the signal.
+      const weights = (projection) =>
+        projection.devices.reduce((sum, row) => sum + row.modelBytes, 0)
+      t.comment(
+        `${variant.label}: plain ${weights(plain)} weight bytes, speculative ${weights(fit)}`
+      )
+      t.ok(weights(fit) > weights(plain), "the draft model's weights are in the figures")
     }
   )
 }
