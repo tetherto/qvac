@@ -83,6 +83,7 @@ jobs:
               "packages/inference/src/schemas/",
               "packages/sdk/src/worker/",
               "packages/sdk-e2e/catalog/conformance/",
+              "packages/sdk-e2e/runners/kotlin/",
               "packages/sdk/contract/",
               "packages/sdk/package.json",
               ".github/workflows/pr-checks-sdk-kotlin.yml",
@@ -217,4 +218,12 @@ jobs:
             :android-example:compileDebugAndroidTestKotlin \
             verifyMavenPublications
           ./scripts/verify-maven-consumers.sh -PqvacProfile="$QVAC_PROFILE"
+          popd
+
+          # Build and unit-test the Kotlin e2e app against this SDK, so an API break fails
+          # here rather than on Device Farm. -x buildWorkspaceSdk: packages/sdk is built above.
+          pushd packages/sdk-e2e/runners/kotlin
+          ../../../sdk-kotlin/gradlew --no-daemon -PqvacProfile=aio \
+            -x :sdk-kotlin:android-barekit:buildWorkspaceSdk \
+            :app:testDebugUnitTest
           popd
