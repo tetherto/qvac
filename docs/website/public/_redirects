@@ -267,9 +267,9 @@
 # dot-containing path, because the pages they stand for are gone and
 # nothing links them.
 #
-# ORDER MATTERS: the line form must precede the `/sdk/v0.21/*` splat
-# below, which would otherwise rewrite the request to an index.html that
-# was never built and drop it on the catch-all 404.
+# ORDER MATTERS: the line form must precede the per-line `/sdk/vX.Y/*`
+# splats below, which would otherwise rewrite the request to an
+# index.html that was never built and drop it on the catch-all 404.
 /sdk/reference/release-notes/            /ecosystem/     301
 /sdk/reference/release-notes.md          /ecosystem.md   301
 /sdk/:line/reference/release-notes/      /ecosystem/     301
@@ -279,7 +279,7 @@
 # DOCUMENTATION LINES
 # ----------------------------------------------------------------------
 # A line that is not the current one answers under its own version
-# segment, `/sdk/v0.18/…`, so every URL of the line carries a dot. Pretty
+# segment, `/sdk/vX.Y/…`, so every URL of the line carries a dot. Pretty
 # URLs skips any path with a dot in it, wherever the dot sits, so no bare
 # line URL gains its trailing slash on its own. Each line carries three
 # rules to make up for it.
@@ -407,7 +407,7 @@
 # years-old link still takes one hop. These three cover the addresses the SDK
 # serves today.
 #
-# Their line-scoped forms — `/sdk/v0.18/tutorials/**` and the rest — get no
+# Their line-scoped forms — `/sdk/vX.Y/tutorials/**` and the rest — get no
 # rule. The site has never served them: production is still on the
 # pre-collections tree, and those paths exist only on this branch.
 /sdk/troubleshooting/       /resources/troubleshooting/       301

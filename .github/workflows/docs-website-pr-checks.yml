@@ -37,14 +37,15 @@ jobs:
         run: bun install
 
       - name: Build and validate
-        # The API summary lives at `content/docs/sdk/(v0.23)/reference/api.mdx`,
-        # with one copy per cut line under `content/docs/sdk/v0.22/reference/`
-        # and the lines below it. Each is committed to the repo and refreshed
-        # locally during the release cutoff (see `docs/ci/RELEASE-TRAIN.md`
-        # step 6), so every PR checkout already has them on disk — no
-        # placeholder step is needed here. (The historical placeholder
-        # targeted `content/docs/sdk/api/`, a path the build never read and
-        # that no longer exists.)
+        # The API summary lives at `content/docs/sdk/(vX.Y)/reference/api.mdx`,
+        # with one copy per cut line under `content/docs/sdk/vX.Y/reference/`
+        # and one in the development line at
+        # `content/_unpublished/sdk/next/reference/api.mdx`. Each is committed
+        # to the repo and refreshed locally during the release cutoff (see
+        # `docs/ci/RELEASE-TRAIN.md` step 6), so every PR checkout already
+        # has them on disk — no placeholder step is needed here. (The
+        # historical placeholder targeted `content/docs/sdk/api/`, a path
+        # the build never read and that no longer exists.)
         #
         # The development line is not built: it sits outside `content/docs/`,
         # which is what keeps unreleased pages off the site. The checks that do

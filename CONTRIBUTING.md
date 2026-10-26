@@ -16,7 +16,7 @@ Full workflow, CLI flags, determinism guarantees, and troubleshooting are docume
 
 ## Documentation lines
 
-The SDK and the CLI are each documented one folder per minor release. Every folder under `docs/website/content/docs/sdk/` and `.../cli/` is a release that already shipped, and documents that release and nothing else. The one in parentheses — `sdk/(v0.23)` — is the most recent, and answers the version-less URLs.
+The SDK and the CLI are each documented one folder per minor release. Every folder under `docs/website/content/docs/sdk/` and `.../cli/` is a release that already shipped, and documents that release and nothing else. The one in parentheses — `sdk/(vX.Y)` — is the most recent, and answers the version-less URLs.
 
 **Your feature's documentation goes in the development line**, which is outside the site:
 
