@@ -1,6 +1,25 @@
 # Changelog
 
-## [Unreleased]
+## [0.52.1] - 2026-10-26
+
+### Added
+
+- Image and audio embeddings for multimodal embedding models such as
+  EmbeddingGemma 2 ([#5237](https://github.com/tetherto/qvac/pull/5237)).
+  `files.projectionModel` takes the model's mmproj; `run()` then also takes
+  `{ inputs: [...] }`, each input a string or an ordered array of text and
+  `{ media: Uint8Array }` parts, one embedding per input. Inputs without
+  media keep the text path.
+- Projector options `image-max-tokens`, `image-min-tokens`,
+  `mmproj-no-audio`, `mmproj-use-gpu`, `image-max-megapixels` and
+  `audio-max-seconds` (default 600), each also in its underscore form. Set
+  without `files.projectionModel`, they fail the load with
+  `InvalidConfiguration`.
+- Error codes `UnableToLoadProjectionModel`, `UnsupportedMedia` and
+  `MediaEncodeFailed`.
+- `assessFit` takes the load's `projectionModel` and refuses a multimodal
+  load with `unsupported-config`, since the fitter does not count a
+  projector. An `error` result now carries a `message` naming the cause.
 
 ### Changed
 
@@ -12,6 +31,12 @@
   later fabric patch no longer needs a manifest change.
 - Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
   `@qvac/fabric-ios` to `0.23.1` together.
+
+### Fixed
+
+- Embeddings are sized with `llama_model_n_embd_out`, so a model whose
+  output width differs from its hidden size (EmbeddingGemma 2: 512 hidden,
+  768-d output) no longer returns truncated vectors.
 
 ## [0.52.0] - 2026-10-20
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.64.3] - 2026-10-26
 
 ### Changed
 
@@ -12,6 +12,16 @@
   later fabric patch no longer needs a manifest change.
 - Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
   `@qvac/fabric-ios` to `0.23.1` together.
+- `assessFit` counts a Gemma 4 assistant given as `spec-draft-model`, and a
+  DFlash draft model that borrows the model's embeddings and output head,
+  in the verdict and the per-device figures. fabric 11259.0.1 measures a
+  draft that borrows from the target next to it, at the target's context;
+  before, both were left out. An MTP draft that cannot be measured is still
+  refused with `unsupported-config`.
+- On Apple GPUs, decode runs fabric's faster Metal kernels: few-row MMA
+  mat-mul for the remaining quant types, a faster MXFP4 mat-vec, and
+  `RMS_NORM`, `ROPE` and the residual `ADD` fused into single-row
+  Q4_0/MXFP4 mat-vecs.
 
 ## [0.64.2] - 2026-10-23
 
