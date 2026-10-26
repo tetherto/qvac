@@ -10722,6 +10722,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon(Enum):
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
     llamacpp_decision = "llamacpp-decision"
+    llamacpp_rerank = "llamacpp-rerank"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"

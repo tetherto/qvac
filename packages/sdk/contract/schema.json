@@ -12815,6 +12815,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
