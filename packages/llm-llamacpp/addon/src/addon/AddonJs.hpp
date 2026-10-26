@@ -822,18 +822,17 @@ inline FitResult runFit(FitRequest request) {
     devices.clear();
     breakdown.clear();
   }
-  // The figures count the draft side, as the verdict does; one fabric cannot
-  // measure (DFlash, a Gemma 4 assistant) stays out of both. Any other MTP
+  // The figures count the draft side, as the verdict does. A draft model the
+  // fit cannot measure stays out of both, as fabric fits without it. An MTP
   // draft that cannot be measured, such as one without MTP layers, fails the
   // load, so it is refused. A failed fit leaves `n_ctx` 0, which the load
   // resolves to the trained context.
-  const uint32_t draftCtx = cparams.n_ctx != 0 ? cparams.n_ctx : trainCtx;
+  llama_context_params draftCparams = cparams;
+  draftCparams.n_ctx = cparams.n_ctx != 0 ? cparams.n_ctx : trainCtx;
   if (measured && speculativeFit &&
-      !speculativeFit->addMemory(draftCtx, devices, breakdown) &&
-      speculativeFit->isMtp() &&
-      !qvac_lib_inference_addon_llama::speculative::fitLeavesOutMtpDraft(
-          qvac_lib_inference_addon_llama::speculative::readGgufShape(
-              speculativeFit->extra()->path_model))) {
+      !speculativeFit->addMemory(
+          modelPath.c_str(), mparams, draftCparams, devices, breakdown) &&
+      speculativeFit->isMtp()) {
     return errorResult("unsupported-config");
   }
 
