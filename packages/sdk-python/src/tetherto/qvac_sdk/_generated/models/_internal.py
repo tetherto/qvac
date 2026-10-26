@@ -5889,7 +5889,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     width: Annotated[
         int | None,
         Field(
-            description="Image width in pixels (must be a multiple of 8).",
+            description="Image width in pixels. Multiple of 8; Qwen-Image-2.1 requires a multiple of 32.",
             gt=0,
             le=9007199254740991,
             multiple_of=8,
@@ -5898,7 +5898,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     height: Annotated[
         int | None,
         Field(
-            description="Image height in pixels (must be a multiple of 8).",
+            description="Image height in pixels. Multiple of 8; Qwen-Image-2.1 requires a multiple of 32.",
             gt=0,
             le=9007199254740991,
             multiple_of=8,
@@ -5913,7 +5913,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     cfg_scale: Annotated[
         float | None,
         Field(
-            description="Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7"
+            description="Classifier-free guidance scale for SD and Qwen-Image models; typical range 1-20, default 7"
         ),
     ] = None
     img_cfg_scale: Annotated[
@@ -5971,7 +5971,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     init_image: Annotated[
         str | None,
         Field(
-            description="Base64-encoded image for img2img generation. Mutually exclusive with init_images.",
+            description="Base64-encoded PNG/JPEG for img2img or reference editing. Qwen-Image-2.1 requires projectionModelSrc for editing and preserves reference alpha. Mutually exclusive with init_images.",
             min_length=1,
             pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
         ),
@@ -5979,7 +5979,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     init_images: Annotated[
         list[InitImage] | None,
         Field(
-            description="FLUX.2-only multi-reference fusion: array of base64-encoded PNG/JPEG buffers. Each buffer becomes a separate reference image that the FLUX.2 transformer attends to. Mutually exclusive with init_image; requires the model to be loaded with config.prediction='flux2_flow' and a Qwen3 text encoder via llmModelSrc.",
+            description="Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2 and Qwen-Image-2.1. Native model detection validates support. Qwen-Image-2.1 requires projectionModelSrc, preserves alpha, and does not need FLUX @imageN tags or a prediction override. Mutually exclusive with init_image.",
             min_length=1,
         ),
     ] = None
@@ -6006,7 +6006,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     strength: Annotated[
         float | None,
         Field(
-            description="img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
+            description="img2img denoising strength for SD/SDXL SDEdit. Does not control reference-editing strength for FLUX.2 or Qwen-Image-2.1; these models start the target from noise.",
             ge=0.0,
             le=1.0,
         ),
@@ -6014,7 +6014,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     upscale: Annotated[
         bool | DiffusionStreamRequestUpscale | None,
         Field(
-            description="Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig."
+            description="Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig. ESRGAN accepts RGB only; Qwen-Image-2.1 RGBA output rejects upscaling."
         ),
     ] = None
     type: Literal["diffusionStream"] = "diffusionStream"
@@ -18648,6 +18648,116 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc(GeneratedBaseMode
     ] = None
 
 
+class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc(
+    GeneratedBaseModel
+):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -19806,7 +19916,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
@@ -19951,14 +20061,21 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc | None,
         Field(
             alias="llmModelSrc",
-            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
+            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
+        ),
+    ] = None
+    projection_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc | None,
+        Field(
+            alias="projectionModelSrc",
+            description="Vision projector for the LLM encoder. Required for Qwen-Image-2.1 reference editing with its GGUF Qwen3-VL encoder; optional for text-to-image. Requires llmModelSrc and diffusion mode.",
         ),
     ] = None
     vae_model_src: Annotated[
         str | LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc | None,
         Field(
             alias="vaeModelSrc",
-            description="VAE decoder model — required for FLUX.2 [klein], Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
+            description="VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
         ),
     ] = None
     high_noise_diffusion_model_src: Annotated[
