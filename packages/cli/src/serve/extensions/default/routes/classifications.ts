@@ -1,10 +1,8 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
-import type { FastifyRequest } from 'fastify'
 import type { z } from 'zod'
 import { classify } from '@qvac/sdk'
-import { HttpError } from '@/serve/lib/http-error'
 import { multipartToBodyOptional } from '@/serve/lib/multipart'
-import { resolveBinaryInput } from '@/serve/lib/binary-input'
+import { JPEG, PNG, createImageInput, undecodableImageError } from '@/serve/lib/image-input'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import {
   classificationsBody,
@@ -13,14 +11,10 @@ import {
 
 type ClassificationsResult = z.infer<typeof classificationsResult>
 
-// The formats the classification addon decodes; it tells them apart by these signatures.
-const IMAGE_SIGNATURES: readonly (readonly number[])[] = [
-  [0x89, 0x50, 0x4e, 0x47],
-  [0xff, 0xd8, 0xff]
-]
+const image = createImageInput([PNG, JPEG])
 
-// Filled before the model is required, so a bad image is refused without loading it.
-const images = new WeakMap<FastifyRequest, Buffer>()
+// The addon reports an image it cannot decode only with this message.
+const UNDECODABLE_IMAGE_MESSAGE = 'Failed to decode image'
 
 const description = `
 Classify an image with a configured classification model, backed by the SDK's
@@ -60,7 +54,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       preHandler: [
         // lunte-disable-next-line require-await
         async function (req) {
-          images.set(req, imageBytes(req, req.body.image))
+          image.read(req, req.body.image)
         },
         requireModel('classification')
       ]
@@ -68,7 +62,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     async (req): Promise<ClassificationsResult> => {
       const { top_k: topK } = req.body
       const { sdkModelId, alias } = req.qvacModel!
-      const bytes = images.get(req)!
+      const bytes = image.get(req)
 
       app.qvac.logger.info(`  classify model=${alias} bytes=${bytes.length}`)
 
@@ -76,18 +70,18 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         modelId: sdkModelId,
         image: bytes,
         ...(topK !== undefined ? { topK } : {})
+      }).catch((err: unknown) => {
+        throw toHttpError(err)
       })
       return { object: 'classification', model: alias, results }
     }
   )
 }
 
-function imageBytes(req: FastifyRequest, value: Buffer | string): Buffer {
-  const { bytes } = resolveBinaryInput(req, 'image', value)
-  if (!IMAGE_SIGNATURES.some((sig) => sig.every((byte, i) => bytes[i] === byte))) {
-    throw new HttpError(400, 'unsupported_image_format', 'image: expected a PNG or JPEG image.')
-  }
-  return bytes
+function toHttpError(err: unknown): unknown {
+  return err instanceof Error && err.message.startsWith(UNDECODABLE_IMAGE_MESSAGE)
+    ? undecodableImageError('classification')
+    : err
 }
 
 export default plugin

@@ -718,7 +718,7 @@ The [binary input](#binary-inputs) errors apply to `image`, plus:
 | 400  | `invalid_multipart`        | Multipart body could not be parsed            |
 | 400  | `missing_model`            | `model` is missing                            |
 | 400  | `missing_image`            | `image` is missing or empty                   |
-| 400  | `unsupported_image_format` | `image` is not a PNG or JPEG                  |
+| 400  | `unsupported_image_format` | `image` is not a PNG or JPEG, or is corrupt |
 | 400  | `invalid_request`          | Unknown field, or `top_k` not a positive int  |
 | 400  | `invalid_model_type`       | Alias is not a `classification` model         |
 | 404  | `model_not_found`          | Unknown alias                                 |

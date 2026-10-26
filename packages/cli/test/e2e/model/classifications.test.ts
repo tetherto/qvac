@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { useModelServer } from '../helpers/server.js'
-import { multipart } from '../helpers/http.js'
+import { assertStatusAndError, multipart } from '../helpers/http.js'
 
 const ALIAS = 'test-classifier'
 const ROUTE = '/qvac/v1/classifications'
@@ -69,4 +69,21 @@ describe('qvac classifications: real classification model', () => {
     assert.equal(results.length, 1)
     assertRanked(results)
   })
+
+  // Each passes the signature check, but the addon's decoder rejects it.
+  const UNDECODABLE: Array<[string, Buffer]> = [
+    ['a truncated JPEG', IMAGE.subarray(0, 300)],
+    ['the JPEG signature followed by junk', Buffer.from([0xff, 0xd8, 0xff, 1, 2, 3, 4])]
+  ]
+  for (const [name, bytes] of UNDECODABLE) {
+    it(`rejects ${name}`, { timeout: 30_000 }, async () => {
+      const image = `data:image/jpeg;base64,${bytes.toString('base64')}`
+      const res = await server().inject({
+        method: 'POST',
+        url: ROUTE,
+        payload: { model: ALIAS, image }
+      })
+      assertStatusAndError(res, 400, 'unsupported_image_format')
+    })
+  }
 })
