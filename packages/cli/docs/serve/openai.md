@@ -448,7 +448,7 @@ HTTP with base URL `http://127.0.0.1:11434/v1` and your configured model alias.
 
 ## `POST /v1/images/generations` and `POST /v1/images/edits`
 
-OpenAI-compatible image routes backed by the SDK's `diffusion()` primitive. The two endpoints share the same validation, response shape, and error model; `/v1/images/edits` adds a multipart-only `image` (init image, img2img) and an optional `strength`.
+OpenAI-compatible image routes backed by the SDK's `diffusion()` primitive. The two endpoints share the same validation, response shape, and error model; `/v1/images/edits` accepts multipart `image` or `image[]` files for img2img or reference editing, plus an optional `strength`.
 
 ### Loaded model
 
@@ -575,18 +575,28 @@ curl -sS http://127.0.0.1:11434/v1/images/edits \
 
 Response shape matches `/v1/images/generations`.
 
+For models with multi-reference support, including FLUX.2 and Qwen-Image-2.1, send repeated `image[]` files. The server forwards every image in upload order as SDK `init_images`; a single file still uses `init_image`. Configure the model with its required companion files and prediction settings before sending edits.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/images/edits \
+  -F "image[]=@reference-a.png" \
+  -F "image[]=@reference-b.png" \
+  -F "model=my-diffusion" \
+  -F "prompt=Place the referenced subjects together in one scene."
+```
+
 ### Multipart edits — accepted fields
 
-| Field                  | Description                                                                                           |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `image` (or `image[]`) | Source image file. **Required.** If multiple files are sent, only the first is used (warning logged). |
-| `model`, `prompt`      | Same as JSON variants. **Required.**                                                                  |
-| `size`                 | `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`.                                                        |
-| `n`                    | Positive integer.                                                                                     |
-| `seed`                 | Integer.                                                                                              |
-| `strength`             | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric → `400 invalid_strength`.           |
-| `response_format`      | `b64_json` (default) or `url` (requires `--public-base-url`).                                         |
-| `stream`               | When `true`, response is `text/event-stream` (see Streaming above).                                   |
+| Field                  | Description                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `image` (or `image[]`) | Source image files. **Required.** Multiple files are forwarded in upload order; the model must support multiple references. |
+| `model`, `prompt`      | Same as JSON variants. **Required.**                                                                                        |
+| `size`                 | `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`.                                                                              |
+| `n`                    | Positive integer.                                                                                                           |
+| `seed`                 | Integer.                                                                                                                    |
+| `strength`             | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric → `400 invalid_strength`.                                 |
+| `response_format`      | `b64_json` (default) or `url` (requires `--public-base-url`).                                                               |
+| `stream`               | When `true`, response is `text/event-stream` (see Streaming above).                                                         |
 
 ## `POST /v1/audio/transcriptions`
 

@@ -19,13 +19,11 @@ export const imagesEditsBody = z
   .object({
     model: z.string().min(1),
     prompt: z.string().min(1).optional(),
+    // Declare both field names so `.passthrough()` cannot accept unchecked text.
+    // Require uploaded bytes so text values such as `curl -F "image[]=junk-text"`
+    // fail validation. The error handler maps failures for either field to
+    // `missing_image`.
     image: z.instanceof(Buffer).optional(),
-    // `image[]` (with literal brackets) is the OpenAI batch-edit form. Declared
-    // here so a stringified value (e.g. `curl -F "image[]=junk-text"`) is
-    // rejected at the validation layer with code `missing_image` instead of
-    // falling through `.passthrough()` and crashing the handler at
-    // `imageFiles[0]!.buffer`. The error-handler maps the instancePath
-    // `image[]` → `missing_image`.
     'image[]': z.instanceof(Buffer).optional(),
     size: z.string().optional(),
     response_format: z.string().optional(),
@@ -234,11 +232,15 @@ export function coerceMultipartFields(fields: Map<string, string>): Record<strin
 
 export function extractImageEditParams(
   body: Record<string, unknown>,
-  imageBuffer: Uint8Array,
+  imageBuffers: Uint8Array[],
   modelId: string
 ): DiffusionClientParams {
   const params = extractImageGenerationParams(body, modelId)
-  params.init_image = imageBuffer
+  if (imageBuffers.length === 1) {
+    params.init_image = imageBuffers[0]!
+  } else {
+    params.init_images = imageBuffers
+  }
 
   const strengthRaw = body['strength']
   if (strengthRaw !== undefined && strengthRaw !== null) {
@@ -254,14 +256,4 @@ export function extractImageEditParams(
   }
 
   return params
-}
-
-export function logImageEditExtraWarnings(
-  _body: Record<string, unknown>,
-  opts: { extraImageCount: number },
-  logger: Logger
-): void {
-  if (opts.extraImageCount > 0) {
-    logger.warn(`image[] received ${opts.extraImageCount + 1} files; using only the first`)
-  }
 }

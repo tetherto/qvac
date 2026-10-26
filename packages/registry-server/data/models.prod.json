@@ -3005,6 +3005,116 @@
     "notes": "F16 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+    "engine": "parakeet-transcription",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet Mosaic 0.6B GGUF",
+    "quantization": "q4_0/q8_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "ggml", "multilingual"],
+    "notes": "Mixed-precision GGUF conversion of nvidia/parakeet-tdt-0.6b-v3. Use the matching parakeet-mosaic-encoder.mlmodelc for optional Core ML acceleration."
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/model.mil",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/weights/weight.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+    "engine": "parakeet-transcription",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet Mosaic Compact 0.6B GGUF",
+    "quantization": "q4_0/q8_0/q3_k/iq3_s",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "ggml", "multilingual"],
+    "notes": "Mixed-precision GGUF conversion of nvidia/parakeet-tdt-0.6b-v3. Use the matching parakeet-mosaic-compact-encoder.mlmodelc for optional Core ML acceleration."
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/model.mil",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/weights/weight.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
