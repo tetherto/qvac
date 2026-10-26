@@ -18,6 +18,7 @@ import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { translate } from '@/plugins/ops/translate'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { nmtConfigFor, nmtFilesFor } from '@/plugins/builtin/nmtcpp-translation/load-files'
+import { nmtFitRequest } from '@/plugins/builtin/nmtcpp-translation/fit'
 import {
   resolveBergamotVocab,
   type PivotModelConfig
@@ -43,6 +44,7 @@ export const nmtPlugin = definePlugin({
   displayName: 'NMT (nmtcpp)',
   addonPackage: ADDON_NMT,
   loadConfigSchema: nmtConfigBaseSchema,
+  fitRequest: nmtFitRequest,
   assessFit: TranslationNmtcpp.assessFit,
 
   async resolveConfig(
