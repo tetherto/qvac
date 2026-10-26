@@ -1499,6 +1499,20 @@ const ASSERTIONS: Record<
     return { passed: true, output: `${fields.length} field(s) present` }
   },
 
+  /** None of the named fields is present on the value. */
+  fieldsAbsent(value, args) {
+    if (!value || typeof value !== 'object') {
+      return { passed: false, output: `expected an object, got ${typeof value}` }
+    }
+    const record = value as Record<string, unknown>
+    const fields = (args.fields ?? []) as string[]
+    const present = fields.filter((field) => record[field] !== undefined)
+    if (present.length > 0) {
+      return { passed: false, output: `unexpected fields: ${present.join(', ')}` }
+    }
+    return { passed: true, output: `${fields.length} field(s) absent` }
+  },
+
   /** The text is exactly the parts joined by the separator. */
   equalsJoined(value, args) {
     const parts = ((args.parts ?? []) as unknown[]).map(String)
