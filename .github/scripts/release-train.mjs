@@ -8,8 +8,8 @@
 //   release-train.mjs linked <train>
 //   release-train.mjs pack <train> <dest-dir>
 //   release-train.mjs stage <package-dir> <tarball-dir>
-//   release-train.mjs publish <moved-json> [--tarballs=<dir>] [--dry-run]
-//   release-train.mjs wait <moved-json>
+//   release-train.mjs publish <moved-json> [--dry-run]
+//   release-train.mjs wait <moved-json> <tarball-dir>
 //   release-train.mjs tag <train> <moved-json> [--push]
 //
 // resolve prints the train and the packages whose version moved between the two
@@ -304,38 +304,36 @@ function publishTrain ([movedJson], options) {
   } finally {
     restores.forEach((restore) => restore())
   }
-
-  if (!options['dry-run'] && options.tarballs) {
-    const index = JSON.parse(readFileSync(join(options.tarballs, TARBALL_INDEX), 'utf8'))
-    for (const project of pending) {
-      const expected = sha1(join(options.tarballs, index[project.name]))
-      const actual = npmView(`${project.name}@${project.version}`, 'dist.shasum')
-      if (actual !== expected) errors.push(`${project.name}@${project.version} on npm has sha1 ${actual}; the built tarball has ${expected}`)
-    }
-    if (errors.length) fail(errors)
-  }
   setOutputs({ published: !options['dry-run'] })
 }
 
-// A registry error counts as "not served yet": the versions are already
-// published, so the only outcome that matters is whether npm serves them in time.
-function waitServed ([movedJson]) {
+// npm answers E404 for a version for some time after publishing it, so the
+// shasum check waits until npm serves the version. A registry error counts as
+// "not served yet": the versions are already published, so the only outcome
+// that matters is whether npm serves them in time, and what it serves.
+function waitServed ([movedJson, tarballDir]) {
+  if (!tarballDir) fail(['usage: wait <moved-json> <tarball-dir>'])
   const moved = JSON.parse(movedJson ?? '[]')
+  const index = JSON.parse(readFileSync(join(tarballDir, TARBALL_INDEX), 'utf8'))
   const deadline = Date.now() + 10 * 60 * 1000
+  const errors = []
   for (const project of moved) {
+    let shasum = null
     for (;;) {
-      let served = false
       try {
-        served = isPublished(project.name, project.version)
+        shasum = npmView(`${project.name}@${project.version}`, 'dist.shasum')
       } catch (error) {
         console.log(error.message)
       }
-      if (served) break
+      if (shasum) break
       if (Date.now() > deadline) fail([`npm does not serve ${project.name}@${project.version} after 10 minutes`])
       spawnSync('sleep', ['10'])
     }
     console.log(`npm serves ${project.name}@${project.version}`)
+    const expected = sha1(join(tarballDir, index[project.name]))
+    if (shasum !== expected) errors.push(`${project.name}@${project.version} on npm has sha1 ${shasum}; the built tarball has ${expected}`)
   }
+  if (errors.length) fail(errors)
 }
 
 function tagTrain ([name, movedJson], options) {
@@ -366,7 +364,6 @@ const { positionals, values } = parseArgs({
   allowPositionals: true,
   options: {
     'check-npm': { type: 'boolean', default: false },
-    tarballs: { type: 'string' },
     'dry-run': { type: 'boolean', default: false },
     push: { type: 'boolean', default: false },
   },

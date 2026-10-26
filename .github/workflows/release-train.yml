@@ -178,7 +178,7 @@ jobs:
           TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
         run: pnpm exec nx run-many -t prepublishOnly --projects="$TRAIN_PROJECTS"
 
-      # The publish job compares what npm stores against these tarballs. Packing
+      # The served job compares what npm stores against these tarballs. Packing
       # also fails on a package whose dist/ is empty.
       - name: Pack the train
         env:
@@ -391,12 +391,6 @@ jobs:
         with:
           name: dist-${{ needs.train.outputs.name }}
 
-      - name: Download train tarballs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: tarballs-${{ needs.train.outputs.name }}
-          path: ${{ runner.temp }}/train-tarballs
-
       # pnpm 11 reads PNPM_CONFIG_* and ignores NPM_CONFIG_*. Lifecycle scripts
       # stay off so inference's `prepare` does not rebuild over the downloaded
       # dist.
@@ -406,7 +400,7 @@ jobs:
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           PNPM_CONFIG_PROVENANCE: "true"
           MOVED: ${{ needs.train.outputs.moved }}
-        run: node .github/scripts/release-train.mjs publish "$MOVED" --tarballs="$RUNNER_TEMP/train-tarballs"
+        run: node .github/scripts/release-train.mjs publish "$MOVED"
 
   # The same publish with --dry-run, as a release PR check or a dispatch with
   # dry_run. No environment and no id-token: it never needs to authenticate.
@@ -443,17 +437,11 @@ jobs:
         with:
           name: dist-${{ needs.train.outputs.name }}
 
-      - name: Download train tarballs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: tarballs-${{ needs.train.outputs.name }}
-          path: ${{ runner.temp }}/train-tarballs
-
       - name: Publish the train (dry run)
         env:
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           MOVED: ${{ needs.train.outputs.moved }}
-        run: node .github/scripts/release-train.mjs publish "$MOVED" --tarballs="$RUNNER_TEMP/train-tarballs" --dry-run
+        run: node .github/scripts/release-train.mjs publish "$MOVED" --dry-run
 
   served:
     name: Wait until npm serves the train
@@ -470,10 +458,16 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Wait
+      - name: Download train tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: tarballs-${{ needs.train.outputs.name }}
+          path: ${{ runner.temp }}/train-tarballs
+
+      - name: Wait and compare with the built tarballs
         env:
           MOVED: ${{ needs.train.outputs.moved }}
-        run: node .github/scripts/release-train.mjs wait "$MOVED"
+        run: node .github/scripts/release-train.mjs wait "$MOVED" "$RUNNER_TEMP/train-tarballs"
 
   # The same checks against what npm now serves. Tags, the GitHub release,
   # PyPI and the wheels wait for them.
