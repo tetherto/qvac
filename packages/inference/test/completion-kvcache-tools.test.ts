@@ -8,7 +8,7 @@ import {
   type AnyModel
 } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime'
-import { ModelType } from '@/schemas'
+import { ModelType, type Tool } from '@/schemas'
 
 // -----------------------------------------------------------------------------
 // A kv-cache turn sends the same prompt as an uncached one: the full history
@@ -33,12 +33,7 @@ type RecordedCall = {
   toolChoice?: string | undefined
 }
 
-type ToolDef = {
-  type: string
-  name: string
-  description: string
-  parameters: unknown
-}
+type ToolDef = Tool
 
 type HistoryEntry = { role: string; content: string; attachments: never[] }
 
@@ -254,7 +249,8 @@ test('completion: auto prefill commits the full normalized history without an as
   const prefix = await getCurrentCacheInfo(
     modelId,
     configHash,
-    longer.slice(0, -1).map(normalizeCacheMessage)
+    longer.slice(0, -1).map(normalizeCacheMessage),
+    [areaTool]
   )
   await writeCacheFile(prefix.cachePath)
   await complete(longer, [areaTool], undefined, true)
@@ -282,6 +278,29 @@ test('completion: tools-only auto prefill is reused by the first question', asyn
   t.ok(await holdsCommittedBytes(paths[0]), 'tools-only prime is persisted')
   await complete([user('Find the area.')], [areaTool])
   t.is(paths[1], paths[0], 'the first user message finds the empty-history prefix')
+  clearRegistry()
+})
+
+test('completion: unrelated requests do not consume tool-bearing auto prefills', async (t) => {
+  for (const systemPrompt of [undefined, 'Use the area tool.']) {
+    await setIsolatedHome()
+    clearRegistry()
+    const modelId = `isolated-prefill-${systemPrompt ? 'system' : 'tools-only'}`
+    const calls: RecordedCall[] = []
+    const paths: string[] = []
+    registerRecordingModel(modelId, calls, { tools: true }, paths)
+    const complete = completer(modelId, true)
+    const prefix = systemPrompt ? [system(systemPrompt)] : []
+
+    await complete(prefix, [areaTool], undefined, true)
+    const primedPath = paths[0]
+    await complete([...prefix, user('Give this chat a title.')])
+    t.not(paths[1], primedPath, 'a tool-less request does not take the tools prime')
+    await complete([...prefix, user('Check the weather.')], [makeTool('lookup_weather')])
+    t.not(paths[2], primedPath, 'a request with different tools does not take the prime')
+    await complete([...prefix, user('Find the area.')], [areaTool])
+    t.is(paths[3], primedPath, 'the intended tools request still finds the prime')
+  }
   clearRegistry()
 })
 

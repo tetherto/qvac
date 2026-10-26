@@ -18,6 +18,7 @@ import {
 } from '@/plugins/ops/kv-cache-retention'
 import { isMobile } from '@/runtime/state'
 import { type CacheMessage, getKVCacheDir } from '@/utils/index'
+import type { Tool } from '@/schemas/tools'
 import {
   logCacheSaveError,
   logCacheStatus
@@ -324,6 +325,8 @@ export interface BeginAutoTurnInput {
   configHash: string
   /** Conversation history used to compute the pre-response cache key. */
   history: CacheMessage[]
+  /** Rendered tools that distinguish prefixes with no assistant message. */
+  tools?: readonly Tool[]
   /** See `BeginCustomTurnInput.signal`. */
   signal?: AbortSignal
 }
@@ -503,9 +506,15 @@ export function createKvCacheSession(
     // the state lock, or commitTurn's rename could deadlock a waiter), then
     // re-check existence under the lock in case a same-file peer just renamed it.
     const discovered = await withCacheStateLock(async () => {
-      const existingCache = await findMatchingCache(modelId, input.configHash, input.history)
+      const existingCache = await findMatchingCache(
+        modelId,
+        input.configHash,
+        input.history,
+        input.tools
+      )
       const cacheInfo =
-        existingCache ?? (await getCurrentCacheInfo(modelId, input.configHash, input.history))
+        existingCache ??
+        (await getCurrentCacheInfo(modelId, input.configHash, input.history, input.tools))
       return {
         cachePath: cacheInfo.cachePath,
         cacheKey: cacheInfo.cacheKey

@@ -439,6 +439,7 @@ export async function* completion(
       kind: 'auto',
       configHash,
       history: prefill ? cacheMessages.map(normalizeCacheMessage) : cacheMessages,
+      ...(toolsActive && toolsToRender ? { tools: toolsToRender } : {}),
       signal
     })
   }
@@ -474,7 +475,8 @@ export async function* completion(
     const cacheInfo = await getCurrentCacheInfo(
       modelId,
       configHash,
-      history.map(toCacheMessage).map(normalizeCacheMessage)
+      history.map(toCacheMessage).map(normalizeCacheMessage),
+      toolsActive ? toolsToRender : undefined
     )
     await session.commitTurn(
       turn,
@@ -517,7 +519,12 @@ export async function* completion(
 
   await saveCacheFile(model, turn.cachePath, requestLogger)
   const savedHistory = buildAutoCacheSaveHistory(history.map(toCacheMessage), result.responseText)
-  const postResponseCacheInfo = await getCurrentCacheInfo(modelId, configHash, savedHistory)
+  const postResponseCacheInfo = await getCurrentCacheInfo(
+    modelId,
+    configHash,
+    savedHistory,
+    toolsActive ? toolsToRender : undefined
+  )
 
   await session.commitTurn(turn, {
     kind: 'autoRename',
