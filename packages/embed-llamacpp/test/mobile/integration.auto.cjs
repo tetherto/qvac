@@ -200,6 +200,11 @@ async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/multi-instance.test.js', options)
 }
 
+async function runMultimodalTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultimodalTest')) return __FILTERED
+  return runIntegrationModule('../integration/multimodal.test.js', options)
+}
+
 async function runRerankTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runRerankTest')) return __FILTERED
   return runIntegrationModule('../integration/rerank.test.js', options)

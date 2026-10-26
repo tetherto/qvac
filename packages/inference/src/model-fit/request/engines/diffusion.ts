@@ -46,6 +46,9 @@ export function createDiffusionFitRequest(params: DiffusionFitRequestParams): Fi
     ...(artifacts['clipGModelPath'] !== undefined && { clipG: artifacts['clipGModelPath'] }),
     ...(artifacts['t5XxlModelPath'] !== undefined && { t5Xxl: artifacts['t5XxlModelPath'] }),
     ...(artifacts['llmModelPath'] !== undefined && { llm: artifacts['llmModelPath'] }),
+    ...(artifacts['projectionModelPath'] !== undefined && {
+      llmVision: artifacts['projectionModelPath']
+    }),
     ...(artifacts['vaeModelPath'] !== undefined && { vae: artifacts['vaeModelPath'] }),
     ...(artifacts['uncondModelPath'] !== undefined && {
       uncondModel: artifacts['uncondModelPath']

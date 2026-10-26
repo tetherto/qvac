@@ -107,6 +107,7 @@ const args = {
 The `args` obj contains the following properties:
 
 * `files.model`: An array of absolute paths to the model file(s) on disk. For sharded models, provide all shard paths.
+* `files.projectionModel` (optional): Absolute path to the projection model (mmproj) of a multimodal embedding model such as EmbeddingGemma 2. With it, `run()` also embeds images and audio (see [Embed images and audio](#embed-images-and-audio)).
 * `config`: A dictionary of hyper-parameters used to tweak the behaviour of the model (see [Create `config`](#3-create-config) below).
 * `logger`: This property is used to create a [`QvacLogger`](../logging) instance, which handles all logging functionality.
 * `opts.stats`: This flag determines whether to calculate inference stats.
@@ -162,6 +163,17 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `main-gpu`       | string of integer \| `"integrated"` \| `"dedicated"` | —      | GPU selection for multi-GPU systems                                                      |
 | `backend`        | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` |
 | `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | `"0"` | Native logging verbosity. The `addonLogging.setLogger` callback receives only messages at or above this threshold. Use `"2"` for llama.cpp INFO logs and `"3"` for DEBUG logs. The verbosity level is process-global and is updated each time a model is constructed, so the most recently constructed model's `config.verbosity` wins for all subsequent native log dispatch. |
+
+These keys apply with [`files.projectionModel`](#embed-images-and-audio), with the names and spellings `@qvac/llm-llamacpp` uses (each also accepts its underscore form, e.g. `image_max_tokens`). Set without `files.projectionModel`, any of them fails the load with `InvalidConfiguration`:
+
+| Key                    | Range / Type                         | Default | Description |
+|------------------------|--------------------------------------|---------|-------------|
+| `image-max-tokens`     | string of positive integer           | projector default (1120 for EmbeddingGemma 2) | Largest per-image token budget of a dynamic-resolution vision encoder. Lower it to embed larger or more images per input within `batch_size`, or to save compute on phones |
+| `image-min-tokens`     | string of positive integer           | projector default (70 for EmbeddingGemma 2) | Smallest per-image token budget. Must not exceed `image-max-tokens` |
+| `mmproj-no-audio`      | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | `"false"` | Skip loading the projector's audio encoder, for image-only use. Audio input is then rejected with `UnsupportedMedia` |
+| `mmproj-use-gpu`       | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto | Run the projector on the GPU. Unset, it follows the model, except on Android GPUs below Adreno 800 (Mali, older Adreno), where it runs on the CPU, as in `@qvac/llm-llamacpp`. Ignored with a warning when the model runs on the CPU |
+| `image-max-megapixels` | string of positive integer           | `"50"`  | Largest image accepted, read from its header before decoding. A larger one is rejected with `UnsupportedMedia` |
+| `audio-max-seconds`    | string of positive integer           | `"600"` | Longest audio accepted, read from its headers (WAV, FLAC) or frames (MP3) before decoding, which bounds the decoded samples. Longer audio, or audio whose length cannot be read (e.g. FLAC without a sample count), is rejected with `UnsupportedMedia`. Not in `@qvac/llm-llamacpp` |
 
 #### Native addon logging
 
@@ -219,6 +231,47 @@ const embeddings = await response.await()
 ```
 
 When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `total_tokens`, `total_time_ms`, `tokens_per_second`, `context_size`, `trained_context_size`, and `backendDevice` (`"cpu"` or `"gpu"`). `context_size` is the active runtime llama context size, while `trained_context_size` is the model's trained context size. `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+
+#### Embed images and audio
+
+A multimodal embedding model, such as EmbeddingGemma 2, maps text, images and audio into one vector space. Load it with its projection model, then pass `{ inputs: [...] }`: each input is a string, or an array of parts in order, with strings for text and `{ media: Uint8Array }` for the bytes of an image (jpg, png, bmp, gif, ...) or of wav/mp3/flac audio.
+
+```js
+const model = new GGMLBert({
+  files: { model: [modelPath], projectionModel: mmprojPath },
+  config: { device: 'gpu', gpu_layers: '99' }
+})
+await model.load()
+
+// One embedding per input
+const response = await model.run({
+  inputs: [
+    'task: search result | query: waterproof trail running shoes',
+    ['title: none | text: ', { media: imageBytes }],
+    [{ media: audioBytes }]
+  ]
+})
+const [embeddings] = await response.await()
+```
+
+`run()` takes:
+
+| Input | Embeddings |
+|-------|------------|
+| `string` | one |
+| `string[]` | one per string |
+| `{ inputs: [...] }`, each a string or an array of parts | one per input |
+
+Media goes only in `{ inputs }`. A bare array is always one embedding per string, so an array holding `{ media }` is rejected with a `TypeError` rather than read as a single input.
+
+Notes:
+
+* Inputs without media use the text path, so a model loaded with a projection model still embeds plain text as before.
+* Media input without `files.projectionModel` is rejected.
+* Each multimodal input is decoded in one pass, so its text and media tokens together must fit in `batch_size` (which is also the micro-batch size). With EmbeddingGemma 2 a large image takes up to 1120 tokens, so two of them in one input need a larger `batch_size` or a lower `image-max-tokens` (see the projector options under [Create `config`](#3-create-config)).
+* Images: the formats stb_image reads (JPEG, PNG including 16-bit, grayscale and alpha, BMP, GIF's first frame, TGA, PSD, HDR, PNM). Audio: WAV, MP3 and FLAC, resampled to the model's rate. TIFF, HEIC, JPEG 2000, WebP, AAC/M4A, AIFF and Ogg are rejected with `UnsupportedMedia`.
+* Task prompts such as `task: search result | query: ` are plain text. Add them as the model's documentation describes.
+* Video input is not supported.
 
 ### 7. Release Resources
 
@@ -451,6 +504,7 @@ const fit = await EmbedLlamacpp.assessFit({
 
 fit.status // 'fits' | 'does-not-fit' | 'error'
 fit.reason // 'fits', 'does-not-fit', 'model-unreadable', 'no-backend-device' or 'unsupported-config'
+fit.message // with status 'error': what caused it, e.g. the refused config key
 fit.gpuLayers // what fits, which is not always what the request asked for
 fit.ctxSize
 fit.devices // one row per device the model was assigned to, then a `host` row
@@ -458,7 +512,9 @@ fit.deviceBytes // model, context and compute summed across the devices, host ex
 fit.hostBytes // the same, for the trailing host row
 ```
 
-`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`. A setting left out takes llama's default.
+A multimodal load is refused with `unsupported-config`: pass its `projectionModel` (or projector options in `config`), and the projection does not count the projector's weights and buffers, so it would otherwise answer for the text model alone.
+
+`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`, and `message` names the setting and why. A setting left out takes llama's default.
 
 Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
 

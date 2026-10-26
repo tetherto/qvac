@@ -1657,7 +1657,7 @@ curl http://localhost:11434/v1/images/edits \
 
 | Field | Description |
 | --- | --- |
-| `image` (or `image[]`) | Source image file. **Required.** If multiple files are sent, only the first is used (warning logged). |
+| `image` (or `image[]`) | Source image files. **Required.** Multiple files are forwarded in upload order; the model must support multiple references. |
 | `model`, `prompt` | Same as JSON variants. **Required.** |
 | `size` | `WIDTHxHEIGHT` (multiples of 8) or `auto`. |
 | `n` | Positive integer. |
@@ -1665,6 +1665,18 @@ curl http://localhost:11434/v1/images/edits \
 | `strength` | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric returns `400 invalid_strength`. |
 | `response_format` | `b64_json` (default) or `url` (requires `--public-base-url`). |
 | `stream` | When `true`, response is `text/event-stream` (see Streaming above). |
+
+For multi-reference editing with FLUX.2 or Qwen-Image-2.1, send repeated `image[]` files:
+
+```bash
+curl http://localhost:11434/v1/images/edits \
+  -F "image[]=@reference-a.png" \
+  -F "image[]=@reference-b.png" \
+  -F "model=my-diffusion" \
+  -F "prompt=Place the referenced subjects together in one scene."
+```
+
+The server passes every reference as SDK `init_images` in upload order. A single file uses `init_image`. Configure the model with its required companion files and prediction settings before sending edits.
 
 <Callout type="warn">
 `mask` / `mask[]` is rejected with `400 mask_not_supported`. The diffusion engine has no mask channel, so masked inpainting cannot be honored — it would silently re-render the entire image.
