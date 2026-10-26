@@ -47,8 +47,8 @@ SDK_DIR = os.environ.get(
     "QVAC_POC_SDK_DIR",
     str(Path(__file__).resolve().parent.parent.parent / "sdk"),
 )
-AUDIO_FIXTURE = f"{SDK_DIR}/e2e/assets/audio/transcription-short-wav.wav"
-NEURAL_FIXTURE = f"{SDK_DIR}/e2e/assets/neural/neural-not-too-controversial.bin"
+AUDIO_FIXTURE = f"{SDK_DIR}/../sdk-e2e/assets/audio/transcription-short-wav.wav"
+NEURAL_FIXTURE = f"{SDK_DIR}/../sdk-e2e/assets/neural/neural-not-too-controversial.bin"
 
 pytestmark = [
     pytest.mark.asyncio,

@@ -54,7 +54,7 @@ and registry prerequisites described under [MOSS](#moss).
 
 - Batch synthesis (`run({ input })` → single PCM buffer).
 - **Sentence-granularity streaming** — `runStreaming(asyncIterable)`:
-  yields one audio chunk per input sentence.
+  yields audio for each input sentence; Audio8 emits PCM as codec windows finish.
 - **Native per-chunk streaming** — set `streamChunkTokens` and audio
   flows out of the C++ engine chunk-by-chunk as T3 tokens produce
   S3Gen+HiFT output; sub-second first-audio-out inside a single
@@ -982,6 +982,19 @@ await model.load()
 await model.run({ input: 'Hello from a fully on-device pipeline.' })
 ```
 
+`runStream(text)`, `runStreaming(asyncIterable)` and
+`run({ input: text, streamOutput: true })` emit PCM as codec windows finish,
+before the current text chunk's complete waveform is ready. Ordinary `run()`
+retains batch synthesis. Native end markers have an empty `outputArray`. Use `response.await()`
+for completion and aggregate statistics, including for asynchronous text input. PCM window sizes are fixed by the codec, so
+`streamChunkTokens` and `streamFirstChunkTokens` remain unsupported.
+
+The native streaming API is included in the pinned `speech-cpp` dependency.
+Rebuild the addon to use it; an older published prebuild does not gain native
+streaming from a JavaScript update alone.
+Use [audio8-streaming.js](examples/audio8-streaming.js) to measure first PCM
+and completion through the wrapper, excluding model loading.
+
 Sampling is **repetition-aware**: a semantic token that repeats one from the
 recent window is re-drawn under a narrower nucleus at a higher temperature,
 which is what keeps the model out of the babble attractor that pure top-p
@@ -1585,6 +1598,7 @@ Runnable demos under `examples/`:
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
 | `cosyvoice-tts.js` | CosyVoice3 batch synth with the cross-engine emotion option (24 kHz; CPU by default, `--gpu` opts into Metal / desktop Vulkan / Android GPU). `bare examples/cosyvoice-tts.js --gpu "Hello" happy` |
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
+| `audio8-streaming.js` | Measure Audio8 wrapper batch, streaming, or duplex latency: `bare examples/audio8-streaming.js ./models stream "Hello"`. Modes: `batch`, `stream`, `duplex`. |
 | `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for the desktop GPU backend (CUDA or Vulkan on linux, Vulkan on Windows). `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
 | `moss-tts.js` | MOSS batch synth, optionally cloning a reference. Set `QVAC_TTS_MOSS_STREAM_FRAMES=25` for native chunk streaming, `QVAC_TTS_MOSS_DURATION=38` for a target length and `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-tts.js "Hello" voice.wav` |
 | `moss-sound-effect.js` | MOSS-SoundEffect text-to-sound-effects at 48 kHz. Set `QVAC_TTS_MOSS_SFX_GPU=1` for the GPU backend and `QVAC_TTS_MOSS_SFX_STEPS` to trade quality for time. `bare examples/moss-sound-effect.js "Rain on a tin roof." 5` |

@@ -5,42 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.14.0] - 2026-10-23
+
+### Added
+
+- Core ML DAC sidecar for Parler-TTS on macOS and iOS: audio decoding runs
+  on Core ML when a `<gguf stem minus quant tag>-dac.mlmodelc` sits beside
+  the GGUF (`parler-mini-v1-q8_0.gguf` -> `parler-mini-v1-dac.mlmodelc`), and
+  falls back to ggml otherwise. `PARLER_COREML_DISABLE` keeps it on ggml
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
 
 ### Changed
 
+- Audio8 streaming methods emit PCM as codec windows finish, with cancellation
+  and no full-waveform replay.
+
 - Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
-  the speech addons so they use the same source revision.
+  the speech addons so they use the same source revision
+  ([#5245](https://github.com/tetherto/qvac/pull/5245)).
+- Move the shared native `speech-cpp` source pin to `2026-10-23#2` across
+  the speech addons so they use the same source revision
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
 - Update the shared native `speech-cpp` source to `2026-10-19`, including
-  optional CosyVoice3 Core ML sidecars on Apple platforms. Re-export existing
+  optional CosyVoice3 Core ML sidecars on Apple platforms
+  ([#5194](https://github.com/tetherto/qvac/pull/5194)). Re-export existing
   LM sidecars to include the cache feedback fix for consecutive predictions.
-- Include native Pocket TTS Metal, CUDA, Vulkan and OpenCL support. The Pocket
+- Include native Pocket TTS Metal, CUDA, Vulkan and OpenCL support
+  ([#5191](https://github.com/tetherto/qvac/pull/5191)). The Pocket
   JavaScript API continues to require CPU inference.
 - The JavaScript wrapper is split into modules under `lib/`: engine ids and
   discovery, model-file normalization, per-engine configuration (`lib/engines/`),
   option validation, native parameter building, per-call fields, reload and
-  sentence streaming. `index.js` keeps the public `TTSGgml` class and its
-  execution lifecycle; the public API, engine/file precedence, cancellation,
-  exclusive execution and reload behaviour are unchanged.
-
+  sentence streaming ([#5174](https://github.com/tetherto/qvac/pull/5174)).
+  `index.js` keeps the public `TTSGgml` class and its execution lifecycle; the
+  public API, engine/file precedence, cancellation, exclusive execution and
+  reload behaviour are unchanged.
 - The wrapper's Pocket execution rules (completion barrier, cancellation drain,
   abort handling, lifecycle lock, reload), native event routing, the
   `exclusiveRun` response queue and the `getVoiceControls()` catalog mapping
   move to `lib/pocketLifecycle.js`, `lib/addonEvents.js`,
-  `lib/exclusiveQueue.js` and `lib/voiceControls.js`; `index.js` keeps the
+  `lib/exclusiveQueue.js` and `lib/voiceControls.js`
+  ([#5211](https://github.com/tetherto/qvac/pull/5211)); `index.js` keeps the
   public API and the load / run / cancel / reload lifecycle. No behaviour
   change.
-
 - `normalizeGgmlFiles` in `lib/modelFiles.js` is table-driven: one row per
   canonical model-file key lists its aliases in precedence order, so adding an
-  alias is a one-line table change. Alias precedence, the skipping of empty
-  values and the normalized key set are unchanged.
-
+  alias is a one-line table change
+  ([#5210](https://github.com/tetherto/qvac/pull/5210)). Alias precedence, the
+  skipping of empty values and the normalized key set are unchanged.
 
 ### Fixed
 
 - LavaSR denoising can use the Vulkan GPU on supported Android ARM Mali devices
-  when GPU inference is enabled, instead of falling back to CPU.
+  when GPU inference is enabled, instead of falling back to CPU
+  ([#5062](https://github.com/tetherto/qvac/pull/5062)).
+- Adreno GPUs (Android, OpenCL): q8_0 matrix products whose sums exceed
+  the fp16 range no longer come back as infinity, and attention over 32 or
+  more tokens with unpadded lengths is computed correctly. The shared native
+  `ggml-speech` moves to `2026-10-23` across the speech addons
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+- Parler-TTS reports an error instead of crashing when the model produces
+  non-finite logits ([#5326](https://github.com/tetherto/qvac/pull/5326)).
 
 ## [0.13.0] - 2026-10-14
 
