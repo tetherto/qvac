@@ -6,6 +6,12 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.30.1] - 2026-10-26
 
+### Security
+
+- Resolve native Brotli from a dedicated vcpkg registry baseline with version
+  1.2.1 to address CVE-2026-111497 if a dependency enables Brotli. Other native
+  dependency baselines are unchanged. Existing binaries require a rebuild.
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.23.0` -> `^0.23.1`, which carries
