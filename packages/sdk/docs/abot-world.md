@@ -90,11 +90,13 @@ it needs **≥ 20 GB free VRAM on a dedicated GPU** — a 24 GB card is the
 practical minimum for that configuration. A co-tenant process holding VRAM will
 OOM the first block even though loading succeeded.
 
-When the model fit policy runs one, `loadModel`'s memory fit check counts the
+For loads with a pre-built `sceneSrc`, `assessModelFit` and `loadModel`'s
+memory fit check (when enabled by the model fit policy) count the
 DiT, the taehv decoder, the attention caches and the history a walk
 accumulates. `world.fitSteps` (default 100) sets how many walk steps that
 estimate covers; it does not limit the walk or what it retains. Scene creation
-with umT5 and the Wan VAE is not part of the estimate.
+with umT5 and the Wan VAE is not part of the estimate; a load without
+`sceneSrc` receives no native world fit estimate.
 
 [Layer streaming](#fitting-the-walk-into-less-vram) changes weight residency,
 so these figures do not apply to a streamed walk; a minimum for the streamed

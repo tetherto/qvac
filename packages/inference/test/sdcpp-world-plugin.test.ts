@@ -1,6 +1,7 @@
 import test from 'brittle'
 import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { splitWorldConfig } from '@/plugins/builtin/sdcpp-generation/world-config'
+import { createFitRequest } from '@/model-fit/request/create'
 
 const resolveCtx = {
   resolveModelPath: async (src: unknown) => `/cache/${String(src)}`,
@@ -68,7 +69,11 @@ test('sdcpp plugin resolveConfig: world resolves taehv + scene and strips *Src',
   const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
 
   const resolved = await diffusionPlugin.resolveConfig!(
-    { ...WORLD_BASE, sceneSrc: '/worlds/forest.safetensors' },
+    {
+      ...WORLD_BASE,
+      sceneSrc: '/worlds/forest.safetensors',
+      world: { fitSteps: 20, kvCache: true }
+    },
     resolveCtx
   )
 
@@ -80,6 +85,33 @@ test('sdcpp plugin resolveConfig: world resolves taehv + scene and strips *Src',
   })
   t.is('taehvModelSrc' in resolved.config, false, 'taehvModelSrc does not leak to the addon config')
   t.is('sceneSrc' in resolved.config, false, 'sceneSrc does not leak to the addon config')
+  const plan = createFitRequest({
+    modelType: 'sdcpp-generation',
+    modelPath: '/cache/abot-world-dit.gguf',
+    modelConfig: resolved.config,
+    artifacts: resolved.artifacts,
+    isShardedModel: false
+  })
+  t.alike(
+    plan,
+    {
+      supported: true,
+      probe: {
+        engine: 'diffusion-cpp',
+        request: {
+          mode: 'world',
+          files: {
+            model: '/cache/abot-world-dit.gguf',
+            taehv: '/cache/registry://hf/taew2_2_f16.gguf',
+            scene: '/cache//worlds/forest.safetensors'
+          },
+          config: { kvCache: true },
+          workload: { walkSteps: 20 }
+        }
+      }
+    },
+    'the resolved scene and decoder reach the fitter; scene-creation encoders do not'
+  )
 })
 
 test('sdcpp plugin resolveConfig: world may walk a pre-built pack without encoders', async (t) => {
