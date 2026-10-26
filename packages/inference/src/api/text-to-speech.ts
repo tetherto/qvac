@@ -407,9 +407,7 @@ export async function* pcmChunksOf(
   }
 }
 
-export async function* samplesOf(
-  chunks: AsyncIterable<Float32Array>
-): AsyncGenerator<number> {
+export async function* samplesOf(chunks: AsyncIterable<Float32Array>): AsyncGenerator<number> {
   for await (const chunk of chunks) {
     yield* chunk
   }

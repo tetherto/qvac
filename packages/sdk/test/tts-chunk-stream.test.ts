@@ -1,5 +1,10 @@
 import test from 'brittle'
-import { TtsMulticast, pcmChunksOf, samplesOf, sentenceAudioViews } from '@/client/api/text-to-speech'
+import {
+  TtsMulticast,
+  pcmChunksOf,
+  samplesOf,
+  sentenceAudioViews
+} from '@/client/api/text-to-speech'
 import type { TtsResponse } from '@qvac/sdk'
 
 // Push-controlled frame source (same shape as tts-multicast.test.ts) so the
