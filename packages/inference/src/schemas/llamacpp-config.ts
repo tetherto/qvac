@@ -454,10 +454,21 @@ export const LLM_CONFIG_DEFAULTS = {
 } as const satisfies Partial<LlmConfigInput>
 
 // Full schema - applies defaults via transform (no duplication)
-export const llmConfigSchema = llmConfigBaseSchema.transform((data) => ({
-  ...LLM_CONFIG_DEFAULTS,
-  ...data
-}))
+// Checked on the config merged with device defaults, before the draft model is downloaded.
+export const llmConfigSchema = llmConfigBaseSchema
+  .superRefine((data, ctx) => {
+    if (data.draftModelSrc !== undefined && (data.spec_type ?? 'none') === 'none') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['draftModelSrc'],
+        message: "draftModelSrc requires spec_type 'draft-mtp' or 'draft-dflash'."
+      })
+    }
+  })
+  .transform((data) => ({
+    ...LLM_CONFIG_DEFAULTS,
+    ...data
+  }))
 
 export type LlmConfig = z.infer<typeof llmConfigSchema>
 

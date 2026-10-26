@@ -566,3 +566,42 @@ test('loadModelOptionsToRequestSchema: accepts draft-dflash with a draftModelSrc
     true
   )
 })
+
+test('loadModelOptionsToRequestSchema: accepts draft-mtp with a draftModelSrc for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { spec_type: 'draft-mtp', draftModelSrc: 'https://example.com/mtp.gguf' }
+    }).success,
+    true
+  )
+})
+
+test('llmConfigSchema: rejects a draftModelSrc without speculative decoding', (t) => {
+  for (const config of [
+    { draftModelSrc: 'https://example.com/dflash.gguf' },
+    { spec_type: 'none', draftModelSrc: 'https://example.com/dflash.gguf' }
+  ]) {
+    const result = llmConfigSchema.safeParse(config)
+    t.is(result.success, false)
+    t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
+  }
+})
+
+test('llmConfigSchema: accepts a draftModelSrc with speculative decoding', (t) => {
+  for (const spec_type of ['draft-mtp', 'draft-dflash'] as const) {
+    t.is(
+      llmConfigSchema.safeParse({ spec_type, draftModelSrc: 'https://example.com/draft.gguf' })
+        .success,
+      true
+    )
+  }
+})
+
+test('llmConfigBaseSchema: leaves the draftModelSrc / spec_type pairing to the merged config', (t) => {
+  t.is(
+    llmConfigBaseSchema.safeParse({ draftModelSrc: 'https://example.com/draft.gguf' }).success,
+    true
+  )
+  t.ok(llmConfigBaseSchema.pick({ draftModelSrc: true }))
+})

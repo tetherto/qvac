@@ -57,7 +57,12 @@ export const speculativeDecodingMtp: TestDefinition = {
     }
   ],
   finally: unloads,
-  metadata: { category: 'speculative-decoding', dependency: 'none', estimatedDurationMs: 300000 }
+  metadata: {
+    category: 'speculative-decoding',
+    dependency: 'none',
+    dependencies: ['llm-mtp'],
+    estimatedDurationMs: 300000
+  }
 }
 
 export const speculativeDecodingMtpExternalHead: TestDefinition = {
@@ -82,7 +87,12 @@ export const speculativeDecodingMtpExternalHead: TestDefinition = {
     }
   ],
   finally: unloads,
-  metadata: { category: 'speculative-decoding', dependency: 'none', estimatedDurationMs: 300000 }
+  metadata: {
+    category: 'speculative-decoding',
+    dependency: 'none',
+    dependencies: ['llm-no-mtp', 'llm-mtp'],
+    estimatedDurationMs: 300000
+  }
 }
 
 export const speculativeDecodingNone: TestDefinition = {
@@ -100,7 +110,12 @@ export const speculativeDecodingNone: TestDefinition = {
     }
   ],
   finally: unloads,
-  metadata: { category: 'speculative-decoding', dependency: 'none', estimatedDurationMs: 300000 }
+  metadata: {
+    category: 'speculative-decoding',
+    dependency: 'none',
+    dependencies: ['llm-mtp'],
+    estimatedDurationMs: 300000
+  }
 }
 
 export const speculativeDecodingDraftNMaxOutOfRangeRejected: TestDefinition = {
