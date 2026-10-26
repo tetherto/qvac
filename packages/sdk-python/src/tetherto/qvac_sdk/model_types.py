@@ -123,6 +123,13 @@ def model_src_to_wire(model_src: Any) -> Any:
     return model_src
 
 
+def model_src_to_fit_wire(model_src: Any) -> Any:
+    """The `assessModelFit` wire takes the whole descriptor, so a ModelConstant
+    becomes its field dict and a dict or string passes through."""
+    descriptor = _descriptor_fields(model_src)
+    return descriptor if descriptor is not None else model_src
+
+
 _BYTES = (bytes, bytearray, memoryview)
 
 
