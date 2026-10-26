@@ -818,6 +818,27 @@
       }
     }
   },
+  "diffusion-esrgan-fit-probe": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "SD_V2_1_1B_Q8_0"
+    },
+    "type": "sdcpp-generation",
+    "config": {
+      "device": "gpu",
+      "threads": 4,
+      "prediction": "v",
+      "upscaler": {
+        "type": "esrgan",
+        "model_src": {
+          "$const": "REALESRGAN_X4PLUS_ANIME_6B"
+        },
+        "tile_size": 128
+      }
+    }
+  },
   "upscaler": {
     "on": [
       "desktop"

@@ -75,7 +75,7 @@ export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', 'au
 export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', 'diffusion-cpp')
 export const modelFitProbeDiffusionEsrgan = probeCase(
   'diffusion-esrgan',
-  'diffusion-esrgan',
+  'diffusion-esrgan-fit-probe',
   'diffusion-cpp'
 )
 export const modelFitProbeUpscaler = probeCase('upscaler', 'upscaler', 'diffusion-cpp')
