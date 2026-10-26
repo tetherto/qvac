@@ -263,8 +263,8 @@ test('orchestrateCompletion: runs tool_search itself and never asks the client',
   const searchResult = seenHistories[1]?.at(-1)
   t.is(searchResult?.role, 'tool', 'the search result was appended as a tool message')
   t.ok(
-    searchResult?.content.includes('"create_issue"'),
-    'the definition reached the next turn through the history'
+    searchResult?.content.includes('"loaded":["create_issue"]'),
+    'the next turn reads the loaded tool back from the history'
   )
   t.ok(
     frames

@@ -21,7 +21,6 @@ interface ToolCallLike {
 
 interface SearchEnvelope {
   tool_search: { loaded: string[]; already_loaded: string[] }
-  tools: Array<{ name: string }>
 }
 
 const DETERMINISTIC = { temp: 0, seed: 42 }
@@ -93,6 +92,7 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     'deferred-tools-warm-vs-cold-qwen35': this.warmVsCold.bind(this),
     'deferred-tools-warm-follow-up-qwen35': this.warmFollowUp.bind(this),
     'deferred-tools-search-then-call-qwen35': this.searchThenCall.bind(this),
+    'deferred-tools-cached-search-qwen35': this.cachedSearch.bind(this),
     'deferred-tools-prompt-cost-qwen35': this.promptCost.bind(this),
     'deferred-tools-reopened-chat-qwen35': this.reopenedChat.bind(this),
     'deferred-tools-kv-cache-isolation-qwen35': this.kvCacheIsolation.bind(this)
@@ -271,10 +271,10 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
 
       // Other tools matching the query may load fresh; only the loaded one must not repeat.
       const name = p.expectedToolCall.name
-      if (repeat.tools.some((t) => t.name === name) || repeat.tool_search.loaded.includes(name)) {
+      if (repeat.tool_search.loaded.includes(name)) {
         return {
           passed: false,
-          output: `Second search appended '${name}' again: ${JSON.stringify(repeat.tool_search)}`
+          output: `Second search loaded '${name}' again: ${JSON.stringify(repeat.tool_search)}`
         }
       }
       if (!repeat.tool_search.already_loaded.includes(p.expectedToolCall.name)) {
@@ -386,6 +386,33 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
       }
     } catch (error) {
       return errorResult('Deferred tools warm vs cold', error)
+    } finally {
+      await this.resetCache(cacheKey)
+    }
+  }
+
+  async cachedSearch(params: unknown): Promise<TestResult> {
+    const p = params as DeferredToolsParams
+    const modelId = await this.resources.ensureLoaded(p.resourceKey ?? 'tools')
+    const cacheKey = 'deferred-tools-cached-search'
+    const history = this.baseHistory(p)
+
+    try {
+      await this.resetCache(cacheKey)
+      const first = await this.run(modelId, history, p, { kvCache: cacheKey })
+      if (first.toolCalls.some((c) => c.name === p.expectedToolCall.name)) {
+        return {
+          passed: false,
+          output: `'${p.expectedToolCall.name}' was callable before it was loaded. Got: [${describeCalls(first.toolCalls)}]`
+        }
+      }
+
+      const loaded = this.withSearch(history, p, p.searchQuery!)
+      const second = await this.run(modelId, loaded, p, { kvCache: cacheKey })
+      const result = checkExpectedCall(second.toolCalls, p.expectedToolCall)
+      return { ...result, output: `Turn after the search on the warm key: ${result.output}` }
+    } catch (error) {
+      return errorResult('Deferred tools cached search', error)
     } finally {
       await this.resetCache(cacheKey)
     }
