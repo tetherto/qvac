@@ -13,11 +13,19 @@
  *
  * A cut is therefore: the outgoing group becomes plain, a copy of the
  * development line becomes the new group, and the development line stays where
- * it is — it is already the next version's. No line folder is renamed across
- * versions and none is deleted, so git has no deletion to pair a pre-cutoff
- * edit against and cannot replay one into a version it was not written for.
- * That is the whole reason the development line is addressed by a fixed name
+ * it is — it is already the next version's. The development line is neither
+ * renamed nor deleted, so git has no deletion to pair a pre-cutoff edit
+ * against and cannot replay a feature PR's work into a version it was not
+ * written for. That is the whole reason the line is addressed by a fixed name
  * instead of by its number.
+ *
+ * The outgoing group is renamed, though, and the new group is byte-identical
+ * to it wherever the sprint changed nothing. A PR that edits the group and
+ * merges after the cut therefore has two exact rename candidates per page, and
+ * git picks one (QVAC-27286). The `Documentation lines` job in
+ * `.github/workflows/docs-website-pr-checks.yml` refuses such a merge until
+ * the PR is rebased; a fixed group folder name would remove the rename
+ * altogether, and is the structural answer this model has not taken.
  *
  * This does exactly what the hand procedure in `README.md` does, in one
  * command. It is a convenience and never a dependency: a cut made by hand is

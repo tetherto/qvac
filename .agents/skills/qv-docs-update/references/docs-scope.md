@@ -32,7 +32,7 @@ content/docs/cli/v0.13/          cut
 
 **This skill writes to the development line and to nothing else.** It documents the working tree, which is the release not yet cut. Every folder under `content/docs/<collection>/` documents a release that already shipped, so adding a new parameter to `sdk/(v0.20)/` would assert that the shipped 0.20 had it. Cut lines stay editable by hand for corrections; that is a human decision and never this skill's.
 
-The name is fixed — `next`, not the version — so that the path stays the same across a cutoff. A PR opened before the cutoff and merged after it lands in the line it was written for, with no rename for git to replay it through.
+The name is fixed — `next`, not the version — so that the path stays the same across a cutoff. A PR writing this line, opened before the cutoff and merged after it, lands in the path it was written to, with no rename for git to replay it through. What a cutoff does change is which release that path belongs to: documentation meant to ship with the release has to merge before the cut, or it reaches readers a version late. The `Documentation lines` job refuses the merge of a docs PR whose branch point predates the latest cutoff, so that choice is made during a rebase instead of by default.
 
 `docs/website/src/lib/versions.ts` is the manifest that declares the cut lines, and `tests/line-structure.test.ts` fails the build if it and the folders disagree. `<sdk-line>` and `<cli-line>` below stand for the development lines. `route-docs-targets.ts` and `check-capability-parity.ts` resolve them the same way and exit 2 if a collection carries no development line. `collect-source-changes.sh` reads only `packages/**` and never needs them.
 

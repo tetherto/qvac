@@ -209,11 +209,19 @@ to the opened one's, and points the opened line's `Release Notes` sidebar link
 at its own minor's GitHub release tag. **The development line stays where it
 is**, and is now the next version's.
 
-Nothing is deleted and no folder is renamed across versions. That is what makes
-the cutoff safe for work in flight: a feature PR opened before it and merged
-after it writes to the same path either way, so its prose lands in the version
-whose sprint it belongs to — with no rename for git to replay it through. That
-replay is the defect QVAC-27286 fixed by hand.
+Nothing is deleted, and the development line is never renamed. That is what
+makes the cutoff safe for the sprint's own work: a feature PR opened before it
+and merged after it writes to the same path either way, so its prose lands in
+the version whose sprint it belongs to — with no rename for git to replay it
+through. That replay is the defect QVAC-27286 fixed by hand.
+
+The outgoing group **is** renamed, and the group the cut opens is byte-identical
+to it wherever the sprint changed nothing. A PR that edits the group and merges
+after the cut therefore gives git two exact rename candidates for every page it
+touches, and git picks one — QVAC-27286 again, reachable at every cut. The
+`Documentation lines` job refuses that merge until the PR is rebased, and the
+cutoff lists the open PRs before cutting so the window is read rather than
+discovered. Both are described under "Docs website PR checks" below.
 
 It refuses a collection that is not versioned, a version that is not above the
 line last cut, a missing development line, a destination already on disk, and a
@@ -593,6 +601,16 @@ now the check is what stands between the window and a silent merge.
 **When:** on the day the version's release branch is cut. Not when the release publishes, days later — though a cut run late is no longer a correctness problem, only a late one: the sprint's prose was going into the development line either way.
 
 **Off which commit:** the release base — `git merge-base <remote>/<release-branch> <remote>/main` — and not `main`'s tip. The tip carries whatever merged after the release branch came off, which ships in the version after this one. The PR still targets `main`; only its base commit is pinned.
+
+**What it checks before cutting:** the open PRs writing either line of the
+collection, listed with `gh pr list` and reported one by one. A PR writing the
+development line with documentation for **this** release has to merge before
+the cut, or the release ships without it; one writing the outgoing group has to
+be rebased after the cutoff merges, since until then its edits have two
+identical rename candidates. Cutting with PRs outstanding is a decision, not an
+error — the point is that it is made rather than discovered. The `Documentation
+lines` job then refuses the merge of any PR the cut stranded, so the rebase is
+enforced rather than remembered.
 
 **What the PR carries**, per collection the release moves:
 

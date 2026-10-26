@@ -93,10 +93,18 @@ git mv 'content/docs/sdk/(v0.17)' content/docs/sdk/v0.17
 cp -r content/_unpublished/sdk/next 'content/docs/sdk/(v0.18)'
 ```
 
-Step 2 is a copy and not a move on purpose. Nothing is deleted and no folder is
-renamed across versions, so a feature PR opened before the cutoff and merged
-after it lands in the line it was written for — git has no deletion to pair its
-edits against.
+Step 2 is a copy and not a move on purpose. Nothing is deleted and the
+development line is never renamed, so a feature PR opened before the cutoff and
+merged after it lands in the path it was written to — git has no deletion to
+pair its edits against.
+
+Step 1 **is** a rename, and the folder it opens in step 2 is byte-identical to
+it wherever the sprint changed nothing. A PR that edits the outgoing group and
+merges after the cut therefore gives git two exact rename candidates per page,
+and git picks one, which is QVAC-27286. The `Documentation lines` job in
+`.github/workflows/docs-website-pr-checks.yml` refuses such a merge until the
+PR is rebased, and `qv-docs-cutoff` lists the PRs a cut will strand before
+making it.
 
 Then edit the two hand-maintained inputs:
 

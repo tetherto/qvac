@@ -6,7 +6,9 @@ What a release does to the documentation. When a line is cut and what the cut co
 
 A versioned collection SHALL write its coming release into a **development line** that the site does not publish, and SHALL publish that line at the release cutoff — when the version's release branch is cut, not when the release deploys. Publishing SHALL consist of three moves in one change: renaming the outgoing folder group to its plain versioned form, which preserves what the site is serving; **copying** the development line into the collection as the new folder group; and updating the version manifest so its entries name the folders as they now stand. The development line SHALL remain in place after the cut, and is then the next version's. A cut SHALL be made for each collection whose package the release moves, and collections SHALL be cuttable independently of one another. Documentation describing an unreleased version MUST land in the development line, and MUST NOT be written into a published one.
 
-The development line SHALL be addressed by a name that does not change from one version to the next, so that the path a change writes to is the same before and after a cutoff. No folder SHALL be renamed across versions and none SHALL be deleted by a cut: a change written before a cutoff and merged after it MUST land in the line it was written for, with no rename for the version-control system to replay it through.
+The development line SHALL be addressed by a name that does not change from one version to the next, so that the path a change writes to is the same before and after a cutoff. The development line SHALL NOT be renamed or deleted by a cut: a change written into it before a cutoff and merged after it MUST land in the path it was written to, with no rename for the version-control system to replay it through.
+
+That guarantee covers the development line and no other. A cut renames the outgoing folder group, and the group it opens is byte-identical to the outgoing one wherever the version being released changed nothing, so a change written into the group before a cutoff and merged after it has two exact rename candidates per page and MAY be replayed into either line. The cutoff and the pull-request checks are what close that window, not the folder layout.
 
 #### Scenario: A cut preserves the outgoing line and publishes the one being released
 
@@ -20,6 +22,12 @@ The development line SHALL be addressed by a name that does not change from one 
 - **WHEN** a change is written into the development line before a cutoff and merged after it
 - **THEN** it lands in the development line, which the cutoff left in place
 - **AND** no published line is modified by the merge
+
+#### Scenario: A change written into the outgoing group across a cutoff is not placed by the merge
+
+- **WHEN** a page the version being released did not change is edited in the folder group before a cutoff, and the pull request merges after it
+- **THEN** the preserved line and the opened group both hold an identical copy of that page, so the merge resolves the edit into whichever the version-control system pairs the rename with
+- **AND** nothing in the folder layout decides which, so the pull request MUST be rebased before it merges
 
 #### Scenario: A half-done cut does not build
 
@@ -64,6 +72,38 @@ An older line SHALL remain an ordinary content folder. Correcting one of its pag
 
 - **WHEN** an older line is edited
 - **THEN** the current line is unchanged
+
+### Requirement: A cutoff reads the work in flight, and the checks refuse what it strands
+
+Because a cut changes which release a documentation path belongs to, and renames the outgoing folder group, a pull request open across a cutoff SHALL be stopped rather than merged on the version-control system's judgement.
+
+Before cutting, the cutoff SHALL list the open pull requests writing either line of each collection being cut, and SHALL report the choice each one forces: a pull request writing the development line with documentation for the release being cut has to merge before the cut, or the release ships without it; one writing the outgoing group has to be rebased after the cutoff merges. Cutting with pull requests outstanding SHALL be permitted — the requirement is that the list is read, not that it is empty.
+
+After a cutoff, a pull request whose branch point precedes it and whose diff touches a collection's published or development line SHALL fail a pull-request check, and the check SHALL clear only when the branch is rebased. The check SHALL compare the collection's folder group at the parent of the pull request's oldest commit against the folder group on the base branch, and MUST NOT use the merge base, which a merge from the base branch moves past the cutoff while carrying the misplacement in with it. A pull request that touches no documentation line SHALL be unaffected, as SHALL a collection the cutoff did not move.
+
+Refusing the merge buys a human decision, not a correct one: nothing validates where the author puts the change during the rebase. Removing the rename altogether — a folder group whose name does not carry its version, so that a cut copies the group to its archived version and overwrites it from the development line — is what would make the placement unambiguous, and is not required here.
+
+#### Scenario: The cutoff reports a pull request it will strand
+
+- **WHEN** a collection is cut while a pull request writing its outgoing group is open
+- **THEN** the cutoff names that pull request and states that it has to be rebased once the cutoff merges
+- **AND** the cut proceeds
+
+#### Scenario: A pull request opened before the cutoff cannot merge after it
+
+- **WHEN** a pull request whose branch point precedes the cutoff edits a collection's documentation line
+- **THEN** the pull-request check fails and names the folder group as it stood at the branch point and as it stands on the base branch
+- **AND** rebasing the branch is what makes the check pass
+
+#### Scenario: Merging the base branch does not satisfy the check
+
+- **WHEN** the base branch is merged into such a pull request instead of the branch being rebased
+- **THEN** the check still fails, because it reads the branch point and not the merge base
+
+#### Scenario: A pull request that writes no documentation line is unaffected
+
+- **WHEN** a pull request opened before a cutoff touches the site's source, tests or configuration but no line of any collection
+- **THEN** the check passes
 
 ### Requirement: A cut adds redirects only for pages the new line drops
 

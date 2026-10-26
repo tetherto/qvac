@@ -30,9 +30,13 @@ export const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..", "..");
  *
  * It is addressed by a fixed name rather than by its number, which is what
  * keeps the path a feature PR writes to stable across a cutoff. A cut copies
- * this folder into the collection and leaves it in place, so a PR opened
- * before the cutoff and merged after it lands in the line it was written for,
- * with no rename for git to replay it through.
+ * this folder into the collection and leaves it in place, so a feature PR
+ * opened before the cutoff and merged after it lands in the path it was
+ * written to, with no rename for git to replay it through.
+ *
+ * That holds for this folder only. The outgoing group is renamed by the cut,
+ * so a PR writing anywhere under `content/docs/` is still exposed to rename
+ * detection — which is what the `Documentation lines` job refuses.
  */
 export const DEVELOPMENT_LINE = "next";
 

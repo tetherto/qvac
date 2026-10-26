@@ -122,7 +122,7 @@ Publishing a line SHALL require both a line folder and a manifest entry naming i
 
 The folder group SHALL be the version most recently released, and the version being written SHALL live in a development line that the site does not publish. A reader is therefore never served a line for a version that does not exist, and a reader following a version-less path always reaches the newest released documentation.
 
-The development line SHALL be published by the cut at the release cutoff, which copies it into the collection as the new folder group and leaves it in place as the next version's. Nothing is moved, renamed, or reclassified for work in flight: the path a change writes to is the same before and after a cutoff.
+The development line SHALL be published by the cut at the release cutoff, which copies it into the collection as the new folder group and leaves it in place as the next version's. The development line itself is never moved, renamed, or reclassified, so the path a change writes to it is the same before and after a cutoff. The outgoing folder group is renamed by the cut, so a change written into the group across a cutoff is not placed by the merge alone — see "A cutoff reads the work in flight, and the checks refuse what it strands" in the documentation release workflow.
 
 #### Scenario: The group is the version last released
 
