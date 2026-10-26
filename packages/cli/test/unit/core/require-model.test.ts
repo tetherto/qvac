@@ -12,6 +12,9 @@ import { ensureReady, resolveAndCheckModel } from '@/serve/core/plugins/require-
 import { createLogger } from '@/logger'
 import type { QvacContext } from '@/serve/core/context'
 import { HttpError } from '@/serve/lib/http-error'
+import { WorkerStartupError } from '@qvac/sdk'
+
+import { rpcTimeout } from '../../helpers/worker-startup.js'
 
 const logger = createLogger('silent')
 
@@ -66,6 +69,72 @@ function fakeExchange(ctx: QvacContext) {
     replyRaw
   }
 }
+
+describe('ensureReady worker startup diagnostics', () => {
+  async function httpError(error: unknown): Promise<HttpError> {
+    const ctx = makeCtx(() => Promise.reject(error), {}, false)
+    try {
+      await ensureReady(ctx, 'm', CONFIG_ENTRY, 'm')
+      assert.fail('load must fail')
+    } catch (err) {
+      assert.ok(err instanceof HttpError)
+      assert.equal(err.status, 503)
+      assert.equal(err.code, 'model_load_failed')
+      return err
+    }
+  }
+
+  for (const exit of [
+    { code: null, signal: 'SIGABRT' as const },
+    { code: 134, signal: null },
+    { code: 0, signal: null }
+  ]) {
+    it(`reports an early exit (${exit.code}, ${exit.signal}) without claiming a timeout`, async () => {
+      const cause = new WorkerStartupError('/private/worker', exit, 'private diagnostic marker')
+      const result = await httpError(rpcTimeout(cause))
+
+      assert.equal(
+        result.message,
+        `Model "m" failed to load: Worker process exited (${exit.signal ? `signal ${exit.signal}` : `code ${exit.code}`}) before IPC was established`
+      )
+    })
+  }
+
+  it('reports a startup timeout without copying SDK diagnostics', async () => {
+    const cause = new WorkerStartupError('/private/worker', null, 'private stderr')
+    const result = await httpError(rpcTimeout(cause))
+    assert.equal(
+      result.message,
+      'Model "m" failed to load: Worker did not establish IPC before the startup timeout'
+    )
+  })
+
+  it('preserves the original SDK error and diagnostics', async () => {
+    const stderr = '/private/worker/log'
+    const cause = new WorkerStartupError('worker failed', { code: 1, signal: null }, stderr)
+    const error = rpcTimeout(cause)
+    const originalMessage = error.message
+    const originalCauseMessage = cause.message
+
+    await httpError(error)
+
+    assert.equal(error.cause, cause)
+    assert.equal(error.message, originalMessage)
+    assert.equal(cause.message, originalCauseMessage)
+    assert.equal(cause.stderrTail, stderr)
+  })
+
+  it('leaves ordinary errors, non-errors and untyped lookalike causes unchanged', async () => {
+    const lookalike = new Error('ordinary error', {
+      cause: { workerExited: true, stderrTail: 'private stderr' }
+    })
+    for (const error of [lookalike, rpcTimeout(), 'plain failure']) {
+      const result = await httpError(error)
+      const message = error instanceof Error ? error.message : error
+      assert.equal(result.message, `Model "m" failed to load: ${message}`)
+    }
+  })
+})
 
 describe('ensureReady disconnect handling', () => {
   it('cancels the in-flight load when the client disconnects mid-load', async () => {
