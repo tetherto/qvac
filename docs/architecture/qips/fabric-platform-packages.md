@@ -135,8 +135,10 @@ rewrites a `DT_NEEDED` it can match to one of the package's own dependencies:
 the desktop ones as `optionalDependencies`, the mobile ones as optional
 `peerDependencies`. They need the mobile slices to *build* their Android and iOS
 prebuilds, and a CI runner installs only its own host's slice, so each consumer
-also adds both as exact-pinned `devDependencies`, not `dependencies`, which would
-ship about 150 MB of mobile runtime with every desktop install of the addon. The
+also adds both as `devDependencies`, not `dependencies`, which would ship about
+150 MB of mobile runtime with every desktop install of the addon. They take the
+same caret range as `@qvac/fabric`: the meta's exact optional peers keep the
+installed pair matched, so a fabric patch needs no consumer change. The
 application still supplies the runtime at run time. Configure fails naming the
 missing package rather than failing later at link.
 
