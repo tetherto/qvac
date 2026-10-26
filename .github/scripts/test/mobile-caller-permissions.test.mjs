@@ -96,14 +96,13 @@ test('discovery finds the leaves and their callers', () => {
   const need = leavesNeedingActionsRead()
   assert.ok(need.size >= 12, `expected at least 12 leaves needing actions: read, found ${need.size}`)
   const found = mobileCalls()
-  // The nx migration removed the per-addon callers. Assert their actual
-  // replacements instead of a pre-migration global job-count threshold.
+  // Speech publishing no longer calls mobile tests. Benchmark callers still
+  // exercise the reusable workflows and their permission requirements.
   for (const addon of ['asr-ggml', 'bci-whispercpp', 'tts-ggml']) {
-    assert.ok(found.some(({ caller, job, target }) =>
-      caller === 'on-merge-nx.yml' &&
-      job === `mobile-post-publish-${addon}` &&
+    assert.ok(found.some(({ caller, target }) =>
+      caller === 'benchmark-performance-nx.yml' &&
       target === `integration-mobile-test-${addon}.yml`
-    ), `missing consolidated post-publish caller for ${addon}`)
+    ), `missing benchmark caller for ${addon}`)
   }
 })
 

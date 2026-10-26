@@ -248,6 +248,25 @@ describe('resolveNestedModelSrcConstants', () => {
   })
 })
 
+describe('parseServeConfig bundled weights', () => {
+  it('loads the bundled classifier when a classification alias has no src', () => {
+    const cfg = parseServeConfig(
+      { serve: { models: { cls: { type: 'ggml-classification' } } } },
+      {}
+    )
+    const cls = cfg.models.get('cls')!
+    assert.equal(cls.modelSrc, '')
+    assert.equal(cls.endpointCategory, 'classification')
+  })
+
+  it('still requires src for other model types', () => {
+    assert.throws(
+      () => parseServeConfig({ serve: { models: { ocr: { type: 'ggml-ocr' } } } }, {}),
+      /serve\.models\.ocr: "src" is required/
+    )
+  })
+})
+
 describe('parseServeConfig nested companions', () => {
   it('resolves nested constants for explicit image / video entries', () => {
     const cfg = parseServeConfig(
