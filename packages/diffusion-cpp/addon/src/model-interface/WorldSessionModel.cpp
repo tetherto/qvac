@@ -57,14 +57,14 @@ sd_abot_session_params_v2_t WorldSessionModel::sessionParams() const {
 }
 
 sd_fit_status_t WorldSessionModel::assessFit(
-    int walkSteps, sd_fit_result_t& result, bool& unsupportedConfig) const {
-  unsupportedConfig = false;
+    int walkSteps, sd_fit_result_t& result, bool& unplanned) const {
+  unplanned = false;
   qvac_lib_inference_addon_sd::validateWorldPlacement(
       config_.paramsBackend, config_.maxVram);
   qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);
   if (!qvac_lib_inference_addon_sd::worldFitPlacementSupported(
           config_.backend, config_.paramsBackend, config_.maxVram)) {
-    unsupportedConfig = true;
+    unplanned = true;
     return SD_FIT_ERROR;
   }
   const auto params = sessionParams();

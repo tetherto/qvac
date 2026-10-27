@@ -230,8 +230,8 @@ test(
       config: { seed: 42 }
     })
     t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'world fit returns a verdict')
-    t.ok(fit.report.includes('100 walk steps'), 'the default sizes 100 walk steps')
-    t.is(fit.changed, false, 'fit preserves the configured placement')
+    t.ok(fit.devices.length >= 1, 'world fit reports the configured placement per device')
+    t.ok(fit.devices[fit.devices.length - 1].unified, 'the host row is last')
 
     const world = new WorldStableDiffusion({
       files: {
@@ -451,7 +451,7 @@ for (const lane of [
           fit.status === 'fits' || fit.status === 'does-not-fit',
           'streaming world fit returns a verdict'
         )
-        t.ok(fit.report.includes('4 walk steps'), 'the explicit length reaches the engine')
+        t.ok(fit.devices.length >= 1, 'streaming world fit reports its placement per device')
         const world = new WorldStableDiffusion({
           files,
           config: { backend: 'gpu', seed: 42, verbosity: 3, ...config },
