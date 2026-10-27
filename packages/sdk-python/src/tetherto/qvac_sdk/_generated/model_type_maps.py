@@ -31,6 +31,7 @@ ENGINE_TO_ADDON: dict[str, str] = {
     "llamacpp-completion": "llm",
     "llamacpp-decision": "embeddings",
     "llamacpp-embedding": "embeddings",
+    "llamacpp-rerank": "embeddings",
     "moss-transcribe": "moss-transcribe",
     "nmtcpp-translation": "nmt",
     "onnx-tts": "tts",

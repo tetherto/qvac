@@ -98,6 +98,16 @@ capability with its configuration and examples. See the
 and the [release notes](https://docs.qvac.tether.io/sdk/reference/release-notes/)
 for what changed in each release.
 
+TranscribePsy (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`, eight European
+languages) has a separate Core ML distribution instead of a sidecar:
+`PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose
+encoder and decoder bundles the SDK stages beside it, so both stages run on
+the Neural Engine. It loads on macOS and iOS only; elsewhere the load is
+refused up front with the ggml constant to use instead. See
+[`examples/asr/parakeet-transcribepsy-filesystem.ts`](examples/asr/parakeet-transcribepsy-filesystem.ts),
+which also shows the `longFormWindowFrames` / `longFormContextFrames` knobs
+that bound the offline encoder window on long recordings.
+
 ## Examples
 
 The [`examples`](./examples) directory has scripts covering every SDK capability.

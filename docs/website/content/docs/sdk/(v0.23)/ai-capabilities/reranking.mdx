@@ -1,0 +1,68 @@
+---
+title: Reranking
+icon: ArrowDownWideNarrow
+description: Score documents by relevance to a query to reorder search and retrieval results.
+schemaType: HowTo
+---
+
+## Overview
+
+Reranking uses [`@qvac/embed-llamacpp`](https://github.com/tetherto/qvac/tree/main/packages/embed-llamacpp) with the Fabric LLM inference engine. Load a reranker (cross-encoder) model using `modelType: 'llamacpp-rerank'`. `modelConfig.device` defaults to `'gpu'`.
+
+[`rerank()`](/sdk/reference/api#rerank) scores each document against a query. Pass a non-empty `query` and a non-empty array of `documents`.
+
+`rerank()` returns one score per document, in the order the documents were given. Higher is more relevant. Scores are the model's raw classifier output (a logit for most rerankers), so they can be negative and are comparable only within one model. `rerank()` does not sort; sort the documents by score yourself, as the example below does.
+
+## Functions
+
+Use the following sequence of function calls:
+
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`rerank()`](/sdk/reference/api#rerank)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+Use a reranker GGUF, such as bge-reranker, jina-reranker or Qwen3-Reranker. The registry has no reranker constants yet, so pass a local GGUF path or a URL as `modelSrc` with explicit `modelType: 'llamacpp-rerank'`. For checkpoints split into multiple GGUF files, see [Sharded models](/sdk/models/sharded-models).
+
+Rerankers and embedding models are not interchangeable: a reranker cannot be loaded for [`embed()`](/sdk/reference/api#embed), and an embedding model has no classifier head to score documents with.
+
+The load-time `batch_size` sets the tokens per forward pass. Each document, paired with the query, must fit within it; the documents are packed into as few passes as fit. `threads`, `threads-batch`, `gpu_layers`, `flash_attn`, and `backend` control execution. The reranker fixes context size, pooling, and parallelism; these settings cannot be configured through the SDK.
+
+## Cancellation and concurrency
+
+The promise returned by [`rerank()`](/sdk/reference/api#rerank) exposes `requestId` before you await it. Pass that ID to [`cancel()`](/sdk/reference/api#cancel) to interrupt the request. Its promise rejects with `InferenceCancelledError`.
+
+Each loaded model runs one rerank request at a time. Concurrent calls wait in a FIFO queue with up to 64 waiting requests per model. When the queue is full, additional calls reject with `RequestRejectedByPolicyError` without affecting active or queued requests. Cancelling a queued call by `requestId` rejects it with `InferenceCancelledError` before native work starts and leaves the active request running. See [Cancellation](/sdk/runtime/cancellation) for broad cancellation by model ID.
+
+## Example
+
+The following script loads a small reranker, or a GGUF path or URL passed as its first argument, scores four support articles against a question, and prints them from most to least relevant:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rerank.js title="rerank.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rerank.ts title="rerank.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published. See the [Python SDK](/sdk/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>

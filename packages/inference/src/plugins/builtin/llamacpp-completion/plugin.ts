@@ -167,11 +167,11 @@ export const llmPlugin = definePlugin({
         const dialect = request.toolDialect ?? detectToolDialect(request.modelId)
         const modelCfg = getModelConfig(request.modelId)
         const toolsActive = (modelCfg as { tools?: boolean }).tools === true
-        // Parse against what each prompt can call: with deferred tools that is
-        // the rendered set plus whatever an earlier `tool_search` loaded.
+        // Parse against what each prompt renders: with deferred tools that
+        // includes whatever an earlier `tool_search` loaded.
         const toolsByPosition = request.prompts.map(
           (prompt) =>
-            resolveDeferredTools(prompt.tools, prompt.history)?.callableTools ??
+            resolveDeferredTools(prompt.tools, prompt.history)?.toolsToRender ??
             prompt.tools?.map(toWireTool) ??
             []
         )
@@ -409,6 +409,7 @@ export const llmPlugin = definePlugin({
             history: filteredHistory,
             modelId: request.modelId,
             kvCache: request.kvCache,
+            prefill: request.prefill,
             ...(toolsActive && request.tools && { tools: request.tools }),
             ...(request.generationParams && { generationParams: request.generationParams }),
             ...(toolsActive && { toolDialect: dialect }),
