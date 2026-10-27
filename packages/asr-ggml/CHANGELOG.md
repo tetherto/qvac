@@ -21,6 +21,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   Sortformer v2.1 workload can load, which the verdict counts on unified
   memory. It is 0 without sidecars and on other platforms.
 
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): matrix products on every quantized weight
+  type whose sums exceed the fp16 range no longer come back as infinity;
+  `ggml-speech` `2026-10-23` fixed q8_0 only. The shared native `ggml-speech`
+  moves to `2026-10-26` across the speech addons
+  ([#PR](https://github.com/tetherto/qvac/pull/PR)).
+
 ## [0.11.1] - 2026-10-23
 
 ### Added
