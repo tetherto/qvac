@@ -34,6 +34,10 @@ restored.dispose()
 
 Code that uses `TurboVecAdapter` without calling the provider directly needs no changes.
 
+## Release builds
+
+Release builds install Bare before copying the generated HyperDB schema. npm publishing requires a successful build and stops when the workflow is cancelled.
+
 ## [0.8.1]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/rag/v/0.8.1
