@@ -124,8 +124,8 @@ export function refineToolChoiceMatchesTools(
     })
     return
   }
-  // A deferred tool has no parameter schema in the prompt, so the addon has
-  // nothing to build a grammar from and could not honour the demand.
+  // A deferred tool has no parameter schema in the prompt until a search loads
+  // it, which this check cannot see, so the demand may be unbuildable.
   if (named.deferLoading === true) {
     ctx.addIssue({
       code: 'custom',

@@ -154,25 +154,24 @@ curl -sS http://127.0.0.1:11434/v1/chat/completions \
   }'
 ```
 
-`tool_search` never reaches the client: the server runs it, appends the
-definitions and asks the model again, so the response only ever carries tool
-calls you can execute. Up to four searches run per request before the turn is
-answered as it stands.
+`tool_search` never reaches the client: the server runs it, records the names it
+loaded, declares those tools in the next round's tools block, and asks the model
+again. The response therefore only carries tool calls you can execute. Up to
+four searches run per request before the turn is answered as it stands.
 
 Consequences worth knowing:
 
-- The search happens inside one request. The `tool` message holding the loaded
-  definitions is not part of the response, so a later request re-searches if the
-  model needs the same tool again.
+- The search happens inside one request. The internal `tool` message naming the
+  loaded definitions is not part of the response, so a later request re-searches
+  if the model needs the same tool again.
 - On `stream: true`, a search round stays on the same SSE stream, so a model
   that says something before searching streams that text too.
 - A turn that asks for a search _and_ calls a tool you can run is returned as it
   stands with the search dropped — the call is yours to answer, and the model
   searches again on your next request.
 - `usage` counts every round the request ran, search rounds included.
-- The round after a search runs without the tool-call grammar unless the
-  request sets a `tool_choice` other than `auto`: the grammar only knows the
-  tools in the prompt, and the loaded definitions sit in the conversation.
+- The round after a search declares the loaded definitions and includes them in
+  the tool-call grammar, so the model can call the tool it just loaded.
 - `tool_choice` naming a deferred tool is rejected with `400`
   `invalid_tool_choice` — its schema is not in the prompt, so the call cannot be
   forced. Name `tool_search` instead.
