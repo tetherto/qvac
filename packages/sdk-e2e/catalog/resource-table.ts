@@ -71,6 +71,13 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'llamacpp-embedding'
   },
 
+  // The reranker the addon's own tests use, pinned until a reranker is in the registry.
+  rerank: {
+    modelSrc:
+      'https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf',
+    type: 'llamacpp-rerank'
+  },
+
   whisper: {
     constant: { $const: 'WHISPER_TINY' },
     type: 'whispercpp-transcription',
@@ -100,6 +107,18 @@ export const RESOURCE_TABLE: ResourceTable = {
     constant: { $const: 'QWEN3_1_7B_INST_Q4' },
     type: 'llamacpp-completion',
     config: { ctx_size: 4096, tools: true }
+  },
+
+  'prefill-llm': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { ctx_size: 4096, tools: true, parallel: 1 }
+  },
+
+  'prefill-llm-parallel': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { ctx_size: 4096, tools: true, parallel: 2 }
   },
 
   'tools-qwen35': {
@@ -585,6 +604,22 @@ export const RESOURCE_TABLE: ResourceTable = {
       threads: 4,
       prediction: 'v',
       params_backend: 'vae=cpu',
+      upscaler: {
+        type: 'esrgan',
+        model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },
+        tile_size: 128
+      }
+    }
+  },
+
+  'diffusion-esrgan-fit-probe': {
+    on: ['desktop'],
+    constant: { $const: 'SD_V2_1_1B_Q8_0' },
+    type: 'sdcpp-generation',
+    config: {
+      device: 'gpu',
+      threads: 4,
+      prediction: 'v',
       upscaler: {
         type: 'esrgan',
         model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },

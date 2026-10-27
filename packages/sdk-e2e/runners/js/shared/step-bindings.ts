@@ -34,6 +34,7 @@ import {
   ragCloseWorkspace,
   ragDeleteWorkspace,
   ragIngest,
+  rerank,
   resume,
   state,
   suspend,
@@ -62,6 +63,7 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
   // --- inference, request/reply -------------------------------------------
   embed: (params) => embed(params),
   classify: async (params) => ({ results: await classify(params) }),
+  rerank: async (params) => ({ scores: await rerank(params) }),
   /**
    * One transcription, bound under the name that says what came back: `metadata` swaps the flat
    * transcript for per-segment records, so a body that projected `text` off a metadata run would be
@@ -856,6 +858,15 @@ const COMPARISONS: Record<
     output: string
   }
 > = {
+  prefillReuse(left, right, args) {
+    const [cold, warm, primed] = [Number(left), Number(right), Number(args.primedTokens)]
+    const passed =
+      [cold, warm, primed].every(Number.isFinite) &&
+      primed > 0 &&
+      warm > 0 &&
+      cold - warm === primed
+    return { passed, output: `cold=${cold}, warm=${warm}, primed=${primed}` }
+  },
   /** The left number is strictly larger than the right. */
   greaterThan(left, right) {
     const [a, b] = [Number(left), Number(right)]

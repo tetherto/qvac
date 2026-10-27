@@ -101,6 +101,9 @@
           "$ref": "#/$defs/rag.request"
         },
         {
+          "$ref": "#/$defs/rerank.request"
+        },
+        {
           "$ref": "#/$defs/resume.request"
         },
         {
@@ -260,6 +263,9 @@
           "$ref": "#/$defs/rag:progress.response"
         },
         {
+          "$ref": "#/$defs/rerank.response"
+        },
+        {
           "$ref": "#/$defs/resume.response"
         },
         {
@@ -411,6 +417,7 @@
                               "bci-whispercpp-transcription",
                               "llamacpp-embedding",
                               "llamacpp-decision",
+                              "llamacpp-rerank",
                               "nmtcpp-translation",
                               "onnx-tts",
                               "tts-ggml",
@@ -457,6 +464,7 @@
                   "bci-whispercpp-transcription",
                   "llamacpp-embedding",
                   "llamacpp-decision",
+                  "llamacpp-rerank",
                   "nmtcpp-translation",
                   "onnx-tts",
                   "tts-ggml",
@@ -3653,6 +3661,7 @@
                 "batchCompletion",
                 "embeddings",
                 "decision",
+                "rerank",
                 "transcribe",
                 "translate",
                 "diffusion",
@@ -3864,6 +3873,10 @@
               "minLength": 1
             }
           ]
+        },
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
         },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
@@ -4571,6 +4584,10 @@
             }
           ]
         },
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
+        },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
           "type": "array",
@@ -5206,6 +5223,7 @@
         "bci-whispercpp-transcription",
         "llamacpp-embedding",
         "llamacpp-decision",
+        "llamacpp-rerank",
         "nmtcpp-translation",
         "onnx-tts",
         "tts-ggml",
@@ -5223,6 +5241,7 @@
         "bciWhispercppTranscription",
         "llamacppEmbedding",
         "llamacppDecision",
+        "llamacppRerank",
         "nmtcppTranslation",
         "onnxTts",
         "ttsGgml",
@@ -5242,6 +5261,7 @@
         "@qvac/sdk/llamacpp-completion/plugin",
         "@qvac/sdk/llamacpp-embedding/plugin",
         "@qvac/sdk/llamacpp-decision/plugin",
+        "@qvac/sdk/llamacpp-rerank/plugin",
         "@qvac/sdk/whispercpp-transcription/plugin",
         "@qvac/sdk/bci-whispercpp-transcription/plugin",
         "@qvac/sdk/moss-transcribe/plugin",
@@ -5257,6 +5277,7 @@
         "LLM",
         "EMBEDDING",
         "DECISION",
+        "RERANK",
         "WHISPER",
         "BCI",
         "MOSS_TRANSCRIBE",
@@ -12704,6 +12725,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -12801,6 +12823,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -13224,6 +13247,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -13505,6 +13529,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -14161,6 +14186,158 @@
                   "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
                   "type": "string",
                   "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestLlamacppRerankModelFitPolicy"
+                },
+                "requestId": {
+                  "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "modelType": {
+                  "type": "string",
+                  "const": "llamacpp-rerank"
+                },
+                "modelConfig": {
+                  "type": "object",
+                  "properties": {
+                    "device": {
+                      "description": "Compute device. Default 'gpu'.",
+                      "type": "string",
+                      "enum": ["cpu", "gpu"],
+                      "title": "LoadModelSrcRequestLlamacppRerankModelConfigDevice"
+                    },
+                    "gpu_layers": {
+                      "description": "Layers to offload. Unset lets the addon choose placement.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "batch_size": {
+                      "description": "Tokens per forward pass. Default 2048; each document paired with the query must fit.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "backend": {
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with 'split-mode': 'layer'.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["cuda", "vulkan", "metal", "opencl", "auto"],
+                        "title": "LoadModelSrcRequestLlamacppRerankModelConfigBackendItem"
+                      }
+                    },
+                    "poll": {
+                      "description": "CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "pollBatch": {
+                      "description": "CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "threads": {
+                      "description": "CPU threads, at most the CPU count. Zero or below uses all logical CPUs.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "threads-batch": {
+                      "description": "Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "flash_attn": {
+                      "description": "Flash attention mode. Default auto.",
+                      "type": "string",
+                      "enum": ["on", "off", "auto"],
+                      "title": "LoadModelSrcRequestLlamacppRerankModelConfigFlashAttn"
+                    },
+                    "verbosity": {
+                      "description": "Native log level: 0 error, 1 warn, 2 info, 3 debug.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 3
+                    },
+                    "main-gpu": {
+                      "description": "GPU index or device class.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["integrated", "dedicated"],
+                          "title": "LoadModelSrcRequestLlamacppRerankModelConfigMainGpu"
+                        }
+                      ]
+                    },
+                    "split-mode": {
+                      "description": "Multi-GPU split mode.",
+                      "type": "string",
+                      "enum": ["none", "layer"],
+                      "title": "LoadModelSrcRequestLlamacppRerankModelConfigSplitMode"
+                    },
+                    "tensor-split": {
+                      "description": "Per-GPU tensor split proportions.",
+                      "type": "string"
+                    },
+                    "openclCacheDir": {
+                      "description": "Writable OpenCL kernel cache directory, required on Android.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "title": "LoadModelSrcRequestLlamacppRerankModelConfig"
+                }
+              },
+              "required": ["type", "modelSrc", "modelType"],
+              "additionalProperties": false,
+              "title": "LoadModelSrcRequestLlamacppRerank"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "loadModel"
+                },
+                "modelSrc": {
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
+                },
+                "modelName": {
+                  "type": "string"
+                },
+                "withProgress": {
+                  "type": "boolean"
+                },
+                "seed": {
+                  "type": "boolean"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
                   "title": "LoadModelSrcRequestNmtcppTranslationModelFitPolicy"
                 },
                 "requestId": {
@@ -14402,6 +14579,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14499,6 +14677,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14641,6 +14820,7 @@
                                             "bci-whispercpp-transcription",
                                             "llamacpp-embedding",
                                             "llamacpp-decision",
+                                            "llamacpp-rerank",
                                             "nmtcpp-translation",
                                             "onnx-tts",
                                             "tts-ggml",
@@ -14739,6 +14919,7 @@
                                             "bci-whispercpp-transcription",
                                             "llamacpp-embedding",
                                             "llamacpp-decision",
+                                            "llamacpp-rerank",
                                             "nmtcpp-translation",
                                             "onnx-tts",
                                             "tts-ggml",
@@ -14836,6 +15017,7 @@
                                             "bci-whispercpp-transcription",
                                             "llamacpp-embedding",
                                             "llamacpp-decision",
+                                            "llamacpp-rerank",
                                             "nmtcpp-translation",
                                             "onnx-tts",
                                             "tts-ggml",
@@ -15238,6 +15420,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15335,6 +15518,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15432,6 +15616,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15529,6 +15714,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15626,6 +15812,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15723,6 +15910,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15948,6 +16136,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16045,6 +16234,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16319,6 +16509,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16416,6 +16607,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16645,6 +16837,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16742,6 +16935,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16839,6 +17033,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16936,6 +17131,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17033,6 +17229,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17207,6 +17404,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17305,6 +17503,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17402,6 +17601,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17555,6 +17755,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17653,6 +17854,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17750,6 +17952,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17851,6 +18054,7 @@
                                           "bci-whispercpp-transcription",
                                           "llamacpp-embedding",
                                           "llamacpp-decision",
+                                          "llamacpp-rerank",
                                           "nmtcpp-translation",
                                           "onnx-tts",
                                           "tts-ggml",
@@ -18056,6 +18260,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -18286,6 +18491,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18588,6 +18794,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18685,6 +18892,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18782,6 +18990,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18879,6 +19088,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18976,6 +19186,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19073,6 +19284,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19170,6 +19382,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19267,6 +19480,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19364,6 +19578,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19461,6 +19676,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19558,6 +19774,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19655,6 +19872,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19752,6 +19970,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19790,7 +20009,7 @@
                       ]
                     },
                     "world": {
-                      "description": "ABot-World session tuning — mode: 'world' only, rejected in every other mode. Forwarded to the native session as-is.",
+                      "description": "ABot-World session tuning — mode: 'world' only, rejected in every other mode. Session settings reach the addon; fitSteps controls only memory fit.",
                       "type": "object",
                       "properties": {
                         "seed": {
@@ -19798,6 +20017,12 @@
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
+                        },
+                        "fitSteps": {
+                          "description": "Walk steps covered by memory fit. Defaults to 100; does not limit generation or retained history.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
                         },
                         "threads": {
                           "description": "CPU threads for the session. -1 = auto-detect (default).",
@@ -19962,6 +20187,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20188,6 +20414,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20285,6 +20512,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20382,6 +20610,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20479,6 +20708,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20622,6 +20852,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20719,6 +20950,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -21368,6 +21600,7 @@
                                 "bci-whispercpp-transcription",
                                 "llamacpp-embedding",
                                 "llamacpp-decision",
+                                "llamacpp-rerank",
                                 "nmtcpp-translation",
                                 "onnx-tts",
                                 "tts-ggml",
@@ -21672,6 +21905,7 @@
                 "bci-whispercpp-transcription",
                 "llamacpp-embedding",
                 "llamacpp-decision",
+                "llamacpp-rerank",
                 "nmtcpp-translation",
                 "onnx-tts",
                 "tts-ggml",
@@ -21819,6 +22053,7 @@
                   "bci-whispercpp-transcription",
                   "llamacpp-embedding",
                   "llamacpp-decision",
+                  "llamacpp-rerank",
                   "nmtcpp-translation",
                   "onnx-tts",
                   "tts-ggml",
@@ -21997,6 +22232,7 @@
                   "bci-whispercpp-transcription",
                   "llamacpp-embedding",
                   "llamacpp-decision",
+                  "llamacpp-rerank",
                   "nmtcpp-translation",
                   "onnx-tts",
                   "tts-ggml",
@@ -22959,6 +23195,58 @@
         }
       },
       "required": ["type", "operation", "workspace", "stage", "current", "total", "timestamp"],
+      "additionalProperties": false
+    },
+    "rerank.request": {
+      "title": "RerankRequest",
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Query to score each document against."
+        },
+        "documents": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Documents to score. Each one, paired with the query, must fit in `batch_size`."
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "rerank"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["query", "documents", "modelId", "type"],
+      "additionalProperties": false
+    },
+    "rerank.response": {
+      "title": "RerankResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "rerank"
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "One relevance score per document, in input order. Higher is more relevant. Scores are the model's raw classifier output, so compare them within one model only."
+        }
+      },
+      "required": ["type", "scores"],
       "additionalProperties": false
     },
     "resume.request": {
