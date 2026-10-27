@@ -23,6 +23,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Update the shared `speech-cpp` native dependency to `2026-10-27#1`.
+
 - Use fused CPU encoder attention for MOSS-Transcribe-Diarize.
 - The shared native `ggml-speech` moves to `2026-10-27` across the speech
   addons, which also speeds up single-query Metal softmax on long KV caches
