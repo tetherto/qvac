@@ -12,6 +12,16 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [0.10.1] - 2026-10-27
+
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): quantized matrix products whose sums exceed
+  the fp16 range no longer come back as infinity, and attention over unpadded
+  lengths or with a head size of 80, 96 or 112 is computed correctly. The
+  shared native `ggml-speech` moves from `2026-10-07#1` to `2026-10-26`
+  ([#PR](https://github.com/tetherto/qvac/pull/PR)).
+
 ## [0.10.0] - 2026-10-14
 
 ### Breaking

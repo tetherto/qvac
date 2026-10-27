@@ -1074,7 +1074,7 @@ tests and the C++ option-mapping tests do not establish GPU execution.
 
 ### OpenMOSS native dependency validation
 
-The package pins `speech-cpp` 2026-10-12#1 and `ggml-speech` 2026-10-07#1.
+The package pins `speech-cpp` 2026-10-12#1 and `ggml-speech` 2026-10-26.
 The registry baseline is `e31be272ecdf9f20970302ebf8a2943d47803001`,
 which contains the merged native source `84b02694001cfea863167776dbc185474a816656`
 from [registry PR #423](https://github.com/tetherto/qvac-registry-vcpkg/pull/423).
