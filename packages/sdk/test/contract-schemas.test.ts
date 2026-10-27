@@ -76,6 +76,23 @@ test('contract diffusion load config: memory controls and removed options', (t) 
   t.is(validate({ stream_layers: 'true' }), false)
 })
 
+test('contract diffusion load config: optional vision projector accepts local model sources', (t) => {
+  const document: unknown = JSON.parse(
+    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
+  )
+  const schema = findSchemaTitle(document, 'LoadModelSrcRequestSdcppGenerationModelConfig')
+  t.ok(schema)
+  if (!schema) return
+  const validate = new Ajv2020({ strict: false }).compile(schema)
+  t.ok(validate({ llmModelSrc: '/models/encoder.gguf' }), 'text-only loading needs no projector')
+  for (const projectionModelSrc of ['/models/projector.gguf', { src: '/models/projector.gguf' }]) {
+    t.ok(validate({ llmModelSrc: '/models/encoder.gguf', projectionModelSrc }))
+  }
+  for (const projectionModelSrc of [false, 123, {}, []]) {
+    t.is(validate({ projectionModelSrc }), false)
+  }
+})
+
 test('contract regeneration preserves four-coordinate OCR boxes', (t) => {
   for (const [bbox, valid] of [
     [[1, 2, 3, 4], true],

@@ -73,6 +73,7 @@ test('a model that cannot be read is an outcome, not a throw', async (t) => {
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'model-unreadable')
+  t.ok(fit.message.includes('/nonexistent/model.gguf'), 'the message names the file')
   t.alike(fit.devices, [])
 })
 
@@ -107,6 +108,7 @@ test('a context floor that is not a count is refused', { timeout: 600_000 }, asy
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'unsupported-config')
+  t.ok(fit.message.includes('minCtxSize'), 'the message names the field')
 })
 
 test(
@@ -117,6 +119,7 @@ test(
 
     t.is(fit.status, 'error')
     t.is(fit.reason, 'unsupported-config')
+    t.ok(fit.message.length > 0, `a message is given: ${fit.message}`)
   }
 )
 
@@ -125,6 +128,27 @@ test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'unsupported-config')
+  t.ok(fit.message.startsWith('device:'), 'the message names the key')
+})
+
+// The fitter does not count a projector, so a multimodal load would be
+// projected as if it were text only.
+test('a multimodal load is refused', { timeout: 600_000 }, async (t) => {
+  const model = await modelPath()
+
+  const withProjector = await assess(model, {}, { projectionModel: '/models/mmproj.gguf' })
+  t.is(withProjector.status, 'error')
+  t.is(withProjector.reason, 'unsupported-config', 'a projection model is refused')
+  t.ok(withProjector.message.startsWith('projectionModel:'), 'the message names the field')
+
+  const withOptions = await assess(model, { 'image-max-tokens': '280' })
+  t.is(withOptions.status, 'error')
+  t.is(withOptions.reason, 'unsupported-config', 'projector options are refused')
+  t.ok(withOptions.message.includes('files.projectionModel'), 'the message says what they need')
+
+  const invalid = await assess(model, { 'image-max-tokens': 'many' })
+  t.is(invalid.reason, 'unsupported-config', 'an invalid projector option is refused')
+  t.ok(invalid.message.includes('image-max-tokens'), 'the message names the key')
 })
 
 test('fitting keeps the event loop responsive', { timeout: 600_000 }, async (t) => {
@@ -138,6 +162,7 @@ test('fitting keeps the event loop responsive', { timeout: 600_000 }, async (t) 
     const fit = await assess(file)
     pending = false
     t.not(fit.status, 'error', 'a real native projection completed')
+    t.absent(fit.message, 'a verdict carries no message')
     t.ok(ticks > 0, 'timers ran before fitting settled')
     t.comment(`${ticks} timer ticks before completion`)
   } finally {

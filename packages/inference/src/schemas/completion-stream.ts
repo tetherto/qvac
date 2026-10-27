@@ -83,7 +83,7 @@ export const generationParamsSchema = z
       .boolean()
       .optional()
       .describe(
-        'Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.'
+        'Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.'
       )
   })
   .strict()
@@ -124,8 +124,8 @@ export function refineToolChoiceMatchesTools(
     })
     return
   }
-  // A deferred tool has no parameter schema in the prompt, so the addon has
-  // nothing to build a grammar from and could not honour the demand.
+  // A deferred tool has no parameter schema in the prompt until a search loads
+  // it, which this check cannot see, so the demand may be unbuildable.
   if (named.deferLoading === true) {
     ctx.addIssue({
       code: 'custom',

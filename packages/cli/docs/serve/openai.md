@@ -8,6 +8,10 @@ Server-wide behavior — authentication, CORS, model loading and `serve.models` 
 described in [README.md](README.md) and applies here. This page covers the routes this
 extension adds and the `serve.openai` config block it reads.
 
+Warnings for ignored OpenAI parameters report their names without their values.
+Fields such as `user`, `instructions`, `suffix`, `stop`, and `reasoning` can contain
+private text or metadata; these warnings do not copy that content into server logs.
+
 ## Endpoints
 
 | Method   | Path                             | Notes                                                                                                       |
@@ -150,25 +154,24 @@ curl -sS http://127.0.0.1:11434/v1/chat/completions \
   }'
 ```
 
-`tool_search` never reaches the client: the server runs it, appends the
-definitions and asks the model again, so the response only ever carries tool
-calls you can execute. Up to four searches run per request before the turn is
-answered as it stands.
+`tool_search` never reaches the client: the server runs it, records the names it
+loaded, declares those tools in the next round's tools block, and asks the model
+again. The response therefore only carries tool calls you can execute. Up to
+four searches run per request before the turn is answered as it stands.
 
 Consequences worth knowing:
 
-- The search happens inside one request. The `tool` message holding the loaded
-  definitions is not part of the response, so a later request re-searches if the
-  model needs the same tool again.
+- The search happens inside one request. The internal `tool` message naming the
+  loaded definitions is not part of the response, so a later request re-searches
+  if the model needs the same tool again.
 - On `stream: true`, a search round stays on the same SSE stream, so a model
   that says something before searching streams that text too.
 - A turn that asks for a search _and_ calls a tool you can run is returned as it
   stands with the search dropped — the call is yours to answer, and the model
   searches again on your next request.
 - `usage` counts every round the request ran, search rounds included.
-- The round after a search runs without the tool-call grammar unless the
-  request sets a `tool_choice` other than `auto`: the grammar only knows the
-  tools in the prompt, and the loaded definitions sit in the conversation.
+- The round after a search declares the loaded definitions and includes them in
+  the tool-call grammar, so the model can call the tool it just loaded.
 - `tool_choice` naming a deferred tool is rejected with `400`
   `invalid_tool_choice` — its schema is not in the prompt, so the call cannot be
   forced. Name `tool_search` instead.
@@ -444,7 +447,7 @@ HTTP with base URL `http://127.0.0.1:11434/v1` and your configured model alias.
 
 ## `POST /v1/images/generations` and `POST /v1/images/edits`
 
-OpenAI-compatible image routes backed by the SDK's `diffusion()` primitive. The two endpoints share the same validation, response shape, and error model; `/v1/images/edits` adds a multipart-only `image` (init image, img2img) and an optional `strength`.
+OpenAI-compatible image routes backed by the SDK's `diffusion()` primitive. The two endpoints share the same validation, response shape, and error model; `/v1/images/edits` accepts multipart `image` or `image[]` files for img2img or reference editing, plus an optional `strength`.
 
 ### Loaded model
 
@@ -571,18 +574,28 @@ curl -sS http://127.0.0.1:11434/v1/images/edits \
 
 Response shape matches `/v1/images/generations`.
 
+For models with multi-reference support, including FLUX.2 and Qwen-Image-2.1, send repeated `image[]` files. The server forwards every image in upload order as SDK `init_images`; a single file still uses `init_image`. Configure the model with its required companion files and prediction settings before sending edits.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/images/edits \
+  -F "image[]=@reference-a.png" \
+  -F "image[]=@reference-b.png" \
+  -F "model=my-diffusion" \
+  -F "prompt=Place the referenced subjects together in one scene."
+```
+
 ### Multipart edits — accepted fields
 
-| Field                  | Description                                                                                           |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `image` (or `image[]`) | Source image file. **Required.** If multiple files are sent, only the first is used (warning logged). |
-| `model`, `prompt`      | Same as JSON variants. **Required.**                                                                  |
-| `size`                 | `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`.                                                        |
-| `n`                    | Positive integer.                                                                                     |
-| `seed`                 | Integer.                                                                                              |
-| `strength`             | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric → `400 invalid_strength`.           |
-| `response_format`      | `b64_json` (default) or `url` (requires `--public-base-url`).                                         |
-| `stream`               | When `true`, response is `text/event-stream` (see Streaming above).                                   |
+| Field                  | Description                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `image` (or `image[]`) | Source image files. **Required.** Multiple files are forwarded in upload order; the model must support multiple references. |
+| `model`, `prompt`      | Same as JSON variants. **Required.**                                                                                        |
+| `size`                 | `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`.                                                                              |
+| `n`                    | Positive integer.                                                                                                           |
+| `seed`                 | Integer.                                                                                                                    |
+| `strength`             | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric → `400 invalid_strength`.                                 |
+| `response_format`      | `b64_json` (default) or `url` (requires `--public-base-url`).                                                               |
+| `stream`               | When `true`, response is `text/event-stream` (see Streaming above).                                                         |
 
 ## `POST /v1/audio/transcriptions`
 
@@ -600,7 +613,7 @@ Transcribes audio in its source language using a transcription model.
   - `response_format` (optional) — `json` (default), `text`, `srt`, `vtt`, or `verbose_json`
 - `json` and `text` work with Whisper, Parakeet, and MOSS. SRT and WebVTT require Whisper or MOSS segment metadata. Parakeet supports `verbose_json`, including Nemotron diarization. Requesting SRT or WebVTT from Parakeet returns `400 unsupported_response_format`.
 - In partial `verbose_json`, `duration` is the latest segment or speaker-turn end, not the submitted audio length. MOSS segments also include `speaker` and `speaker_id` when available. Parakeet offline diarization includes `speaker_segments` with zero-based `speaker_id` and start/end times in seconds; overlapping turns are preserved.
-- `language` is configured when the model loads; a per-request value is logged and ignored. `temperature` is also logged and ignored.
+- `language` is configured when the model loads; a per-request override is ignored with a warning. `temperature` is also ignored with a warning. These warnings report parameter names without values.
 
 ```bash
 curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \

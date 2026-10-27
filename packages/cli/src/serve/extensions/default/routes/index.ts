@@ -1,7 +1,9 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import chatBatch from '@/serve/extensions/default/routes/chat-batch'
+import classifications from '@/serve/extensions/default/routes/classifications'
 import kvCache from '@/serve/extensions/default/routes/kv-cache'
 import modelFit from '@/serve/extensions/default/routes/model-fit'
+import ocr from '@/serve/extensions/default/routes/ocr'
 import system from '@/serve/extensions/default/routes/system'
 import translate from '@/serve/extensions/default/routes/translate'
 
@@ -11,5 +13,7 @@ export const routes: readonly FastifyPluginAsyncZod[] = [
   kvCache,
   system,
   modelFit,
-  translate
+  translate,
+  ocr,
+  classifications
 ]

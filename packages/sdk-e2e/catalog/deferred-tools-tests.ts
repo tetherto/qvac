@@ -269,7 +269,7 @@ export const deferredToolsSearchThenCall = createDeferredToolsTest(
   { estimatedDurationMs: 60000 }
 )
 
-// Searching for an already-loaded tool appends no second definition.
+// Searching for an already-loaded tool reports it as already loaded.
 export const deferredToolsRepeatSearch = createDeferredToolsTest(
   'deferred-tools-repeat-search',
   HOROSCOPE
@@ -329,6 +329,15 @@ export const deferredToolsSearchThenCallQwen35 = createDeferredToolsTest(
   { estimatedDurationMs: 60000 }
 )
 
+// The search runs on a named cache the conversation already warmed. The turn
+// after it declares the loaded tool, so the cached prefix diverges at the tool
+// block; Qwen 3.5 must still call the loaded tool on that key.
+export const deferredToolsCachedSearchQwen35 = createDeferredToolsTest(
+  'deferred-tools-cached-search-qwen35',
+  { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' },
+  { estimatedDurationMs: 60000 }
+)
+
 // Qwen 3.5 renders tools through its own template, which must keep deferred schemas out too.
 export const deferredToolsPromptCostQwen35 = createDeferredToolsTest(
   'deferred-tools-prompt-cost-qwen35',
@@ -360,6 +369,7 @@ export const deferredToolsTests = [
   deferredToolsWarmVsColdQwen35,
   deferredToolsWarmFollowUpQwen35,
   deferredToolsSearchThenCallQwen35,
+  deferredToolsCachedSearchQwen35,
   deferredToolsPromptCostQwen35,
   deferredToolsReopenedChatQwen35,
   deferredToolsKvCacheIsolationQwen35

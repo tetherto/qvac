@@ -121,10 +121,6 @@ GgufShape readGgufShape(const std::string& path) {
   return shape;
 }
 
-bool fitLeavesOutMtpDraft(const GgufShape& draft) {
-  return draft.arch == "gemma4-assistant" && draft.mtpLayers > 0;
-}
-
 SpeculativeConfig
 parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
   SpeculativeConfig result;
@@ -319,24 +315,24 @@ SpeculativeFitModel::create(const common_params& params) {
 }
 
 bool SpeculativeFitModel::addMemory(
-    uint32_t nCtx, const std::vector<ggml_backend_dev_t>& devices,
+    const char* pathTarget, const llama_model_params& mparamsTarget,
+    const llama_context_params& cparamsTarget,
+    const std::vector<ggml_backend_dev_t>& devices,
     common_device_memory_data_vec& breakdown) const {
   if (breakdown.size() != devices.size() + 1) {
     return false;
   }
-  // Fabric measures the draft side at the target's context.
-  llama_context_params cparams = cparams_;
-  cparams.n_ctx = nCtx;
   std::vector<ggml_backend_dev_t> draftDevices;
   uint32_t nLayer = 0;
   uint32_t nCtxTrain = 0;
   uint32_t nExpert = 0;
   common_device_memory_data_vec measured;
   try {
-    measured = common_get_device_memory_data(
-        extra_.path_model,
-        &mparams_,
-        &cparams,
+    measured = common_get_extra_device_memory_data(
+        &extra_,
+        pathTarget,
+        &mparamsTarget,
+        &cparamsTarget,
         draftDevices,
         nLayer,
         nCtxTrain,

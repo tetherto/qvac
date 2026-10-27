@@ -538,6 +538,7 @@ asrFitResultToJs(js_env_t* env, const ::parakeet::FitResult& fit) {
   bytes("decoderStateBytes", fit.device.decoder_state_bytes);
   bytes("decoderComputeBytes", fit.device.decoder_compute_bytes);
   bytes("hostBytes", fit.host_bytes);
+  bytes("coremlBytes", fit.coreml_bytes);
 
   return result;
 }

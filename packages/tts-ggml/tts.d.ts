@@ -2,6 +2,7 @@ export interface TTSConfigurationParams {
     [key: string]: string | number | boolean | string[] | undefined;
 }
 export interface TTSJobData {
+    streamOutput?: boolean;
     type: string;
     input: string;
     description?: string;
