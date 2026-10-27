@@ -1043,6 +1043,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -1623,6 +1627,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -2048,6 +2056,10 @@
               "type": "number"
             },
             "backendId": {
+              "type": "number"
+            },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
               "type": "number"
             },
             "emittedFrames": {

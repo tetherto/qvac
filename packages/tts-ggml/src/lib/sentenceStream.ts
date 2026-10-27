@@ -24,14 +24,33 @@ export interface ChunkResolver {
   reject(error: unknown): void;
 }
 
-export interface StreamAccumulator {
+/**
+ * Stats a stream keeps from the last chunk that reported them instead of
+ * summing: where the synthesis ran, and whether the Audio8 codec used its
+ * Core ML sidecar.
+ */
+export const LAST_REPORTED_STREAM_STATS = [
+  "backendDevice",
+  "backendId",
+  "gpuUnsupported",
+  "enhancerBackendDevice",
+  "enhancerBackendId",
+  "denoiserBackendDevice",
+  "denoiserBackendId",
+  "codecSidecarLoaded",
+  "codecOnCoreml",
+] as const;
+
+export type LastReportedStreamStat =
+  (typeof LAST_REPORTED_STREAM_STATS)[number];
+
+export interface StreamAccumulator
+  extends Partial<Pick<RuntimeStats, LastReportedStreamStat>> {
   firstAudioMs?: number;
   totalTime: number;
   audioDurationMs: number;
   totalSamples: number;
   generatedFrames: number;
-  codecSidecarLoaded?: number;
-  codecOnCoreml?: number;
 }
 
 export interface SentenceStreamContext {
@@ -323,11 +342,16 @@ function mergeSentenceStreamStats(
     typeof data.totalSamples === "number" ? data.totalSamples : 0;
   accumulator.generatedFrames +=
     typeof data.generatedFrames === "number" ? data.generatedFrames : 0;
-  if (typeof data.codecSidecarLoaded === "number") {
-    accumulator.codecSidecarLoaded = data.codecSidecarLoaded;
-  }
-  if (typeof data.codecOnCoreml === "number") {
-    accumulator.codecOnCoreml = data.codecOnCoreml;
+  retainLastReportedStats(accumulator, data);
+}
+
+function retainLastReportedStats(
+  accumulator: StreamAccumulator,
+  data: NativeStats,
+): void {
+  for (const field of LAST_REPORTED_STREAM_STATS) {
+    const value = data[field];
+    if (typeof value === "number") accumulator[field] = value;
   }
 }
 
