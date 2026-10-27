@@ -1,6 +1,6 @@
 ---
 name: qv-release-train
-description: Release the packages of a release train (inference, sdk, cli, ai-sdk-provider, the two plugins) together from one branch and one publish run. Use when releasing the SDK chain, writing a version plan, or invoking /qv-release-train.
+description: Release the packages of a release train (.github/release-trains.json) together from one branch and one publish run. Use when releasing a set of packages that ship as a train, writing a version plan, or invoking /qv-release-train.
 ---
 
 # Release train

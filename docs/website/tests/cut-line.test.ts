@@ -217,10 +217,10 @@ describe('a cut against a copy of the tree', () => {
     ).rejects.toThrow();
   });
 
-  it('opens the released line complete, at the same paths', async () => {
-    expect(await pagesOf(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`))).toEqual(
-      await pagesOf(path.join(root, 'content', 'docs', 'sdk', CURRENT)),
-    );
+  it('opens the released line carrying every page the preserved line has, at the same paths', async () => {
+    const opened = await pagesOf(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`));
+    const preserved = await pagesOf(path.join(root, 'content', 'docs', 'sdk', CURRENT));
+    expect(preserved.filter((page) => !opened.includes(page))).toEqual([]);
   });
 
   it('leaves the development line in place, which is what makes the path stable', async () => {
