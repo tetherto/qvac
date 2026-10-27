@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/rag/v/0.9.0
 
-TurboVec index providers can now initialize asynchronously, allowing them to dynamically import their native addon before creating or loading an index. Existing synchronous providers remain supported.
+TurboVec index providers can now initialize asynchronously, allowing them to dynamically import their native addon before creating or loading an index. Synchronous providers continue to work.
 
 ## Asynchronous TurboVec initialization
 
@@ -33,10 +33,6 @@ restored.dispose()
 ```
 
 Code that uses `TurboVecAdapter` without calling the provider directly needs no changes.
-
-## Release builds
-
-Release builds install Bare before copying the generated HyperDB schema. npm publishing requires a successful build and stops when the workflow is cancelled.
 
 ## [0.8.1]
 
