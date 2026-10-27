@@ -126,6 +126,7 @@ const PENDING = [
     ['.github/workflows/integration-test-llm-llamacpp.yml', 1],
     ['.github/workflows/integration-test-vla.yml', 1],
     ['.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml', 1],
+    ['.github/workflows/reusable-prebuilds.yml', 2],
     ['.github/actions/cpp-lint/action.yaml', 1],
   ].map(([file, count]) => ({
     file,
@@ -133,12 +134,6 @@ const PENDING = [
     count,
     reason: 'QVAC-25458 PR 2',
   })),
-  {
-    file: '.github/workflows/reusable-prebuilds.yml',
-    match: 'run: npm install',
-    count: 1,
-    reason: 'Package lifecycle scripts await migration; tooling installs already disable them.',
-  },
 
   // PR 3 — registry-server, the shared lint composites, remaining SDK lanes.
   ...[

@@ -208,7 +208,7 @@ runs:
           url="https://developer.download.nvidia.com/compute/cuda/redist/$rel"
           out="$RUNNER_TEMP/$(basename "$rel")"
           echo "Downloading $url"
-          curl -fsSL --retry 3 --retry-all-errors "$url" -o "$out"
+          curl -fsSL --retry 3 "$url" -o "$out"
           echo "$sha  $out" | sha256sum -c -
           case "$out" in
             *.zip)
