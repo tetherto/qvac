@@ -259,6 +259,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       - name: Install global dependencies
         run: npm install -g --force bare-make@1.8.0 bare-runtime
@@ -471,7 +472,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 20
+          node-version: lts/*
+          check-latest: true
 
       - name: Install bare-runtime
         run: npm install -g --force bare-runtime
@@ -1073,6 +1075,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       - name: Download all evaluation artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1

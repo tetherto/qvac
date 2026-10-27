@@ -70,7 +70,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: "22"
+          node-version: lts/*
+          check-latest: true
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Install CLI deps
@@ -126,7 +127,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: "22"
+          node-version: lts/*
+          check-latest: true
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Install CLI deps
@@ -157,7 +159,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: "22"
+          node-version: lts/*
+          check-latest: true
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Install CLI deps
@@ -204,7 +207,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: "22"
+          node-version: lts/*
+          check-latest: true
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Require runner-local config and environment manifest

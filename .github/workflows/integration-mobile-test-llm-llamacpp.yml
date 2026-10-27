@@ -306,6 +306,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       - name: Compute LLM mobile model set
         id: mobileset
@@ -393,6 +394,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       # Hard-fails on purpose. This covers both the generated mobile test list
       # and test/mobile/model-manifest.json — an incomplete pre-stage map does

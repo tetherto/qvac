@@ -210,7 +210,8 @@ jobs:
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: lts/*
+          check-latest: true
 
       - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
         with:
@@ -634,7 +635,8 @@ jobs:
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: lts/*
+          check-latest: true
 
       - name: Configure npm registries
         shell: node {0}

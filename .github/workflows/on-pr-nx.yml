@@ -511,6 +511,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
       - name: Combine performance reports
         uses: ./.github/actions/run-mobile-integration-tests/combine-perf-reports
         with:
@@ -592,6 +593,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
       - name: Download merged prebuilds
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
