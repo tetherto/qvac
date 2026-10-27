@@ -171,6 +171,10 @@
     "./llamacpp-decision/plugin": {
       "types": "./dist/src/worker/plugins/llamacpp-decision.d.ts",
       "import": "./dist/src/worker/plugins/llamacpp-decision.js"
+    },
+    "./llamacpp-rerank/plugin": {
+      "types": "./dist/src/worker/plugins/llamacpp-rerank.d.ts",
+      "import": "./dist/src/worker/plugins/llamacpp-rerank.js"
     }
   },
   "imports": {

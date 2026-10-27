@@ -7,6 +7,7 @@ import { getServerLogger } from '@/logging'
 import { registerPlugins } from '@qvac/inference/plugins'
 import { llmPlugin } from '@qvac/inference/llamacpp-completion/plugin'
 import { decisionPlugin } from '@qvac/inference/llamacpp-decision/plugin'
+import { rerankPlugin } from '@qvac/inference/llamacpp-rerank/plugin'
 import { embeddingsPlugin } from '@qvac/inference/llamacpp-embedding/plugin'
 import { whisperPlugin } from '@qvac/inference/whispercpp-transcription/plugin'
 import { bciPlugin } from '@qvac/inference/bci-whispercpp-transcription/plugin'
@@ -30,6 +31,7 @@ registerPlugins([
   llmPlugin,
   embeddingsPlugin,
   decisionPlugin,
+  rerankPlugin,
   whisperPlugin,
   bciPlugin,
   parakeetPlugin,

@@ -71,6 +71,13 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'llamacpp-embedding'
   },
 
+  // The reranker the addon's own tests use, pinned until a reranker is in the registry.
+  rerank: {
+    modelSrc:
+      'https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf',
+    type: 'llamacpp-rerank'
+  },
+
   whisper: {
     constant: { $const: 'WHISPER_TINY' },
     type: 'whispercpp-transcription',
