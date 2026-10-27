@@ -26,6 +26,7 @@ object ModelTypeMaps {
         "llamacpp-completion" to "llm",
         "llamacpp-decision" to "embeddings",
         "llamacpp-embedding" to "embeddings",
+        "llamacpp-rerank" to "embeddings",
         "moss-transcribe" to "moss-transcribe",
         "nmtcpp-translation" to "nmt",
         "onnx-tts" to "tts",

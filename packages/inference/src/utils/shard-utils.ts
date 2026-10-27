@@ -4,6 +4,7 @@ import { validateAndJoinPath } from '@/utils/path-security'
 import type { ShardPatternInfo, ShardUrl } from '@/schemas/index'
 import { extractAndWriteTensorsFile } from '@/utils/gguf-tensor-extractor'
 import { promises as fsPromises } from 'bare-fs'
+import path from 'bare-path'
 
 /**
  * Detect if model filename follows shard pattern (00001-of-0000x)
@@ -69,6 +70,21 @@ export function generateShardFilenames(shardName: string): string[] {
   }
 
   return filenames
+}
+
+/**
+ * List the files a model path loads: the path itself, or for a sharded model
+ * its tensors file followed by every shard in order
+ */
+export function getModelShardFiles(modelPath: string): string[] {
+  const filename = path.basename(modelPath)
+  const info = detectShardedModel(filename)
+  if (!info.isSharded) return [modelPath]
+  const directory = path.dirname(modelPath)
+  return [
+    path.join(directory, `${info.baseFilename}.tensors.txt`),
+    ...generateShardFilenames(filename).map((shard) => path.join(directory, shard))
+  ]
 }
 
 /**

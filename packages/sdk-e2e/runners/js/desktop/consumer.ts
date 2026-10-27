@@ -1,5 +1,6 @@
 import { SpeakerAwareExecutor } from '../shared/executors/node/speaker-aware-executor.js'
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
+import { RerankExecutor } from '../shared/executors/rerank-executor.js'
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { createExecutor, type TestDefinition } from '@qvac/test-suite'
 import { createStepBindings } from '../shared/step-bindings.js'
@@ -136,6 +137,7 @@ export const executor = createExecutor({
   handlers: [
     new SpeakerAwareExecutor(resources),
     new DecisionExecutor(resources),
+    new RerankExecutor(resources),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath

@@ -55,6 +55,7 @@ export {
   audioUnderstand,
   classify,
   decide,
+  rerank,
   video,
   type VideoProgressTick,
   upscale,
