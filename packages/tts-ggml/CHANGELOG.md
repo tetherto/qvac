@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type whose sums exceed the fp16 range no longer come back as infinity;
   `ggml-speech` `2026-10-23` fixed q8_0 only. The shared native `ggml-speech`
   moves to `2026-10-26` across the speech addons
-  ([#PR](https://github.com/tetherto/qvac/pull/PR)).
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
 
 ## [0.14.0] - 2026-10-23
 
