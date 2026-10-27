@@ -230,9 +230,9 @@ The JavaScript and TypeScript examples below import the same `shared` module sho
 The Python example takes the [worker-orchestrated loop](#worker-orchestrated-tool-loop) while the others take the client-side one. Deferring a tool works the same in both languages — the worker builds the catalog and reads back what the conversation has loaded — but running `tool_search` from client code needs the `executeToolSearch` helper, which only the JS SDK exports. On the orchestrated path the worker runs the search itself.
 
 The model calls `tool_search({ query })` with a capability or an exact tool
-name; the SDK searches the registered tools outside inference and appends the
-matching definitions to the conversation as a tool result, and the model calls
-them by name on its next step.
+name; the SDK searches the registered tools outside inference and returns a
+tool result naming the matches, the next turn declares their definitions in the
+prompt alongside the other tools, and the model calls them by name.
 
 Notes:
 
@@ -242,18 +242,21 @@ Notes:
   MCP server name.
 * To defer an MCP server's tools, set it on the client entry:
   `mcp: [{ client, deferLoading: true, group: 'github' }]`.
-* Loading a definition twice appends nothing; the search result says the tool is
-  already available.
+* Loading a definition twice declares it once; the search result says the tool
+  is already available.
+* Give tools distinct names. A deferred tool the prompt could not declare is
+  left out of the catalog and cannot be loaded: an empty name, `auto`, `none`
+  or `required`, or a name equal to an always-loaded tool's, `tool_search` or
+  an earlier deferred tool's once every run of characters outside `A-Z`, `a-z`,
+  `0-9` and `-` is read as `-` (`get_weather` and `get-weather`).
 * `completion()` stays stateless. The loaded set is read back from the
   conversation, so a reopened chat given the same tools and the same history has
   the same tools loaded, and concurrent chats cannot mix.
 * `generationParams.tool_choice` cannot name a deferred tool — its schema is not
   in the prompt, so the call cannot be constrained. Force `"tool_search"`
   instead.
-* Once the conversation has loaded a deferred tool, turns with no `tool_choice`
-  or `"auto"` run without the tool-call grammar, which only knows the tools in
-  the prompt. The call is still parsed and checked against the loaded
-  definitions.
+* The tool block sits near the start of the prompt, so the turn after a load
+  re-processes most or all of the prompt instead of reusing the cached prefix.
 * On the worker-orchestrated loop the SDK runs `tool_search` itself; your
   handlers are never called for it.
 

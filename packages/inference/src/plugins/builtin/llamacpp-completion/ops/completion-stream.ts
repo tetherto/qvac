@@ -24,7 +24,7 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-session'
 import type { DisposableScope } from '@/runtime/disposable-scope'
 import { detectToolDialect, prependToolsToHistory } from '@/utils/tool-integration'
-import { resolveDeferredTools, toWireTool, withDeferredToolChoice } from '@/utils/tools/defer'
+import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
 import { parseToolCalls } from '@/utils/tools/index'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import { buildAutoCacheSaveHistory, type CacheMessage } from '@/utils/index'
@@ -326,13 +326,11 @@ export async function* completion(
   const modelConfig = getModelConfig(modelId)
   const history = seedConfiguredSystemPrompt(requestHistory, modelConfig)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
-  // With deferred tools the prompt and the parser see different lists: the
-  // prompt carries the always-loaded ones plus `tool_search` and its catalog,
-  // while the parser also accepts whatever earlier searches appended to the
-  // history. `null` when nothing defers, which leaves the existing path alone.
+  // With deferred tools the prompt carries the always-loaded ones, `tool_search`
+  // and its catalog, and whatever earlier searches loaded. `null` when nothing
+  // defers, which leaves the existing path alone.
   const deferred = resolveDeferredTools(tools, history)
   const toolsToRender = deferred?.toolsToRender ?? tools?.map(toWireTool)
-  const callableTools = deferred?.callableTools ?? toolsToRender
   const toolsActive = !!toolsToRender?.length && toolsEnabled
   const dialect =
     tools && tools.length > 0 ? (params.toolDialect ?? detectToolDialect(modelId)) : undefined
@@ -354,9 +352,7 @@ export async function* completion(
       }
     }
   }
-  mergedGenerationParams = withParallelToolCalls(
-    withDeferredToolChoice(mergedGenerationParams, toolsActive ? deferred : null)
-  )
+  mergedGenerationParams = withParallelToolCalls(mergedGenerationParams)
 
   const model = getModel(modelId)
 
@@ -404,7 +400,7 @@ export async function* completion(
     return yield* processModelResponse(
       model,
       prompt,
-      callableTools,
+      toolsToRender,
       mergedGenerationParams,
       undefined,
       dialect,
@@ -457,7 +453,7 @@ export async function* completion(
   const result = yield* processModelResponse(
     model,
     prompt,
-    callableTools,
+    toolsToRender,
     mergedGenerationParams,
     { cacheKey: turn.cachePath },
     dialect,
