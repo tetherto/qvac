@@ -1,11 +1,11 @@
-import type { FastifyInstance } from 'fastify'
+import type { HttpServer } from '@/lib/http'
 import { before, after, type TestContext } from 'node:test'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildServer, type StartServerOptions } from '@/serve/index'
-import { preloadModels } from '@/serve/core/lifecycle'
-import type { OpenAIExtensionOptions } from '@/serve/extensions/openai/state'
+import { buildServer, type StartServerOptions } from '@/lib/api/index'
+import { preloadModels } from '@/lib/api/core/lifecycle'
+import type { OpenAIExtensionOptions } from '@/lib/api/extensions/openai/state'
 import { MODELLESS_CONFIG, writeConfigDir } from './config.js'
 
 export interface CreateServerOptions {
@@ -47,11 +47,11 @@ function serverOptions(projectRoot: string, opts: CreateServerOptions): StartSer
 }
 
 // Build an in-process server (no listen) against a temp projectRoot. Returns
-// the Fastify app; call app.inject(...) to drive it. Closes on test teardown.
+// the HTTP app; call app.inject(...) to drive it. Closes on test teardown.
 export async function createServer(
   t: TestContext,
   opts: CreateServerOptions = {}
-): Promise<FastifyInstance> {
+): Promise<HttpServer> {
   const projectRoot = await writeConfigDir(t, opts.config ?? MODELLESS_CONFIG)
   const app = await buildServer(serverOptions(projectRoot, opts))
   t.after(async () => {
@@ -63,8 +63,8 @@ export async function createServer(
 // Build one shared server per describe block (one server per config variant).
 // Wires before/after on the enclosing suite and returns a getter for use inside
 // `it` bodies.
-export function useServer(opts: CreateServerOptions = {}): () => FastifyInstance {
-  let app: FastifyInstance | undefined
+export function useServer(opts: CreateServerOptions = {}): () => HttpServer {
+  let app: HttpServer | undefined
   let dir: string | undefined
   before(async () => {
     dir = await mkdtemp(join(tmpdir(), 'qvac-cli-e2e-'))
@@ -86,8 +86,8 @@ export function useServer(opts: CreateServerOptions = {}): () => FastifyInstance
 // would interfere with the test runner.
 // One shared server per file, since model loads are expensive and node:test
 // isolates files into separate processes.
-export function useModelServer(config: unknown): () => FastifyInstance {
-  let app: FastifyInstance | undefined
+export function useModelServer(config: unknown): () => HttpServer {
+  let app: HttpServer | undefined
   let dir: string | undefined
   before(async () => {
     dir = await mkdtemp(join(tmpdir(), 'qvac-cli-e2e-models-'))

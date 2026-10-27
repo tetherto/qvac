@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
-import type { FastifyInstance } from 'fastify'
+import type { HttpServer } from '@/lib/http'
 
-export type InjectResponse = Awaited<ReturnType<FastifyInstance['inject']>>
+export type InjectResponse = Awaited<ReturnType<HttpServer['inject']>>
 
 export const JSON_HEADERS = { 'content-type': 'application/json' }
 

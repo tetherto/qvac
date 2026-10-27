@@ -1,17 +1,18 @@
 {
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "types/**/*.d.ts"],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ES2022",
+    "module": "ESNext",
     "moduleResolution": "bundler",
     "rootDir": "src",
     "outDir": "dist",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "b4a": ["./types/b4a.d.ts"]
     },
-    "lib": ["ES2022"],
+    "lib": ["ES2023"],
     "declaration": true,
     "declarationMap": true,
     "strict": true,

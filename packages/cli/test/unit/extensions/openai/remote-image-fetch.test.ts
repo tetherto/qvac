@@ -8,8 +8,8 @@ import {
   isBlockedAddress,
   RemoteImageFetchError,
   RemoteImageTooLargeError
-} from '@/serve/lib/remote-image-fetch'
-import type { RemoteImageFetchOptions } from '@/serve/lib/remote-image-fetch'
+} from '@/lib/api/lib/remote-image-fetch'
+import type { RemoteImageFetchOptions } from '@/lib/api/lib/remote-image-fetch'
 
 describe('isBlockedAddress', () => {
   const blocked = [

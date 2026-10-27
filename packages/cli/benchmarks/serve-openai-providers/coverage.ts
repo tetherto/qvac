@@ -1,5 +1,5 @@
-import { buildCoverageReport } from '../../src/openai/coverage/build-report'
-import type { CoverageReport, CoverageRow } from '../../src/openai/coverage/types'
+import { buildCoverageReport } from '../../src/lib/openai/coverage/build-report'
+import type { CoverageReport, CoverageRow } from '../../src/lib/openai/coverage/types'
 import type { OpenAiApiCoverageSnapshot, OpenAiCoverageMetric } from './types'
 
 export type CoverageReportBuilder = (options?: { offline?: boolean }) => Promise<CoverageReport>

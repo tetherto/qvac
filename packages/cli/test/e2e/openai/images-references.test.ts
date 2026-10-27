@@ -4,7 +4,7 @@ import type { DiffusionClientParams } from '@qvac/sdk'
 import { createServer } from '../helpers/server.js'
 import { multipart } from '../helpers/http.js'
 import { tinyPng } from '../helpers/fixtures.js'
-import { openaiState } from '@/serve/extensions/openai/state'
+import { openaiState } from '@/lib/api/extensions/openai/state'
 
 const models = {
   flux: {

@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
-import { buildServer } from '@/serve/index'
-import { extensionErrorCodes, type ServeExtension } from '@/serve/core/extensions'
-import { DEFAULT_EXTENSION, EXTENSIONS, resolveExtensions } from '@/serve/extensions'
+import { buildServer } from '@/lib/api/index'
+import { extensionErrorCodes, type ServeExtension } from '@/lib/api/core/extensions'
+import { DEFAULT_EXTENSION, EXTENSIONS, resolveExtensions } from '@/lib/api/extensions'
 
 function routePaths(printed: string): string[] {
   return printed

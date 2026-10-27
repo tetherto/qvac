@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { RequestRejectedByPolicyError } from '@qvac/sdk'
 import { createServer, useServer } from '../helpers/server.js'
-import { openaiState } from '@/serve/extensions/openai/state'
+import { openaiState } from '@/lib/api/extensions/openai/state'
 import { JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
 
 describe('serve: chat completions validation', () => {

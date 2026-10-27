@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer, type CreateServerOptions } from '../helpers/server.js'
-import { openaiState } from '@/serve/extensions/openai/state'
+import { openaiState } from '@/lib/api/extensions/openai/state'
 import type { VideoClientParams } from '@qvac/sdk'
 
 describe('serve: H3 video', () => {

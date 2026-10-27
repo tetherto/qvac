@@ -3,9 +3,9 @@ import { test } from 'node:test'
 import {
   transcriptionsBody,
   assertTranscriptionOptionsSupported
-} from '../../../../src/serve/extensions/openai/schemas/audio'
-import { normalizeEndpointCategory } from '../../../../src/serve/core/config/endpoint-category'
-import { formatTimedTranscription } from '../../../../src/serve/lib/transcription-response'
+} from '../../../../src/lib/api/extensions/openai/schemas/audio'
+import { normalizeEndpointCategory } from '../../../../src/lib/api/core/config/endpoint-category'
+import { formatTimedTranscription } from '../../../../src/lib/api/lib/transcription-response'
 
 test('MOSS multipart options preserve empty hotwords and the default token limit', () => {
   const body = transcriptionsBody.parse({

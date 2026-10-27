@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { DecisionResult } from '@qvac/sdk'
-import { serializerCompiler } from 'fastify-type-provider-zod'
-import { decisionsBody, decisionsResult } from '@/serve/extensions/openai/schemas/decisions'
-import { toDecideParams, toDecisionsResult } from '@/serve/extensions/openai/adapters/decisions'
+import { serializerCompiler } from '@/lib/http'
+import { decisionsBody, decisionsResult } from '@/lib/api/extensions/openai/schemas/decisions'
+import { toDecideParams, toDecisionsResult } from '@/lib/api/extensions/openai/adapters/decisions'
 
 const questions = [
   { type: 'predicate', instructions: 'Urgent?' },

@@ -128,7 +128,7 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push('## Executive summary')
   lines.push('')
   lines.push(
-    'Client-side comparison of OpenAI-compatible `/v1/chat/completions` across qvac serve, Ollama, and LM Studio using one shared GGUF and one shared SDK path.'
+    'Client-side comparison of OpenAI-compatible `/v1/chat/completions` across qvac sdk serve, Ollama, and LM Studio using one shared GGUF and one shared SDK path.'
   )
   if (raw.openai_api_coverage?.status === 'available') {
     lines.push(

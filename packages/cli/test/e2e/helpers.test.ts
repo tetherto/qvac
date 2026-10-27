@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import Fastify from 'fastify'
-import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
+import createHttpServer from '@/lib/http'
+import { initSSE, sendSSE, endSSE } from '@/lib/api/lib/sse'
 import { collectSSE, multipart, assertError, type InjectResponse } from './helpers/http.js'
 
 // Harness self-tests. The SSE case confirms app.inject captures hijacked
@@ -11,7 +11,7 @@ describe('e2e harness helpers', () => {
     'collectSSE parses hijacked reply.raw SSE captured by app.inject',
     { timeout: 5000 },
     async () => {
-      const app = Fastify({ logger: false })
+      const app = createHttpServer({ logger: false })
       // lunte-disable-next-line require-await
       app.get('/sse', async (_req, reply) => {
         initSSE(reply)

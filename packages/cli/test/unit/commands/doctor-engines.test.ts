@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { checkBareEngines } from '@/doctor/checks/engines'
+import { checkBareEngines } from '@/lib/doctor/checks/engines'
 
 async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-doctor-engines-')))

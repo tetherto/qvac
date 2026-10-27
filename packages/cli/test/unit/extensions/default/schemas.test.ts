@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { FastifySchemaValidationError } from 'fastify/types/schema.js'
-import { validatorCompiler } from 'fastify-type-provider-zod'
+import type { HttpSchemaValidationError } from '@/lib/http'
+import { validatorCompiler } from '@/lib/http'
 import {
   MAX_BATCH_INPUTS,
   TRANSLATE_FIELD_CODES,
   translateBody
-} from '@/serve/extensions/default/schemas/translate'
+} from '@/lib/api/extensions/default/schemas/translate'
 
 function issuePaths(input: unknown): string[] {
   const result = translateBody.safeParse(input)
@@ -78,7 +78,7 @@ describe('translateBody', () => {
     const result = validate({
       model: 'ta-en',
       text: Array.from({ length: MAX_BATCH_INPUTS + 1 }, () => 'a')
-    }) as { error?: FastifySchemaValidationError[] }
+    }) as { error?: HttpSchemaValidationError[] }
 
     assert.equal(result.error?.[0]?.keyword, 'too_big')
     assert.equal(result.error?.[0]?.instancePath, '/text')

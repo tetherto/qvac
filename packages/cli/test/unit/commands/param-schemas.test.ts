@@ -6,8 +6,8 @@ import {
   paramFields,
   coerceParam,
   validateParam
-} from '@/configure/param-schemas'
-import { TTS_ENGINES, buildEntry } from '@/configure/presets'
+} from '@/lib/configure/param-schemas'
+import { TTS_ENGINES, buildEntry } from '@/lib/configure/presets'
 
 describe('configure: param-schemas', () => {
   it('exposes GPU backend priorities for LLM, embeddings, and VLA', () => {

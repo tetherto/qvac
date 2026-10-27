@@ -1,5 +1,5 @@
 import type OpenAI from 'openai'
-import type { CoverageSpecSourceMode } from '../../src/openai/coverage/types'
+import type { CoverageSpecSourceMode } from '../../src/lib/openai/coverage/types'
 
 export type StreamTimings = {
   requestStartS: number

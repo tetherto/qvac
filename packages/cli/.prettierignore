@@ -1,3 +1,7 @@
 # Large fixed prompt bodies and local sweep outputs
 benchmarks/**/prompts.json
 benchmarks/**/results
+
+# Generated runtime, standalone binaries, and external benchmark checkouts
+output/
+out/

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LAYA_MULTILINGUAL_322M_Q8_0 } from '@qvac/sdk'
 import { runCli } from '../helpers/cli.js'
-import { parseServeConfig } from '@/serve/core/config'
+import { parseServeConfig } from '@/lib/api/core/config'
 
 function tmp(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'qvac-configure-'))

@@ -10,12 +10,12 @@ import {
   packageNameFromNpmLockPath,
   parseNpmPackageLock,
   UnsupportedLockfileError
-} from '@/verify/deps/npm-lockfile'
+} from '@/lib/verify/deps/npm-lockfile'
 import {
   collectNativePackages,
   type NativePackage,
   type UnclassifiedPackage
-} from '@/verify/deps/native-packages'
+} from '@/lib/verify/deps/native-packages'
 import {
   diffUnknownRemovedPackages,
   diffNativePackages,
@@ -25,7 +25,7 @@ import {
   hasUnclassifiedPackages,
   resolveLockfilePackageRoot,
   verifyDeps
-} from '@/verify/deps/index'
+} from '@/lib/verify/deps/index'
 
 async function withTempDir(fn: (dir: string) => Promise<void> | void): Promise<void> {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-verify-deps-')))

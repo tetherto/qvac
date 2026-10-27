@@ -6,12 +6,12 @@ import {
   nearestVideoFrameCount,
   InvalidVideoStrengthError,
   DEFAULT_FPS
-} from '@/serve/extensions/openai/schemas/videos'
-import { createVideoJobsStore, type VideoJob } from '@/serve/extensions/openai/video-jobs-store'
-import { tearDownJob, resolveInputReferenceImage } from '@/serve/extensions/openai/routes/videos'
-import { HttpError } from '@/serve/lib/http-error'
-import type { QvacContext } from '@/serve/core/context'
-import type { OpenAIState } from '@/serve/extensions/openai/state'
+} from '@/lib/api/extensions/openai/schemas/videos'
+import { createVideoJobsStore, type VideoJob } from '@/lib/api/extensions/openai/video-jobs-store'
+import { tearDownJob, resolveInputReferenceImage } from '@/lib/api/extensions/openai/routes/videos'
+import { HttpError } from '@/lib/api/lib/http-error'
+import type { QvacContext } from '@/lib/api/core/context'
+import type { OpenAIState } from '@/lib/api/extensions/openai/state'
 
 type CancelInput = Parameters<NonNullable<OpenAIState['cancelOverride']>>[0]
 

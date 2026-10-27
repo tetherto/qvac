@@ -2,9 +2,9 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CompletionRun, CompletionStats, ToolCall, ToolCallError } from '@qvac/sdk'
 import { InferenceCancelledError } from '@qvac/sdk'
-import { completionTokensFromStats, formatToolErrors } from '@/serve/core/completion'
-import { drainCompletion } from '@/serve/extensions/openai/adapters/completion-result'
-import { HttpError } from '@/serve/lib/http-error'
+import { completionTokensFromStats, formatToolErrors } from '@/lib/api/core/completion'
+import { drainCompletion } from '@/lib/api/extensions/openai/adapters/completion-result'
+import { HttpError } from '@/lib/api/lib/http-error'
 
 function fakeRun(opts: {
   tokens?: string[]

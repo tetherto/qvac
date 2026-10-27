@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { emitOpenApiSpec, renderOpenApiSpec } from '@/openai/spec'
+import { emitOpenApiSpec, renderOpenApiSpec } from '@/lib/openai/spec'
 
 describe('renderOpenApiSpec', () => {
   it('returns a valid OpenAPI 3.1.0 JSON string by default', async () => {

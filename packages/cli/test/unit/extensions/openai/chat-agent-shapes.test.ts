@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import {
   chatCompletionChunk,
   chatCompletionResponse
-} from '@/serve/extensions/openai/adapters/chat-shapes'
-import { sdkToolCallsToOpenaiDeltas } from '@/serve/extensions/openai/adapters/tool-calls'
+} from '@/lib/api/extensions/openai/adapters/chat-shapes'
+import { sdkToolCallsToOpenaiDeltas } from '@/lib/api/extensions/openai/adapters/tool-calls'
 
 describe('chat agent OpenAI shapes', () => {
   it('maps blocking SDK tool calls to OpenAI chat tool_calls', () => {

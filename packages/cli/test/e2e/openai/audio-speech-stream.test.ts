@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { TextToSpeechStreamResponse, TextToSpeechStreamSession } from '@qvac/sdk'
 import { createServer } from '../helpers/server.js'
 import { assertStatusAndError, collectSSE } from '../helpers/http.js'
-import { openaiState } from '@/serve/extensions/openai/state'
+import { openaiState } from '@/lib/api/extensions/openai/state'
 
 const CONFIG = {
   serve: {

@@ -5,7 +5,7 @@ import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'src')
-const CORE = join(SRC, 'serve', 'core')
+const CORE = join(SRC, 'lib', 'api', 'core')
 
 function sourceFiles(dir: string): string[] {
   const found: string[] = []
@@ -20,7 +20,7 @@ function sourceFiles(dir: string): string[] {
 describe('serve layering', () => {
   it('core does not import from any extension', () => {
     const offenders = sourceFiles(CORE)
-      .filter((file) => readFileSync(file, 'utf8').includes('@/serve/extensions'))
+      .filter((file) => readFileSync(file, 'utf8').includes('@/lib/api/extensions'))
       .map((file) => relative(SRC, file))
 
     assert.deepEqual(

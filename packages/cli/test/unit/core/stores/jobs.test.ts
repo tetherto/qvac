@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createJobsStore, type JobEvictReason } from '@/serve/core/stores/jobs'
+import { createJobsStore, type JobEvictReason } from '@/lib/api/core/stores/jobs'
 
 interface Job {
   id: string

@@ -12,8 +12,8 @@ import {
   InvalidImageBatchCountError,
   InvalidImageStrengthError,
   UnsupportedImageOutputError
-} from '@/serve/extensions/openai/schemas/images'
-import type { Logger } from '@/logger'
+} from '@/lib/api/extensions/openai/schemas/images'
+import type { Logger } from '@/lib/logger'
 
 // Collects warnings so the log-only helpers can be asserted on.
 function makeLogger(): { warnings: string[]; logger: Logger } {

@@ -11,28 +11,28 @@ import {
   extractToolChoice,
   withToolChoice,
   InvalidToolChoiceError
-} from '@/serve/extensions/openai/schemas/common'
+} from '@/lib/api/extensions/openai/schemas/common'
 import {
   openaiMessagesToHistory,
   writeChatImages,
   chatCompletionsBody,
   toSdkChatArgs,
   type OpenAIMessage
-} from '@/serve/extensions/openai/schemas/chat'
+} from '@/lib/api/extensions/openai/schemas/chat'
 import {
   parseExpiresAfter,
   parseMetadata,
   InvalidExpiresAfterError,
   InvalidMetadataError
-} from '@/serve/extensions/openai/schemas/vector-stores'
+} from '@/lib/api/extensions/openai/schemas/vector-stores'
 import {
   vectorStoreToOpenAI,
   searchResultsToOpenAI
-} from '@/serve/extensions/openai/adapters/vector-stores-shape'
+} from '@/lib/api/extensions/openai/adapters/vector-stores-shape'
 import {
   sdkToolCallsToOpenai,
   sdkToolCallsToOpenaiDeltas
-} from '@/serve/extensions/openai/adapters/tool-calls'
+} from '@/lib/api/extensions/openai/adapters/tool-calls'
 import {
   openaiResponsesInputToHistory,
   openaiResponsesToolsToSdk,
@@ -45,13 +45,13 @@ import {
   InvalidResponsesBackgroundError,
   responsesBody,
   toSdkResponsesArgs
-} from '@/serve/extensions/openai/schemas/responses'
+} from '@/lib/api/extensions/openai/schemas/responses'
 import {
   parseLegacyPrompt,
   legacyPromptToHistory,
   InvalidPromptError
-} from '@/serve/extensions/openai/schemas/completions'
-import type { VectorStoreMeta } from '@/serve/core/stores/vector-stores'
+} from '@/lib/api/extensions/openai/schemas/completions'
+import type { VectorStoreMeta } from '@/lib/api/core/stores/vector-stores'
 
 describe('openaiMessagesToHistory', () => {
   it('converts simple user/assistant messages', () => {

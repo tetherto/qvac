@@ -5,7 +5,7 @@ import {
   generateVectorStoreId,
   idToWorkspace,
   InvalidVectorStoreIdError
-} from '@/serve/core/stores/vector-stores'
+} from '@/lib/api/core/stores/vector-stores'
 
 describe('generateVectorStoreId', () => {
   it('returns a vs_-prefixed id of expected length', () => {

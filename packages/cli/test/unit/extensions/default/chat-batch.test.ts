@@ -1,16 +1,16 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { FastifySchemaValidationError } from 'fastify/types/schema.js'
-import { validatorCompiler } from 'fastify-type-provider-zod'
+import type { HttpSchemaValidationError } from '@/lib/http'
+import { validatorCompiler } from '@/lib/http'
 import { SDK_SERVER_ERROR_CODES, type CompletionFinal } from '@qvac/sdk'
-import { HttpError } from '@/serve/lib/http-error'
+import { HttpError } from '@/lib/api/lib/http-error'
 import {
   CHAT_BATCH_FIELD_CODES,
   MAX_BATCH_PROMPTS,
   chatBatchBody,
   chatBatchResult
-} from '@/serve/extensions/default/schemas/chat-batch'
-import { toHttpError, toResultItem } from '@/serve/extensions/default/routes/chat-batch'
+} from '@/lib/api/extensions/default/schemas/chat-batch'
+import { toHttpError, toResultItem } from '@/lib/api/extensions/default/routes/chat-batch'
 
 const prompt = { messages: [{ role: 'user', content: 'hi' }] }
 
@@ -76,7 +76,7 @@ describe('chatBatchBody', () => {
     const result = validate({
       model: 'llm',
       prompts: Array.from({ length: MAX_BATCH_PROMPTS + 1 }, () => prompt)
-    }) as { error?: FastifySchemaValidationError[] }
+    }) as { error?: HttpSchemaValidationError[] }
 
     assert.equal(result.error?.[0]?.keyword, 'too_big')
     assert.equal(result.error?.[0]?.instancePath, '/prompts')

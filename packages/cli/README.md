@@ -1,591 +1,321 @@
-# QVAC CLI
+<p align="center">
+  <img src="docs/assets/ducks-small.png" alt="" width="200">
+</p>
 
-A command-line interface for the QVAC ecosystem. QVAC CLI provides tooling for building, bundling, and managing QVAC-powered applications.
+<h1 align="center">QV.AC CLI</h1>
 
-This package is published to npm as **`@qvac/cli`** and lives in the QVAC monorepo at **`packages/cli`**. Older instructions may refer to the deprecated **`qvac-cli`** package name—use **`@qvac/cli`** instead.
+<p align="center">
+  <b>Your most powerful device. Everywhere.</b>
+  <br>
+  Local AI in your terminal: chat, code and serve models across your devices, peer to peer
+</p>
 
-## Table of Contents
+<p align="center">
+  local models &middot; P2P workspaces &middot; borrow compute from your other devices &middot;
+  every change approved with its diff &middot; harness plugins &middot; headless host
+</p>
 
-- [Installation](#installation)
-- [Command Reference](#command-reference)
-  - [`doctor`](#doctor)
-  - [`configure`](#configure)
-  - [`bundle sdk`](#bundle-sdk)
-  - [`verify deps`](#verify-deps)
-  - [`verify bundle`](#verify-bundle)
-  - [`serve`](#serve)
-- [Configuration](#configuration)
-- [System Requirements](#system-requirements)
-- [Development](#development)
-- [License](#license)
+<p align="center">
+  <a href="#quick-start">Quick start</a> &middot;
+  <a href="#chat">Chat</a> &middot;
+  <a href="#edits-you-can-see">Edits</a> &middot;
+  <a href="#skills-and-plugins">Skills and plugins</a> &middot;
+  <a href="#your-devices">Devices</a> &middot;
+  <a href="#scripts-and-servers">Headless</a> &middot;
+  <a href="#configuration">Configuration</a> &middot;
+  <a href="#development">Development</a>
+</p>
 
-## Installation
+<p align="center">
+  <img src="docs/assets/tour.gif" alt="Booting QV.AC, the workspace dashboard, then a chat with a local model" width="900">
+</p>
 
-Install globally:
+`qvac` is one terminal app on top of [QV.AC Core](https://github.com/tetherto/qvac-core) and the
+[QV.AC Harness](https://github.com/tetherto/qvac-harness). Core keeps your conversations, agents and
+devices in a replicated mesh, so a chat started here is on your phone and laptop too. The harness
+runs the model, the tools and the plugins on the device you choose. Nothing goes to a server.
 
-```bash
-npm i -g @qvac/cli
+## Quick start
+
+```sh
+# From the monorepo root, with its pinned pnpm version
+pnpm install --frozen-lockfile
+pnpm --filter @qvac/cli build
+pnpm --filter @qvac/cli start             # chat; first run sets this device up
+pnpm --filter @qvac/cli start --temp      # a throwaway store
 ```
 
-Once installed, use the `qvac` command:
+`qvac` launches with Node and runs the app on its own pinned Bare runtime; you do not need Bare
+installed. `qvac-bare` is the same CLI launched by Bare itself, with no Node past install (it needs
+`bare` on your PATH). State lives in
+`~/.qvac/cli` (`--storage <dir>` or `QVAC_STORAGE` for another), models in the shared
+`~/.qvac/models`.
 
-```bash
-qvac <command>
+```sh
+qvac                      # chat, resuming your last conversation
+qvac "explain this repo"  # open chat and send a first message
+qvac -r                   # pick a conversation first
+qvac serve                # no UI: set up and serve this machine to your workspace
+qvac -p "summarise" < notes.md
+qvac --help               # every command; qvac help <command> for one
 ```
 
-Or run directly via npx:
+## Chat
 
-```bash
-npx @qvac/cli <command>
+<p align="center"><img src="docs/assets/chat.png" alt="A chat with a local model" width="820"></p>
+
+The composer is always one key away: `Enter` from the dashboard, `Ctrl+G` back. Type `/` for
+commands, `@` to reference a project file, `!cmd` to run a shell command and send its output
+(`!!cmd` keeps it to yourself). `AGENTS.md` and `CLAUDE.md` from your project are given to every new
+conversation, and `.qvac/prompts/*.md` become your own `/commands`.
+
+<p align="center"><img src="docs/assets/palette.png" alt="The command palette" width="820"></p>
+
+| Key                   |                                                                      |
+| --------------------- | -------------------------------------------------------------------- |
+| `Enter` / `Alt+Enter` | send / new line; sending mid-run queues the message                  |
+| `Esc`                 | stop the run, close a panel; twice to branch from an earlier message |
+| `Ctrl+B` / `Ctrl+N`   | conversations / new conversation                                     |
+| `Ctrl+L`, `Shift+Tab` | choose model, thinking on/off                                        |
+| `Ctrl+O` / `Ctrl+T`   | tool output / thinking                                               |
+| `Ctrl+F`              | search the conversation                                              |
+| `Ctrl+X`, `/export`   | copy the last answer, save the conversation as HTML or Markdown      |
+| `Alt+E`               | edit the draft in `$EDITOR`                                          |
+| `Ctrl+V`              | attach the file whose path is on the clipboard                       |
+| wheel, drag           | scroll; select and copy (`Shift`+drag for your terminal's own)       |
+
+Editing is readline: word motion and deletion, `Ctrl+K`/`Ctrl+U`/`Ctrl+Y` kill and yank, undo,
+history on `↑`/`↓`, and large pastes fold into one `[paste #1 +120 lines]` marker. `/help` lists
+everything.
+
+## Edits you can see
+
+<p align="center"><img src="docs/assets/coding.gif" alt="A model edits a file; the change is approved with its diff in view" width="900"></p>
+
+Every write waits for you, and you see what it would do before you answer: the diff of an edit, the
+file a write replaces, the exact command. `y` allows once, `a` always (a rule for you, not for the
+whole workspace), `n` denies. Finished calls stay as one line each (`Edit math.mjs +4 −0`,
+`Run npm test exit 1`) and open with `Ctrl+O`.
+
+## Skills and plugins
+
+<p align="center">
+  <img src="docs/assets/skills.png" alt="Skills" width="410">
+  <img src="docs/assets/plugins.png" alt="Plugins" width="410">
+</p>
+
+- `/skills` — the agent's skills with live readiness: turn them on and off, add a token, write your
+  own. With a 9B or larger model, the `qvac-plugins` skill writes a plugin or an extension for you
+  when you ask: [docs/skills.md](docs/skills.md).
+- `/plugins` — harness plugins beyond the built-ins: a persistent coding shell with background jobs
+  (sandboxed on macOS and Linux), language servers, code mode, QuickJS, Claude Code command hooks,
+  MCP servers. Dependencies come with them; `r` re-reads `qvac.config` and restarts Core, in place. Every
+  plugin, how to turn it on and how to write your own, inline in `qvac.config` too:
+  [docs/plugins.md](docs/plugins.md). Extensions add commands, footer notes, keys and colours to
+  the app itself: [docs/extensions.md](docs/extensions.md).
+- `/tools`, `/permissions`, `/agent`, `/usage`, `/knowledge`, `/folders` — toolsets, approval mode and
+  saved rules, instructions and context size, what fills the context, files and web search, and
+  which folders the agent may read or write.
+
+## Your devices
+
+<p align="center">
+  <img src="docs/assets/overview.png" alt="Overview" width="270">
+  <img src="docs/assets/device.png" alt="Device" width="270">
+  <img src="docs/assets/models.png" alt="Models" width="270">
+</p>
+
+The dashboard is the workspace at a glance: devices, people, models and projects (`1`), this
+machine's hardware and model memory (`2`), and its models to download, load and remove (`3`). `i`
+pairs another device with a QR code. A paired machine's models serve the whole workspace, so a laptop
+can chat on a desktop's GPU.
+
+## Scripts and servers
+
+`qvac serve` puts a machine with no screen into your workspace and serves its models. On first run
+in a terminal it asks three plain questions (join or create, your name, this device's name) and
+prints the invites with a QR code; after that a restart resumes without asking. Without a terminal
+it takes everything from flags or `QVAC_*` env vars and exits 2 naming what is missing. It stays up
+until Ctrl+C or SIGTERM (exit 0), stops with exit 0 when another device unpairs it, and exits 1 if
+Core dies. `qvac host serve` is the same command; the SDK's API server is `qvac sdk serve`.
+
+```sh
+qvac serve --create --account-name Ada --device-name dgx-spark --non-interactive --json
+QVAC_JOIN=qvac://workspace/… QVAC_DEVICE_NAME=gpu-1 qvac serve
 ```
 
-### Troubleshooting: `No binaries found for target '<platform>-<arch>'`
-
-QVAC spawns its worker through `bare-runtime`, which loads a platform-specific
-binary package (e.g. `bare-runtime-win32-x64`). With **pnpm** this package — or
-one of its nested dependencies — is sometimes not installed, even on a supported
-platform, so the runtime throws `No binaries found for target '<platform>-<arch>'`
-(see [#1492](https://github.com/tetherto/qvac/issues/1492)).
-
-Resolve it in one of these ways:
-
-```bash
-# Install the platform package directly (substitute your platform-arch)
-pnpm add bare-runtime-win32-x64
-
-# …or install with npm or bun, which place the nested binary correctly
-npm install
-```
-
-## Command Reference
-
-### `doctor`
-
-Validate that the current host can run `@qvac/sdk` + `@qvac/cli` before you
-hit runtime errors. The command prints a human-readable report by default and
-exits `1` when any required check fails.
-
-```bash
-qvac doctor [options]
-```
-
-**Options:**
-
-| Flag            | Description                                                       |
-| --------------- | ----------------------------------------------------------------- |
-| `--deep`        | Start the installed SDK worker and verify its heartbeat.          |
-| `--json`        | Output the report as JSON.                                        |
-| `-q, --quiet`   | Suppress stdout — only set the exit code.                         |
-| `-v, --verbose` | Include bounded worker stdout/stderr when a deep check fails.     |
-| `--offline`     | Skip GitHub and npm registry lookups in the `engines.bare` check. |
-
-**What it checks:**
-
-- **Runtime** — Node.js version (`^22.21.0 || >=24.9.0`; bundling needs Node
-  22.21+ on the 22 line or 24.9+) and supported CLI host
-  (desktop platforms only; Android/iOS are SDK deploy targets reported
-  separately below).
-- **Hardware** — total RAM, available RAM (via `os.availableMemory()` on
-  Node 22+), GPU acceleration (Metal on macOS, `vulkaninfo` on
-  Linux/Windows), and free disk space in the current working directory.
-- **Deploy targets (SDK)** — desktop target matrix, Android (`adb`), and
-  iOS (`xcodebuild` on macOS). Missing mobile toolchains produce
-  warnings, not failures.
-- **Optional tools** — `ffmpeg` (microphone/transcription) and the Bare
-  runtime.
-- **Project** — whether `@qvac/sdk` is resolvable from the current
-  working directory (works for hoisted monorepo installs too), and whether
-  every package's `engines.bare` accepts the Bare version each target runs:
-  the one built into `react-native-bare-kit` for Android/iOS, `bare-runtime`
-  for the desktop host. Reads `qvac/worker.bundle.js` when present (exactly
-  what ships), otherwise `node_modules`. On a mismatch it fails and prints the
-  `react-native-bare-kit` release to upgrade to and, per package, an override
-  that pins a release that runs on the current Bare. See
-  [Bare runtime detection](#verify-bundle) for where versions come from.
-- **SDK runtime (`--deep`)** — starts the installed SDK in an isolated Node.js
-  process, performs a worker heartbeat, and closes it. The probe is bounded to
-  45 seconds and classifies common Bare, native library, CPU instruction,
-  Vulkan, and worker-handshake failures. When `--deep` is requested, a missing
-  SDK, failed heartbeat, or failed cleanup causes exit code `1`.
-
-See [`system-requirements.md`](./system-requirements.md) for the full list of
-thresholds and rationale.
-
-**Examples:**
-
-```bash
-# Human-readable report
-qvac doctor
-
-# Exercise SDK worker startup without loading a model
-qvac doctor --deep
-
-# JSON for CI / scripts
-qvac doctor --json
-
-# Fail-fast in a script (exit 1 on any required check)
-qvac doctor --quiet || exit 1
-```
-
-### `configure`
-
-Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
-straight to `qvac serve --openai`. It searches the models the SDK provides — by name or by
-capability (role, addon, quantization) — and on a wide terminal previews, for the
-highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
-its alias, set config parameters (guided by the SDK's config schema — each field shows its
-type and description and is validated on entry, for model types the SDK exposes a schema for;
-currently llama.cpp chat + embedding + decision), and (with `$EDITOR`) tweak the entry and review the
-result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C`
-aborts without writing. Existing entries are preserved; re-running is idempotent per model.
-
-```bash
-qvac configure                 # interactive
-qvac configure --yes           # non-interactive: write a chat + transcription starter
-qvac configure --modality chat --modality image
-qvac configure --modality decision
-```
-
-| Flag                  | Description                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                                         |
-| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                                |
-| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image` / `decision`. |
-| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                                      |
-| `-q, --quiet`         | Suppress output.                                                                                                         |
-
-Single-artifact modalities (chat, embedding, transcription, image, decision) are runnable as written.
-Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder —
-set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for
-non-TTY use `--yes` / `--modality`.
-
-### `bundle sdk`
-
-Generate a tree-shaken Bare worker bundle containing the plugins you select (defaults to all built-in plugins).
-
-```bash
-qvac bundle sdk [options]
-```
-
-**What it does:**
-
-1. Reads `qvac.config.*` from your project root (if present)
-2. Resolves enabled plugins from the `plugins` array (defaults to all built-in plugins if omitted)
-3. Generates worker entry files with **static imports only**
-4. Bundles with `bare-pack --linked`
-5. Before bundling for mobile hosts (`android-arm64`, `ios-*`), adds any platform packages the installed split addons need (for example `@qvac/fabric-android-arm64` or `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version. A split addon's `binding.js` is `require('#host-addon')`, so bare-pack cannot bundle it for a host whose platform package is missing: if the packages cannot be installed, it prints the dependencies to add and the bundle fails with `HOST_PREBUILDS_MISSING`. Skip the install with `--no-install`.
-6. Generates `addons.manifest.json` from the bundle graph
-7. Checks every bundled package's `engines.bare` against the Bare runtime of each host and prints a warning with fixes on a mismatch (see [`verify bundle`](#verify-bundle))
-
-**Options:**
-
-| Flag                  | Description                                                      |
-| --------------------- | ---------------------------------------------------------------- |
-| `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`)          |
-| `--host <target>`     | Target host (repeatable, default: all platforms)                 |
-| `--defer <module>`    | Defer a module (repeatable, for mobile targets)                  |
-| `--no-install`        | Do not install missing addon platform packages for mobile hosts  |
-| `--quiet, -q`         | Minimal output                                                   |
-| `--verbose, -v`       | Detailed output                                                  |
-| `--offline`           | Skip GitHub and npm registry lookups in the `engines.bare` check |
-
-**Examples:**
-
-```bash
-# Bundle with default settings (all platforms)
-qvac bundle sdk
-
-# Bundle for specific platforms only
-qvac bundle sdk --host darwin-arm64 --host linux-x64
-
-# Use a custom config file
-qvac bundle sdk --config ./my-config.json
-
-# Verbose output for debugging
-qvac bundle sdk --verbose
-```
-
-**Output:**
-
-| File                        | Description                                     |
-| --------------------------- | ----------------------------------------------- |
-| `qvac/worker.entry.mjs`     | Standalone/Electron worker with RPC + lifecycle |
-| `qvac/worker.bundle.js`     | Final bundle for mobile runtimes (Expo/BareKit) |
-| `qvac/addons.manifest.json` | Native addon allowlist for tree-shaking         |
-
-> **Note:** Your project must have `@qvac/sdk` installed.
-
-### `verify deps`
-
-Detect native Bare addon package changes between two git refs by comparing
-npm `package-lock.json` contents.
-
-```bash
-qvac verify deps --base <ref> --head <ref> [options]
-```
-
-Both `--base` and `--head` are required.
-
-**Options:**
-
-| Flag                | Description                                                     |
-| ------------------- | --------------------------------------------------------------- |
-| `--base <ref>`      | Base git ref or SHA.                                            |
-| `--head <ref>`      | Head git ref or SHA.                                            |
-| `--lockfile <path>` | Path to npm `package-lock.json` (default: `package-lock.json`). |
-| `--quiet, -q`       | Suppress output when there are no native changes.               |
-
-**Examples:**
-
-```bash
-# Local fork checkout
-qvac verify deps --base upstream/main --head HEAD
-
-# Direct clone where origin points at the canonical repo
-qvac verify deps --base origin/main --head HEAD
-
-# Package with a nested npm lockfile
-qvac verify deps --base upstream/main --head HEAD --lockfile packages/sdk/package-lock.json
-```
-
-**Exit codes:**
-
-| Exit | Meaning                                                                                                                                                                                                                |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | No native addon changes, or no npm lockfile exists at either ref.                                                                                                                                                      |
-| `1`  | Native addon additions or removals were detected, or a removed package's native status could not be determined. Reviewers should confirm the change is intentional.                                                    |
-| `2`  | Tool error (missing required args, unsupported lockfile, git ref could not be resolved, lockfile read or parse failure, etc.). The check did not complete and no judgment about native dependency changes can be made. |
-
-CI guardrails should treat `1` and `2` differently: `1` means "real native change to confirm", `2` means "infrastructure/usage problem to fix".
-
-**Detection Capabilities:**
-
-- Supports npm `package-lock.json` only.
-- Yarn, Bun, and pnpm lockfiles are not parsed yet.
-- Native packages are identified by reading installed `node_modules/<pkg>/package.json` and checking for top-level `"addon": true`, so run from a checkout with dependencies installed for the head under review.
-- Removed lockfile packages whose `package.json` is unavailable are reported with unknown native status so reviewers can inspect them.
-- Packages with unreadable metadata are reported as warnings only when native addon changes are also reported.
-
-### `verify bundle`
-
-Verify that every native Bare addon reachable from a generated worker bundle or
-an installed `node_modules` tree has prebuilds for the requested host(s) and a
-declared `engines.bare` range compatible with the installed Bare runtime.
-
-```bash
-qvac verify bundle --addons-source <path> --host <target> [--host <target>...] [options]
-```
-
-`--addons-source` may be either a `qvac/worker.bundle.js` produced by
-`qvac bundle sdk` or a `node_modules` directory. The source kind is detected
-automatically: files are parsed as bare-pack bundles, directories are walked
-as `node_modules` trees.
-
-**Options:**
-
-| Flag                              | Description                                                                                                                                                                                                                                                             |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--addons-source <path>`          | Required. Path to a `worker.bundle.js` or a `node_modules` directory.                                                                                                                                                                                                   |
-| `--host <target>`                 | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`.                                                                                                   |
-| `--bare-runtime-version <semver>` | Optional. Override the resolved Bare runtime version used for ABI checks, for every host. It replaces the version read from `react-native-bare-kit` for mobile hosts, so use it for desktop builds only (e.g. Electron packaging where runtime inference is ambiguous). |
-| `--offline`                       | Optional. Make no network requests: no GitHub lookup for a `react-native-bare-kit` release newer than the built-in table, and no npm registry lookup for override suggestions.                                                                                          |
-| `--config, -c <path>`             | Optional. Path to a `qvac.config.*` file (default: auto-detect `qvac.config.{json,js,mjs,ts}` in the project root). Reads `bareRuntimeVersion` if present.                                                                                                              |
-| `--project-root <path>`           | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd).                                                                                                                                                         |
-| `--json`                          | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling.                                                                                                                                   |
-| `--quiet, -q`                     | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set.                                                                                                                                                                   |
-
-**Examples:**
-
-```bash
-# Mobile bundle, runs after `qvac bundle sdk` writes qvac/worker.bundle.js
-qvac verify bundle --addons-source qvac/worker.bundle.js \
-  --host android-arm64 \
-  --host ios-arm64 \
-  --host ios-arm64-simulator \
-  --host ios-x64-simulator
-
-# Desktop / Electron dev tree
-qvac verify bundle --addons-source ./node_modules \
-  --host darwin-arm64 --host linux-x64 --host win32-x64
-
-# Packaged Electron app (validates what actually ships)
-qvac verify bundle \
-  --addons-source dist/mac-arm64/MyApp.app/Contents/Resources/app.asar.unpacked/node_modules \
-  --host darwin-arm64
-
-# Force the runtime version of a desktop build (e.g. an Electron app that
-# ships its own Bare). Do not pin mobile hosts: the pin replaces the version
-# read from react-native-bare-kit.
-qvac verify bundle --addons-source ./node_modules \
-  --host darwin-arm64 --bare-runtime-version 1.33.4
-
-# Pin via qvac.config.json (committed with the project; same caveat)
-# {
-#   "plugins": ["llamacpp-completion"],
-#   "bareRuntimeVersion": "1.33.4"
-# }
-qvac verify bundle --addons-source ./node_modules \
-  --host darwin-arm64
-
-# Structured output for CI consumers
-qvac verify bundle --addons-source qvac/worker.bundle.js \
-  --host darwin-arm64 --json | jq '.issues[] | select(.level == "error")'
-```
-
-**Exit codes:**
-
-| Exit | Meaning                                                                                                                                                                                                                                                                                                                               |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | No error-level issues. All required prebuilds are present, and every ABI check that _ran_ passed. Warnings may indicate skipped checks or surfaced metadata problems: `unknown-runtime-version`, `malformed-engines-bare`, `invalid-package-json`, `empty-bundle-resolutions`, or `config-load-failed`.                               |
-| `1`  | At least one error-level issue: `missing-prebuild`, `abi-mismatch`, `invalid-runtime-version` (malformed `--bare-runtime-version` or config `bareRuntimeVersion`), or `invalid-source`. Prebuild checks always run regardless of runtime parse failures, so a typo in `--bare-runtime-version` cannot hide a real `missing-prebuild`. |
-
-**Issue codes:**
-
-| Code                       | Level   | Meaning                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `missing-prebuild`         | error   | No `.bare` for the host. For an ordinary addon, `<packageRoot>/prebuilds/<host>/` is missing or empty; for a split addon (one with a `#host-addon` map), its per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) is not installed or has no `prebuilds/<host>/*.bare`.                                        |
-| `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the resolved runtime version.                                                                                                                                                                                                                                                |
-| `engines-mismatch`         | error   | A package that is not an addon declares an `engines.bare` range that does not include the resolved runtime version.                                                                                                                                                                                                                     |
-| `unknown-runtime-version`  | warning | At least one package declares `engines.bare`, but no Bare runtime version could be auto-detected. For mobile hosts install `react-native-bare-kit`; for a desktop build install `bare-runtime` or pass `--bare-runtime-version`.                                                                                                        |
-| `invalid-runtime-version`  | error   | The value passed via `--bare-runtime-version` or via the config `bareRuntimeVersion` field is not a valid semver. An invalid explicit version is rejected as an error (vs. auto-detection failure, which is only a warning) because the user opted into runtime verification. ABI resolution is skipped, but prebuild checks still run. |
-| `malformed-engines-bare`   | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer.                                                                                                                                        |
-| `invalid-package-json`     | warning | An addon `package.json` could not be parsed (malformed JSON, non-object root, missing `name` on an `addon: true` package). The package is treated as a non-addon and its prebuilds/ABI cannot be verified.                                                                                                                              |
-| `empty-bundle-resolutions` | warning | The `--addons-source` bundle has an empty bare-pack resolutions table. The verifier cannot inspect any addons; a "passed" summary would be vacuous. Regenerate the bundle or check for corruption.                                                                                                                                      |
-| `config-load-failed`       | warning | An auto-detected `qvac.config.*` exists but failed to load (syntax error, throwing import, etc.). The project-pinned `bareRuntimeVersion` is being ignored. Fix the config or pass `--config` explicitly to escalate to an error.                                                                                                       |
-| `invalid-source`           | error   | `--addons-source` does not point to a readable bundle or directory, `--host` was empty, or an explicit `--config` path could not be loaded.                                                                                                                                                                                             |
-
-**Bare runtime detection:**
-
-Runtime resolution order:
-
-1. `--bare-runtime-version <semver>` (authoritative — user-provided). Applies to every host, including mobile hosts, where it replaces the `react-native-bare-kit` detection below.
-2. `bareRuntimeVersion` field in `qvac.config.{json,js,mjs,ts}` (auto-detected from `--project-root`, or supplied via `--config`). Committed and shared across the team. Applies to every host, including mobile hosts, where it replaces the `react-native-bare-kit` detection below.
-3. Android and iOS hosts, when `react-native-bare-kit` is installed: the Bare version compiled into the bare-kit binaries it ships (see below).
-4. Desktop hosts, and mobile hosts without `react-native-bare-kit`: `<projectRoot>/node_modules/bare-runtime/package.json`, then `<projectRoot>/node_modules/bare/package.json` — `version` field.
-
-If no runtime resolves, ABI checks emit a single `unknown-runtime-version`
-warning and the exit code stays `0`. Prebuild checks always run regardless of
-runtime detection.
-
-**Mobile / Expo:** `react-native-bare-kit` records no Bare version in its
-`package.json`. The SDK finds it in this order, and says so before any step
-that uses the network:
-
-1. A built-in table of `react-native-bare-kit` → bare-kit → Bare versions,
-   read from each release's `CMakeLists.txt`.
-2. The installed `ios/BareKit.xcframework/.../Info.plist`, whose bundle
-   version is the bare-kit release, mapped to Bare with the same table. This
-   covers releases older than 0.13.3, which do not name their bare-kit
-   version in `CMakeLists.txt`.
-3. For a release newer than the table's newest entry: that release's
-   `CMakeLists.txt` and the matching bare-kit `CMakeLists.txt` on
-   `raw.githubusercontent.com` (two requests, 5 s timeout each). Skipped with
-   `--offline`.
-
-The table is regenerated with `npm run bare-kit-runtimes:generate` in
-`packages/sdk`, which only probes releases newer than its newest entries
-(`npm run bare-kit-runtimes:generate -- --full` rebuilds it).
-
-**Fix suggestions:** on an `abi-mismatch` or `engines-mismatch`, the summary
-names the oldest `react-native-bare-kit` release whose Bare satisfies every
-range, and for each failing package fetches its abbreviated package metadata from
-`registry.npmjs.org` (one request per package, 5 s timeout, skipped with
-`--offline`) to find the newest release that runs on the current Bare and that
-its dependents accept. The override is printed in the syntax of the project's
-package manager, detected the same way as for the addon platform-package
-install in `bundle sdk`: npm `overrides`, pnpm `pnpm.overrides`, yarn
-`resolutions`, or bun `overrides`. It is scoped to the
-accepting dependents when another dependent still requires the current version.
-
-### `serve`
-
-Run an HTTP server backed by locally configured QVAC models (`serve.models` in `qvac.config.*`), with an optional **OpenAI-compatible** extension.
-
-```bash
-qvac serve --openai [options]
-```
-
-The OpenAI extension includes `POST /v1/decisions` for local typed decisions.
-See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request examples.
-
-`--no-default` leaves the QVAC surface out. `qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
-
-| Flag                             | Description                                                                                                                         |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `-c, --config <path>`            | Config file path (default: auto-detect `qvac.config.*`).                                                                            |
-| `-p, --port <number>`            | Port to listen on (default: `11434`).                                                                                               |
-| `-H, --host <address>`           | Host to bind to (default: `127.0.0.1`).                                                                                             |
-| `--model <alias>`                | Force a model alias to preload at startup (repeatable; must be in config). Models not preloaded still load lazily on first request. |
-| `--api-key <key>`                | Require Bearer authentication. Recommended for every non-loopback bind.                                                             |
-| `--api-key-file <path>`          | Read the Bearer token from a file. Keeps it out of argv, which `/proc` exposes locally.                                             |
-| `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                          |
-| `--cors`                         | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin.                                          |
-| `--cors-origin <origin>`         | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                                                           |
-| `--allowed-host <host>`          | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` covers subdomains (repeatable).    |
-| `--allow-any-host`               | Accept any `Host` header, turning off DNS-rebinding protection.                                                                     |
-| `--public-base-url <url>`        | Externally reachable origin required for image `response_format=url`.                                                               |
-| `--docs`                         | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                                                                |
-| `--no-lazy-load`                 | Disable lazy loading; a request for an unloaded model returns `503 model_not_loaded`.                                               |
-| `--load-concurrency <n>`         | Max simultaneous model loads (default: `1`).                                                                                        |
-| `--load-timeout <ms>`            | Per-load timeout in milliseconds (default: unbounded).                                                                              |
-| `--no-cancel-load-on-disconnect` | Keep loading a model even if the client that triggered the load disconnects.                                                        |
-| `-v, --verbose`                  | Detailed output.                                                                                                                    |
-
-With lazy loading on (the default), the server starts even when some preload models fail; a failed model still loads lazily on the next request. With `--no-lazy-load`, preloaded models are the only ones that can serve, so if every preload model fails the server exits non-zero instead of listening — under a supervisor (systemd, Docker) that surfaces the failure rather than a running-but-empty server. The worker stderr behind the failure (for example a missing addon) is logged either way.
-
-`serve.cors.origins` in `qvac.config.*` and repeatable `--cors-origin` flags are combined. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. `--cors` is only a compatibility validation switch and does not enable CORS itself. It fails without an explicit CLI/config origin, including with `--docs`. Existing `--cors` scripts must add every trusted origin explicitly:
-
-```bash
-qvac serve --openai --cors --cors-origin https://app.example.com
-```
-
-Independently, `--docs` enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. `/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. Do not expose docs on a non-loopback bind unless public introspection is acceptable.
-
-A non-loopback `--host` refuses to start without `--api-key` or `--api-key-file`. `--allow-unauthenticated` downgrades that refusal to a warning.
-
-Every request, `/openapi.json` included, must carry a `Host` header naming a loopback host, an IP address, the bind host, the `--public-base-url` host or an `--allowed-host` entry; anything else gets `403 host_not_allowed`. This stops a web page that rebinds its own domain to `127.0.0.1` from calling the server. Behind a reverse proxy or under a LAN hostname, list that name with `--allowed-host` or `serve.allowedHosts` (a leading dot covers the domain and its subdomains); `--allow-any-host` or `"allowedHosts": true` turns the check off.
-
-`--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file` reads it from an owner-only file instead; the CLI refuses a path that is not a regular file and warns when the file is readable beyond its owner.
-
-The QVAC surface serves **`POST /qvac/v1/translate`**: text translation through an NMT alias whose `config` carries the `engine` and the `from` / `to` languages. `text` takes one string or an array, and `stream: true` emits Server-Sent Events. **`POST /qvac/v1/ocr`** reads the text in a PNG, JPEG or BMP image through an OCR alias. **`POST /qvac/v1/classifications`** ranks the labels for a PNG or JPEG image through a classification alias. It also serves **`GET /qvac/v1/system`** for the host's CPU, memory and GPU capacity, and **`POST /qvac/v1/models/fit`** to ask whether `serve.models` aliases or SDK model constants are likely to fit before they are loaded. And it serves **`POST /qvac/v1/chat/batch`**: up to 64 chat prompts decoded together on one LLM alias, returned in prompt order.
-
-See **[docs/serve/](./docs/serve/README.md)** for the server reference: shared configuration and model loading, the [QVAC surface](./docs/serve/default.md), and the [OpenAI-compatible surface](./docs/serve/openai.md) — supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS — `wav` + `pcm` natively, plus `mp3` / `opus` / `aac` / `flac` when `ffmpeg` is on the server's `PATH` — with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias, and the `GET /v1/audio/voices` / `GET /v1/audio/models` discovery endpoints).
+With `--json` it prints one `{"status":"ready",…}` line (the device invite, and the workspace
+invite when it can mint one), then one line per event: `download`, `peers`, `unpaired`, `stopped`.
+
+| Command                      |                                                                    |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `qvac serve`                 | set up and run this device, no UI                                  |
+| `qvac workspace join <link>` | preview a `qvac://workspace/` or `qvac://device/` link, join, wait |
+| `qvac workspace leave`       | unpair this device: it leaves your account and its workspaces      |
+| `qvac models list`           | on disk, loaded, and the catalog that suits this device (`--json`) |
+| `qvac models pull <model>`   | download, with percent, size, speed and time left                  |
+| `qvac models remove <model>` | delete from disk; refused while loaded, asks unless `--yes`        |
+| `qvac status`                | this device, workspace, peers, models loaded, storage (`--json`)   |
+| `qvac logs [-f] [--tail N]`  | the end of `assistant.log` and `harness.log`; `-f` follows         |
+| `qvac config`                | the merged configuration, each value with its source (`--json`)    |
+| `qvac help [command]`, `-v`  | commands and options; the CLI, Core and harness versions           |
+
+Flags: `--create`, `--account-name`, `--device-name` (`--name`), `--join`, `--device-join`,
+`--data-dir` (`--storage`, `-s`), `--no-default-models`, `--json`, `--non-interactive`, `--yes`,
+`--no-color`, `--temp`. Every flag also reads `QVAC_<FLAG_NAME>`: `QVAC_JOIN`, `QVAC_ACCOUNT_NAME`,
+`QVAC_DATA_DIR`, `QVAC_NON_INTERACTIVE=1`, `QVAC_JSON=1`. A device's state has one writer, so
+commands that need Core refuse to run beside another `qvac` on the same `--data-dir`; `qvac status`
+beside a running `qvac serve` reads the copy serve keeps.
+
+For scripts, `qvac -p "prompt"` prints the answer (stdin goes first), `--mode json` streams every
+chunk as JSON lines, and `--mode rpc` takes JSON commands on stdin for editors and other tools. All
+of them go through Core, so the conversation is saved and replicated like any other. The words
+`serve`, `workspace`, `models`, `status`, `logs`, `help`, `sdk`, `host`, `chat` and `config` are commands,
+never a first chat message; `qvac -- status of the build` sends one anyway.
+
+## QVAC SDK commands
+
+The existing SDK commands are integrated under `qvac sdk`. Update scripts from
+`qvac doctor`, `qvac configure`, `qvac serve --openai`, `qvac bundle sdk` and
+`qvac verify …` to their `qvac sdk …` equivalents. SDK flags and configuration
+keys are preserved; see the [SDK command reference](docs/sdk-cli.md).
+
+| Command                                                         |                                                                                                                        |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `qvac sdk doctor [--deep] [--json] [--offline]`                 | can this machine run the SDK: Node, memory, GPU, disk, mobile toolchains, ffmpeg, Bare, `engines.bare`; exits 1 if not |
+| `qvac sdk configure [--yes] [--modality chat]`                  | build `serve.models` in `qvac.config.json` by searching the SDK's models                                               |
+| `qvac sdk serve --openai [--systemone]`                         | an HTTP API on local models: OpenAI-compatible `/v1/…`, System One decisions and `/qvac/v1/translate`                  |
+| `qvac sdk openai coverage`, `qvac sdk openai spec`              | which OpenAI endpoints `serve --openai` covers, and its OpenAPI spec without starting it                               |
+| `qvac sdk bundle sdk [--host darwin-arm64]`                     | a tree-shaken Bare worker bundle of the SDK plugins in `qvac.config`, plus `addons.manifest.json`                      |
+| `qvac sdk verify deps --base <ref> --head <ref>`                | the native dependency changes between two git refs                                                                     |
+| `qvac sdk verify bundle --addons-source <path> --host <target>` | a bundle's addons and Bare ABI checked for each host                                                                   |
+
+`qvac sdk serve` listens on `127.0.0.1:11434` by default (`-p`, `-H`); a non-loopback host needs
+`--api-key` or `--api-key-file`, and `--docs` mounts the API explorer at `/docs`. It is not `qvac serve`:
+that one puts this device in your QV.AC workspace, this one is a local HTTP API for apps.
 
 ## Configuration
 
-The CLI reads configuration from `qvac.config.{json,js,mjs,ts}` in your project root.
+`qvac.config.json`, `.js`, `.mjs` or `.ts` in the current folder, or `--config <path>`; see
+[docs/examples/qvac.config.mjs](docs/examples/qvac.config.mjs).
 
-If no config file is found, the CLI bundles all built-in plugins.
-
-> **Note:** `qvac.config.ts` is supported via `tsx` internally (no user setup required).
-
-This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads this **bundler-only** key (ignored by the SDK at runtime):
-
-| Key       | Type       | Required | Description                                                                      |
-| --------- | ---------- | -------- | -------------------------------------------------------------------------------- |
-| `plugins` | `string[]` | No       | Module specifiers, each ending with `/plugin` (defaults to all built-in plugins) |
-
-> **Custom plugin contract:** custom `*/plugin` modules must **default-export** the plugin object.
-
-**Built-in plugins:**
-
-```
-@qvac/sdk/llamacpp-completion/plugin
-@qvac/sdk/llamacpp-embedding/plugin
-@qvac/sdk/whispercpp-transcription/plugin
-@qvac/sdk/parakeet-transcription/plugin
-@qvac/sdk/nmtcpp-translation/plugin
-@qvac/sdk/onnx-tts/plugin
-@qvac/sdk/ggml-ocr/plugin
-@qvac/sdk/sdcpp-generation/plugin
-```
-
-**Example configurations:**
-
-```json
-// qvac.config.json - LLM only
-{
-  "plugins": ["@qvac/sdk/llamacpp-completion/plugin"]
+```js
+export default {
+  core: {
+    model: 'Qwen3.5-9B-Q4_K_M',
+    folders: [{ path: '.', write: true }]
+  },
+  harness: {
+    plugins: [{ use: './my-plugin.mjs' }],
+    delegation: { targets: [{ name: 'codex', protocol: 'codex', command: 'codex' }] }
+  },
+  tui: { theme: 'qvac', toolOutput: 'collapsed', mouse: true }
 }
 ```
 
-```json
-// qvac.config.json - Multiple plugins
-{
-  "plugins": [
-    "@qvac/sdk/llamacpp-completion/plugin",
-    "@qvac/sdk/whispercpp-transcription/plugin",
-    "@qvac/sdk/nmtcpp-translation/plugin"
-  ]
-}
+The SDK's own keys keep their meaning in the same file: top-level `plugins` (the SDK inference plugins
+`qvac sdk bundle sdk` bundles) and `serve` (`serve.models`, `serve.cors`, `serve.openai` for
+`qvac sdk serve`). QV.AC's keys live under `core`, `harness` and `tui`; every key and how the
+layers merge is in [docs/config.md](docs/config.md).
+
+Plugins turned on in `/plugins` are kept in `<storage>/plugins.json`. A custom plugin module exports
+a factory that returns a harness plugin, or names a class with `export`. Delegation hands work to
+local child agents or to Claude Code, Codex or ACP CLIs, within the run's folder and network grants.
+
+## How it works
+
+```
+qvac (Bare, bare-tui) ── Client ──► Core sidecar ──► harness worker (models, tools, plugins)
+                                     │
+                                     └── mesh ◄──► your other devices and workspace
 ```
 
-## System Requirements
-
-See [`system-requirements.md`](./system-requirements.md) for the full list of
-required and recommended host dependencies. You can validate your environment
-at any time with:
-
-```bash
-qvac doctor
-```
+The UI is a client like any other: everything goes through Core's `Client`, and inference happens
+only in the harness. Core and the harness are npm packages, `@qvac/core` and `@qvac/harness`,
+pinned to exact versions in `package.json`.
 
 ## Development
 
-**Prerequisites:**
+The CLI lives in the monorepo's `packages/cli`. Sources are strict TypeScript:
+`src/cli` owns command parsing and dispatch, `src/lib` holds reusable runtime,
+configuration, client and SDK/server code, and `src/product` owns the terminal UI.
 
-- Node.js `^22.21.0 || >=24.9.0`
-- npm
+We retain the existing CLI's `tsc` + `tsc-alias` build. Modern Bare can run
+TypeScript directly, but both launchers and the packaged application use the
+same emitted `dist` JavaScript. Rebuild after source changes before running
+integration tests or creating a package.
 
-### Agent-stack test ownership
+From `packages/cli`, after installing dependencies at the monorepo root:
 
-For tests that touch `qvac serve --openai`, `@qvac/ai-sdk-provider`, or agent-tool plugins, see
-[`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
-CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
-
-The CLI depends on the published `@qvac/sdk` (`^0.22.0`), which provides the
-`./commands` subpath that `bundle`/`verify` re-export and the server runtime
-the `serve` commands use. A normal `npm install` pulls it from the registry —
-no local SDK build is required.
-
-**Iterating against an in-repo `@qvac/sdk` build** (e.g. when changing the SDK
-and the CLI together in the monorepo, or against an SDK checked out in a
-separate worktree):
-
-```bash
-# Build the SDK first (from its packages/sdk directory)
-cd /path/to/qvac/packages/sdk && npm run build
-
-# Point the CLI at the sibling SDK (../sdk) instead of the registry copy
-cd packages/cli
-npm run dev:link
-
-# Sanity check: path should be inside .../qvac/packages/sdk/dist/commands/
-node -e "console.log(require.resolve('@qvac/sdk/commands'))"
+```sh
+pnpm build                # compile TypeScript and resolve import aliases
+pnpm typecheck            # check source and SDK test types
+pnpm format               # check formatting
+pnpm lint                 # lunte
+pnpm test:unit            # SDK, benchmark harness and workbench unit tests
+pnpm test:e2e             # SDK command and HTTP API tests
+pnpm test:integration     # boots real Core under Bare
+pnpm test:pty             # real CLI in a pseudo-terminal
+pnpm test:p2p             # devices on a private test DHT
+pnpm test:delegation      # real local-model delegation through an external CLI
+pnpm test:invite          # invitation encoding and QR smoke check
+pnpm test:diagnostics     # spawned-server diagnostic checks
+pnpm test:standalone      # copied binary smoke check after pnpm pear:build
+pnpm capture              # render real frames from a running Core
+pnpm demo:record          # re-record terminal videos (needs vhs)
+pnpm build:splash         # regenerate boot ducks
 ```
 
-Before committing, restore the committed `package.json`:
+Test programs live under `test`: Core, invitation and delegation smokes are in
+`test/integration`, shared runners are in `test/helpers`, and server diagnostics
+are in `test/e2e`. `scripts` contains build, publishing and dependency lifecycle
+tooling. Screen capture and rendering tools live beside the videos in `docs/demo`.
 
-```bash
-npm run dev:unlink
+Tests do not ship in the npm archive. To run a checkout smoke against a separately
+installed package, select its root explicitly (the runner also uses its Bare runtime):
+
+```sh
+QVAC_CLI_TEST_PACKAGE=/absolute/consumer/node_modules/@qvac/cli pnpm test:integration
+QVAC_CLI_TEST_PACKAGE=/absolute/consumer/node_modules/@qvac/cli pnpm test:delegation
 ```
 
-This runs `git checkout HEAD -- package.json` and re-installs, so the
-committed `@qvac/sdk` dependency (`^0.22.0`) is restored regardless of what you
-swapped in locally. `package-lock.json` is gitignored and is regenerated by the
-trailing `npm install`.
+`pnpm test:workbench` rebuilds before its focused unit suite. P2P checks support
+`P2P_DEVICES=10`; `P2P_KEEP=1` keeps their logs. GPU/model checks also need the
+appropriate model files and platform addons; rerun them on H100 when the hosts
+are available.
 
-**How CI tests the CLI/SDK pair**:
+Distribution: run `pnpm build && pnpm pack:local` for an npm archive, or
+`pnpm pear:build` for a Pear payload. Both package the emitted code, scripts and
+skills from this package, without the old standalone checkout. SDK commands run directly in the Node launcher, preserving server readiness
+descriptors and process IDs. `qvac-bare sdk` starts the packaged Node runner and
+requires the Node version in `package.json`. Explicit legacy HTTP launches
+(`qvac serve --openai`, `qvac serve --no-default`, and `qvac serve openai`) remain
+compatible with managed provider and editor integrations. Plain `qvac serve`
+starts the peer host.
 
-- PRs into `main` (and `feature-*` / `tmp-*`) build and test the CLI against the
-  **in-repo SDK** — the source that will ship. CI runs the
-  `sdk-source:workspace` script (builds `packages/sdk` and links it via
-  `npm install ../sdk`), so a CLI change can rely on unreleased SDK code without
-  a published version or any type cast.
-- PRs into `release-cli-*` test against **both** the in-repo SDK and the
-  `package.json`-pinned **published** SDK. Both must pass: the published leg
-  proves the CLI works against the exact SDK version it will ship against. If it
-  fails, widen the committed `@qvac/sdk` range to a published version that
-  carries the API the CLI now needs.
-- Push CI (`General CI/CD (cli)`) uses the same split: in-repo SDK on `main` /
-  `feature-*` / `tmp-*`, published SDK on `release-*`.
+Workspace pnpm installs apply the patches declared in `pnpm-workspace.yaml`.
+Standalone npm installs use `scripts/patch-dependencies.mjs` to apply the pinned
+harness patches. If lifecycle scripts are disabled or awaiting approval, run that first-party
+script explicitly before exercising Core or harness behavior.
 
-The committed `@qvac/sdk` range is never changed for testing — the in-repo link
-is a CI-time/local-only override (`sdk-source:workspace` / `dev:link`), never
-committed.
+The npm archive also includes a generated `npm-shrinkwrap.json` to preserve
+Bare runtime versions. After changing dependencies, regenerate both the root
+pnpm lock and this package's npm shrinkwrap (`npm install --package-lock-only
+--ignore-scripts` from `packages/cli`), then rerun the clean consumer checks.
+The publish check rejects mismatched direct dependency specifications.
 
-**Run locally:**
+npm only honors overrides in the consuming project's root manifest. The current
+Core/harness manifests can therefore select older harness, LLM and translation
+peers in a consumer install even with the shrinkwrap. To reproduce the tested
+workspace graph in an npm project, copy this package's `overrides` into that
+project's root manifest, replacing `$dependency` references with the exact
+versions from this package's `dependencies`. Reinstall and apply the harness
+patch script. Workspace and consumer dependency graphs are validated separately:
+the Core smoke checks startup and persistence, while the delegation smoke uses a
+real cached local model and an authenticated external CLI. Run both installed-package
+commands above after dependency changes, then rerun the model API checks for the
+native backends being shipped. The clean npm consumer has also passed real 2B-model
+delegation and the chat, tool, Responses, embedding, ASR, translation and TTS API checks.
 
-```bash
-# From packages/cli after a build
-npm run build
-node ./dist/index.js bundle sdk
-
-# Or link globally for testing
-npm link
-qvac bundle sdk
-```
-
-## License
-
-This project is licensed under the Apache-2.0 License - see the [LICENSE](LICENSE) file for details.
+See [SDK development and CI](docs/sdk-cli.md#development) for the workspace and
+published SDK test variants.

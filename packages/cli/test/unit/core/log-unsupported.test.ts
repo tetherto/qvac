@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import Fastify from 'fastify'
-import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
-import type { Logger } from '@/logger'
-import type { QvacContext } from '@/serve/core/context'
+import createHttpServer from '@/lib/http'
+import { logUnsupported } from '@/lib/api/core/plugins/log-unsupported'
+import type { Logger } from '@/lib/logger'
+import type { QvacContext } from '@/lib/api/core/context'
 
 function warningContext(warnings: string[]): QvacContext {
   const logger: Logger = {
@@ -20,7 +20,7 @@ function warningContext(warnings: string[]): QvacContext {
 describe('unsupported parameter warnings', () => {
   it('reports field names without retaining private values or injecting log lines', async (t) => {
     const warnings: string[] = []
-    const app = Fastify()
+    const app = createHttpServer()
     t.after(() => app.close())
     app.decorate('qvac', warningContext(warnings))
     app.post<{ Body: Record<string, unknown> }>(
@@ -54,7 +54,7 @@ describe('unsupported parameter warnings', () => {
 
   it('warns for supplied falsy values and stays quiet for absent fields', async (t) => {
     const warnings: string[] = []
-    const app = Fastify()
+    const app = createHttpServer()
     t.after(() => app.close())
     app.decorate('qvac', warningContext(warnings))
     app.post(

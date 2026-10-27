@@ -13,15 +13,15 @@ import {
   buildEntry,
   buildGenericEntry,
   modalityInfo
-} from '@/configure/presets'
-import { CONFIG_DOCS_URL, docsUrlForAddon } from '@/configure/docs-links'
+} from '@/lib/configure/presets'
+import { CONFIG_DOCS_URL, docsUrlForAddon } from '@/lib/configure/docs-links'
 import {
   foreignConfigPath,
   loadJsonConfig,
   mergeServeModels,
   serializeConfig,
   writeConfigAtomically
-} from '@/configure/write-config'
+} from '@/lib/configure/write-config'
 
 describe('configure: presets / buildEntry', () => {
   it('builds a bare {model, preload:false} for chat with the recommended default', () => {

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import type { AddressInfo } from 'node:net'
-import { buildServer } from '@/serve/index'
-import { identityProof } from '@/serve/core/identity'
+import { buildServer } from '@/lib/api/index'
+import { identityProof } from '@/lib/api/core/identity'
 
 const API_KEY = 'identity-test-key-0123456789'
 

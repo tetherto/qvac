@@ -3,3 +3,8 @@ dist
 .DS_Store
 package-lock.json
 bun.lock
+
+# Local CLI runtime and benchmark artifacts
+output/
+out/
+*.tgz

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { assertToolsEnabled, toolsRequested } from '@/serve/lib/assert-tools-enabled'
-import { HttpError } from '@/serve/lib/http-error'
+import { assertToolsEnabled, toolsRequested } from '@/lib/api/lib/assert-tools-enabled'
+import { HttpError } from '@/lib/api/lib/http-error'
 
 const TOOLS = [{ name: 'get_weather' }]
 

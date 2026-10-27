@@ -6,8 +6,8 @@ import { useModelServer } from '../helpers/server.js'
 import { assertError, multipart, collectSSE, assertStatusAndError } from '../helpers/http.js'
 import { MODEL_CONFIG, E2E } from '../helpers/config.js'
 import { silenceWav, tinyPng, textFile } from '../helpers/fixtures.js'
-import { openaiState } from '@/serve/extensions/openai/state'
-import type { DecisionsResult } from '@/serve/extensions/openai/schemas/decisions'
+import { openaiState } from '@/lib/api/extensions/openai/state'
+import type { DecisionsResult } from '@/lib/api/extensions/openai/schemas/decisions'
 
 // One shared in-process server preloads the LLM, embedding, decision, and two Whisper models.
 // test-video stays preload:false so its requests reach the model check.

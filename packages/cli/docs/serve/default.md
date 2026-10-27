@@ -1,6 +1,6 @@
 # Default extension
 
-The QVAC surface, mounted by `qvac serve` unless `--no-default` is passed. Its routes live
+The QVAC surface, mounted by `qvac sdk serve` unless `--no-default` is passed. Its routes live
 under `/qvac/v1`.
 
 Server-wide behavior — authentication, CORS, model loading and `serve.models` — is
@@ -177,7 +177,7 @@ curl -X DELETE http://localhost:11434/qvac/v1/kv_cache
 > per-server scoping is not available.
 
 This route needs the QVAC surface mounted. It is absent under `--no-default`, and therefore
-under the deprecated `qvac serve openai`, which implies it.
+under the deprecated `qvac sdk serve openai`, which implies it.
 
 ### Errors
 

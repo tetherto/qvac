@@ -1,6 +1,6 @@
 # OpenAI extension
 
-Mount with `qvac serve --openai`. The extension serves an OpenAI-compatible HTTP API so
+Mount with `qvac sdk serve --openai`. The extension serves an OpenAI-compatible HTTP API so
 tools and SDKs that target OpenAI can run against local QVAC models. Every route below
 lives under `/v1`.
 
@@ -92,7 +92,7 @@ Rows are **catalog entries**, not usable `model` objects:
   "quantization": "q4",
   "params": "600M",
   "size": 382156480,
-  "hint": "Not in serve.models — run `qvac configure` (or add it there by hand) to make it usable."
+  "hint": "Not in serve.models — run `qvac sdk configure` (or add it there by hand) to make it usable."
 }
 ```
 
@@ -310,7 +310,7 @@ curl -sS http://127.0.0.1:11434/v1/responses \
 
 ## `POST /v1/decisions`
 
-`qvac serve --openai` mounts `POST /v1/decisions`, backed by SDK `decide()`
+`qvac sdk serve --openai` mounts `POST /v1/decisions`, backed by SDK `decide()`
 and a local Laya checkpoint. The request and response follow the
 [official OpenAI Decisions API reference](https://developers.openai.com/api/reference/resources/decisions/methods/create).
 See the [OpenAI Decisions guide](https://developers.openai.com/api/docs/guides/decisions)
@@ -323,8 +323,8 @@ checkpoint in `serve.models` with SDK model type `llamacpp-decision`. An
 embedding-only checkpoint cannot answer decision questions.
 
 ```bash
-qvac configure --modality decision
-qvac serve --openai --no-default
+qvac sdk configure --modality decision
+qvac sdk serve --openai --no-default
 ```
 
 `configure` selects `LAYA_MULTILINGUAL_322M_Q8_0` and writes the following entry.
@@ -536,7 +536,7 @@ curl -sS http://127.0.0.1:11434/v1/images/generations \
 **`url` mode (server started with `--public-base-url`):**
 
 ```bash
-qvac serve --openai --public-base-url "https://api.example.com"
+qvac sdk serve --openai --public-base-url "https://api.example.com"
 ```
 
 ```bash
@@ -865,7 +865,7 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
   - `model` (required) — alias, resolved as described above
   - `input` (required) — non-empty string, capped at **`serve.openai.audio.speech.maxInputChars`** (default **4096**, OpenAI's documented limit; set to `null` to disable)
   - `voice` (optional, defaults to `defaultVoice`) — an OpenAI built-in voice name (`alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`, `onyx`, `nova`, `sage`, `shimmer`, `verse`, `marin`, `cedar`), any other string, or a custom voice reference `{ "id": "voice_1234" }`. The object form routes the same way as its `id` string.
-  - `response_format` (optional) — `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. The encoded formats are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`; when ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`). The default stays `wav` so synthesis works on hosts without ffmpeg.
+  - `response_format` (optional) — `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. The encoded formats are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`; when ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac sdk doctor`). The default stays `wav` so synthesis works on hosts without ffmpeg.
   - `stream_format` (optional) — `audio` (default, one audio body) or `sse` (see [Streaming](#streaming-stream_format-sse)). Other values return `400 invalid_stream_format`.
 - **Accepted but ignored:** `speed`, `instructions` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
 

@@ -1,11 +1,11 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
-import { writeStreamingResponse } from '@/serve/extensions/openai/adapters/response-writers'
+import { writeStreamingResponse } from '@/lib/api/extensions/openai/adapters/response-writers'
 import type {
   ResponsesHandlerParams,
   ResponseWriterContext
-} from '@/serve/extensions/openai/adapters/response-writers'
+} from '@/lib/api/extensions/openai/adapters/response-writers'
 import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
 
 function minimalRouteContext(): ResponseWriterContext {

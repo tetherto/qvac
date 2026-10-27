@@ -3,11 +3,15 @@ import { mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
-import { resolveServeApiKey } from '@/serve/core/api-key'
-import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '@/serve/core/cors'
-import { parseServeConfig } from '@/serve/core/config'
-import { buildServer } from '@/serve/index'
-import { checkNetworkExposure, ServeOptionsError, validateServeStartup } from '@/serve/core/startup'
+import { resolveServeApiKey } from '@/lib/api/core/api-key'
+import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '@/lib/api/core/cors'
+import { parseServeConfig } from '@/lib/api/core/config'
+import { buildServer } from '@/lib/api/index'
+import {
+  checkNetworkExposure,
+  ServeOptionsError,
+  validateServeStartup
+} from '@/lib/api/core/startup'
 
 describe('normalizeCorsOrigin', () => {
   it('normalizes HTTP(S) origins', () => {

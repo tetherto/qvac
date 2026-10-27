@@ -1,13 +1,9 @@
 #!/usr/bin/env node
 // Gate for `npm publish` (wired via `prepublishOnly` in package.json).
 //
-// The CLI is built in-monorepo against a local @qvac/sdk: the direct
-// dependency `@qvac/sdk` is set to `file:../sdk`, and `scripts.preinstall`
-// builds that sibling so the symlink resolves a populated dist/. Both knobs
-// MUST be flipped before publishing — otherwise the published artifact would
-// (a) point consumers at a non-existent local path and (b) try to build a
-// non-existent sibling on their machines. The dep range must also allow the
-// SDK version that actually has the ./commands subpath on npm (0.12.0+).
+// Published CLI installs need the generated npm shrinkwrap: npm ignores an
+// installed dependency's overrides. Keep its direct specs aligned with the
+// manifest; npm version handles release-version metadata separately.
 
 'use strict'
 
@@ -18,6 +14,22 @@ const PKG_PATH = path.resolve(__dirname, '..', 'package.json')
 const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'))
 
 const errors = []
+
+const lockPath = path.resolve(__dirname, '..', 'npm-shrinkwrap.json')
+if (!fs.existsSync(lockPath)) {
+  errors.push('npm-shrinkwrap.json is missing; regenerate the npm distribution lock')
+} else {
+  const locked = JSON.parse(fs.readFileSync(lockPath, 'utf8')).packages?.['']
+  for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+    const wanted = pkg[field] || {}
+    const actual = locked?.[field] || {}
+    for (const name of new Set([...Object.keys(wanted), ...Object.keys(actual)])) {
+      if (wanted[name] !== actual[name]) {
+        errors.push(`npm-shrinkwrap.json ${field}["${name}"] differs from package.json`)
+      }
+    }
+  }
+}
 
 const sdkDep = pkg.dependencies && pkg.dependencies['@qvac/sdk']
 if (typeof sdkDep !== 'string') {
@@ -42,7 +54,7 @@ if (errors.length === 0) {
 
 const message = [
   '',
-  'Cannot publish @qvac/cli — the local-SDK fallback is still wired up.',
+  'Cannot publish @qvac/cli — dependency metadata is not ready.',
   '',
   ...errors.map((e) => `  • ${e}`),
   '',
@@ -52,7 +64,8 @@ const message = [
   '  2. Set dependencies["@qvac/sdk"] to ^0.12.0 (or wider) in packages/cli/package.json.',
   '  3. Remove scripts.preinstall from packages/cli/package.json',
   '     (scripts/preinstall-build-local-sdk.cjs can stay on disk).',
-  '  4. Re-run npm publish.',
+  '  4. Regenerate npm-shrinkwrap.json with npm install --package-lock-only --ignore-scripts.',
+  '  5. Re-run npm publish.',
   ''
 ].join('\n')
 

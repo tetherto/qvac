@@ -5,9 +5,9 @@ import {
   LAYA_MULTILINGUAL_322M_Q8_0,
   type DecisionResult
 } from '@qvac/sdk'
-import { buildServer } from '@/serve/index'
-import { buildGenericEntry } from '@/configure/presets'
-import type { DecideFn } from '@/serve/extensions/openai/adapters/decisions'
+import { buildServer } from '@/lib/api/index'
+import { buildGenericEntry } from '@/lib/configure/presets'
+import type { DecideFn } from '@/lib/api/extensions/openai/adapters/decisions'
 import { writeConfigDir } from '../helpers/config.js'
 
 const questions = [

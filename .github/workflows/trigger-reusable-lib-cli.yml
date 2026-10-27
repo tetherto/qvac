@@ -74,7 +74,7 @@ jobs:
           node-version: 22
 
       # Match SDK pod policy: in-repo SDK on main/tmp/feature, published on
-      # release-* (packages/cli/README.md "How CI tests the CLI/SDK pair").
+      # release-* (packages/cli/docs/sdk-cli.md "How CI tests the CLI/SDK pair").
       # sdk-source:workspace builds inference + SDK and needs GPR (@tetherto/*)
       # via GITHUB_TOKEN.
       - name: Configure npm registries

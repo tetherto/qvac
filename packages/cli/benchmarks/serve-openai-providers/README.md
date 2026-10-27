@@ -1,4 +1,4 @@
-# OpenAI serve provider compare (`qvac serve` vs LM Studio vs Ollama)
+# OpenAI serve provider compare (`qvac sdk serve` vs LM Studio vs Ollama)
 
 Client-side benchmark that hits each server's `POST /v1/chat/completions` with one
 shared OpenAI TypeScript SDK client, the same local GGUF, and a fixed prompt set.
@@ -64,7 +64,7 @@ version ranges in `packages/cli/package.json`, because this monorepo intentional
 does not commit package-level npm lockfiles; runner egress is audited.
 
 The full three-provider sweep is **not** part of SDK Pod Checks. It needs local
-LM Studio / Ollama / `qvac serve` and the shared GGUF on a `qvac-macos*-gpu`
+LM Studio / Ollama / `qvac sdk serve` and the shared GGUF on a `qvac-macos*-gpu`
 runner, with the runtime config and environment manifest supplied by protected
 `benchmark-live` environment variables (never from the checked-out tree).
 The protected job validates the immutable target before dispatch and rejects

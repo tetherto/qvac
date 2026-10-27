@@ -6,9 +6,9 @@ import {
   WHISPER_EN_TINY_Q8_0,
   LAYA_MULTILINGUAL_322M_Q8_0
 } from '@qvac/sdk'
-import { parseServeConfig } from '@/serve/core/config'
-import { resolveExplicitServeModel, resolveModelConstant } from '@/serve/core/config/models'
-import { resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
+import { parseServeConfig } from '@/lib/api/core/config'
+import { resolveExplicitServeModel, resolveModelConstant } from '@/lib/api/core/config/models'
+import { resolveNestedModelSrcConstants } from '@/lib/api/core/config/nested-model-src'
 
 describe('resolveExplicitServeModel', () => {
   it('routes the decisions model type to its own endpoint category', () => {

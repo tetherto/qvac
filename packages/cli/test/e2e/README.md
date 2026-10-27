@@ -1,7 +1,7 @@
 # CLI end-to-end tests (`node:test`)
 
 End-to-end tests for `@qvac/cli`, run with the Node built-in test runner via `tsx`.
-They cover the CLI commands and the served HTTP API — both in-process (Fastify
+They cover the CLI commands and the served HTTP API — both in-process (HTTP
 `app.inject`) and as a black-box spawned binary.
 
 ## Run
@@ -16,10 +16,10 @@ build step handles this; the test scripts don't re-build.
 
 ## Two ways to drive the CLI — and when to use each
 
-### 1. In-process, via Fastify `app.inject()` — **default for `/v1/*` routes**
+### 1. In-process, via HTTP `app.inject()` — **default for `/v1/*` routes**
 
 Helpers: `helpers/server.ts` (`createServer`, `useServer`, `useModelServer`).
-Builds the _same_ server code `qvac serve --openai` runs (`buildServer`) and injects
+Builds the _same_ server code `qvac sdk serve --openai` runs (`buildServer`) and injects
 requests without opening a socket. Fast, deterministic, no port.
 
 Use for HTTP API behavior: routing, request/response shape, validation + error

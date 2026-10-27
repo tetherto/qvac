@@ -298,7 +298,7 @@ describe('serve-openai-providers harness', () => {
         spec_source: 'https://example.test/openai.yaml',
         spec_sha256: 'c'.repeat(64),
         spec_endpoint_count: 100,
-        router_source: '/repo/packages/cli/src/serve/routes',
+        router_source: '/repo/packages/cli/src/lib/api/routes',
         router_implemented_count: 12,
         consumer_primary: {
           implemented: 10,
@@ -1103,7 +1103,7 @@ describe('serve-openai-providers harness', () => {
         spec_source: 'https://example.test/openai.yaml',
         spec_sha256: 'a'.repeat(64),
         spec_endpoint_count: 100,
-        router_source: '/repo/packages/cli/src/serve/routes',
+        router_source: '/repo/packages/cli/src/lib/api/routes',
         router_implemented_count: 12,
         consumer_primary: {
           implemented: 10,

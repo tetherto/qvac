@@ -25,7 +25,7 @@ export async function runCli(
   args: string[],
   opts: { cwd?: string; timeoutMs?: number } = {}
 ): Promise<CliResult> {
-  const child = spawn(process.execPath, [CLI_BIN, ...args], {
+  const child = spawn(process.execPath, [CLI_BIN, 'sdk', ...args], {
     ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
     env: process.env
   })
@@ -81,7 +81,7 @@ export async function startCliServer(
   const baseUrl = `http://127.0.0.1:${port}`
   const proc = spawn(
     process.execPath,
-    [CLI_BIN, 'serve', '--openai', '--no-default', '-p', String(port), ...args],
+    [CLI_BIN, 'sdk', 'serve', '--openai', '--no-default', '-p', String(port), ...args],
     {
       ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
       env: process.env
@@ -146,7 +146,7 @@ export function useSpawnedServer(
     baseUrl = `http://127.0.0.1:${port}`
     proc = spawn(
       process.execPath,
-      [CLI_BIN, 'serve', '--openai', '--no-default', '-p', String(port)].concat(args),
+      [CLI_BIN, 'sdk', 'serve', '--openai', '--no-default', '-p', String(port)].concat(args),
       {
         cwd: dir,
         env: process.env

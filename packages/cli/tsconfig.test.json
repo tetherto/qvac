@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "test/**/*", "types/**/*.d.ts"],
   "compilerOptions": {
     "rootDir": ".",
     "noEmit": true

@@ -1,18 +1,17 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
-import type { FastifyInstance } from 'fastify'
-import type { ZodTypeProvider } from 'fastify-type-provider-zod'
+import type { HttpServer } from '@/lib/http'
 import { z } from 'zod'
-import { buildServer } from '@/serve/index'
-import { binaryInput, resolveBinaryInput } from '@/serve/lib/binary-input'
-import { multipartToBodyOptional } from '@/serve/lib/multipart'
+import { buildServer } from '@/lib/api/index'
+import { binaryInput, resolveBinaryInput } from '@/lib/api/lib/binary-input'
+import { multipartToBodyOptional } from '@/lib/api/lib/multipart'
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 // No extension is mounted, so the route below proves multipart parsing comes
 // from core rather than from the openai extension.
-async function buildEchoServer(): Promise<FastifyInstance> {
+async function buildEchoServer(): Promise<HttpServer> {
   const app = await buildServer({
     projectRoot: tmpdir(),
     port: 0,
@@ -22,7 +21,7 @@ async function buildEchoServer(): Promise<FastifyInstance> {
   })
   // lunte-disable-next-line require-await
   await app.register(async (scope) => {
-    scope.withTypeProvider<ZodTypeProvider>().post(
+    scope.post(
       '/echo',
       {
         schema: { body: z.object({ image: binaryInput('Image.') }) },
@@ -52,7 +51,7 @@ async function multipart(form: FormData): Promise<{ payload: Buffer; contentType
 }
 
 describe('binary input', () => {
-  let app: FastifyInstance
+  let app: HttpServer
 
   before(async () => {
     app = await buildEchoServer()

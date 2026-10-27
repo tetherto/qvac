@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, openSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { READY_PREFIX, writeReadySignal } from '@/serve/core/ready-signal'
-import { ServeOptionsError, validateServeStartup } from '@/serve/core/startup'
+import { READY_PREFIX, writeReadySignal } from '@/lib/api/core/ready-signal'
+import { ServeOptionsError, validateServeStartup } from '@/lib/api/core/startup'
 
 describe('serve ready signal', () => {
   it('writes one prefixed JSON line and closes the descriptor', () => {

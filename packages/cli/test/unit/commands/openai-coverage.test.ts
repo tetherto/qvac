@@ -4,12 +4,12 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildCoverageReport, DEFAULT_ROUTER } from '@/openai/coverage/build-report'
-import { categorize } from '@/openai/coverage/categorize'
-import { filterCoverageRows, formatCoverageReportHuman } from '@/openai/coverage/format'
-import { parseRouter } from '@/openai/coverage/parse-router'
-import { parseSpec } from '@/openai/coverage/parse-spec'
-import { CONSUMER_PRIMARY_ENDPOINTS } from '@/openai/coverage/primary'
+import { buildCoverageReport, DEFAULT_ROUTER } from '@/lib/openai/coverage/build-report'
+import { categorize } from '@/lib/openai/coverage/categorize'
+import { filterCoverageRows, formatCoverageReportHuman } from '@/lib/openai/coverage/format'
+import { parseRouter } from '@/lib/openai/coverage/parse-router'
+import { parseSpec } from '@/lib/openai/coverage/parse-spec'
+import { CONSUMER_PRIMARY_ENDPOINTS } from '@/lib/openai/coverage/primary'
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures')
 const FIXTURE_SPEC = join(FIXTURE_DIR, 'openai-spec-mini.yaml')

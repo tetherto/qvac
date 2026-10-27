@@ -11,9 +11,9 @@ import {
   buildStreamingWavHeader,
   buildWavBuffer,
   speechAliasKey
-} from '@/serve/extensions/openai/audio'
-import { parseOpenAIOptions } from '@/serve/extensions/openai/config'
-import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '@/serve/lib/audio-transcode'
+} from '@/lib/api/extensions/openai/audio'
+import { parseOpenAIOptions } from '@/lib/api/extensions/openai/config'
+import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '@/lib/api/lib/audio-transcode'
 
 describe('mapResponseFormat', () => {
   it('returns the documented default for missing input', () => {

@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { FastifyRequest } from 'fastify'
-import { HttpError } from '@/serve/lib/http-error'
-import { BMP, JPEG, PNG, createImageInput } from '@/serve/lib/image-input'
+import type { HttpRequest } from '@/lib/http'
+import { HttpError } from '@/lib/api/lib/http-error'
+import { BMP, JPEG, PNG, createImageInput } from '@/lib/api/lib/image-input'
 
 // A direct upload resolves without touching the request beyond its multipart files.
-function fakeRequest(): FastifyRequest {
-  return {} as FastifyRequest
+function fakeRequest(): HttpRequest {
+  return {} as HttpRequest
 }
 
 function rejection(fn: () => void): HttpError {

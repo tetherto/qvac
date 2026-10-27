@@ -1,0 +1,13 @@
+diff --git a/index.js b/index.js
+index 385cd0ec3ebc88c0394d25056e4872f43a3b78ca..4fecd4b6bbb7b2d9568b2355dea8c5e3bbe9af03 100644
+--- a/index.js
++++ b/index.js
+@@ -58,7 +58,7 @@ class TreeEntry {
+     for (const [entryFilename, node] of this.list(filename)) {
+       if (node.watcher) node.watcher.close()
+       node.watcher = null
+-      if (node.entries || node.stat.isDirectory()) continue
++      if (node.entries || node.stat?.isDirectory()) continue
+       if (!node.ignore) diff.push({ type: 'delete', filename: entryFilename })
+     }
+     this.entries = null

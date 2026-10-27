@@ -5,10 +5,10 @@ import {
   extractToolChoice,
   openaiToolsToSdk,
   InvalidToolChoiceError
-} from '@/serve/extensions/openai/schemas/common'
-import { foldToolSearch, stripToolSearchCalls } from '@/serve/lib/tool-search'
-import { accumulateUsage } from '@/serve/core/completion'
-import type { DrainedOpenAICompletion } from '@/serve/extensions/openai/adapters/completion-result'
+} from '@/lib/api/extensions/openai/schemas/common'
+import { foldToolSearch, stripToolSearchCalls } from '@/lib/api/lib/tool-search'
+import { accumulateUsage } from '@/lib/api/core/completion'
+import type { DrainedOpenAICompletion } from '@/lib/api/extensions/openai/adapters/completion-result'
 
 const DEFERRED_WIRE = {
   type: 'function',

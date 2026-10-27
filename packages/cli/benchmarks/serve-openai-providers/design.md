@@ -2,7 +2,7 @@
 
 ## Goal
 
-Produce a reproducible, one-off comparison of `qvac serve`, LM Studio, and Ollama when serving the same Qwen3.5-9B Q4_K_M GGUF through `POST /v1/chat/completions` on the same macOS host.
+Produce a reproducible, one-off comparison of `qvac sdk serve`, LM Studio, and Ollama when serving the same Qwen3.5-9B Q4_K_M GGUF through `POST /v1/chat/completions` on the same macOS host.
 
 The comparison measures the complete OpenAI-compatible server stack. Differences in each server's llama.cpp build and HTTP implementation are intentionally part of the result.
 
@@ -10,7 +10,7 @@ The comparison measures the complete OpenAI-compatible server stack. Differences
 
 The benchmark covers:
 
-- `qvac serve` built from the exact merge commit of PR [#3259](https://github.com/tetherto/qvac/pull/3259) (`7ee761b70271`) or a later `main` commit that includes that change — record the SHA used in `environment.md`
+- `qvac sdk serve` built from the exact merge commit of PR [#3259](https://github.com/tetherto/qvac/pull/3259) (`7ee761b70271`) or a later `main` commit that includes that change — record the SHA used in `environment.md`
 - LM Studio
 - Ollama
 - One local Qwen3.5-9B Q4_K_M GGUF loaded by all three servers (registry constant `QWEN3_5_9B_MULTIMODAL_Q4_K_M` → `Qwen3.5-9B-Q4_K_M.gguf`)
@@ -70,7 +70,7 @@ Use the same GGUF bytes for all providers:
 1. Resolve the Qwen3.5-9B Q4_K_M registry model to its local GGUF path.
 2. Compute its SHA-256 digest and require it to match `model_parity.sha256`
    before any provider request.
-3. Configure `qvac serve` to load that local model (commit SHA recorded in `environment.md`).
+3. Configure `qvac sdk serve` to load that local model (commit SHA recorded in `environment.md`).
 4. Load that file directly in LM Studio.
 5. Import that file into Ollama with a `Modelfile` whose `FROM` points to the same path.
 6. Record each provider's visible model identifier and confirm a preflight completion succeeds.
@@ -93,11 +93,11 @@ Use the GGUF's embedded chat template without provider-specific system prompts o
 
 Keep `reasoning_budget` and other provider-specific fields out of the shared request body. Disable thinking via server/load configuration so the request shape stays identical:
 
-| Provider     | Disable mechanism (record exact launch/config in `environment.md`)                                            |
-| ------------ | ------------------------------------------------------------------------------------------------------------- |
-| `qvac serve` | Model/load config or server default equivalent to `reasoning_budget: 0` / thinking off for Qwen3.5            |
-| Ollama       | Modelfile / server setting that disables thinking (e.g. `PARAMETER think false` or current Ollama equivalent) |
-| LM Studio    | Load/runtime setting that disables reasoning / thinking for the GGUF                                          |
+| Provider         | Disable mechanism (record exact launch/config in `environment.md`)                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `qvac sdk serve` | Model/load config or server default equivalent to `reasoning_budget: 0` / thinking off for Qwen3.5            |
+| Ollama           | Modelfile / server setting that disables thinking (e.g. `PARAMETER think false` or current Ollama equivalent) |
+| LM Studio        | Load/runtime setting that disables reasoning / thinking for the GGUF                                          |
 
 Preflight must assert for every provider on the parity fixture:
 
@@ -122,7 +122,7 @@ The environment manifest records:
 - Provider launch commands and ports
 - Exact reasoning-disable settings used per provider
 
-`qvac serve` must not use port `11434`, because that is Ollama's default. Use distinct endpoints such as qvac `11435`, Ollama `11434`, and LM Studio `1234`.
+`qvac sdk serve` must not use port `11434`, because that is Ollama's default. Use distinct endpoints such as qvac `11435`, Ollama `11434`, and LM Studio `1234`.
 
 ## Workload
 

@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CompletionRun, ToolCall, ToolCallError } from '@qvac/sdk'
 import { createServer } from '../helpers/server.js'
-import { openaiState } from '@/serve/extensions/openai/state'
+import { openaiState } from '@/lib/api/extensions/openai/state'
 import { JSON_HEADERS, assertStatusAndError, collectSSE } from '../helpers/http.js'
 
 const CHAT_TOOLS = [

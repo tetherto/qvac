@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { OCR_FIELD_CODES, ocrBody } from '@/serve/extensions/default/schemas/ocr'
+import { OCR_FIELD_CODES, ocrBody } from '@/lib/api/extensions/default/schemas/ocr'
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 

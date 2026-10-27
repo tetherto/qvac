@@ -39,6 +39,16 @@ fetchRetryMaxtimeout: 120000
 # hyper-instrument's own lockfile points bare-v8 at a local link: path that
 # doesn't exist in this workspace; pin it to a real registry version instead.
 overrides:
+  # CLI's Bare bundle/native runtime must resolve the versions validated by Core.
+  bare-module: "7.1.0"
+  bare-module-traverse: "2.5.9"
+  bare-thread: "1.2.7"
+  bare-http1: "4.5.9"
+  bare-path: "3.0.1"
+  "@qvac/harness>@qvac/llm-llamacpp": "0.62.0"
+  "@qvac/harness>@qvac/translation-nmtcpp": "10.0.0"
+  "@qvac/inference>@qvac/llm-llamacpp": "0.62.0"
+  "@qvac/inference>@qvac/translation-nmtcpp": "10.0.0"
   hyper-instrument>bare-v8: "^1.0.1"
   # @electron/rebuild pins @electron/node-gyp to a git URL (exotic subdep);
   # pin it to the electron fork's published registry build so blockExoticSubdeps
@@ -47,30 +57,32 @@ overrides:
   # The speech addons declare their desktop platform packages so a standalone
   # npm install of one (its sanity job) can resolve "#host-addon". In the
   # workspace `npm run link:platform` stages the local build instead, which a
-  # copy from npm would replace.
-  "@qvac/asr-ggml-linux-x64": "-"
-  "@qvac/asr-ggml-linux-arm64": "-"
-  "@qvac/asr-ggml-darwin-arm64": "-"
-  "@qvac/asr-ggml-darwin-x64": "-"
-  "@qvac/asr-ggml-win32-x64": "-"
-  "@qvac/tts-ggml-linux-x64": "-"
-  "@qvac/tts-ggml-linux-arm64": "-"
-  "@qvac/tts-ggml-darwin-arm64": "-"
-  "@qvac/tts-ggml-darwin-x64": "-"
-  "@qvac/tts-ggml-win32-x64": "-"
-  "@qvac/audiogen-ggml-linux-x64": "-"
-  "@qvac/audiogen-ggml-linux-arm64": "-"
-  "@qvac/audiogen-ggml-darwin-arm64": "-"
-  "@qvac/audiogen-ggml-darwin-x64": "-"
-  "@qvac/audiogen-ggml-win32-x64": "-"
+  # copy from npm would replace. Scope these exclusions to the workspace
+  # versions: the CLI also consumes published addons that need their prebuilds.
+  # Keep the selectors aligned when those workspace versions change.
+  "@qvac/asr-ggml@0.11.1>@qvac/asr-ggml-linux-x64": "-"
+  "@qvac/asr-ggml@0.11.1>@qvac/asr-ggml-linux-arm64": "-"
+  "@qvac/asr-ggml@0.11.1>@qvac/asr-ggml-darwin-arm64": "-"
+  "@qvac/asr-ggml@0.11.1>@qvac/asr-ggml-darwin-x64": "-"
+  "@qvac/asr-ggml@0.11.1>@qvac/asr-ggml-win32-x64": "-"
+  "@qvac/tts-ggml@0.14.0>@qvac/tts-ggml-linux-x64": "-"
+  "@qvac/tts-ggml@0.14.0>@qvac/tts-ggml-linux-arm64": "-"
+  "@qvac/tts-ggml@0.14.0>@qvac/tts-ggml-darwin-arm64": "-"
+  "@qvac/tts-ggml@0.14.0>@qvac/tts-ggml-darwin-x64": "-"
+  "@qvac/tts-ggml@0.14.0>@qvac/tts-ggml-win32-x64": "-"
+  "@qvac/audiogen-ggml@0.9.0>@qvac/audiogen-ggml-linux-x64": "-"
+  "@qvac/audiogen-ggml@0.9.0>@qvac/audiogen-ggml-linux-arm64": "-"
+  "@qvac/audiogen-ggml@0.9.0>@qvac/audiogen-ggml-darwin-arm64": "-"
+  "@qvac/audiogen-ggml@0.9.0>@qvac/audiogen-ggml-darwin-x64": "-"
+  "@qvac/audiogen-ggml@0.9.0>@qvac/audiogen-ggml-win32-x64": "-"
   # diffusion-cpp's desktop platform packages are not on npm until the split
   # release publishes them. The workspace stages a source build with
   # `npm run link:platform` instead.
-  "@qvac/diffusion-cpp-linux-x64": "-"
-  "@qvac/diffusion-cpp-linux-arm64": "-"
-  "@qvac/diffusion-cpp-darwin-arm64": "-"
-  "@qvac/diffusion-cpp-darwin-x64": "-"
-  "@qvac/diffusion-cpp-win32-x64": "-"
+  "@qvac/diffusion-cpp@0.31.0>@qvac/diffusion-cpp-linux-x64": "-"
+  "@qvac/diffusion-cpp@0.31.0>@qvac/diffusion-cpp-linux-arm64": "-"
+  "@qvac/diffusion-cpp@0.31.0>@qvac/diffusion-cpp-darwin-arm64": "-"
+  "@qvac/diffusion-cpp@0.31.0>@qvac/diffusion-cpp-darwin-x64": "-"
+  "@qvac/diffusion-cpp@0.31.0>@qvac/diffusion-cpp-win32-x64": "-"
 
 blockExoticSubdeps: true
 
@@ -176,3 +188,8 @@ minimumReleaseAgeExclude:
   - bare-worker
   - bare-ws
   - bare-zlib
+
+# Harness runtime compatibility patches, applied by pnpm before linking packages.
+patchedDependencies:
+  "pyodide@314.0.2": patches/pyodide@314.0.2.patch
+  "localwatch@1.4.3": patches/localwatch@1.4.3.patch

@@ -1,10 +1,10 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createModelRegistry } from '@/serve/core/model-registry'
-import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
-import type { LoadManager } from '@/serve/core/load-manager'
-import { preloadModels, formatErrorChain, shouldRefuseStart } from '@/serve/core/lifecycle'
-import { createLogger } from '@/logger'
+import { createModelRegistry } from '@/lib/api/core/model-registry'
+import type { ResolvedModelEntry, ServeConfig } from '@/lib/api/core/config/types'
+import type { LoadManager } from '@/lib/api/core/load-manager'
+import { preloadModels, formatErrorChain, shouldRefuseStart } from '@/lib/api/core/lifecycle'
+import { createLogger } from '@/lib/logger'
 
 const logger = createLogger('silent')
 

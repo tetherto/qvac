@@ -123,6 +123,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:00fa94482e19d1617fe6b7d8ea490c999e6ed20c9de549b3a2072ceb5b8618d9",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/doctor/deep.ts",
+        "symbol": "probeSdkRuntime#1 > <anonymous>#1"
+      },
+      "summary": "probeSdkRuntime#1 > <anonymous>#1 in packages/cli/src/lib/doctor/deep.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/doctor/deep.ts",
+        "line": 181,
+        "column": 22
+      },
+      "measurement": {
+        "value": 52,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:00fb500feecb9d3aac73c46fa6e5cc54d3ce043da0e5e0596145218206bbd8b1",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -736,31 +761,6 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/inference/src/api/index.ts"
-      }
-    },
-    {
-      "fingerprint": "quality-v1:05bc4403ad57d3385512b3b5152fd0fb0c3ecc65b2810dc7924bb220f9329b52",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "symbol": "serveContent#1"
-      },
-      "summary": "serveContent#1 in packages/cli/src/serve/extensions/openai/routes/videos.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "line": 361,
-        "column": 1
-      },
-      "measurement": {
-        "value": 104,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -1774,6 +1774,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:0d0bdf2928868f18c6f42ff8a7db022117e5de4d56ba5dfa68a530f94fee798d",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts",
+        "symbol": "historyPrefixFromStoredResponse#1"
+      },
+      "summary": "historyPrefixFromStoredResponse#1 in packages/cli/src/lib/api/extensions/openai/schemas/responses.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts",
+        "line": 302,
+        "column": 8
+      },
+      "measurement": {
+        "value": 34,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
       "fingerprint": "quality-v1:0d8e7f61239b270fd29aa49beec10fdd44539bfd77d5a8eb3115a98998b325da",
       "detector": "structure",
       "rule": "function-lines",
@@ -1919,6 +1944,31 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:0e438e432d756e17c04cd4ee36f9eed67eff5b08ca5a30e55f522c3bea63d21b",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/plugins/error-handler.ts",
+        "symbol": "plugin#1 > app > setErrorHandler callback#1"
+      },
+      "summary": "plugin#1 > app > setErrorHandler callback#1 in packages/cli/src/lib/api/core/plugins/error-handler.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/plugins/error-handler.ts",
+        "line": 29,
+        "column": 55
+      },
+      "measurement": {
+        "value": 20,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -2243,6 +2293,31 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:116077de46a0bf0f43a5bb657adef8ecd879d53b850e8e72253b430b87749857",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts",
+        "symbol": "openaiResponsesInputToHistory#1"
+      },
+      "summary": "openaiResponsesInputToHistory#1 in packages/cli/src/lib/api/extensions/openai/schemas/responses.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts",
+        "line": 222,
+        "column": 8
+      },
+      "measurement": {
+        "value": 19,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -3768,6 +3843,55 @@
       }
     },
     {
+      "fingerprint": "quality-v1:204d3b46c6c725e44f486106788f5e757d817ef17136ae3d09c1cb39d1aa9ac7",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/responses.ts"
+      },
+      "summary": "packages/cli/src/lib/api/extensions/openai/routes/responses.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/responses.ts",
+        "line": 339,
+        "column": 1
+      },
+      "measurement": {
+        "value": 302,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
+      }
+    },
+    {
+      "fingerprint": "quality-v1:20690be2df4618797e81f94dc6af61d4dfcb452ae6a31f2f96733e4f18cbd6f7",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/configure/prompts.ts",
+        "symbol": "editField#1"
+      },
+      "summary": "editField#1 in packages/cli/src/lib/configure/prompts.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/configure/prompts.ts",
+        "line": 253,
+        "column": 1
+      },
+      "measurement": {
+        "value": 59,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:209393e11b2f42ffb547485b06c0223d107d0469da3830919463e016f2cdc64d",
       "detector": "structure",
       "rule": "function-lines",
@@ -4091,30 +4215,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:241d738b4aa318b88fe37fcfb1e8f2e110d83b01f5f681829f834e6292838ae2",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts"
-      },
-      "summary": "packages/cli/src/serve/extensions/openai/routes/videos.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "line": 350,
-        "column": 1
-      },
-      "measurement": {
-        "value": 572,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
-      }
-    },
-    {
       "fingerprint": "quality-v1:2426b835db7119efd78fad3ae69d2746bef1b5dfb3c60cbb5dc10bfa4c77c6bd",
       "detector": "structure",
       "rule": "function-lines",
@@ -4309,6 +4409,31 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:2604239e3f19a0e0d0c0c9c7b992f4d6ff68e5a8edca732e517a0ed007ebd204",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/images.ts",
+        "symbol": "runAndRespond#1"
+      },
+      "summary": "runAndRespond#1 in packages/cli/src/lib/api/extensions/openai/routes/images.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/images.ts",
+        "line": 137,
+        "column": 1
+      },
+      "measurement": {
+        "value": 17,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -4562,31 +4687,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:279c4fe907bca6dabb4f50f24e4cd6cc76acff339eabf0f0462c3cfabafd8590",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/plugins/error-handler.ts",
-        "symbol": "plugin#1"
-      },
-      "summary": "plugin#1 in packages/cli/src/serve/core/plugins/error-handler.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/plugins/error-handler.ts",
-        "line": 26,
-        "column": 57
-      },
-      "measurement": {
-        "value": 99,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:27bfc12307dc750ab913d742e84be7c862f5f8dac19476d0b7ea3fcf404b60ba",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -4631,6 +4731,31 @@
       },
       "measurement": {
         "value": 111,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:28938cac1a83299c88ca5ced1dfd9e891dc128067325770e6270c837c50a4a3d",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/stores/ephemeral-files.ts",
+        "symbol": "createEphemeralFilesStore#1"
+      },
+      "summary": "createEphemeralFilesStore#1 in packages/cli/src/lib/api/core/stores/ephemeral-files.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/stores/ephemeral-files.ts",
+        "line": 46,
+        "column": 8
+      },
+      "measurement": {
+        "value": 70,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -4935,6 +5060,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:2a3be4390dd4651a6e6774aa35d029d51b78933779e2445e9e5358195d052f46",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "symbol": "plugin#1 > app > post \"/v1/audio/speech\" callback#1"
+      },
+      "summary": "plugin#1 > app > post \"/v1/audio/speech\" callback#1 in packages/cli/src/lib/api/extensions/openai/routes/audio.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "line": 304,
+        "column": 24
+      },
+      "measurement": {
+        "value": 38,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
       "fingerprint": "quality-v1:2a8bb1fa87c190c69d2f5601fb17f00a70e9cbfdeb9d67bcc117864ac4eeb4ee",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -5160,28 +5310,27 @@
       }
     },
     {
-      "fingerprint": "quality-v1:2cee41d845e480f4c4d4d255d4464b1d38873883363b1f9eafe270677d6b67b7",
+      "fingerprint": "quality-v1:2cd8e9a45a9e1484f780c3228b092687a8f502f01529e38bda3578d900ef2777",
       "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "high",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
       "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "symbol": "plugin#1 > app > post \"/v1/audio/speech\" callback#1"
+        "kind": "file",
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts"
       },
-      "summary": "plugin#1 > app > post \"/v1/audio/speech\" callback#1 in packages/cli/src/serve/extensions/openai/routes/audio.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "summary": "packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 304,
-        "column": 24
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts",
+        "line": 337,
+        "column": 1
       },
       "measurement": {
-        "value": 38,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
+        "value": 305,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
       }
     },
     {
@@ -5651,31 +5800,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:3121d17ae12a2ee5d3cba0373c47847bf5e6a3f38fe8603ca47cbb65524faec0",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/plugins/error-handler.ts",
-        "symbol": "plugin#1 > app > setErrorHandler callback#1"
-      },
-      "summary": "plugin#1 > app > setErrorHandler callback#1 in packages/cli/src/serve/core/plugins/error-handler.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/plugins/error-handler.ts",
-        "line": 29,
-        "column": 23
-      },
-      "measurement": {
-        "value": 83,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:313e4e1eb0009890ca72cdbc05b046692e4da19c50f0866ed63ff890eeb4bff4",
       "detector": "structure",
       "rule": "function-lines",
@@ -5698,31 +5822,6 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
-      }
-    },
-    {
-      "fingerprint": "quality-v1:315f013ffb0b5a377da06514ff8a57f6600c4fb7289b05d745c14daa2d73c47f",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/stores/vector-stores.ts",
-        "symbol": "createVectorStoresStore#1"
-      },
-      "summary": "createVectorStoresStore#1 in packages/cli/src/serve/core/stores/vector-stores.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/stores/vector-stores.ts",
-        "line": 113,
-        "column": 8
-      },
-      "measurement": {
-        "value": 73,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -5949,31 +6048,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:32d9ab3be716924ddc49d87847d3d24b803633541ae3c90e924120796a3f2ffb",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "symbol": "plugin#1 > app > post \"/v1/audio/transcriptions\" callback#1"
-      },
-      "summary": "plugin#1 > app > post \"/v1/audio/transcriptions\" callback#1 in packages/cli/src/serve/extensions/openai/routes/audio.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 150,
-        "column": 5
-      },
-      "measurement": {
-        "value": 58,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:32f5c287bdcbd8e4bb25ba3b2f3f2429ddee0604eea96b92411472f8d5652bb4",
       "detector": "structure",
       "rule": "function-lines",
@@ -6074,30 +6148,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:337f15f3e074b56c029abf57e50d21240dcd9d23561d9aed074e41fe66fe998f",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/serve/extensions/openai/schemas/common.ts"
-      },
-      "summary": "packages/cli/src/serve/extensions/openai/schemas/common.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/schemas/common.ts",
-        "line": 370,
-        "column": 1
-      },
-      "measurement": {
-        "value": 334,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
-      }
-    },
-    {
       "fingerprint": "quality-v1:3395190a02f46b8bb4eb31d046bd5917e1d9861731eab8c3a6a7fe1c23c34c7f",
       "detector": "structure",
       "rule": "file-lines",
@@ -6144,31 +6194,6 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:33aba464194f8309ae9e65c76736de7e841be3db782cddae2d6364c4cf8eb40c",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/files.ts",
-        "symbol": "plugin#1"
-      },
-      "summary": "plugin#1 in packages/cli/src/serve/extensions/openai/routes/files.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/files.ts",
-        "line": 53,
-        "column": 39
-      },
-      "measurement": {
-        "value": 93,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -6222,25 +6247,25 @@
       }
     },
     {
-      "fingerprint": "quality-v1:34199760a8296b6036d86f5ae8d7c03b1026d474ba62afec2300d9831b00799f",
+      "fingerprint": "quality-v1:343826be03bdeed04cd2488475421d2a6fe32acdc251640df9d96265942ab5b7",
       "detector": "structure",
       "rule": "function-lines",
       "category": "size",
       "severity": "high",
       "subject": {
         "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "symbol": "writeStreamingResponse#1"
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "symbol": "plugin#1 > app > post \"/v1/audio/speech\" callback#1"
       },
-      "summary": "writeStreamingResponse#1 in packages/cli/src/serve/extensions/openai/adapters/response-writers.ts exceeds the function-lines threshold",
+      "summary": "plugin#1 > app > post \"/v1/audio/speech\" callback#1 in packages/cli/src/lib/api/extensions/openai/routes/audio.ts exceeds the function-lines threshold",
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "line": 139,
-        "column": 8
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "line": 304,
+        "column": 5
       },
       "measurement": {
-        "value": 185,
+        "value": 166,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -6316,31 +6341,6 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
-      }
-    },
-    {
-      "fingerprint": "quality-v1:356449144cc5bb227455760e104224e9eb34c8c967bf1940ee6ac8442359eeb4",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/configure/index.ts",
-        "symbol": "runConfigure#1"
-      },
-      "summary": "runConfigure#1 in packages/cli/src/configure/index.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/configure/index.ts",
-        "line": 45,
-        "column": 8
-      },
-      "measurement": {
-        "value": 94,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -6661,28 +6661,27 @@
       }
     },
     {
-      "fingerprint": "quality-v1:385ce09ce645e2f5f821900846303e2751a36377e304f73890f2f0e9c432ec36",
+      "fingerprint": "quality-v1:384d68d2616ba7800c2ee7388f401e7558eeb39a958b02fc9bbdd41cf1ab51ef",
       "detector": "structure",
-      "rule": "function-lines",
+      "rule": "file-lines",
       "category": "size",
       "severity": "advisory",
       "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "symbol": "runStreaming#1"
+        "kind": "file",
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts"
       },
-      "summary": "runStreaming#1 in packages/cli/src/serve/extensions/openai/routes/chat.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "summary": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "line": 294,
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts",
+        "line": 330,
         "column": 1
       },
       "measurement": {
-        "value": 85,
+        "value": 410,
         "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
+        "advisoryThreshold": 300,
+        "highThreshold": 500
       }
     },
     {
@@ -6733,31 +6732,6 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
-      }
-    },
-    {
-      "fingerprint": "quality-v1:397132d4ca2b4393f655e3e660abab509b24242803f1218e8cbae21692450ae4",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/models.ts",
-        "symbol": "plugin#1"
-      },
-      "summary": "plugin#1 in packages/cli/src/serve/extensions/openai/routes/models.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/models.ts",
-        "line": 54,
-        "column": 39
-      },
-      "measurement": {
-        "value": 56,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -6829,6 +6803,31 @@
       },
       "measurement": {
         "value": 31,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:3a0102e3c155a513015919108c0e656e23f5c8fc06bec73079fb934d11543382",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/doctor/deep.ts",
+        "symbol": "probeSdkRuntime#1 > <anonymous>#1 > child > once \"close\" callback#1"
+      },
+      "summary": "probeSdkRuntime#1 > <anonymous>#1 > child > once \"close\" callback#1 in packages/cli/src/lib/doctor/deep.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/doctor/deep.ts",
+        "line": 194,
+        "column": 44
+      },
+      "measurement": {
+        "value": 17,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -7401,6 +7400,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:3d548a57d56641c864595e694e7ee8d871cbb528aabd48de04a14f5cac2e90ea",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/responses.ts",
+        "symbol": "plugin#1 > app > post \"/v1/responses\" callback#1"
+      },
+      "summary": "plugin#1 > app > post \"/v1/responses\" callback#1 in packages/cli/src/lib/api/extensions/openai/routes/responses.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/responses.ts",
+        "line": 126,
+        "column": 24
+      },
+      "measurement": {
+        "value": 22,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
       "fingerprint": "quality-v1:3d6434b042ca44f7d98646d866d3329f44526a261102c491ca2f3e804915749b",
       "detector": "structure",
       "rule": "function-lines",
@@ -7476,6 +7500,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:3e5d95ae03c464b91365b4b4b3fec947ea86cc0304f1205bcb4de038d1491f20",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/lib/ffmpeg.ts",
+        "symbol": "runFfmpeg#1"
+      },
+      "summary": "runFfmpeg#1 in packages/cli/src/lib/api/lib/ffmpeg.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/lib/ffmpeg.ts",
+        "line": 38,
+        "column": 8
+      },
+      "measurement": {
+        "value": 66,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:3e91c4d4f22209ca146e5091feab4440308eb84c50e2e4b98a0f5988933d3ba3",
       "detector": "structure",
       "rule": "function-lines",
@@ -7548,31 +7597,6 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:3ef40d18c905602ba74ded6393f39487ca7ec22f4e4296820f9ed119996598f9",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts",
-        "symbol": "openaiResponsesInputToHistory#1"
-      },
-      "summary": "openaiResponsesInputToHistory#1 in packages/cli/src/serve/extensions/openai/schemas/responses.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts",
-        "line": 222,
-        "column": 8
-      },
-      "measurement": {
-        "value": 51,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -7674,31 +7698,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:40cae35e95a3cc54f6c4fc4085846e3310b07e69d6e8456ad8d60d380c9820e7",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/server.ts",
-        "symbol": "createCoreServer#1"
-      },
-      "summary": "createCoreServer#1 in packages/cli/src/serve/core/server.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/server.ts",
-        "line": 45,
-        "column": 8
-      },
-      "measurement": {
-        "value": 75,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:412a0eb49122efed8b18a3bba39c86a48141869856f1a76447dd8964477201c0",
       "detector": "structure",
       "rule": "function-lines",
@@ -7770,6 +7769,31 @@
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
+      }
+    },
+    {
+      "fingerprint": "quality-v1:41729c770065adb6fd59538a2586d9aafc8dfd12972a6f6c3988b3dc1b03f5e9",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts",
+        "symbol": "openaiResponsesInputToHistory#1"
+      },
+      "summary": "openaiResponsesInputToHistory#1 in packages/cli/src/lib/api/extensions/openai/schemas/responses.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts",
+        "line": 222,
+        "column": 8
+      },
+      "measurement": {
+        "value": 51,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -8385,6 +8409,56 @@
       }
     },
     {
+      "fingerprint": "quality-v1:4799b705e74cfdccd5cd7395a8da375a8e9743f930e1c0b32021b7b0e5e5d3a8",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/verify/command.ts",
+        "symbol": "registerVerifyCommand#1"
+      },
+      "summary": "registerVerifyCommand#1 in packages/cli/src/lib/verify/command.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/verify/command.ts",
+        "line": 5,
+        "column": 8
+      },
+      "measurement": {
+        "value": 92,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:47a1abdc28efb257d9fcada04f7bd02eb72c40e2d5faa3bb4a5d1d4ab18c5922",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "symbol": "plugin#1"
+      },
+      "summary": "plugin#1 in packages/cli/src/lib/api/extensions/openai/routes/videos.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "line": 480,
+        "column": 39
+      },
+      "measurement": {
+        "value": 157,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:47ab1a3905e3faebab4bada4e4bf191ad825a1ce3c9d05dc8d09498e9e99159e",
       "detector": "structure",
       "rule": "function-lines",
@@ -8500,6 +8574,31 @@
       },
       "measurement": {
         "value": 51,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:492da8c3f285cd07879bc3c51a53b5941bbaab85778eba69649d358c2fc3a610",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/doctor/checks/hardware.ts",
+        "symbol": "checkGpuAcceleration#1"
+      },
+      "summary": "checkGpuAcceleration#1 in packages/cli/src/lib/doctor/checks/hardware.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/doctor/checks/hardware.ts",
+        "line": 124,
+        "column": 44
+      },
+      "measurement": {
+        "value": 58,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -8771,6 +8870,56 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
+      }
+    },
+    {
+      "fingerprint": "quality-v1:4b62cc9d13cd9e200e887bc2a1ecb4b2db537f1b14087a4b46ffd0c50bc63c93",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "symbol": "runVideoJob#1"
+      },
+      "summary": "runVideoJob#1 in packages/cli/src/lib/api/extensions/openai/routes/videos.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "line": 244,
+        "column": 1
+      },
+      "measurement": {
+        "value": 94,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:4b745b85889a08d87713614a6d5b124dff2d6e483b23c1a832fdde2822c66925",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "symbol": "plugin#1 > app > post \"/v1/audio/translations\" callback#1"
+      },
+      "summary": "plugin#1 > app > post \"/v1/audio/translations\" callback#1 in packages/cli/src/lib/api/extensions/openai/routes/audio.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "line": 226,
+        "column": 5
+      },
+      "measurement": {
+        "value": 60,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -9468,6 +9617,30 @@
       }
     },
     {
+      "fingerprint": "quality-v1:4fffd5261e73ed65d9ba90b59a9c0e6f7c80c380dce0bc425a5567a5302bf63a",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/cli/src/lib/doctor/deep.ts"
+      },
+      "summary": "packages/cli/src/lib/doctor/deep.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/doctor/deep.ts",
+        "line": 346,
+        "column": 1
+      },
+      "measurement": {
+        "value": 374,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
+      }
+    },
+    {
       "fingerprint": "quality-v1:50616eba7a12644de52c43e99de05cb01c0cd5ad56adfffb802abe1d9f327554",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -9667,28 +9840,28 @@
       }
     },
     {
-      "fingerprint": "quality-v1:529a4de638c42af0f6443c3241819c803a19a225cb5daa95efc282fe25f53fed",
+      "fingerprint": "quality-v1:523544ca9e9fe7f579538872e2407efd76fbee8a6c80b3455972d6243d3ca231",
       "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
+      "rule": "function-lines",
+      "category": "size",
       "severity": "advisory",
       "subject": {
         "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "symbol": "plugin#1 > app > post \"/v1/responses\" callback#1"
+        "path": "packages/cli/src/lib/api/lib/ffmpeg.ts",
+        "symbol": "runFfmpeg#1 > <anonymous>#1"
       },
-      "summary": "plugin#1 > app > post \"/v1/responses\" callback#1 in packages/cli/src/serve/extensions/openai/routes/responses.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "summary": "runFfmpeg#1 > <anonymous>#1 in packages/cli/src/lib/api/lib/ffmpeg.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "line": 126,
-        "column": 24
+        "path": "packages/cli/src/lib/api/lib/ffmpeg.ts",
+        "line": 47,
+        "column": 36
       },
       "measurement": {
-        "value": 22,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
+        "value": 57,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -9816,6 +9989,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:54fffa7e0dd8076e3221823c71f92aea79ae4fb4d745e1fc8d50851f8199f8bc",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts",
+        "symbol": "writeStreamingResponse#1"
+      },
+      "summary": "writeStreamingResponse#1 in packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts",
+        "line": 139,
+        "column": 8
+      },
+      "measurement": {
+        "value": 16,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
       "fingerprint": "quality-v1:551b4b22c001d9f4298eda87ad1fe365ca562e78ad76d5ac88cc42ff0959ac96",
       "detector": "structure",
       "rule": "file-lines",
@@ -9862,31 +10060,6 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:55b61c02bb49df62bbc6ef8a92ad41175a5dac16d82ae3a8dcb65d8e7e50b3ca",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/lib/ffmpeg.ts",
-        "symbol": "runFfmpeg#1"
-      },
-      "summary": "runFfmpeg#1 in packages/cli/src/serve/lib/ffmpeg.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/lib/ffmpeg.ts",
-        "line": 38,
-        "column": 8
-      },
-      "measurement": {
-        "value": 66,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -10376,6 +10549,30 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
+      }
+    },
+    {
+      "fingerprint": "quality-v1:5a20d97900fc4d0ba72eb14d1f7055eeccb1f9d3b9e8be323d14912325d0b019",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "file",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts"
+      },
+      "summary": "packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts",
+        "line": 329,
+        "column": 1
+      },
+      "measurement": {
+        "value": 637,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
       }
     },
     {
@@ -10943,56 +11140,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:5ec596f49e6cd820d4475db634c87f54a3796b89d5340238472887067429e439",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/load-manager.ts",
-        "symbol": "createLoadManager#1 > run#1"
-      },
-      "summary": "createLoadManager#1 > run#1 in packages/cli/src/serve/core/load-manager.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/load-manager.ts",
-        "line": 137,
-        "column": 3
-      },
-      "measurement": {
-        "value": 64,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:5f06ec5bcb2600968a00bdcf1d411a5a75076a4f7d6c5d2dac80714d8b511ad1",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/doctor/checks/hardware.ts",
-        "symbol": "checkGpuAcceleration#1"
-      },
-      "summary": "checkGpuAcceleration#1 in packages/cli/src/doctor/checks/hardware.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/doctor/checks/hardware.ts",
-        "line": 124,
-        "column": 44
-      },
-      "measurement": {
-        "value": 58,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:5f86747a81c41f79505dd7345ed6a971b4665290fde963ae0b80270749476ae4",
       "detector": "structure",
       "rule": "function-lines",
@@ -11061,31 +11208,6 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/inference/src/api/index.ts"
-      }
-    },
-    {
-      "fingerprint": "quality-v1:6060f1334825d7cc2b670e9cec8185be52dc073a677d244c5ec96c48af4228b6",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/doctor/deep-protocol.ts",
-        "symbol": "isSerializedError#1"
-      },
-      "summary": "isSerializedError#1 in packages/cli/src/doctor/deep-protocol.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/doctor/deep-protocol.ts",
-        "line": 42,
-        "column": 1
-      },
-      "measurement": {
-        "value": 18,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
       }
     },
     {
@@ -11209,31 +11331,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:616d81504ac88660ac165b5af2950e304edb5dd8edd14b977967e713d73c91bf",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "symbol": "runStreaming#1"
-      },
-      "summary": "runStreaming#1 in packages/cli/src/serve/extensions/openai/routes/chat.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "line": 294,
-        "column": 1
-      },
-      "measurement": {
-        "value": 17,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
       "fingerprint": "quality-v1:617c78f435f34d6394aa60dac86a8af9de04da1739faeff00b614c947e158f6a",
       "detector": "structure",
       "rule": "nesting-depth",
@@ -11256,6 +11353,31 @@
         "unit": "levels",
         "advisoryThreshold": 5,
         "highThreshold": 7
+      }
+    },
+    {
+      "fingerprint": "quality-v1:6181c4d96d6fb2039fb39f5124e1696f17f6a4f7db9feb88ffd045de51807f3b",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/chat.ts",
+        "symbol": "runStreaming#1"
+      },
+      "summary": "runStreaming#1 in packages/cli/src/lib/api/extensions/openai/routes/chat.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/chat.ts",
+        "line": 294,
+        "column": 1
+      },
+      "measurement": {
+        "value": 85,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -11628,30 +11750,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:64cf977503249feab60d8e8e0e8d52626ede6a0277a019a12dcb32fbd87b2d0c",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts"
-      },
-      "summary": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "line": 337,
-        "column": 1
-      },
-      "measurement": {
-        "value": 305,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
-      }
-    },
-    {
       "fingerprint": "quality-v1:64fccf649a8293589989ef992c48b6cb4c4cfde768b58ca5d3de4321d52734b7",
       "detector": "structure",
       "rule": "function-lines",
@@ -11726,31 +11824,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:668755691479c0107ba18352a61ac597d3d30eec091f2978459e6579c321cfa0",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "symbol": "plugin#1"
-      },
-      "summary": "plugin#1 in packages/cli/src/serve/extensions/openai/routes/vector-stores.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "line": 101,
-        "column": 39
-      },
-      "measurement": {
-        "value": 347,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:668953069e8921ddfab6898b4e8ab11b41db7475123fff618131a3b895d49974",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -11773,6 +11846,31 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
+      }
+    },
+    {
+      "fingerprint": "quality-v1:66c7ada9dd3a81cdb4c8ba55e26d95377b1a09572bf4410abe28a951c4c0d7a7",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/doctor/deep-protocol.ts",
+        "symbol": "isSerializedError#1"
+      },
+      "summary": "isSerializedError#1 in packages/cli/src/lib/doctor/deep-protocol.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/doctor/deep-protocol.ts",
+        "line": 42,
+        "column": 1
+      },
+      "measurement": {
+        "value": 18,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -11820,31 +11918,6 @@
       },
       "measurement": {
         "value": 64,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:6713e966d2661e9b25c97502d9b2d48050c9e2af98d427859153b2bbe5d541a9",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/configure/prompts.ts",
-        "symbol": "editField#1"
-      },
-      "summary": "editField#1 in packages/cli/src/configure/prompts.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/configure/prompts.ts",
-        "line": 253,
-        "column": 1
-      },
-      "measurement": {
-        "value": 59,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -12366,31 +12439,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:6b055582287e06bd11b3fb33d212f601c6ad27c0bb09ea371133a08ae7a2e349",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/config.ts",
-        "symbol": "parseOpenAIOptions#1"
-      },
-      "summary": "parseOpenAIOptions#1 in packages/cli/src/serve/extensions/openai/config.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/config.ts",
-        "line": 55,
-        "column": 8
-      },
-      "measurement": {
-        "value": 28,
-        "unit": "branches",
-        "advisoryThreshold": 20,
-        "highThreshold": 35
-      }
-    },
-    {
       "fingerprint": "quality-v1:6b066729a73a0ac9be09ebd708ca9dc3f209e03f079ff1862cc6fe5bd76b906c",
       "detector": "structure",
       "rule": "function-lines",
@@ -12630,31 +12678,6 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
-      }
-    },
-    {
-      "fingerprint": "quality-v1:6c3764d5a4d6ac6b9b2f373cd50a26e3fc9e279fe6c484706d9ff07e1cad1469",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/stores/jobs.ts",
-        "symbol": "createJobsStore#1"
-      },
-      "summary": "createJobsStore#1 in packages/cli/src/serve/core/stores/jobs.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/stores/jobs.ts",
-        "line": 39,
-        "column": 8
-      },
-      "measurement": {
-        "value": 58,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -13344,31 +13367,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:72e8442c748eb986c037f443ad680aaf79e43140f7babc639adc71cf5954e08e",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "symbol": "plugin#1 > app > post \"/v1/audio/translations\" callback#1"
-      },
-      "summary": "plugin#1 > app > post \"/v1/audio/translations\" callback#1 in packages/cli/src/serve/extensions/openai/routes/audio.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 226,
-        "column": 5
-      },
-      "measurement": {
-        "value": 60,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:73013191bcdb776adc2351c40e089f2aa298d4294e04365168cde4778e6c040c",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -13689,31 +13687,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:763a4be93c2a0ec05f654cb1c4a6201a2053b2412451419c59f9fa8c53ef639b",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/openai/command.ts",
-        "symbol": "registerOpenAiCommand#1"
-      },
-      "summary": "registerOpenAiCommand#1 in packages/cli/src/openai/command.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/openai/command.ts",
-        "line": 4,
-        "column": 8
-      },
-      "measurement": {
-        "value": 57,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:7641eb3c5d331ee8f6054b32bf1723ccea9b09e5a4a33a29b1ed89e1b20b6905",
       "detector": "structure",
       "rule": "function-lines",
@@ -13788,30 +13761,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:771478045b146ddbc21bddb9340486f7351ab3ab4b72c031173f40b2d6f66a8b",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts"
-      },
-      "summary": "packages/cli/src/serve/extensions/openai/routes/chat.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "line": 358,
-        "column": 1
-      },
-      "measurement": {
-        "value": 335,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
-      }
-    },
-    {
       "fingerprint": "quality-v1:7813efb7c8a58cb638dbaad2ca8072871c6ce5395b368f138a6c216759be1e7f",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -13834,6 +13783,31 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:783dc243ef5120ace27c838f06d8a2e734a369f6dc9a25445264683859d85327",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/model-registry.ts",
+        "symbol": "createModelRegistry#1"
+      },
+      "summary": "createModelRegistry#1 in packages/cli/src/lib/api/core/model-registry.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/model-registry.ts",
+        "line": 43,
+        "column": 8
+      },
+      "measurement": {
+        "value": 70,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -13959,30 +13933,6 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
-      }
-    },
-    {
-      "fingerprint": "quality-v1:78dd75be3268812613b0806ab92a260532c6b15186984bb11d6a1db0028115bc",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts"
-      },
-      "summary": "packages/cli/src/serve/extensions/openai/routes/responses.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "line": 339,
-        "column": 1
-      },
-      "measurement": {
-        "value": 302,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
       }
     },
     {
@@ -14133,31 +14083,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:79f6b1f6a1e1100fb3de12078176886493852fc5529405e7182d9144f7b4c8f6",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "symbol": "plugin#1"
-      },
-      "summary": "plugin#1 in packages/cli/src/serve/extensions/openai/routes/responses.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "line": 110,
-        "column": 39
-      },
-      "measurement": {
-        "value": 211,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:7a26141b0a99ddf3bb9dcc0e818dfce566d20e7010ea8fb513fbf53cb3da786d",
       "detector": "structure",
       "rule": "function-lines",
@@ -14233,31 +14158,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:7a611efac8b229ae54399bad063a6d351b7f7e141f75980e4c4751dcb3d27bda",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/doctor/deep.ts",
-        "symbol": "probeSdkRuntime#1 > <anonymous>#1"
-      },
-      "summary": "probeSdkRuntime#1 > <anonymous>#1 in packages/cli/src/doctor/deep.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/doctor/deep.ts",
-        "line": 181,
-        "column": 22
-      },
-      "measurement": {
-        "value": 52,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:7a6b59fdeadee57ef839b5b673859ef1540e92bb3ce6cb2429f2272ad68bd6c0",
       "detector": "structure",
       "rule": "function-lines",
@@ -14327,31 +14227,6 @@
       },
       "measurement": {
         "value": 99,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:7b10c2468ee3e248e025880fb787f0225db8489eab8450c3f50c022831c51cf9",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "symbol": "plugin#1 > app > post \"/v1/responses\" callback#1"
-      },
-      "summary": "plugin#1 > app > post \"/v1/responses\" callback#1 in packages/cli/src/serve/extensions/openai/routes/responses.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "line": 126,
-        "column": 5
-      },
-      "measurement": {
-        "value": 118,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -14839,6 +14714,55 @@
       }
     },
     {
+      "fingerprint": "quality-v1:7f3c5b5397b23bc6d2c79add894853826e37a4bdf3379bd6fe865981d9dec2f1",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/images.ts"
+      },
+      "summary": "packages/cli/src/lib/api/extensions/openai/routes/images.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/images.ts",
+        "line": 339,
+        "column": 1
+      },
+      "measurement": {
+        "value": 313,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
+      }
+    },
+    {
+      "fingerprint": "quality-v1:7f9e601651f27616a498f7ea43244e7c91c8b9853554a89d39327446823e5d69",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/responses.ts",
+        "symbol": "plugin#1 > app > post \"/v1/responses\" callback#1"
+      },
+      "summary": "plugin#1 > app > post \"/v1/responses\" callback#1 in packages/cli/src/lib/api/extensions/openai/routes/responses.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/responses.ts",
+        "line": 126,
+        "column": 5
+      },
+      "measurement": {
+        "value": 118,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:7fc5241a4da5e320184153d43849c08fc148189aa2d832b68e507f0d0a9fd0f1",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -15061,30 +14985,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:81a824d95290417edb1d3259fa334a9955acc3c01a7efc3dca8704f5dd3794fc",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/doctor/deep.ts"
-      },
-      "summary": "packages/cli/src/doctor/deep.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/doctor/deep.ts",
-        "line": 346,
-        "column": 1
-      },
-      "measurement": {
-        "value": 374,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
-      }
-    },
-    {
       "fingerprint": "quality-v1:81fef87195b993e63a75f9b6c283ba7ed9d6c1b9c9381c0829f819e335007781",
       "detector": "dependencies",
       "rule": "runtime-cycle",
@@ -15231,31 +15131,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:832faa58d1ee28359d7a7796ac5132ec382261a464aa0c978f570377a3b7751b",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/doctor/deep-probe-child.ts",
-        "symbol": "run#1"
-      },
-      "summary": "run#1 in packages/cli/src/doctor/deep-probe-child.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/doctor/deep-probe-child.ts",
-        "line": 101,
-        "column": 1
-      },
-      "measurement": {
-        "value": 51,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:83441421622158ea33b0b3138451e97621f8c025de569b6f62e1b0f0bc861e75",
       "detector": "structure",
       "rule": "function-lines",
@@ -15325,6 +15200,31 @@
       },
       "measurement": {
         "value": 78,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:83c034d4092b1a35d651139a06b98487e87c799ef416fe5535ad5bfdf66a6618",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/files.ts",
+        "symbol": "plugin#1"
+      },
+      "summary": "plugin#1 in packages/cli/src/lib/api/extensions/openai/routes/files.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/files.ts",
+        "line": 53,
+        "column": 39
+      },
+      "measurement": {
+        "value": 93,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -15574,6 +15474,56 @@
       }
     },
     {
+      "fingerprint": "quality-v1:863557547806142e9e396cd2a8ac515e9de60dc8a57137f9283dbf980bf1a114",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts",
+        "symbol": "writeBlockingResponse#1"
+      },
+      "summary": "writeBlockingResponse#1 in packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts",
+        "line": 64,
+        "column": 8
+      },
+      "measurement": {
+        "value": 67,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:86bb89867ed6c8d4a96a57babf734674b47b3fb5e54e0cc786e37077cb4bad7f",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "symbol": "runVideoJob#1"
+      },
+      "summary": "runVideoJob#1 in packages/cli/src/lib/api/extensions/openai/routes/videos.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "line": 244,
+        "column": 1
+      },
+      "measurement": {
+        "value": 17,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
       "fingerprint": "quality-v1:86eab5206895d772b916c55d78b3be6712692c384ae67ac7d49656dcbc3fda44",
       "detector": "structure",
       "rule": "function-lines",
@@ -15768,30 +15718,6 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/inference/src/logging/index.ts"
-      }
-    },
-    {
-      "fingerprint": "quality-v1:8832b8869f2d38fadd7af2fe31225577160c90312ef8a7365f0fa88fce6471af",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts"
-      },
-      "summary": "packages/cli/src/serve/extensions/openai/routes/audio.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 334,
-        "column": 1
-      },
-      "measurement": {
-        "value": 597,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
       }
     },
     {
@@ -16093,6 +16019,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:8b0db8906031b1d94cf7453e3514b5497593be7064962251f495392ee91d5e95",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/doctor/deep-probe-child.ts",
+        "symbol": "run#1"
+      },
+      "summary": "run#1 in packages/cli/src/lib/doctor/deep-probe-child.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/doctor/deep-probe-child.ts",
+        "line": 101,
+        "column": 1
+      },
+      "measurement": {
+        "value": 51,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:8bae3f772b16b89ee18cb9209abca48f81db41d717c5b637b18f87054536efad",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -16168,31 +16119,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:8c1a99fd0b686cb78aa85086e754dbc8f484c03663d6ea1fd0e2a0a0586180fe",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "symbol": "runBlocking#1"
-      },
-      "summary": "runBlocking#1 in packages/cli/src/serve/extensions/openai/routes/chat.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "line": 222,
-        "column": 1
-      },
-      "measurement": {
-        "value": 59,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:8c1d500041fbe7d271dbefd1bffbf83e45b035f7cdac6a0917b1b259f7b77a1f",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -16243,6 +16169,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:8c9136d0ba89aedb3d04a9a10d39fb1ea6a40031e77a62e20a7047d080c7192f",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "symbol": "resolveInputReferenceImage#1"
+      },
+      "summary": "resolveInputReferenceImage#1 in packages/cli/src/lib/api/extensions/openai/routes/videos.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "line": 116,
+        "column": 8
+      },
+      "measurement": {
+        "value": 126,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:8c9f2d7598a6c6fd1505e58e59227d5ecd3aef518b7f6ee0325ac4a34e272071",
       "detector": "structure",
       "rule": "function-lines",
@@ -16265,6 +16216,56 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:8cadc18dd01a92c53be7fbb7afd99c25eeb080d0459aa781e59b3d225e576adf",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/completion.ts",
+        "symbol": "drainCompletion#1"
+      },
+      "summary": "drainCompletion#1 in packages/cli/src/lib/api/core/completion.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/completion.ts",
+        "line": 44,
+        "column": 8
+      },
+      "measurement": {
+        "value": 51,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:8cec604505bf5335941dd13c894626e9f0da361a05ca498a536cbc66205b9207",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/config.ts",
+        "symbol": "parseOpenAIOptions#1"
+      },
+      "summary": "parseOpenAIOptions#1 in packages/cli/src/lib/api/extensions/openai/config.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/config.ts",
+        "line": 55,
+        "column": 8
+      },
+      "measurement": {
+        "value": 28,
+        "unit": "branches",
+        "advisoryThreshold": 20,
+        "highThreshold": 35
       }
     },
     {
@@ -16307,56 +16308,6 @@
       "primaryLocation": {
         "path": "packages/sdk/src/commands/bundle/index.ts",
         "line": 91,
-        "column": 8
-      },
-      "measurement": {
-        "value": 92,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:8d210d4633428fcf992770a3a05888062bce6e0aac111c8ff15b5422ba25338b",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/model-registry.ts",
-        "symbol": "createModelRegistry#1"
-      },
-      "summary": "createModelRegistry#1 in packages/cli/src/serve/core/model-registry.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/model-registry.ts",
-        "line": 43,
-        "column": 8
-      },
-      "measurement": {
-        "value": 70,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:8d5420095e584ef0ef09764c07a43bf868f8c24239d0f4e3a59a8ef9a28297c2",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/verify/command.ts",
-        "symbol": "registerVerifyCommand#1"
-      },
-      "summary": "registerVerifyCommand#1 in packages/cli/src/verify/command.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/verify/command.ts",
-        "line": 5,
         "column": 8
       },
       "measurement": {
@@ -16641,55 +16592,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:8ffbffb893b0698e33e751994d4b18486f79757aff59ad856e2b9f6114c82b8a",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts"
-      },
-      "summary": "packages/cli/src/serve/extensions/openai/schemas/responses.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts",
-        "line": 330,
-        "column": 1
-      },
-      "measurement": {
-        "value": 410,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
-      }
-    },
-    {
-      "fingerprint": "quality-v1:8ffe5fa72d6f6917b803cba0f7ef7ac3c9b325510a8a87c12b57eb1def0fa49f",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/configure/index.ts",
-        "symbol": "runConfigure#1"
-      },
-      "summary": "runConfigure#1 in packages/cli/src/configure/index.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/configure/index.ts",
-        "line": 45,
-        "column": 8
-      },
-      "measurement": {
-        "value": 36,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
       "fingerprint": "quality-v1:8fff83f3441fc2b074a2410ecc4a3c35efb45d95817120fba7908ed766fceac4",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -16736,55 +16638,6 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
-      }
-    },
-    {
-      "fingerprint": "quality-v1:902dff68e48a03c59284640e61323154cdc9d7654902057519872bfa1daf9dfa",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/responses-store.ts",
-        "symbol": "createResponsesStore#1"
-      },
-      "summary": "createResponsesStore#1 in packages/cli/src/serve/extensions/openai/adapters/responses-store.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/responses-store.ts",
-        "line": 46,
-        "column": 8
-      },
-      "measurement": {
-        "value": 99,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:90a26ab38db4d21b2db28923daf645f9388f0e56d3f5f0bc93e5f92692f78fd1",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/configure/prompts.ts"
-      },
-      "summary": "packages/cli/src/configure/prompts.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/configure/prompts.ts",
-        "line": 359,
-        "column": 1
-      },
-      "measurement": {
-        "value": 469,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
       }
     },
     {
@@ -17011,6 +16864,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:92dae6a786e5cdb49727022401229717db02a3c02446a687ff83d153283553e7",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/responses-shape.ts",
+        "symbol": "buildResponseObject#1"
+      },
+      "summary": "buildResponseObject#1 in packages/cli/src/lib/api/extensions/openai/adapters/responses-shape.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/responses-shape.ts",
+        "line": 55,
+        "column": 8
+      },
+      "measurement": {
+        "value": 80,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:9314b35ddf0b7f44b10ee68be37195d7af4b309c27f076dd94917e435eff9361",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -17030,6 +16908,31 @@
       },
       "measurement": {
         "value": 23,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:93953e71ba855e599bf7bb77809bc753ca3894da7871bd19fc2e545644bbab58",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/responses-shape.ts",
+        "symbol": "buildResponseObject#1"
+      },
+      "summary": "buildResponseObject#1 in packages/cli/src/lib/api/extensions/openai/adapters/responses-shape.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/responses-shape.ts",
+        "line": 55,
+        "column": 8
+      },
+      "measurement": {
+        "value": 26,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -17452,31 +17355,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:97791c5af38a99a14ad053d7ebc2e2b521232b4182b5d047bbd27f31b4cc267a",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts",
-        "symbol": "openaiResponsesInputToHistory#1"
-      },
-      "summary": "openaiResponsesInputToHistory#1 in packages/cli/src/serve/extensions/openai/schemas/responses.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts",
-        "line": 222,
-        "column": 8
-      },
-      "measurement": {
-        "value": 19,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
       "fingerprint": "quality-v1:97a7d588825620bf493ba82bebe0714c41bb05d472c3fe6a4d6dcd5a7d213360",
       "detector": "structure",
       "rule": "file-lines",
@@ -17498,6 +17376,31 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
+      }
+    },
+    {
+      "fingerprint": "quality-v1:9803e815f996aaf0602113aba23cd9769d61659a7e99af3e4ec0aae1f7804860",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/common.ts",
+        "symbol": "extractResponseFormat#1"
+      },
+      "summary": "extractResponseFormat#1 in packages/cli/src/lib/api/extensions/openai/schemas/common.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/common.ts",
+        "line": 321,
+        "column": 8
+      },
+      "measurement": {
+        "value": 51,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -17601,31 +17504,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:985cae7a8e3318cd18c5eec77036b2471f2f758f7116907c8a1040796572cff7",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "symbol": "plugin#1"
-      },
-      "summary": "plugin#1 in packages/cli/src/serve/extensions/openai/routes/videos.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "line": 480,
-        "column": 39
-      },
-      "measurement": {
-        "value": 157,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:986958952cdd26c477ffd99d9afa1303aa819c78e6c2a7e84ed33c2725618465",
       "detector": "structure",
       "rule": "function-lines",
@@ -17673,31 +17551,6 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
-      }
-    },
-    {
-      "fingerprint": "quality-v1:98876af83b995fe857ba66b6a745c76a3f354a628f496b80229df7bd5af3d503",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/schemas/common.ts",
-        "symbol": "extractResponseFormat#1"
-      },
-      "summary": "extractResponseFormat#1 in packages/cli/src/serve/extensions/openai/schemas/common.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/schemas/common.ts",
-        "line": 321,
-        "column": 8
-      },
-      "measurement": {
-        "value": 51,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -17826,6 +17679,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:98e1ed16427c395d400b9f23538f78e8d1531541aacc3902d4ff9472b8ba6b0e",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/load-manager.ts",
+        "symbol": "createLoadManager#1"
+      },
+      "summary": "createLoadManager#1 in packages/cli/src/lib/api/core/load-manager.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/load-manager.ts",
+        "line": 73,
+        "column": 8
+      },
+      "measurement": {
+        "value": 156,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:992670bd60d9737b7020a8ef8d39cd98861b147efca7be9473471ff578ae4828",
       "detector": "structure",
       "rule": "file-lines",
@@ -17871,6 +17749,31 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
+      }
+    },
+    {
+      "fingerprint": "quality-v1:99703f4400b6a855c1834948c2678d23b73959456b958cd68f11057a83db85c4",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/doctor/deep.ts",
+        "symbol": "probeSdkRuntime#1"
+      },
+      "summary": "probeSdkRuntime#1 in packages/cli/src/lib/doctor/deep.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/doctor/deep.ts",
+        "line": 138,
+        "column": 8
+      },
+      "measurement": {
+        "value": 94,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -18018,6 +17921,31 @@
       },
       "measurement": {
         "value": 69,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:9a4bce4481806fe48cec647f4f0ddee74088cd4e1d5efe49c841af8a0b8e767f",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/images.ts",
+        "symbol": "plugin#1"
+      },
+      "summary": "plugin#1 in packages/cli/src/lib/api/extensions/openai/routes/images.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/images.ts",
+        "line": 238,
+        "column": 39
+      },
+      "measurement": {
+        "value": 94,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -18315,22 +18243,28 @@
       }
     },
     {
-      "fingerprint": "quality-v1:9dd511f8570dc2aecd6101040ab3be5667678ec72d73ed544cd2149aa7f9b3bb",
-      "detector": "dependencies",
-      "rule": "runtime-cycle",
-      "category": "dependency",
-      "severity": "high",
+      "fingerprint": "quality-v1:9deed21c51ae4d875e5ae07243eb4b5e5e38ac87c01f9e1ce0430373f1d32e41",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
       "subject": {
-        "kind": "cycle",
-        "members": [
-          "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-          "packages/cli/src/serve/extensions/openai/state.ts"
-        ]
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/common.ts",
+        "symbol": "extractResponseFormat#1"
       },
-      "summary": "Runtime dependency cycle: packages/cli/src/serve/extensions/openai/routes/videos.ts → packages/cli/src/serve/extensions/openai/state.ts",
-      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "summary": "extractResponseFormat#1 in packages/cli/src/lib/api/extensions/openai/schemas/common.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts"
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/common.ts",
+        "line": 321,
+        "column": 8
+      },
+      "measurement": {
+        "value": 18,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -18504,6 +18438,56 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
+      }
+    },
+    {
+      "fingerprint": "quality-v1:9eb19bfe6e92dcd99380b7dbab810e27b57ce14a4bf170e707fa34b16629b431",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/configure/prompts.ts",
+        "symbol": "addByCapability#1"
+      },
+      "summary": "addByCapability#1 in packages/cli/src/lib/configure/prompts.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/configure/prompts.ts",
+        "line": 441,
+        "column": 1
+      },
+      "measurement": {
+        "value": 54,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:9ee392092e562ee988346349c699f03f497f0c9a836603b3edd14800c1c87b78",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/configure/prompts.ts",
+        "symbol": "confirmEntry#1"
+      },
+      "summary": "confirmEntry#1 in packages/cli/src/lib/configure/prompts.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/configure/prompts.ts",
+        "line": 386,
+        "column": 1
+      },
+      "measurement": {
+        "value": 54,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -18701,6 +18685,30 @@
       }
     },
     {
+      "fingerprint": "quality-v1:a0b29f909dfed56dd9c38a28cbd71ea7f792f0fd4350f2fb59dc6468ad67e4a4",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "file",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts"
+      },
+      "summary": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "line": 350,
+        "column": 1
+      },
+      "measurement": {
+        "value": 572,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
+      }
+    },
+    {
       "fingerprint": "quality-v1:a17b1a7addebddc87af66605221c6ca0072dd819bba43f53abe8ee01433d7eee",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -18744,31 +18752,6 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/inference/src/api/delete-cache.ts"
-      }
-    },
-    {
-      "fingerprint": "quality-v1:a1851cd55fded85c978932a416f5338ad7149a12e68285560392c7d1827ff6d6",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/doctor/deep.ts",
-        "symbol": "probeSdkRuntime#1 > <anonymous>#1 > child > once \"close\" callback#1"
-      },
-      "summary": "probeSdkRuntime#1 > <anonymous>#1 > child > once \"close\" callback#1 in packages/cli/src/doctor/deep.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/doctor/deep.ts",
-        "line": 194,
-        "column": 44
-      },
-      "measurement": {
-        "value": 17,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
       }
     },
     {
@@ -18843,6 +18826,31 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:a2da53084df445a66ba6f03beb221af3d00ef045fda83f78a0e49974aec65055",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "symbol": "resolveInputReferenceImage#1"
+      },
+      "summary": "resolveInputReferenceImage#1 in packages/cli/src/lib/api/extensions/openai/routes/videos.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "line": 116,
+        "column": 8
+      },
+      "measurement": {
+        "value": 25,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -19136,31 +19144,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:a4bf4c5c0532a9c8151bf9712999b2286b9a44717e6d51ed7b15b98cb36a6288",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "symbol": "plugin#1"
-      },
-      "summary": "plugin#1 in packages/cli/src/serve/extensions/openai/routes/audio.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 135,
-        "column": 39
-      },
-      "measurement": {
-        "value": 354,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:a4ce8daac83eb9efaf3bbf1546f46fb253261a8f404a706c72c4202519683015",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -19307,31 +19290,6 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
-      }
-    },
-    {
-      "fingerprint": "quality-v1:a62c4972819e95cde2245d004837e1f38138f6e06dbe305d475af9fd95806f86",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/stores/ephemeral-files.ts",
-        "symbol": "createEphemeralFilesStore#1"
-      },
-      "summary": "createEphemeralFilesStore#1 in packages/cli/src/serve/core/stores/ephemeral-files.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/stores/ephemeral-files.ts",
-        "line": 46,
-        "column": 8
-      },
-      "measurement": {
-        "value": 70,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -19574,31 +19532,6 @@
       },
       "measurement": {
         "value": 22,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
-      "fingerprint": "quality-v1:a8fb1e5d13594a9f39b10edd9d4d839cb3acb803637e65578004407ceb53a04d",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/responses-shape.ts",
-        "symbol": "buildResponseObject#1"
-      },
-      "summary": "buildResponseObject#1 in packages/cli/src/serve/extensions/openai/adapters/responses-shape.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/responses-shape.ts",
-        "line": 55,
-        "column": 8
-      },
-      "measurement": {
-        "value": 26,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -19917,6 +19850,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:ac95f948ef548576fa18a5655a36878477dc087d295acf903f44cb0dcfe0682d",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "symbol": "serveContent#1"
+      },
+      "summary": "serveContent#1 in packages/cli/src/lib/api/extensions/openai/routes/videos.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "line": 361,
+        "column": 1
+      },
+      "measurement": {
+        "value": 104,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:aceb2c4d328fd98920ecfd61d2ed10878eae48a91ef6b1fc483a2410c655a59f",
       "detector": "structure",
       "rule": "nesting-depth",
@@ -20141,6 +20099,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:af6fe2f093a837c06ec682c938220f96ea9b2f954e4993723a1cf5b72eb48a38",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/openai/command.ts",
+        "symbol": "registerOpenAiCommand#1"
+      },
+      "summary": "registerOpenAiCommand#1 in packages/cli/src/lib/openai/command.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/openai/command.ts",
+        "line": 4,
+        "column": 8
+      },
+      "measurement": {
+        "value": 57,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:afbef8b9e7f866579fe7a82c4649a9796c694df182fe5ed2c16bf92fe48b5277",
       "detector": "structure",
       "rule": "function-lines",
@@ -20287,28 +20270,27 @@
       }
     },
     {
-      "fingerprint": "quality-v1:b14517d53989b94bfeeb4ff08f9338e333c54f5e285c115162106b0c9cb6315a",
+      "fingerprint": "quality-v1:b14baf8c108bae177ff46a079316c16374d0c3c43a0ea213a7654299add42364",
       "detector": "structure",
-      "rule": "function-lines",
+      "rule": "file-lines",
       "category": "size",
       "severity": "advisory",
       "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/configure/prompts.ts",
-        "symbol": "confirmEntry#1"
+        "kind": "file",
+        "path": "packages/cli/src/lib/configure/prompts.ts"
       },
-      "summary": "confirmEntry#1 in packages/cli/src/configure/prompts.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "summary": "packages/cli/src/lib/configure/prompts.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
-        "path": "packages/cli/src/configure/prompts.ts",
-        "line": 386,
+        "path": "packages/cli/src/lib/configure/prompts.ts",
+        "line": 359,
         "column": 1
       },
       "measurement": {
-        "value": 54,
+        "value": 469,
         "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
+        "advisoryThreshold": 300,
+        "highThreshold": 500
       }
     },
     {
@@ -20406,6 +20388,31 @@
       },
       "measurement": {
         "value": 54,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:b2923cdc091636e7fc22879dddbf71a6108bd1458074e755571e5a94a181fd83",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/server.ts",
+        "symbol": "createCoreServer#1"
+      },
+      "summary": "createCoreServer#1 in packages/cli/src/lib/api/core/server.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/server.ts",
+        "line": 45,
+        "column": 8
+      },
+      "measurement": {
+        "value": 75,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -21128,31 +21135,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:b8c8c61888a280e48e27b5741a9c45bb6ba3275897a7f298f32f87a83f517d91",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "symbol": "runVideoJob#1"
-      },
-      "summary": "runVideoJob#1 in packages/cli/src/serve/extensions/openai/routes/videos.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "line": 244,
-        "column": 1
-      },
-      "measurement": {
-        "value": 17,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
       "fingerprint": "quality-v1:b9180dbf4368db8feffb49448035852581f25873b7ca5f1167cf1c1f76b40495",
       "detector": "structure",
       "rule": "function-lines",
@@ -21351,6 +21333,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:bb3d856d30ea7bf6d598fd6c8b66430cf8b33b6adf901ee408576fd90d354992",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/responses.ts",
+        "symbol": "plugin#1"
+      },
+      "summary": "plugin#1 in packages/cli/src/lib/api/extensions/openai/routes/responses.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/responses.ts",
+        "line": 110,
+        "column": 39
+      },
+      "measurement": {
+        "value": 211,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:bb935381bb9900e3fa7e3bed63429d82a27719dbf6683fea47059f17d873caa1",
       "detector": "structure",
       "rule": "function-lines",
@@ -21400,31 +21407,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:bc171c5f9dfab2eb8231172c9dca37c127c55d93e8870f7006d9bcc1c078da21",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "symbol": "writeBlockingResponse#1"
-      },
-      "summary": "writeBlockingResponse#1 in packages/cli/src/serve/extensions/openai/adapters/response-writers.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "line": 64,
-        "column": 8
-      },
-      "measurement": {
-        "value": 67,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:bc1fcae968f543f0955a953e8ad5354970d46883fb835abd44b6ef0073425184",
       "detector": "structure",
       "rule": "file-lines",
@@ -21470,6 +21452,31 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
+      }
+    },
+    {
+      "fingerprint": "quality-v1:bc767892c85c1c88696ae11b5cc6fc1408a1cf0b63eb365ddac98819cf7cafe6",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/configure/index.ts",
+        "symbol": "runConfigure#1"
+      },
+      "summary": "runConfigure#1 in packages/cli/src/lib/configure/index.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/configure/index.ts",
+        "line": 45,
+        "column": 8
+      },
+      "measurement": {
+        "value": 94,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -21967,6 +21974,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:c35d3ed1e7a4a6a55bf231e07dbbf1e7d9cc9d345ee7ad15369776c5df42ca37",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts",
+        "symbol": "plugin#1 > app > post \"/v1/vector_stores/:id/files\" callback#1"
+      },
+      "summary": "plugin#1 > app > post \"/v1/vector_stores/:id/files\" callback#1 in packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts",
+        "line": 367,
+        "column": 5
+      },
+      "measurement": {
+        "value": 95,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:c399019706851113c73d82a59a1c1b4dcaeaf7ac2074b4ad40c1290797b761a5",
       "detector": "structure",
       "rule": "file-lines",
@@ -22108,6 +22140,31 @@
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
+      }
+    },
+    {
+      "fingerprint": "quality-v1:c4f4cee51c065442de8272d7144dbcd9f0ef7e7f6fc1e0939bc2ae6186edd24f",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "symbol": "plugin#1"
+      },
+      "summary": "plugin#1 in packages/cli/src/lib/api/extensions/openai/routes/audio.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "line": 135,
+        "column": 39
+      },
+      "measurement": {
+        "value": 354,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -22557,6 +22614,30 @@
       }
     },
     {
+      "fingerprint": "quality-v1:c8cdf2afda05b15c14083c62bde7256375b57a0bf8e829feba252bb22c587b1e",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/common.ts"
+      },
+      "summary": "packages/cli/src/lib/api/extensions/openai/schemas/common.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/common.ts",
+        "line": 370,
+        "column": 1
+      },
+      "measurement": {
+        "value": 334,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
+      }
+    },
+    {
       "fingerprint": "quality-v1:c90b62860dad46042ae71fbeba7a3954eb81760669edec854f28f035ebfb05b3",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -22827,31 +22908,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:cacaad480fd180fb762b3202d238c6207d09d85f58908259c2fad8ba99f1f255",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/images.ts",
-        "symbol": "plugin#1"
-      },
-      "summary": "plugin#1 in packages/cli/src/serve/extensions/openai/routes/images.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/images.ts",
-        "line": 238,
-        "column": 39
-      },
-      "measurement": {
-        "value": 94,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:caef7dba111007e6a953c18715cd56a8b75690fafa064e1417f007bd38d27f26",
       "detector": "structure",
       "rule": "function-lines",
@@ -22974,31 +23030,6 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
-      }
-    },
-    {
-      "fingerprint": "quality-v1:cbeeacc065f72db4e0ce237cd1f5bf46c44eb3709143a9e1e4729eb79b0fd002",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "symbol": "writeStreamingResponse#1"
-      },
-      "summary": "writeStreamingResponse#1 in packages/cli/src/serve/extensions/openai/adapters/response-writers.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "line": 139,
-        "column": 8
-      },
-      "measurement": {
-        "value": 16,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
       }
     },
     {
@@ -23223,31 +23254,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:cd689a6fe92c449f483371094f980c91ec60eacb2fa86ef3a48cf4e27629971c",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/configure/prompts.ts",
-        "symbol": "addByCapability#1"
-      },
-      "summary": "addByCapability#1 in packages/cli/src/configure/prompts.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/configure/prompts.ts",
-        "line": 441,
-        "column": 1
-      },
-      "measurement": {
-        "value": 54,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:cdc8f54aae6d86b761691b72f038e9f93380871980ec1a949931e8571f6add99",
       "detector": "structure",
       "rule": "nesting-depth",
@@ -23322,28 +23328,52 @@
       }
     },
     {
-      "fingerprint": "quality-v1:ce0594864f2ea689489ac0ca95b3d3e11e7629ba993c52bdd60d00cbd36ebecf",
+      "fingerprint": "quality-v1:ce45d416b37c75249d7de82d56dbfc6fdac7e359053b977a62a06ea454b0a967",
       "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
+      "rule": "file-lines",
+      "category": "size",
       "severity": "high",
       "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts",
-        "symbol": "historyPrefixFromStoredResponse#1"
+        "kind": "file",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts"
       },
-      "summary": "historyPrefixFromStoredResponse#1 in packages/cli/src/serve/extensions/openai/schemas/responses.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "summary": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts",
-        "line": 302,
-        "column": 8
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "line": 334,
+        "column": 1
       },
       "measurement": {
-        "value": 34,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
+        "value": 597,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
+      }
+    },
+    {
+      "fingerprint": "quality-v1:ce68f5967fae012c6bd2647e77865d8b1141f9701e70d7ae477c72e61c27ac92",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/chat.ts",
+        "symbol": "runBlocking#1"
+      },
+      "summary": "runBlocking#1 in packages/cli/src/lib/api/extensions/openai/routes/chat.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/chat.ts",
+        "line": 222,
+        "column": 1
+      },
+      "measurement": {
+        "value": 59,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -23369,31 +23399,6 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:ce98eae660f461e9739bb2c07b09b9434fe87ac83cdb02780b5c5629bf588d0d",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "symbol": "serveContent#1"
-      },
-      "summary": "serveContent#1 in packages/cli/src/serve/extensions/openai/routes/videos.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "line": 361,
-        "column": 1
-      },
-      "measurement": {
-        "value": 20,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
       }
     },
     {
@@ -23544,6 +23549,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:d0577aa2b228738b1b9873698d71aca68acb0b0bcc00af3649b05d9ee53b4a5a",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "symbol": "plugin#1 > app > post \"/v1/audio/transcriptions\" callback#1"
+      },
+      "summary": "plugin#1 > app > post \"/v1/audio/transcriptions\" callback#1 in packages/cli/src/lib/api/extensions/openai/routes/audio.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/audio.ts",
+        "line": 150,
+        "column": 5
+      },
+      "measurement": {
+        "value": 58,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:d07e5e87468b145b2f18cad1a93f42f173017feb4a9460ae65770a8c3434caeb",
       "detector": "dependencies",
       "rule": "runtime-cycle",
@@ -23590,56 +23620,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:d0a845eb07cff37fcf593b2e5bb828a8e75054aa8aaa50308fb32334ae71d46b",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/schemas/common.ts",
-        "symbol": "extractResponseFormat#1"
-      },
-      "summary": "extractResponseFormat#1 in packages/cli/src/serve/extensions/openai/schemas/common.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/schemas/common.ts",
-        "line": 321,
-        "column": 8
-      },
-      "measurement": {
-        "value": 18,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
-      "fingerprint": "quality-v1:d0e25688076c714f9be4fbcf283c0c62364d32c57373b5768bba19afb3c3f513",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/completion.ts",
-        "symbol": "drainCompletion#1"
-      },
-      "summary": "drainCompletion#1 in packages/cli/src/serve/core/completion.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/completion.ts",
-        "line": 44,
-        "column": 8
-      },
-      "measurement": {
-        "value": 51,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:d117c7008107b80a01302a9fa6cf78b7133754ef59c7d7bafbefe8755bb45e60",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -23662,6 +23642,30 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
+      }
+    },
+    {
+      "fingerprint": "quality-v1:d14054ee738095ccf9714c79acbcab7f418a9182abcc9d3a6d3afe76c05c5df0",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/chat.ts"
+      },
+      "summary": "packages/cli/src/lib/api/extensions/openai/routes/chat.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/chat.ts",
+        "line": 358,
+        "column": 1
+      },
+      "measurement": {
+        "value": 335,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
       }
     },
     {
@@ -23938,31 +23942,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:d3ffc951d936db274e2e4c998db573801c24456368e63e34ddb93e2a04f7f21f",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "symbol": "plugin#1 > app > post \"/v1/audio/speech\" callback#1"
-      },
-      "summary": "plugin#1 > app > post \"/v1/audio/speech\" callback#1 in packages/cli/src/serve/extensions/openai/routes/audio.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 304,
-        "column": 5
-      },
-      "measurement": {
-        "value": 166,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:d468010ef0834a416d89e1971e23b2b1038b858ef736e40f27bec68fc791239d",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -24011,30 +23990,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:d5149bbda60e71a74eb8777dbeec8c34b6554404833117ebc48710568c24b2e3",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/serve/extensions/openai/routes/images.ts"
-      },
-      "summary": "packages/cli/src/serve/extensions/openai/routes/images.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/images.ts",
-        "line": 339,
-        "column": 1
-      },
-      "measurement": {
-        "value": 313,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
-      }
-    },
-    {
       "fingerprint": "quality-v1:d5221d9fbaf609a440fdf4aa875852eff5599b932038f2f4df0482298f575b58",
       "detector": "structure",
       "rule": "function-lines",
@@ -24054,31 +24009,6 @@
       },
       "measurement": {
         "value": 56,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:d522267bb3ac429a4e832f3dccc2eef0be83e652ca20150a0d7f33c91ce0b800",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/lib/ffmpeg.ts",
-        "symbol": "runFfmpeg#1 > <anonymous>#1"
-      },
-      "summary": "runFfmpeg#1 > <anonymous>#1 in packages/cli/src/serve/lib/ffmpeg.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/lib/ffmpeg.ts",
-        "line": 47,
-        "column": 36
-      },
-      "measurement": {
-        "value": 57,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -24429,6 +24359,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:d8f81db4b2d912aafb7958ed9a4bebe773d261ee99fba5f7cdd7ad3dec9bacdf",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/responses-store.ts",
+        "symbol": "createResponsesStore#1"
+      },
+      "summary": "createResponsesStore#1 in packages/cli/src/lib/api/extensions/openai/adapters/responses-store.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/responses-store.ts",
+        "line": 46,
+        "column": 8
+      },
+      "measurement": {
+        "value": 99,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:d9064f990789ea041a154b798e000ceb1ff91a404ce1f40c5901c20a55742943",
       "detector": "structure",
       "rule": "function-lines",
@@ -24553,31 +24508,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:d9c142009c27932318914d4a518e6cf8a75d1ce9c2e564ef51856950d3401f5e",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/doctor/deep.ts",
-        "symbol": "probeSdkRuntime#1"
-      },
-      "summary": "probeSdkRuntime#1 in packages/cli/src/doctor/deep.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/doctor/deep.ts",
-        "line": 138,
-        "column": 8
-      },
-      "measurement": {
-        "value": 94,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:d9c7ec766683509e595d692e84d5240c537ef10f33e46dc0f8c698f2df118599",
       "detector": "structure",
       "rule": "file-lines",
@@ -24627,6 +24557,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:da0f19ef50fbe45d99dd1f370c47c416a89023f2f3c7f1da7aae9422c548a6b7",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts",
+        "symbol": "historyPrefixFromStoredResponse#1"
+      },
+      "summary": "historyPrefixFromStoredResponse#1 in packages/cli/src/lib/api/extensions/openai/schemas/responses.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/schemas/responses.ts",
+        "line": 302,
+        "column": 8
+      },
+      "measurement": {
+        "value": 59,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:da24c1d68b8d9e837504338d098cb08befd7e72a9175e7c95fec78db2f636428",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -24671,56 +24626,6 @@
       },
       "measurement": {
         "value": 19,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
-      "fingerprint": "quality-v1:da4170d3558be359fbb28918310f3d75568818e602152f00a5614783c1f0547c",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/index.ts",
-        "symbol": "buildServerParts#1"
-      },
-      "summary": "buildServerParts#1 in packages/cli/src/serve/index.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/index.ts",
-        "line": 57,
-        "column": 1
-      },
-      "measurement": {
-        "value": 52,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:daa0e5b272a10a123e5b74169d86afce55ab6d6d237abbaa90e39ddfcbc2c586",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/images.ts",
-        "symbol": "runAndRespond#1"
-      },
-      "summary": "runAndRespond#1 in packages/cli/src/serve/extensions/openai/routes/images.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/images.ts",
-        "line": 137,
-        "column": 1
-      },
-      "measurement": {
-        "value": 17,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -24777,31 +24682,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:dbdd04b3d4ac13b2dbb51ccb503abb407c5d3efddaa92764e5df6c53e67dfc9d",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "symbol": "plugin#1 > app > post \"/v1/vector_stores/:id/files\" callback#1"
-      },
-      "summary": "plugin#1 > app > post \"/v1/vector_stores/:id/files\" callback#1 in packages/cli/src/serve/extensions/openai/routes/vector-stores.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "line": 367,
-        "column": 5
-      },
-      "measurement": {
-        "value": 95,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:dbdd13f49219b81542d63695d71453d6e6311acca3b4bd08b7ae81680c61c8f3",
       "detector": "structure",
       "rule": "function-lines",
@@ -24824,6 +24704,31 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:dc19b4f131d77e7eee05af3ff368ba19289490d285a424db9ea2c98ae0efeb7f",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/chat.ts",
+        "symbol": "runStreaming#1"
+      },
+      "summary": "runStreaming#1 in packages/cli/src/lib/api/extensions/openai/routes/chat.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/chat.ts",
+        "line": 294,
+        "column": 1
+      },
+      "measurement": {
+        "value": 17,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -25144,6 +25049,25 @@
       }
     },
     {
+      "fingerprint": "quality-v1:de95e1304875208ea9cabdee2ad0df707390bab6c1b7a6ae9d4c848fe5b1b886",
+      "detector": "dependencies",
+      "rule": "runtime-cycle",
+      "category": "dependency",
+      "severity": "high",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+          "packages/cli/src/lib/api/extensions/openai/state.ts"
+        ]
+      },
+      "summary": "Runtime dependency cycle: packages/cli/src/lib/api/extensions/openai/routes/videos.ts → packages/cli/src/lib/api/extensions/openai/state.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts"
+      }
+    },
+    {
       "fingerprint": "quality-v1:decb9f098a1951248029d685afb2b82436e25004ec5eb235a67786bdb0325e4a",
       "detector": "structure",
       "rule": "function-lines",
@@ -25293,28 +25217,28 @@
       }
     },
     {
-      "fingerprint": "quality-v1:dfd0ab304e104849aa13e6fb3fe8706ce81a13381ce96ee3d9a2664991c0291d",
+      "fingerprint": "quality-v1:dfe15ca8f3a2d24892b804a57c2776804d0271e200b44ec9d50b5a284ee87776",
       "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
+      "rule": "function-lines",
+      "category": "size",
       "severity": "advisory",
       "subject": {
         "kind": "function",
-        "path": "packages/cli/src/serve/core/plugins/error-handler.ts",
-        "symbol": "plugin#1 > app > setErrorHandler callback#1"
+        "path": "packages/cli/src/lib/api/core/stores/jobs.ts",
+        "symbol": "createJobsStore#1"
       },
-      "summary": "plugin#1 > app > setErrorHandler callback#1 in packages/cli/src/serve/core/plugins/error-handler.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "summary": "createJobsStore#1 in packages/cli/src/lib/api/core/stores/jobs.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/core/plugins/error-handler.ts",
-        "line": 29,
-        "column": 55
+        "path": "packages/cli/src/lib/api/core/stores/jobs.ts",
+        "line": 39,
+        "column": 8
       },
       "measurement": {
-        "value": 20,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
+        "value": 58,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -25416,27 +25340,28 @@
       }
     },
     {
-      "fingerprint": "quality-v1:e06809f7b9a52661ea0d3b5b8ffc237b8d1d33d22c19852d2726af6649902bf2",
+      "fingerprint": "quality-v1:e09a1794c9290bf209ac7e81f03885b30dd239ea5b538b77de04896f4a75a96c",
       "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
+      "rule": "modified-complexity",
+      "category": "complexity",
       "severity": "high",
       "subject": {
-        "kind": "file",
-        "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts"
+        "kind": "function",
+        "path": "packages/cli/src/lib/configure/index.ts",
+        "symbol": "runConfigure#1"
       },
-      "summary": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "summary": "runConfigure#1 in packages/cli/src/lib/configure/index.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "line": 329,
-        "column": 1
+        "path": "packages/cli/src/lib/configure/index.ts",
+        "line": 45,
+        "column": 8
       },
       "measurement": {
-        "value": 637,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
+        "value": 36,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -25608,6 +25533,31 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
+      }
+    },
+    {
+      "fingerprint": "quality-v1:e24028c9ca0af3d6cad0c1cfab951b443dc767dc37fb12b2d50872a9daf019fe",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/index.ts",
+        "symbol": "buildServerParts#1"
+      },
+      "summary": "buildServerParts#1 in packages/cli/src/lib/api/index.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/index.ts",
+        "line": 57,
+        "column": 1
+      },
+      "measurement": {
+        "value": 52,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -25958,6 +25908,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:e5bd440e263e6efe5c2d8d1e14ef42f50871294d891f64b67851e7f973ea548e",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts",
+        "symbol": "plugin#1 > app > post \"/v1/vector_stores/:id/search\" callback#1"
+      },
+      "summary": "plugin#1 > app > post \"/v1/vector_stores/:id/search\" callback#1 in packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts",
+        "line": 298,
+        "column": 5
+      },
+      "measurement": {
+        "value": 52,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:e66683cd4e2f9ecf701bf6c50def4e5df80d50ea5bc82046e599b0e129dc0838",
       "detector": "structure",
       "rule": "function-lines",
@@ -26130,31 +26105,6 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:e75dc8af4ff073a288186327ce72ea11ba61993ec2fd97620334fcae61203aca",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "symbol": "plugin#1 > app > post \"/v1/vector_stores/:id/search\" callback#1"
-      },
-      "summary": "plugin#1 > app > post \"/v1/vector_stores/:id/search\" callback#1 in packages/cli/src/serve/extensions/openai/routes/vector-stores.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "line": 298,
-        "column": 5
-      },
-      "measurement": {
-        "value": 52,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -26458,31 +26408,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:e9ea15de6e9479a175a2d39ae453649f10083fdf8248b81925d6e079ed2681a7",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "symbol": "resolveInputReferenceImage#1"
-      },
-      "summary": "resolveInputReferenceImage#1 in packages/cli/src/serve/extensions/openai/routes/videos.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "line": 116,
-        "column": 8
-      },
-      "measurement": {
-        "value": 126,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:ea1bb099bff74151292c9a9671d161c91659839954815a864f9276917be07cd0",
       "detector": "structure",
       "rule": "nesting-depth",
@@ -26676,31 +26601,6 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/sdk/src/worker/create-server.ts"
-      }
-    },
-    {
-      "fingerprint": "quality-v1:eb91e996b527f766c53ae385e8fcf00edba6f00548dd0af0efffc69c27301f2d",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/core/load-manager.ts",
-        "symbol": "createLoadManager#1"
-      },
-      "summary": "createLoadManager#1 in packages/cli/src/serve/core/load-manager.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/core/load-manager.ts",
-        "line": 73,
-        "column": 8
-      },
-      "measurement": {
-        "value": 156,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -26925,28 +26825,28 @@
       }
     },
     {
-      "fingerprint": "quality-v1:ee31570894d8d524c2bcbff08742e00f087787e2edd2ec380128c1505baaf4ea",
+      "fingerprint": "quality-v1:edf32682ef643141921a0204f97e931bb910f7ebbd05d1afa2a8d2b671aedae1",
       "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
+      "rule": "modified-complexity",
+      "category": "complexity",
       "severity": "advisory",
       "subject": {
         "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "symbol": "runVideoJob#1"
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "symbol": "serveContent#1"
       },
-      "summary": "runVideoJob#1 in packages/cli/src/serve/extensions/openai/routes/videos.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "summary": "serveContent#1 in packages/cli/src/lib/api/extensions/openai/routes/videos.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "line": 244,
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/videos.ts",
+        "line": 361,
         "column": 1
       },
       "measurement": {
-        "value": 94,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
+        "value": 20,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -27019,6 +26919,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:eeed762d2e3d7c0f4b1ad28d177ca877825fba086eaa41369a97fc2498eb1015",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/models.ts",
+        "symbol": "plugin#1"
+      },
+      "summary": "plugin#1 in packages/cli/src/lib/api/extensions/openai/routes/models.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/models.ts",
+        "line": 54,
+        "column": 39
+      },
+      "measurement": {
+        "value": 56,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:ef27e07846abc490c9417faa3a899d860f427b9eacb9cb923e564c8f8536c3e8",
       "detector": "structure",
       "rule": "function-lines",
@@ -27062,31 +26987,6 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/inference/src/api/index.ts"
-      }
-    },
-    {
-      "fingerprint": "quality-v1:efb953f4a343ea8eab07f98b0a0b73acbf7ba1ace21f141e4a572c1a37bbddcc",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/responses-shape.ts",
-        "symbol": "buildResponseObject#1"
-      },
-      "summary": "buildResponseObject#1 in packages/cli/src/serve/extensions/openai/adapters/responses-shape.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/responses-shape.ts",
-        "line": 55,
-        "column": 8
-      },
-      "measurement": {
-        "value": 80,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -27262,6 +27162,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:f02739e21a4542815ac7fb2fb5f318112fbf625c05ebdc8eb0aefafb615a1dd5",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/plugins/error-handler.ts",
+        "symbol": "plugin#1 > app > setErrorHandler callback#1"
+      },
+      "summary": "plugin#1 > app > setErrorHandler callback#1 in packages/cli/src/lib/api/core/plugins/error-handler.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/plugins/error-handler.ts",
+        "line": 29,
+        "column": 23
+      },
+      "measurement": {
+        "value": 83,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:f02e7a616cbaf318afa88383433088a77bfd2bf2c029f6d1857637003cbf7a5b",
       "detector": "dependencies",
       "rule": "type-only-cycle",
@@ -27333,31 +27258,6 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:f0855d334ab3b3fdbc1e35f32b92b9a2eaf33741839371e73bccc67a4dd69034",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts",
-        "symbol": "historyPrefixFromStoredResponse#1"
-      },
-      "summary": "historyPrefixFromStoredResponse#1 in packages/cli/src/serve/extensions/openai/schemas/responses.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/schemas/responses.ts",
-        "line": 302,
-        "column": 8
-      },
-      "measurement": {
-        "value": 59,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -27558,28 +27458,28 @@
       }
     },
     {
-      "fingerprint": "quality-v1:f1ed931bf3317104dc45edcbc717995e7abba7b36529dcd3d7c5d3a83d74d219",
+      "fingerprint": "quality-v1:f1ccf89445a8695d8776bbdc9bb7276d4baec0dd7be011cfe7eab6589f9a9e98",
       "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "high",
       "subject": {
         "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "symbol": "resolveInputReferenceImage#1"
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts",
+        "symbol": "plugin#1"
       },
-      "summary": "resolveInputReferenceImage#1 in packages/cli/src/serve/extensions/openai/routes/videos.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "summary": "plugin#1 in packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
-        "line": 116,
-        "column": 8
+        "path": "packages/cli/src/lib/api/extensions/openai/routes/vector-stores.ts",
+        "line": 101,
+        "column": 39
       },
       "measurement": {
-        "value": 25,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
+        "value": 347,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -27700,6 +27600,31 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:f284d2471e5535e99abab804aea8226191e896f6733c7fbe877b4345d595da8f",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/plugins/error-handler.ts",
+        "symbol": "plugin#1"
+      },
+      "summary": "plugin#1 in packages/cli/src/lib/api/core/plugins/error-handler.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/plugins/error-handler.ts",
+        "line": 26,
+        "column": 57
+      },
+      "measurement": {
+        "value": 99,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -28289,6 +28214,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:f63bee06900a4626b40026d334a26832126db3341c4cd32b66dc03b8743d6733",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/load-manager.ts",
+        "symbol": "createLoadManager#1 > run#1"
+      },
+      "summary": "createLoadManager#1 > run#1 in packages/cli/src/lib/api/core/load-manager.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/load-manager.ts",
+        "line": 137,
+        "column": 3
+      },
+      "measurement": {
+        "value": 64,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:f6a77eda496f0a52eeda9f08dc0bbf3319b4c806a4d9e2b2ae27dadb2e480173",
       "detector": "structure",
       "rule": "file-lines",
@@ -28410,6 +28360,31 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:f7184874b666b5a092bc1bc8548a81a16635e088a863a304fb8286ac5ed16d64",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "high",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts",
+        "symbol": "writeStreamingResponse#1"
+      },
+      "summary": "writeStreamingResponse#1 in packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/extensions/openai/adapters/response-writers.ts",
+        "line": 139,
+        "column": 8
+      },
+      "measurement": {
+        "value": 185,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -29254,6 +29229,31 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
+      }
+    },
+    {
+      "fingerprint": "quality-v1:fdfb83e928851ae671f0096426e948ef06cd34f8f7821210f74a88ed5d660725",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/lib/api/core/stores/vector-stores.ts",
+        "symbol": "createVectorStoresStore#1"
+      },
+      "summary": "createVectorStoresStore#1 in packages/cli/src/lib/api/core/stores/vector-stores.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/lib/api/core/stores/vector-stores.ts",
+        "line": 113,
+        "column": 8
+      },
+      "measurement": {
+        "value": 73,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {

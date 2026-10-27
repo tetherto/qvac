@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { createHostMatcher, normalizeAllowedHost } from '@/serve/core/host-check'
-import { parseServeConfig } from '@/serve/core/config'
+import { createHostMatcher, normalizeAllowedHost } from '@/lib/api/core/host-check'
+import { parseServeConfig } from '@/lib/api/core/config'
 
 describe('createHostMatcher', () => {
   const allowed = createHostMatcher({ bindHost: '127.0.0.1', allowedHosts: [] })

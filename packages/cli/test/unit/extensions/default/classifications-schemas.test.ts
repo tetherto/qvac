@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   CLASSIFICATIONS_FIELD_CODES,
   classificationsBody
-} from '@/serve/extensions/default/schemas/classifications'
+} from '@/lib/api/extensions/default/schemas/classifications'
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 

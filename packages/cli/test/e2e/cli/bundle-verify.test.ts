@@ -61,8 +61,10 @@ async function linkInstalledQvacScope(sdkPath: string, destScope: string) {
     }
   }
 
-  await linkScope(join(sdkPath, '..'))
+  // Match SDK resolution: its nested dependencies win over the caller's hoisted
+  // packages, which can be different versions in the consolidated CLI.
   await linkScope(join(await realpath(sdkPath), 'node_modules', '@qvac'))
+  await linkScope(join(sdkPath, '..'))
 }
 
 describe('cli: bundle sdk → verify bundle (chain)', () => {

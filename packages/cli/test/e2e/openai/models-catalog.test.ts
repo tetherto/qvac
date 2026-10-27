@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { FastifyInstance } from 'fastify'
+import type { HttpServer } from '@/lib/http'
 import { useServer } from '../helpers/server.js'
 
 interface CatalogEntry {
@@ -24,7 +24,7 @@ interface CatalogList {
 describe('serve: model catalog', () => {
   // Default MODELLESS_CONFIG declares one configured (preload:false) model: fake-transcribe.
   const server = useServer()
-  const get = (url: string) => (server() as FastifyInstance).inject({ method: 'GET', url })
+  const get = (url: string) => (server() as HttpServer).inject({ method: 'GET', url })
 
   it('lists catalog entries as model_catalog_entry objects', async () => {
     const res = await get('/v1/models/catalog')

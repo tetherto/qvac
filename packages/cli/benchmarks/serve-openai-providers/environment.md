@@ -40,7 +40,7 @@ npx tsx benchmark.ts digest
 The configured `model_parity.sha256` must match this digest. `preflight`,
 `smoke`, and `full` enforce the digest before issuing any provider request.
 
-## qvac serve
+## qvac sdk serve
 
 | Field                                                            | Value                                      |
 | ---------------------------------------------------------------- | ------------------------------------------ |
@@ -59,7 +59,7 @@ Example shape (adjust paths/aliases):
 
 ```bash
 # From a checkout at the recorded commit — do not use port 11434.
-qvac serve openai --config /path/to/qvac.serve.benchmark.json
+qvac sdk serve openai --config /path/to/qvac.serve.benchmark.json
 ```
 
 Suggested serve config sketch:

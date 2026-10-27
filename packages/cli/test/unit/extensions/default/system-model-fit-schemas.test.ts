@@ -1,16 +1,16 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { FastifySchemaValidationError } from 'fastify/types/schema.js'
-import { validatorCompiler } from 'fastify-type-provider-zod'
+import type { HttpSchemaValidationError } from '@/lib/http'
+import { validatorCompiler } from '@/lib/http'
 import {
   MAX_FIT_MODELS,
   MODEL_FIT_FIELD_CODES,
   modelFitBody,
   modelFitResult
-} from '@/serve/extensions/default/schemas/model-fit'
-import { systemQuery, systemResult } from '@/serve/extensions/default/schemas/system'
-import { mergeConfig } from '@/serve/extensions/default/routes/model-fit'
-import { errorResponses } from '@/serve/lib/error-responses'
+} from '@/lib/api/extensions/default/schemas/model-fit'
+import { systemQuery, systemResult } from '@/lib/api/extensions/default/schemas/system'
+import { mergeConfig } from '@/lib/api/extensions/default/routes/model-fit'
+import { errorResponses } from '@/lib/api/lib/error-responses'
 
 function issuePaths(input: unknown): string[] {
   const result = modelFitBody.safeParse(input)
@@ -66,7 +66,7 @@ describe('modelFitBody', () => {
     })
     const result = validate({
       models: Array.from({ length: MAX_FIT_MODELS + 1 }, () => ({ model: 'm' }))
-    }) as { error?: FastifySchemaValidationError[] }
+    }) as { error?: HttpSchemaValidationError[] }
 
     assert.equal(result.error?.[0]?.keyword, 'too_big')
     assert.equal(result.error?.[0]?.instancePath, '/models')

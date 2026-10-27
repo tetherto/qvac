@@ -20,7 +20,7 @@ describe('serve: lifecycle (spawned binary)', () => {
     assert.equal(res.status, 200)
     const body = (await res.json()) as { object: string; data: unknown[] }
     assert.equal(body.object, 'list')
-    // CORS header travels over the real transport (set by @fastify/cors).
+    // CORS header travels over the real transport (set by the HTTP server).
     assert.equal(res.headers.get('access-control-allow-origin'), origin)
   })
 

@@ -282,40 +282,16 @@ JavaScript Dependencies
 
 --- blueoak-1.0.0 ---
 
-  glob@13.0.6
-    https://github.com/isaacs/node-glob
-  lru-cache@11.5.3
-    https://github.com/isaacs/node-lru-cache
-  minimatch@10.2.6
-    https://github.com/isaacs/minimatch
-  minipass@7.1.3
-    https://github.com/isaacs/minipass
-  path-scurry@2.0.2
-    https://github.com/isaacs/path-scurry
 
 --- bsd-3-clause (BSD 3-Clause License) ---
 
-  fast-uri@3.1.8
-    https://github.com/fastify/fast-uri
-  fast-uri@4.2.1
-    https://github.com/fastify/fast-uri
-  light-my-request@6.6.0
-    https://github.com/fastify/light-my-request
-  secure-json-parse@4.1.0
-    https://github.com/fastify/secure-json-parse
 
 --- isc (ISC License) ---
 
   bits-to-bytes@1.3.0
     https://github.com/holepunchto/bits-to-bytes
-  cli-width@4.1.0
-    https://github.com/knownasilya/cli-width
   fastq@1.20.3
     https://github.com/mcollina/fastq
-  inherits@2.0.4
-    https://github.com/isaacs/inherits
-  mute-stream@3.0.0
-    https://github.com/npm/mute-stream
   nanoassert@2.0.0
     https://github.com/emilbayes/nanoassert
   noise-curve-ed@2.1.0
@@ -324,181 +300,55 @@ JavaScript Dependencies
     https://github.com/holepunchto/quickbit-universal
   semver@7.8.5
     https://github.com/npm/node-semver
-  setprototypeof@1.2.0
-    https://github.com/wesleytodd/setprototypeof
-  signal-exit@4.1.0
-    https://github.com/tapjs/signal-exit
   simdle-universal@1.1.2
     https://github.com/holepunchto/simdle-universal
-  split2@4.2.0
-    https://github.com/mcollina/split2
   tmatch@5.0.0
     https://github.com/isaacs/tmatch
   v8-to-istanbul@9.3.0
     https://github.com/istanbuljs/v8-to-istanbul
-  yaml@2.9.1
-    https://github.com/eemeli/yaml
 
 --- mit (MIT License) ---
 
   @esbuild/darwin-arm64@0.28.2
     https://github.com/evanw/esbuild
-  @fastify/accept-negotiator@2.1.0
-    https://github.com/fastify/accept-negotiator
-  @fastify/ajv-compiler@4.0.6
-    https://github.com/fastify/ajv-compiler
-  @fastify/busboy@3.2.2
-    https://github.com/fastify/busboy
-  @fastify/cors@11.3.0
-    https://github.com/fastify/fastify-cors
-  @fastify/deepmerge@3.2.1
-    https://github.com/fastify/deepmerge
-  @fastify/error@4.2.0
-    https://github.com/fastify/fastify-error
-  @fastify/fast-json-stringify-compiler@5.1.0
-    https://github.com/fastify/fast-json-stringify-compiler
-  @fastify/forwarded@3.0.2
-    https://github.com/fastify/forwarded
-  @fastify/merge-json-schemas@0.2.1
-    https://github.com/fastify/merge-json-schemas
-  @fastify/multipart@9.4.0
-    https://github.com/fastify/fastify-multipart
-  @fastify/proxy-addr@5.1.1
-    https://github.com/fastify/proxy-addr
-  @fastify/send@4.1.1
-    https://github.com/fastify/send
-  @fastify/static@10.1.4
-    https://github.com/fastify/fastify-static
-  @fastify/swagger@9.9.0
-    https://github.com/fastify/fastify-swagger
-  @fastify/swagger-ui@6.1.1
-    https://github.com/fastify/fastify-swagger-ui
-  @inquirer/ansi@2.0.8
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/checkbox@5.2.5
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/confirm@6.3.2
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/core@12.0.3
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/editor@5.3.3
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/expand@5.1.5
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/external-editor@3.0.5
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/figures@2.0.9
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/input@5.1.6
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/number@4.2.3
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/password@5.2.2
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/prompts@8.5.2
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/rawlist@5.3.5
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/search@4.3.3
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/select@5.2.5
-    https://github.com/SBoudrias/Inquirer.js
-  @inquirer/type@4.1.1
-    https://github.com/SBoudrias/Inquirer.js
   @jridgewell/resolve-uri@3.1.2
     https://github.com/jridgewell/resolve-uri
   @jridgewell/sourcemap-codec@1.6.0
     https://github.com/jridgewell/sourcemaps
   @jridgewell/trace-mapping@0.3.31
     https://github.com/jridgewell/sourcemaps
-  @lukeed/ms@2.0.2
-    https://github.com/lukeed/ms
-  @pinojs/redact@0.4.0
-    https://github.com/pinojs/redact
   @types/istanbul-lib-coverage@2.0.6
     https://github.com/DefinitelyTyped/DefinitelyTyped
   @types/node@25.9.8
     https://github.com/DefinitelyTyped/DefinitelyTyped
-  abstract-logging@2.0.1
-    https://github.com/jsumners/abstract-logging
-  ajv@8.20.0
-    https://github.com/ajv-validator/ajv
-  ajv-formats@3.0.1
-    https://github.com/ajv-validator/ajv-formats
-  atomic-sleep@1.0.0
-    https://github.com/davidmarkclements/atomic-sleep
-  avvio@9.3.0
-    https://github.com/fastify/avvio
-  balanced-match@4.0.4
-    https://github.com/juliangruber/balanced-match
   big-sparse-array@1.0.3
     https://github.com/mafintosh/big-sparse-array
   binary-stream-equals@1.0.0
     https://github.com/mafintosh/binary-stream-equals
   bogon@1.3.0
     https://github.com/mafintosh/bogon
-  brace-expansion@5.0.12
-    https://github.com/juliangruber/brace-expansion
-  chardet@2.2.0
-    https://github.com/runk/node-chardet
-  close-with-grace@2.5.0
-    https://github.com/mcollina/close-with-grace
+  graceful-goodbye@1.3.3
+    https://github.com/holepunchto/graceful-goodbye
   codecs@3.1.0
     https://github.com/mafintosh/codecs
   commander@14.0.3
     https://github.com/tj/commander.js
-  content-disposition@3.0.0
-    https://github.com/jshttp/content-disposition
   convert-source-map@2.0.0
     https://github.com/thlorenz/convert-source-map
-  cookie@1.1.1
-    https://github.com/jshttp/cookie
   corestore@7.12.5
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
-  debug@4.4.3
-    https://github.com/debug-js/debug
-  depd@2.0.0
-    https://github.com/dougwilson/nodejs-depd
-  dequal@2.0.3
-    https://github.com/lukeed/dequal
   dht-rpc@6.27.0
     https://github.com/holepunchto/dht-rpc
   error-stack-parser@2.1.4
     https://github.com/stacktracejs/error-stack-parser
   esbuild@0.28.2
     https://github.com/evanw/esbuild
-  escape-html@1.0.3
-    https://github.com/component/escape-html
-  fast-decode-uri-component@1.0.1
-    https://github.com/delvedor/fast-decode-uri-component
-  fast-deep-equal@3.1.3
-    https://github.com/epoberezkin/fast-deep-equal
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
-  fast-json-stringify@7.0.1
-    https://github.com/fastify/fast-json-stringify
-  fast-querystring@1.1.2
-    https://github.com/anonrig/fast-querystring
   fast-safe-stringify@2.1.1
     https://github.com/davidmarkclements/fast-safe-stringify
-  fast-string-truncated-width@3.0.3
-    https://github.com/fabiospampinato/fast-string-truncated-width
-  fast-string-width@3.0.2
-    https://github.com/fabiospampinato/fast-string-width
-  fast-wrap-ansi@0.2.2
-    https://github.com/43081j/fast-wrap-ansi
-  fastify@5.12.5
-    https://github.com/fastify/fastify
-  fastify-plugin@5.1.0
-    https://github.com/fastify/fastify-plugin
-  fastify-plugin@6.0.0
-    https://github.com/fastify/fastify-plugin
-  fastify-type-provider-zod@5.1.0
-    https://github.com/turkerdev/fastify-type-provider-zod
-  find-my-way@9.9.0
-    https://github.com/delvedor/find-my-way
   flat-tree@1.13.0
     https://github.com/mafintosh/flat-tree
   fsevents@2.3.3
@@ -507,8 +357,6 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-object-property
   generate-string@1.0.1
     https://github.com/mafintosh/generate-string
-  http-errors@2.0.1
-    https://github.com/jshttp/http-errors
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
   hypercore@11.36.1
@@ -519,50 +367,22 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdht
   hyperswarm@4.17.2
     https://github.com/holepunchto/hyperswarm
-  iconv-lite@0.7.3
-    https://github.com/pillarjs/iconv-lite
-  ipaddr.js@2.5.0
-    https://github.com/whitequark/ipaddr.js
   is-options@1.0.2
     https://github.com/mafintosh/is-options
   is-property@1.0.2
     https://github.com/mikolalysenko/is-property
   js-yaml@4.3.2
     https://github.com/nodeca/js-yaml
-  json-schema-ref-resolver@3.0.0
-    https://github.com/fastify/json-schema-ref-resolver
-  json-schema-resolver@3.0.0
-    https://github.com/Eomm/json-schema-resolver
-  json-schema-traverse@1.0.0
-    https://github.com/epoberezkin/json-schema-traverse
   kademlia-routing-table@1.0.6
     https://github.com/mafintosh/kademlia-routing-table
   llm-splitter@0.2.0
     https://github.com/nearform/llm-splitter
-  mime@3.0.0
-    https://github.com/broofa/mime
-  ms@2.1.3
-    https://github.com/vercel/ms
   mutexify@1.4.0
     https://github.com/mafintosh/mutexify
   nat-sampler@1.0.1
     https://github.com/mafintosh/nat-sampler
-  on-exit-leak-free@2.1.2
-    https://github.com/mcollina/on-exit-or-gc
-  openapi-types@12.1.3
-    https://github.com/kogosoftwarellc/open-api/tree/master/packages/openapi-types
   picomatch@4.0.7
     https://github.com/micromatch/picomatch
-  pino@10.3.1
-    https://github.com/pinojs/pino
-  pino-abstract-transport@3.0.0
-    https://github.com/pinojs/pino-abstract-transport
-  pino-std-serializers@7.1.0
-    https://github.com/pinojs/pino-std-serializers
-  process-warning@4.0.1
-    https://github.com/fastify/process-warning
-  process-warning@5.1.0
-    https://github.com/fastify/process-warning
   promaphore@1.0.0
     https://github.com/mafintosh/promaphore
   protocol-buffers-encodings@1.2.0
@@ -571,42 +391,22 @@ JavaScript Dependencies
     https://github.com/holepunchto/protomux
   queue-tick@1.0.1
     https://github.com/mafintosh/queue-tick
-  quick-format-unescaped@4.0.4
-    https://github.com/davidmarkclements/quick-format
   random-array-iterator@1.0.0
     https://github.com/mafintosh/random-array-iterator
   ready-resource@1.2.0
     https://github.com/holepunchto/ready-resource
-  real-require@0.2.0
-    https://github.com/pinojs/real-require
-  real-require@1.0.0
-    https://github.com/pinojs/real-require
   record-cache@1.2.0
     https://github.com/mafintosh/record-cache
-  require-from-string@2.0.2
-    https://github.com/floatdrop/require-from-string
   resolve-reject-promise@1.1.0
     https://github.com/mafintosh/resolve-reject-promise
-  ret@0.5.0
-    https://github.com/fent/ret.js
   reusify@1.1.0
     https://github.com/mcollina/reusify
-  rfdc@1.4.1
-    https://github.com/davidmarkclements/rfdc
-  safe-regex2@5.1.1
-    https://github.com/fastify/safe-regex2
-  safe-stable-stringify@2.5.0
-    https://github.com/BridgeAR/safe-stable-stringify
-  safer-buffer@2.1.2
-    https://github.com/ChALkeR/safer-buffer
   safety-catch@1.0.3
     https://github.com/mafintosh/safety-catch
   same-data@1.0.0
     https://github.com/mafintosh/same-data
   same-object@1.0.2
     https://github.com/holepunchto/same-object
-  set-cookie-parser@2.7.2
-    https://github.com/nfriedly/set-cookie-parser
   shuffled-priority-queue@2.1.0
     https://github.com/mafintosh/shuffled-priority-queue
   signal-promise@1.0.3
@@ -619,14 +419,10 @@ JavaScript Dependencies
     https://github.com/mafintosh/sodium-secretstream
   sodium-universal@5.0.1
     https://github.com/holepunchto/sodium-universal
-  sonic-boom@4.2.1
-    https://github.com/pinojs/sonic-boom
   speedometer@1.1.0
     https://github.com/mafintosh/speedometer
   stackframe@1.3.4
     https://github.com/stacktracejs/stackframe
-  statuses@2.0.2
-    https://github.com/jshttp/statuses
   streamx@2.28.1
     https://github.com/mafintosh/streamx
   tar-stream@3.2.1
@@ -635,8 +431,6 @@ JavaScript Dependencies
     https://github.com/mafintosh/teex
   test-tmp@1.4.0
     https://github.com/mafintosh/test-tmp
-  thread-stream@4.2.0
-    https://github.com/mcollina/thread-stream
   time-ordered-set@2.0.1
     https://github.com/mafintosh/time-ordered-set
   timeout-refresh@2.0.1
@@ -645,10 +439,6 @@ JavaScript Dependencies
     https://github.com/mafintosh/tiny-byte-size
   tinyld@1.3.4
     https://github.com/komodojp/tinyld
-  toad-cache@3.7.4
-    https://github.com/kibertoad/toad-cache
-  toidentifier@1.0.1
-    https://github.com/component/toidentifier
   tsx@4.23.15
     https://github.com/privatenumber/tsx
   undici-types@7.24.6

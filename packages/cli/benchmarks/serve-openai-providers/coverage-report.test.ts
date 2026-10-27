@@ -8,7 +8,7 @@ import { captureOpenAiApiCoverage } from './coverage'
 import { generateOpenAiCoveragePreview, outputDirectory } from './coverage-preview'
 import { writeOpenAiCoveragePreview, writeReport } from './report'
 import type { RawDocument } from './types'
-import type { CoverageReport } from '../../src/openai/coverage/types'
+import type { CoverageReport } from '../../src/lib/openai/coverage/types'
 
 const BENCHMARK_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -18,7 +18,7 @@ function makeCoverageReport(): CoverageReport {
     specSource: 'https://example.test/openai.yaml',
     specSourceMode: 'live',
     specSha256: 'b'.repeat(64),
-    routerSource: '/repo/packages/cli/src/serve/routes',
+    routerSource: '/repo/packages/cli/src/lib/api/routes',
     implementedCount: 3,
     extensions: ['GET /v1/audio/models'],
     rows: [
@@ -161,7 +161,7 @@ describe('OpenAI API capability coverage report', () => {
           spec_source: 'https://example.test/openai.yaml',
           spec_sha256: 'a'.repeat(64),
           spec_endpoint_count: 100,
-          router_source: '/repo/packages/cli/src/serve/routes',
+          router_source: '/repo/packages/cli/src/lib/api/routes',
           router_implemented_count: 12,
           consumer_primary: {
             implemented: 10,

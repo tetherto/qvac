@@ -76,7 +76,7 @@ describe('serve flags: --cors', () => {
 })
 
 describe('serve flags: --docs', () => {
-  it('exposes Swagger UI at /docs only when enabled; /openapi.json is always served', async (t) => {
+  it('exposes API explorer at /docs only when enabled; /openapi.json is always served', async (t) => {
     const on = await configuredServer(t, MODELLESS_CONFIG, ['--docs'])
     assert.ok((await fetch(`${on.baseUrl}/docs`)).ok, 'expected /docs to be served with --docs')
     assert.equal((await fetch(`${on.baseUrl}/openapi.json`)).status, 200)
