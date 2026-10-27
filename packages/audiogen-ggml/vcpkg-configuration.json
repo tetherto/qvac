@@ -2,7 +2,8 @@
   "default-registry": {
     "kind": "git",
     "baseline": "630ffdd9bf0677b827ad732fe92216a096ede046",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
+    "reference": "32d21b708d250ab06a3fc41345dcb7c2bac09834"
   },
   "registries": [
     {

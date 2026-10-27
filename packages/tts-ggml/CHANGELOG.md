@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Project only required MOSS Delay text-control logits on Metal.
+- Avoid duplicate reference encoding when MOSS-TTSD dialogue uses one recording.
+- Align TTSD prompts and reference level normalization with the native pipeline.
 - The shared native `ggml-speech` moves to `2026-10-27` across the speech
   addons, which also speeds up single-query Metal softmax on long KV caches
   ([#5392](https://github.com/tetherto/qvac/pull/5392)).
