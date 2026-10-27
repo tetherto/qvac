@@ -45,3 +45,12 @@ speaker-activity VAD events retain `speakerId`. `diarizationThreshold` and
 `diarizationMinSegmentMs` are load-time controls and per-call streaming controls.
 Omitted controls preserve native model defaults. Registry constants and model-output
 validation are pending registry weights.
+
+TranscribePsy-250M-EU-sub (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`) loads through
+`parakeet-transcription` as a TDT model; it detects its eight European languages
+itself. `longFormWindowFrames` and `longFormContextFrames` bound the offline
+encoder window on long recordings in 80 ms encoder frames; the default `0` takes
+the window the model recommends (60 s with 25 % overlap for TranscribePsy). Its
+Core ML distribution, `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0`, is an
+encoder-less GGUF whose encoder and decoder bundles the loader stages beside it on
+macOS and iOS; on any other platform that load is refused before the download.

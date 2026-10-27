@@ -21,6 +21,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   Sortformer v2.1 workload can load, which the verdict counts on unified
   memory. It is 0 without sidecars and on other platforms.
 
+### Changed
+
+- Use fused CPU encoder attention for MOSS-Transcribe-Diarize.
+
 ## [0.11.1] - 2026-10-23
 
 ### Added

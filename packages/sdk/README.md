@@ -279,6 +279,16 @@ sidecars alone does not activate Core ML. See
 [`examples/asr/parakeet-unified-coreml.ts`](examples/asr/parakeet-unified-coreml.ts)
 for a local check of a Unified GGUF and its encoder bundle.
 
+TranscribePsy (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`, eight European
+languages) has a separate Core ML distribution instead of a sidecar:
+`PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose
+encoder and decoder bundles the SDK stages beside it, so both stages run on
+the Neural Engine. It loads on macOS and iOS only; elsewhere the load is
+refused up front with the ggml constant to use instead. See
+[`examples/asr/parakeet-transcribepsy-filesystem.ts`](examples/asr/parakeet-transcribepsy-filesystem.ts),
+which also shows the `longFormWindowFrames` / `longFormContextFrames` knobs
+that bound the offline encoder window on long recordings.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:

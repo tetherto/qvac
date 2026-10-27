@@ -238,7 +238,7 @@ const RULES: Rule[] = [
   // ── model fit ────────────────────────────────────────────────────────────
   // The assessment needs no load and runs everywhere; the probe reads a resident model.
   {
-    match: /^model-fit-(?:probe-)?(?:audiogen|diffusion)$/,
+    match: /^model-fit-(?:probe-)?(?:audiogen|diffusion(?:-esrgan)?|upscaler)$/,
     skip: {
       reason:
         'Neither set runs in the packaged Electron pass or Snap -- both are far beyond it -- so neither the load-time probe nor the fit assessment is checked there',
@@ -246,7 +246,7 @@ const RULES: Rule[] = [
     }
   },
   {
-    match: /^model-fit-probe-(?:audiogen|diffusion)$/,
+    match: /^model-fit-probe-(?:audiogen|diffusion(?:-esrgan)?|upscaler)$/,
     skip: {
       reason:
         'Reading the projection needs a resident model, and both sets are too heavy to load on Device Farm devices; the assessment needs no load and still runs',
@@ -263,6 +263,22 @@ const RULES: Rule[] = [
   },
 
   // ── Apple only: the leg has to be able to run Core ML ────────────────────
+  {
+    match: /^parakeet-transcribepsy-coreml-/,
+    skip: {
+      reason:
+        'The TranscribePsy Core ML distribution loads only where its Neural Engine bundles can be staged: macOS and iOS',
+      platforms: [
+        'desktop-linux',
+        'desktop-windows',
+        'desktop-python',
+        'electron-linux',
+        'electron-windows',
+        'snap',
+        'mobile-android'
+      ]
+    }
+  },
   {
     match: ['parakeet-unified-coreml-ios'],
     skip: {

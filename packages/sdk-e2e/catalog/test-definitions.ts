@@ -1,5 +1,6 @@
 import { speakerAwareTests } from './speaker-aware-tests.js'
 import { decisionTests } from './decision-tests.js'
+import { rerankTests } from './rerank-tests.js'
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { Step, TestDefinition } from '@qvac/test-suite'
@@ -618,6 +619,7 @@ const catalog: TestDefinition[] = [
   // Classification tests
   ...classificationTests,
   ...decisionTests,
+  ...rerankTests,
 
   // TTS tests
   ...ttsTests,

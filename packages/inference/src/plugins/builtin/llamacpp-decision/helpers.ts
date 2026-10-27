@@ -4,14 +4,12 @@ import type {
   LayaRequest as NativeLayaRequest,
   LayaResult as NativeLayaResult
 } from '@qvac/embed-llamacpp'
-import path from 'bare-path'
 import type {
   DecisionConfig,
   DecisionQuestion,
   DecisionRequest,
   DecisionResult
 } from '@/schemas/index'
-import { detectShardedModel, generateShardFilenames } from '@/utils/shard-utils'
 
 export function transformDecisionConfig(config: DecisionConfig): LayaConfig {
   const { pollBatch, ...nativeConfig } = config
@@ -115,15 +113,4 @@ export function transformDecisionResult(result: NativeLayaResult): DecisionResul
           })
     }
   }
-}
-
-export function decisionModelFiles(modelPath: string): string[] {
-  const filename = path.basename(modelPath)
-  const info = detectShardedModel(filename)
-  if (!info.isSharded) return [modelPath]
-  const directory = path.dirname(modelPath)
-  return [
-    path.join(directory, `${info.baseFilename}.tensors.txt`),
-    ...generateShardFilenames(filename).map((shard) => path.join(directory, shard))
-  ]
 }

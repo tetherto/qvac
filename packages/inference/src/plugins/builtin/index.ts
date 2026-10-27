@@ -1,6 +1,7 @@
 export { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 export { embeddingsPlugin } from '@/plugins/builtin/llamacpp-embedding/plugin'
 export { decisionPlugin } from '@/plugins/builtin/llamacpp-decision/plugin'
+export { rerankPlugin } from '@/plugins/builtin/llamacpp-rerank/plugin'
 export { whisperPlugin } from '@/plugins/builtin/whispercpp-transcription/plugin'
 export { bciPlugin } from '@/plugins/builtin/bci-whispercpp-transcription/plugin'
 export { parakeetPlugin } from '@/plugins/builtin/parakeet-transcription/plugin'
