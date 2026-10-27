@@ -60,7 +60,7 @@ sealed class AnyRequest {
 internal object AnyRequestSerializer : KSerializer<AnyRequest> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AnyRequest")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"models\",\"type\"],\"properties\":{\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"execution\":{\"type\":\"string\",\"enum\":[\"sequential\",\"concurrent\"]},\"policy\":{\"type\":\"string\",\"const\":\"interactive-v1\"},\"type\":{\"type\":\"string\",\"const\":\"assessModelFit\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"models\",\"type\"],\"properties\":{\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"type\":{\"type\":\"string\",\"const\":\"assessModelFit\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"operations\",\"sourceAudio\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"operations\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"from\",\"to\"]},{\"type\":\"object\",\"required\":[\"type\",\"caption\",\"start\"]}]}},\"seed\":{\"type\":\"integer\"},\"vocalLanguage\":{\"type\":\"string\"},\"bpm\":{\"type\":\"integer\"},\"keyscale\":{\"type\":\"string\"},\"timesignature\":{\"type\":\"string\"},\"augmentCaptionWithMetadata\":{\"type\":\"boolean\"},\"dcwEnabled\":{\"type\":\"boolean\"},\"dcwScaler\":{\"type\":\"number\"},\"dcwHighScaler\":{\"type\":\"number\"},\"inferenceSteps\":{\"type\":\"integer\"},\"shift\":{\"type\":\"number\"},\"sourceAudio\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"referenceAudio\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"audioEditStream\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"caption\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"caption\":{\"type\":\"string\"},\"lyrics\":{\"type\":\"string\"},\"seed\":{\"type\":\"integer\"},\"vocalLanguage\":{\"type\":\"string\"},\"bpm\":{\"type\":\"integer\"},\"keyscale\":{\"type\":\"string\"},\"timesignature\":{\"type\":\"string\"},\"augmentCaptionWithMetadata\":{\"type\":\"boolean\"},\"simpleMode\":{\"type\":\"boolean\"},\"rewriteQuery\":{\"type\":\"boolean\"},\"generateLrc\":{\"type\":\"boolean\"},\"computeQualityScore\":{\"type\":\"boolean\"},\"normalizeLoudness\":{\"type\":\"boolean\"},\"guidanceScale\":{\"type\":\"number\"},\"track\":{\"type\":\"string\",\"enum\":[\"vocals\",\"backing_vocals\",\"drums\",\"bass\",\"guitar\",\"keyboard\",\"percussion\",\"strings\",\"synth\",\"fx\",\"brass\",\"woodwinds\"]},\"duration\":{\"type\":\"number\"},\"maxFrames\":{\"type\":\"integer\"},\"inferenceSteps\":{\"type\":\"integer\"},\"shift\":{\"type\":\"number\"},\"cfgScale\":{\"type\":\"number\"},\"lmTemperature\":{\"type\":\"number\"},\"lmTopP\":{\"type\":\"number\"},\"lmTopK\":{\"type\":\"integer\"},\"lmCfgScale\":{\"type\":\"number\"},\"lmPhase1\":{\"type\":\"boolean\"},\"dcwEnabled\":{\"type\":\"boolean\"},\"dcwScaler\":{\"type\":\"number\"},\"dcwHighScaler\":{\"type\":\"number\"},\"taskType\":{\"type\":\"string\",\"enum\":[\"text2music\",\"cover-nofsq\",\"lego\"]},\"audioCoverStrength\":{\"type\":\"number\"},\"coverNoiseStrength\":{\"type\":\"number\"},\"audioCodes\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"referenceAudio\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"sourceAudio\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"audioGenStream\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"sourceAudio\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"seed\":{\"type\":\"integer\"},\"vocalLanguage\":{\"type\":\"string\"},\"lmTemperature\":{\"type\":\"number\"},\"lmTopP\":{\"type\":\"number\"},\"lmTopK\":{\"type\":\"integer\"},\"sourceAudio\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"audioUnderstand\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
@@ -221,8 +221,6 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
 @Serializable
 data class AssessModelFitRequest(
     @SerialName("models") val `models`: List<AssessModelFitRequestModelsItem>,
-    @SerialName("execution") val `execution`: AssessModelFitRequestExecution? = null,
-    @SerialName("policy") val `policy`: String? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "assessModelFit",
 )
@@ -419,12 +417,6 @@ data class MossSoundEffectFitWorkload(
     @SerialName("prompt") val `prompt`: String,
     @SerialName("seconds") val `seconds`: Double,
 )
-
-@Serializable
-enum class AssessModelFitRequestExecution {
-    @SerialName("sequential") `SEQUENTIAL`,
-    @SerialName("concurrent") `CONCURRENT`,
-}
 
 @Serializable
 data class AudioEditStreamRequest(
@@ -12101,7 +12093,7 @@ sealed class AnyResponse {
 internal object AnyResponseSerializer : KSerializer<AnyResponse> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AnyResponse")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"verdict\",\"basis\",\"execution\",\"models\",\"reasons\",\"assumptions\",\"type\"],\"properties\":{\"verdict\":{\"type\":\"string\",\"enum\":[\"likely-fits\",\"likely-too-large\",\"unknown\"]},\"basis\":{\"type\":\"string\",\"enum\":[\"system-memory\",\"process-memory\",\"device-memory\",\"device-budget\"]},\"execution\":{\"type\":\"string\",\"enum\":[\"sequential\",\"concurrent\"]},\"evidence\":{\"type\":\"string\",\"enum\":[\"computed-only\",\"native-fit\"]},\"budget\":{\"type\":\"object\",\"required\":[\"totalBytes\",\"usedBytes\",\"availableBytes\",\"reservedBytes\",\"availableAfterReserveBytes\"],\"properties\":{\"totalBytes\":{\"type\":\"number\"},\"usedBytes\":{\"type\":\"number\"},\"availableBytes\":{\"type\":\"number\"},\"reservedBytes\":{\"type\":\"number\"},\"availableAfterReserveBytes\":{\"type\":\"number\"}}},\"floorBytes\":{\"type\":\"number\"},\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"verdict\",\"reasons\"]}},\"reasons\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"assumptions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"type\":{\"type\":\"string\",\"const\":\"assessModelFit\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"verdict\",\"pools\",\"models\",\"type\"],\"properties\":{\"verdict\":{\"type\":\"string\",\"enum\":[\"fits\",\"does-not-fit\",\"unknown\"]},\"pools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"unified\",\"usedBytes\"]}},\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"status\",\"devices\",\"stats\"]}},\"type\":{\"type\":\"string\",\"const\":\"assessModelFit\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioEditStream\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"data\":{\"type\":\"string\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"bitsPerSample\":{\"type\":\"integer\"},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuFallbackReason\":{\"type\":\"number\"},\"emittedFrames\":{\"type\":\"number\"},\"arMs\":{\"type\":\"number\"},\"conditionMs\":{\"type\":\"number\"},\"flowMs\":{\"type\":\"number\"},\"vocoderMs\":{\"type\":\"number\"},\"metadata\":{\"type\":\"object\",\"required\":[\"caption\",\"lyrics\",\"bpm\",\"keyscale\",\"beatsPerBar\",\"vocalLanguage\",\"seed\",\"codeFrames\"]},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\",\"seed\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioGenStream\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"data\":{\"type\":\"string\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"bitsPerSample\":{\"type\":\"integer\"},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuFallbackReason\":{\"type\":\"number\"},\"emittedFrames\":{\"type\":\"number\"},\"arMs\":{\"type\":\"number\"},\"conditionMs\":{\"type\":\"number\"},\"flowMs\":{\"type\":\"number\"},\"vocoderMs\":{\"type\":\"number\"},\"metadata\":{\"type\":\"object\",\"required\":[\"caption\",\"lyrics\",\"bpm\",\"keyscale\",\"beatsPerBar\",\"vocalLanguage\",\"seed\",\"codeFrames\"]},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\",\"seed\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioUnderstand\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\",\"seed\"],\"properties\":{\"caption\":{\"type\":\"string\"},\"bpm\":{\"type\":\"number\"},\"duration\":{\"type\":\"number\"},\"keyscale\":{\"type\":\"string\"},\"timesignature\":{\"type\":\"string\"},\"vocalLanguage\":{\"type\":\"string\"},\"audioCodes\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"seed\":{\"type\":\"number\"}}},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuFallbackReason\":{\"type\":\"number\"},\"emittedFrames\":{\"type\":\"number\"},\"arMs\":{\"type\":\"number\"},\"conditionMs\":{\"type\":\"number\"},\"flowMs\":{\"type\":\"number\"},\"vocoderMs\":{\"type\":\"number\"},\"metadata\":{\"type\":\"object\",\"required\":[\"caption\",\"lyrics\",\"bpm\",\"keyscale\",\"beatsPerBar\",\"vocalLanguage\",\"seed\",\"codeFrames\"]},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\",\"seed\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
@@ -12121,7 +12113,7 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"message\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"error\"},\"message\":{\"type\":\"string\"},\"stack\":{\"type\":\"string\"},\"timestamp\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"code\":{\"type\":\"number\"},\"cause\":{},\"typedFields\":{\"type\":\"object\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"finetune\"},\"status\":{\"type\":\"string\",\"enum\":[\"IDLE\",\"RUNNING\",\"PAUSED\",\"CANCELLED\",\"COMPLETED\"]},\"stats\":{\"type\":\"object\",\"required\":[\"global_steps\",\"epochs_completed\"],\"properties\":{\"train_loss\":{\"type\":\"number\"},\"train_loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"val_loss\":{\"type\":\"number\"},\"val_loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"train_accuracy\":{\"type\":\"number\"},\"train_accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"val_accuracy\":{\"type\":\"number\"},\"val_accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"learning_rate\":{\"type\":\"number\"},\"global_steps\":{\"type\":\"integer\"},\"epochs_completed\":{\"type\":\"integer\"}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"is_train\",\"loss\",\"loss_uncertainty\",\"accuracy\",\"accuracy_uncertainty\",\"global_steps\",\"current_epoch\",\"current_batch\",\"total_batches\",\"elapsed_ms\",\"eta_ms\",\"type\",\"modelId\"],\"properties\":{\"is_train\":{\"type\":\"boolean\"},\"loss\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"accuracy\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"global_steps\":{\"type\":\"integer\"},\"current_epoch\":{\"type\":\"integer\"},\"current_batch\":{\"type\":\"integer\"},\"total_batches\":{\"type\":\"integer\"},\"elapsed_ms\":{\"type\":\"number\"},\"eta_ms\":{\"type\":\"number\"},\"type\":{\"type\":\"string\",\"const\":\"finetune:progress\"},\"modelId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"info\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"getLoadedModelInfo\"},\"info\":{\"type\":\"object\",\"required\":[\"modelId\",\"modelType\",\"handlers\",\"loadedAt\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\"},\"handlers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"displayName\":{\"type\":\"string\"},\"addonPackage\":{\"type\":\"string\"},\"loadedAt\":{},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"fitProbe\":{\"type\":\"object\",\"required\":[\"verdict\",\"basis\",\"estimatorVersion\",\"reason\"]}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"info\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"getLoadedModelInfo\"},\"info\":{\"type\":\"object\",\"required\":[\"modelId\",\"modelType\",\"handlers\",\"loadedAt\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\"},\"handlers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"displayName\":{\"type\":\"string\"},\"addonPackage\":{\"type\":\"string\"},\"loadedAt\":{},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"fitProbe\":{\"type\":\"object\",\"required\":[\"verdict\",\"pools\",\"models\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelInfo\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"getModelInfo\"},\"modelInfo\":{\"type\":\"object\",\"required\":[\"name\",\"modelId\",\"expectedSize\",\"sha256Checksum\",\"addon\",\"isCached\",\"isLoaded\",\"cacheFiles\"],\"properties\":{\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobBlockOffset\":{\"type\":\"number\"},\"blobBlockLength\":{\"type\":\"number\"},\"blobByteOffset\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"quantization\":{\"type\":\"string\"},\"params\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"type\":\"string\",\"enum\":[\"llm\",\"whisper\",\"bci\",\"parakeet\",\"moss-transcribe\",\"embeddings\",\"nmt\",\"vad\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\",\"other\"]},\"isCached\":{\"type\":\"boolean\"},\"isLoaded\":{\"type\":\"boolean\"},\"cacheFiles\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"filename\",\"path\",\"expectedSize\",\"sha256Checksum\",\"isCached\"]}},\"actualSize\":{\"type\":\"number\"},\"cachedAt\":{},\"loadedInstances\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"registryId\",\"loadedAt\"]}}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"capabilities\",\"type\"],\"properties\":{\"capabilities\":{\"type\":\"object\",\"required\":[\"cpu\",\"memory\",\"gpus\"],\"properties\":{\"cpu\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]},\"memory\":{\"type\":\"object\",\"required\":[\"totalBytes\"]},\"gpus\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]}}},\"sample\":{\"type\":\"object\",\"required\":[\"sampledAt\",\"cpu\",\"memory\",\"gpus\"],\"properties\":{\"sampledAt\":{\"type\":\"number\"},\"cpu\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]},\"memory\":{\"type\":\"object\",\"required\":[\"usedBytes\",\"totalBytes\",\"processUsedBytes\",\"processAvailableBytes\"]},\"gpus\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]}}},\"type\":{\"type\":\"string\",\"const\":\"getSystemResources\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"number\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"heartbeat\"},\"number\":{\"type\":\"number\"}}}").jsonObject,
@@ -12274,77 +12266,88 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
 @Serializable
 data class AssessModelFitResponse(
     @SerialName("verdict") val `verdict`: AssessModelFitResponseVerdict,
-    @SerialName("basis") val `basis`: AssessModelFitResponseBasis,
-    @SerialName("execution") val `execution`: AssessModelFitResponseExecution,
-    @SerialName("evidence") val `evidence`: AssessModelFitResponseEvidence? = null,
-    @SerialName("budget") val `budget`: AssessModelFitResponseBudget? = null,
-    @SerialName("floorBytes") val `floorBytes`: Double? = null,
-    @SerialName("models") val `models`: List<AssessModelFitResponseModelsItem>,
-    @SerialName("reasons") val `reasons`: List<String>,
-    @SerialName("assumptions") val `assumptions`: List<String>,
+    @SerialName("pools") val `pools`: List<ModelFitPool>,
+    @SerialName("models") val `models`: List<ModelFitModelResult>,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "assessModelFit",
 )
 
 @Serializable
 enum class AssessModelFitResponseVerdict {
-    @SerialName("likely-fits") `LIKELYFITS`,
-    @SerialName("likely-too-large") `LIKELYTOOLARGE`,
+    @SerialName("fits") `FITS`,
+    @SerialName("does-not-fit") `DOESNOTFIT`,
     @SerialName("unknown") `UNKNOWN`,
 }
 
 @Serializable
-enum class AssessModelFitResponseBasis {
-    @SerialName("system-memory") `SYSTEMMEMORY`,
-    @SerialName("process-memory") `PROCESSMEMORY`,
-    @SerialName("device-memory") `DEVICEMEMORY`,
-    @SerialName("device-budget") `DEVICEBUDGET`,
-}
-
-@Serializable
-enum class AssessModelFitResponseExecution {
-    @SerialName("sequential") `SEQUENTIAL`,
-    @SerialName("concurrent") `CONCURRENT`,
-}
-
-@Serializable
-enum class AssessModelFitResponseEvidence {
-    @SerialName("computed-only") `COMPUTEDONLY`,
-    @SerialName("native-fit") `NATIVEFIT`,
-}
-
-@Serializable
-data class AssessModelFitResponseBudget(
-    @SerialName("totalBytes") val `totalBytes`: Double,
+data class ModelFitPool(
+    @SerialName("id") val `id`: String,
+    @SerialName("unified") val `unified`: Boolean,
     @SerialName("usedBytes") val `usedBytes`: Double,
-    @SerialName("availableBytes") val `availableBytes`: Double,
-    @SerialName("reservedBytes") val `reservedBytes`: Double,
-    @SerialName("availableAfterReserveBytes") val `availableAfterReserveBytes`: Double,
+    @SerialName("freeBytes") val `freeBytes`: Double? = null,
+    @SerialName("totalBytes") val `totalBytes`: Double? = null,
 )
 
 @Serializable
-data class AssessModelFitResponseModelsItem(
-    @SerialName("name") val `name`: String,
-    @SerialName("verdict") val `verdict`: AssessModelFitResponseModelsItemVerdict,
-    @SerialName("evidence") val `evidence`: AssessModelFitResponseModelsItemEvidence? = null,
-    @SerialName("floorBytes") val `floorBytes`: Double? = null,
-    @SerialName("estimatorVersion") val `estimatorVersion`: String? = null,
-    @SerialName("device") val `device`: String? = null,
-    @SerialName("reasons") val `reasons`: List<String>,
+data class ModelFitModelResult(
+    @SerialName("status") val `status`: ModelFitModelResultStatus,
+    @SerialName("devices") val `devices`: List<ModelFitDevice>,
+    @SerialName("stats") val `stats`: ModelFitModelResultStats,
 )
 
 @Serializable
-enum class AssessModelFitResponseModelsItemVerdict {
-    @SerialName("likely-fits") `LIKELYFITS`,
-    @SerialName("likely-too-large") `LIKELYTOOLARGE`,
+enum class ModelFitModelResultStatus {
+    @SerialName("fits") `FITS`,
+    @SerialName("does-not-fit") `DOESNOTFIT`,
     @SerialName("unknown") `UNKNOWN`,
 }
 
 @Serializable
-enum class AssessModelFitResponseModelsItemEvidence {
-    @SerialName("computed-only") `COMPUTEDONLY`,
-    @SerialName("native-fit") `NATIVEFIT`,
+data class ModelFitDevice(
+    @SerialName("id") val `id`: String,
+    @SerialName("name") val `name`: String,
+    @SerialName("unified") val `unified`: Boolean,
+    @SerialName("usedBytes") val `usedBytes`: Double,
+    @SerialName("freeBytes") val `freeBytes`: Double? = null,
+    @SerialName("totalBytes") val `totalBytes`: Double? = null,
+)
+
+@Serializable(with = ModelFitModelResultStatsSerializer::class)
+sealed class ModelFitModelResultStats {
+    data class LlamaFitStats(val value: io.tether.qvac.sdk.generated.schema.LlamaFitStats) : ModelFitModelResultStats()
+    data class EmptyFitStats(val value: io.tether.qvac.sdk.generated.schema.EmptyFitStats) : ModelFitModelResultStats()
 }
+internal object ModelFitModelResultStatsSerializer : KSerializer<ModelFitModelResultStats> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("ModelFitModelResultStats")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ctxSize\",\"gpuLayers\"],\"properties\":{\"ctxSize\":{\"type\":\"integer\"},\"gpuLayers\":{\"type\":\"integer\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"properties\":{}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): ModelFitModelResultStats {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> ModelFitModelResultStats.LlamaFitStats(input.json.decodeFromJsonElement(serializer<LlamaFitStats>(), element))
+            1 -> ModelFitModelResultStats.EmptyFitStats(input.json.decodeFromJsonElement(serializer<EmptyFitStats>(), element))
+            else -> throw SerializationException("No matching ModelFitModelResultStats variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: ModelFitModelResultStats) {
+        when (value) {
+            is ModelFitModelResultStats.LlamaFitStats -> encoder.encodeSerializableValue(serializer<LlamaFitStats>(), value.value)
+            is ModelFitModelResultStats.EmptyFitStats -> encoder.encodeSerializableValue(serializer<EmptyFitStats>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class LlamaFitStats(
+    @SerialName("ctxSize") val `ctxSize`: Long,
+    @SerialName("gpuLayers") val `gpuLayers`: Long,
+)
+
+@Serializable
+class EmptyFitStats
 
 @Serializable
 data class AudioEditStreamResponse(
@@ -13854,7 +13857,7 @@ data class LoadedModelInfo(
     @SerialName("name") val `name`: String? = null,
     @SerialName("path") val `path`: String? = null,
     @SerialName("toolDialect") val `toolDialect`: LoadedModelInfoToolDialect? = null,
-    @SerialName("fitProbe") val `fitProbe`: NativeProbeFit? = null,
+    @SerialName("fitProbe") val `fitProbe`: ModelFitProbe? = null,
 )
 
 @Serializable
@@ -13869,55 +13872,79 @@ enum class LoadedModelInfoToolDialect {
 }
 
 @Serializable
-data class NativeProbeFit(
-    @SerialName("verdict") val `verdict`: NativeProbeFitVerdict,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("basis") val `basis`: String = "native-probe",
-    @SerialName("engine") val `engine`: String? = null,
-    @SerialName("estimatorVersion") val `estimatorVersion`: String,
-    @SerialName("reason") val `reason`: String,
-    @SerialName("message") val `message`: String? = null,
-    @SerialName("plan") val `plan`: NativeProbeFitPlan? = null,
-    @SerialName("projection") val `projection`: NativeProbeFitProjection? = null,
+data class ModelFitProbe(
+    @SerialName("verdict") val `verdict`: ModelFitProbeVerdict,
+    @SerialName("pools") val `pools`: List<ModelFitProbePool>,
+    @SerialName("models") val `models`: List<ModelFitProbeModel>,
 )
 
 @Serializable
-enum class NativeProbeFitVerdict {
-    @SerialName("fit") `FIT`,
+enum class ModelFitProbeVerdict {
+    @SerialName("fits") `FITS`,
     @SerialName("does-not-fit") `DOESNOTFIT`,
     @SerialName("unknown") `UNKNOWN`,
 }
 
 @Serializable
-data class NativeProbeFitPlan(
-    @SerialName("nCtx") val `nCtx`: Long,
-    @SerialName("nGpuLayers") val `nGpuLayers`: Long,
-    @SerialName("nGpuDevices") val `nGpuDevices`: Long,
+data class ModelFitProbePool(
+    @SerialName("id") val `id`: String,
+    @SerialName("unified") val `unified`: Boolean,
+    @SerialName("usedBytes") val `usedBytes`: Double,
+    @SerialName("freeBytes") val `freeBytes`: Double? = null,
+    @SerialName("totalBytes") val `totalBytes`: Double? = null,
 )
 
 @Serializable
-data class NativeProbeFitProjection(
-    @SerialName("deviceName") val `deviceName`: String? = null,
-    @SerialName("deviceBytes") val `deviceBytes`: Double? = null,
-    @SerialName("hostBytes") val `hostBytes`: Double? = null,
-    @SerialName("weightsBytes") val `weightsBytes`: Double? = null,
-    @SerialName("contextBytes") val `contextBytes`: Double? = null,
-    @SerialName("computeBytes") val `computeBytes`: Double? = null,
-    @SerialName("deviceFreeBytes") val `deviceFreeBytes`: Double? = null,
-    @SerialName("deviceTotalBytes") val `deviceTotalBytes`: Double? = null,
-    @SerialName("devices") val `devices`: List<NativeProbeFitProjectionDevicesItem>? = null,
-    @SerialName("report") val `report`: String? = null,
+data class ModelFitProbeModel(
+    @SerialName("status") val `status`: ModelFitProbeModelStatus,
+    @SerialName("devices") val `devices`: List<ModelFitProbeDevice>,
+    @SerialName("stats") val `stats`: ModelFitProbeModelStats,
 )
 
 @Serializable
-data class NativeProbeFitProjectionDevicesItem(
+enum class ModelFitProbeModelStatus {
+    @SerialName("fits") `FITS`,
+    @SerialName("does-not-fit") `DOESNOTFIT`,
+    @SerialName("unknown") `UNKNOWN`,
+}
+
+@Serializable
+data class ModelFitProbeDevice(
+    @SerialName("id") val `id`: String,
     @SerialName("name") val `name`: String,
-    @SerialName("totalBytes") val `totalBytes`: Double,
-    @SerialName("freeBytes") val `freeBytes`: Double,
-    @SerialName("weightsBytes") val `weightsBytes`: Double,
-    @SerialName("contextBytes") val `contextBytes`: Double,
-    @SerialName("computeBytes") val `computeBytes`: Double,
+    @SerialName("unified") val `unified`: Boolean,
+    @SerialName("usedBytes") val `usedBytes`: Double,
+    @SerialName("freeBytes") val `freeBytes`: Double? = null,
+    @SerialName("totalBytes") val `totalBytes`: Double? = null,
 )
+
+@Serializable(with = ModelFitProbeModelStatsSerializer::class)
+sealed class ModelFitProbeModelStats {
+    data class LlamaFitStats(val value: io.tether.qvac.sdk.generated.schema.LlamaFitStats) : ModelFitProbeModelStats()
+    data class EmptyFitStats(val value: io.tether.qvac.sdk.generated.schema.EmptyFitStats) : ModelFitProbeModelStats()
+}
+internal object ModelFitProbeModelStatsSerializer : KSerializer<ModelFitProbeModelStats> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("ModelFitProbeModelStats")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ctxSize\",\"gpuLayers\"],\"properties\":{\"ctxSize\":{\"type\":\"integer\"},\"gpuLayers\":{\"type\":\"integer\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"properties\":{}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): ModelFitProbeModelStats {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> ModelFitProbeModelStats.LlamaFitStats(input.json.decodeFromJsonElement(serializer<LlamaFitStats>(), element))
+            1 -> ModelFitProbeModelStats.EmptyFitStats(input.json.decodeFromJsonElement(serializer<EmptyFitStats>(), element))
+            else -> throw SerializationException("No matching ModelFitProbeModelStats variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: ModelFitProbeModelStats) {
+        when (value) {
+            is ModelFitProbeModelStats.LlamaFitStats -> encoder.encodeSerializableValue(serializer<LlamaFitStats>(), value.value)
+            is ModelFitProbeModelStats.EmptyFitStats -> encoder.encodeSerializableValue(serializer<EmptyFitStats>(), value.value)
+        }
+    }
+}
 
 @Serializable
 data class GetModelInfoResponse(
