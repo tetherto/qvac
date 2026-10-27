@@ -1,6 +1,6 @@
 {
   "name": "@qvac/turbovec-ggml",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "CPU vector index with TurboVec quantization for qvac",
   "addon": true,
   "engines": {

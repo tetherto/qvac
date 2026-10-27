@@ -143,6 +143,49 @@ test('completion: a multimodal load is refused', (t) => {
   )
 })
 
+test('completion: the speculative keys and the draft model path reach the fit', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.llamacppCompletion,
+    modelPath: '/models/model.gguf',
+    modelConfig: { ...COMPLETION_CONFIG, spec_type: 'draft-dflash', spec_draft_n_max: 7 },
+    artifacts: { draftModelPath: '/models/dflash.gguf' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
+  const config = plan.probe.request.config ?? {}
+  t.is(config['spec_type'], 'draft-dflash')
+  t.is(config['spec_draft_n_max'], '7')
+  t.is(config['spec_draft_model'], '/models/dflash.gguf')
+})
+
+test('completion: an external MTP head reaches the fit as spec_draft_model', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.llamacppCompletion,
+    modelPath: '/models/model.gguf',
+    modelConfig: { ...COMPLETION_CONFIG, spec_type: 'draft-mtp' },
+    artifacts: { draftModelPath: '/models/mtp-head.gguf' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
+  const config = plan.probe.request.config ?? {}
+  t.is(config['spec_type'], 'draft-mtp')
+  t.is(config['spec_draft_model'], '/models/mtp-head.gguf')
+})
+
+test('completion: no draft model artifact sends no spec_draft_model to the fit', (t) => {
+  const plan = completionRequest({ spec_type: 'draft-mtp' })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
+  const config = plan.probe.request.config ?? {}
+  t.is(config['spec_type'], 'draft-mtp')
+  t.absent('spec_draft_model' in config)
+})
+
 test('a sharded load is refused whatever engine would run it', (t) => {
   t.alike(
     createFitRequest({
