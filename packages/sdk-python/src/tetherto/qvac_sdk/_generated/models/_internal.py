@@ -12477,6 +12477,24 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ] = None
+    long_form_window_frames: Annotated[
+        int | None,
+        Field(
+            alias="longFormWindowFrames",
+            description="Offline encoder window for long recordings, in 80 ms encoder frames. `0` takes the window the model recommends (TranscribePsy: 750 frames, 60 s, with 94 frames of context on each side; other models: the engine's balanced automatic windows); a negative value encodes the whole input in one pass. Default 0.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    long_form_context_frames: Annotated[
+        int | None,
+        Field(
+            alias="longFormContextFrames",
+            description="Encoder frames of context shared with each neighbouring long-form window. `0` lets the engine choose; `-1` runs the windows without context.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
     backends_dir: Annotated[
         str | None,
         Field(

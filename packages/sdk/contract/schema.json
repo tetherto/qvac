@@ -13752,6 +13752,18 @@
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
+                    "longFormWindowFrames": {
+                      "description": "Offline encoder window for long recordings, in 80 ms encoder frames. `0` takes the window the model recommends (TranscribePsy: 750 frames, 60 s, with 94 frames of context on each side; other models: the engine's balanced automatic windows); a negative value encodes the whole input in one pass. Default 0.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "longFormContextFrames": {
+                      "description": "Encoder frames of context shared with each neighbouring long-form window. `0` lets the engine choose; `-1` runs the windows without context.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
                     "backendsDir": {
                       "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                       "type": "string"
