@@ -91,6 +91,36 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
+test('RAG release publishing requires a successful build and release authorization', () => {
+  const job = eachJob(read('.github/workflows/trigger-reusable-lib-rag.yml'))
+    .find((job) => job.name === 'publish-release-npm')
+  assert.ok(job)
+  const expression = ifExpression(job.text)
+  assert.ok(expression)
+  const evaluate = new Function(
+    'needs',
+    'always',
+    `return ${expression.replace(/needs\.([\w-]+)/g, (_, name) => `needs[${JSON.stringify(name)}]`)}`,
+  )
+
+  for (const build of ['success', 'failure', 'cancelled', 'skipped']) {
+    for (const guard of ['success', 'failure', 'cancelled', 'skipped']) {
+      for (const release of ['true', 'false']) {
+        const needs = {
+          build: { result: build },
+          'release-merge-guard': { result: guard },
+          'publish-logic': { outputs: { publish_release: release } },
+        }
+        assert.equal(
+          evaluate(needs, () => true),
+          build === 'success' && ['success', 'skipped'].includes(guard) && release === 'true',
+          `build=${build}, guard=${guard}, release=${release}`,
+        )
+      }
+    }
+  }
+})
+
 // The packages the consolidated pipeline publishes, read from its own push paths
 // so the list cannot drift from the workflow.
 function consolidatedPackages() {
