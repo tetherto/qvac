@@ -85,8 +85,6 @@ from .schemas import (
 
 # Contract enum values; tests/test_api_literals.py holds them to the generated models.
 ModelFitPolicy = Literal["log", "refuse", "off"]
-ModelFitExecution = Literal["sequential", "concurrent"]
-ModelFitHeadroomPolicy = Literal["interactive-v1"]
 
 
 def _dump(model: Any) -> dict[str, Any]:
@@ -348,12 +346,10 @@ async def assess_model_fit(
     transport: Transport,
     *,
     models: list[dict[str, Any]],
-    execution: ModelFitExecution | None = None,
-    policy: ModelFitHeadroomPolicy | None = None,
 ) -> AssessModelFitResponse:
     """Ergonomic assessModelFit mirroring JS's `client/api/assess-model-fit.ts`:
-    whether the given models are likely to fit in this device's memory, judged
-    before anything is downloaded.
+    whether the given models fit in this device's memory when loaded together,
+    without downloading them.
 
     - `models` holds one dict per candidate, keyed like `load_model`'s own
       arguments: `model_src`, `model_type`, `model_config`, plus the fit-only
@@ -362,13 +358,18 @@ async def assess_model_fit(
     - `model_src` accepts a plain string, a ModelConstant, or a descriptor
       dict. `model_type` may be omitted when the descriptor names its engine
       (raises ModelTypeRequiredError otherwise).
-    - `execution` is "sequential" (the default) or "concurrent": whether the
-      models are assumed to run one at a time or all at once.
-    - `policy` names the headroom policy, how much of the free memory is held
-      back. Unset uses the worker's default, "interactive-v1".
 
-    Advisory only: nothing is downloaded, reserved, or blocked. An `unknown`
-    verdict means the evidence supports no answer either way.
+    Each model's engine fitter runs against the registry's weightless
+    description of the model, or the model itself when it is on disk. The
+    memory each load takes is summed per device and compared against what is
+    free. The result carries the verdict for the set ("fits", "does-not-fit"
+    or "unknown") and each model's own verdict and stats. `unknown` is the
+    answer for a load that would start but cannot be sized: an engine with no
+    fitter, a load the fitter cannot project, a model with no registry
+    description that is not on disk, or a device that reported no free memory.
+    A load that load_model would refuse raises the same error: no plugin for
+    the model type, a config the plugin refuses, or a model the fitter cannot
+    read.
     """
     try:
         # A loop, so the alias warning's stacklevel sees no comprehension frame.
@@ -376,10 +377,6 @@ async def assess_model_fit(
         for candidate in models:
             candidates.append(_fit_candidate_to_wire(candidate))
         payload: dict[str, Any] = {"type": "assessModelFit", "models": candidates}
-        if execution is not None:
-            payload["execution"] = execution
-        if policy is not None:
-            payload["policy"] = policy
         request = AssessModelFitRequest.model_validate(payload)
     except ValidationError as error:
         raise RequestValidationError(
