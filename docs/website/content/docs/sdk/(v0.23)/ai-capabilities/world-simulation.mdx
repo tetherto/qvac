@@ -108,6 +108,8 @@ world: {
 
 These live under `world` rather than at the top level. The flat `params_backend`, `max_vram`, `stream_layers` and `verbosity` accepted by image and video generation do not reach a walk session, so passing one in world mode fails at `loadModel()` and names the `world.*` field to use instead.
 
+[`assessModelFit()`](/sdk/reference/api#assessmodelfit) and the fit check in [`loadModel()`](/sdk/reference/api#loadmodel) size a walk when the load names a pre-built `sceneSrc`: they count the transformer, the decoder, the attention caches and the history a walk accumulates. `world.fitSteps` (default `100`) sets how many walk steps that estimate covers; it does not limit the walk. Scene creation is not part of the estimate, so a load without `sceneSrc` gets no engine estimate.
+
 ## Example
 
 The following script loads an ABot-World session, creates a world from a first-frame image, walks it for several blocks under a scripted key tape, and writes each decoded frame to disk:
