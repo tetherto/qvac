@@ -183,7 +183,7 @@ jobs:
       packages: write
       id-token: write
     if: >-
-      always() && needs.build.result == 'success' &&
+      !cancelled() && needs.build.result == 'success' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest

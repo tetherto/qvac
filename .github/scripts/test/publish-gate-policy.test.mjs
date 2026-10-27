@@ -91,7 +91,7 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
-test('RAG release publishing requires a successful build and release authorization', () => {
+test('RAG release publishing requires a successful build, release authorization and an uncancelled run', () => {
   const job = eachJob(read('.github/workflows/trigger-reusable-lib-rag.yml'))
     .find((job) => job.name === 'publish-release-npm')
   assert.ok(job)
@@ -99,7 +99,7 @@ test('RAG release publishing requires a successful build and release authorizati
   assert.ok(expression)
   const evaluate = new Function(
     'needs',
-    'always',
+    'cancelled',
     `return ${expression.replace(/needs\.([\w-]+)/g, (_, name) => `needs[${JSON.stringify(name)}]`)}`,
   )
 
@@ -111,11 +111,13 @@ test('RAG release publishing requires a successful build and release authorizati
           'release-merge-guard': { result: guard },
           'publish-logic': { outputs: { publish_release: release } },
         }
-        assert.equal(
-          evaluate(needs, () => true),
-          build === 'success' && ['success', 'skipped'].includes(guard) && release === 'true',
-          `build=${build}, guard=${guard}, release=${release}`,
-        )
+        for (const runCancelled of [false, true]) {
+          assert.equal(
+            evaluate(needs, () => runCancelled),
+            !runCancelled && build === 'success' && ['success', 'skipped'].includes(guard) && release === 'true',
+            `cancelled=${runCancelled}, build=${build}, guard=${guard}, release=${release}`,
+          )
+        }
       }
     }
   }
