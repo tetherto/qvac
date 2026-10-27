@@ -79,7 +79,9 @@ Because a cut changes which release a documentation path belongs to, and renames
 
 Before cutting, the cutoff SHALL list the open pull requests writing either line of each collection being cut, and SHALL report the choice each one forces: a pull request writing the development line with documentation for the release being cut has to merge before the cut, or the release ships without it; one writing the outgoing group has to be rebased after the cutoff merges. Cutting with pull requests outstanding SHALL be permitted — the requirement is that the list is read, not that it is empty.
 
-After a cutoff, a pull request whose branch point precedes it and whose diff touches a collection's published or development line SHALL fail a pull-request check, and the check SHALL clear only when the branch is rebased. The check SHALL compare the collection's folder group at the parent of the pull request's oldest commit against the folder group on the base branch, and MUST NOT use the merge base, which a merge from the base branch moves past the cutoff while carrying the misplacement in with it. A pull request that touches no documentation line SHALL be unaffected, as SHALL a collection the cutoff did not move. Whether that failure also withholds the merge is a branch-protection decision outside this specification; what is required is that the failure is raised and names the window.
+After a cutoff, a pull request whose branch point precedes it and whose diff touches a collection's published lines SHALL fail a pull-request check, and the check SHALL clear only when the branch is rebased. The check SHALL compare the collection's folder group at the parent of the pull request's oldest commit against the folder group on the base branch, and MUST NOT use the merge base, which a merge from the base branch moves past the cutoff while carrying the misplacement in with it. A pull request that touches no published line SHALL be unaffected, as SHALL a collection the cutoff did not move. Whether that failure also withholds the merge is a branch-protection decision outside this specification; what is required is that the failure is raised and names the window.
+
+The check SHALL NOT read the development line. A change written there crosses a cutoff intact, so failing it would buy nothing while costing every open pull request that carries documentation a rebase at every cutoff, dismissing the approvals it already has. The question the development line does raise — documentation reaching readers a version late because it merged after the cut — is answered by the inventory above, before the cut.
 
 Failing the check buys a human decision, not a correct one: nothing validates where the author puts the change during the rebase, and a failure that does not withhold the merge can be merged past. Removing the rename altogether — a folder group whose name does not carry its version, so that a cut copies the group to its archived version and overwrites it from the development line — is what would make the placement unambiguous, and is not required here.
 
@@ -91,7 +93,7 @@ Failing the check buys a human decision, not a correct one: nothing validates wh
 
 #### Scenario: A pull request opened before the cutoff fails the check after it
 
-- **WHEN** a pull request whose branch point precedes the cutoff edits a collection's documentation line
+- **WHEN** a pull request whose branch point precedes the cutoff edits a collection's published line
 - **THEN** the pull-request check fails and names the folder group as it stood at the branch point and as it stands on the base branch
 - **AND** rebasing the branch is what makes the check pass
 
@@ -99,6 +101,12 @@ Failing the check buys a human decision, not a correct one: nothing validates wh
 
 - **WHEN** the base branch is merged into such a pull request instead of the branch being rebased
 - **THEN** the check still fails, because it reads the branch point and not the merge base
+
+#### Scenario: A pull request that writes only the development line is unaffected
+
+- **WHEN** a pull request opened before a cutoff writes documentation into a collection's development line and into no published line
+- **THEN** the check passes, because the path it writes to means the same thing on both sides of the cut
+- **AND** no rebase is asked of it, so the approvals it already carries stand
 
 #### Scenario: A pull request that writes no documentation line is unaffected
 

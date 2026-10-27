@@ -31,7 +31,10 @@ The path never changes. A cutoff copies the development line into the collection
 
 **What a cutoff does change is which release that path belongs to.** Your feature's documentation ships with your feature only if it merges before the cutoff of that release. Write it in the same PR as the code, which is what makes the two move together. If it follows in a separate PR and a cutoff lands first, the prose stays in the development line and reaches users a release late: move it into the published line's folder — `content/docs/<collection>/<line>/` — and tell the documentation engineer, because production serves the line promoted at the release, not `main`.
 
-Two checks cover the folder you are writing to. `Documentation lines` fails when a cutoff landed after your branch came off and your PR writes documentation, because the layout you wrote against no longer exists; rebase to clear it, and rebase rather than *Update branch*, since a merge commit lets git relocate the edits by similarity. It is not a required check, so it asks for the rebase rather than withholding the merge — merging it red carries the misplacement in with it. The same job also warns whenever a PR changes a file under `content/docs/`. Editing a shipped release's folder on purpose is fine — a factual correction to published documentation belongs there, and reaches production with the next promotion. The warning exists so a feature's documentation does not land there by mistake.
+The `Documentation lines` job reads `content/docs/` only, so a PR that writes the development line and nothing else is never flagged. If you do edit `content/docs/`, it:
+
+- **warns**, always. Correcting a published release there is fine, and reaches production with the next promotion; the warning exists so a feature's documentation does not land there by mistake.
+- **fails** if a cutoff landed after your branch came off, because the cut renamed the folder you wrote against. Rebase to clear it — rebase, not *Update branch*, which lets git relocate the edits by similarity. The job is not required, so it asks rather than blocks; merging it red carries the misplacement in.
 
 ## PR Labels
 

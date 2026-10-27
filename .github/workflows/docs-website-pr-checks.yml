@@ -72,36 +72,30 @@ jobs:
 
   published-lines:
     # Two checks on where a PR writes documentation: one warns, one fails.
-    # Neither withholds the merge — this job is not a required check, so a red
-    # run asks for a rebase and records why, and merging past it is a choice
-    # someone makes rather than a step they skip.
+    # Neither is required, so a red run asks for a rebase and records why
+    # rather than withholding the merge.
     #
     # Feature documentation belongs in the development line, outside the site
     # at `content/_unpublished/<collection>/next/`. Everything under
-    # `content/docs/<collection>/` has been cut: either it is a version the
-    # site already serves, or it is the version being released and awaiting
-    # promotion. Editing one is legitimate — correcting a shipped release's
-    # pages is the reason the folders are kept — so the first step only warns.
-    # It says what the edit implies, because only a human can tell a correction
-    # from documentation written into the wrong line.
+    # `content/docs/<collection>/` has been cut, so editing it is legitimate —
+    # correcting a shipped release is why the folders are kept — and the first
+    # step only warns: only a human can tell a correction from documentation
+    # written into the wrong line.
     #
-    # The second step fails, and covers the window a cutoff opens. A feature
-    # PR is safe across a cutoff: it writes to the development line, which the
-    # cut copies and leaves in place, so its path is the same before and after
-    # and the edit lands where it was written. Two other shapes are not:
+    # The second step fails, and covers the window a cutoff opens for the
+    # published lines. The cut renames the outgoing group — `(vX.Y)` becomes
+    # `vX.Y` — beside a new `(vX.Y+1)` that is byte-identical wherever the
+    # sprint changed nothing, so each page a pre-cutoff PR edits has two exact
+    # rename candidates and git picks one (QVAC-27286, reproduced here with
+    # `git merge-tree`). No conflict, so nothing warns whoever merges.
     #
-    #   - A correction PR writes to the outgoing group, and the cut renames it
-    #     — `(vX.Y)` becomes `vX.Y` — beside a new `(vX.Y+1)` whose pages are
-    #     byte-identical wherever the sprint changed nothing. Every page the PR
-    #     edits then has two exact rename candidates and git picks one, so the
-    #     correction can land in a version it was not written for. That is
-    #     QVAC-27286 again, reproduced on this repo with `git merge-tree`.
-    #   - A development-line PR that was meant to ship with the release merges
-    #     clean, but into the line after it, so the release ships with the gap.
-    #
-    # Neither produces a conflict, so neither is visible to whoever merges.
-    # Turning the run red and naming the window is what makes the choice a
-    # human one.
+    # The filter reads `content/docs/<collection>/` only, on purpose: the
+    # development line crosses a cutoff intact — `next/` is copied, not
+    # renamed — so reading it too would fail every feature PR carrying docs, at
+    # every cutoff, and the rebase would dismiss their approvals. What that
+    # leaves unread — documentation merging clean into the line after the
+    # release it describes — the open-PR inventory in `qv-docs-cutoff` reads
+    # before the cut.
     name: Documentation lines
     runs-on: ubuntu-latest
     steps:
@@ -181,8 +175,7 @@ jobs:
           stale=""
           for collection in sdk cli; do
             if [ -z "$(git diff --name-only "$origin" "$HEAD_SHA" -- \
-              "docs/website/content/docs/${collection}/" \
-              "docs/website/content/_unpublished/${collection}/next/")" ]; then
+              "docs/website/content/docs/${collection}/")" ]; then
               continue
             fi
             was=$(group_at "$origin" "$collection")

@@ -543,37 +543,38 @@ feature's documentation belongs. It cannot be a failure, because a factual
 correction to a shipped release's documentation is legitimate and only a human
 can tell it apart from a misplaced edit.
 
-The second fails the run, and covers the window a cutoff opens. A feature
-PR crosses a cutoff safely: it writes to the development line, which the cut
-copies and leaves in place, so its path means the same thing before and after.
-Two other shapes do not:
+The second fails the run, and covers the window a cutoff opens for the
+published lines. A feature PR crosses a cutoff safely: it writes to the
+development line, which the cut copies and leaves in place, so its path means
+the same thing before and after. **A correction to the published line does
+not.** The cut renames the outgoing group — `(vX.Y)` becomes `vX.Y` — beside a
+new `(vX.Y+1)` whose pages are byte-identical wherever the sprint changed
+nothing, so every page the PR edits has two exact rename candidates and git
+replays the edit into one of them: no conflict, green merge, and a shipped
+release documenting a feature it never had. That is QVAC-27286, reachable at
+every cut and invisible to whoever merges.
 
-- **A correction to the published line.** The cut renames the outgoing group —
-  `(vX.Y)` becomes `vX.Y` — beside a new `(vX.Y+1)` whose pages are
-  byte-identical wherever the sprint changed nothing. Every page the PR edits
-  then has two exact rename candidates, and git replays the edit into one of
-  them: no conflict, green merge, and a shipped release documenting a feature
-  it never had. That is QVAC-27286, and it is reachable at every cut, not only
-  the first.
-- **Documentation that was meant to ship with the release.** It merges clean,
-  into the line after the one it documents, so the release ships with the gap.
+The check reads the parenthesized folder — the line last cut, whose name only a
+cutoff changes — at the parent of the PR's oldest commit and at the base
+branch's head, and fails when they differ while the PR edits a line under
+`content/docs/`. It anchors on the branch point rather than the merge-base
+because *Update branch* moves the merge-base past the cutoff and carries the
+misplacement in with it, turning a merge-base check green at the moment the
+damage is done. A rebase is what clears it.
 
-Neither produces a conflict, so neither is visible to whoever merges. The check
-reads the parenthesized folder — the line last cut, whose name only a cutoff
-changes — at the parent of the PR's oldest commit and at the base branch's
-head, and fails when they differ while the PR writes documentation. It anchors
-on the branch point rather than the merge-base because *Update branch* moves
-the merge-base past the cutoff and carries the misplacement in with it, which
-would turn a merge-base check green at the moment the damage is done. A rebase
-is what clears it.
+**It deliberately leaves the development line alone.** Reading
+`_unpublished/<collection>/next/` too would catch the other shape a cutoff
+strands — documentation meant to ship with the release, merging after the cut
+into the line after it — but would fail every open feature PR carrying docs at
+every cutoff and dismiss their approvals. The open-PR inventory in
+`qv-docs-cutoff` reads that shape before the cut instead.
 
 **The job is not a required check**, so neither step withholds the merge. What
 the second one buys is that the window stops being silent: the run goes red and
 names the folder group as it stood at the branch point and as it stands now, so
-merging anyway is a decision someone takes rather than a step nobody saw. Make
-it required and it would hold the merge — the cost is that the job runs only on
-docs paths, so every PR that does not touch them would need the check to be
-reported some other way.
+merging anyway is a decision someone takes rather than a step nobody saw. Making
+it required would hold the merge, at the cost of the job running only on docs
+paths — every PR that touches none would need the check reported some other way.
 
 The structural fix is to stop renaming: a fixed group folder name would make a
 cut a copy plus an overwrite, leaving git no deletion to pair an edit against.
@@ -617,8 +618,9 @@ the cut, or the release ships without it; one writing the outgoing group has to
 be rebased after the cutoff merges, since until then its edits have two
 identical rename candidates. Cutting with PRs outstanding is a decision, not an
 error — the point is that it is made rather than discovered. The `Documentation
-lines` job then fails any PR the cut stranded, so the rebase is asked for on
-the PR itself rather than remembered.
+lines` job then fails the ones writing the outgoing group, so that rebase is
+asked for on the PR itself rather than remembered; for the development line,
+this list is the only reading there is.
 
 **What the PR carries**, per collection the release moves:
 

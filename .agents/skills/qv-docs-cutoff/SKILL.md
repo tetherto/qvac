@@ -103,7 +103,8 @@ gh pr list --state open --limit 200 --json number,title,url,files \
 Report the list and the choice it forces, per PR, without acting on it:
 
 - Writing the development line, and documenting a feature of **this** release:
-  merge it before the cut, or the release ships without it.
+  merge it before the cut, or the release ships without it. This list is the
+  only place that asks: `Documentation lines` never reads the development line.
 - Writing the development line, and documenting the **next** release: nothing
   to do. It lands where it was written.
 - Writing the outgoing group: it must be rebased after the cutoff merges. Until
