@@ -1074,8 +1074,8 @@ including [CUDA #321](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/32
 merged to native master at `84b02694001cfea863167776dbc185474a816656`.
 This checkout consumes the merged [registry #423](https://github.com/tetherto/qvac-registry-vcpkg/pull/423)
 at `e31be272ecdf9f20970302ebf8a2943d47803001`: `speech-cpp` 2026-10-12#1
-pins that merged revision, and `ggml-speech` 2026-10-07#1 pins
-`06f1b66806626a635904f31db6914ad2d0e71197`. The earlier native `f4d4c257`
+pins that merged revision, and `ggml-speech` 2026-10-26 pins
+`6eead4c54b411872a6ee912c9de887caf85d8aa4`. The earlier native `f4d4c257`
 passed ten smaller-model CUDA/Vulkan cases; those results do not establish GPU
 validation of the final native revision or the packaged addon. Rebuild the addon
 before running its GPU tests. Native desktop results also do not establish
