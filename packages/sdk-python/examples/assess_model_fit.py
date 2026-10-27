@@ -1,15 +1,13 @@
 """Python port of packages/sdk/examples/assess-model-fit.ts.
 
-Which models is this machine likely to run — asked before downloading any
-weights. Nothing is fetched, loaded or reserved.
+Which models fit this machine, asked before downloading any weights. Each
+engine's fitter reads the registry's weightless description of a model, so
+nothing is fetched beyond tens of KB, loaded or reserved.
 
-The header prints the evidence the answer rests on: `system-memory` on a
-CPU-only or integrated-GPU host, `device-memory` on a discrete card,
-`device-budget` for the per-process allowance Windows grants on one. Which
-of those applies depends on where the engine would put the model.
-
-`unknown` is a real answer, not an error: the evidence does not support a
-call either way. Show it as "can't say", never as "no".
+Each model gets its own verdict and the memory it takes on each device, and
+the set gets one verdict for all of them loaded together, with what it takes
+from each memory pool. `unknown` is a valid answer: show it as "can't say",
+never as "no".
 
 RUN: python examples/assess_model_fit.py
 """
@@ -28,8 +26,7 @@ from tetherto.qvac_sdk.models import (
     QWEN3_600M_INST_Q4,
 )
 
-# Sizes the assessment the way it sizes the load: the estimator reads the
-# context out of the config `load_model` would be given.
+# The fitter sizes the load as `load_model` would run it, context included.
 CONTEXT_TOKENS = 8192
 
 # A ladder ending well past what a laptop has, so one screen shows every verdict.
@@ -41,7 +38,7 @@ CANDIDATES = [
     QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL,
 ]
 
-VERDICT_MARK = {"likely-fits": "✔", "likely-too-large": "✖", "unknown": "?"}
+VERDICT_MARK = {"fits": "✔", "does-not-fit": "✖", "unknown": "?"}
 
 
 def gib(byte_count: float) -> str:
@@ -55,61 +52,33 @@ async def main() -> int:
             result = await assess_model_fit(
                 t,
                 models=[
-                    {"model_src": model, "model_config": {"ctx_size": CONTEXT_TOKENS}}
+                    {
+                        "model_src": model,
+                        "model_type": "llamacpp-completion",
+                        "model_config": {"ctx_size": CONTEXT_TOKENS},
+                    }
                     for model in CANDIDATES
                 ],
-                # Declared for aggregation only, not a scheduling instruction:
-                # "sequential" counts the largest operation peak, "concurrent"
-                # counts one per model.
-                execution="sequential",
-                policy="interactive-v1",
             )
 
-            print(f"▸ Budget basis: {result.basis.value}")
-            if result.budget:
-                print(
-                    f"    {gib(result.budget.available_after_reserve_bytes)} budget"
-                    f" ({gib(result.budget.total_bytes)} total,"
-                    f" {gib(result.budget.used_bytes)} in use,"
-                    f" {gib(result.budget.available_bytes)} free,"
-                    f" {gib(result.budget.reserved_bytes)} held back)"
-                )
+            print(f"▸ At {CONTEXT_TOKENS} tokens of context, each model alone")
+            for candidate, model in zip(CANDIDATES, result.models):
+                mark = VERDICT_MARK[model.status.value]
+                size = gib(candidate.expected_size).rjust(9)
+                print(f"  {mark} {candidate.name.ljust(46)} {size} on disk")
+                for device in model.devices:
+                    print(
+                        f"      {device.name.ljust(10)} {gib(device.used_bytes).rjust(10)}"
+                    )
 
-            # Says which device the verdicts assume, when the model would run on a GPU.
-            placement = next(
-                (
-                    line
-                    for line in result.assumptions
-                    if "assumed to execute on" in line
-                ),
-                None,
-            )
-            if placement:
-                print(f"▸ {placement}")
-
-            print(f"\n▸ At {CONTEXT_TOKENS} tokens of context")
-            for index, model in enumerate(result.models):
-                mark = VERDICT_MARK[model.verdict.value]
-                size = gib(CANDIDATES[index].expected_size).rjust(9)
-                computed_only = (
-                    model.evidence is not None
-                    and model.evidence.value == "computed-only"
+            print(f"\n▸ All five loaded together: {result.verdict.value}")
+            for pool in result.pools:
+                free = (
+                    "no free figure"
+                    if pool.free_bytes is None
+                    else f"of {gib(pool.free_bytes)} free"
                 )
-                needs = (
-                    f"at least {gib(model.floor_bytes)}"
-                    if computed_only and model.floor_bytes
-                    else ""
-                )
-                print(f"  {mark} {model.name.ljust(46)} {size} on disk  {needs}")
-                # Present on every `unknown`, and worth surfacing: it names what is missing.
-                if model.verdict.value == "unknown":
-                    for reason in model.reasons:
-                        print(f"      {reason}")
-
-            print(f"\n▸ All five together, sequentially: {result.verdict.value}")
-            print(
-                "▸ Advisory only — this does not gate load_model or reserve anything."
-            )
+                print(f"  {pool.id.ljust(14)} {gib(pool.used_bytes).rjust(10)} {free}")
         except Exception as error:
             print(f"✖ {error}", file=sys.stderr)
             return 1
