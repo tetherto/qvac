@@ -1,10 +1,7 @@
 import ImgStableDiffusion, {
   EsrganUpscaler,
   VideoStableDiffusion,
-  assessFit as diffusionAssessFit,
-  type DiffusionFiles,
-  type SdConfig,
-  type VideoStableDiffusionArgs
+  assessFit as diffusionAssessFit
 } from '@qvac/diffusion-cpp'
 import {
   definePlugin,
@@ -46,10 +43,15 @@ import {
   worldScenePath,
   worldStep
 } from '@/plugins/builtin/sdcpp-generation/ops/world'
+import { sdcppFitRequest } from '@/plugins/builtin/sdcpp-generation/fit'
 import {
-  flattenUpscalerKeys,
-  toEsrganAddonConfig
-} from '@/plugins/builtin/sdcpp-generation/upscaler-config'
+  assertUpscalerResolved,
+  imageConfigFor,
+  imageFilesFor,
+  videoConfigFor,
+  videoFilesFor
+} from '@/plugins/builtin/sdcpp-generation/load-files'
+import { toEsrganAddonConfig } from '@/plugins/builtin/sdcpp-generation/upscaler-config'
 import { splitWorldConfig } from '@/plugins/builtin/sdcpp-generation/world-config'
 
 // Wait for op cleanup before emitting completion.
@@ -96,6 +98,7 @@ export const diffusionPlugin = definePlugin({
   displayName: 'Image Generation & Upscaling (stable-diffusion.cpp)',
   addonPackage: ADDON_DIFFUSION,
   loadConfigSchema: sdcppConfigSchema,
+  fitRequest: sdcppFitRequest,
   assessFit: diffusionAssessFit,
 
   async resolveConfig(
@@ -382,23 +385,10 @@ export const diffusionPlugin = definePlugin({
       }
     }
 
-    // In diffusion mode the ESRGAN file (when post-generation upscale is
-    // wanted) must come from upscaler.model_src — the primary modelPath is
-    // the main diffusion checkpoint. Reject early with a clear error
-    // instead of letting the native addon fail mid-load. Done before any
-    // logger / native side-effects so callers can recover cleanly.
-    if (
-      config.mode === 'diffusion' &&
-      config.upscaler !== undefined &&
-      !artifacts?.['esrganModelPath']
-    ) {
-      throw new ModelLoadFailedError(
-        'modelConfig.upscaler.model_src is required when modelConfig.upscaler ' +
-          'is set in diffusion mode. Provide the ESRGAN model, omit the ' +
-          "upscaler block, or switch to modelConfig.mode = 'upscale' to load " +
-          'a standalone upscaler.'
-      )
-    }
+    // Reject early with a clear error instead of letting the native addon fail
+    // mid-load. Done before any logger / native side-effects so callers can
+    // recover cleanly.
+    assertUpscalerResolved(config, artifacts)
 
     const logger = createStreamLogger(modelId, ModelType.sdcppGeneration)
     registerAddonLogger(modelId, ModelType.sdcppGeneration, logger)
@@ -444,147 +434,22 @@ export const diffusionPlugin = definePlugin({
     }
 
     if (config.mode === 'video') {
-      // Companion layout selection, mirroring how the addon self-detects it:
-      // the LTX-2 text-embedding connectors switch to the LTX-2 layout (Gemma
-      // via llm + video VAE + connectors, optional audio VAE —
-      // `SdModel::isLtxModel_ = !embeddingsConnectorsPath.empty()`); without
-      // them, an audio VAE (or an llm with no Wan T5) means MiniMax-H3
-      // (llm + video VAE, with an optional audio VAE); everything else is Wan
-      // via t5Xxl.
-      // Native code verifies the model's tensors.
-      const embeddingsConnectorsModelPath = artifacts?.['embeddingsConnectorsModelPath']
-
-      if (!artifacts?.['vaeModelPath']) {
-        throw new ModelLoadFailedError(
-          'modelConfig.vaeModelSrc is required in video mode. ' +
-            'Provide the Wan, LTX-2 or MiniMax-H3 video VAE before loading the video pipeline.'
-        )
-      }
-      const vaeModelPath = artifacts['vaeModelPath']
-
-      let files: VideoStableDiffusionArgs['files']
-      if (embeddingsConnectorsModelPath) {
-        if (!artifacts['llmModelPath']) {
-          throw new ModelLoadFailedError(
-            'modelConfig.llmModelSrc is required for LTX-2 video. ' +
-              'Provide the Gemma text encoder model before loading the LTX-2 pipeline.'
-          )
-        }
-        files = {
-          model: modelPath,
-          vae: vaeModelPath,
-          llm: artifacts['llmModelPath'],
-          embeddingsConnectors: embeddingsConnectorsModelPath,
-          ...(artifacts['audioVaeModelPath'] && {
-            audioVae: artifacts['audioVaeModelPath']
-          }),
-          ...(artifacts['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
-        }
-      } else if (
-        artifacts['audioVaeModelPath'] ||
-        (artifacts['llmModelPath'] && !artifacts['t5XxlModelPath'])
-      ) {
-        if (!artifacts['llmModelPath']) {
-          throw new ModelLoadFailedError('MiniMax-H3 requires llmModelSrc and vaeModelSrc.')
-        }
-        if (
-          artifacts['t5XxlModelPath'] ||
-          artifacts['highNoiseDiffusionModelPath'] ||
-          artifacts['clipVisionModelPath'] ||
-          artifacts['clipLModelPath'] ||
-          artifacts['clipGModelPath']
-        ) {
-          throw new ModelLoadFailedError(
-            'MiniMax-H3 cannot use Wan T5, high-noise, CLIP-vision or CLIP-L/G companions.'
-          )
-        }
-        files = {
-          model: modelPath,
-          vae: vaeModelPath,
-          llm: artifacts['llmModelPath'],
-          ...(artifacts['audioVaeModelPath'] && {
-            audioVae: artifacts['audioVaeModelPath']
-          })
-        }
-      } else {
-        if (!artifacts['t5XxlModelPath']) {
-          throw new ModelLoadFailedError(
-            'modelConfig.t5XxlModelSrc is required in video mode. ' +
-              'Provide the Wan text encoder model before loading the video pipeline.'
-          )
-        }
-        files = {
-          model: modelPath,
-          vae: vaeModelPath,
-          t5Xxl: artifacts['t5XxlModelPath'],
-          ...(artifacts['highNoiseDiffusionModelPath'] && {
-            highNoiseDiffusionModel: artifacts['highNoiseDiffusionModelPath']
-          }),
-          ...(artifacts['clipVisionModelPath'] && {
-            clipVision: artifacts['clipVisionModelPath']
-          }),
-          ...(artifacts['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
-        }
-      }
-
-      /* eslint-disable @typescript-eslint/no-unused-vars */
-      const {
-        clipLModelSrc,
-        clipGModelSrc,
-        clipVisionModelSrc,
-        t5XxlModelSrc,
-        llmModelSrc,
-        projectionModelSrc,
-        vaeModelSrc,
-        highNoiseDiffusionModelSrc,
-        uncondModelSrc,
-        audioVaeModelSrc,
-        embeddingsConnectorsModelSrc,
-        upscaler,
-        mode,
-        ...rest
-      } = config
-      /* eslint-enable @typescript-eslint/no-unused-vars */
-
+      const files = videoFilesFor(modelPath, artifacts)
       const model = new VideoStableDiffusion({
         files,
-        config: rest as SdConfig,
+        config: videoConfigFor(config),
         logger,
         opts: { stats: true }
       })
-      if (embeddingsConnectorsModelPath) markLtxVideoModel(model)
+      if (files.embeddingsConnectors) markLtxVideoModel(model)
       else if (files.llm) markH3VideoModel(model)
       if (files.highNoiseDiffusionModel) markMoeCapableVideoModel(model)
       return { model }
     }
 
-    const files: DiffusionFiles = {
-      model: modelPath,
-      ...(artifacts?.['clipLModelPath'] && { clipL: artifacts['clipLModelPath'] }),
-      ...(artifacts?.['clipGModelPath'] && { clipG: artifacts['clipGModelPath'] }),
-      ...(artifacts?.['t5XxlModelPath'] && { t5Xxl: artifacts['t5XxlModelPath'] }),
-      ...(artifacts?.['llmModelPath'] && { llm: artifacts['llmModelPath'] }),
-      ...(artifacts?.['projectionModelPath'] && { llmVision: artifacts['projectionModelPath'] }),
-      ...(artifacts?.['vaeModelPath'] && { vae: artifacts['vaeModelPath'] }),
-      ...(artifacts?.['uncondModelPath'] && {
-        uncondModel: artifacts['uncondModelPath']
-      }),
-      ...(artifacts?.['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
-    }
-
-    // `mode` is consumed by this plugin to select the model class above; the
-    // stable-diffusion.cpp native config does not understand it. Strip it
-    // before forwarding `rest` to the addon.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { upscaler, mode, ...rest } = config
-    const addonConfig = {
-      ...rest,
-      ...flattenUpscalerKeys(upscaler)
-    } as SdConfig
-
     const model = new ImgStableDiffusion({
-      files,
-      config: addonConfig,
+      files: imageFilesFor(modelPath, artifacts),
+      config: imageConfigFor(config),
       logger,
       opts: { stats: true }
     })

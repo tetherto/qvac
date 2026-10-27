@@ -2,6 +2,8 @@ import test from 'brittle'
 import Buffer from 'bare-buffer'
 import { sdcppConfigSchema, type DiffusionStreamResponse } from '@/schemas/sdcpp-config'
 import { loadModelSrcRequestSchema } from '@/schemas/load-model'
+import { sdcppFitRequest } from '@/plugins/builtin/sdcpp-generation/fit'
+import type { DiffusionFitRequest } from '@qvac/diffusion-cpp'
 
 const companions = {
   llmModelSrc: '/models/encoder.gguf',
@@ -77,6 +79,18 @@ test('Qwen companions resolve into load and fit files without native config sour
     llmVision: companionPaths.projectionModelPath,
     vae: companionPaths.vaeModelPath
   })
+  const fit = sdcppFitRequest({
+    modelPath: context.modelSrc,
+    modelConfig: resolved.config,
+    artifacts: resolved.artifacts,
+    isShardedModel: false
+  })
+  t.ok('request' in fit)
+  if ('request' in fit) {
+    const request = fit.request as DiffusionFitRequest
+    t.alike(request.files, files, 'fit accounts for the same projector as load')
+    t.alike(request.config, { flash_attn: true })
+  }
   await result.model.unload?.()
 })
 

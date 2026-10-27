@@ -39,7 +39,7 @@ export const modelFitLlm = assessCase('llm', 'llm', true)
 export const modelFitEmbeddings = assessCase('embeddings', 'embeddings', true)
 export const modelFitParakeet = assessCase('parakeet', 'parakeet-tdt', true)
 export const modelFitAudiogen = assessCase('audiogen', 'audiogen-turbo', true)
-export const modelFitDiffusion = assessCase('diffusion', 'diffusion', false)
+export const modelFitDiffusion = assessCase('diffusion', 'diffusion', true)
 export const modelFitOcr = assessCase('ocr', 'ocr', true)
 export const modelFitTts = assessCase('tts-chatterbox', 'tts-chatterbox', true)
 export const modelFitWhisper = assessCase('whisper', 'whisper', true)
@@ -53,13 +53,13 @@ export const modelFitProbeWhisper = probeCase('whisper', 'whisper', true)
 export const modelFitProbeBci = probeCase('bci', 'bci', true)
 export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', true)
 export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', true)
-export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', false)
+export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', true)
 export const modelFitProbeDiffusionEsrgan = probeCase(
   'diffusion-esrgan',
   'diffusion-esrgan-fit-probe',
-  false
+  true
 )
-export const modelFitProbeUpscaler = probeCase('upscaler', 'upscaler', false)
+export const modelFitProbeUpscaler = probeCase('upscaler', 'upscaler', true)
 export const modelFitProbeOcr = probeCase('ocr', 'ocr', true)
 export const modelFitProbeTranslation = probeCase('translation', 'bergamot-en-fr', true)
 
