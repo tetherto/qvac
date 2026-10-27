@@ -4,7 +4,13 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.30.1] - 2026-10-26
+
+### Security
+
+- Resolve native Brotli from a dedicated vcpkg registry baseline with version
+  1.2.1 to address CVE-2026-111497 if a dependency enables Brotli. Other native
+  dependency baselines are unchanged. Existing binaries require a rebuild.
 
 ### Changed
 
@@ -16,6 +22,7 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   later fabric patch no longer needs a manifest change.
 - Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
   `@qvac/fabric-ios` to `0.23.1` together.
+- No API change for this package.
 
 ## [0.30.0] - 2026-10-20
 

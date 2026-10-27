@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.1] - 2026-10-26
 
 ### Changed
 
@@ -12,6 +12,8 @@
   later fabric patch no longer needs a manifest change.
 - Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
   `@qvac/fabric-ios` to `0.23.1` together.
+- The RPC protocol stays at 111, so servers and clients on `@qvac/fabric`
+  0.23.0 and 0.23.1 still connect. No API change for this package.
 
 ## [0.6.0] - 2026-10-20
 

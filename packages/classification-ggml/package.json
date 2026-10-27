@@ -1,6 +1,6 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.33.0",
+  "version": "0.33.1",
   "description": "GGML vision addon for QVAC: MobileNet classification and MegaLoc image embeddings",
   "addon": true,
   "scripts": {
