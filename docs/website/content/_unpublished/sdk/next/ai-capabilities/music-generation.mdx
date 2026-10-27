@@ -460,7 +460,7 @@ The same description is repeated on the terminal frame as `stats.understand`, so
 - ACE-Step, on every platform, from the registry's weightless descriptions of the four model constants, so before anything is downloaded, or from the files already on disk.
 - MiniMax-Music3, on desktop, from the LM and synthesis files on disk, since it has no registry constants. It projects the default generation (300 semantic frames, 12 s) on the device the config selects: `device` as given, otherwise `useGPU`.
 
-The audiogen fitter reports a peak across the pipeline rather than a byte breakdown. When an audiogen load is the only model assessed, the fitter's verdict, fit or refusal, is the answer. Assessed together with other models, only a refusal (`likely-too-large`) carries over; a fit falls back to the computed floor.
+The audiogen fitter reports each device's peak across the pipeline phases, so an audiogen load is summed with the other models assessed alongside it like any other.
 
 ```ts
 import { assessModelFit } from "@qvac/sdk";
