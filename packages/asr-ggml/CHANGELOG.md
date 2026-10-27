@@ -20,7 +20,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   the fp16 range no longer come back as infinity, and attention over unpadded
   lengths or with a head size of 80, 96 or 112 is computed correctly. The
   shared native `ggml-speech` moves from `2026-10-07#1` to `2026-10-26`
-  ([#PR](https://github.com/tetherto/qvac/pull/PR)).
+  ([#5393](https://github.com/tetherto/qvac/pull/5393)).
 
 ## [0.10.0] - 2026-10-14
 
