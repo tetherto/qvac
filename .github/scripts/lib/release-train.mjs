@@ -235,6 +235,16 @@ export function publishedElsewhere (moved, gitHeadOf, head) {
   return errors
 }
 
+// The commit a train release was published from: the gitHead npm records for
+// the anchor package at the branch version. gitHeadOf returns { found, value }.
+export function publishedCommit (train, version, gitHeadOf) {
+  const name = train.anchorProjects[0]
+  const { found, value } = gitHeadOf(name, version)
+  if (!found) throw new Error(`${name}@${version} is not on npm; the train has not published yet`)
+  if (!/^[0-9a-f]{40}$/.test(value ?? '')) throw new Error(`${name}@${version} has no commit as its gitHead on npm`)
+  return value
+}
+
 // A consumer install that resolves every train package from its tarball, as it
 // will from npm once published. npm rejects an override that differs from a
 // direct dependency, so direct dependencies point at the same tarball.

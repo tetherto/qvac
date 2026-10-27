@@ -11,6 +11,7 @@ import {
   parseBranch,
   parseLsRemote,
   planTags,
+  publishedCommit,
   publishedElsewhere,
   rangeErrors,
   readRepoJson,
@@ -252,6 +253,29 @@ test('treats a version npm has without a gitHead as published elsewhere, and one
   assert.deepEqual(publishedElsewhere(MOVED, (project) => views[project.name] ?? { found: false, value: null }, HEAD), [
     `@qvac/inference@0.22.0 is on npm without a gitHead, so it was not published from ${HEAD}; cut a new train branch`,
   ])
+})
+
+test('reads the published commit from the anchor package, and fails until npm has a commit for it', () => {
+  const asked = []
+  const gitHeadOf = (view) => (name, version) => {
+    asked.push(`${name}@${version}`)
+    return view
+  }
+  assert.equal(publishedCommit(TRAIN, '0.22.0', gitHeadOf({ found: true, value: HEAD })), HEAD)
+  assert.equal(publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: HEAD })), HEAD)
+  assert.deepEqual(asked, ['@qvac/inference@0.22.0', '@qvac/cli@0.17.0'])
+  assert.throws(
+    () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: false, value: null })),
+    /@qvac\/cli@0\.17\.0 is not on npm; the train has not published yet/,
+  )
+  assert.throws(
+    () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: null })),
+    /@qvac\/cli@0\.17\.0 has no commit as its gitHead on npm/,
+  )
+  assert.throws(
+    () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: 'refs/heads/main' })),
+    /has no commit as its gitHead on npm/,
+  )
 })
 
 test('points every train dependency, direct or not, at its tarball', () => {

@@ -4,6 +4,7 @@
 //   release-train.mjs slugs <train>
 //   release-train.mjs projects <train>
 //   release-train.mjs from-npm <train>
+//   release-train.mjs published-commit <release-train-<train>-x.y.z>
 //   release-train.mjs exclude <train>
 //   release-train.mjs linked <train>
 //   release-train.mjs pack <train> <dest-dir>
@@ -32,6 +33,7 @@ import {
   parseBranch,
   parseLsRemote,
   planTags,
+  publishedCommit,
   publishedElsewhere,
   readRepoJson,
   repoRoot,
@@ -197,6 +199,12 @@ function printProjects ([name]) {
 
 function printFromNpm ([name]) {
   console.log(JSON.stringify(train(name).fromNpm))
+}
+
+function printPublishedCommit ([ref]) {
+  const branch = parseBranch(ref ?? '')
+  if (!branch) fail([`usage: published-commit <release-train-<train>-x.y.z>; got '${ref}'`])
+  console.log(publishedCommit(train(branch.train), branch.version, (name, version) => npmView(`${name}@${version}`, 'gitHead')))
 }
 
 function excludeFromNpm ([name]) {
@@ -377,6 +385,7 @@ const commands = {
   slugs: printSlugs,
   projects: printProjects,
   'from-npm': printFromNpm,
+  'published-commit': printPublishedCommit,
   exclude: excludeFromNpm,
   linked: checkLinked,
   pack: packTrain,

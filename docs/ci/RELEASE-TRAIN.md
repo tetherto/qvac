@@ -129,8 +129,11 @@ Before npm publish:
   and the SDK's consumer installs), with every train package installed from a tarball
   of this commit and everything else from npm. The backmerge PR, from
   `backmerge/release-train-<train>-<x.y.z>` into `main`, runs the same through
-  `pr-checks-sdk-pod.yml`, except for a train with `fromNpm` packages, whose
-  backmerge installs every package from npm.
+  `pr-checks-sdk-pod.yml`, except for a train with `fromNpm` packages. `main`
+  keeps those packages in the workspace, and its code may already need
+  versions of them that npm does not have, so that backmerge runs the checks
+  after npm publish again: on the commit npm records as the anchor package's
+  `gitHead`, with every package from npm.
 - **`shared-runtime-libs`**: `check-shared-runtime-libs.mjs` for inference and
   sdk, as `publish-inference.yml` and `publish-sdk.yml` run it.
 - **`sdk-python`**: the Python contract check, build, version lockstep and
