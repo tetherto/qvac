@@ -152,6 +152,28 @@
       "tools": true
     }
   },
+  "prefill-llm": {
+    "constant": {
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "tools": true,
+      "parallel": 1
+    }
+  },
+  "prefill-llm-parallel": {
+    "constant": {
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "tools": true,
+      "parallel": 2
+    }
+  },
   "tools-qwen35": {
     "on": [
       "desktop",
@@ -643,6 +665,35 @@
   "parakeet-eou": {
     "constant": {
       "$const": "PARAKEET_EOU_120M_V1_Q4_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-transcribepsy": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-transcribepsy-windowed": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {
+      "longFormWindowFrames": 188,
+      "longFormContextFrames": 16
+    }
+  },
+  "parakeet-transcribepsy-coreml": {
+    "on": [
+      "desktop-macos",
+      "electron-macos",
+      "mobile-ios"
+    ],
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0"
     },
     "type": "parakeet-transcription",
     "config": {}

@@ -316,6 +316,30 @@ On hybrid and recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-wind
 - `cache_checkpoint_storage`: `'memory'` (default) or `'disk'`. With `'disk'`, set `cache_checkpoint_dir` to a writable directory; on mobile, use the app's cache directory.
 - `cache_ram_mib`: host-RAM budget, in MiB, for cached conversations that are not running, so switching back to a caller-managed `kvCache` key skips reading its cache file. Default `0` (off).
 
+#### Prepare the system prompt and tools ahead of time
+
+Use `prefill: true` to evaluate a prompt before the first question arrives. It requires `kvCache: true` or a nonempty named key and finishes with stats, no answer and no tool calls. Await the priming run before sending the question:
+
+```typescript
+const history = [{ role: "system", content: "You are a helpful assistant." }];
+await completion({ modelId, history, tools, stream: false, kvCache: "chat", prefill: true }).final;
+const answer = await completion({
+  modelId,
+  history: [...history, { role: "user", content: "What is the weather in Lugano?" }],
+  tools,
+  stream: false,
+  kvCache: "chat",
+}).final;
+```
+
+Load the model with `modelConfig: { tools: true }` when passing tools. Resend the same system prompt and tools on the question so their cached prefix can be reused. A prefill rejects forced `generationParams.tool_choice` values (`"required"` or a named tool, including `"tool_search"`); use the default `"auto"` or `"none"` instead. Auto-cache priming saves the complete prompt history without appending an empty assistant message.
+
+With `kvCache: true`, the first question moves the cache to the conversation's new history, so the prime serves one conversation. Use a named key for reuse across conversations, or prime each conversation separately.
+
+Affected templates require `@qvac/llm-llamacpp` 0.64.1 or later. Full reuse is template-dependent; arbitrary custom templates may fall back to normal rendering. Cache priming is available through the library API, not the CLI OpenAI-compatible HTTP endpoints or model-load configuration.
+
+#### Compare cached and uncached turns
+
 The following script enables `kvCache: true` to speed up follow-up turns, and then compares it with `kvCache: false` on the same history:
 
 <Tabs>

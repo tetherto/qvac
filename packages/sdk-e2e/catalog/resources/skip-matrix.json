@@ -4,11 +4,13 @@
     "snap-storage-common-root"
   ],
   "desktop-linux": [
+    "parakeet-transcribepsy-coreml-wav",
     "parakeet-unified-coreml-ios",
     "snap-storage-common-root",
     "tts-audio8-coreml"
   ],
   "desktop-windows": [
+    "parakeet-transcribepsy-coreml-wav",
     "parakeet-unified-coreml-ios",
     "snap-storage-common-root",
     "tts-audio8-coreml"
@@ -152,6 +154,7 @@
     "no-lingering-bare-close",
     "no-lingering-bare-ipc-disconnect",
     "no-lingering-bare-sigterm",
+    "parakeet-transcribepsy-coreml-wav",
     "parakeet-unified-coreml-ios",
     "snap-storage-common-root",
     "tools-simple-function-gemma4",
@@ -238,6 +241,7 @@
     "no-lingering-bare-close",
     "no-lingering-bare-ipc-disconnect",
     "no-lingering-bare-sigterm",
+    "parakeet-transcribepsy-coreml-wav",
     "parakeet-unified-coreml-ios",
     "snap-storage-common-root",
     "tools-simple-function-gemma4",
@@ -324,6 +328,7 @@
     "no-lingering-bare-close",
     "no-lingering-bare-ipc-disconnect",
     "no-lingering-bare-sigterm",
+    "parakeet-transcribepsy-coreml-wav",
     "parakeet-unified-coreml-ios",
     "rpc-server-cancel-discovery",
     "rpc-server-empty-discovery",
@@ -635,6 +640,7 @@
     "parakeet-indic-conformer-silence",
     "parakeet-stream-eou",
     "parakeet-stream-iterator-throw",
+    "parakeet-transcribepsy-coreml-wav",
     "parakeet-unified-coreml-ios",
     "snap-storage-common-root",
     "tools-ambiguous-intent",
@@ -726,6 +732,7 @@
     "no-lingering-bare-ipc-disconnect",
     "no-lingering-bare-sigterm",
     "ocr-main-gpu-index-0",
+    "parakeet-transcribepsy-coreml-wav",
     "parakeet-unified-coreml-ios",
     "rpc-server-device-map",
     "rpc-server-device-map-empty",
