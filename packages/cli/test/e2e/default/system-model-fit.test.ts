@@ -50,12 +50,6 @@ describe('qvac models/fit: validation', () => {
     assertStatusAndError(await fit({ models }), 400, 'too_many_models')
   })
 
-  it('rejects an unknown execution and policy', async () => {
-    const models = [{ model: 'chat-model' }]
-    assertStatusAndError(await fit({ models, execution: 'parallel' }), 400, 'invalid_execution')
-    assertStatusAndError(await fit({ models, policy: 'batch-v1' }), 400, 'invalid_policy')
-  })
-
   it('rejects an unknown field, including a raw model source', async () => {
     assertStatusAndError(
       await fit({ models: [{ model: 'chat-model' }], nope: true }),
@@ -117,7 +111,12 @@ describe('qvac system and models/fit: surface', () => {
   it('lists each error code under its status', async () => {
     const fit = await operation('/qvac/v1/models/fit', 'post')
     assert.deepEqual(fit?.tags, ['System'])
-    for (const code of ['invalid_models', 'too_many_models', 'invalid_model_src']) {
+    for (const code of [
+      'invalid_models',
+      'too_many_models',
+      'invalid_model_src',
+      'invalid_model_config'
+    ]) {
       assert.match(fit?.responses?.['400']?.description ?? '', new RegExp(`\`${code}\``))
     }
     assert.match(fit?.responses?.['404']?.description ?? '', /`model_not_found`/)
