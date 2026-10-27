@@ -2,6 +2,7 @@ import test from 'brittle'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Response } from '@qvac/inference/surface'
+import { OperationTimeoutError } from '@/utils/withTimeout'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -133,6 +134,46 @@ test('the unsubscribe from subscribeServerLogs closes the stream without another
 
   t.is(await nextReport(), `closed:${SDK_ALL_LOG_ID}`, 'the worker sees it closed')
 })
+
+for (const profiled of [false, true]) {
+  for (const afterFirst of [false, true]) {
+    test(`stream timeout closes a stalled ${afterFirst ? 'later' : 'first'} read (profiling=${profiled})`, async function (t) {
+      t.timeout(10_000)
+      const { stream } = await load()
+      const controller = new AbortController()
+      const id = afterFirst ? 'chatty' : 'quiet'
+      const responses = stream(
+        { type: 'loggingStream', id },
+        { timeout: 100, signal: controller.signal, profiling: { enabled: profiled } }
+      )
+      let read = responses.next()
+      if (afterFirst) {
+        t.is(((await within(read, 5000, 'no first entry')).value as LogResponse).message, 'hello')
+        read = responses.next()
+      }
+      const outcome = read.then(
+        () => undefined,
+        (error: unknown) => error
+      )
+      try {
+        t.is(await nextReport(), `opened:${id}`, 'the worker has an open request')
+        const error = await within(outcome, 1000, 'the streaming timeout did not fire').catch(
+          (reason: unknown) => reason
+        )
+        t.ok(
+          error instanceof OperationTimeoutError,
+          'the read fails as a timeout, not a worker crash'
+        )
+        if (!(error instanceof OperationTimeoutError)) controller.abort()
+        t.is(await nextReport(), `closed:${id}`, 'the worker sees the timed-out stream close')
+      } finally {
+        controller.abort()
+        await outcome
+        await responses.return(undefined)
+      }
+    })
+  }
+}
 
 test('close the worker', { hook: true }, async function () {
   const { close } = await load()
