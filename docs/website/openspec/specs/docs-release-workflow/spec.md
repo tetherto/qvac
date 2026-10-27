@@ -73,15 +73,15 @@ An older line SHALL remain an ordinary content folder. Correcting one of its pag
 - **WHEN** an older line is edited
 - **THEN** the current line is unchanged
 
-### Requirement: A cutoff reads the work in flight, and the checks refuse what it strands
+### Requirement: A cutoff reads the work in flight, and the checks flag what it strands
 
-Because a cut changes which release a documentation path belongs to, and renames the outgoing folder group, a pull request open across a cutoff SHALL be stopped rather than merged on the version-control system's judgement.
+Because a cut changes which release a documentation path belongs to, and renames the outgoing folder group, a pull request open across a cutoff SHALL be reported rather than left to merge on the version-control system's judgement.
 
 Before cutting, the cutoff SHALL list the open pull requests writing either line of each collection being cut, and SHALL report the choice each one forces: a pull request writing the development line with documentation for the release being cut has to merge before the cut, or the release ships without it; one writing the outgoing group has to be rebased after the cutoff merges. Cutting with pull requests outstanding SHALL be permitted — the requirement is that the list is read, not that it is empty.
 
-After a cutoff, a pull request whose branch point precedes it and whose diff touches a collection's published or development line SHALL fail a pull-request check, and the check SHALL clear only when the branch is rebased. The check SHALL compare the collection's folder group at the parent of the pull request's oldest commit against the folder group on the base branch, and MUST NOT use the merge base, which a merge from the base branch moves past the cutoff while carrying the misplacement in with it. A pull request that touches no documentation line SHALL be unaffected, as SHALL a collection the cutoff did not move.
+After a cutoff, a pull request whose branch point precedes it and whose diff touches a collection's published or development line SHALL fail a pull-request check, and the check SHALL clear only when the branch is rebased. The check SHALL compare the collection's folder group at the parent of the pull request's oldest commit against the folder group on the base branch, and MUST NOT use the merge base, which a merge from the base branch moves past the cutoff while carrying the misplacement in with it. A pull request that touches no documentation line SHALL be unaffected, as SHALL a collection the cutoff did not move. Whether that failure also withholds the merge is a branch-protection decision outside this specification; what is required is that the failure is raised and names the window.
 
-Refusing the merge buys a human decision, not a correct one: nothing validates where the author puts the change during the rebase. Removing the rename altogether — a folder group whose name does not carry its version, so that a cut copies the group to its archived version and overwrites it from the development line — is what would make the placement unambiguous, and is not required here.
+Failing the check buys a human decision, not a correct one: nothing validates where the author puts the change during the rebase, and a failure that does not withhold the merge can be merged past. Removing the rename altogether — a folder group whose name does not carry its version, so that a cut copies the group to its archived version and overwrites it from the development line — is what would make the placement unambiguous, and is not required here.
 
 #### Scenario: The cutoff reports a pull request it will strand
 
@@ -89,7 +89,7 @@ Refusing the merge buys a human decision, not a correct one: nothing validates w
 - **THEN** the cutoff names that pull request and states that it has to be rebased once the cutoff merges
 - **AND** the cut proceeds
 
-#### Scenario: A pull request opened before the cutoff cannot merge after it
+#### Scenario: A pull request opened before the cutoff fails the check after it
 
 - **WHEN** a pull request whose branch point precedes the cutoff edits a collection's documentation line
 - **THEN** the pull-request check fails and names the folder group as it stood at the branch point and as it stands on the base branch

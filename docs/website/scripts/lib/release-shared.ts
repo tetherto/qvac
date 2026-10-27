@@ -36,7 +36,7 @@ export const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..", "..");
  *
  * That holds for this folder only. The outgoing group is renamed by the cut,
  * so a PR writing anywhere under `content/docs/` is still exposed to rename
- * detection — which is what the `Documentation lines` job refuses.
+ * detection — which is what the `Documentation lines` job fails on.
  */
 export const DEVELOPMENT_LINE = "next";
 

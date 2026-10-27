@@ -71,19 +71,21 @@ jobs:
         run: bun run vitest run tests/tsdoc-completeness.test.ts
 
   published-lines:
-    # Two checks on where a PR writes documentation: one that reports, one that
-    # blocks.
+    # Two checks on where a PR writes documentation: one warns, one fails.
+    # Neither withholds the merge — this job is not a required check, so a red
+    # run asks for a rebase and records why, and merging past it is a choice
+    # someone makes rather than a step they skip.
     #
     # Feature documentation belongs in the development line, outside the site
     # at `content/_unpublished/<collection>/next/`. Everything under
     # `content/docs/<collection>/` has been cut: either it is a version the
     # site already serves, or it is the version being released and awaiting
     # promotion. Editing one is legitimate — correcting a shipped release's
-    # pages is the reason the folders are kept — so the first step never
-    # blocks. It only says what the edit implies, because only a human can tell
-    # a correction from documentation written into the wrong line.
+    # pages is the reason the folders are kept — so the first step only warns.
+    # It says what the edit implies, because only a human can tell a correction
+    # from documentation written into the wrong line.
     #
-    # The second step blocks, and covers the window a cutoff opens. A feature
+    # The second step fails, and covers the window a cutoff opens. A feature
     # PR is safe across a cutoff: it writes to the development line, which the
     # cut copies and leaves in place, so its path is the same before and after
     # and the edit lands where it was written. Two other shapes are not:
@@ -98,7 +100,8 @@ jobs:
     #     clean, but into the line after it, so the release ships with the gap.
     #
     # Neither produces a conflict, so neither is visible to whoever merges.
-    # Stopping the PR and asking is what makes the choice a human one.
+    # Turning the run red and naming the window is what makes the choice a
+    # human one.
     name: Documentation lines
     runs-on: ubuntu-latest
     steps:
@@ -136,7 +139,7 @@ jobs:
           echo "::warning::This PR edits documentation lines that have already been cut. Correcting a release's pages is legitimate; documenting a new feature is not — that belongs in content/_unpublished/<collection>/next/. If the correction also applies to the line under development, apply it there too, or it will not survive the next cutoff."
           printf '%s\n' "$changed"
 
-      - name: Refuse documentation written against a line layout a cutoff has changed
+      - name: Fail documentation written against a line layout a cutoff has changed
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -196,5 +199,5 @@ jobs:
           fi
 
           printf '%s' "$stale"
-          echo "::error::A cutoff landed after this branch came off, so this PR's documentation was written against a line layout that no longer exists. Rebase onto the base branch — rebase, not 'Update branch': a merge commit lets git relocate the edits by similarity, which is the failure this check exists to stop. Then place each change in the line it documents: a correction to a released version in docs/website/content/docs/<collection>/<line>/, and documentation for the version still being written in docs/website/content/_unpublished/<collection>/next/. If the change belongs to the version that was just cut, it goes in that line's folder and reaches production with the next promotion."
+          echo "::error::A cutoff landed after this branch came off, so this PR's documentation was written against a line layout that no longer exists. Rebase onto the base branch — rebase, not 'Update branch': a merge commit lets git relocate the edits by similarity, which is the failure this check exists to stop. Then place each change in the line it documents: a correction to a released version in docs/website/content/docs/<collection>/<line>/, and documentation for the version still being written in docs/website/content/_unpublished/<collection>/next/. If the change belongs to the version that was just cut, it goes in that line's folder and reaches production with the next promotion. This check is not required, so it does not hold the merge: merging it red carries whatever it reports into the base branch."
           exit 1

@@ -109,8 +109,9 @@ Report the list and the choice it forces, per PR, without acting on it:
 - Writing the outgoing group: it must be rebased after the cutoff merges. Until
   then its edits have two identical rename candidates, and git can replay them
   into either line (QVAC-27286). `Documentation lines` in
-  `.github/workflows/docs-website-pr-checks.yml` refuses the merge while that
-  is true, so the rebase is enforced rather than remembered.
+  `.github/workflows/docs-website-pr-checks.yml` fails while that is true, so
+  the rebase is asked for on the PR itself rather than remembered. It is not a
+  required check: it makes the window visible, it does not withhold the merge.
 
 Cutting with PRs outstanding is a decision, not an error. Proceed once the list
 has been read.

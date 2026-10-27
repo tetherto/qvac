@@ -24,9 +24,10 @@ feature PR that straddles the cutoff merges into the path it was written to.
 The outgoing group is renamed, so a PR that edits it and merges after the cut
 has two exact rename candidates for every page the sprint left alone, and git
 picks one (QVAC-27286). `qv-docs-cutoff` lists those PRs before the cut, and the
-`Documentation lines` job refuses their merge until they are rebased. Neither is
-this skill's to run; both are named here because they are what makes the rename
-safe.
+`Documentation lines` job fails them until they are rebased — it is not a
+required check, so it makes the window visible rather than withholding the
+merge. Neither is this skill's to run; both are named here because they are
+what keeps the rename from being silent.
 
 `docs/website/scripts/cut-line.ts` performs the cut. This skill is the round
 around it: which collections to cut, what to measure, and what the PR has to

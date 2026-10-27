@@ -219,8 +219,8 @@ The outgoing group **is** renamed, and the group the cut opens is byte-identical
 to it wherever the sprint changed nothing. A PR that edits the group and merges
 after the cut therefore gives git two exact rename candidates for every page it
 touches, and git picks one — QVAC-27286 again, reachable at every cut. The
-`Documentation lines` job refuses that merge until the PR is rebased, and the
-cutoff lists the open PRs before cutting so the window is read rather than
+`Documentation lines` job fails such a PR until it is rebased, and the cutoff
+lists the open PRs before cutting so the window is read rather than
 discovered. Both are described under "Docs website PR checks" below.
 
 It refuses a collection that is not versioned, a version that is not above the
@@ -543,7 +543,7 @@ feature's documentation belongs. It cannot be a failure, because a factual
 correction to a shipped release's documentation is legitimate and only a human
 can tell it apart from a misplaced edit.
 
-The second refuses the merge, and covers the window a cutoff opens. A feature
+The second fails the run, and covers the window a cutoff opens. A feature
 PR crosses a cutoff safely: it writes to the development line, which the cut
 copies and leaves in place, so its path means the same thing before and after.
 Two other shapes do not:
@@ -567,10 +567,18 @@ the merge-base past the cutoff and carries the misplacement in with it, which
 would turn a merge-base check green at the moment the damage is done. A rebase
 is what clears it.
 
+**The job is not a required check**, so neither step withholds the merge. What
+the second one buys is that the window stops being silent: the run goes red and
+names the folder group as it stood at the branch point and as it stands now, so
+merging anyway is a decision someone takes rather than a step nobody saw. Make
+it required and it would hold the merge — the cost is that the job runs only on
+docs paths, so every PR that does not touch them would need the check to be
+reported some other way.
+
 The structural fix is to stop renaming: a fixed group folder name would make a
 cut a copy plus an overwrite, leaving git no deletion to pair an edit against.
 That moves the manifest, the redirects, the breadcrumbs and their tests, so for
-now the check is what stands between the window and a silent merge.
+now the check is what makes the window visible.
 
 ### 2. Promote docs to production (manual)
 
@@ -609,8 +617,8 @@ the cut, or the release ships without it; one writing the outgoing group has to
 be rebased after the cutoff merges, since until then its edits have two
 identical rename candidates. Cutting with PRs outstanding is a decision, not an
 error — the point is that it is made rather than discovered. The `Documentation
-lines` job then refuses the merge of any PR the cut stranded, so the rebase is
-enforced rather than remembered.
+lines` job then fails any PR the cut stranded, so the rebase is asked for on
+the PR itself rather than remembered.
 
 **What the PR carries**, per collection the release moves:
 

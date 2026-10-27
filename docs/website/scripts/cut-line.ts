@@ -23,9 +23,10 @@
  * to it wherever the sprint changed nothing. A PR that edits the group and
  * merges after the cut therefore has two exact rename candidates per page, and
  * git picks one (QVAC-27286). The `Documentation lines` job in
- * `.github/workflows/docs-website-pr-checks.yml` refuses such a merge until
- * the PR is rebased; a fixed group folder name would remove the rename
- * altogether, and is the structural answer this model has not taken.
+ * `.github/workflows/docs-website-pr-checks.yml` fails such a PR until it is
+ * rebased — it is not a required check, so it makes the window visible rather
+ * than withholding the merge; a fixed group folder name would remove the
+ * rename altogether, and is the structural answer this model has not taken.
  *
  * This does exactly what the hand procedure in `README.md` does, in one
  * command. It is a convenience and never a dependency: a cut made by hand is
