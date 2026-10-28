@@ -56,13 +56,13 @@ only. The native prebuild for each desktop host lives in a version-locked
 platform package selected at install time through `os`/`cpu` filtered
 `optionalDependencies`:
 
-| Host | Package |
-| --- | --- |
-| linux-x64 (glibc) | `@qvac/audiogen-ggml-linux-x64` |
-| linux-arm64 (glibc) | `@qvac/audiogen-ggml-linux-arm64` |
-| darwin-arm64 | `@qvac/audiogen-ggml-darwin-arm64` |
-| darwin-x64 | `@qvac/audiogen-ggml-darwin-x64` |
-| win32-x64 | `@qvac/audiogen-ggml-win32-x64` |
+| Host                | Package                            |
+| ------------------- | ---------------------------------- |
+| linux-x64 (glibc)   | `@qvac/audiogen-ggml-linux-x64`    |
+| linux-arm64 (glibc) | `@qvac/audiogen-ggml-linux-arm64`  |
+| darwin-arm64        | `@qvac/audiogen-ggml-darwin-arm64` |
+| darwin-x64          | `@qvac/audiogen-ggml-darwin-x64`   |
+| win32-x64           | `@qvac/audiogen-ggml-win32-x64`    |
 
 Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
@@ -78,10 +78,10 @@ and `optionalDependencies` filtering can never select them. Mobile
 applications must declare the target's platform package as a direct
 dependency, pinned to the exact `@qvac/audiogen-ggml` version:
 
-| Target | Package |
-| --- | --- |
-| android-arm64 | `@qvac/audiogen-ggml-android-arm64` |
-| ios (device + simulators) | `@qvac/audiogen-ggml-ios` |
+| Target                    | Package                             |
+| ------------------------- | ----------------------------------- |
+| android-arm64             | `@qvac/audiogen-ggml-android-arm64` |
+| ios (device + simulators) | `@qvac/audiogen-ggml-ios`           |
 
 ```json
 {
@@ -165,6 +165,43 @@ the engine time into `arMs`, `conditionMs`, `flowMs` and `vocoderMs`, and
 the song ended on its own. See
 [`examples/generate-music-minimax.js`](examples/generate-music-minimax.js).
 
+### MiniMax full Core ML on macOS
+
+On macOS 15+, `speech-cpp[audiogen]` includes the full Core ML runtime. Use
+the original F16 GGUF pair and its matching compiled profile:
+
+```js
+const generator = new AudioGen({
+  engine: ENGINE_MINIMAX,
+  files: { lmModel: '/models/mm3-lm-f16.gguf', synthModel: '/models/mm3-synth-f16.gguf' },
+  config: { coremlProfileDir: '/models/minimax-coreml', coremlComputeUnits: 'CPU_AND_NE' }
+})
+```
+
+Set both options explicitly. `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE`, and
+`ALL` select Apple's allowed compute units; they do not guarantee that Apple
+places every operation on a particular device. They take precedence over the
+native `device`/`useGPU` selection for this route. Without the pair, MiniMax
+uses its existing native backend. An explicit Core ML request fails if the
+build, OS, or profile cannot support it; it does not silently switch backends.
+
+The profile directory belongs to the inference host and contains `manifest.json`
+and all compiled LM, depth, conditioner, DiT, and vocoder programs. Keep its
+weights and dimensions matched to the GGUF pair. The compiled LM cache profile
+must accommodate the prompt and generation; no request is truncated to fit it.
+The programs stay resident between generations and are released on unload.
+Core ML returns `backendId: 99` (`other`); native-only `backendDevice` and
+`gpuFallbackReason` are omitted. Memory preflight returns
+`coreml-memory-estimate-unavailable` for this route.
+
+CPU/ANE initial-logit parity against the native reference is still under
+validation; the measured device policies are not a claim of identical sampled
+music or faster generation. See the native engine's
+[full Core ML validation guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/audiogen/docs/minimax-coreml-validation.md).
+
+The example accepts `AUDIOGEN_COREML_PROFILE_DIR` and
+`AUDIOGEN_COREML_COMPUTE_UNITS` with the same explicit pair.
+
 ### 1. Simplest case — an instrumental
 
 ```js
@@ -210,7 +247,7 @@ await gen.destroy()
 > Progress items arrive live during generation. The current native engine emits
 > one PCM item after generation, not incremental audio chunks. `await()` resolves
 > with terminal stats. `backendDevice` /
-> `backendId` report the backend the engine *resolved to*, not the one requested,
+> `backendId` report the backend the engine _resolved to_, not the one requested,
 > so a `useGPU: true` run that fell back to the CPU is detectable. Use
 > `audiogenBackendName(stats.backendId)` rather than copying the code table
 > above; it returns `undefined` for an id this version does not know.
@@ -245,13 +282,13 @@ Pass `lyrics` for vocals, and steer the LM with musical hints — `bpm`,
 
 ```js
 const response = await gen.run('energetic cumbia, brass stabs, live percussion, party vibe', {
-  vocalLanguage: 'es',        // language the vocals are sung in
-  bpm: 98,                    // tempo
-  keyscale: 'A minor',        // key / scale
-  timesignature: '4/4',       // time signature
+  vocalLanguage: 'es', // language the vocals are sung in
+  bpm: 98, // tempo
+  keyscale: 'A minor', // key / scale
+  timesignature: '4/4', // time signature
   augmentCaptionWithMetadata: true, // reinforce these hints in the conditioning caption
-  duration: 150,              // target length in seconds (omit => the LM decides)
-  seed: 42,                   // reproducible run
+  duration: 150, // target length in seconds (omit => the LM decides)
+  seed: 42, // reproducible run
   lyrics: `[verse]
 Suena el tambor y el barrio se enciende
 la noche es joven y la gente lo entiende
@@ -358,10 +395,11 @@ set is kept. Leave `lyrics` unset for LM-written vocals, or pass
 `'[Instrumental]'` for an instrumental song.
 
 ```js
-const response = await gen.run(
-  'a romantic modern salsa with male lead vocals for a wedding',
-  { simpleMode: true, duration: 0, seed: 4242 }
-)
+const response = await gen.run('a romantic modern salsa with male lead vocals for a wedding', {
+  simpleMode: true,
+  duration: 0,
+  seed: 4242
+})
 ```
 
 Or end to end from the repo:
@@ -543,12 +581,14 @@ const fs = require('fs')
 const pcmChunks = []
 for await (const item of response.iterate()) {
   if (!('outputArray' in item)) continue
-  pcmChunks.push(Buffer.from(
-    item.outputArray.buffer.slice(
-      item.outputArray.byteOffset,
-      item.outputArray.byteOffset + item.outputArray.byteLength
+  pcmChunks.push(
+    Buffer.from(
+      item.outputArray.buffer.slice(
+        item.outputArray.byteOffset,
+        item.outputArray.byteOffset + item.outputArray.byteLength
+      )
     )
-  ))
+  )
 }
 const pcmBuffer = Buffer.concat(pcmChunks)
 
@@ -571,27 +611,27 @@ for (const f of files) fs.writeFileSync(`song.${f.extension}`, f.data)
 vendored for `@qvac/decoder-audio`), so the matching encoder must be compiled
 into that build.
 
-| `format` | Container / codec | Extension | MIME | Notes |
-|----------|-------------------|-----------|------|-------|
-| `pcm` | raw interleaved Int16 | `pcm` | `audio/L16` | no container, dependency-free |
-| `wav` | WAV / PCM s16le | `wav` | `audio/wav` | dependency-free (pure-JS header) |
-| `flac` | FLAC | `flac` | `audio/flac` | lossless |
-| `alac` | MP4 / ALAC | `m4a` | `audio/mp4` | Apple Lossless (shares the `.m4a` extension) |
-| `aiff` | AIFF / PCM s16be | `aiff` | `audio/aiff` | uncompressed |
-| `caf` | CAF / PCM s16le | `caf` | `audio/x-caf` | Apple Core Audio Format, uncompressed |
-| `m4a` | MP4 / AAC | `m4a` | `audio/mp4` | AAC in an MP4/M4A container |
-| `aac` | ADTS / AAC | `aac` | `audio/aac` | raw AAC stream |
-| `opus` | Ogg / Opus | `opus` | `audio/opus` | resampled to 48 kHz (libopus requirement) |
-| `ogg` | Ogg / Vorbis | `ogg` | `audio/ogg` | Vorbis |
-| `ac3` | AC-3 | `ac3` | `audio/ac3` | Dolby Digital |
-| `wma` | ASF / WMA v2 | `wma` | `audio/x-ms-wma` | Windows Media Audio |
-| `mp2` | MPEG-1 Layer II | `mp2` | `audio/mpeg` | legacy MPEG audio |
+| `format` | Container / codec     | Extension | MIME             | Notes                                        |
+| -------- | --------------------- | --------- | ---------------- | -------------------------------------------- |
+| `pcm`    | raw interleaved Int16 | `pcm`     | `audio/L16`      | no container, dependency-free                |
+| `wav`    | WAV / PCM s16le       | `wav`     | `audio/wav`      | dependency-free (pure-JS header)             |
+| `flac`   | FLAC                  | `flac`    | `audio/flac`     | lossless                                     |
+| `alac`   | MP4 / ALAC            | `m4a`     | `audio/mp4`      | Apple Lossless (shares the `.m4a` extension) |
+| `aiff`   | AIFF / PCM s16be      | `aiff`    | `audio/aiff`     | uncompressed                                 |
+| `caf`    | CAF / PCM s16le       | `caf`     | `audio/x-caf`    | Apple Core Audio Format, uncompressed        |
+| `m4a`    | MP4 / AAC             | `m4a`     | `audio/mp4`      | AAC in an MP4/M4A container                  |
+| `aac`    | ADTS / AAC            | `aac`     | `audio/aac`      | raw AAC stream                               |
+| `opus`   | Ogg / Opus            | `opus`    | `audio/opus`     | resampled to 48 kHz (libopus requirement)    |
+| `ogg`    | Ogg / Vorbis          | `ogg`     | `audio/ogg`      | Vorbis                                       |
+| `ac3`    | AC-3                  | `ac3`     | `audio/ac3`      | Dolby Digital                                |
+| `wma`    | ASF / WMA v2          | `wma`     | `audio/x-ms-wma` | Windows Media Audio                          |
+| `mp2`    | MPEG-1 Layer II       | `mp2`     | `audio/mpeg`     | legacy MPEG audio                            |
 
 > `mp3` is intentionally **not** listed: the vendored FFmpeg build ships no MP3
 > encoder (`libmp3lame`). Unknown/unsupported formats throw.
 >
 > `AudioGen.encode(pcm, formats, opts)` returns `{ format, data, extension,
-> mimeType }` for a single format, or an array of those (input order) for an
+mimeType }` for a single format, or an array of those (input order) for an
 > array. `OUTPUT_FORMATS` exports the full allowed list.
 
 See [`examples/generate-music.js`](examples/generate-music.js) for a full,
@@ -606,60 +646,61 @@ runnable end-to-end script (`npm run example`).
 
 `files` — model paths:
 
-| Option | Meaning |
-|--------|---------|
-| `modelDir` | Folder holding the GGUFs (stages auto-classified by name). |
-| `ditVariant` | Which DiT to load from `modelDir`: `turbo-q4` \| `turbo-q8` \| `sft`. |
-| `textEncModel` / `lmModel` / `ditModel` / `vaeModel` | Explicit per-stage paths (override `modelDir`). |
-| `lmModel` / `synthModel` | Explicit MiniMax-Music3 pair (override `modelDir`). |
+| Option                                               | Meaning                                                               |
+| ---------------------------------------------------- | --------------------------------------------------------------------- |
+| `modelDir`                                           | Folder holding the GGUFs (stages auto-classified by name).            |
+| `ditVariant`                                         | Which DiT to load from `modelDir`: `turbo-q4` \| `turbo-q8` \| `sft`. |
+| `textEncModel` / `lmModel` / `ditModel` / `vaeModel` | Explicit per-stage paths (override `modelDir`).                       |
+| `lmModel` / `synthModel`                             | Explicit MiniMax-Music3 pair (override `modelDir`).                   |
 
 `config` — runtime knobs:
 
-| Option | Meaning |
-|--------|---------|
-| `useGPU` | Run on GPU (Metal / CUDA / Vulkan, including Android Mali); falls back to CPU. |
-| `device` | MiniMax only, instead of `useGPU`: `gpu` fails `load()` without a usable GPU, `auto` falls back to the CPU, `cpu` never uses a GPU. |
-| `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. `run()` can override both per call. |
-| `cfgScale` | Default MiniMax flow guidance scale; `0` uses the model default. |
-| `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
-| `threads` | CPU thread count (0 / unset = hardware default). |
-| `backendsDir` | Advanced; directory scanned, as given, for dlopen'd ggml backend modules. Unset scans the addon's own, next to its native module, which is where the platform package and `bare-link` put them. |
+| Option                                    | Meaning                                                                                                                                                                                         |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useGPU`                                  | Run on GPU (Metal / CUDA / Vulkan, including Android Mali); falls back to CPU.                                                                                                                  |
+| `coremlProfileDir` / `coremlComputeUnits` | MiniMax full Core ML profile and explicit Apple device policy; both required together, macOS 15+.                                                                                               |
+| `device`                                  | MiniMax only, instead of `useGPU`: `gpu` fails `load()` without a usable GPU, `auto` falls back to the CPU, `cpu` never uses a GPU.                                                             |
+| `inferenceSteps` / `shift`                | Advanced; leave unset to auto-tune per DiT. `run()` can override both per call.                                                                                                                 |
+| `cfgScale`                                | Default MiniMax flow guidance scale; `0` uses the model default.                                                                                                                                |
+| `nGpuLayers`                              | GPU layers to offload when `useGPU` is set (99 = all).                                                                                                                                          |
+| `threads`                                 | CPU thread count (0 / unset = hardware default).                                                                                                                                                |
+| `backendsDir`                             | Advanced; directory scanned, as given, for dlopen'd ggml backend modules. Unset scans the addon's own, next to its native module, which is where the platform package and `bare-link` put them. |
 
 `logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
 wrapped by a level-gated `QvacLogger`.
 
 **`run(caption, opts)`** returns a `QvacResponse`.
 
-| Option | Meaning |
-|--------|---------|
-| `lyrics` | Lyrics text; use `[Instrumental]` for no vocals. |
-| `vocalLanguage` | Vocal language hint. |
-| `bpm` | Tempo in beats per minute. |
-| `keyscale` | Key and scale, such as `C minor`. |
-| `timesignature` | Time signature, such as `4/4`. |
-| `augmentCaptionWithMetadata` | Append BPM/tempo, time signature, and key guidance to the internal conditioning caption; defaults to `false`. |
-| `duration` | Target length in seconds; omit to let the LM decide. |
-| `maxFrames` | MiniMax semantic-frame cap; cannot be combined with `duration`. |
-| `inferenceSteps` | Per-run diffusion steps (`0`–`1000`); omit to keep `config.inferenceSteps`. |
-| `shift` | ACE-Step per-run DiT timestep shift; omit to keep `config.shift`. |
-| `cfgScale` | Per-run MiniMax flow guidance scale. |
-| `seed` | RNG seed for reproducible generation. |
-| `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
-| `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
-| `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
-| `rewriteQuery` | LM FORMAT pass: rewrite the caption into a detailed description, preserving the lyric content. Requires real `lyrics` and `taskType: 'text2music'`; mutually exclusive with `simpleMode`. |
-| `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
-| `generateLrc` | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`. |
-| `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |
-| `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
-| `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
-| `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |
-| `sourceAudio` | Source PCM in the same format; required by cover and lego tasks. |
-| `taskType` | `text2music` (default), `cover-nofsq`, `lego`, or reserved `cover`. |
-| `track` | Lego target layer; required when `taskType` is `lego`. |
-| `guidanceScale` | DiT classifier-free guidance; `0` (default) auto-resolves to `1.0` on turbo and `7.0` on base/sft. |
-| `audioCoverStrength` | Fraction of the run that follows the source, from `0` to `1` (default `1`). |
-| `coverNoiseStrength` | Initial source/noise blend from `0` to `1`. |
+| Option                                               | Meaning                                                                                                                                                                                   |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lyrics`                                             | Lyrics text; use `[Instrumental]` for no vocals.                                                                                                                                          |
+| `vocalLanguage`                                      | Vocal language hint.                                                                                                                                                                      |
+| `bpm`                                                | Tempo in beats per minute.                                                                                                                                                                |
+| `keyscale`                                           | Key and scale, such as `C minor`.                                                                                                                                                         |
+| `timesignature`                                      | Time signature, such as `4/4`.                                                                                                                                                            |
+| `augmentCaptionWithMetadata`                         | Append BPM/tempo, time signature, and key guidance to the internal conditioning caption; defaults to `false`.                                                                             |
+| `duration`                                           | Target length in seconds; omit to let the LM decide.                                                                                                                                      |
+| `maxFrames`                                          | MiniMax semantic-frame cap; cannot be combined with `duration`.                                                                                                                           |
+| `inferenceSteps`                                     | Per-run diffusion steps (`0`–`1000`); omit to keep `config.inferenceSteps`.                                                                                                               |
+| `shift`                                              | ACE-Step per-run DiT timestep shift; omit to keep `config.shift`.                                                                                                                         |
+| `cfgScale`                                           | Per-run MiniMax flow guidance scale.                                                                                                                                                      |
+| `seed`                                               | RNG seed for reproducible generation.                                                                                                                                                     |
+| `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls.                                                                                                                                                                     |
+| `lmPhase1`                                           | Allow the LM to infer missing metadata before generating semantic codes.                                                                                                                  |
+| `simpleMode`                                         | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis.                                                                                          |
+| `rewriteQuery`                                       | LM FORMAT pass: rewrite the caption into a detailed description, preserving the lyric content. Requires real `lyrics` and `taskType: 'text2music'`; mutually exclusive with `simpleMode`. |
+| `normalizeLoudness`                                  | Percentile loudness normalization of generated audio (default `true`); edits are never normalized.                                                                                        |
+| `generateLrc`                                        | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`.                                                                |
+| `computeQualityScore`                                | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`.                                                              |
+| `dcwEnabled` / `dcwScaler` / `dcwHighScaler`         | Haar DCW correction controls.                                                                                                                                                             |
+| `audioCodes`                                         | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM.                                                                                                                          |
+| `referenceAudio`                                     | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning.                                                                                       |
+| `sourceAudio`                                        | Source PCM in the same format; required by cover and lego tasks.                                                                                                                          |
+| `taskType`                                           | `text2music` (default), `cover-nofsq`, `lego`, or reserved `cover`.                                                                                                                       |
+| `track`                                              | Lego target layer; required when `taskType` is `lego`.                                                                                                                                    |
+| `guidanceScale`                                      | DiT classifier-free guidance; `0` (default) auto-resolves to `1.0` on turbo and `7.0` on base/sft.                                                                                        |
+| `audioCoverStrength`                                 | Fraction of the run that follows the source, from `0` to `1` (default `1`).                                                                                                               |
+| `coverNoiseStrength`                                 | Initial source/noise blend from `0` to `1`.                                                                                                                                               |
 
 ## Models
 
@@ -676,14 +717,14 @@ MiniMax-Music3 Community License.
 Four stages. Three are fixed; only the DiT changes, so you pick it with
 `ditVariant`.
 
-| Stage | GGUF | Size | Notes |
-|------|------|------|-------|
-| text-enc | Qwen3-Embedding-0.6B-Q8_0 | 748 MB | fixed |
-| LM | acestep-5Hz-lm-0.6B-Q8_0 | 677 MB | fixed |
-| VAE | vae-BF16 | 322 MB | fixed |
-| DiT | acestep-v15-turbo-Q4_K_M | 1.35 GB | `ditVariant: 'turbo-q4'` (fastest / smallest) |
-| DiT | acestep-v15-turbo-Q8_0 | 2.37 GB | `ditVariant: 'turbo-q8'` (higher precision) |
-| DiT | acestep-v15-sft-Q8_0 | 2.37 GB | `ditVariant: 'sft'` (50-step, non-turbo) |
+| Stage    | GGUF                      | Size    | Notes                                         |
+| -------- | ------------------------- | ------- | --------------------------------------------- |
+| text-enc | Qwen3-Embedding-0.6B-Q8_0 | 748 MB  | fixed                                         |
+| LM       | acestep-5Hz-lm-0.6B-Q8_0  | 677 MB  | fixed                                         |
+| VAE      | vae-BF16                  | 322 MB  | fixed                                         |
+| DiT      | acestep-v15-turbo-Q4_K_M  | 1.35 GB | `ditVariant: 'turbo-q4'` (fastest / smallest) |
+| DiT      | acestep-v15-turbo-Q8_0    | 2.37 GB | `ditVariant: 'turbo-q8'` (higher precision)   |
+| DiT      | acestep-v15-sft-Q8_0      | 2.37 GB | `ditVariant: 'sft'` (50-step, non-turbo)      |
 
 Downloading the GGUFs is the caller's job (the qvac SDK's `resolveModelPath`, a
 download script, etc.) — the addon only ever receives a local path. `models.js`
@@ -736,18 +777,18 @@ fit.report
 `modelsDir` holds the four stage GGUFs; `textEncoderPath`, `lmPath`, `ditPath`
 and `vaePath` name them individually and win over it.
 
-| Option | Description |
-| --- | --- |
-| `durationSeconds` | Longest single generation the projection must accommodate. |
-| `textTokens`, `lyricTokens` | The prompt the projection is sized for. |
-| `lmPromptTokens` | 0 derives it from the text and lyric budgets. |
-| `lmMaxNewTokens` | 0 derives it from the duration, as the pipeline does. |
-| `lmCfgScale`, `guidanceScale` | 0 picks CFG or no CFG from the checkpoint. |
-| `withSourceAudio` | Projects the extra VAE-encoder phase a cover or reference request loads. |
-| `keepStages` | `-1` mirrors the engine, `0` forces the staged projection, `1` all-resident. |
-| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. |
-| `threads`, `backendsDir` | As the load takes them. |
-| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to 256 MiB. |
+| Option                        | Description                                                                               |
+| ----------------------------- | ----------------------------------------------------------------------------------------- |
+| `durationSeconds`             | Longest single generation the projection must accommodate.                                |
+| `textTokens`, `lyricTokens`   | The prompt the projection is sized for.                                                   |
+| `lmPromptTokens`              | 0 derives it from the text and lyric budgets.                                             |
+| `lmMaxNewTokens`              | 0 derives it from the duration, as the pipeline does.                                     |
+| `lmCfgScale`, `guidanceScale` | 0 picks CFG or no CFG from the checkpoint.                                                |
+| `withSourceAudio`             | Projects the extra VAE-encoder phase a cover or reference request loads.                  |
+| `keepStages`                  | `-1` mirrors the engine, `0` forces the staged projection, `1` all-resident.              |
+| `gpuLayers`                   | Greater than 0 requests the GPU stack, with the fallbacks a real load applies.            |
+| `threads`, `backendsDir`      | As the load takes them.                                                                   |
+| `marginBytes`                 | Free memory that must remain for the projection to count as fitting. Defaults to 256 MiB. |
 
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host
 bytes compete with device bytes.
@@ -771,12 +812,12 @@ const fit = await assessFit({
 })
 ```
 
-| Option | Description |
-| --- | --- |
-| `device` | `'cpu'`, `'gpu'` or `'auto'`, as `config.device` takes it. Without it, `gpuLayers` greater than 0 projects `'auto'` and anything else `'cpu'`. |
-| `durationSeconds`, `maxFrames` | The generation length, as `run()` takes it (25 frames per second); one or the other. Defaults to 300 frames. |
-| `promptTokens` | Tokenized prompt length: caption, lyrics and template. Defaults to 1024. A prompt above the checkpoint's limit, or one that leaves too little context for the frames, is `workload-too-large`. |
-| `threads`, `backendsDir`, `marginBytes` | As for ACE-Step. |
+| Option                                  | Description                                                                                                                                                                                    |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `device`                                | `'cpu'`, `'gpu'` or `'auto'`, as `config.device` takes it. Without it, `gpuLayers` greater than 0 projects `'auto'` and anything else `'cpu'`.                                                 |
+| `durationSeconds`, `maxFrames`          | The generation length, as `run()` takes it (25 frames per second); one or the other. Defaults to 300 frames.                                                                                   |
+| `promptTokens`                          | Tokenized prompt length: caption, lyrics and template. Defaults to 1024. A prompt above the checkpoint's limit, or one that leaves too little context for the frames, is `workload-too-large`. |
+| `threads`, `backendsDir`, `marginBytes` | As for ACE-Step.                                                                                                                                                                               |
 
 On Android and iOS, where MiniMax-Music3 is unavailable, `engine: 'minimax'`
 comes back as `status: "error"` with `reason: "unsupported-engine"`.

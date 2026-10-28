@@ -132,7 +132,8 @@ export const SDK_SERVER_ERROR_CODES = {
 
   // QVAC Model Registry Operations (53,950-54,000)
   // Note: Registry client errors (19,001-20,000) are re-thrown directly
-  QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950
+  QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
+  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951
 } as const
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -641,6 +642,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'QVAC_MODEL_REGISTRY_QUERY_FAILED',
     message: (details?: string) =>
       `QVAC model registry query failed${details ? `: ${details}` : ''}`
+  },
+  [SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND]: {
+    name: 'QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND',
+    message: (registrySource: string, registryPath: string) =>
+      `QVAC model registry has no model at ${registrySource}/${registryPath}`
   }
 }
 

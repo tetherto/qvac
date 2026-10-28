@@ -373,6 +373,7 @@ export type { InferenceCancelledPartial } from './utils/errors-server'
 export {
   ContextOverflowError,
   type ContextOverflowErrorSizes,
+  ModelRegistryModelNotFoundError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,

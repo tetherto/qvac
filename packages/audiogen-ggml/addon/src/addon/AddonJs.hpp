@@ -853,6 +853,8 @@ inline tts_cpp::minimax::EngineOptions minimaxFitOptions(FitRequest& request) {
   options.model_dir = request.text("modelsDir");
   options.lm_model_path = request.text("lmPath");
   options.synth_model_path = request.text("synthPath");
+  options.coreml_profile_dir = request.text("coremlProfileDir");
+  options.coreml_compute_units = request.text("coremlComputeUnits");
   options.device = minimaxFitDevice(request);
   options.backends_dir =
       resolveBackendsDir(request.text("backendsDir")).string();
