@@ -36,7 +36,7 @@ on-pr-nx.yml            (pull_request_target)  ── PR orchestrator
   ├─ run-integration    → integration-test-nx.yml       (target: test:integration)
   ├─ sanity-checks / cpp-lint / ts-checks / fabric-lockstep   (matrix-filtered from on-pr ci)
   ├─ coload-smoke       → coload-smoke.yml               (desktop co-load)
-  ├─ coload-smoke-mobile→ coload-smoke-mobile.yml        (asr/tts on-device co-load)
+  ├─ coload-smoke-mobile→ coload-smoke-mobile.yml        (on-device co-load)
   ├─ perf-report(-rtf)                                   (informational)
   ├─ publish-prebuild-status  (scripts/prebuild-status/publish.mjs → qvac/prebuild-<pkg>)
   ├─ publish-cpp-test-status  (scripts/prebuild-status/publish.mjs KIND=cpp-tests → qvac/cpp-tests-<pkg>)
@@ -61,19 +61,13 @@ Per target, common fields (see any `packages/*/project.json`):
 - **build** — `artifactNamePrefix`, `includeVulkanSdk`, `includeRocm`, `includeCuda`, `linuxExtraPackages`, `macBrewPackages`, `extraCmakeDefines`, `platformCmakeDefines`. Presence of `build.options.ci` is what makes a package "have prebuilds" (`hasPrebuilds` is derived, not declared).
 - **on-pr** — `hasCppLint`, `hasTsChecks` (`tsChecksMode`), `hasFabricLockstep`, `cppTestsBaseline` (run the package's `test:cpp` lane on every PR, without the `run-cpp-addon-tests` label), `hasCoload`/`coloadActive`, `hasPerfReport` (`perfReportVariant`, `perfReportPattern`, `perfReportTitle`, `perfReportExtraArgs`).
 - **test:cpp** — `platforms[]` (os/platform/arch/runner), `vcpkgMode`, `coverageOn`, `mode`, plus per-package flags; `carveOut: true` routes to a bespoke reusable.
-- **test:integration** — `platforms[]` rows, each able to override any shared field (e.g. `timeoutMinutes`, `modelDownloadScript`); `testScript`, the npm script a leg runs instead of `test:integration` (darwin-x64 legs point it at a single-suite smoke script); `carveOut: true` for packages with bespoke integration flows (asr, llm). After the leaf stages `prebuilds/<host>/`, a package whose `package.json` defines `link:platform` gets that script run, so `#host-addon` loads the staged build rather than the optionalDependency pin in git.
+- **test:integration** — `platforms[]` rows, each able to override any shared field (e.g. `timeoutMinutes`, `modelDownloadScript`); `testScript`, the npm script a leg runs instead of `test:integration` (darwin-x64 legs point it at a single-suite smoke script); `carveOut: true` for packages with bespoke integration flows. After the leaf stages `prebuilds/<host>/`, a package whose `package.json` defines `link:platform` gets that script run, so `#host-addon` loads the staged build rather than the optionalDependency pin in git.
 - **benchmark** — `aggregateScript`, `manualDir`.
 - **on-merge** — `buildStep`, `nameTransform`, `repoName`, `testGateMode`.
 
 Per-run overrides are possible via the action's `overrides` input, but only for fields a package already declares (validated, so a PR can't inject new CI behaviour).
 
-For `asr-ggml`, `tts-ggml`, `audiogen-ggml`, and `bci-whispercpp`, PR-time cpp-lint additionally requires a changed C/C++ source or header (`.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, or `.hxx`) inside that package. The filter uses API-reported paths, including deleted files and previous paths for renames. Vcpkg version-only bumps skip cpp-lint, and the merge guard accepts that skipped job. Manual dispatch retains the affected packages' cpp-lint lanes.
-
-Speech C++ tests for `asr-ggml`, `tts-ggml`, and `bci-whispercpp` use the Ubuntu 22.04 x64 CPU runner in both their `test:cpp.options.ci.platforms` rows and standalone coverage workflows. The consolidated PR lane reads those target rows; changing only a standalone workflow does not change PR runner selection. `audiogen-ggml` builds its native addon on the Ubuntu 22.04 CPU runner, with trusted vcpkg and per-package compiler caches and two build workers. It has no addon-level C++ unit tests yet; after those caches are saved the same lane runs the bounded config-parse fuzz target, and a fuzz failure fails the job. Default-branch pushes, a schedule every 2 days, and dispatches warm the AudioGen caches. `runner-names.test.mjs`, included in the security policy suite, guards both routing paths.
-
-AudioGen non-PR runs pin checkout to the triggering repository and commit, and
-reject inputs requesting other code. Caller-selected PR-head checkouts are
-limited to PR events, whose cache scope cannot write default-branch entries.
+The speech packages (`asr-ggml`, `audiogen-ggml`, `bci-whispercpp`, `decoder-audio`, `tts-ggml`) are on the CI contract (`docs/ci/workflow-standard.md`). Their `cpp:lint` runs only when the change touched a C/C++ source or header in the package, through `scripts/ci/cpp-lint-changed.mjs --generate`, and their C++ tests run in `_cpp-tests.yml` on the Ubuntu 22.04 x64 CPU runner. `cpp-lint-selection.mjs` keeps the same rule for them on `on-pr-nx.yml`, where none runs today.
 
 The consolidated coverage lane restores vcpkg binaries from the host cache and
 the package's keyed cache, including its build mode, triplets, and toolchain
@@ -94,8 +88,8 @@ in the script) are left to it.
   after 5 days without an upload or download, so the longest gap stays at 4 days
   even after one failed run.
 
-Carve-outs keep their own vcpkg caches and warm them separately. `audiogen-ggml`
-and `translation-nmtcpp` warm theirs on pushes and on their own 2-day schedules;
+Carve-outs keep their own vcpkg caches and warm them separately.
+`translation-nmtcpp` warms its own on pushes and on its own 2-day schedule;
 `llm-llamacpp` and `model-fit` are warmed by their `on-merge-vcpkg-cache-*.yml`
 dispatchers. `cpp-tests-warm-roster.test.mjs` fails for a carve-out with neither.
 
@@ -104,20 +98,15 @@ manual `CPP Tests (nx)` dispatch on `main` with explicit packages also warms the
 caches:
 
 ```bash
-gh workflow run cpp-tests-nx.yml --ref main \
-  -f packages='["asr-ggml","tts-ggml","bci-whispercpp"]'
+gh workflow run cpp-tests-nx.yml --ref main -f packages='["diffusion-cpp"]'
 ```
 
-All three coverage targets enable ccache. Each job uses its own package cache
-directory under `RUNNER_TEMP`, restores entries for the same toolchain and
-dependencies, and trusted builds save a fresh run-specific key. This avoids
-restoring a fixed, immutable snapshot forever or mixing another package's
-compiler cache into the archive. `cppBuildJobs` defaults to two and caps both
-CMake and vcpkg parallelism; change the target's `options.ci.cppBuildJobs` to
-tune it for runner capacity. CPU runners remain the default to avoid GPU queue
-contention. ASR and BCI test errors fail the job and the merge guard; coverage
-generation and artifact collection still run after a failed test if the build
-succeeded.
+A coverage target can enable ccache (`hasCcache`). Each job then uses its own
+package cache directory under `RUNNER_TEMP`, restores entries for the same
+toolchain and dependencies, and trusted builds save a fresh run-specific key.
+`cppBuildJobs` defaults to two and caps both CMake and vcpkg parallelism.
+Coverage generation and artifact collection still run after a failed test if
+the build succeeded.
 
 To try a different setting, dispatch the same `main` commit with explicit
 packages and an `overrides` JSON object. It accepts only fields already declared
@@ -143,7 +132,7 @@ Enforced by `.github/scripts/test/ci-trust-policy.test.mjs`.
 
 ## Carve-outs
 
-Packages with bespoke flows set `carveOut: true` on the relevant target. `nx-project-matrix` surfaces them in the `carveouts` output; the orchestrator routes them to their own reusable (`integration-test-asr-ggml.yml`) instead of the generic matrix. They still self-affect from their own `project.json`.
+Packages with bespoke flows set `carveOut: true` on the relevant target. `nx-project-matrix` surfaces them in the `carveouts` output; the orchestrator routes them to their own reusable instead of the generic matrix. They still self-affect from their own `project.json`.
 
 ## Merge guard
 
@@ -151,14 +140,14 @@ Packages with bespoke flows set `carveOut: true` on the relevant target. `nx-pro
 
 ## Mobile
 
-Mobile tests use the per-package `integration-mobile-test-<pkg>.yml` workflows.
-Speech, OCR and translation publishing in `on-merge-nx.yml` does not launch
-desktop integration or mobile E2E tests: `asr-ggml`, `tts-ggml`, `bci-whispercpp`,
-`decoder-audio`, `audiogen-ggml`, `ocr-ggml` and `translation-nmtcpp` set
-`on-merge.options.ci.testGateMode` to `none`. The workflow reads this policy
-from the trusted default branch. Prebuilds, generated-wrapper verification and
-publishing remain enabled. Wrapper verification is a publish-integrity gate for
-release pushes and manual dispatches, including those that never open a PR.
+Mobile tests for the packages left on this path use the per-package
+`integration-mobile-test-<pkg>.yml` workflows; the packages on the CI contract,
+the speech packages among them, run theirs through `mobile-tests.yml` and publish
+through `publish-npm.yml` and `publish-gpr.yml`. Publishing in `on-merge-nx.yml`
+reads each package's `on-merge.options.ci.testGateMode` from the trusted default
+branch. Prebuilds, generated-wrapper verification and publishing remain enabled.
+Wrapper verification is a publish-integrity gate for release pushes and manual
+dispatches, including those that never open a PR.
 
 The pre-publish integration job, post-build gate, post-publish integration job
 and publish-step test gates remain supported opt-in paths controlled by

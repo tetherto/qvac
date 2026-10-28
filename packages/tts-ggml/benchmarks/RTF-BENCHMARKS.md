@@ -163,7 +163,7 @@ Matrix entries may set `quality`, `whisperModel`, `werUpperBound`, and
 
 | Env var                                 | Default | Purpose                                                                                                                                                                                                                          |
 | --------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE` | (unset) | Gates the `test/integration/{rtf,streaming}-benchmark.test.js` shims. The mobile workflow only sets it when dispatched with `run_rtf_benchmarks: true`; otherwise the shims soft-skip and the matrix entry goes green-with-skip. |
+| `QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE` | (unset) | Gates the `test/integration/{rtf,streaming}-benchmark.test.js` shims. `ci/prepare-mobile.mjs` only sets it on a `benchmarks.yml` run that passes `args`; otherwise the shims soft-skip and the run goes green-with-skip. |
 
 Mobile quality reports identify their Whisper evaluator model so results produced
 with `ggml-tiny.bin` are not conflated with desktop `ggml-small.bin` rows.
@@ -300,7 +300,7 @@ npm --prefix packages/tts-ggml run test:benchmark:rtf
 
 ### CI wiring
 
-- **Desktop** (`integration-test-tts-ggml.yml`): each matrix branch carries
+- **Desktop** (the `benchmark` target, `ci/benchmark-matrix/<configuration>.json`): each matrix carries
   `enhancer:"lavasr"` and `denoiser:"lavasr"` rows for `supertonic` + `chatterbox`
   (CPU everywhere, plus Vulkan/Metal on GPU runners), plus an enhancer quant sweep
   (`enhancerVariant` = `f32` / `q8_0`) on `supertonic` across CPU + the platform
@@ -308,11 +308,11 @@ npm --prefix packages/tts-ggml run test:benchmark:rtf
   (the `f16`/`f32` enhancer tiers and the denoiser) hard-fails if its GGUF can't be
   fetched, so a real registry failure surfaces instead of a false green, while the
   not-yet-published `q8_0` tier soft-skips (green) until it lands on S3.
-- **Mobile** (`integration-mobile-test-tts-ggml.yml`): Device Farm rows benchmark
+- **Mobile** (`benchmarks.yml` with `run_mobile`, one row per run picked in its `args`): Device Farm rows benchmark
   the fp16 enhancer (CPU + GPU) and the denoiser (CPU) on supertonic + chatterbox.
   The on-device runtime reads `QVAC_TTS_GGML_BENCHMARK_ENHANCER` /
   `QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT` / `QVAC_TTS_GGML_BENCHMARK_DENOISER`
-  (threaded through the inject-env step). iOS resolves the GGUFs from the registry
+  (injected into the mobile runtime by `ci/prepare-mobile.mjs`). iOS resolves the GGUFs from the registry
   on-device (like the engine GGUFs); Android has no on-device network, so the fp16
   enhancer + denoiser are pre-signed into the mobile model manifest and adb-pushed
   into `<models>/lavasr/` by the prestage step, where `ensureLavaSR*Gguf` scans for
@@ -321,20 +321,21 @@ npm --prefix packages/tts-ggml run test:benchmark:rtf
 ## How the CI pipeline fits together
 
 ```
-workflow_dispatch
-  └── benchmark-performance-tts-ggml.yml  (orchestrator)
-         ├── prebuilds-tts-ggml.yml          (build native addon)
-         ├── desktop-benchmarks              (desktop matrix: CPU everywhere, Vulkan on GPU runners)
-         ├── mobile-benchmarks               (run_mobile=true → Device Farm CPU + GPU, engine sweep)
-         └── summarize job
-               ├── downloads rtf-results-tts-ggml-* (desktop) + perf-report-tts-ggml-* (mobile)
-               ├── runs aggregate-tts-ggml-rtf.js --manual-dir benchmarks/manual-results
-               └── writes combined markdown + JSON to $GITHUB_STEP_SUMMARY + artifact
+benchmarks.yml (workflow_dispatch, -f packages=tts-ggml)
+  ├── build                    (the package's build target, every platform)
+  ├── desktop                  (benchmark target: ci/benchmark.mjs per configuration, CPU everywhere, GPU on GPU runners)
+  ├── mobile                   (run_mobile=true → Device Farm, the one row picked in args)
+  └── report                   (benchmark target's report configuration)
+        ├── downloads tts-ggml-benchmark-* (desktop) + tts-ggml-perf-mobile-* (mobile)
+        ├── runs aggregate-tts-ggml-rtf.js --manual-dir benchmarks/manual-results
+        └── writes combined markdown + JSON to $GITHUB_STEP_SUMMARY + artifact
 ```
 
-The orchestrator runs on `workflow_dispatch`. Desktop and mobile are both on by
-default and can be disabled with the `run_desktop=false` / `run_mobile=false`
-dispatch inputs. On-PR workflows do NOT run the benchmarks.
+`benchmarks.yml` runs on `workflow_dispatch`. Desktop is on by default and can be
+disabled with `run_desktop=false`; mobile runs with `run_mobile=true` on the
+chosen platform and devices, measuring the row its `args` name (`engine`,
+`variant`, `use_gpu`, `enhancer`, `enhancer_variant`, `denoiser`). Pull requests
+do NOT run the benchmarks.
 
 ## CI runner coverage
 
@@ -386,10 +387,9 @@ total wall time.
 
 ## Adding a new platform
 
-1. Add the matrix row to the `desktop-benchmarks` path in
-   `.github/workflows/integration-test-tts-ggml.yml`, or dispatch
-   `.github/workflows/benchmark-performance-tts-ggml.yml` with
-   `benchmark_matrix_json` containing the `(engine, useGPU, backendHint)` combos.
+1. Add the `(engine, useGPU, backendHint)` rows to the configuration's
+   `ci/benchmark-matrix/<configuration>.json`, or add a `benchmark` configuration
+   for the platform in `project.json` with its own matrix file.
 2. Add the platform's GPU backend, if any, to
    `scripts/perf-report/aggregate-tts-ggml-rtf.js`'s `SUPPORTED_GPU_BACKENDS`.
 3. For unavailable backends (CUDA, OpenCL, hosted-macOS Metal), drop fixtures
