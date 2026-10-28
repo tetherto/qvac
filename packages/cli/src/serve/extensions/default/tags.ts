@@ -15,5 +15,7 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   Classification:
     "Image classification via SDK `classify()`. An alias without `src` uses the addon's bundled model.",
   Upscale:
-    'Image upscaling via SDK `upscale()` backed by an ESRGAN model loaded with `config.mode: "upscale"`. Returns the `/v1/images` response shape.'
+    'Image upscaling via SDK `upscale()` backed by an ESRGAN model loaded with `config.mode: "upscale"`. Returns the `/v1/images` response shape.',
+  Music:
+    'Music generation, editing and description via SDK `audioGen()`, `audioEdit()` and `audioUnderstand()`, backed by an `audiogen` model. Generations and edits run as async jobs, like `/v1/videos`.'
 }
