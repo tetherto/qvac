@@ -666,6 +666,7 @@ jobs:
         if: >-
           inputs.desktop-smoke-command != '' &&
           (matrix.platform == 'linux' || matrix.platform == 'darwin' || matrix.platform == 'win32')
+        timeout-minutes: 15
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:

@@ -4,8 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
-import { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } from '@qvac/sdk/commands'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import link from 'bare-link'
 import { platformPackageForHost } from './platform-package.mjs'
 
@@ -55,6 +54,13 @@ if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recu
 // Bundle the checkout's packages/sdk. The worker build owns compiling it.
 const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
 const modulesRoot = bundleSdkPath ?? projectRoot
+// The bundler of the SDK being bundled: the installed @qvac/sdk can predate the workspace
+// SDK's built-in plugins, and bundles one it does not know as a custom plugin.
+const { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } = await import(
+  bundleSdkPath
+    ? pathToFileURL(path.join(bundleSdkPath, 'dist', 'src', 'commands', 'index.js')).href
+    : '@qvac/sdk/commands'
+)
 const classificationWeightsSource = classificationWeightsPath(modulesRoot)
 
 // Split addons ship their native code in per-platform packages, installed at
@@ -66,14 +72,25 @@ await ensureHostPrebuilds('android-arm64', modulesRoot)
 // differ in the monorepo, where the worker comes from ../sdk but the Kotlin
 // runtime's own node_modules is a separate tree; for a standalone consumer they
 // are the same. ensureHostPrebuilds installs into this tree too.
-const bundle = await bundleSdk({
-  projectRoot: modulesRoot,
-  configPath,
-  ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
-  hosts: ['android-arm64'],
-  defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
-  quiet: true
-})
+//
+// Pack from modulesRoot: bare-pack keys files by their path from the cwd, and
+// from here the workspace SDK would be keyed `/../sdk/...`, outside the bundle
+// root, where the worklet cannot read it.
+const workingDirectory = process.cwd()
+process.chdir(modulesRoot)
+let bundle
+try {
+  bundle = await bundleSdk({
+    projectRoot: modulesRoot,
+    configPath,
+    ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
+    hosts: ['android-arm64'],
+    defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
+    quiet: true
+  })
+} finally {
+  process.chdir(workingDirectory)
+}
 
 const verification = await verifyBundle({
   projectRoot: modulesRoot,

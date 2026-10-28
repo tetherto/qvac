@@ -37,9 +37,9 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
   const request = vectorIndexRequestSchema.parse(input)
   switch (request.operation) {
     case 'create':
-      return { type: 'vectorIndex', operation: 'create', ...createVectorIndex(request) }
+      return { type: 'vectorIndex', operation: 'create', ...(await createVectorIndex(request)) }
     case 'load':
-      return { type: 'vectorIndex', operation: 'load', ...loadVectorIndex(request) }
+      return { type: 'vectorIndex', operation: 'load', ...(await loadVectorIndex(request)) }
     case 'add':
       return { type: 'vectorIndex', operation: 'add', ...addVectors(request) }
     case 'search':
