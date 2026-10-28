@@ -1,7 +1,8 @@
 'use strict'
 
-// Guards test/integration/parakeet-models.manifest.json — the single source of
-// truth for the CI-staged parakeet model set AND the cache-models cache key.
+// Guards the parakeet (s3Path) entries of test/integration/models.manifest.json —
+// the single source of truth for the CI-staged parakeet model set AND the model
+// cache key. The whisper (urls) entries and the sidecars have their own guards.
 // Kept import-light (reads files only, never requires the native addon) so it
 // runs under brittle-bare without a prebuild.
 //
@@ -17,7 +18,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 
-const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'parakeet-models.manifest.json')
+const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'models.manifest.json')
 const HELPERS_PATH = path.join(__dirname, '..', 'integration', 'parakeet-helpers.js')
 
 // The desktop quant sweep staged by integration-test-asr-ggml.yml
@@ -55,28 +56,40 @@ const KNOWN_DATE_PREFIXES = [
 ]
 const KNOWN_MODEL_FAMILIES = ['parakeet', 'indic_conformer']
 
+// The manifest with only the parakeet entries: every non-urls entry is parakeet's.
 function loadManifest() {
-  return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
+  const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
+  const models = Object.fromEntries(
+    Object.entries(manifest.models).filter(([, entry]) => !entry.urls)
+  )
+  return { ...manifest, models }
 }
 
 test('manifest: contains only cache-key-bearing fields', (t) => {
   const manifest = loadManifest()
   t.alike(
     Object.keys(manifest).sort(),
-    ['cacheEpoch', 'models', 'source'],
+    ['cacheEpoch', 'models', 'sidecars'],
     'top level excludes prose and unrelated metadata'
   )
   t.ok(
     Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0,
     'cacheEpoch is a positive integer'
   )
-  t.is(manifest.source, 's3', 'source is s3')
+  for (const [name, entry] of Object.entries(manifest.models)) {
+    t.is(typeof entry.s3Path, 'string', `${name}: source is s3`)
+  }
 
   for (const [name, entry] of Object.entries(manifest.models)) {
     t.alike(
       Object.keys(entry).sort(),
-      ['bytes', 's3Path', 'sha256'],
+      ['bytes', 'dest', 's3Path', 'sha256', 'targets'],
       `${name}: entry contains only staging and integrity fields`
+    )
+    t.is(entry.dest, `models/${name}`, `${name}: stages into models/`)
+    t.ok(
+      entry.targets.includes('test:integration') && entry.targets.includes('benchmark'),
+      `${name}: staged for the integration tests and benchmarks`
     )
   }
 })

@@ -155,7 +155,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: asr-ggml-model-manifest
-          path: packages/asr-ggml/test/integration/parakeet-models.manifest.json
+          path: packages/asr-ggml/test/integration/models.manifest.json
           if-no-files-found: error
 
   run-integration-tests:
@@ -441,7 +441,7 @@ jobs:
 
       # Stage every desktop quantisation the parakeet RTF benchmark matrix
       # sweeps (f16 + q8_0 + q4_0). The staged set + its S3 paths are declared
-      # once in test/integration/parakeet-models.manifest.json (also part of
+      # once in test/integration/models.manifest.json (also part of
       # the cache-key source); the script copies each object from
       # s3://$MODEL_S3_BUCKET/<s3Path>. Whisper models need no staging step:
       # the whisper tests download them at runtime (and they persist in the

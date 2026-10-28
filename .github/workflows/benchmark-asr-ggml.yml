@@ -562,9 +562,9 @@ jobs:
         run: |
           set -euo pipefail
           GGUF="${{ matrix.gguf }}"
-          S3_PATH=$(jq -r --arg f "$GGUF" '.models[$f].s3Path // empty' test/integration/parakeet-models.manifest.json)
+          S3_PATH=$(jq -r --arg f "$GGUF" '.models[$f].s3Path // empty' test/integration/models.manifest.json)
           if [ -z "$S3_PATH" ]; then
-            echo "::error::GGUF '$GGUF' not declared in test/integration/parakeet-models.manifest.json"
+            echo "::error::GGUF '$GGUF' not declared in test/integration/models.manifest.json"
             exit 1
           fi
           mkdir -p models

@@ -1220,8 +1220,8 @@ Three things are worth knowing before touching these lanes:
   is written, because the artifact is written before the test's own
   assertions run.
 
-Sidecars are pinned in
-[`test/integration/parakeet-coreml.manifest.json`](test/integration/parakeet-coreml.manifest.json)
+Sidecars are pinned in the `sidecars` object of
+[`test/integration/models.manifest.json`](test/integration/models.manifest.json)
 and staged by `scripts/stage-integration-models.mjs`. **Until a bundle is
 published there the Core ML lanes skip themselves loudly** and the rest of the
 matrix is unaffected.
