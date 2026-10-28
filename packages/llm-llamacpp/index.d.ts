@@ -589,7 +589,7 @@ declare namespace LlmLlamacpp {
          * this model, as any `cacheKey` file it used does, until files named
          * or picked as a prompt's closest match more recently push it out (the
          * model keeps the 256 most recent, as far as 64 MiB of memory holds
-         * their prompt records). Text models only.
+         * their prompt records).
          */
         baseCacheKey?: string;
         /**

@@ -31,11 +31,12 @@ A cached conversation is written to its file by `model.saveCache(cacheKey)`,
 or automatically when it would otherwise be lost; see [Save the cache to
 disk](#save-the-cache-to-disk).
 
-On text models a request also reuses the prompt prefix it shares with any
-other conversation the model holds, whatever its `cacheKey`: the one in
-memory, the [RAM tier](#keep-switched-away-conversations-in-ram), or a
-`cacheKey` file used in this process. A new chat with the same system prompt
-and tools as an earlier one decodes only what follows them. The other
+A request also reuses the prompt prefix it shares with any other
+conversation the model holds, whatever its `cacheKey`: the one in memory, the
+[RAM tier](#keep-switched-away-conversations-in-ram), or a `cacheKey` file
+used in this process. A new chat with the same system prompt and tools as an
+earlier one decodes only what follows them; on multimodal models an image
+the two share is not encoded again. The other
 conversation is copied, never changed. See [Starting from another
 conversation](./cache-lifecycle.md#starting-from-another-conversation).
 
@@ -45,7 +46,7 @@ conversation](./cache-lifecycle.md#starting-from-another-conversation).
 | --- | --- | --- |
 | `cacheKey` | `string` | Path to the cache file. The conversation stays in memory and is written to this file only by `saveCache()` or when it would otherwise be lost (see [Save the cache to disk](#save-the-cache-to-disk)). Omit it and nothing is written to a file (see [Inference without a cacheKey](#inference-without-a-cachekey)). |
 | `ephemeral` | `boolean` | `true` keeps the conversation in memory only: whenever it would be written automatically, it is dropped instead. `saveCache()` still writes it. Default `false`. |
-| `baseCacheKey` | `string` | A `cacheKey` file to start from when nothing in memory serves more of the prompt, such as a primed system prompt. Read, never written; skipped when missing or when it shares no prefix with the prompt. Once named, the file stays a source for later requests on this model, as any `cacheKey` file it used does, until files named or picked as a prompt's closest match more recently push it out (the model keeps the 256 most recent, as far as 64 MiB of memory holds their prompt records). The file must come from a trusted source: its state is loaded as written. Text models only. See [Start from a primed file](#start-from-a-primed-file). |
+| `baseCacheKey` | `string` | A `cacheKey` file to start from when nothing in memory serves more of the prompt, such as a primed system prompt. Read, never written; skipped when missing or when it shares no prefix with the prompt. Once named, the file stays a source for later requests on this model, as any `cacheKey` file it used does, until files named or picked as a prompt's closest match more recently push it out (the model keeps the 256 most recent, as far as 64 MiB of memory holds their prompt records). The file must come from a trusted source: its state is loaded as written. See [Start from a primed file](#start-from-a-primed-file). |
 | `prefill` | `boolean` | Evaluate prompt without generating a response. On a model loaded with `parallel >= 2`, needs a `cacheKey` — see below. |
 | `generationParams` | `object` | Per-run overrides for temp, top_p, top_k, predict, seed, penalties. |
 
@@ -249,8 +250,8 @@ as the single-prompt path: the conversation stays in memory between requests.
 - **Shared prefixes.** A request whose key has no state of its own, or that
   has no key, starts from a copy of the conversation that shares the most of
   its prompt: parked in another slot, in the RAM tier, or in a `cacheKey`
-  file. On text models a request without a `cacheKey` is kept in its slot for
-  that purpose, never written.
+  file. A request without a `cacheKey` is kept in its slot for that purpose,
+  never written.
 
 Resident conversations with unsaved turns are written to their files when
 the model is reloaded (finetuning reloads it) or unloaded, except ephemeral
@@ -458,10 +459,9 @@ await model.run([{ role: 'user', content: 'Topic B' }], { cacheKey: 'session2.bi
 
 ## Inference without a cacheKey
 
-Omit `cacheKey`. Nothing is written to a file. On text models the request
-still reuses the prefix it shares with what the model holds, and its state
-stays in memory for the next request, as llama-server does; on multimodal
-models the context is reset after each call.
+Omit `cacheKey`. Nothing is written to a file. The request still reuses the
+prefix it shares with what the model holds, and its state stays in memory for
+the next request, as llama-server does.
 
 ```js
 await model.run([{ role: 'user', content: 'One-off question' }])
