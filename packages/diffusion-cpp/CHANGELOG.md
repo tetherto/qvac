@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Image generation accepts `custom_sigmas`, including a terminal zero, to
+  override the scheduler and step count with an explicit noise schedule.
+- The Qwen-Image-2.1 example can use Turbo weights with the official eight-step
+  schedule and CFG 1. Generation, reference editing, multi-reference composition
+  and RGBA output were smoke-tested with Q8_0 Turbo weights on NVIDIA GB10.
+- The Qwen example selects smaller VAE tiles for output areas of 2048×2048
+  pixels or larger, avoiding a full-frame CUDA decoding assertion.
+
 ## [0.31.0] - 2026-10-21
 
 This release adds Qwen-Image-2.1 generation and reference editing, including

@@ -6,6 +6,7 @@ const fs = require('bare-fs')
 
 async function main () {
   const dir = path.resolve(process.env.QWEN_MODELS_DIR || path.join(__dirname, '../models/qwen-image-21'))
+  const turbo = process.env.QWEN_TURBO === '1'
   const args = process.argv.slice(2)
   const portrait = path.join(__dirname, '../assets/von-neumann-colorized.jpg')
   const originalPortrait = path.join(__dirname, '../assets/von-neumann.jpg')
@@ -41,7 +42,11 @@ async function main () {
     console.log('Modes: ' + Object.keys(modes).join(', '))
     console.log('Each mode has bundled defaults; optional references must match its input count.')
     console.log('--remove-background [image] is an alias for --mode remove-background.')
+    console.log('Turbo: set QWEN_TURBO=1 and QWEN_TURBO_MODEL to the diffusion checkpoint path.')
     return
+  }
+  if (turbo && !process.env.QWEN_TURBO_MODEL) {
+    throw new Error('Set QWEN_TURBO_MODEL to the Turbo diffusion GGUF or safetensors file')
   }
   const modeName = args[0] === '--remove-background' ? 'remove-background' : args[0] === '--mode' ? args[1] : null
   if (args[0] === '--mode' && !Object.hasOwn(modes, modeName)) {
@@ -54,7 +59,8 @@ async function main () {
     throw new Error(`${modeName} expects ${preset.inputs.length} reference image(s); omit them to use its defaults`)
   }
   const inputFiles = suppliedFiles.length ? suppliedFiles : preset ? preset.inputs : []
-  const defaultOutput = preset ? preset.output : 'qwen-image-21.png'
+  const baseOutput = preset ? preset.output : 'qwen-image-21.png'
+  const defaultOutput = turbo ? baseOutput.replace('.png', '-turbo.png') : baseOutput
   const output = path.resolve(process.env.QWEN_OUTPUT || path.join(__dirname, '../output', defaultOutput))
   const refs = inputFiles.map(file => fs.readFileSync(path.resolve(file)))
   const defaultPrompt = preset ? preset.prompt : 'A red ceramic teapot on a wooden table, soft daylight, product photograph.'
@@ -66,7 +72,7 @@ async function main () {
   const ImgStableDiffusion = require('../index')
   const model = new ImgStableDiffusion({
     files: {
-      model: path.join(dir, 'qwen_image_2.1-Q4_K.gguf'),
+      model: turbo ? path.resolve(process.env.QWEN_TURBO_MODEL) : path.join(dir, 'qwen_image_2.1-Q4_K.gguf'),
       llm: path.join(dir, 'Qwen3VL-8B-Instruct-Q4_K_M.gguf'),
       vae: path.join(dir, 'qwen_image_2.1_vae_bf16.safetensors'),
       ...(refs.length ? { llmVision: path.join(dir, 'mmproj-Qwen3VL-8B-Instruct-F16.gguf') } : {})
@@ -91,10 +97,16 @@ async function main () {
       prompt: process.env.QWEN_PROMPT || defaultPrompt,
       width,
       height,
-      steps: Number(process.env.QWEN_STEPS || 30),
+      // Native tile sizes are latent units; bound VAE decoding at 2K and above.
+      ...(width * height >= 2048 * 2048 ? { vae_tiling: true, vae_tile_size: 64 } : {}),
+      steps: turbo ? 8 : Number(process.env.QWEN_STEPS || 30),
       seed: Number(process.env.QWEN_SEED || 42),
-      cfg_scale: 6,
+      cfg_scale: turbo ? 1 : 6,
       sampling_method: 'euler',
+      ...(turbo ? {
+        // Official Turbo model_index.json sample_sigmas, plus the engine's terminal zero.
+        custom_sigmas: [1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0.0]
+      } : {}),
       ...(refs.length === 1 ? { init_image: refs[0] } : refs.length > 1 ? { init_images: refs } : {})
     })
     const images = []
