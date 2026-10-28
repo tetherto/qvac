@@ -22,6 +22,7 @@
 
 #include "model-interface/CacheManager.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/MtmdLlmContext.hpp"
 #include "model-interface/SequenceDriver.hpp"
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
@@ -2662,6 +2663,7 @@ struct BatchedTurn {
   std::string output;
   size_t reuse = 0;
   size_t fileCheckpointReads = 0;
+  int32_t visionEncodeTiles = 0;
 };
 
 class BatchedCacheHarness {
@@ -2676,7 +2678,7 @@ public:
          this](const common_params& params, uint32_t seqId, llama_pos ceiling) {
           std::unique_ptr<SequenceDriver> built =
               original(params, seqId, ceiling);
-          driver_ = dynamic_cast<TextLlmContext*>(built.get());
+          driver_ = built.get();
           return built;
         });
   }
@@ -2684,19 +2686,30 @@ public:
   BatchedTurn
   run(const std::string& input, const std::string& cacheKey,
       bool saveAfter = false, const std::string& baseKey = "") {
-    BatchedTurn turn;
     LlamaModel::Prompt prompt;
     prompt.input = input;
     prompt.cacheKey = cacheKey;
     prompt.baseCacheKey = baseKey;
+    return run(std::move(prompt), saveAfter);
+  }
+
+  BatchedTurn run(LlamaModel::Prompt prompt, bool saveAfter = false) {
+    BatchedTurn turn;
     bool read = false;
     prompt.outputCallback = [&](const std::string&) {
-      if (!read && driver_ != nullptr) {
-        turn.reuse = driver_->lastCacheReuseForTesting();
-        turn.fileCheckpointReads = driver_->fileCheckpointReadsForTesting();
-        read = true;
+      if (read) {
+        return;
+      }
+      read = true;
+      if (auto* text = dynamic_cast<TextLlmContext*>(driver_)) {
+        turn.reuse = text->lastCacheReuseForTesting();
+        turn.fileCheckpointReads = text->fileCheckpointReadsForTesting();
+      } else if (auto* mtmd = dynamic_cast<MtmdLlmContext*>(driver_)) {
+        turn.reuse = mtmd->lastCacheReuseForTesting();
+        turn.visionEncodeTiles = mtmd->getVisionEncodeTiles();
       }
     };
+    const std::string cacheKey = prompt.cacheKey;
     const auto outputs = model_.processPromptBatch({prompt});
     turn.output = outputs.empty() ? std::string() : outputs.front();
     if (saveAfter) {
@@ -2714,7 +2727,7 @@ private:
   LlamaModel& model_;
   qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler*
       scheduler_;
-  TextLlmContext* driver_ = nullptr;
+  SequenceDriver* driver_ = nullptr;
 };
 
 std::string userTurns(const std::vector<std::string>& turns) {
@@ -2921,6 +2934,18 @@ struct SingleTurn {
   size_t reuse = 0;
 };
 
+SingleTurn runSingle(LlamaModel& model, const LlamaModel::Prompt& prompt) {
+  SingleTurn turn;
+  turn.output = model.processPrompt(prompt);
+  LlmContext* context = LlamaModelTestPeer::llmContext(model);
+  if (auto* text = dynamic_cast<TextLlmContext*>(context)) {
+    turn.reuse = text->lastCacheReuseForTesting();
+  } else if (auto* mtmd = dynamic_cast<MtmdLlmContext*>(context)) {
+    turn.reuse = mtmd->lastCacheReuseForTesting();
+  }
+  return turn;
+}
+
 SingleTurn runSingle(
     LlamaModel& model, const std::string& input, const std::string& key,
     const std::string& baseKey = "") {
@@ -2928,13 +2953,7 @@ SingleTurn runSingle(
   prompt.input = input;
   prompt.cacheKey = key;
   prompt.baseCacheKey = baseKey;
-  SingleTurn turn;
-  turn.output = model.processPrompt(prompt);
-  if (auto* text = dynamic_cast<TextLlmContext*>(
-          LlamaModelTestPeer::llmContext(model))) {
-    turn.reuse = text->lastCacheReuseForTesting();
-  }
-  return turn;
+  return runSingle(model, prompt);
 }
 
 } // namespace
@@ -4382,4 +4401,284 @@ TEST(CrossKeyPrefixTest, ARefusedBudgetKeepsTheKeysUnsavedTurns) {
       << "the key's file lost the banana turn";
   model.reset();
   fs::remove(key);
+}
+
+namespace {
+
+std::unique_ptr<LlamaModel> loadVisionModel(
+    const std::string& modelPath, const std::string& projectionPath,
+    const char* parallel = nullptr) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = parallel != nullptr ? "8192" : "4096";
+  config["n_predict"] = "12";
+  config["temp"] = "0";
+  config["seed"] = "5";
+  if (parallel != nullptr) {
+    config["parallel"] = parallel;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath;
+  std::string projection = projectionPath;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::move(projection), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+std::string smolVlmPath() {
+  return test_common::BaseTestModelPath::get(
+      "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+}
+
+std::string smolVlmProjectionPath() {
+  return test_common::BaseTestModelPath::get(
+      "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-500M-Instruct.gguf");
+}
+
+std::string qwen35ProjectionPath() {
+  return test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
+}
+
+// A fixture from the package `media/` dir; the tests run from the package
+// root or from build/test/unit.
+std::vector<uint8_t> readMediaFixture(const std::string& name) {
+  for (const std::string& root : {"../../../media/", "media/"}) {
+    std::ifstream file(root + name, std::ios::binary);
+    if (file) {
+      return {
+          std::istreambuf_iterator<char>(file),
+          std::istreambuf_iterator<char>()};
+    }
+  }
+  return {};
+}
+
+constexpr const char* K_ANIMAL = "What animal is this? Answer in one word.";
+constexpr const char* K_COLOUR =
+    "What colour is this animal? Answer in one word.";
+
+// A system prompt, then the image `imageName` with `question`: the addon
+// puts a media message's marker at the start of the next user message.
+LlamaModel::Prompt imageQuestion(
+    const std::string& imageName, const std::string& question,
+    const std::string& key, const std::string& baseKey = "") {
+  nlohmann::json messages = nlohmann::json::array(
+      {{{"role", "system"},
+        {"content", "You look at images and answer in one word."}},
+       {{"role", "user"}, {"type", "media"}, {"content", ""}},
+       {{"role", "user"}, {"content", question}}});
+  LlamaModel::Prompt prompt;
+  prompt.input = messages.dump();
+  prompt.media.push_back(readMediaFixture(imageName));
+  prompt.cacheKey = key;
+  prompt.baseCacheKey = baseKey;
+  return prompt;
+}
+
+MtmdLlmContext& visionContext(LlamaModel& model) {
+  auto* mtmd =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(model));
+  EXPECT_NE(mtmd, nullptr);
+  return *mtmd;
+}
+
+bool visionModelsFound(const std::string& model, const std::string& mmproj) {
+  return fs::exists(model) && fs::exists(mmproj) &&
+         !readMediaFixture("elephant.jpg").empty();
+}
+
+} // namespace
+
+// A new key with the same image starts from the conversation set aside and
+// does not encode the image again; another image is encoded.
+TEST(CrossKeyMultimodalTest, NewKeyReusesTheImageSetAside) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_a.bin", "cross_vision_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+
+  const SingleTurn animal =
+      runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0);
+  EXPECT_TRUE(mentions(animal.output, "elephant")) << animal.output;
+
+  const SingleTurn colour =
+      runSingle(*model, imageQuestion("elephant.jpg", K_COLOUR, keys[1]));
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the new key encoded the image again";
+  EXPECT_GT(colour.reuse, 0u);
+  ASSERT_TRUE(fs::exists(keys[0])) << "the switch did not save the first chat";
+  const std::string firstFile = bytesOf(keys[0]);
+
+  runSingle(*model, imageQuestion("news-paper.jpg", K_ANIMAL, ""));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0) << "another image was not encoded";
+  EXPECT_EQ(bytesOf(keys[0]), firstFile);
+
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A request without a key leaves its image in memory for the next request.
+TEST(CrossKeyMultimodalTest, RequestsWithoutAKeyLeaveTheirImage) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+  }
+  const std::string key = "cross_vision_keyless.bin";
+  fs::remove(key);
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, ""));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0);
+
+  const SingleTurn colour =
+      runSingle(*model, imageQuestion("elephant.jpg", K_COLOUR, key));
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the keyed request encoded the image the keyless one left";
+  EXPECT_GT(colour.reuse, 0u);
+  model.reset();
+  EXPECT_TRUE(fs::exists(key));
+  fs::remove(key);
+}
+
+// `baseCacheKey` serves a fresh model a primed image, and the file stays as
+// it was.
+TEST(CrossKeyMultimodalTest, ABaseCacheKeyServesAPrimedImage) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_base_primed.bin", "cross_vision_base_d.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto primer = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+    ASSERT_TRUE(primer->isLoaded());
+    runSingle(*primer, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+    primer->saveCache(keys[0]);
+  }
+  ASSERT_TRUE(fs::exists(keys[0]));
+  const std::string base = bytesOf(keys[0]);
+
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  const SingleTurn colour = runSingle(
+      *model, imageQuestion("elephant.jpg", K_COLOUR, keys[1], keys[0]));
+  EXPECT_EQ(mtmd.donorAdoptionsForTesting(), 1u);
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the request did not start from its baseCacheKey";
+  EXPECT_GT(colour.reuse, 0u);
+  model.reset();
+  EXPECT_EQ(bytesOf(keys[0]), base) << "the base file was written";
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// On the batch path a new key copies the image from another parked
+// conversation, which keeps its own state.
+TEST(CrossKeyMultimodalTest, BatchCopiesAParkedImage) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_batch_a.bin", "cross_vision_batch_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath(), "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const BatchedTurn animal =
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_TRUE(mentions(animal.output, "elephant")) << animal.output;
+
+  const BatchedTurn colour =
+      harness.run(imageQuestion("elephant.jpg", K_COLOUR, keys[1]));
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_EQ(colour.visionEncodeTiles, 0)
+      << "the new key encoded the image again";
+  EXPECT_GT(colour.reuse, 0u);
+
+  const uint64_t residentBefore = harness.scheduler().residentHitsForTesting();
+  harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), residentBefore + 1)
+      << "the lending conversation lost its parked state";
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// On a hybrid M-RoPE model, which cannot trim its memory, a new key that
+// continues another conversation's image question starts from that
+// conversation's end-of-history checkpoint, on both paths, and the image is
+// not encoded again.
+TEST(CrossKeyMultimodalTest, HybridStartsFromAnotherConversationsCheckpoint) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found() ||
+      !visionModelsFound(modelPath.path, qwen35ProjectionPath())) {
+    GTEST_SKIP() << "Qwen3.5 model, projection or media fixture not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_hybrid_a.bin", "cross_vision_hybrid_b.bin"};
+  const auto followUp = [&keys]() {
+    LlamaModel::Prompt prompt =
+        imageQuestion("elephant.jpg", K_ANIMAL, keys[1]);
+    nlohmann::json messages = nlohmann::json::parse(prompt.input);
+    messages.push_back({{"role", "assistant"}, {"content", "Elephant."}});
+    messages.push_back({{"role", "user"}, {"content", K_COLOUR}});
+    prompt.input = messages.dump();
+    return prompt;
+  };
+  for (const char* parallel : {static_cast<const char*>(nullptr), "2"}) {
+    SCOPED_TRACE(parallel == nullptr ? "single prompt" : "batch");
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+    auto model =
+        loadVisionModel(modelPath.path, qwen35ProjectionPath(), parallel);
+    ASSERT_TRUE(model->isLoaded());
+    if (parallel == nullptr) {
+      MtmdLlmContext& mtmd = visionContext(*model);
+      runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+      ASSERT_GT(mtmd.getVisionEncodeTiles(), 0);
+      const SingleTurn colour = runSingle(*model, followUp());
+      EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+          << "the new key encoded the image again";
+      EXPECT_GT(colour.reuse, 0u);
+    } else {
+      BatchedCacheHarness harness(*model);
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+      const BatchedTurn colour = harness.run(followUp());
+      EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+      EXPECT_EQ(colour.visionEncodeTiles, 0)
+          << "the new key encoded the image again";
+      EXPECT_GT(colour.reuse, 0u);
+      const uint64_t residentBefore =
+          harness.scheduler().residentHitsForTesting();
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+      EXPECT_EQ(
+          harness.scheduler().residentHitsForTesting(), residentBefore + 1)
+          << "the lending conversation lost its parked state";
+    }
+    model.reset();
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+  }
 }

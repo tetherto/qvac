@@ -208,6 +208,10 @@ public:
   [[nodiscard]] size_t lastCacheReuseForTesting() const noexcept {
     return pendingReuseEntries_;
   }
+  /// Requests that started from another conversation's state.
+  [[nodiscard]] size_t donorAdoptionsForTesting() const noexcept {
+    return donorAdoptions_;
+  }
 
   [[nodiscard]] llama_pos getCacheTokens() const override;
   void setCacheTokens(llama_pos cacheTokens) override;
@@ -226,6 +230,17 @@ public:
   void setCacheReconciliationEnabled(bool enabled) override {
     cacheReconciliationEnabled_ = enabled;
   }
+  /// See TextLlmContext: the ledger, media entries included, describes the
+  /// memory exactly whichever request left it there.
+  [[nodiscard]] bool sharesCacheAcrossKeys() const override {
+    return !llama_model_has_encoder(modelCtx_.model);
+  }
+  void setCacheSourceProvider(
+      qvac_lib_inference_addon_llama::cache::CacheSourceProvider provider)
+      override {
+    cacheSourceProvider_ = std::move(provider);
+  }
+  void resetStateKeepingMemory(bool resetStats) override;
   void setCacheCheckpointPolicy(
       const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy)
       override {
@@ -402,6 +417,13 @@ private:
   ledgerFromChunks(const mtmd::input_chunks& chunks) const;
   void rebuildSamplerFromLedger(
       const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
+  /// See TextLlmContext::adoptBestCacheSource.
+  void adoptBestCacheSource(
+      const qvac_lib_inference_addon_llama::cache::Ledger& prompt);
+  /// See TextLlmContext::adoptDonorState.
+  bool adoptDonorState(
+      const qvac_lib_inference_addon_llama::cache::DonorState& donor,
+      const qvac_lib_inference_addon_llama::cache::Ledger& prompt);
   void commitCacheRequest();
   bool restorePreRequestCacheState();
   // Checks a state `loadCache` or `adoptResidentState` just put in memory
@@ -586,6 +608,9 @@ private:
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
   size_t pendingReuseEntries_ = 0;
+  size_t donorAdoptions_ = 0;
+  qvac_lib_inference_addon_llama::cache::CacheSourceProvider
+      cacheSourceProvider_;
   bool failNextMediaChunkForTesting_ = false;
 
   // Generic request-entry snapshot for cancellation on memory that cannot
