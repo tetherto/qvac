@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve the active TTS instance when an older overlapping reload fails.
 - Adreno GPUs (Android, OpenCL): matrix products on every quantized weight
   type whose sums exceed the fp16 range no longer come back as infinity;
   `ggml-speech` `2026-10-23` fixed q8_0 only.

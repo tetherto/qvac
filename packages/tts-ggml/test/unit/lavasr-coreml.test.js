@@ -13,6 +13,16 @@ const ENGINE_FILES = {
   cosyvoice3: { cosyvoiceModelDir: '/models/cosyvoice' }
 }
 
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((ok, fail) => {
+    resolve = ok
+    reject = fail
+  })
+  return { promise, resolve, reject }
+}
+
 function stageOptions(stage, computeUnits) {
   return {
     type: 'lavasr',
@@ -177,4 +187,62 @@ test('a failed Core ML reload destroys the partial addon and cannot accept jobs'
     await response.await()
   }, /not loaded|Core ML model/)
   t.is(jobs, 0, 'no synthesis can bypass the explicitly selected stage')
+})
+
+test('a failed older Core ML reload preserves the newer active addon', async (t) => {
+  const model = new TTSGgml(modelOptions({ enhancer: stageOptions('enhancer', 'CPU_AND_NE') }))
+  const first = { started: deferred(), activation: deferred() }
+  const second = { started: deferred(), activation: deferred() }
+  const activations = [undefined, first, second]
+  const instances = []
+  const destroyed = new Set()
+  t.teardown(async () => {
+    first.activation.resolve()
+    second.activation.resolve()
+    await Promise.all(instances.map((addon) => addon.destroyInstance()))
+  })
+  model._createAddon = (configuration, callback) => {
+    const binding = new MockedBinding()
+    const pending = activations[instances.length]
+    const activate = binding.activate.bind(binding)
+    if (pending) {
+      binding.activate = async (handle) => {
+        pending.started.resolve()
+        await pending.activation.promise
+        activate(handle)
+      }
+    }
+    const addon = new TTSInterface(binding, configuration, callback)
+    const destroy = addon.destroyInstance.bind(addon)
+    addon.destroyInstance = async () => {
+      await destroy()
+      destroyed.add(addon)
+    }
+    instances.push(addon)
+    return addon
+  }
+  await model.load()
+  const firstReload = t.exception(model.reload(), /First Core ML activation failed/)
+  await first.started.promise
+  const secondReload = model.reload()
+  await second.started.promise
+  const newest = model.addon
+  second.activation.resolve()
+  await secondReload
+  t.is(model.addon, newest, 'the newer reload activates its replacement')
+  first.activation.reject(new Error('First Core ML activation failed'))
+  await firstReload
+  t.is(model.addon, newest, 'the older failure cannot clear the active replacement')
+  t.absent(destroyed.has(newest), 'the active replacement remains alive')
+  let samples = 0
+  const response = await model.run({ input: 'The newer model still works.' })
+  await response
+    .onUpdate((chunk) => {
+      if (chunk.outputArray) samples += chunk.outputArray.length
+    })
+    .await()
+  t.ok(samples > 0, 'synthesis still produces audio through the newer instance')
+  await model.unload()
+  t.ok(destroyed.has(newest), 'unload can still reach and destroy the active replacement')
+  t.absent(model.addon, 'unload clears the replacement')
 })

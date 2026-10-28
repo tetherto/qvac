@@ -369,7 +369,8 @@ class TTSGgml {
             await addon.activate();
         }
         catch (error) {
-            this.addon = null;
+            if (this.addon === addon)
+                this.addon = null;
             await addon.destroyInstance();
             throw error;
         }
