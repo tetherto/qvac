@@ -79,7 +79,7 @@ Both formats are interchangeable. The `hypercore-id-encoding` library handles co
 
 ### System Requirements
 
-- Node.js ≥ 20
+- Node.js 22.23.4, 24.22.1 or 26.12.1+ (CVE-2026-111497); run `pm2 update` after upgrading
 - `npm install` completed inside `registry-server/`
 - `npm run build:spec` executed (generates hyperschema/hyperdb/hyperdispatch artifacts)
 - Unique storage directory per writer (`./corestore`, `./store2`, `./store3`, …)

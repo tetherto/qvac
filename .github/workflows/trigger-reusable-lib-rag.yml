@@ -116,8 +116,8 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
-      - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Setup Node and Bare
+        uses: ./.github/actions/setup-bare-tooling
         with:
           node-version: 22
 
@@ -182,8 +182,10 @@ jobs:
       contents: write
       packages: write
       id-token: write
-    if: |-
-      (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
     environment: npm
     outputs:
