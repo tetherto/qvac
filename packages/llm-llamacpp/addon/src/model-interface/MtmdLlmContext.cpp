@@ -1327,9 +1327,9 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
             qvac_errors::general_error::InvalidArgument),
         errorMsg);
   }
-  const std::string mediaId =
-      std::to_string(cache::hashBytes(bmp.data(), bmp.n_bytes()));
-  bmp.set_id(mediaId.c_str());
+  // The helper names the bitmap by the SHA-256 of its bytes, as llama-server
+  // does to keep one image's cells from serving another: the cache shares
+  // them across keys.
   bitmaps_.entries.push_back(std::move(bmp));
 }
 
