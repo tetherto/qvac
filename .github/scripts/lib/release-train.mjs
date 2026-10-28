@@ -245,6 +245,32 @@ export function publishedCommit (train, version, gitHeadOf) {
   return value
 }
 
+// The result of `npm view <spec> <field> --json`. E404 means both "no such
+// package" and "no such version", and also a version npm has accepted but does
+// not serve yet. `found` keeps that apart from a field the version does not
+// have, where `value` is null.
+export function parseNpmView ({ status, stdout, stderr }) {
+  if (status !== 0) {
+    let code
+    try {
+      code = JSON.parse(stdout).error?.code
+    } catch {}
+    if (code === 'E404') return { found: false, value: null }
+    throw new Error(`exit ${status}: ${stderr || stdout}`)
+  }
+  return { found: true, value: stdout.trim() ? JSON.parse(stdout) : null }
+}
+
+// Compares npm's sha1 only for the versions this run published. A version an
+// earlier run published was compared by that run, and a rebuild of the same
+// commit can pack different bytes than it did.
+export function shasumMismatches (moved, published, servedShasum, builtShasum) {
+  const publishedNames = new Set(published)
+  return moved
+    .filter((project) => publishedNames.has(project.name) && servedShasum(project) !== builtShasum(project))
+    .map((project) => `${project.name}@${project.version} on npm has sha1 ${servedShasum(project)}; the built tarball has ${builtShasum(project)}`)
+}
+
 // A consumer install that resolves every train package from its tarball, as it
 // will from npm once published. npm rejects an override that differs from a
 // direct dependency, so direct dependencies point at the same tarball.

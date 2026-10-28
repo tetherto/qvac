@@ -10,7 +10,7 @@
 //   release-train.mjs pack <train> <dest-dir>
 //   release-train.mjs stage <package-dir> <tarball-dir>
 //   release-train.mjs publish <moved-json> [--dry-run]
-//   release-train.mjs wait <moved-json> <tarball-dir>
+//   release-train.mjs wait <moved-json> <published-json> <tarball-dir>
 //   release-train.mjs tag <moved-json> [--push]
 //
 // resolve prints the train and the packages whose version moved between the two
@@ -32,11 +32,13 @@ import {
   movedProjects,
   parseBranch,
   parseLsRemote,
+  parseNpmView,
   planTags,
   publishedCommit,
   publishedElsewhere,
   readRepoJson,
   repoRoot,
+  shasumMismatches,
   slugOf,
   stageManifest,
 } from './lib/release-train.mjs'
@@ -64,20 +66,12 @@ function gitShow (sha, path) {
   return result.status === 0 ? result.stdout : null
 }
 
-// E404 means both "no such package" and "no such version", and also a version
-// npm has accepted but does not serve yet. `found` keeps that apart from a field
-// the version does not have, where `value` is null.
 function npmView (spec, field) {
-  const result = run('npm', ['view', spec, field, '--json', '--prefer-online'])
-  if (result.status !== 0) {
-    let code
-    try {
-      code = JSON.parse(result.stdout).error?.code
-    } catch {}
-    if (code === 'E404') return { found: false, value: null }
-    throw new Error(`npm view ${spec} failed (exit ${result.status}): ${result.stderr || result.stdout}`)
+  try {
+    return parseNpmView(run('npm', ['view', spec, field, '--json', '--prefer-online']))
+  } catch (error) {
+    throw new Error(`npm view ${spec} failed (${error.message})`)
   }
-  return { found: true, value: result.stdout.trim() ? JSON.parse(result.stdout) : null }
 }
 
 function isPublished (name, version) {
@@ -298,6 +292,7 @@ function publishTrain ([movedJson], options) {
   if (errors.length) fail(errors)
   if (pending.length === 0) {
     console.log('Nothing to publish.')
+    setOutputs({ published: '[]' })
     return
   }
 
@@ -317,18 +312,20 @@ function publishTrain ([movedJson], options) {
   } finally {
     restores.forEach((restore) => restore())
   }
+  setOutputs({ published: JSON.stringify(pending.map((project) => project.name)) })
 }
 
 // npm answers E404 for a version for some time after publishing it, so the
 // shasum check waits until npm serves the version. A registry error counts as
 // "not served yet": the versions are already published, so the only outcome
 // that matters is whether npm serves them in time, and what it serves.
-function waitServed ([movedJson, tarballDir]) {
-  if (!tarballDir) fail(['usage: wait <moved-json> <tarball-dir>'])
-  const moved = JSON.parse(movedJson ?? '[]')
+function waitServed ([movedJson, publishedJson, tarballDir]) {
+  if (!movedJson || !publishedJson || !tarballDir) fail(['usage: wait <moved-json> <published-json> <tarball-dir>'])
+  const moved = JSON.parse(movedJson)
+  const published = JSON.parse(publishedJson)
   const index = JSON.parse(readFileSync(join(tarballDir, TARBALL_INDEX), 'utf8'))
   const deadline = Date.now() + 10 * 60 * 1000
-  const errors = []
+  const served = new Map()
   for (const project of moved) {
     let view = { found: false }
     for (;;) {
@@ -342,9 +339,11 @@ function waitServed ([movedJson, tarballDir]) {
       spawnSync('sleep', ['10'])
     }
     console.log(`npm serves ${project.name}@${project.version}`)
-    const expected = sha1(join(tarballDir, index[project.name]))
-    if (view.value !== expected) errors.push(`${project.name}@${project.version} on npm has sha1 ${view.value}; the built tarball has ${expected}`)
+    served.set(project.name, view.value)
   }
+  const errors = shasumMismatches(moved, published,
+    (project) => served.get(project.name),
+    (project) => sha1(join(tarballDir, index[project.name])))
   if (errors.length) fail(errors)
 }
 

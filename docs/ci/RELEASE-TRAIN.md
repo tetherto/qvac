@@ -166,24 +166,27 @@ check that is skipped counts as passed.
   the run; an older line is released through its per-package workflow.
 - `gitHead` in each published manifest is the commit it was built from. Each
   tag goes on that commit, the GitHub release's tag included.
-- npm's sha of each published tarball must match the tarball the build job
-  packed, compared once npm serves the version.
+- npm's sha of each tarball the run published must match the tarball the build
+  job packed, compared once npm serves the version. A version an earlier run
+  published is not compared again: a rebuild can pack different bytes.
 - A version npm already has from this commit (its `gitHead`) is skipped; one
-  from another commit stops the run.
+  from another commit, or with no recorded commit, stops the run.
 
 ## Recovery
 
 - **Nothing published yet** (a check failed, or the approval was rejected): fix
   it with a PR into the same branch.
 - **Partly published, or a job after publishing failed, transient error**:
-  re-run the failed jobs on the same commit. Versions on npm from that commit
-  are skipped, and every job after publishing runs again: it skips tags already
-  at npm's `gitHead` and files PyPI already has, and updates the notes of an
-  existing GitHub release.
+  re-run the failed jobs on the same commit, not all jobs: re-running all jobs
+  rebuilds the train and no longer compares npm's sha with what was published.
+  Versions on npm from that commit are skipped, and every job after publishing
+  runs again: it skips tags already at npm's `gitHead` and files PyPI already
+  has, and updates the notes of an existing GitHub release.
 - **Partly published, fix needs a new commit**: the branch can no longer
   publish. Cut a new train with new versions for the packages npm already has;
   the others can keep theirs.
-- `workflow_dispatch` with `publish_pypi_only: true` publishes PyPI alone.
+- `workflow_dispatch` with `publish_pypi_only: true` publishes PyPI alone. It
+  fails on a file PyPI already has.
 
 ## Per-package workflows
 

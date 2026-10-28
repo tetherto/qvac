@@ -10,12 +10,14 @@ import {
   movedProjects,
   parseBranch,
   parseLsRemote,
+  parseNpmView,
   planTags,
   publishedCommit,
   publishedElsewhere,
   rangeErrors,
   readRepoJson,
   satisfies,
+  shasumMismatches,
   stageManifest,
   workspaceEntries,
 } from '../lib/release-train.mjs'
@@ -276,6 +278,28 @@ test('reads the published commit from the anchor package, and fails until npm ha
     () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: 'refs/heads/main' })),
     /has no commit as its gitHead on npm/,
   )
+})
+
+test('tells a version npm does not serve apart from a field it does not have', () => {
+  const e404 = JSON.stringify({ error: { code: 'E404', summary: 'No match found for version 0.17.0' } })
+  assert.deepEqual(parseNpmView({ status: 1, stdout: e404, stderr: '' }), { found: false, value: null })
+  assert.deepEqual(parseNpmView({ status: 0, stdout: '', stderr: '' }), { found: true, value: null })
+  assert.deepEqual(parseNpmView({ status: 0, stdout: `"${HEAD}"\n`, stderr: '' }), { found: true, value: HEAD })
+  assert.throws(
+    () => parseNpmView({ status: 1, stdout: JSON.stringify({ error: { code: 'E503' } }), stderr: 'Service Unavailable' }),
+    /exit 1: Service Unavailable/,
+  )
+  assert.throws(() => parseNpmView({ status: 1, stdout: '', stderr: 'getaddrinfo ENOTFOUND' }), /ENOTFOUND/)
+})
+
+test('compares sha1 only for the versions this run published', () => {
+  const served = { '@qvac/inference': 'aaa', '@qvac/sdk': 'bbb', '@qvac/cli': 'ccc' }
+  const built = { '@qvac/inference': 'aaa', '@qvac/sdk': 'xxx', '@qvac/cli': 'yyy' }
+  const mismatches = (published) => shasumMismatches(MOVED, published, (project) => served[project.name], (project) => built[project.name])
+  assert.deepEqual(mismatches(['@qvac/inference', '@qvac/sdk']), [
+    '@qvac/sdk@0.22.0 on npm has sha1 bbb; the built tarball has xxx',
+  ])
+  assert.deepEqual(mismatches([]), [])
 })
 
 test('points every train dependency, direct or not, at its tarball', () => {
