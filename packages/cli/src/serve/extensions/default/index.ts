@@ -6,6 +6,7 @@ import { MODEL_FIT_FIELD_CODES } from '@/serve/extensions/default/schemas/model-
 import { OCR_FIELD_CODES } from '@/serve/extensions/default/schemas/ocr'
 import { SYSTEM_FIELD_CODES } from '@/serve/extensions/default/schemas/system'
 import { TRANSLATE_FIELD_CODES } from '@/serve/extensions/default/schemas/translate'
+import { UPSCALE_FIELD_CODES } from '@/serve/extensions/default/schemas/upscale'
 import { TAG_DESCRIPTIONS } from '@/serve/extensions/default/tags'
 
 const defaultExtension: ServeExtension = {
@@ -18,7 +19,8 @@ const defaultExtension: ServeExtension = {
     ...MODEL_FIT_FIELD_CODES,
     ...TRANSLATE_FIELD_CODES,
     ...OCR_FIELD_CODES,
-    ...CLASSIFICATIONS_FIELD_CODES
+    ...CLASSIFICATIONS_FIELD_CODES,
+    ...UPSCALE_FIELD_CODES
   },
   async register(app) {
     for (const route of routes) {

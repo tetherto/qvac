@@ -13,5 +13,7 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
     'Text translation via SDK `translate()` backed by an NMT model. Each alias under `serve.models` configures its own engine and language direction.',
   OCR: 'Text recognition via SDK `ocr()`. Each alias under `serve.models` configures its own pipeline and languages.',
   Classification:
-    "Image classification via SDK `classify()`. An alias without `src` uses the addon's bundled model."
+    "Image classification via SDK `classify()`. An alias without `src` uses the addon's bundled model.",
+  Upscale:
+    'Image upscaling via SDK `upscale()` backed by an ESRGAN model loaded with `config.mode: "upscale"`. Returns the `/v1/images` response shape.'
 }
