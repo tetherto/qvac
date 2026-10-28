@@ -91,6 +91,20 @@ export default {
           // stays out of this file.
           QVAC_WORKER_PATH: '../../qvac/worker.entry.mjs'
         }
+      },
+      {
+        // The Kotlin SDK on an Android device. An app cannot be driven over
+        // stdin, so it speaks the consumer protocol itself (mqtt mode).
+        // See runners/kotlin/README.md.
+        name: 'kotlin-android',
+        platform: 'kotlin-android',
+        mode: 'mqtt',
+        prepare: {
+          interpreter: 'node',
+          args: ['runners/kotlin/scripts/device.mjs', 'prepare']
+        },
+        interpreter: 'node',
+        args: ['runners/kotlin/scripts/device.mjs', 'run']
       }
     ],
     mobile: {
