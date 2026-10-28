@@ -736,7 +736,7 @@ and one streaming chunk.
 | --- | --- | --- |
 | `maxThreads` | `0` | CPU threads (0 lets the engine pick). |
 | `useGPU` | `false` | Select a GPU automatically when `backend` is `auto`. |
-| `backend` | `auto` | Native selector: `cpu`, `cuda`, `vulkan`, or an exact ggml device name such as `CUDA0` or `Vulkan0`. Explicit selection overrides `useGPU` and fails at load if unavailable. |
+| `backend` | `auto` | Native selector: `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`, `Vulkan0` or `MTL0`. Explicit selection overrides `useGPU` and fails at load if unavailable. |
 | `backendsDir` | next to the loaded module | Directory scanned as given for the dynamically loaded ggml backends. |
 
 For example, `mossTranscribeConfig: { backend: 'cuda' }` requests CUDA even
@@ -745,8 +745,8 @@ the CPU ggml backend. `auto` (or an empty selector) preserves automatic selectio
 Pass the same `backend` to `assessFit({ engine: 'moss-transcribe', ... })`
 to project on that device; it overrides `gpuLayers`. A missing explicit device
 returns a fit error instead of a CPU projection. `getBackendInfo()` reports
-the resolved backend after load. CUDA/Vulkan require compatible native
-`speech-cpp` libraries and the corresponding backend in the addon build.
+the resolved backend after load. CUDA, Vulkan and Metal require compatible
+native `speech-cpp` libraries and the corresponding backend in the addon build.
 
 Any other key throws `INVALID_CONFIG` (24015). Prompt, hotwords and the token
 bound are per call; see
@@ -1103,8 +1103,8 @@ The MOSS-Transcribe-Diarize integration test (`moss-transcribe.test.js`, part of
 at a GGUF and is skipped otherwise; the C++ suite transcribes a real recording
 when `QVAC_TEST_MOSS_TRANSCRIBE_GGUF` and `QVAC_TEST_MOSS_TRANSCRIBE_AUDIO`
 (16 kHz s16le raw) are set. To check a specific backend with the JS integration
-test, also set `QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=cuda` or `vulkan` (or an exact
-device name). It asserts the resolved backend before transcription; a missing
+test, also set `QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=cuda`, `vulkan` or `metal` (or
+an exact device name). It asserts the resolved backend before transcription; a missing
 requested backend fails instead of silently validating CPU. An explicit selector
 also fails if the model or audio fixture is missing; only the default `auto`
 mode permits optional-fixture skips. Selectors are case-sensitive, matching

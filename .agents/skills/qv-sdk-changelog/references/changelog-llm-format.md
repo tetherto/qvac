@@ -40,6 +40,7 @@ Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelin
    - **Bug Fixes**: Describe what was broken and how it's fixed
    - **Model Changes**: List added/removed models with their constant names, grouped by type (LLM, embedding, whisper, etc.)
    - **Other sections**: Summarize briefly
+   - **Client subsections** (`@qvac/sdk` only): changes to the Python or Kotlin client sit under a `### Python client` / `### Kotlin client` heading inside Breaking Changes or New APIs, with the example in that language
 
 5. **Style Guidelines**:
    - Use complete sentences, not bullet fragments
