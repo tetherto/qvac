@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Lints the C/C++ a change touched in one package: clang-format on the changed lines, then clang-tidy (warnings as
 // errors) on the changed sources in build/compile_commands.json. Run from the package directory after bare-make
-// generate, as `node ../../scripts/ci/cpp-lint-changed.mjs --base <commit>`.
+// generate, as `node ../../scripts/ci/cpp-lint-changed.mjs --base <commit>`. With --generate "<command>" it runs that
+// generate itself, and skips generate and lint when the change touched no C/C++ file in the package.
 
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -10,11 +11,24 @@ import { parseArgs } from 'node:util'
 
 const EXTENSIONS = 'c,cc,cpp,cxx,h,hh,hpp,hxx'
 const SOURCE = /\.(c|cc|cpp|cxx)$/
+const CPP = /\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$/
 
-const { base } = parseArgs({ options: { base: { type: 'string' } } }).values
+const { base, generate } = parseArgs({
+  options: { base: { type: 'string' }, generate: { type: 'string' } }
+}).values
 // A value starting with "-" would reach git as an option.
 if (!/^[A-Za-z0-9][A-Za-z0-9._/~^-]*$/.test(base ?? ''))
   throw new Error(`--base '${base}' is not a commit`)
+
+if (generate !== undefined) {
+  if (
+    !git(['diff', '--name-only', '--relative', base, 'HEAD', '--', '.']).some((f) => CPP.test(f))
+  ) {
+    console.log('No C/C++ file changed in this package; skipping generate and lint.')
+    process.exit(0)
+  }
+  execFileSync(generate, { shell: true, stdio: 'inherit' })
+}
 
 const formatOk = checkFormat()
 const tidyOk = runTidy()

@@ -1,0 +1,27 @@
+name: Publish platform packages to npm
+description: Publish each per-platform package the slicer staged, before the meta. A slice already on npm is skipped when the meta is released or its contents are identical; a slice from another build while the meta is missing fails before anything publishes.
+
+inputs:
+  workdir:
+    description: Meta package directory, after slicing
+    required: true
+  slices-dir:
+    description: Directory holding one staged platform package per subdirectory
+    required: true
+  tag:
+    description: npm dist-tag
+    required: true
+  dry-run:
+    description: Check every slice and list what would publish, without publishing
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        SLICES_DIR: ${{ inputs.slices-dir }}
+        DIST_TAG: ${{ inputs.tag }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: node "$GITHUB_ACTION_PATH/npm-publish-platform-packages.mjs"
