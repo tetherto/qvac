@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Align the shared native `speech-cpp` source to `2026-10-26` across the speech addons.
 - Project only required MOSS Delay text-control logits on Metal.
 - Avoid duplicate reference encoding when MOSS-TTSD dialogue uses one recording.
 - Align TTSD prompts and reference level normalization with the native pipeline.

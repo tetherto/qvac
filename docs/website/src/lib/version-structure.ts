@@ -24,6 +24,14 @@ export interface DirectoryListing {
   directories: readonly string[];
   /** Content files, `.mdx` or `.md`. */
   files: readonly string[];
+  /**
+   * Entries that are symbolic links. The development line is previewed by
+   * linking it into its collection, and a link committed by accident would
+   * publish an unreleased line in silence: Fumadocs follows it, while the
+   * bijection above reads `isDirectory()`, which a link answers `false`. This
+   * is the only thing that sees it.
+   */
+  symlinks?: readonly string[];
 }
 
 /** A version folder carrying a patch, which no version folder may. */
@@ -58,6 +66,15 @@ function checkSoftware(
   }
 
   const problems: string[] = [];
+
+  for (const link of listing.symlinks ?? []) {
+    problems.push(
+      `${software.path}: ${link} is a symbolic link, so it publishes whatever ` +
+        `it points at without being a line of its own — the preview link ` +
+        `belongs in .gitignore, not in a commit`,
+    );
+  }
+
   const versionFolders = listing.directories.filter((directory) =>
     looksLikeVersionFolder(directory),
   );

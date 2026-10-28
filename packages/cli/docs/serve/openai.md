@@ -124,8 +124,8 @@ curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'
 curl 'http://localhost:11434/v1/models/catalog?search=qwen'
 ```
 
-The live remote model registry and on-disk download state are not included yet (planned
-follow-ups).
+The catalog does not include on-disk download state. To browse the live remote model registry,
+use [`GET /qvac/v1/registry/models`](default.md#get-qvacv1registrymodels) on the QVAC surface.
 
 ## Tools: deferred loading
 
