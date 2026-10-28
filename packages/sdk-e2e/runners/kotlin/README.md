@@ -53,6 +53,12 @@ The Gradle build includes `packages/sdk-kotlin` as a composite build, so the app
 checkout's Kotlin SDK and the worker it bundles. `pr-checks-sdk-kotlin.yml` runs the unit tests, so an
 SDK change that breaks the app fails the Kotlin SDK's PR checks.
 
+## CI
+
+`test-android-sdk.yml` with `app: kotlin` builds the APK with the run and broker baked in and runs it on
+Device Farm under the React Native app's test spec. Dispatch `test-sdk.yml` with **Kotlin Android
+tests**.
+
 ## Adding coverage
 
 The interpreter mirrors the Python client's step for step, so a test that passes on one and fails on the
