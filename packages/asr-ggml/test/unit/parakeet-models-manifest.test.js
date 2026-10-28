@@ -21,7 +21,7 @@ const path = require('bare-path')
 const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'models.manifest.json')
 const HELPERS_PATH = path.join(__dirname, '..', 'integration', 'parakeet-helpers.js')
 
-// The desktop quant sweep staged by integration-test-asr-ggml.yml
+// The desktop quant sweep the CI contract stages for test:integration
 // (f16 + q8_0 + q4_0 for Unified and the existing core model types), plus
 // the Sortformer-Streaming v2.1 q8_0 GGUF that parakeet-sortformer-aosc-streaming.test.js
 // loads via MODEL_CONFIGS.sortformerStreaming, plus Indic Conformer CTC q8_0

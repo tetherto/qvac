@@ -29,7 +29,8 @@ const DEFAULT_DIT_VARIANT = 'turbo-q4'
 const DEFAULT_MANUAL_DIR = 'packages/audiogen-ggml/benchmarks/manual-results'
 const BYTES_PER_MB = 1024 * 1024
 
-const ARTIFACT_PATTERNS = ['rtf-results-audiogen-ggml-*', 'perf-report-audiogen-ggml-*']
+// The CI contract's benchmark artifacts: desktop RTF results and the mobile perf reports.
+const ARTIFACT_PATTERNS = ['audiogen-ggml-benchmark-*', 'audiogen-ggml-perf-mobile-*']
 const DEFAULT_FETCH_RUNS = 6
 
 function parseArgs (argv) {

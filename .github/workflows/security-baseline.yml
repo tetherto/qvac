@@ -105,7 +105,6 @@ jobs:
           .github/scripts/test/model-cache-sync.test.mjs
           .github/scripts/test/cache-models-branches.test.mjs
           .github/scripts/test/download-artifact-retry.test.mjs
-          .github/scripts/test/asr-integration-budget.test.mjs
           .github/scripts/test/integration-test-script.test.mjs
           .github/scripts/test/release-train.test.mjs
           .agents/skills/_lib/sdk/agent-stack-plan.test.mjs

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// asr's test:integration, as integration-test-asr-ggml.yml ran it: the package installs with npm (it is outside the
+// asr's test:integration, as main's asr integration workflow ran it: the package installs with npm (it is outside the
 // pnpm workspace) and links its local build again, then both engines' suite, the whisper GPU suite and, on the
 // Vulkan host, the GPU smoke test. The manifest supplies the models.
 //
@@ -53,7 +53,7 @@ const must = (status) => {
 
 // npm install restores the published platform package over the local link, so link again after it.
 export function install() {
-  must(run('npm', ['install', '--no-audit', '--no-fund']))
+  must(run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund']))
   must(run('npm', ['run', 'link:platform']))
 }
 

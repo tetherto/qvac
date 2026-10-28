@@ -119,14 +119,14 @@ contention. ASR and BCI test errors fail the job and the merge guard; coverage
 generation and artifact collection still run after a failed test if the build
 succeeded.
 
-For a runner comparison, dispatch the same `main` commit with explicit packages
-and an `overrides` JSON object. It accepts only fields already declared in the
-trusted package configuration. For example, benchmark TTS on Ubuntu 24.04 GPU
-without changing its default CPU routing:
+To try a different setting, dispatch the same `main` commit with explicit
+packages and an `overrides` JSON object. It accepts only fields already declared
+in the trusted package configuration, and applies them to each of the package's
+platform rows. For example, diffusion's C++ tests in standard mode:
 
 ```bash
-gh workflow run cpp-tests-nx.yml --ref main -f packages='["tts-ggml"]' \
-  -f overrides='{"tts-ggml":{"os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64-gpu","cppBuildJobs":2}}'
+gh workflow run cpp-tests-nx.yml --ref main -f packages='["diffusion-cpp"]' \
+  -f overrides='{"diffusion-cpp":{"mode":"standard"}}'
 ```
 
 Package config is read from the trusted base ref. After merging a runner change into `main`, start a new run for an existing PR to resolve the updated matrix; already queued jobs retain the labels selected by their original run.

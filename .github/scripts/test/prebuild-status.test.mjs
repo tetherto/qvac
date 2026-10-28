@@ -23,7 +23,7 @@ import {
 const iso = (s) => new Date(s).toISOString()
 
 function status({
-  context = 'qvac/prebuild-tts-ggml',
+  context = 'qvac/prebuild-diffusion-cpp',
   login = 'github-actions[bot]',
   updated_at,
   target_url,
@@ -95,7 +95,7 @@ test('selectNewestBotStatus picks the newest bot status across pages (multi-page
     [status({ updated_at: iso('2026-08-10T12:00:00Z'), target_url: 'r/actions/runs/2', state: 'success' })],
     [status({ updated_at: iso('2026-08-10T09:00:00Z'), target_url: 'r/actions/runs/1', state: 'failure' })],
   ]
-  const chosen = selectNewestBotStatus(flattenPages(pages), 'qvac/prebuild-tts-ggml')
+  const chosen = selectNewestBotStatus(flattenPages(pages), 'qvac/prebuild-diffusion-cpp')
   assert.equal(chosen.target_url, 'r/actions/runs/2')
   assert.equal(chosen.state, 'success')
 })
@@ -106,8 +106,8 @@ test('selectNewestBotStatus ignores non-bot creators and non-matching contexts',
     status({ context: 'qvac/prebuild-vla', updated_at: iso('2026-08-10T13:30:00Z'), target_url: 'x/actions/runs/8' }),
     status({ updated_at: iso('2026-08-10T12:00:00Z'), target_url: 'x/actions/runs/2' }),
   ]
-  assert.equal(selectNewestBotStatus(statuses, 'qvac/prebuild-tts-ggml').target_url, 'x/actions/runs/2')
-  assert.equal(selectNewestBotStatus([], 'qvac/prebuild-tts-ggml'), null)
+  assert.equal(selectNewestBotStatus(statuses, 'qvac/prebuild-diffusion-cpp').target_url, 'x/actions/runs/2')
+  assert.equal(selectNewestBotStatus([], 'qvac/prebuild-diffusion-cpp'), null)
 })
 
 // --- run binding ----------------------------------------------------------
@@ -126,11 +126,11 @@ test('isRunFresh requires the matching workflow and created_at >= threshold', ()
   const fresh = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T12:00:05Z' }
   const stale = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T11:59:00Z' }
   // legacy per-package producer is no longer trusted — only on-pr-nx.yml
-  const wrongWorkflow = { path: '.github/workflows/on-pr-tts-ggml.yml', created_at: '2026-08-10T13:00:00Z' }
-  assert.equal(isRunFresh(fresh, 'tts-ggml', threshold), true)
-  assert.equal(isRunFresh(stale, 'tts-ggml', threshold), false)
-  assert.equal(isRunFresh(wrongWorkflow, 'tts-ggml', threshold), false)
-  assert.equal(isRunFresh(null, 'tts-ggml', threshold), false)
+  const wrongWorkflow = { path: '.github/workflows/on-pr-diffusion-cpp.yml', created_at: '2026-08-10T13:00:00Z' }
+  assert.equal(isRunFresh(fresh, 'diffusion-cpp', threshold), true)
+  assert.equal(isRunFresh(stale, 'diffusion-cpp', threshold), false)
+  assert.equal(isRunFresh(wrongWorkflow, 'diffusion-cpp', threshold), false)
+  assert.equal(isRunFresh(null, 'diffusion-cpp', threshold), false)
 })
 
 // Each carved-out package has exactly one legitimate producer. A flat allowlist
@@ -193,10 +193,22 @@ test('isRunFresh: vla trusts pr-build-test.yml, and no longer its old orchestrat
   assert.equal(isRunFresh({ path: '.github/workflows/on-pr-vla.yml', created_at: at }, 'vla', threshold), false)
 })
 
-test('isRunFresh: every carved-out key is a real PREBUILD_KEYS entry', () => {
-  // A typo ('vla-ggml' for 'vla') would silently fall back to the nx producer.
+test('isRunFresh: every carved-out key is a real PREBUILD_KEYS or CPP_TEST_KEYS entry', () => {
+  // A typo ('vla-ggml' for 'vla') would silently fall back to the nx producer. audiogen-ggml posts only its C++ status.
   for (const pkg of Object.keys(CARVED_OUT_PRODUCERS)) {
-    assert.ok(PREBUILD_KEYS.includes(pkg), `${pkg} is not a PREBUILD_KEYS entry`)
+    assert.ok(
+      PREBUILD_KEYS.includes(pkg) || CPP_TEST_KEYS.includes(pkg),
+      `${pkg} is not a PREBUILD_KEYS or CPP_TEST_KEYS entry`
+    )
+  }
+})
+
+test('isRunFresh: the speech packages trust pr-build-test.yml, not on-pr-nx', () => {
+  const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
+  const at = '2026-08-10T12:00:05Z'
+  for (const pkg of ['asr-ggml', 'audiogen-ggml', 'bci-whispercpp', 'tts-ggml']) {
+    assert.equal(isRunFresh({ path: '.github/workflows/pr-build-test.yml', created_at: at }, pkg, threshold), true)
+    assert.equal(isRunFresh({ path: NX_PRODUCER, created_at: at }, pkg, threshold), false)
   }
 })
 
@@ -224,21 +236,21 @@ test('evaluatePackage: a superseded pre-label run cannot pass; the fresh labeled
   const preLabelOnly = [
     status({ updated_at: iso('2026-08-10T12:00:30Z'), target_url: 'r/actions/runs/1', state: 'success' }),
   ]
-  assert.equal(evaluatePackage(preLabelOnly, 'tts-ggml', threshold, lookup), 'pending')
+  assert.equal(evaluatePackage(preLabelOnly, 'diffusion-cpp', threshold, lookup), 'pending')
 
   // The labeled run posts success -> pass.
   const labeledSuccess = [
     ...preLabelOnly,
     status({ updated_at: iso('2026-08-10T13:00:00Z'), target_url: 'r/actions/runs/2', state: 'success' }),
   ]
-  assert.equal(evaluatePackage(labeledSuccess, 'tts-ggml', threshold, lookup), 'success')
+  assert.equal(evaluatePackage(labeledSuccess, 'diffusion-cpp', threshold, lookup), 'success')
 
   // The labeled run posts failure -> fail.
   const labeledFailure = [
     ...preLabelOnly,
     status({ updated_at: iso('2026-08-10T13:00:00Z'), target_url: 'r/actions/runs/2', state: 'failure' }),
   ]
-  assert.equal(evaluatePackage(labeledFailure, 'tts-ggml', threshold, lookup), 'failed')
+  assert.equal(evaluatePackage(labeledFailure, 'diffusion-cpp', threshold, lookup), 'failed')
 })
 
 // A failed run lookup must not read as "untrusted producer". If it does, the
@@ -261,14 +273,14 @@ test('evaluatePackage: a failed run lookup holds the gate at pending', () => {
 
   // Both runs resolvable: the newer failure decides.
   assert.equal(
-    evaluatePackage([olderSuccess, newerFailure], 'tts-ggml', threshold, () => fresh),
+    evaluatePackage([olderSuccess, newerFailure], 'diffusion-cpp', threshold, () => fresh),
     'failed',
   )
 
   // The newer failure's run lookup 502s. Pending, not success.
   const flaky = (id) => (String(id) === '2' ? LOOKUP_FAILED : fresh)
   assert.equal(
-    evaluatePackage([olderSuccess, newerFailure], 'tts-ggml', threshold, flaky),
+    evaluatePackage([olderSuccess, newerFailure], 'diffusion-cpp', threshold, flaky),
     'pending',
   )
 })
@@ -277,13 +289,13 @@ test('evaluatePackage: a status whose run resolves to another workflow is reject
   const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
   const lookup = () => ({ path: '.github/workflows/on-pr-vla.yml', created_at: '2026-08-10T13:00:00Z' })
   const forged = [status({ updated_at: iso('2026-08-10T13:00:00Z'), target_url: 'r/actions/runs/7', state: 'success' })]
-  assert.equal(evaluatePackage(forged, 'tts-ggml', threshold, lookup), 'pending')
+  assert.equal(evaluatePackage(forged, 'diffusion-cpp', threshold, lookup), 'pending')
 })
 
 test('evaluatePackage: a status without a parseable producing run stays pending', () => {
   const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
   const legacy = [status({ updated_at: iso('2026-08-10T13:00:00Z'), target_url: '', state: 'success' })]
-  assert.equal(evaluatePackage(legacy, 'tts-ggml', threshold, () => null), 'pending')
+  assert.equal(evaluatePackage(legacy, 'diffusion-cpp', threshold, () => null), 'pending')
 })
 
 test('PREBUILD_KEYS covers the merge-guard allowlist', () => {
@@ -335,7 +347,7 @@ test('pollPrebuilds retries a transient statuses fetch error, then passes', asyn
   const logs = []
   let calls = 0
   const code = await pollPrebuilds({
-    expected: ['tts-ggml'],
+    expected: ['diffusion-cpp'],
     prUpdatedEpoch: THRESHOLD,
     fetchStatuses: () => {
       calls += 1
@@ -358,7 +370,7 @@ test('pollPrebuilds fails closed only when statuses fetch keeps failing past the
   const clock = fakeClock()
   const logs = []
   const code = await pollPrebuilds({
-    expected: ['tts-ggml'],
+    expected: ['diffusion-cpp'],
     prUpdatedEpoch: THRESHOLD,
     fetchStatuses: () => {
       throw new Error('HTTP 502')
@@ -377,7 +389,7 @@ test('pollPrebuilds fails closed only when statuses fetch keeps failing past the
 test('pollPrebuilds times out (fail-closed) when a required status never appears', async () => {
   const clock = fakeClock()
   const code = await pollPrebuilds({
-    expected: ['tts-ggml'],
+    expected: ['diffusion-cpp'],
     prUpdatedEpoch: THRESHOLD,
     fetchStatuses: () => [],
     lookupRun: () => null,
@@ -395,26 +407,26 @@ test('evaluatePackage with the C++ context prefix ignores a prebuild status', ()
   const lookup = () => FRESH_RUN
   const onlyPrebuild = [
     status({
-      context: 'qvac/prebuild-tts-ggml',
+      context: 'qvac/prebuild-diffusion-cpp',
       updated_at: iso('2026-08-10T13:00:00Z'),
       target_url: 'r/actions/runs/2',
       state: 'success',
     }),
   ]
   assert.equal(
-    evaluatePackage(onlyPrebuild, 'tts-ggml', threshold, lookup, 'qvac/cpp-tests'),
+    evaluatePackage(onlyPrebuild, 'diffusion-cpp', threshold, lookup, 'qvac/cpp-tests'),
     'pending',
   )
   const cppSuccess = [
     status({
-      context: 'qvac/cpp-tests-tts-ggml',
+      context: 'qvac/cpp-tests-diffusion-cpp',
       updated_at: iso('2026-08-10T13:00:00Z'),
       target_url: 'r/actions/runs/2',
       state: 'success',
     }),
   ]
   assert.equal(
-    evaluatePackage(cppSuccess, 'tts-ggml', threshold, lookup, 'qvac/cpp-tests'),
+    evaluatePackage(cppSuccess, 'diffusion-cpp', threshold, lookup, 'qvac/cpp-tests'),
     'success',
   )
 })
@@ -422,11 +434,11 @@ test('evaluatePackage with the C++ context prefix ignores a prebuild status', ()
 test('pollCppTests returns failure immediately when a C++ test status is failed', async () => {
   const clock = fakeClock()
   const code = await pollCppTests({
-    expected: ['tts-ggml'],
+    expected: ['diffusion-cpp'],
     prUpdatedEpoch: THRESHOLD,
     fetchStatuses: () => [
       status({
-        context: 'qvac/cpp-tests-tts-ggml',
+        context: 'qvac/cpp-tests-diffusion-cpp',
         updated_at: iso('2026-08-10T12:01:00Z'),
         target_url: 'r/actions/runs/2',
         state: 'failure',
@@ -445,7 +457,7 @@ test('pollCppTests returns failure immediately when a C++ test status is failed'
 test('pollPrebuilds returns failure immediately when a prebuild status is failed', async () => {
   const clock = fakeClock()
   const code = await pollPrebuilds({
-    expected: ['tts-ggml'],
+    expected: ['diffusion-cpp'],
     prUpdatedEpoch: THRESHOLD,
     fetchStatuses: () => [status({ updated_at: iso('2026-08-10T12:01:00Z'), target_url: 'r/actions/runs/2', state: 'failure' })],
     lookupRun: () => FRESH_RUN,

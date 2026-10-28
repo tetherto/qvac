@@ -113,13 +113,8 @@ const PENDING = [
   // run-cpp-addon-tests and run-desktop-addon-tests labels.
   ...[
     ['.github/workflows/cpp-lint.yaml', 2],
-    ['.github/workflows/cpp-test-coverage-asr-ggml.yml', 1],
-    ['.github/workflows/cpp-test-coverage-bci-whispercpp.yml', 1],
-    ['.github/workflows/cpp-test-coverage-tts-ggml.yml', 1],
     ['.github/workflows/cpp-tests-nx.yml', 2],
     ['.github/workflows/integration-mobile-test-inference-addon-cpp.yml', 3],
-    ['.github/workflows/integration-test-asr-ggml.yml', 1],
-    ['.github/workflows/integration-test-audiogen-ggml.yml', 1],
     ['.github/workflows/reusable-prebuilds.yml', 2],
     ['.github/actions/cpp-lint/action.yaml', 1],
     // The CI contract's job templates, carrying over vla's old cpp-tests and integration sites unchanged.
@@ -133,7 +128,6 @@ const PENDING = [
   // PR 3 — registry-server, the shared lint composites, remaining SDK lanes.
   ...[
     ['.github/workflows/fill-fit-blobs-registry-server.yml', 1],
-    ['.github/workflows/on-merge-model-cache-audiogen.yml', 1],
     ['.github/workflows/pr-models-validation-registry-server.yml', 7],
     ['.github/workflows/publish-registry-server.yml', 1],
     ['.github/workflows/trigger-reusable-lib.yml', 1],
@@ -153,19 +147,11 @@ const PENDING = [
   },
 
   // PR 4 — dispatch-only benchmark lanes; each needs a manual run to verify.
-  ...[
-    ['.github/workflows/benchmark-asr-ggml.yml', 3],
-  ].map(([file, count]) => ({
-    file,
-    match: 'npm install',
-    count,
-    reason: 'QVAC-25458 PR 4',
-  })),
   {
     file: 'packages/bci-whispercpp/package.json',
     match: '"test:mobile:generate"',
     count: 1,
-    reason: 'QVAC-25458 PR 4 — run by the integration-mobile-test-* lanes',
+    reason: "QVAC-25458 PR 4 — run by bci-whispercpp's test:mobile",
   },
   {
     file: 'packages/embed-llamacpp/package.json',

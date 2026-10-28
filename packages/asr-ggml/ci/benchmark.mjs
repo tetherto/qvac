@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// asr's benchmarks: suite=rtf (the RTF matrix of both engines, as integration-test-asr-ggml.yml ran it) or
-// suite=accuracy (WER/CER, as benchmark-asr-ggml.yml ran it), chosen in BENCHMARK_ARGS as key=value words; rtf when
+// asr's benchmarks: suite=rtf (the RTF matrix of both engines, as main's asr integration workflow ran it) or
+// suite=accuracy (WER/CER, as main's asr accuracy workflow ran it), chosen in BENCHMARK_ARGS as key=value words; rtf when
 // none is given. Each configuration names the suite its host serves; a host that serves another does nothing.
 //
 //   node ci/benchmark.mjs --suite rtf --config <configuration> [--no-gpu] [--set NAME=value]...

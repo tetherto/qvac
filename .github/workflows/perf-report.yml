@@ -26,7 +26,8 @@ on:
           - "Mobile Integration Tests (LLM)"
           - "Mobile Integration Tests (Parakeet)"
           - "Mobile Integration Tests (Diffusion CPP)"
-          - "Benchmark Performance (AudioGen GGML)"
+          - "Benchmarks"
+          - "PR build and test"
       runs:
         description: "Number of recent runs to aggregate"
         type: number
@@ -182,10 +183,10 @@ jobs:
 
           # ACE-Step (audiogen-ggml) reports desktop and mobile in one table, so
           # a single aggregation covers both lanes. It is only as fresh as the
-          # last sweep — the benchmark workflow is dispatch-only.
+          # last benchmarks.yml run, which is dispatch-only.
           echo "=== ACE-Step (Desktop + Mobile) ==="
           node scripts/perf-report/aggregate-audiogen-ggml-rtf.js \
-            --workflow "Benchmark Performance (AudioGen GGML)" \
+            --workflow "Benchmarks" \
             --runs 6 \
             --output reports/audiogen-ggml-performance.md \
             --output-json reports/audiogen-ggml-performance.json || true

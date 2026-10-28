@@ -78,5 +78,8 @@
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
-  "types": "index.d.ts"
+  "types": "index.d.ts",
+  "nx": {
+    "includedScripts": []
+  }
 }

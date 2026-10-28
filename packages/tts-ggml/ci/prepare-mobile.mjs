@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tts's test:mobile, as integration-mobile-test-tts-ggml.yml prepared it: the advisory staleness check, the presigned
+// tts's test:mobile, as main's tts mobile workflow prepared it: the advisory staleness check, the presigned
 // mobile model manifest from the US bucket, and the Device Farm host's pre-stage block (Android always, iOS on a
 // benchmark run). A benchmarks.yml run picks its matrix row in BENCHMARK_ARGS (engine, variant, use_gpu, enhancer,
 // enhancer_variant, denoiser), injects it into the mobile runtime, runs the perf tests only and turns on the report.

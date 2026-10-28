@@ -94,12 +94,11 @@ function mobileCalls(sources = definitions()) {
 
 test('discovery finds the leaves and their callers', () => {
   const need = leavesNeedingActionsRead()
-  // 5 since the fabric consumers' mobile workflows gave way to the CI contract's mobile-tests.yml.
-  assert.ok(need.size >= 5, `expected at least 5 leaves needing actions: read, found ${need.size}`)
+  // 1 since the fabric consumers' and speech packages' mobile workflows gave way to the CI contract's _mobile.yml.
+  assert.ok(need.size >= 1, `expected at least 1 leaf needing actions: read, found ${need.size}`)
   const found = mobileCalls()
-  // Speech publishing no longer calls mobile tests. Benchmark callers still
-  // exercise the reusable workflows and their permission requirements.
-  for (const addon of ['asr-ggml', 'bci-whispercpp', 'tts-ggml']) {
+  // Benchmark callers still exercise the remaining reusable workflows and their permission requirements.
+  for (const addon of ['diffusion-cpp']) {
     assert.ok(found.some(({ caller, target }) =>
       caller === 'benchmark-performance-nx.yml' &&
       target === `integration-mobile-test-${addon}.yml`

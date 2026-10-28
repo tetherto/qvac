@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// asr's test:mobile, as integration-mobile-test-asr-ggml.yml prepared it: the advisory staleness check, the presigned
+// asr's test:mobile, as main's asr mobile workflow prepared it: the advisory staleness check, the presigned
 // mobile model manifest from the US bucket and the Device Farm host's pre-stage block. A benchmarks.yml run picks one
 // on-device perf runner in BENCHMARK_ARGS (engine, model or model_type, use_gpu) and runs only that.
 

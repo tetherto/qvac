@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# asr's accuracy benchmark rows, as benchmark-asr-ggml.yml generated its matrix: one row per model variant the
+# asr's accuracy benchmark rows, as main's asr accuracy workflow generated its matrix: one row per model variant the
 # dispatch's engine, language, dataset, model size or type asks for. Reads them from the environment.
 import json
 import os

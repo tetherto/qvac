@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# asr's accuracy benchmark (WER/CER, AraDiaWER for Arabic), as benchmark-asr-ggml.yml ran it: every row of
+# asr's accuracy benchmark (WER/CER, AraDiaWER for Arabic), as main's asr accuracy workflow ran it: every row of
 # ci/accuracy-matrix.py in turn on this host, each against the benchmark server, into benchmarks/results. The BM_*
 # variables carry the dispatch options; a failed row fails the run after the others have run.
 set -uo pipefail

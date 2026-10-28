@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// bci's test:mobile, as integration-mobile-test-bci-whispercpp.yml prepared it: the advisory staleness check, then the
+// bci's test:mobile, as main's bci mobile workflow prepared it: the advisory staleness check, then the
 // mobile test assets (the manifest's models plus the fixtures from the private release, through GITHUB_TOKEN), then
 // the speech ggml build check.
 

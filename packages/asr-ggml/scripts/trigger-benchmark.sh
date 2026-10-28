@@ -11,7 +11,7 @@ MAX_SAMPLES="50"
 BRANCH=""
 REMOTE="upstream"
 WATCH="false"
-WORKFLOW="benchmark-asr-ggml.yml"
+WORKFLOW="benchmarks.yml"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -154,10 +154,12 @@ echo "  Max Samples:  $MAX_SAMPLES"
 echo "  Watch:        $WATCH"
 echo ""
 
-WORKFLOW_ARGS=(-f engine="$ENGINE" -f max_samples="$MAX_SAMPLES")
+# benchmarks.yml runs asr's accuracy suite on its linux-x64-accuracy configuration.
+ARGS="suite=accuracy engine=$ENGINE max_samples=$MAX_SAMPLES"
 if [ "$ENGINE" = "parakeet" ]; then
-    WORKFLOW_ARGS+=(-f model_type="$MODEL_TYPE")
+    ARGS="$ARGS model_type=$MODEL_TYPE"
 fi
+WORKFLOW_ARGS=(-f packages=asr-ggml -f configs=linux-x64-accuracy -f args="$ARGS")
 
 if ! gh workflow run "$WORKFLOW" \
     -R "$REPO" \

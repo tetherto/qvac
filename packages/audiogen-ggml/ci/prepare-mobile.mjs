@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// audiogen's test:mobile, as integration-mobile-test-audiogen-ggml.yml prepared it: on Android the host pre-stages the
+// audiogen's test:mobile, as main's audiogen mobile workflow prepared it: on Android the host pre-stages the
 // tested dit variant's models from presigned URLs in the US bucket. A benchmarks.yml run picks its matrix row in
 // BENCHMARK_ARGS (dit_variant, use_gpu, warmup, runs, duration), runs the perf tests only and turns on the perf report.
 

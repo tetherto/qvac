@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// decoder-audio's test:mobile, as integration-mobile-test-decoder-audio.yml prepared it: the advisory check that the
+// decoder-audio's test:mobile, as main's decoder-audio mobile workflow prepared it: the advisory check that the
 // generated mobile tests are current, then the speech ggml build check. It has no prebuilds or models to stage.
 
 import { execFileSync } from 'node:child_process'

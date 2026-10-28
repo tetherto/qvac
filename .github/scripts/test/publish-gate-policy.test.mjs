@@ -28,8 +28,9 @@ const GATE = "needs.verify-generated.result == 'success'"
 const GATE_MATRIX =
   "needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled'"
 const CONSOLIDATED = '.github/workflows/on-merge-nx.yml'
-// ocr-ggml and translation-nmtcpp publish from the CI contract now; publish-gpr-skip-policy covers them there.
-const NO_PUBLISH_TEST_PACKAGES = ['decoder-audio', 'asr-ggml', 'bci-whispercpp', 'tts-ggml', 'audiogen-ggml']
+// The speech packages, ocr-ggml and translation-nmtcpp publish from the CI contract now; publish-gpr-skip-policy
+// covers them there.
+const NO_PUBLISH_TEST_PACKAGES = []
 
 function read(relativePath) {
   return readFileSync(join(root, relativePath), 'utf8')
@@ -286,7 +287,7 @@ test('wrapper drift is still checked somewhere at PR time', () => {
   assert.match(sanityChecks, /check:generated/)
 })
 
-test('speech, OCR and translation publishing retains wrapper verification without integration or mobile E2E tests', () => {
+test('on-merge publishing retains wrapper verification without integration or mobile E2E tests', () => {
   const source = withoutComments(read(CONSOLIDATED))
   const jobs = eachJob(source)
 

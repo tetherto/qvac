@@ -72,37 +72,18 @@ test('fails when a consumer bumps cache-version and the seed does not', () => {
 test('fails when a consumer moves its cached paths and the seed does not', () => {
   const dir = sandbox()
   try {
-    // audiogen, not translation: translation appears in KNOWN_COLLISIONS, so
-    // moving its paths would trip the unobserved-collision check first.
-    edit(
-      dir,
-      'integration-test-audiogen-ggml.yml',
-      'paths: packages/audiogen-ggml/models',
-      'paths: packages/audiogen-ggml/models-v2',
+    // diffusion-cpp's base blocks in its project.json are the consumers of on-merge-model-cache-diffusion.yml's seed.
+    const pj = join(dir, 'packages/diffusion-cpp/project.json')
+    const before = readFileSync(pj, 'utf8')
+    const after = before.replaceAll(
+      '{ "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" }',
+      '{ "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2", "paths": "packages/diffusion-cpp/models-v2" }',
     )
+    assert.notEqual(after, before, 'fixture stale: diffusion-cpp base modelCache blocks')
+    writeFileSync(pj, after)
     const r = run(dir)
     assert.equal(r.status, 1, r.stdout)
-    assert.match(r.stderr, /on-merge-model-cache-audiogen\.yml/)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-
-// Ian's audiogen bug, on the real workflow: reverting the turbo-q4 suffix puts
-// an empty suffix back, whose restore prefix reaches the all-dit-variants key.
-test('rejects the audiogen collision the turbo-q4 suffix fixed', () => {
-  const dir = sandbox()
-  try {
-    edit(
-      dir,
-      'integration-test-audiogen-ggml.yml',
-      "inputs.run_rtf_benchmarks && 'all-dit-variants' || 'turbo-q4'",
-      "inputs.run_rtf_benchmarks && 'all-dit-variants' || ''",
-    )
-    const r = run(dir)
-    assert.equal(r.status, 1, r.stdout)
-    assert.match(r.stderr, /restore-key prefix collision/)
-    assert.match(r.stderr, /suffix \(empty\) reaches suffix all-dit-variants/)
+    assert.match(r.stderr, /on-merge-model-cache-diffusion\.yml/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -137,42 +118,6 @@ test('rejects a collision between two distinct consumer call sites', () => {
   }
 })
 
-// The amnesty list must pardon exactly the recorded pairs, not a whole file.
-test('a NEW collision in an allowlisted file still fails', () => {
-  const dir = sandbox()
-  try {
-    const f = wf(dir, 'cpp-test-coverage-asr-ggml.yml')
-    const src = readFileSync(f, 'utf8')
-    // a second asr call site with a different glob: same class, not recorded
-    const extra = src.replace(
-      'cache-key-suffix: cpp-tests',
-      'cache-key-suffix: cpp-tests-extra',
-    )
-    assert.notEqual(extra, src, 'fixture stale')
-    writeFileSync(f, extra)
-    const r = run(dir)
-    assert.equal(r.status, 1, r.stdout)
-    assert.match(r.stderr, /restore-key prefix collision|no longer observed/)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-
-// If a parser regression drops one of a call site's inputs, that site changes
-// version bucket and its recorded collision stops firing -- silently, and the
-// same regression would hide a NEW collision just as well.
-test('fails when a recorded collision stops being observed', () => {
-  const dir = sandbox()
-  try {
-    edit(dir, 'cpp-test-coverage-asr-ggml.yml', /^ +paths: packages\/asr-ggml\/models$/m, '')
-    const r = run(dir)
-    assert.equal(r.status, 1, r.stdout)
-    assert.match(r.stderr, /no longer observed/)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-
 // Every other check reads the parser's output, so a parser that quietly stops
 // finding call sites would make all of them pass on an empty set.
 test('fails closed when a call site stops being parsed', () => {
@@ -180,14 +125,14 @@ test('fails closed when a call site stops being parsed', () => {
   try {
     edit(
       dir,
-      'on-merge-model-cache-asr.yml',
+      'on-merge-model-cache-diffusion.yml',
       /uses: \.\/\.github\/actions\/cache-models$/gm,
       'uses: ./.github/actions/cache-models # shared',
     )
     const r = run(dir)
     assert.equal(r.status, 1, r.stdout)
     assert.match(r.stderr, /parser has gone blind/)
-    assert.match(r.stderr, /on-merge-model-cache-asr\.yml/)
+    assert.match(r.stderr, /on-merge-model-cache-diffusion\.yml/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
