@@ -1,0 +1,6 @@
+[
+  {
+    "useGPU": false,
+    "backendHint": "cpu"
+  }
+]

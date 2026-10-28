@@ -1,0 +1,10 @@
+[
+  {
+    "useGPU": false,
+    "backendHint": "cpu"
+  },
+  {
+    "useGPU": true,
+    "backendHint": "vulkan"
+  }
+]
