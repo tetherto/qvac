@@ -12,32 +12,32 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
-## [Unreleased]
+## [0.11.2] - 2026-10-28
 
 ### Added
 
 - `assessFit` reports `coremlBytes` for Parakeet models on macOS and iOS: the
   memory of the Core ML diarizer sidecars a Nemotron 3 Diarization or
   Sortformer v2.1 workload can load, which the verdict counts on unified
-  memory. It is 0 without sidecars and on other platforms.
+  memory. It is 0 without sidecars and on other platforms
+  ([#5250](https://github.com/tetherto/qvac/pull/5250)).
 - `mossTranscribeConfig.backend` and the MOSS `assessFit` request accept
-  `metal`, which selects the Metal device.
+  `metal`, which selects the Metal device
+  ([#5404](https://github.com/tetherto/qvac/pull/5404)).
 
 ### Changed
 
 - MOSS-Transcribe-Diarize decodes 29-42% faster on Metal (M3 Ultra), with
-  identical transcripts.
-
-### Changed
-
-- Use fused CPU encoder attention for MOSS-Transcribe-Diarize.
-- Align the shared native `speech-cpp` source to `2026-10-27` across the speech
-  addons. Parakeet TDT models with a Core ML decoder sidecar, TranscribePsy
-  among them, use about 26 MiB less memory once loaded on macOS and iOS, and
-  MOSS-Transcribe-Diarize decodes 1.4 to 1.7 times faster on Metal. Both
-  measurements are from a Mac Studio M3 Ultra
-  ([native #378](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/378),
+  identical transcripts ([#5404](https://github.com/tetherto/qvac/pull/5404),
   [native #374](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/374)).
+- Use fused CPU encoder attention for MOSS-Transcribe-Diarize
+  ([#5368](https://github.com/tetherto/qvac/pull/5368)).
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech
+  addons ([#5397](https://github.com/tetherto/qvac/pull/5397)). Parakeet TDT
+  models with a Core ML decoder sidecar, TranscribePsy among them, use about
+  26 MiB less memory once loaded on macOS and iOS, measured on a Mac Studio
+  M3 Ultra
+  ([native #378](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/378)).
 - The shared native `ggml-speech` moves to `2026-10-27` across the speech
   addons, which also speeds up single-query Metal softmax on long KV caches
   ([#5392](https://github.com/tetherto/qvac/pull/5392)).
@@ -46,12 +46,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 - Adreno GPUs (Android, OpenCL): matrix products on every quantized weight
   type whose sums exceed the fp16 range no longer come back as infinity;
-  `ggml-speech` `2026-10-23` fixed q8_0 only.
+  `ggml-speech` `2026-10-23` fixed q8_0 only
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
 - Metal: a fused SwiGLU mat-vec whose output overlaps its inputs, and copies
   into strided destinations, no longer produce wrong values; quantized matrix
-  products keep F32 activations.
+  products keep F32 activations
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
 - Vulkan: tensor views not aligned for the speech ops fall back instead of
-  returning wrong data.
+  returning wrong data ([#5392](https://github.com/tetherto/qvac/pull/5392)).
 
 ## [0.11.1] - 2026-10-23
 
