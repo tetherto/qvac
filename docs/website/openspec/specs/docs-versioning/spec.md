@@ -118,29 +118,35 @@ Publishing a line SHALL require both a line folder and a manifest entry naming i
 - **WHEN** a folder group is renamed to its plain versioned form and the manifest still names the old folder
 - **THEN** the build fails, rather than serving the renamed line as current
 
-### Requirement: The current line is the version shipping next
+### Requirement: The newest published line is the version last released
 
-The folder group SHALL be the version the next release will publish, and SHALL be cut in `main` as soon as the previous release is live. Between releases `main` therefore carries a line for a version that has not shipped, which is the point: every edit describing the coming release lands in the folder that will be current when it ships, so nothing is moved, renamed, or reclassified at release time. The site is deployed as part of a release, so a reader is never served the line before its version exists.
+The folder group SHALL be the version most recently released, and the version being written SHALL live in a development line that the site does not publish. A reader is therefore never served a line for a version that does not exist, and a reader following a version-less path always reaches the newest released documentation.
 
-#### Scenario: The next line is cut right after a release
+The development line SHALL be published by the cut at the release cutoff, which copies it into the collection as the new folder group and leaves it in place as the next version's. The development line itself is never moved, renamed, or reclassified, so the path a change writes to it is the same before and after a cutoff. The outgoing folder group is renamed by the cut, so a change written into the group across a cutoff is not placed by the merge alone — see "A cutoff reads the work in flight, and the checks flag what it strands" in the documentation release workflow.
 
-- **WHEN** `@qvac/sdk` `0.18` is live on the site
-- **THEN** `main` renames `(v0.18)` to `v0.18` and copies it to `(v0.19)`
-- **AND** the site keeps serving `v0.18` until the next release deploys
+#### Scenario: The group is the version last released
 
-#### Scenario: The coming release's edits land in the group
+- **WHEN** `@qvac/sdk` `0.18` is the most recent release
+- **THEN** the folder group is `(v0.18)` and the version-less paths serve it
+
+#### Scenario: The coming release's edits land outside the site
 
 - **WHEN** a page is written for the version being prepared
-- **THEN** it is written in the folder group, and no move is needed when that version ships
+- **THEN** it is written in the development line, which no URL resolves to
+
+#### Scenario: The cutoff publishes the development line
+
+- **WHEN** `0.19` reaches its release cutoff
+- **THEN** `(v0.18)` becomes `v0.18`, a copy of the development line becomes `(v0.19)`, and the development line stays in place
 
 #### Scenario: The current line is the highest number
 
 - **WHEN** a versioned collection's lines are enumerated
 - **THEN** the folder group is the highest-numbered line
 
-#### Scenario: A product with no release scheduled is not cut
+#### Scenario: A collection whose package is not released is not cut
 
-- **WHEN** the coming release includes no new version of a tracked package
+- **WHEN** a release moves no version of a tracked package
 - **THEN** that collection keeps the lines it has, and its group stays the version it already documents
 
 ### Requirement: Documentation lines do not carry patch versions

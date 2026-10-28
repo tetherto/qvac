@@ -90,6 +90,38 @@ per-package workflow. The next train moves it above that version.
    into `main` from `backmerge/release-train-<train>-<anchor version>`. The
    backmerge keeps `main`'s `pnpm-workspace.yaml` and regenerates
    `pnpm-lock.yaml` from it.
+
+   The documentation site has one step here. **Run `qv-docs-cutoff` right
+   after cutting the train branch**, passing the new version of each
+   collection's package and the train branch itself — `@qvac/sdk` and
+   `@qvac/cli` are the two documented today, and a train that moves neither
+   cuts nothing. The branch is what tells it the release base: the cutoff
+   publishes the tree the train was cut from, not `main`'s tip. It opens one PR
+   into `main` and reports its URL. The documentation engineer
+   reviews and merges it. That review is how the documentation side of the
+   release is verified — no CI check does it — so do not approve or merge it
+   yourself. The checks they run are in
+   [`docs/website/docs-workflow.md`](../website/docs-workflow.md), "Reviewing
+   the cutoff PR". It lands on `main`; the train branch is the release's
+   target, never documentation's. Nothing in steps 1 to 8 waits on it, and it
+   touches no package.
+
+   What the PR does, per collection the train moves: regenerate the API
+   summary of the version being released, publish that version's line — the
+   line the sprint was written into, which until now sat outside the site at
+   `content/_unpublished/<collection>/next/` — and preserve the previously
+   published line at its versioned URLs. The development line stays where it
+   is and is now the next version's, which is where the coming sprint's
+   feature PRs write. No folder is renamed across versions and none is
+   deleted.
+
+   Why here and not at step 7 or 8: the line has to be published from the tree
+   the release was cut from, and the development line has to be free for the
+   next sprint from the moment its development starts.
+
+   Skipping this step is the one option that is not available: the version
+   would ship with the previous version's documentation. If the documentation
+   engineer is unavailable to review, the PR waits — it blocks no other step.
 7. Wait for the release PR's `Release Train (nx)` run, the dry run described
    under [Checks](#checks), then merge the release PR. `release-train.yml`
    then:
@@ -106,6 +138,16 @@ per-package workflow. The next train moves it above that version.
    `main` would name versions that the checks of later PRs cannot install. If
    the run fails before publishing, fix it with a PR into the train branch
    (see [Recovery](#recovery)) and carry the same commit to the backmerge.
+9. Promote the documentation to production, once the versions are on npm.
+   Verify that tree on staging, then run `promote-docs-production.yml` on the
+   merge commit of step 6's PR, reading the content diff its preflight prints.
+   Name that commit, never `main`'s tip: promoting before npm would publish
+   documentation for a version nobody can install, and promoting a later commit
+   would publish whatever else merged into `main` meanwhile — including a change
+   that breaks the build or the pages without touching a line at all. The
+   procedure is in
+   [`docs/website/docs-workflow.md`](../website/docs-workflow.md),
+   "Production (manual promotion)".
 
 ## Checks
 
