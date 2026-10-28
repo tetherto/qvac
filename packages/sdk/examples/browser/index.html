@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QVAC SDK · Browser</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">QVAC / ENGINEERING PREVIEW</p>
+          <h1>Inference, in your browser.</h1>
+          <p class="subtitle">@qvac/sdk → Web Worker → @qvac/inference → WebAssembly → WebGPU.</p>
+        </div>
+        <div class="header-status">
+          <div id="webgpu-readiness" class="readiness" role="status" data-state="checking">
+            <span class="readiness-dot" aria-hidden="true"></span>
+            <span id="webgpu-readiness-label">Checking WebGPU…</span>
+            <button id="webgpu-help" class="text-button" hidden>Enable in Chrome</button>
+          </div>
+          <span id="status" role="status" data-state="idle">Not loaded</span>
+        </div>
+      </header>
+      <section class="panel setup" aria-labelledby="setup-heading">
+        <div class="section-heading">
+          <h2 id="setup-heading">01 <span>Load a model</span></h2>
+          <span class="tag">Qwen3.5 · 2B · Q4_K_M</span>
+        </div>
+        <label for="model-url">GGUF model URL</label>
+        <input id="model-url" type="url" spellcheck="false" />
+        <div class="controls">
+          <label for="context"
+            >Context size
+            <input id="context" type="number" min="256" max="8192" step="256" value="2048" /></label
+          ><button id="load" disabled>Load model</button
+          ><button id="unload" class="secondary" disabled>Unload</button>
+        </div>
+        <p class="hint">
+          The default model downloads about 1.4 GB once; the browser keeps it in its private file
+          system for later visits and runs inference locally. The model host must allow cross-origin
+          requests.
+        </p>
+        <progress
+          id="progress"
+          max="1"
+          value="0"
+          aria-label="Model download progress"
+          hidden
+        ></progress>
+        <p id="progress-text" class="hint" aria-live="polite"></p>
+      </section>
+      <div class="workspace">
+        <section class="panel" aria-labelledby="run-heading">
+          <div class="section-heading">
+            <h2 id="run-heading">02 <span>Send a prompt</span></h2>
+            <button id="clear" class="text-button">Clear history</button>
+          </div>
+          <label for="prompt">Message</label
+          ><textarea id="prompt" rows="5">
+Explain in three short sentences why the sky appears blue.</textarea>
+          <div class="controls">
+            <label for="tokens"
+              >Output limit
+              <input id="tokens" type="number" min="1" max="2048" value="256" /></label
+            ><button id="run" disabled>Run completion</button
+            ><button id="stop" class="secondary" disabled>Stop</button>
+          </div>
+          <p id="history-info" class="hint">Fresh conversation</p>
+          <div id="error" role="alert" hidden></div>
+          <div class="output-heading">
+            <h3>Output</h3>
+            <span id="elapsed"></span>
+          </div>
+          <pre id="output" aria-live="polite">Load a model to begin.</pre>
+          <dl id="stats" class="stats"></dl>
+        </section>
+        <aside class="panel diagnostics" aria-labelledby="diagnostics-heading">
+          <div class="section-heading">
+            <h2 id="diagnostics-heading">03 <span>Runtime evidence</span></h2>
+          </div>
+          <p class="hint">
+            Adapter availability alone does not prove GPU offload. Engine logs and completion
+            statistics (backendDevice) provide the execution evidence.
+          </p>
+          <pre id="capabilities">Checking browser capabilities…</pre>
+          <div class="output-heading">
+            <h3>Logs</h3>
+            <button id="download-logs" class="text-button">Download logs</button>
+          </div>
+          <pre id="logs" aria-label="Runtime logs"></pre>
+        </aside>
+      </div>
+      <footer>
+        <span>Dedicated Worker · same SDK API as Node, Bare and Expo</span
+        ><button id="close" class="text-button">Close runtime</button>
+      </footer>
+    </main>
+    <dialog id="webgpu-dialog" aria-labelledby="webgpu-dialog-title">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <h2 id="webgpu-dialog-title">Enable Vulkan in Chrome</h2>
+          <button class="text-button" value="close" aria-label="Close">Close</button>
+        </div>
+        <p>
+          Chrome does not expose a usable WebGPU adapter on this machine with its current defaults.
+          A webpage cannot change browser flags for you.
+        </p>
+        <ol>
+          <li>Copy the address below and paste it into Chrome's address bar.</li>
+          <li>Set <strong>Vulkan</strong> to <strong>Enabled</strong>.</li>
+          <li>Relaunch Chrome, reopen this page, and load the model.</li>
+        </ol>
+        <label for="chrome-flags-url">Chrome setting</label>
+        <div class="copy-setting">
+          <input id="chrome-flags-url" value="chrome://flags/#enable-vulkan" readonly />
+          <button id="copy-flags-url" type="button">Copy address</button>
+        </div>
+        <p class="hint">Do not enable Unsafe WebGPU, Ignore GPU blocklist, or Dawn overrides.</p>
+      </form>
+    </dialog>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
