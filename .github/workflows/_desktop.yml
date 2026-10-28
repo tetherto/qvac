@@ -85,6 +85,11 @@ jobs:
           rocm-version: ${{ matrix.row.toolchain.rocm.version }}
           gfx: ${{ matrix.row.toolchain.rocm.gfx }}
           sha256: ${{ matrix.row.toolchain.rocm.sha256 }}
+      # Translation's quality benchmark: bergamot publishes wheels for Python 3.10 and older only.
+      - if: contains(matrix.row.setup, 'python')
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
       - id: models
         uses: ./.github/actions/models-cache-key
         with:

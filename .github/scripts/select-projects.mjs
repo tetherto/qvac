@@ -39,7 +39,7 @@ export const CONFIG_NAME = /^(linux|android|ios|darwin|win32)-(x64|arm64)(-[a-z0
 const CONFIG_KEYS = ['args', 'commands', 'ci']
 const CI_KEYS = ['runner', 'setup']
 // Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json.
-const SETUP = ['cuda', 'rocm']
+const SETUP = ['cuda', 'rocm', 'python']
 
 // The metadata a target may carry, and on which targets. toolchain is nx.json's, merged into every build target.
 const METADATA = {

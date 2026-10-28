@@ -56,7 +56,7 @@ Each platform a target runs on is an Nx configuration of that target, named `<pl
 - `args`: appended to the target's commands that set `forwardAllArgs: true`. Put the platform flags here, so the commands stay written once.
 - `commands`: replaces the target's commands on this platform, when the step itself differs.
 - `ci.runner`: the runner key from `reusable-runner-names.yml`.
-- `ci.setup`: extra host toolkits, `cuda` or `rocm`.
+- `ci.setup`: extra host toolkits: `cuda` or `rocm`, or `python` for Python 3.10 on a desktop leg.
 
 `benchmark` may also define `report`, the one configuration not named for a platform. `benchmarks.yml` runs it once on Linux after every other configuration and the mobile runs finish, with their results downloaded under `<dir>/benchmarks/results/`. A benchmark command writes its own results there, and reads `BENCHMARK_ARGS`, `QVAC_PERF_RUNS` and `QVAC_PERF_WARMUP_RUNS` when the dispatch sets them.
 

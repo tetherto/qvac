@@ -341,7 +341,7 @@
       "configurations": {
         "linux-x64": {
           "ci": {
-            "runner": "ubuntu_2404"
+            "runner": "ubuntu_2404", "setup": ["python"]
           }
         },
         "darwin-arm64": {

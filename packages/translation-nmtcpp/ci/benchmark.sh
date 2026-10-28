@@ -45,7 +45,8 @@ if [ "$platform" = linux-x64 ] && $hosted; then
 fi
 
 venv=$(mktemp -d)/venv
-if command -v python3 >/dev/null 2>&1; then python3 -m venv "$venv"; else python -m venv "$venv"; fi
+py=python3; command -v python3 >/dev/null 2>&1 || py=python
+"$py" -m venv "$venv"
 PYBIN="$venv/bin/python"; [ -x "$PYBIN" ] || PYBIN="$venv/Scripts/python.exe"
 "$PYBIN" -m pip install --upgrade pip
 if $hosted; then
@@ -134,7 +135,9 @@ for pair in "${PAIRS[@]}"; do
   fi
   if [[ ",$translators," == *,bergamot,* ]]; then firefox_models "$src$trg" || echo "::warning::Firefox models for $pair failed"; fi
   if [[ ",$translators," == *,qvac_bergamot,* ]]; then cdn_models "$src" "$trg" || echo "::warning::CDN models for $pair failed"; fi
-  results="$PKG/benchmarks/results/results-$pair-$translators-$metrics-$hyperparams$([ "$pivot" = true ] && echo -pivot)-$platform"
+  # An if, not $([ ... ] && echo): a false test there fails the assignment under set -e.
+  suffix=""; if [ "$pivot" = true ]; then suffix=-pivot; fi
+  results="$PKG/benchmarks/results/results-$pair-$translators-$metrics-$hyperparams$suffix-$platform"
   for dataset in "${DATASETS[@]}"; do
     echo "== $pair on $dataset"
     (cd "$EVAL" && PYTHONUNBUFFERED=1 "$PYBIN" evaluate.py --pairs "$pair" --translators "$translators" --dataset "$dataset" \
