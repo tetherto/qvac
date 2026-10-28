@@ -115,7 +115,7 @@ public:
     bool ephemeral = false;
     /// A `cacheKey` file the request may start from, read and never written:
     /// it competes with the states in memory, and the one that serves the
-    /// longest prefix of the prompt wins. Text models only.
+    /// longest prefix of the prompt wins.
     std::string baseCacheKey;
   };
 

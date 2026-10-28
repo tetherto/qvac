@@ -36,7 +36,8 @@ conversation the model holds, whatever its `cacheKey`: the one in memory, the
 [RAM tier](#keep-switched-away-conversations-in-ram), or a `cacheKey` file
 used in this process. A new chat with the same system prompt and tools as an
 earlier one decodes only what follows them; on multimodal models an image
-the two share is not encoded again. The other
+the two share is not encoded again. Encoder-decoder models encode each prompt
+afresh and keep a key's state to that key. The other
 conversation is copied, never changed. See [Starting from another
 conversation](./cache-lifecycle.md#starting-from-another-conversation).
 
@@ -461,9 +462,9 @@ await model.run([{ role: 'user', content: 'Topic B' }], { cacheKey: 'session2.bi
 
 Omit `cacheKey`. Nothing is written to a file. The request still reuses the
 prefix it shares with what the model holds, and its state stays in memory for
-the next request, as llama-server does; with
-[`cache_share_across_keys: 'false'`](#keep-conversations-apart) the context is
-reset after each call.
+the next request, as llama-server does; on encoder-decoder models, or with
+[`cache_share_across_keys: 'false'`](#keep-conversations-apart), the context
+is reset after each call.
 
 ```js
 await model.run([{ role: 'user', content: 'One-off question' }])
