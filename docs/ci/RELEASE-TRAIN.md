@@ -68,11 +68,12 @@ per-package workflow. The next train moves it above that version.
    rm .nx/version-plans/<ticket>.md
    ```
 
-5. Write a changelog section for each package (`qv-sdk-changelog`). When the
-   train moves `@qvac/sdk`, bring `packages/sdk-python` and
-   `packages/sdk-kotlin` to its new version (the `sdk-python` and `sdk-kotlin`
-   syncs of `qv-sdk-inference-version`); `pr-checks-sdk-kotlin.yml` checks the Kotlin
-   version on both PRs.
+5. Write a changelog section for each package (`qv-sdk-changelog`). The
+   `@qvac/sdk` section also carries the Python and Kotlin clients, which have
+   no changelog of their own. When the train moves `@qvac/sdk`, bring
+   `packages/sdk-python` and `packages/sdk-kotlin` to its new version (the
+   `sdk-python` and `sdk-kotlin` syncs of `qv-sdk-inference-version`);
+   `pr-checks-sdk-kotlin.yml` checks the Kotlin version on both PRs.
 
    When the train lists `fromNpm` packages, take them out of the workspace in a
    separate commit. pnpm links a workspace package whenever its version

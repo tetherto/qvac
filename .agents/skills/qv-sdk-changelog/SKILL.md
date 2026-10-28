@@ -47,9 +47,14 @@ makes the files disagree.
 Step 2 when that floor is a patch.
 
 The SDK is the consumer-facing full notes. `--package=sdk` also scans
-`packages/inference` (`CHANGELOG_EXTRA_SCAN_DIRS` in
-`scripts/sdk/package-paths.cjs`). The inference changelog is the engine-only
-slice of that same set. A patch on either side is one release of its own.
+`packages/inference`, `packages/sdk-python` and `packages/sdk-kotlin`
+(`CHANGELOG_EXTRA_SCAN_DIRS` in `scripts/sdk/package-paths.cjs`). The Python
+client (`tetherto-qvac-sdk`) and the Kotlin client (`io.tether:qvac-sdk-kotlin`
+and the `io.tether:qvac-sdk-android` AARs) ship at the SDK's version and have
+no changelog of their own; their PRs land in the SDK notes, and their release
+artifacts attach to the SDK's GitHub release, whose body is
+`packages/sdk/CHANGELOG.md`. The inference changelog is the engine-only slice
+of that same set. A patch on either side is one release of its own.
 
 **Working branch (when cutting from a release line):** use
 `chore/<pkg>-<x.y.z>-changelog` (e.g. `chore/sdk-0.17.0-changelog`). Do **not**
@@ -193,6 +198,25 @@ source. Every user-facing add, remove, or rename in that diff must appear in
 `--update-root-changelog` only — do not re-run a full generate. New public
 exports under an older umbrella PR still get their own `api.md` example.
 
+**`--package=sdk` also audits the clients.** The Python and Kotlin clients are
+built from the same commit as `@qvac/sdk`, so `$LAST` is their floor too:
+
+```bash
+git diff "$LAST" HEAD -- packages/sdk-python packages/sdk-kotlin
+```
+
+Changes to a client's public surface (Python wrappers and literals, Kotlin
+client classes and the generated contract types) go in `api.md` and
+`breaking.md` under a `### Python client` / `### Kotlin client` heading, with
+the example in that language. A generated type whose shape changes (an enum
+that becomes a string, a renamed request field) is breaking for that client
+even when the JS API only gained an option. Skip a client whose diff is tests,
+CI or build files only.
+
+A client that has not been published before has no floor: its section
+announces the first release — artifact coordinates, supported targets, how to
+add the repository — instead of a delta.
+
 Fail-stop until the notes match the tree. Then write `CHANGELOG_LLM.md`.
 
 ### Step 4: Generate CHANGELOG_LLM.md (mandatory)
@@ -208,6 +232,10 @@ See [references/changelog-llm-format.md](references/changelog-llm-format.md).
 Skip backmerges, automated bumps, and entries that only repeat a previous
 release. Models body stays concise; the full constant lists live in `models.md`
 and in the LLM `### Added` / `### Removed` blocks.
+
+For `--package=sdk`, the Python and Kotlin client entries from the audit keep
+their `### Python client` / `### Kotlin client` headings under Breaking Changes
+and New APIs, so a reader of one client finds its changes in one place.
 
 After writing the file, rebuild the root aggregate so
 `packages/<package>/CHANGELOG.md` picks up `CHANGELOG_LLM.md` (the aggregator
@@ -437,6 +465,7 @@ Before completing:
 - [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `npm install` against unpublished lockstep deps)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] Published-version audit done: `npm view "$PKG@<base-version>" gitHead` vs HEAD under `getPackageDir(<slug>)` (`$DIR`, not `package.json`) matches `api.md` / `breaking.md` / `models.md`
+- [ ] When `--package=sdk`: the same diff over `packages/sdk-python` and `packages/sdk-kotlin` is reflected under `### Python client` / `### Kotlin client` in `api.md` / `breaking.md` and in `CHANGELOG_LLM.md`; a client's first release gets a first-release section
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
 - [ ] NOTICE updated; JS section not emptied by a failed install
 - [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
