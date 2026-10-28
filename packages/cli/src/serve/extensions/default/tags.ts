@@ -17,5 +17,7 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   Registry:
     'Read-only view of the live QVAC model registry via SDK `modelRegistrySearch()` and `modelRegistryGetModel()`. Entries become callable once a `serve.models` alias points at them.',
   Upscale:
-    'Image upscaling via SDK `upscale()` backed by an ESRGAN model loaded with `config.mode: "upscale"`. Returns the `/v1/images` response shape.'
+    'Image upscaling via SDK `upscale()` backed by an ESRGAN model loaded with `config.mode: "upscale"`. Returns the `/v1/images` response shape.',
+  Music:
+    'Music generation, editing and description via SDK `audioGen()`, `audioEdit()` and `audioUnderstand()`, backed by an `audiogen` model. Generations and edits run as async jobs, like `/v1/videos`.'
 }
