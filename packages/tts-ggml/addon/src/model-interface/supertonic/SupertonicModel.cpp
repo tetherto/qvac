@@ -259,7 +259,8 @@ void SupertonicModel::loadLocked() {
         cfg_.enhancerGgufPath,
         backendDevice_ == kBackendDeviceGpu,
         "SupertonicModel::load: lavasr enhancer: ",
-        cfg_.vulkanDevice.value_or(0), cfg_.enhancerCoreml);
+        cfg_.vulkanDevice.value_or(0),
+        cfg_.enhancerCoreml);
     enhancer_ = std::move(loaded.enhancer);
     enhancerBackendDevice_ = loaded.backendDevice;
     enhancerBackendId_ = loaded.backendId;
@@ -267,7 +268,8 @@ void SupertonicModel::loadLocked() {
     LoadedDenoiser denoiser = loadDenoiser(
         cfg_.denoiserGgufPath,
         backendDevice_ == kBackendDeviceGpu,
-        "SupertonicModel::load: lavasr denoiser: ", cfg_.denoiserCoreml);
+        "SupertonicModel::load: lavasr denoiser: ",
+        cfg_.denoiserCoreml);
     denoiser_ = std::move(denoiser.denoiser);
     denoiserBackendDevice_ = denoiser.backendDevice;
     denoiserBackendId_ = denoiser.backendId;

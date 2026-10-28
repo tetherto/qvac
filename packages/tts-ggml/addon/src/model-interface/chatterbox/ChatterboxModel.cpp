@@ -571,7 +571,9 @@ void ChatterboxModel::loadLocked() {
     LoadedEnhancer loaded = loadEnhancer(
         cfg_.enhancerGgufPath,
         backendDevice_ == kBackendDeviceGpu,
-        "ChatterboxModel::load: lavasr enhancer: ", 0, cfg_.enhancerCoreml);
+        "ChatterboxModel::load: lavasr enhancer: ",
+        0,
+        cfg_.enhancerCoreml);
     enhancer_ = std::move(loaded.enhancer);
     enhancerBackendDevice_ = loaded.backendDevice;
     enhancerBackendId_ = loaded.backendId;
@@ -579,7 +581,8 @@ void ChatterboxModel::loadLocked() {
     LoadedDenoiser denoiser = loadDenoiser(
         cfg_.denoiserGgufPath,
         backendDevice_ == kBackendDeviceGpu,
-        "ChatterboxModel::load: lavasr denoiser: ", cfg_.denoiserCoreml);
+        "ChatterboxModel::load: lavasr denoiser: ",
+        cfg_.denoiserCoreml);
     denoiser_ = std::move(denoiser.denoiser);
     denoiserBackendDevice_ = denoiser.backendDevice;
     denoiserBackendId_ = denoiser.backendId;

@@ -26,7 +26,8 @@ inline int denoiserBackendIdFromName(const std::string& name) {
 }
 
 inline int denoiserBackendDeviceFromName(const std::string& name) {
-  if (name.rfind("coreml-", 0) == 0) return kBackendDeviceCoreML;
+  if (name.rfind("coreml-", 0) == 0)
+    return kBackendDeviceCoreML;
   return denoiserBackendIdFromName(name) == backendIdFromName("CPU")
              ? kBackendDeviceCpu
              : kBackendDeviceGpu;
@@ -57,7 +58,8 @@ inline LoadedDenoiser loadDenoiser(
         qvac_errors::tts_error::InitializationFailed, errorContext + e.what());
   }
   out.backendId = denoiserBackendIdFromName(out.denoiser->backend_name());
-  out.backendDevice = denoiserBackendDeviceFromName(out.denoiser->backend_name());
+  out.backendDevice =
+      denoiserBackendDeviceFromName(out.denoiser->backend_name());
   return out;
 }
 

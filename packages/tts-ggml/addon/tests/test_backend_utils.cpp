@@ -73,7 +73,8 @@ TEST(BackendUtils, BackendDeviceCodeMatchesGgmlEnum) {
 }
 
 TEST(BackendUtils, LavaSRCoreMLReportsFrameworkPlacement) {
-  for (const auto* name : {"coreml-cpu", "coreml-gpu", "coreml-ane", "coreml-all"}) {
+  for (const auto* name :
+       {"coreml-cpu", "coreml-gpu", "coreml-ane", "coreml-all"}) {
     EXPECT_EQ(qvac::ttsggml::denoiserBackendDeviceFromName(name), 2);
     EXPECT_EQ(qvac::ttsggml::denoiserBackendIdFromName(name), 99);
   }

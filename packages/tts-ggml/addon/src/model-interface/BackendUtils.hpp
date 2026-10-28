@@ -40,7 +40,8 @@ inline int backendIdFromName(const std::string& name) {
 }
 
 inline int backendDeviceCode(tts_cpp::BackendDevice d) {
-  if (d == tts_cpp::BackendDevice::CoreML) return kBackendDeviceCoreML;
+  if (d == tts_cpp::BackendDevice::CoreML)
+    return kBackendDeviceCoreML;
   return d == tts_cpp::BackendDevice::GPU ? kBackendDeviceGpu
                                           : kBackendDeviceCpu;
 }
