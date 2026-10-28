@@ -107,6 +107,9 @@ Qwen3-0.6B decoder, converted from
 (Apache-2.0). It transcribes a whole recording in one pass and returns
 timestamped segments labelled with the speaker (`S01`, `S02`, ...).
 
+The native CPU encoder uses fused attention to avoid materializing full
+attention score matrices.
+
 | File | Size | Notes |
 |------|-----:|-------|
 | `moss-transcribe-diarize-q8_0.gguf` | ~0.98 GB | Recommended: the same WER/CER as f16 |

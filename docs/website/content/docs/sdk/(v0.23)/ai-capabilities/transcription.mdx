@@ -7,7 +7,7 @@ schemaType: HowTo
 
 ## Overview
 
-Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-fabric-speech.cpp`, or `modelType: "parakeet-transcription"` for Parakeet. Parakeet supports multilingual transcription (TDT), English-only transcription (CTC), English transcription with a single model that supports both batch and duplex streaming (Unified), Indic-language transcription (Indic Conformer CTC), speaker diarization (Sortformer and Nemotron 3), and end-of-utterance detection (EOU) for duplex streaming.
+Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-fabric-speech.cpp`, or `modelType: "parakeet-transcription"` for Parakeet. Parakeet supports multilingual transcription (TDT), English-only transcription (CTC), English transcription with a single model that supports both batch and duplex streaming (Unified), the small [TranscribePsy](https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf) distillation for eight European languages, Indic-language transcription (Indic Conformer CTC), speaker diarization (Sortformer and Nemotron 3), and end-of-utterance detection (EOU) for duplex streaming.
 
 Provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
 
@@ -32,7 +32,7 @@ You should load two models:
 
 ### Parakeet
 
-Parakeet uses a GGUF checkpoint per variant, and the addon detects TDT / CTC / Unified / Sortformer / EOU from its GGUF metadata. Supply the GGUF via the top-level `modelSrc`:
+Parakeet uses a GGUF checkpoint per variant, and the addon detects TDT / CTC / Unified / Sortformer / EOU from its GGUF metadata (TranscribePsy loads as a TDT model). Supply the GGUF via the top-level `modelSrc`:
 
 ```ts
 await loadModel({
@@ -47,6 +47,11 @@ await loadModel({
 
 await loadModel({
   modelSrc: PARAKEET_UNIFIED_0_6B_Q8_0,   // english; batch + streaming, ~740MB
+  modelType: "parakeet-transcription",
+});
+
+await loadModel({
+  modelSrc: PARAKEET_TRANSCRIBEPSY_250M_Q8_0,  // nl/en/fr/de/it/pl/pt/es, ~305MB
   modelType: "parakeet-transcription",
 });
 
@@ -68,6 +73,10 @@ await loadModel({
 ```
 
 On macOS and iOS, loading a supported Parakeet registry constant also downloads its complete Core ML encoder bundle and stages the `.mlmodelc` directory beside the GGUF. This applies to TDT 0.6B v3, Unified English 0.6B, EOU 120M v1, and streaming Sortformer v2.1. The sidecar weights increase the first download and disk use. Other platforms download the GGUF alone; if a sidecar is unavailable or cannot load, the GGUF encoder is used.
+
+TranscribePsy publishes a separate Core ML distribution. `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose encoder and decoder bundles the SDK downloads and stages beside it, so both stages run on the Apple Neural Engine; `stats.encoderUsedCoreml` on the `transcribe()` call reports it. That constant loads on macOS and iOS only: elsewhere the load is refused up front, and `PARAKEET_TRANSCRIBEPSY_250M_Q8_0` is the one to use.
+
+**Long recordings.** Parakeet encodes a long `transcribe()` input in overlapping windows, so memory stays flat however long the recording is and cancellation lands between windows. The defaults need nothing from you: TranscribePsy uses the 60 s windows with 25 % overlap it recommends, the other models the engine's automatic windows. To trade speed for a smaller footprint, for example on a phone with little memory, set `longFormWindowFrames` and `longFormContextFrames` in `modelConfig` (encoder frames of 80 ms: 375 is a 30 s window, and 47 frames of context on each side keeps the 25 % overlap); a negative window encodes the whole input in one pass.
 
 For model artifacts available as constants, see [SDK — Models](/sdk#models).
 
@@ -331,6 +340,28 @@ The following macOS script loads a regenerated Unified GGUF from disk, downloads
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-unified-coreml.ts title="parakeet-unified-coreml.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### TranscribePsy
+
+The following script transcribes a file with TranscribePsy. By default it loads the ggml GGUF; on macOS, `--coreml` loads the Core ML distribution and reports whether the encoder ran on the Neural Engine, and `--window-sec` sets an explicit long-form window:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/parakeet-transcribepsy-filesystem.js title="parakeet-transcribepsy-filesystem.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-transcribepsy-filesystem.ts title="parakeet-transcribepsy-filesystem.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

@@ -264,6 +264,22 @@ const RULES: Rule[] = [
 
   // ── Apple only: the leg has to be able to run Core ML ────────────────────
   {
+    match: /^parakeet-transcribepsy-coreml-/,
+    skip: {
+      reason:
+        'The TranscribePsy Core ML distribution loads only where its Neural Engine bundles can be staged: macOS and iOS',
+      platforms: [
+        'desktop-linux',
+        'desktop-windows',
+        'desktop-python',
+        'electron-linux',
+        'electron-windows',
+        'snap',
+        'mobile-android'
+      ]
+    }
+  },
+  {
     match: ['parakeet-unified-coreml-ios'],
     skip: {
       reason:

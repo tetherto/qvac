@@ -130,3 +130,28 @@ test('Nemotron diarization load and streaming controls preserve defaults and exp
     t.exception(() => parakeetRuntimeConfigSchema.parse(config))
   }
 })
+
+test('parakeetRuntimeConfigSchema: accepts the long-form window and context frames', (t) => {
+  // TranscribePsy recommends 60 s windows with 25 % overlap: 750 encoder
+  // frames with 94 frames of context on each side. `0` leaves the window to
+  // the model, a negative window is one pass, `-1` context is no context.
+  const explicit = parakeetRuntimeConfigSchema.parse({
+    longFormWindowFrames: 750,
+    longFormContextFrames: 94
+  })
+  t.is(explicit.longFormWindowFrames, 750)
+  t.is(explicit.longFormContextFrames, 94)
+
+  const sentinels = parakeetRuntimeConfigSchema.parse({
+    longFormWindowFrames: -1,
+    longFormContextFrames: -1
+  })
+  t.is(sentinels.longFormWindowFrames, -1)
+  t.is(sentinels.longFormContextFrames, -1)
+
+  t.absent(
+    parakeetRuntimeConfigSchema.safeParse({ longFormWindowFrames: 37.5 }).success,
+    'frames are whole encoder frames'
+  )
+  t.ok(parakeetLoadConfigSchema.safeParse({ longFormWindowFrames: 375 }).success)
+})

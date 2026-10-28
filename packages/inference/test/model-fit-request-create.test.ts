@@ -337,6 +337,27 @@ test('parakeet: those windows bind nothing outside a streaming load', (t) => {
   )
 })
 
+test('parakeet: an explicit long-form window reaches the projection', (t) => {
+  // The window bounds the offline encoder graph the fitter sizes, so the
+  // frames (or the one-pass sentinel) are forwarded as the load sets them.
+  const plan = createFitRequest({
+    modelType: ModelType.parakeetTranscription,
+    modelPath: '/models/transcribepsy-250m-eu-sub.gguf',
+    modelConfig: { longFormWindowFrames: 375, longFormContextFrames: -1 },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.alike(plan.probe.request, {
+    engine: 'parakeet',
+    modelPath: '/models/transcribepsy-250m-eu-sub.gguf',
+    gpuLayers: 0,
+    longFormWindowFrames: 375,
+    longFormContextFrames: -1
+  })
+})
+
 test('parakeet: a non-streaming load holds no live session to size', (t) => {
   const plan = createFitRequest({
     modelType: ModelType.parakeetTranscription,
