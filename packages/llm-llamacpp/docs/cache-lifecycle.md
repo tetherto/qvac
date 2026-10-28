@@ -189,9 +189,10 @@ prompt are deleted.
 
 ## Starting from another conversation
 
-A request is not limited to its own `cacheKey`'s state. After
-its prompt is tokenized and before it is reconciled, it starts from whichever
-state serves the longest prefix of it, cheapest first on a tie:
+A request is not limited to its own `cacheKey`'s state (encoder-decoder
+models excepted: they encode each prompt afresh). After its prompt is
+tokenized and before it is reconciled, it starts from whichever state serves
+the longest prefix of it, cheapest first on a tie:
 
 1. its own sequence: its key's conversation, or what the previous occupant
    left there (a conversation set aside by a key switch or evicted from the
