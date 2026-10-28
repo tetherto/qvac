@@ -4530,6 +4530,47 @@ TEST(CrossKeyMultimodalTest, NewKeyReusesTheImageSetAside) {
   }
 }
 
+// A prompt too long for the context is refused before another
+// conversation's image state is copied in, so the key keeps its own.
+TEST(CrossKeyMultimodalTest, ARefusedPromptKeepsTheKeysOwnState) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_refused_a.bin", "cross_vision_refused_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  const SingleTurn animal =
+      runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  const auto continuing = [&](const std::string& key, const std::string& last) {
+    LlamaModel::Prompt prompt = imageQuestion("elephant.jpg", K_ANIMAL, key);
+    nlohmann::json messages = nlohmann::json::parse(prompt.input);
+    messages.push_back({{"role", "assistant"}, {"content", animal.output}});
+    messages.push_back({{"role", "user"}, {"content", last}});
+    prompt.input = messages.dump();
+    return prompt;
+  };
+  // The second key continues the first, so it serves more of the long
+  // prompt below than the first key's own state does.
+  runSingle(*model, continuing(keys[1], K_COLOUR));
+
+  std::string tooLong = K_COLOUR;
+  for (int i = 0; i < 6000; ++i) {
+    tooLong += " filler";
+  }
+  EXPECT_ANY_THROW(runSingle(*model, continuing(keys[0], tooLong)));
+  EXPECT_EQ(mtmd.donorAdoptionsForTesting(), 0u)
+      << "the refused prompt replaced the key's state with another one";
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
 // A request without a key leaves its image in memory for the next request.
 TEST(CrossKeyMultimodalTest, RequestsWithoutAKeyLeaveTheirImage) {
   if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
