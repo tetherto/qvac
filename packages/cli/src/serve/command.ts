@@ -15,6 +15,7 @@ interface ServeOptions {
   corsOrigin: string[]
   allowedHost: string[]
   allowAnyHost?: boolean
+  enableAdmin?: boolean
   publicBaseUrl?: string
   docs?: boolean
   lazyLoad?: boolean
@@ -95,6 +96,10 @@ function addServeOptions(command: Command): Command {
     )
     .option('--allow-any-host', 'Accept any Host header (turns off DNS-rebinding protection)')
     .option(
+      '--enable-admin',
+      'Mount the admin endpoints (runtime suspend/resume); off by default, needs an API key off loopback'
+    )
+    .option(
       '--public-base-url <url>',
       'Externally reachable origin (required for image response_format=url)'
     )
@@ -135,6 +140,7 @@ async function runServe(options: ServeOptions): Promise<void> {
       corsOrigins: options.corsOrigin.length > 0 ? options.corsOrigin : undefined,
       allowedHosts: options.allowedHost.length > 0 ? options.allowedHost : undefined,
       allowAnyHost: options.allowAnyHost,
+      enableAdmin: options.enableAdmin,
       publicBaseUrl: options.publicBaseUrl,
       docs: options.docs,
       extensions: resolveExtensionNames(options),

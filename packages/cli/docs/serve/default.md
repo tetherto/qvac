@@ -15,6 +15,9 @@ described in [README.md](README.md) and applies here. Its own configuration live
 | `DELETE`        | `/qvac/v1/kv_cache`                      | Reclaim automatic KV cache              |
 | `GET`           | `/qvac/v1/system`                        | Host CPU, memory and GPU capacity       |
 | `POST`          | `/qvac/v1/models/fit`                    | Whether models fit, before loading them |
+| `GET`           | `/qvac/v1/runtime/state`                 | Runtime lifecycle state                 |
+| `GET`           | `/qvac/v1/runtime/models`                | Loaded models                           |
+| `POST`          | `/qvac/v1/runtime/{suspend,resume}`      | Suspend or resume (admin-only)          |
 | `POST`          | `/qvac/v1/translate`                     | Text translation (NMT model)            |
 | `POST`          | `/qvac/v1/ocr`                           | Text recognition in an image            |
 | `POST`          | `/qvac/v1/classifications`               | Image classification                    |
@@ -242,6 +245,79 @@ The example is trimmed; each CPU, memory and GPU object carries every field, eac
 | ---- | ------------------------- | --------------------------------------- |
 | 400  | `invalid_sample`          | `sample` is not `true` or `false`       |
 | 500  | `system_resources_failed` | The SDK could not read system resources |
+
+## Runtime: `/qvac/v1/runtime/*`
+
+The SDK runtime behind the server. Reading its state and its loaded models is open to every
+client that passes authentication. Suspending and resuming it acts on every client at once, so
+those two routes are **admin-only**: they answer `403 admin_disabled` unless the server was
+started with `--enable-admin` (or `"enableAdmin": true` under `serve`).
+
+`--enable-admin` on a non-loopback `--host` needs `--api-key` or `--api-key-file`;
+`--allow-unauthenticated` does not lift that. The API key is the same one every route uses.
+
+While the runtime is `suspending`, `suspended` or `resuming`, every route outside this group
+answers `503 runtime_suspended`. `/openapi.json`, `/docs` and `/qvac/identity` stay available.
+
+### `GET /qvac/v1/runtime/state`
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/runtime/state
+```
+
+```json
+{ "object": "runtime.state", "state": "active" }
+```
+
+`state` is `active`, `suspending`, `suspended` or `resuming`.
+
+### `GET /qvac/v1/runtime/models`
+
+The `serve.models` aliases whose model is loaded, with the SDK's `getLoadedModelInfo()` for each.
+Configured aliases that are not loaded are left out; `GET /v1/models` lists those. The model's
+on-disk path is not returned.
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "runtime.model",
+      "model": "qwen",
+      "modelId": "1a2b3c",
+      "modelType": "llm",
+      "handlers": ["completionStream"],
+      "addonPackage": "@qvac/llm-llamacpp",
+      "loadedAt": 1760870400000
+    }
+  ]
+}
+```
+
+### `POST /qvac/v1/runtime/suspend` and `POST /qvac/v1/runtime/resume`
+
+Admin-only. Suspend pauses P2P resources and gates every other route until resume. Requests
+already running finish. Both are idempotent and return the state they leave the runtime in.
+
+```bash
+curl -sS -X POST http://localhost:11434/qvac/v1/runtime/suspend \
+  -H "Authorization: Bearer $QVAC_API_KEY"
+```
+
+```json
+{ "object": "runtime.state", "state": "suspended" }
+```
+
+### Errors
+
+| HTTP | `error.code`             | When                                                                |
+| ---- | ------------------------ | ------------------------------------------------------------------- |
+| 403  | `admin_disabled`         | Suspend or resume on a server started without `--enable-admin`      |
+| 503  | `runtime_suspended`      | Any route outside this group while the runtime is not `active`      |
+| 500  | `runtime_state_failed`   | The SDK could not report the lifecycle state                        |
+| 500  | `runtime_query_failed`   | The SDK could not describe a loaded model                           |
+| 500  | `runtime_suspend_failed` | A resource failed to pause; the runtime is suspended anyway, resume |
+| 500  | `runtime_resume_failed`  | A resource failed to restore; the runtime stays suspended, retry    |
 
 ## `POST /qvac/v1/models/fit`
 

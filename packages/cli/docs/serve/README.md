@@ -37,6 +37,8 @@ using the extension's usual termination sentinel.
 
 The default `127.0.0.1` bind is unauthenticated. A non-loopback `--host` refuses to start without `--api-key <key>` or `--api-key-file <path>`; `--allow-unauthenticated` downgrades that refusal to a warning for operators who accept the exposure.
 
+Admin-only routes, such as runtime suspend and resume, answer `403 admin_disabled` unless the server starts with `--enable-admin` or `"enableAdmin": true` under `serve`. On a non-loopback host `--enable-admin` needs a key even with `--allow-unauthenticated`. See [default.md](default.md#runtime-qvacv1runtime).
+
 Prefer `--api-key-file`: `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. The file must be a regular file, and the CLI warns when it is readable beyond its owner (`chmod 600`).
 
 CORS only governs cross-origin requests. A page that points its own domain at `127.0.0.1` (DNS rebinding) is same-origin with the server, so every request, `/openapi.json` included, must also carry a `Host` header naming a loopback host (`localhost`, `*.localhost`, `127.0.0.0/8`, `[::1]`), an IP address, the bind host, the `--public-base-url` host or an allowed host; the port is ignored and anything else gets `403 host_not_allowed`. Add names that reach the server through a proxy or DNS with `--allowed-host` or `serve.allowedHosts`; a leading dot covers the domain and its subdomains:

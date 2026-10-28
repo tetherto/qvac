@@ -155,6 +155,33 @@ export async function createCoreServer(
     )
   }
 
+  // After auth, so an unauthenticated caller learns nothing about the opt-in.
+  // lunte-disable-next-line require-await
+  app.addHook('onRequest', async (req) => {
+    const config = req.routeOptions.config
+    if (config?.admin === true && !ctx.serveConfig.enableAdmin) {
+      throw new HttpError(
+        403,
+        'admin_disabled',
+        'This endpoint is admin-only. Start the server with --enable-admin or serve.enableAdmin: true.'
+      )
+    }
+    if (
+      ctx.runtime.state !== 'active' &&
+      config?.allowWhileSuspended !== true &&
+      req.routeOptions.url !== undefined &&
+      req.method !== 'OPTIONS' &&
+      !isIntrospectionPath(req.url) &&
+      req.routeOptions.url !== IDENTITY_PATH
+    ) {
+      throw new HttpError(
+        503,
+        'runtime_suspended',
+        `The runtime is ${ctx.runtime.state}. Resume it with POST /qvac/v1/runtime/resume.`
+      )
+    }
+  })
+
   // lunte-disable-next-line require-await
   app.addHook('onRequest', async (req) => {
     if (!isIntrospectionPath(req.url)) {

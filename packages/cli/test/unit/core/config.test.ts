@@ -267,6 +267,21 @@ describe('parseServeConfig bundled weights', () => {
   })
 })
 
+describe('parseServeConfig enableAdmin', () => {
+  it('is off unless the flag or serve.enableAdmin turns it on', () => {
+    assert.equal(parseServeConfig({}, {}).enableAdmin, false)
+    assert.equal(parseServeConfig({}, { enableAdmin: true }).enableAdmin, true)
+    assert.equal(parseServeConfig({ serve: { enableAdmin: true } }, {}).enableAdmin, true)
+  })
+
+  it('rejects a non-boolean serve.enableAdmin', () => {
+    assert.throws(
+      () => parseServeConfig({ serve: { enableAdmin: 'yes' } }, {}),
+      /serve\.enableAdmin must be a boolean/
+    )
+  })
+})
+
 describe('parseServeConfig nested companions', () => {
   it('resolves nested constants for explicit image / video entries', () => {
     const cfg = parseServeConfig(
