@@ -304,7 +304,10 @@ Open [Actions → QVAC Tests (sdk) → Run workflow](https://github.com/tetherto
 and submit the form.
 
 Select any combination of the platform checkboxes. Desktop, Android, and iOS are selected by default.
-Electron and strict Snap runs are manual-only and must be selected explicitly.
+Electron, strict Snap, and Kotlin Android runs are manual-only and must be selected explicitly. Kotlin
+Android always builds against the checkout's `packages/inference`, whatever `inference-source` says. Both
+Android legs choose from the same Device Farm pools; to run them together, set `android-device-pool` to a
+public pool so they do not queue on one private device.
 
 Non-obvious inputs:
 
@@ -335,7 +338,8 @@ in the form.
 - `test-node-sdk.yml` runs desktop, Electron, and Python. Their job is the same apart from a few steps.
 - `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and the in-snap model cache are
   its own steps, so none of them show up as skipped steps on the other families' jobs.
-- `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm.
+- `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm. The Android
+  workflow runs either app (`app: js | kotlin`); the Kotlin one reports as its own family, `kotlin-android`.
 
 The runner-hosted families take their shared steps from the `sdk-e2e-node-*` composite actions in
 `.github/actions`: `leg` resolves the platform and rerun filter, `prepare` installs and builds, `run`
