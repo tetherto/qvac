@@ -31,7 +31,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 ### Changed
 
 - Use fused CPU encoder attention for MOSS-Transcribe-Diarize.
-- Align the shared native `speech-cpp` source to `2026-10-26` across the speech addons.
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech
+  addons. Parakeet TDT models with a Core ML decoder sidecar, TranscribePsy
+  among them, use about 26 MiB less memory once loaded on macOS and iOS, and
+  MOSS-Transcribe-Diarize decodes 1.4 to 1.7 times faster on Metal. Both
+  measurements are from a Mac Studio M3 Ultra
+  ([native #378](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/378),
+  [native #374](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/374)).
 - The shared native `ggml-speech` moves to `2026-10-27` across the speech
   addons, which also speeds up single-query Metal softmax on long KV caches
   ([#5392](https://github.com/tetherto/qvac/pull/5392)).

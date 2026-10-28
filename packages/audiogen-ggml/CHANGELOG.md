@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Align the shared native `speech-cpp` source to `2026-10-26` across the speech addons.
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech addons.
 - The shared native `ggml-speech` moves to `2026-10-27` across the speech
   addons, which also speeds up single-query Metal softmax on long KV caches
   ([#5392](https://github.com/tetherto/qvac/pull/5392)).
