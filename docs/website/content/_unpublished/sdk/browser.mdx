@@ -1,0 +1,75 @@
+---
+title: Browser (experimental)
+description: Run the SDK in a web page, with the LLM addon on WebGPU in a Dedicated Worker.
+schemaType: TechArticle
+---
+
+In a web page, `@qvac/sdk` runs the same client API it runs on Node, Bare and
+Expo. Requests go to the same worker request handling and `@qvac/inference`
+engine, here in a Dedicated Worker. The LLM addon runs as WebAssembly on WebGPU.
+
+```js
+import { loadModel, completion, unloadModel } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: 'https://huggingface.co/<org>/<repo>/resolve/main/model-Q4_K_M.gguf',
+  modelType: 'llamacpp-completion',
+  modelConfig: { ctx_size: 4096 },
+  onProgress: (p) => console.log(`${p.percentage.toFixed(0)}%`)
+})
+
+const run = completion({ modelId, history: [{ role: 'user', content: 'Hello' }], stream: true })
+for await (const token of run.tokenStream) console.log(token)
+await unloadModel({ modelId })
+```
+
+## How it works
+
+| Layer              | Bare / Node                                  | Browser                                                         |
+| ------------------ | -------------------------------------------- | --------------------------------------------------------------- |
+| Transport (`#rpc`) | bare-rpc over a child process or Worklet IPC | bare-rpc over the Worker's `postMessage`                        |
+| Worker             | Bare worker (`dist/src/worker`)              | `dist/worker.browser.js`, prebuilt from `src/worker/browser.ts` |
+| Engine             | `@qvac/inference`                            | `@qvac/inference`, with its `browser` field substitutions       |
+| LLM addon          | `@qvac/llm-llamacpp` native prebuild         | `@qvac/llm-llamacpp` `prebuilds/web` (WebAssembly + WebGPU)     |
+| Model cache        | `~/.qvac` on disk                            | `/.qvac` in the origin private file system (OPFS)               |
+
+Bundlers that follow the `browser` export condition and
+`new Worker(new URL(..., import.meta.url))` pick this up with no
+configuration. That includes Vite and webpack. They emit the worker, the
+addon's loader and its `.wasm` as assets.
+
+## Requirements
+
+- A browser with WebGPU and `shader-f16` (Chrome or Edge 113+) for GPU
+  inference. Without it the model runs on the CPU, which is much slower.
+- A secure context (HTTPS or `localhost`), for OPFS.
+- No cross-origin isolation headers are needed.
+
+## What is supported
+
+Supported:
+
+- `loadModel` from `http(s)` URLs. Downloads resume, and the cache in OPFS
+  survives reloads.
+- `completion`: streaming, events, reasoning, tool calls and generation
+  parameters.
+- `cancel`. It takes effect at the next generated token, so on the CPU fallback a
+  long prompt evaluation finishes first.
+- `unloadModel` and `close`.
+
+Requests run one at a time.
+
+Not available in the browser, each failing with an error that says so:
+
+- Model types other than `llamacpp-completion`.
+- Media (image or audio) messages.
+- Registry (`registry://`) and peer-to-peer (`pear://`) model sources.
+- Sharded models.
+- RAG.
+- Delegated inference.
+- Fine-tuning.
+- Model-fit assessment.
+- Config files. The browser worker uses the SDK defaults.
+
+Downloads from Hugging Face are not checked against the Hub's SHA-256: the
+browser hides the redirect response that carries it.

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const runtimeContextSchema = z.object({
-  runtime: z.enum(['node', 'bare', 'react-native']).optional(),
+  runtime: z.enum(['node', 'bare', 'react-native', 'browser']).optional(),
   platform: z.enum(['android', 'ios', 'darwin', 'linux', 'win32']).optional(),
   deviceModel: z.string().optional(),
   deviceBrand: z.string().optional()

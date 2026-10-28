@@ -24,3 +24,15 @@ export function encodeBase64(bytes: Uint8Array): string {
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!)
   return btoa(binary)
 }
+
+/**
+ * Decodes UTF-8 bytes from an RPC frame. Bare and Node hand frames over as
+ * Buffers (Bare has no TextDecoder); the browser worker as plain Uint8Arrays,
+ * whose own toString() would list the byte values instead.
+ */
+export function decodeUtf8(bytes: Uint8Array): string {
+  if (Object.getPrototypeOf(bytes) === Uint8Array.prototype) {
+    return new TextDecoder().decode(bytes)
+  }
+  return bytes.toString()
+}

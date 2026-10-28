@@ -21,13 +21,15 @@ export function initEnv(): void {
   }
 
   const isBareKit = typeof (globalThis as { BareKit?: unknown }).BareKit !== 'undefined'
-  if (isBareKit && Bare.argv[0]) {
-    envConfig['HOME_DIR'] = Bare.argv[0]
+  // The browser build has no Bare global and so no arguments.
+  const argv = (globalThis as { Bare?: { argv: string[] } }).Bare?.argv ?? []
+  if (isBareKit && argv[0]) {
+    envConfig['HOME_DIR'] = argv[0]
   }
 
-  if (Bare.argv[2]) {
+  if (argv[2]) {
     try {
-      const overrides = JSON.parse(Bare.argv[2]) as Record<string, string>
+      const overrides = JSON.parse(argv[2]) as Record<string, string>
       envConfig = { ...envConfig, ...overrides }
     } catch {
       // Ignore non-JSON args
