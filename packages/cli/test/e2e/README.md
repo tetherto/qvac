@@ -60,7 +60,7 @@ test/e2e/
     routing-cors-auth.test.ts, model-load-config.test.ts
   default/            /qvac/v1/* route tests, in-process & modelless
     chat-batch.test.ts, kv-cache.test.ts, system-model-fit.test.ts, translate.test.ts, ocr.test.ts,
-    classifications.test.ts,
+    classifications.test.ts, upscale.test.ts,
     registry.test.ts
   openai/             /v1/* route tests, in-process & modelless
     *-validation.test.ts, models, models-catalog, audio-*
@@ -76,6 +76,7 @@ test/e2e/
     system-model-fit.test.ts      in-process: host resources and pre-load model fit
     chat-batch.test.ts            in-process: batch chat on a parallel:2 LLM
     registry.test.ts              in-process: live model registry browse and lookup
+    upscale.test.ts               in-process: ESRGAN image upscale
 ```
 
 ## Concurrency
