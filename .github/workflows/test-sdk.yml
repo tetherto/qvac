@@ -36,6 +36,11 @@ on:
         description: "Android tests (Device Farm)"
         type: boolean
         default: true
+      # workflow_dispatch allows 25 inputs, all used: a new input must replace one.
+      kotlin-android:
+        description: "Kotlin Android tests (Device Farm, the Kotlin SDK app)"
+        type: boolean
+        default: false
       ios:
         description: "iOS tests (Device Farm)"
         type: boolean
@@ -218,12 +223,14 @@ jobs:
       run-snap: ${{ steps.resolve.outputs.run-snap }}
       run-python: ${{ steps.resolve.outputs.run-python }}
       run-android: ${{ steps.resolve.outputs.run-android }}
+      run-kotlin-android: ${{ steps.resolve.outputs.run-kotlin-android }}
       run-ios: ${{ steps.resolve.outputs.run-ios }}
       desktop-platforms: ${{ steps.plan.outputs.desktop-platforms }}
       electron-platforms: ${{ steps.plan.outputs.electron-platforms }}
       snap-platforms: ${{ steps.plan.outputs.snap-platforms }}
       python-platforms: ${{ steps.plan.outputs.python-platforms }}
       filter-android: ${{ steps.plan.outputs.filter-android }}
+      filter-kotlin-android: ${{ steps.plan.outputs.filter-kotlin-android }}
       filter-ios: ${{ steps.plan.outputs.filter-ios }}
     steps:
       - name: Resolve configuration
@@ -237,6 +244,7 @@ jobs:
           RUN_ELECTRON: ${{ inputs.electron }}
           RUN_SNAP: ${{ inputs.snap }}
           RUN_ANDROID: ${{ inputs.android }}
+          RUN_KOTLIN_ANDROID: ${{ inputs.kotlin-android }}
           RUN_IOS: ${{ inputs.ios }}
           SUITE: ${{ inputs.suite }}
         run: |
@@ -255,6 +263,7 @@ jobs:
           RESOLVED_ELECTRON=false
           RESOLVED_SNAP=false
           RESOLVED_ANDROID=false
+          RESOLVED_KOTLIN_ANDROID=false
           RESOLVED_IOS=false
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
@@ -263,10 +272,11 @@ jobs:
             RESOLVED_ELECTRON="$RUN_ELECTRON"
             RESOLVED_SNAP="$RUN_SNAP"
             RESOLVED_ANDROID="$RUN_ANDROID"
+            RESOLVED_KOTLIN_ANDROID="${RUN_KOTLIN_ANDROID:-false}"
             RESOLVED_IOS="$RUN_IOS"
 
-            SELECTED="${RESOLVED_DESKTOP}${RESOLVED_PYTHON}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}"
-            if [ "$SELECTED" = "falsefalsefalsefalsefalsefalse" ]; then
+            SELECTED="${RESOLVED_DESKTOP}${RESOLVED_PYTHON}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_KOTLIN_ANDROID}${RESOLVED_IOS}"
+            if [ "$SELECTED" = "falsefalsefalsefalsefalsefalsefalse" ]; then
               echo "::error::Select at least one platform to test."
               exit 1
             fi
@@ -310,6 +320,9 @@ jobs:
               android)
                 RESOLVED_ANDROID=true
                 ;;
+              kotlin-android)
+                RESOLVED_KOTLIN_ANDROID=true
+                ;;
               ios)
                 RESOLVED_IOS=true
                 ;;
@@ -331,6 +344,7 @@ jobs:
                     electron) RESOLVED_ELECTRON=true; MATCHED=true ;;
                     snap) RESOLVED_SNAP=true; MATCHED=true ;;
                     android) RESOLVED_ANDROID=true; MATCHED=true ;;
+                    kotlin-android) RESOLVED_KOTLIN_ANDROID=true; MATCHED=true ;;
                     ios) RESOLVED_IOS=true; MATCHED=true ;;
                     "") ;;
                     *)
@@ -354,6 +368,7 @@ jobs:
             echo "run-snap=$RESOLVED_SNAP"
             echo "run-python=$RESOLVED_PYTHON"
             echo "run-android=$RESOLVED_ANDROID"
+            echo "run-kotlin-android=$RESOLVED_KOTLIN_ANDROID"
             echo "run-ios=$RESOLVED_IOS"
           } >> "$GITHUB_OUTPUT"
 
@@ -432,6 +447,7 @@ jobs:
               )
             ),
             'filter-android': filterFor('android', 'android'),
+            'filter-kotlin-android': filterFor('kotlin-android', 'kotlin-android'),
             'filter-ios': filterFor('ios', 'ios'),
           };
 
@@ -715,6 +731,43 @@ jobs:
       working-directory: "packages/sdk-e2e"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
       filter: ${{ needs.resolve.outputs.filter-android || inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
+      device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
+      device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.android-device-pool }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
+    secrets: inherit
+
+  # Same Device Farm pools as android-tests. Builds its own Android runtime, so
+  # no shared-runtime-libs dependency.
+  kotlin-android-tests:
+    needs: [resolve, prepare-inference, prepare-test-suite]
+    permissions:
+      actions: read
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
+    if: needs.resolve.outputs.run-kotlin-android == 'true'
+    uses: ./.github/workflows/test-android-sdk.yml
+    with:
+      project-directory: "packages/sdk"
+      app: kotlin
+      working-directory: "packages/sdk-e2e"
+      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
+      filter: ${{ needs.resolve.outputs.filter-kotlin-android || inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       include: ${{ inputs.include }}
