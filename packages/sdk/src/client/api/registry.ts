@@ -26,11 +26,9 @@ interface RegistryResponse {
   error?: string | undefined
 }
 
-function validateRegistryResponse(response: RegistryResponse, fallbackError?: string): void {
+function validateRegistryResponse(response: RegistryResponse): void {
   if (!response.success) {
-    throw new ModelRegistryQueryFailedError(
-      response.error ?? fallbackError ?? 'Unknown registry error'
-    )
+    throw new ModelRegistryQueryFailedError(response.error ?? 'Unknown registry error')
   }
 }
 
@@ -99,7 +97,7 @@ async function modelRegistryGetModel(
   }
 
   const response = (await send(request)) as ModelRegistryGetModelResponse
-  validateRegistryResponse(response, `Model not found: ${registrySource}/${registryPath}`)
+  validateRegistryResponse(response)
 
   return response.model!
 }
