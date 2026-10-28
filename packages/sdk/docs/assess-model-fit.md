@@ -202,7 +202,15 @@ one allowance for the whole load. Assessed together with other models, a `fit`
 from any of the four falls back to the [computed floor](#two-kinds-of-evidence)
 while a refusal still stands. `onnx-tts`, `ggml-vla` and `ggml-classification`
 have no fitter and assess from the floor, as do a translation model not yet
-downloaded, MOSS-Speech, and diffusion `world` and `upscale` loads.
+downloaded and MOSS-Speech.
+
+For `sdcpp-generation` the fitter covers image generation, including a
+configured ESRGAN `upscaler`, standalone `mode: 'upscale'`, video, and
+`mode: 'world'`. A world load needs its `taehvModelSrc` and a pre-built
+`sceneSrc`; without a scene the fitter is not asked. The catalog's ESRGAN
+checkpoints are `.pth` files, which have no registry description, so a load
+naming one reaches no engine verdict before download and assesses from the
+floor.
 
 Two shapes the SDK refuses to put to an engine, so that it is never asked a
 question it cannot answer: a sharded model, which every fitter reads as whole

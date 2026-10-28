@@ -199,7 +199,7 @@ test('batchCompletionStream: a deferred tool sends a catalog, not its schema', a
   clearRegistry()
 })
 
-test('batchCompletionStream: a prompt with a loaded deferred tool runs without the tool grammar', async (t) => {
+test('batchCompletionStream: a prompt with a loaded deferred tool declares it and keeps the grammar', async (t) => {
   clearRegistry()
 
   const modelId = `batch-defer-choice-${Date.now()}`
@@ -233,14 +233,17 @@ test('batchCompletionStream: a prompt with a loaded deferred tool runs without t
   for await (const _ of gen) void _
 
   const byId = new Map(prompts.map((prompt) => [prompt.id, prompt]))
+  const declared = (id: string) =>
+    byId
+      .get(id)!
+      .messages.filter((entry) => entry.type === 'function')
+      .map((entry) => entry.name)
+  t.alike(declared('fresh'), ['tool_search'], 'nothing loaded: only the search tool is declared')
+  t.alike(declared('loaded'), ['tool_search', 'calculate_area'], 'the loaded tool is declared')
   t.is(byId.get('fresh')!.toolChoice, undefined, 'nothing loaded: the grammar stays on')
-  t.is(byId.get('loaded')!.toolChoice, 'none', 'a loaded tool turns the grammar off')
-  t.is(
-    byId.get('auto')!.toolChoice,
-    'none',
-    'an explicit "auto" is the default and is treated the same'
-  )
-  t.is(byId.get('caller')!.toolChoice, 'required', 'a stronger caller choice is kept')
+  t.is(byId.get('loaded')!.toolChoice, undefined, 'a loaded tool keeps the grammar on')
+  t.is(byId.get('auto')!.toolChoice, 'auto', 'an explicit "auto" is passed through')
+  t.is(byId.get('caller')!.toolChoice, 'required', 'a caller choice is passed through')
 
   unregisterModel(modelId)
   clearRegistry()

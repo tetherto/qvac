@@ -1,7 +1,7 @@
 import { normalizeAssistantCacheContent } from '@/utils/cache-normalize'
 import type { CacheMessage } from '@/utils/cache/types'
 
-function normalizeCacheMessage(message: CacheMessage): CacheMessage {
+export function normalizeCacheMessage(message: CacheMessage): CacheMessage {
   const { attachments, ...normalized } = message
   if (message.role === 'assistant') {
     normalized.content = normalizeAssistantCacheContent(message.content)

@@ -1005,6 +1005,17 @@ def greater_than(left: Any, right: Any, _args: dict[str, Any]) -> StepResult:
     return StepResult.ok(f"{left} > {right}")
 
 
+def prefill_reuse(left: Any, right: Any, args: dict[str, Any]) -> StepResult:
+    primed = args.get("primedTokens")
+    values = (left, right, primed)
+    message = f"cold={left}, warm={right}, primed={primed}"
+    if not all(isinstance(value, (int, float)) for value in values):
+        return StepResult.fail(message)
+    if primed <= 0 or right <= 0 or left - right != primed:
+        return StepResult.fail(message)
+    return StepResult.ok(message)
+
+
 def equal_strings(left: Any, right: Any, _args: dict[str, Any]) -> StepResult:
     """The two strings are the same."""
     if str(left) != str(right):
@@ -1102,6 +1113,7 @@ def length_ratio_at_least(left: Any, right: Any, args: dict[str, Any]) -> StepRe
 COMPARISONS: dict[str, Any] = {
     "equalStrings": equal_strings,
     "greaterThan": greater_than,
+    "prefillReuse": prefill_reuse,
     "identicalBytes": identical_bytes,
     "differentBytes": different_bytes,
     "lengthRatioAtLeast": length_ratio_at_least,

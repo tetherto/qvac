@@ -10,11 +10,14 @@ import {
   movedProjects,
   parseBranch,
   parseLsRemote,
+  parseNpmView,
   planTags,
+  publishedCommit,
   publishedElsewhere,
   rangeErrors,
   readRepoJson,
   satisfies,
+  shasumMismatches,
   stageManifest,
   workspaceEntries,
 } from '../lib/release-train.mjs'
@@ -241,10 +244,62 @@ const HEAD = 'a'.repeat(40)
 const OTHER = 'b'.repeat(40)
 
 test('refuses to publish the rest of a train from another commit', () => {
-  const gitHeads = { '@qvac/inference': OTHER, '@qvac/sdk': HEAD }
-  assert.deepEqual(publishedElsewhere(MOVED, (project) => gitHeads[project.name] ?? null, HEAD), [
+  const views = { '@qvac/inference': { found: true, value: OTHER }, '@qvac/sdk': { found: true, value: HEAD } }
+  assert.deepEqual(publishedElsewhere(MOVED, (project) => views[project.name] ?? { found: false, value: null }, HEAD), [
     `@qvac/inference@0.22.0 was published from ${OTHER}, not ${HEAD}; cut a new train branch`,
   ])
+})
+
+test('treats a version npm has without a gitHead as published elsewhere, and one it does not have as unpublished', () => {
+  const views = { '@qvac/inference': { found: true, value: null }, '@qvac/sdk': { found: false, value: null } }
+  assert.deepEqual(publishedElsewhere(MOVED, (project) => views[project.name] ?? { found: false, value: null }, HEAD), [
+    `@qvac/inference@0.22.0 is on npm without a gitHead, so it was not published from ${HEAD}; cut a new train branch`,
+  ])
+})
+
+test('reads the published commit from the anchor package, and fails until npm has a commit for it', () => {
+  const asked = []
+  const gitHeadOf = (view) => (name, version) => {
+    asked.push(`${name}@${version}`)
+    return view
+  }
+  assert.equal(publishedCommit(TRAIN, '0.22.0', gitHeadOf({ found: true, value: HEAD })), HEAD)
+  assert.equal(publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: HEAD })), HEAD)
+  assert.deepEqual(asked, ['@qvac/inference@0.22.0', '@qvac/cli@0.17.0'])
+  assert.throws(
+    () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: false, value: null })),
+    /@qvac\/cli@0\.17\.0 is not on npm; the train has not published yet/,
+  )
+  assert.throws(
+    () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: null })),
+    /@qvac\/cli@0\.17\.0 has no commit as its gitHead on npm/,
+  )
+  assert.throws(
+    () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: 'refs/heads/main' })),
+    /has no commit as its gitHead on npm/,
+  )
+})
+
+test('tells a version npm does not serve apart from a field it does not have', () => {
+  const e404 = JSON.stringify({ error: { code: 'E404', summary: 'No match found for version 0.17.0' } })
+  assert.deepEqual(parseNpmView({ status: 1, stdout: e404, stderr: '' }), { found: false, value: null })
+  assert.deepEqual(parseNpmView({ status: 0, stdout: '', stderr: '' }), { found: true, value: null })
+  assert.deepEqual(parseNpmView({ status: 0, stdout: `"${HEAD}"\n`, stderr: '' }), { found: true, value: HEAD })
+  assert.throws(
+    () => parseNpmView({ status: 1, stdout: JSON.stringify({ error: { code: 'E503' } }), stderr: 'Service Unavailable' }),
+    /exit 1: Service Unavailable/,
+  )
+  assert.throws(() => parseNpmView({ status: 1, stdout: '', stderr: 'getaddrinfo ENOTFOUND' }), /ENOTFOUND/)
+})
+
+test('compares sha1 only for the versions this run published', () => {
+  const served = { '@qvac/inference': 'aaa', '@qvac/sdk': 'bbb', '@qvac/cli': 'ccc' }
+  const built = { '@qvac/inference': 'aaa', '@qvac/sdk': 'xxx', '@qvac/cli': 'yyy' }
+  const mismatches = (published) => shasumMismatches(MOVED, published, (project) => served[project.name], (project) => built[project.name])
+  assert.deepEqual(mismatches(['@qvac/inference', '@qvac/sdk']), [
+    '@qvac/sdk@0.22.0 on npm has sha1 bbb; the built tarball has xxx',
+  ])
+  assert.deepEqual(mismatches([]), [])
 })
 
 test('points every train dependency, direct or not, at its tarball', () => {
@@ -275,9 +330,9 @@ test('tags each package at its npm gitHead, once, and fails on a tag elsewhere',
     { name: '@qvac/ai-sdk-provider', version: '0.10.0' },
   ]
   const onOrigin = { 'cli-v0.16.0': HEAD, 'ai-sdk-provider-v0.10.0': OTHER }
-  const plan = planTags(moved, { releaseProject: '@qvac/sdk', remoteCommit: (tag) => onOrigin[tag] ?? null, gitHeadOf: () => HEAD })
+  const plan = planTags(moved, { remoteCommit: (tag) => onOrigin[tag] ?? null, gitHeadOf: () => HEAD })
   assert.deepEqual(plan, {
-    create: [{ tag: 'inference-v0.21.0', commit: HEAD }],
+    create: [{ tag: 'inference-v0.21.0', commit: HEAD }, { tag: 'sdk-v0.21.0', commit: HEAD }],
     existing: ['cli-v0.16.0'],
     conflicts: [{ tag: 'ai-sdk-provider-v0.10.0', commit: OTHER, expected: HEAD }],
   })

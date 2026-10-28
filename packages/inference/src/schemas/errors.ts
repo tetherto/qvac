@@ -149,7 +149,8 @@ export const ERROR_CODES = {
   PATH_TRAVERSAL: 53900,
 
   // Model registry query (53,950-54,000)
-  QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950
+  QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
+  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951
 } as const
 
 const errorDefinitions: ErrorCodesMap = {
@@ -720,6 +721,11 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'QVAC_MODEL_REGISTRY_QUERY_FAILED',
     message: (details?: string) =>
       `QVAC model registry query failed${details ? `: ${details}` : ''}`
+  },
+  [ERROR_CODES.QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND]: {
+    name: 'QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND',
+    message: (registrySource: string, registryPath: string) =>
+      `QVAC model registry has no model at ${registrySource}/${registryPath}`
   }
 }
 

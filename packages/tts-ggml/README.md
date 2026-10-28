@@ -1018,6 +1018,15 @@ synthesis, the analysis half only to clone a voice or run a dialogue, so a
 text-only deployment can omit `files.mossCodecEncoder`.  The backbones have 8B
 parameters, so MOSS targets desktop hosts; mobile is not supported.
 
+On Metal, the backbone projects only the text-control logits needed during
+audio generation and omits text projection during the forced drain. Embedding
+tables stay on the GPU, and the model weight type is preserved.
+
+When `dialogueReferences` contains one recording, its encoded codes also serve
+as continuation, avoiding a duplicate encoder pass during engine creation.
+Multiple references retain their joined-audio continuation encoding. Prepared
+reference codes stay cached per instance for batch and streaming synthesis.
+
 ```js
 const model = new TTSGgml({
   engine: TTSGgml.ENGINE_MOSS,
@@ -1194,6 +1203,15 @@ flow-matching steps, and a DAC decoder turns it into 48 kHz mono audio of up
 to 30 seconds.  It is not a speech model, and it ships as one GGUF.  Select it
 with `engine: TTSGgml.ENGINE_MOSS_SFX` or by staging `moss-sfx-*.gguf` in the
 `modelDir`.
+
+Native generation reuses fixed cross-attention K/V across diffusion steps and
+uses Metal DiT FlashAttention when the GPU supports both attention shapes.
+Memory preflight includes the request cache (360 MiB for guided generation
+with the released models) alongside the scheduler's retained peak across text
+encoding, diffusion and VAE decoding, including repeated requests.
+FlashAttention can slightly change waveform samples. See the
+[native SoundEffect guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/33174cc8693b1c8cdb44b5ff57b0f120bc89e454/engines/tts/docs/moss.md#moss-soundeffect)
+for precision details and the M1 Ultra measurements.
 
 ```js
 const sfx = new TTSGgml({
