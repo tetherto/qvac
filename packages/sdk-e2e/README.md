@@ -3,7 +3,8 @@
 SDK dogfooding tests built on [`@qvac/test-suite`](../test-suite), the test-orchestration framework
 that lives in this monorepo at `packages/test-suite`.
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
-(packaged Electron main process), strict Snap, or mobile (Bare + React Native).
+(packaged Electron main process), strict Snap, mobile (Bare + React Native), the Python client, or the Kotlin
+client on Android.
 
 ## Layout
 
@@ -16,6 +17,7 @@ The package keeps what every SDK client must do apart from how each client does 
 | `catalog/conformance/`        | The API-level corpus the JS, Python and Kotlin clients each run                                    |
 | [`runners/js/`](./runners/js) | The JS client: desktop, Electron, Snap and mobile consumers, and their executors                   |
 | `runners/python/`             | The Python client: an interpreter for the declarative bodies, and hand-written bodies for the rest |
+| `runners/kotlin/`             | The Kotlin client: an Android app that interprets the declarative bodies through the Kotlin SDK    |
 | `assets/`, `fixtures/`        | Data the tests read                                                                                |
 | `scripts/`                    | Build helpers and the catalog gates                                                                |
 
@@ -40,6 +42,7 @@ npx qvac-test run:local:snap --filter snap-
 npx qvac-test run:local:android
 npx qvac-test run:local:ios
 npx qvac-test run:local:python
+npx qvac-test run:local:kotlin-android
 ```
 
 **MQTT broker.** `run:local:*` requires a broker serving WebSockets on port 8080 and MQTT/TCP on 1883.
@@ -71,6 +74,9 @@ full list.
   The leg runs the same worker bundle the desktop leg does, so
   `npm run bundle:sdk` (part of `install:build:full`) has to have run.
 
+- Kotlin Android: `adb` + a USB-debuggable arm64 device, JDK 17, Python 3, and an Android SDK with NDK
+  `29.0.14206865`. The `prepare` step builds the app from this checkout and installs it; `--skip-build`
+  reuses the installed one. See [`runners/kotlin/`](./runners/kotlin/README.md).
 - Electron: Node 22+, Electron Forge dependencies, and a desktop runner capable of launching packaged Electron
   apps. The config declares `macos`, `windows`, and `linux`; local runs package the current host target unless
   `--platform` / `--arch` are supplied.
