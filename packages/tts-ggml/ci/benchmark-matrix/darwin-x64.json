@@ -1,0 +1,79 @@
+[
+  {
+    "engine": "chatterbox",
+    "useGPU": false,
+    "backendHint": "cpu"
+  },
+  {
+    "engine": "chatterbox-mtl",
+    "useGPU": false,
+    "backendHint": "cpu"
+  },
+  {
+    "engine": "supertonic",
+    "useGPU": false,
+    "backendHint": "cpu"
+  },
+  {
+    "engine": "supertonic-mtl",
+    "useGPU": false,
+    "backendHint": "cpu"
+  },
+  {
+    "engine": "supertonic3",
+    "useGPU": false,
+    "backendHint": "cpu"
+  },
+  {
+    "engine": "supertonic",
+    "useGPU": false,
+    "backendHint": "cpu",
+    "enhancer": "lavasr"
+  },
+  {
+    "engine": "chatterbox",
+    "useGPU": false,
+    "backendHint": "cpu",
+    "enhancer": "lavasr"
+  },
+  {
+    "engine": "supertonic",
+    "useGPU": false,
+    "backendHint": "cpu",
+    "denoiser": "lavasr"
+  },
+  {
+    "engine": "chatterbox",
+    "useGPU": false,
+    "backendHint": "cpu",
+    "denoiser": "lavasr"
+  },
+  {
+    "engine": "supertonic",
+    "useGPU": false,
+    "backendHint": "cpu",
+    "enhancer": "lavasr",
+    "denoiser": "lavasr"
+  },
+  {
+    "engine": "chatterbox",
+    "useGPU": false,
+    "backendHint": "cpu",
+    "enhancer": "lavasr",
+    "denoiser": "lavasr"
+  },
+  {
+    "engine": "supertonic",
+    "useGPU": false,
+    "backendHint": "cpu",
+    "enhancer": "lavasr",
+    "enhancerVariant": "f32"
+  },
+  {
+    "engine": "supertonic",
+    "useGPU": false,
+    "backendHint": "cpu",
+    "enhancer": "lavasr",
+    "enhancerVariant": "q8_0"
+  }
+]
