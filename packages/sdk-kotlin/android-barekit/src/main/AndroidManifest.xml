@@ -1,5 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!-- The vendor OpenCL driver is outside the app's linker namespace unless the app asks
+             for it (Android 12+). Without it the GPU addons fall back to Vulkan, which on some
+             Adreno GPUs produces garbage and then loses the device. Not required: a device
+             without OpenCL still installs and runs on Vulkan or the CPU. -->
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
         <service
             android:name=".QvacWorkerService"
             android:exported="false"

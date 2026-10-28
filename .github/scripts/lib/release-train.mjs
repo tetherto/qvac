@@ -222,15 +222,53 @@ export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt
 
 // A version on npm was published from the commit in its gitHead. Publishing the
 // rest of the train from another commit would mix sources in one release.
+// gitHeadOf returns { found, value } for the version on npm.
 export function publishedElsewhere (moved, gitHeadOf, head) {
   const errors = []
   for (const project of moved) {
-    const gitHead = gitHeadOf(project)
-    if (gitHead && gitHead !== head) {
-      errors.push(`${project.name}@${project.version} was published from ${gitHead}, not ${head}; cut a new train branch`)
-    }
+    const { found, value: gitHead } = gitHeadOf(project)
+    if (!found || gitHead === head) continue
+    errors.push(gitHead
+      ? `${project.name}@${project.version} was published from ${gitHead}, not ${head}; cut a new train branch`
+      : `${project.name}@${project.version} is on npm without a gitHead, so it was not published from ${head}; cut a new train branch`)
   }
   return errors
+}
+
+// The commit a train release was published from: the gitHead npm records for
+// the anchor package at the branch version. gitHeadOf returns { found, value }.
+export function publishedCommit (train, version, gitHeadOf) {
+  const name = train.anchorProjects[0]
+  const { found, value } = gitHeadOf(name, version)
+  if (!found) throw new Error(`${name}@${version} is not on npm; the train has not published yet`)
+  if (!/^[0-9a-f]{40}$/.test(value ?? '')) throw new Error(`${name}@${version} has no commit as its gitHead on npm`)
+  return value
+}
+
+// The result of `npm view <spec> <field> --json`. E404 means both "no such
+// package" and "no such version", and also a version npm has accepted but does
+// not serve yet. `found` keeps that apart from a field the version does not
+// have, where `value` is null.
+export function parseNpmView ({ status, stdout, stderr }) {
+  if (status !== 0) {
+    let code
+    try {
+      code = JSON.parse(stdout).error?.code
+    } catch {}
+    if (code === 'E404') return { found: false, value: null }
+    throw new Error(`exit ${status}: ${stderr || stdout}`)
+  }
+  return { found: true, value: stdout.trim() ? JSON.parse(stdout) : null }
+}
+
+// Compares npm's sha1 only for the versions this run published. A version an
+// earlier run published was compared by that run, and a rebuild of the same
+// commit can pack different bytes than it did.
+export function shasumMismatches (moved, published, servedShasum, builtShasum) {
+  const publishedNames = new Set(published)
+  return moved
+    .filter((project) => publishedNames.has(project.name) && servedShasum(project) !== builtShasum(project))
+    .map((project) => `${project.name}@${project.version} on npm has sha1 ${servedShasum(project)}; the built tarball has ${builtShasum(project)}`)
 }
 
 // A consumer install that resolves every train package from its tarball, as it
@@ -260,12 +298,11 @@ export function parseLsRemote (output, tag) {
   return direct
 }
 
-// Each tag goes on the commit npm records as the version's gitHead.
-export function planTags (moved, { releaseProject, remoteCommit, gitHeadOf }) {
+// Each tag goes on the commit npm records as the version's gitHead, including
+// the tag the GitHub release is created on.
+export function planTags (moved, { remoteCommit, gitHeadOf }) {
   const plan = { create: [], existing: [], conflicts: [] }
   for (const project of moved) {
-    // create-github-release.yml makes this one.
-    if (project.name === releaseProject) continue
     const tag = tagFor(project.name, project.version)
     const target = gitHeadOf(project)
     const commit = remoteCommit(tag)

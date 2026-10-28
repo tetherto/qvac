@@ -111,6 +111,10 @@ test('shard cache: unchanged shards reuse verification and corruption is invalid
     [0]
   )
   fs.writeFileSync(file, 'broken content')
+  // Same size and inode, so only the timestamps mark the change; a rewrite in
+  // the same millisecond would otherwise look unchanged.
+  const later = new Date(fs.statSync(file).mtimeMs + 1000)
+  fs.utimesSync(file, later, later)
   t.alike(await checkShardCompleteness(key, ['shard.gguf'], metadata), [0])
   t.is(reads, 1, 'changed shard is hashed again')
 })
