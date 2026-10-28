@@ -4,10 +4,10 @@ The SDK test suite is split into two clearly separated buckets. Each bucket has 
 
 ## Buckets
 
-| Bucket                | Runtime                                 | Framework        | Location | Command                                     |
-| --------------------- | --------------------------------------- | ---------------- | -------- | ------------------------------------------- |
-| **Unit**              | Node                                    | brittle          | `test/`  | `npm run test:unit`                         |
-| **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @qvac/test-suite | `e2e/`   | See [below](#e2e--clientconsumer-e2e-tests) |
+| Bucket                | Runtime                                 | Framework        | Location      | Command                                         |
+| --------------------- | --------------------------------------- | ---------------- | ------------- | ----------------------------------------------- |
+| **Unit**              | Node                                    | brittle          | `test/`       | `npm run test:unit`                             |
+| **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @qvac/test-suite | `../sdk-e2e/` | See [below](#sdk-e2e--clientconsumer-e2e-tests) |
 
 The Bare-runtime engine and its server-side tests live in `@qvac/inference`; the SDK consumes that package and no longer hosts an in-process engine test bucket.
 
@@ -28,11 +28,12 @@ Tests that exercise **shared schemas, client logic, utilities, and the SDK's own
 
 - It exercises the in-process inference engine — engine behavior is tested in `@qvac/inference`
 
-### `e2e/` — Client/consumer e2e tests
+### `../sdk-e2e/` — Client/consumer e2e tests
 
 Tests that exercise the **full SDK from the consumer perspective** — loadModel, completion, transcription, etc.
 These run on desktop Node, packaged Electron apps, and real devices (iOS, Android) via the
-`@qvac/test-suite` framework.
+`@qvac/test-suite` framework. They live in their own private package, `packages/sdk-e2e`, which
+installs this SDK as a `file:` dependency.
 
 **Belongs here if:**
 
@@ -42,7 +43,7 @@ These run on desktop Node, packaged Electron apps, and real devices (iOS, Androi
 - Tests mobile-specific or desktop-specific consumer behavior
 - Tests Electron packaged-app behavior, including `process.resourcesPath` worker/config resolution
 
-See [e2e/README.md](./e2e/README.md) for the full structure and local run instructions.
+See [../sdk-e2e/README.md](../sdk-e2e/README.md) for the full structure and local run instructions.
 
 ## Running tests
 
@@ -51,7 +52,7 @@ See [e2e/README.md](./e2e/README.md) for the full structure and local run instru
 npm run test:unit
 ```
 
-For client e2e tests, see [e2e/README.md](./e2e/README.md).
+For client e2e tests, see [../sdk-e2e/README.md](../sdk-e2e/README.md).
 
 ## Shared
 

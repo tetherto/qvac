@@ -2,6 +2,9 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from '../helpers/server.js'
 import { assertStatusAndError, JSON_HEADERS } from '../helpers/http.js'
+import { WorkerStartupError } from '@qvac/sdk'
+
+import { rpcTimeout } from '../../helpers/worker-startup.js'
 
 const CHAT_BODY = { model: '', messages: [{ role: 'user', content: 'hi' }] }
 
@@ -10,6 +13,47 @@ function chat(model: string) {
 }
 
 describe('serve: load config', () => {
+  it('a worker exit returns a safe startup summary in the HTTP 503 body', async (t) => {
+    const cause = new WorkerStartupError(
+      '/private/worker',
+      { code: null, signal: 'SIGABRT' },
+      'private diagnostic marker'
+    )
+    const app = await createServer(t, {
+      config: {
+        serve: {
+          models: {
+            failed: {
+              type: 'llamacpp-completion',
+              src: 'hyper://example.invalid/model',
+              preload: false
+            }
+          }
+        }
+      },
+      loadModelOverride: () => Promise.reject(rpcTimeout(cause))
+    })
+    const errors: string[] = []
+    app.qvac.logger.error = (message) => errors.push(message)
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: JSON_HEADERS,
+      payload: chat('failed')
+    })
+
+    assertStatusAndError(res, 503, 'model_load_failed')
+    assert.equal(
+      res.json().error.message,
+      'Model "failed" failed to load: Worker process exited (signal SIGABRT) before IPC was established'
+    )
+    assert.doesNotMatch(res.body, /timed out|30000|private|diagnostic marker/)
+    assert.equal(errors.length, 1)
+    assert.match(errors[0]!, /RPC initialization timed out/)
+    assert.ok(errors[0]!.includes(cause.message))
+  })
+
   it('lazy loading disabled → 503 model_not_loaded (no load attempted)', async (t) => {
     const app = await createServer(t, {
       config: {

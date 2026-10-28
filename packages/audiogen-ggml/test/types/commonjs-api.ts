@@ -13,12 +13,14 @@ import {
   type AudiogenFitStatus,
   type AudiogenGenerationMetadata,
   type AudiogenMinimaxDevice,
+  type AudiogenMinimaxCoreMLComputeUnits,
   type AudiogenOutputChunk,
   type AudiogenStats
 } from '../../index'
 
-type InvalidEngineIsAllowed =
-  'invalid-engine' extends Parameters<typeof detectEngineType>[1] ? true : false
+type InvalidEngineIsAllowed = 'invalid-engine' extends Parameters<typeof detectEngineType>[1]
+  ? true
+  : false
 
 const audioGen = new AudioGen()
 const errorCode: number = ERR_CODES.INVALID_INPUT
@@ -53,8 +55,7 @@ const editSession = audioGen
     end: 1,
     mode: RepaintMode.Balanced
   })
-const operationType: AudioEditOperationType =
-  AudioEditOperationType.FlowEdit
+const operationType: AudioEditOperationType = AudioEditOperationType.FlowEdit
 const editResponse = editSession.run({
   seed: 22883,
   referenceAudio: new Float32Array(2),
@@ -112,3 +113,14 @@ void minimaxVerdict
 void unawaitedVerdict
 void readMetadata
 void operationType
+
+const coremlUnits: AudiogenMinimaxCoreMLComputeUnits = 'CPU_AND_NE'
+const coremlMinimax = new AudioGen({
+  engine: ENGINE_MINIMAX,
+  files: { modelDir: '/models/minimax' },
+  config: { coremlProfileDir: '/models/coreml', coremlComputeUnits: coremlUnits }
+})
+void coremlMinimax
+// @ts-expect-error Apple does not offer a GPU_ONLY Core ML policy
+const invalidCoreML: AudiogenMinimaxCoreMLComputeUnits = 'GPU_ONLY'
+void invalidCoreML

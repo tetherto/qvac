@@ -32,6 +32,7 @@ class GGMLBert {
     opts;
     state;
     _files;
+    _projectionModelPath;
     _config;
     _job;
     _run;
@@ -48,7 +49,16 @@ class GGMLBert {
                 throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
             }
         }
+        if (files.projectionModel !== undefined) {
+            if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
+                throw new TypeError("files.projectionModel must be an absolute path string");
+            }
+            if (!path.isAbsolute(files.projectionModel)) {
+                throw new TypeError(`files.projectionModel must be an absolute path (got: ${files.projectionModel})`);
+            }
+        }
         this._files = files.model;
+        this._projectionModelPath = files.projectionModel ?? "";
         this._config = config;
         this.logger = new QvacLogger(logger);
         this.opts = opts;
@@ -73,6 +83,7 @@ class GGMLBert {
         const configurationParams = {
             path: primaryGgufPath,
             config: this._config,
+            projectionPath: this._projectionModelPath,
         };
         this.logger.info("Creating addon with configuration:", configurationParams);
         try {
@@ -106,21 +117,30 @@ class GGMLBert {
             this.logger.info(`Streamed weights for ${filename}`);
         }
     }
+    /**
+     * Embed text, or text mixed with images and audio when the model was given
+     * `files.projectionModel`. See {@link EmbedRunInput} for the input shapes.
+     */
     async run(input) {
         return this._run(() => this._runInternal(input));
     }
-    async _runInternal(text) {
+    async _runInternal(input) {
         if (!this.addon) {
             throw new Error("Addon not initialized. Call load() first.");
         }
         if (this._hasActiveResponse) {
             throw new Error(RUN_BUSY_ERROR_MESSAGE);
         }
-        this.logger.info("Starting inference embeddings for text:", text);
-        // Array input → type: 'sequences' (batched pass); string input → type: 'text'.
-        const inputData = Array.isArray(text)
-            ? { type: "sequences", input: text }
-            : { type: "text", input: text };
+        const inputData = (0, addon_1.toBertJobInput)(input);
+        if (inputData.type === "multimodal") {
+            if (!this._projectionModelPath) {
+                throw new TypeError("media input needs files.projectionModel");
+            }
+            this.logger.info(`Starting inference embeddings for ${inputData.input?.length ?? 0} multimodal input(s)`);
+        }
+        else {
+            this.logger.info("Starting inference embeddings for text:", input);
+        }
         const response = this._job.start();
         // addon-cpp guarantees no output events until runJob is fully accepted.
         // If runJob throws or returns false, no events will fire for this job.

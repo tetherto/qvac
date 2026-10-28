@@ -452,6 +452,9 @@ class TTSGgml {
 
   private async _dispatchJob(input: TTSJobData): Promise<void> {
     const addon = this._requireAddon();
+    if (this._setup.engineType === ENGINE_AUDIO8 && this._sentenceStream.ctx) {
+      return addon.runJob({ ...input, streamOutput: true });
+    }
     return this._pocket ? this._pocket.runJob(addon, input) : addon.runJob(input);
   }
 

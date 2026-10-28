@@ -3,11 +3,9 @@ import ImgStableDiffusion, {
   VideoStableDiffusion,
   assessFit as diffusionAssessFit,
   type DiffusionFiles,
-  type EsrganUpscalerConfig,
   type SdConfig,
   type VideoStableDiffusionArgs
 } from '@qvac/diffusion-cpp'
-import type { WorldConfig } from '@qvac/diffusion-cpp/world'
 import {
   definePlugin,
   defineHandler,
@@ -48,6 +46,28 @@ import {
   worldScenePath,
   worldStep
 } from '@/plugins/builtin/sdcpp-generation/ops/world'
+import {
+  flattenUpscalerKeys,
+  toEsrganAddonConfig
+} from '@/plugins/builtin/sdcpp-generation/upscaler-config'
+import { splitWorldConfig } from '@/plugins/builtin/sdcpp-generation/world-config'
+
+// Wait for op cleanup before emitting completion.
+async function* withCompletionFrame<TChunk, TResult>(
+  stream: AsyncGenerator<TChunk, TResult>,
+  complete: (result: TResult) => TChunk
+): AsyncGenerator<TChunk> {
+  try {
+    let result = await stream.next()
+    while (!result.done) {
+      yield result.value
+      result = await stream.next()
+    }
+    yield complete(result.value)
+  } finally {
+    await stream.return?.(undefined as never)
+  }
+}
 
 type DiffusionArtifactKey =
   | 'clipLModelPath'
@@ -55,6 +75,7 @@ type DiffusionArtifactKey =
   | 'clipVisionModelPath'
   | 't5XxlModelPath'
   | 'llmModelPath'
+  | 'projectionModelPath'
   | 'vaeModelPath'
   | 'highNoiseDiffusionModelPath'
   | 'uncondModelPath'
@@ -63,39 +84,6 @@ type DiffusionArtifactKey =
   | 'esrganModelPath'
   | 'taehvModelPath'
   | 'seedScenePath'
-
-// Single source of truth for `SdcppConfig.upscaler.*` → addon-config key
-// mapping. Used by both the diffusion-mode (post-generation upscaler) and the
-// standalone-upscale-mode branches; keeping the mapping in one place avoids
-// drift if `@qvac/diffusion-cpp` ever adds or renames an `upscaler_*` key.
-function flattenUpscalerKeys(upscaler: SdcppConfig['upscaler']): Partial<EsrganUpscalerConfig> {
-  if (!upscaler) return {}
-  return {
-    ...(upscaler.tile_size !== undefined && {
-      upscaler_tile_size: upscaler.tile_size
-    }),
-    ...(upscaler.direct !== undefined && {
-      upscaler_direct: upscaler.direct
-    }),
-    ...(upscaler.offload_params_to_cpu !== undefined && {
-      upscaler_offload_params_to_cpu: upscaler.offload_params_to_cpu
-    }),
-    ...(upscaler.threads !== undefined && {
-      upscaler_threads: upscaler.threads
-    })
-  }
-}
-
-// `mode: "upscale"` builds an EsrganUpscaler directly (not via SdCtx), so the
-// top-level `device` field has to be forwarded explicitly — it is not part of
-// the `upscaler.*` block.
-function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
-  return {
-    ...flattenUpscalerKeys(config.upscaler),
-    ...(config.device !== undefined && { device: config.device }),
-    ...(config.verbosity !== undefined && { verbosity: config.verbosity })
-  }
-}
 
 /**
  * Stable-diffusion.cpp plugin for image diffusion, upscaling, and Wan video.
@@ -114,6 +102,17 @@ export const diffusionPlugin = definePlugin({
     cfg: SdcppConfig,
     ctx: ResolveContext
   ): Promise<ResolveResult<SdcppConfig, DiffusionArtifactKey>> {
+    if (cfg.projectionModelSrc && cfg.mode !== 'diffusion') {
+      throw new ModelLoadFailedError(
+        'modelConfig.projectionModelSrc requires diffusion mode. ' +
+          "Use mode: 'diffusion' or remove projectionModelSrc."
+      )
+    }
+    if (cfg.projectionModelSrc && !cfg.llmModelSrc) {
+      throw new ModelLoadFailedError(
+        'modelConfig.projectionModelSrc requires modelConfig.llmModelSrc for the LLM encoder.'
+      )
+    }
     if (cfg.uncondModelSrc && cfg.mode !== 'diffusion') {
       throw new ModelLoadFailedError(
         'modelConfig.uncondModelSrc is Ideogram 4 diffusion only. ' +
@@ -236,6 +235,7 @@ export const diffusionPlugin = definePlugin({
       clipVisionModelSrc,
       t5XxlModelSrc,
       llmModelSrc,
+      projectionModelSrc,
       vaeModelSrc,
       highNoiseDiffusionModelSrc,
       uncondModelSrc,
@@ -298,6 +298,7 @@ export const diffusionPlugin = definePlugin({
       clipVisionModelSrc,
       t5XxlModelSrc,
       llmModelSrc,
+      projectionModelSrc,
       vaeModelSrc,
       highNoiseDiffusionModelSrc,
       uncondModelSrc,
@@ -320,6 +321,7 @@ export const diffusionPlugin = definePlugin({
       clipVisionModelPath,
       t5XxlModelPath,
       llmModelPath,
+      projectionModelPath,
       vaeModelPath,
       highNoiseDiffusionModelPath,
       uncondModelPath,
@@ -334,6 +336,7 @@ export const diffusionPlugin = definePlugin({
       clipVisionModelSrc ? resolve(clipVisionModelSrc) : undefined,
       t5XxlModelSrc ? resolve(t5XxlModelSrc) : undefined,
       llmModelSrc ? resolve(llmModelSrc) : undefined,
+      projectionModelSrc ? resolve(projectionModelSrc) : undefined,
       vaeModelSrc ? resolve(vaeModelSrc) : undefined,
       highNoiseDiffusionModelSrc ? resolve(highNoiseDiffusionModelSrc) : undefined,
       uncondModelSrc ? resolve(uncondModelSrc) : undefined,
@@ -352,6 +355,7 @@ export const diffusionPlugin = definePlugin({
         ...(clipVisionModelPath && { clipVisionModelPath }),
         ...(t5XxlModelPath && { t5XxlModelPath }),
         ...(llmModelPath && { llmModelPath }),
+        ...(projectionModelPath && { projectionModelPath }),
         ...(vaeModelPath && { vaeModelPath }),
         ...(highNoiseDiffusionModelPath && { highNoiseDiffusionModelPath }),
         ...(uncondModelPath && { uncondModelPath }),
@@ -428,10 +432,7 @@ export const diffusionPlugin = definePlugin({
           taehv: artifacts['taehvModelPath'],
           scene: worldScenePath(modelId)
         },
-        // Cast rather than rebuild: `exactOptionalPropertyTypes` will not widen
-        // the schema's `x?: T` into the addon's `x?: T` without it, and the
-        // addon already drops undefined values before stringifying them.
-        config: (config.world ?? {}) as WorldConfig,
+        config: splitWorldConfig(config.world).session,
         encoders: {
           t5: artifacts['t5XxlModelPath'],
           vae: artifacts['vaeModelPath']
@@ -533,6 +534,7 @@ export const diffusionPlugin = definePlugin({
         clipVisionModelSrc,
         t5XxlModelSrc,
         llmModelSrc,
+        projectionModelSrc,
         vaeModelSrc,
         highNoiseDiffusionModelSrc,
         uncondModelSrc,
@@ -562,6 +564,7 @@ export const diffusionPlugin = definePlugin({
       ...(artifacts?.['clipGModelPath'] && { clipG: artifacts['clipGModelPath'] }),
       ...(artifacts?.['t5XxlModelPath'] && { t5Xxl: artifacts['t5XxlModelPath'] }),
       ...(artifacts?.['llmModelPath'] && { llm: artifacts['llmModelPath'] }),
+      ...(artifacts?.['projectionModelPath'] && { llmVision: artifacts['projectionModelPath'] }),
       ...(artifacts?.['vaeModelPath'] && { vae: artifacts['vaeModelPath'] }),
       ...(artifacts?.['uncondModelPath'] && {
         uncondModel: artifacts['uncondModelPath']
@@ -597,14 +600,24 @@ export const diffusionPlugin = definePlugin({
       // sdcpp diffusion exposes a model-wide hard cancel — compute
       // is interrupted on the currently-running generation.
       cancel: { scope: 'model', hard: true },
-      handler: diffusion
+      handler: (request) =>
+        withCompletionFrame(diffusion(request), ({ stats }) => ({
+          type: 'diffusionStream' as const,
+          done: true,
+          stats
+        }))
     }),
     videoStream: defineHandler({
       requestSchema: videoRequestSchema,
       responseSchema: videoStreamResponseSchema,
       streaming: true,
       cancel: { scope: 'model', hard: true },
-      handler: video
+      handler: (request) =>
+        withCompletionFrame(video(request), ({ stats }) => ({
+          type: 'videoStream' as const,
+          done: true,
+          stats
+        }))
     }),
     upscaleStream: defineHandler({
       requestSchema: upscaleRequestSchema,

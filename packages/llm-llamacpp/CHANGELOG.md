@@ -1,5 +1,79 @@
 # Changelog
 
+## [0.65.0] - 2026-10-27
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.23.1` -> `^0.24.0`, which carries
+  `qvac-fabric` `11259.0.1` -> `11259.1.0`
+  ([#5374](https://github.com/tetherto/qvac/pull/5374)): an opt-in deferred
+  gated delta net state commit for Qwen3.5 / Qwen3.5-MoE speculative decoding
+  and the two ggml ops it adds. A caret on a `0.x` version locks the minor, so
+  `^0.23.1` would not have resolved `0.24.0` on its own. The mobile dev
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.24.0` with it.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.24.0` together.
+- Speculative decoding on Qwen3.5 / Qwen3.5-MoE can commit the gated delta
+  net state once per accepted block instead of keeping a state per draft
+  token, with `LLAMA_GDN_DEFERRED=1` set in the environment and the
+  recurrent states offloaded. Without it, decoding is unchanged.
+- The RPC protocol moves 111 -> 112, so RPC offload needs a
+  `@qvac/ggml-rpc-server` on `@qvac/fabric` 0.24.0; a server on 0.23.x
+  refuses the connection. No API change for this package.
+
+## [0.64.3] - 2026-10-26
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.23.0` -> `^0.23.1`, which carries
+  `qvac-fabric` `11259.0.0` -> `11259.0.1`
+  ([#5339](https://github.com/tetherto/qvac/pull/5339)). `@qvac/fabric` 0.23.1
+  requires the matching `@qvac/fabric-android-arm64` / `@qvac/fabric-ios`, so
+  the mobile dev dependencies move to `^0.23.1`. They now take a caret, so a
+  later fabric patch no longer needs a manifest change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.23.1` together.
+- `assessFit` counts a Gemma 4 assistant given as `spec-draft-model`, and a
+  DFlash draft model that borrows the model's embeddings and output head,
+  in the verdict and the per-device figures. fabric 11259.0.1 measures a
+  draft that borrows from the target next to it, at the target's context;
+  before, both were left out. An MTP draft that cannot be measured is still
+  refused with `unsupported-config`.
+- On Apple GPUs, decode runs fabric's faster Metal kernels: few-row MMA
+  mat-mul for the remaining quant types, a faster MXFP4 mat-vec, and
+  `RMS_NORM`, `ROPE` and the residual `ADD` fused into single-row
+  Q4_0/MXFP4 mat-vecs.
+
+## [0.64.2] - 2026-10-23
+
+### Added
+
+- External MTP heads: `spec-type: 'draft-mtp'` accepts `spec-draft-model`, as
+  llama-server's `--spec-type draft-mtp -md <head>`, to draft for a model
+  without MTP layers, or a Gemma 4 assistant for its Gemma 4 model. The head
+  is placed like the model, and the load's fit and `assessFit` count its
+  weights and context; fabric cannot measure a Gemma 4 assistant, so they
+  leave it out. A head with another hidden width or vocabulary than the
+  model fails the load, and `assessFit` refuses it with `unsupported-config`
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
+### Fixed
+
+- `assessFit` with `spec-type: 'draft-mtp'` now counts the MTP draft context
+  in its per-device figures (`devices`, `deviceBytes`, `hostBytes`), not only
+  in its verdict, so their totals match what the load uses. As in fabric's
+  fit, the draft side's rows follow the placement the load asked for
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` refuses `spec-type: 'draft-mtp'` on a model without MTP layers
+  with `unsupported-config`, as the load fails, instead of projecting the
+  load without the MTP context
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` reports `model-unreadable` for a `spec-draft-model` that is not
+  a regular file, such as a directory, as the load rejects it, instead of
+  projecting the load without it
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
 ## [0.64.1] - 2026-10-23
 
 ### Fixed

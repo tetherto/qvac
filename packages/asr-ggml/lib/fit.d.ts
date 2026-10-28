@@ -63,6 +63,13 @@ export interface AsrFitResult {
     weightsBytes: number;
     hostBytes: number;
     report: string;
+    /**
+     * Parakeet on macOS and iOS: system RAM of the Core ML diarizer sidecars
+     * (`<stem>-diarizer-<frames>.mlmodelc`) a Nemotron 3 Diarization or
+     * Sortformer v2.1 workload can load, counted in the verdict on unified
+     * memory. 0 without sidecars and on other platforms.
+     */
+    coremlBytes?: number;
     /** Parakeet and MOSS-Transcribe. */
     encoderComputeBytes?: number;
     decoderStateBytes?: number;

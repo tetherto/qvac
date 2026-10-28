@@ -87,9 +87,11 @@ GGUF metadata** — there is no `modelType` to pass.
 
 On macOS and iOS, TDT, Unified, EOU, and Sortformer v2.1 can also run their
 encoder on an optional Core ML sidecar, and TranscribePsy's published Core ML
-distribution runs its encoder and TDT decoder on the Neural Engine; CTC and
-Indic Conformer CTC cannot with the pinned engine, and Sortformer v1 has no
-sidecar. See [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
+distribution runs its encoder and TDT decoder on the Neural Engine. Nemotron 3
+Diarization and Sortformer v2.1 can run their whole network on Core ML
+diarizer sidecars. CTC and Indic Conformer CTC cannot use a sidecar with the
+pinned engine, and Sortformer v1 has none. See
+[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
 
 TranscribePsy is published ready to run by
 [QVAC on Hugging Face](https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf);
@@ -104,6 +106,9 @@ Qwen3-0.6B decoder, converted from
 [OpenMOSS-Team/MOSS-Transcribe-Diarize](https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize)
 (Apache-2.0). It transcribes a whole recording in one pass and returns
 timestamped segments labelled with the speaker (`S01`, `S02`, ...).
+
+The native CPU encoder uses fused attention to avoid materializing full
+attention score matrices.
 
 | File | Size | Notes |
 |------|-----:|-------|
@@ -530,6 +535,7 @@ fit.deviceName
 fit.deviceBytes
 fit.weightsBytes
 fit.hostBytes
+fit.coremlBytes // parakeet on macOS and iOS: Core ML diarizer sidecars the workload can load
 fit.report
 ```
 
@@ -730,7 +736,7 @@ and one streaming chunk.
 | --- | --- | --- |
 | `maxThreads` | `0` | CPU threads (0 lets the engine pick). |
 | `useGPU` | `false` | Select a GPU automatically when `backend` is `auto`. |
-| `backend` | `auto` | Native selector: `cpu`, `cuda`, `vulkan`, or an exact ggml device name such as `CUDA0` or `Vulkan0`. Explicit selection overrides `useGPU` and fails at load if unavailable. |
+| `backend` | `auto` | Native selector: `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`, `Vulkan0` or `MTL0`. Explicit selection overrides `useGPU` and fails at load if unavailable. |
 | `backendsDir` | next to the loaded module | Directory scanned as given for the dynamically loaded ggml backends. |
 
 For example, `mossTranscribeConfig: { backend: 'cuda' }` requests CUDA even
@@ -739,8 +745,8 @@ the CPU ggml backend. `auto` (or an empty selector) preserves automatic selectio
 Pass the same `backend` to `assessFit({ engine: 'moss-transcribe', ... })`
 to project on that device; it overrides `gpuLayers`. A missing explicit device
 returns a fit error instead of a CPU projection. `getBackendInfo()` reports
-the resolved backend after load. CUDA/Vulkan require compatible native
-`speech-cpp` libraries and the corresponding backend in the addon build.
+the resolved backend after load. CUDA, Vulkan and Metal require compatible
+native `speech-cpp` libraries and the corresponding backend in the addon build.
 
 Any other key throws `INVALID_CONFIG` (24015). Prompt, hotwords and the token
 bound are per call; see
@@ -886,11 +892,25 @@ ggml.
 | Unified (`parakeet-unified-en-0.6b`) | `<stem>-encoder.mlmodelc` | `run()`, padded or windowed like TDT | `runStreaming()`, which uses the cache-aware encoder |
 | TranscribePsy (`transcribepsy-250m-eu-sub-coreml.gguf`, the encoder-less GGUF of the Core ML distribution) | `<stem>-encoder.mlmodelc` and `<stem>-decoder.mlmodelc` | any length: 15 s Neural Engine windows with 1.28 s of seam context; the TDT decoder runs on the Neural Engine as well | never: without its encoder sidecar that GGUF fails to load, since it carries no encoder weights. The full `transcribepsy-250m-eu-sub.gguf` behaves like TDT |
 | EOU (`parakeet-eou-120m-v1`) | `<stem>-encoder.mlmodelc` | inputs of exactly the compiled mel length | every other length, including streaming windows of a different length |
-| Sortformer v2.1 + AOSC | `<stem>-encoder.mlmodelc` (batch), `<stem>-encoder-bypass-pre-encode.mlmodelc` (AOSC) | batch: exactly the compiled length; AOSC: slabs up to the masked capacity (410 encoder frames for the default geometry) | other batch lengths, larger AOSC slabs; the speaker head always |
+| Sortformer v2.1 + AOSC, whole network | `<stem>-diarizer-<frames>.mlmodelc`, one fixed capacity per bundle (410 frames covers the default AOSC slab and batch inputs up to 32.8 s) | batch inputs and AOSC steps of up to its capacity: the conformer encoder, speaker transformer and head run on Core ML, the smallest capacity that fits is used and padded rows are masked | longer batch inputs, and every call if the bundle fails |
+| Sortformer v2.1 + AOSC, encoder only | `<stem>-encoder.mlmodelc` (batch), `<stem>-encoder-bypass-pre-encode.mlmodelc` (AOSC) | used when no diarizer bundle covers the call. Batch: exactly the compiled length; AOSC: slabs up to the masked capacity (410 encoder frames for the default geometry) | other batch lengths, larger AOSC slabs; the speaker head always |
+| Nemotron 3 Diarization (`Nemotron-3-Diarization`) | `<stem>-diarizer-<frames>.mlmodelc`, one fixed capacity per bundle (358 frames covers offline inputs up to 28.6 s and the default live chunk, 745 the 30 s long-form blocks and offline inputs up to 59.6 s) | offline, long-form and live calls of up to a capacity: the whole network runs on Core ML, with the smallest capacity that fits | calls above every capacity, and every call if the bundle fails |
 | CTC (`parakeet-ctc-0.6b`), Indic Conformer CTC | none in the pinned `speech-cpp` | — | always (the engine adds CTC sidecars from `speech-cpp` `2026-09-24`) |
 | Sortformer v1 | none | — | always |
 | Whisper | none: the `whisper` feature builds without `WHISPER_COREML` | — | always |
 | MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
+
+Diarizer bundles load on first use, and each capacity costs 190-220 MiB of
+weights. They pay off on base and Pro chips and iOS (1.4-2.7x over Metal on an
+M4). A Max or Ultra GPU is as fast as the Neural Engine (0.70-1.17x on an M3
+Ultra), so leave them out there. `PARAKEET_COREML_DIARIZER_DISABLE=1` ignores
+them and keeps the encoder-only sidecars. `assessFit` charges the bundles a
+workload can load as `coremlBytes`. Diarizer bundles are not in the model
+registry yet: export them with
+`engines/parakeet/scripts/export-nemotron-diarization-coreml.py` and
+`export-sortformer-diarizer-coreml.py`. The
+[Parakeet backends guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/backends.md#core-ml-diarizer-sidecars)
+gives the commands and the measured speedups.
 
 `getBackendInfo().encoderOnCoreml` (with `encoderBackend: 'coreml'`) and
 `RuntimeStats.encoderOnCoreml` report that a sidecar loaded at `load()`, not
@@ -1083,8 +1103,8 @@ The MOSS-Transcribe-Diarize integration test (`moss-transcribe.test.js`, part of
 at a GGUF and is skipped otherwise; the C++ suite transcribes a real recording
 when `QVAC_TEST_MOSS_TRANSCRIBE_GGUF` and `QVAC_TEST_MOSS_TRANSCRIBE_AUDIO`
 (16 kHz s16le raw) are set. To check a specific backend with the JS integration
-test, also set `QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=cuda` or `vulkan` (or an exact
-device name). It asserts the resolved backend before transcription; a missing
+test, also set `QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=cuda`, `vulkan` or `metal` (or
+an exact device name). It asserts the resolved backend before transcription; a missing
 requested backend fails instead of silently validating CPU. An explicit selector
 also fails if the model or audio fixture is missing; only the default `auto`
 mode permits optional-fixture skips. Selectors are case-sensitive, matching

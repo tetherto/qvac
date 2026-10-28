@@ -13,7 +13,6 @@ import { dirname, join, resolve } from "node:path";
 export const CONFIG_DIR = join(homedir(), ".config", "qvac-pr-skills");
 export const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 export const DIARY_ENABLED_FILE = join(CONFIG_DIR, "diary.enabled");
-export const DEFAULT_TOKEN_ENV = "ASANA_ACCESS_TOKEN";
 export const DEFAULT_DIARY_DIR = join(CONFIG_DIR, "diary");
 export const DEFAULT_STALE_DAYS = 3;
 
@@ -61,25 +60,16 @@ function repoFromRemote() {
 
 export function normalizeConfig(raw = {}) {
   const config = {
-    ...raw,
     github: { ...(raw.github || {}) },
     ticket: { ...(raw.ticket || {}) },
-    asana: { ...(raw.asana || {}) },
     slack: { ...(raw.slack || {}) },
     diary: { ...(raw.diary || {}) },
-    watchedDependencies: Array.isArray(raw.watchedDependencies)
-      ? raw.watchedDependencies
-      : [],
   };
 
   if (!config.github.defaultRemote) config.github.defaultRemote = "upstream";
   if (!config.github.staleDays) config.github.staleDays = DEFAULT_STALE_DAYS;
   if (!config.github.repo) config.github.repo = repoFromRemote();
 
-  if (!config.asana.tokenEnv) config.asana.tokenEnv = DEFAULT_TOKEN_ENV;
-  if (!Object.prototype.hasOwnProperty.call(config.asana, "tokenShellFallback")) {
-    config.asana.tokenShellFallback = true;
-  }
   if (!config.slack || typeof config.slack !== "object") config.slack = {};
   if (!Object.prototype.hasOwnProperty.call(config.slack, "statusChannel")) {
     config.slack.statusChannel = null;
@@ -108,29 +98,13 @@ export function splitRepo(repo) {
   return { owner, name, repo: `${owner}/${name}` };
 }
 
-function requireGid(value, label, errors) {
-  if (!value?.gid) errors.push(`${label}.gid is required`);
-}
-
-export function validateConfig(config, { requireAsana = false } = {}) {
+export function validateConfig(config) {
   const errors = [];
   if (!config.github?.repo) errors.push("github.repo is required");
   if (config.github?.repo && !/^[^/]+\/[^/]+$/.test(config.github.repo)) {
     errors.push("github.repo must be owner/name");
   }
   if (!config.diary?.dir) errors.push("diary.dir is required");
-
-  if (requireAsana) {
-    requireGid(config.asana?.workspace, "asana.workspace", errors);
-    requireGid(config.asana?.project, "asana.project", errors);
-    requireGid(config.asana?.sections?.inProgress, "asana.sections.inProgress", errors);
-    requireGid(config.asana?.sections?.inReview, "asana.sections.inReview", errors);
-    requireGid(config.asana?.sections?.blocked, "asana.sections.blocked", errors);
-    requireGid(config.asana?.sections?.completed, "asana.sections.completed", errors);
-    if (!config.asana?.customFields?.ticket?.gid && !config.ticket?.pattern) {
-      errors.push("asana.customFields.ticket.gid or ticket.pattern is required");
-    }
-  }
 
   return errors;
 }

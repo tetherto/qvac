@@ -41,8 +41,8 @@ export function assertChunkStreamingSupport(setup: EngineSetup): void {
   ) {
     throw new Error(
       "tts-ggml: streamChunkTokens / streamFirstChunkTokens are not " +
-        "supported by the audio8 engine, which synthesizes a whole " +
-        "utterance at a time. Use sentence-level streaming via " +
+        "supported by the audio8 engine, which uses fixed codec windows. " +
+        "Use incremental PCM streaming via " +
         "runStream() / runStreaming() / run({ streamOutput: true }).",
     );
   }

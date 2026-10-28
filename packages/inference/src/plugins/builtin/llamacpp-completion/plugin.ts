@@ -52,11 +52,13 @@ function createLlmModel(
   modelId: string,
   modelPath: string,
   llmConfig: LlmConfig,
-  projectionModelPath?: string
+  projectionModelPath?: string,
+  draftModelPath?: string
 ) {
   const logger = createStreamLogger(modelId, ModelType.llamacppCompletion)
   registerAddonLogger(modelId, ModelType.llamacppCompletion, logger)
   const llmConfigStrings = transformLlmConfig(llmConfig)
+  if (draftModelPath) llmConfigStrings['spec_draft_model'] = draftModelPath
 
   if (isMobile()) {
     const stripped = stripMultiGpuKeys(llmConfigStrings, true)
@@ -120,16 +122,22 @@ export const llmPlugin = definePlugin({
   assessFit: LlmLlamacpp.assessFit,
 
   async resolveConfig(cfg: LlmConfigInput, ctx: ResolveContext) {
-    const { projectionModelSrc, ...llmConfig } = cfg
+    const { projectionModelSrc, draftModelSrc, ...llmConfig } = cfg
 
-    if (!projectionModelSrc) {
+    if (!projectionModelSrc && !draftModelSrc) {
       return { config: llmConfig }
     }
 
-    const projectionModelPath = await ctx.resolveModelPath(projectionModelSrc)
+    const [projectionModelPath, draftModelPath] = await Promise.all([
+      projectionModelSrc ? ctx.resolveModelPath(projectionModelSrc) : Promise.resolve(undefined),
+      draftModelSrc ? ctx.resolveModelPath(draftModelSrc) : Promise.resolve(undefined)
+    ])
     return {
       config: llmConfig,
-      artifacts: { projectionModelPath }
+      artifacts: {
+        ...(projectionModelPath ? { projectionModelPath } : {}),
+        ...(draftModelPath ? { draftModelPath } : {})
+      }
     }
   },
 
@@ -140,7 +148,8 @@ export const llmPlugin = definePlugin({
       params.modelId,
       params.modelPath,
       llmConfig,
-      params.artifacts?.['projectionModelPath']
+      params.artifacts?.['projectionModelPath'],
+      params.artifacts?.['draftModelPath']
     )
 
     return { model }
@@ -158,11 +167,11 @@ export const llmPlugin = definePlugin({
         const dialect = request.toolDialect ?? detectToolDialect(request.modelId)
         const modelCfg = getModelConfig(request.modelId)
         const toolsActive = (modelCfg as { tools?: boolean }).tools === true
-        // Parse against what each prompt can call: with deferred tools that is
-        // the rendered set plus whatever an earlier `tool_search` loaded.
+        // Parse against what each prompt renders: with deferred tools that
+        // includes whatever an earlier `tool_search` loaded.
         const toolsByPosition = request.prompts.map(
           (prompt) =>
-            resolveDeferredTools(prompt.tools, prompt.history)?.callableTools ??
+            resolveDeferredTools(prompt.tools, prompt.history)?.toolsToRender ??
             prompt.tools?.map(toWireTool) ??
             []
         )
@@ -400,6 +409,7 @@ export const llmPlugin = definePlugin({
             history: filteredHistory,
             modelId: request.modelId,
             kvCache: request.kvCache,
+            prefill: request.prefill,
             ...(toolsActive && request.tools && { tools: request.tools }),
             ...(request.generationParams && { generationParams: request.generationParams }),
             ...(toolsActive && { toolDialect: dialect }),

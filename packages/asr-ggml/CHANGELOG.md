@@ -12,6 +12,82 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [0.11.2] - 2026-10-28
+
+### Added
+
+- `assessFit` reports `coremlBytes` for Parakeet models on macOS and iOS: the
+  memory of the Core ML diarizer sidecars a Nemotron 3 Diarization or
+  Sortformer v2.1 workload can load, which the verdict counts on unified
+  memory. It is 0 without sidecars and on other platforms
+  ([#5250](https://github.com/tetherto/qvac/pull/5250)).
+- `mossTranscribeConfig.backend` and the MOSS `assessFit` request accept
+  `metal`, which selects the Metal device
+  ([#5404](https://github.com/tetherto/qvac/pull/5404)).
+
+### Changed
+
+- MOSS-Transcribe-Diarize decodes 29-42% faster on Metal (M3 Ultra), with
+  identical transcripts ([#5404](https://github.com/tetherto/qvac/pull/5404),
+  [native #374](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/374)).
+- Use fused CPU encoder attention for MOSS-Transcribe-Diarize
+  ([#5368](https://github.com/tetherto/qvac/pull/5368)).
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech
+  addons ([#5397](https://github.com/tetherto/qvac/pull/5397)). Parakeet TDT
+  models with a Core ML decoder sidecar, TranscribePsy among them, use about
+  26 MiB less memory once loaded on macOS and iOS, measured on a Mac Studio
+  M3 Ultra
+  ([native #378](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/378)).
+- The shared native `ggml-speech` moves to `2026-10-27` across the speech
+  addons, which also speeds up single-query Metal softmax on long KV caches
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): matrix products on every quantized weight
+  type whose sums exceed the fp16 range no longer come back as infinity;
+  `ggml-speech` `2026-10-23` fixed q8_0 only
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+- Metal: a fused SwiGLU mat-vec whose output overlaps its inputs, and copies
+  into strided destinations, no longer produce wrong values; quantized matrix
+  products keep F32 activations
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+- Vulkan: tensor views not aligned for the speech ops fall back instead of
+  returning wrong data ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+
+## [0.11.1] - 2026-10-23
+
+### Added
+
+- Core ML diarizer sidecars on macOS and iOS: Nemotron 3 Diarization and
+  Sortformer v2.1 run their whole network on the Neural Engine when a
+  `<model>-diarizer-<frames>.mlmodelc` sits beside the GGUF, and fall back to
+  ggml above its capacity or on failure
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+- Parakeet CTC loads the Mosaic and Mosaic Compact GGUFs, with their optional
+  Core ML encoder sidecar on macOS and iOS
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+
+### Changed
+
+- Move the shared native `speech-cpp` source pin from `2026-10-20#1` to
+  `2026-10-23#2` across the speech addons
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)). Whisper's
+  `assessFit` sizes integrated and unified-memory GPUs that report no capacity
+  of their own against host RAM, and returns the reason
+  `memory-capacity-unavailable` when no capacity is known.
+
+### Fixed
+
+- Nemotron 3 Diarization loads again. The `speech-cpp` `2026-10-20#1` pin
+  rejected its GGUF as having no encoder weights
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+- Adreno GPUs (Android, OpenCL): long Parakeet recordings, TranscribePsy
+  among them, no longer lose most of their text after the first window, and
+  attention over 32 or more tokens with unpadded lengths is computed
+  correctly. The shared native `ggml-speech` moves to `2026-10-23` across the
+  speech addons ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+
 ## [0.11.0] - 2026-10-22
 
 ### Added

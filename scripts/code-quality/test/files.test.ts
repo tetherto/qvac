@@ -58,4 +58,7 @@ test('source classification assigns looser thresholds to auxiliary code', () => 
   assert.equal(classifySourceFile('packages/api/src/__tests__/server.ts'), 'auxiliary')
   assert.equal(classifySourceFile('scripts/release.ts'), 'auxiliary')
   assert.equal(classifySourceFile('packages/api/eslint.config.js'), 'auxiliary')
+  assert.equal(classifySourceFile('packages/sdk-e2e/runners/js/consumer.ts'), 'auxiliary')
+  assert.equal(classifySourceFile('packages/app/e2e/flows.ts'), 'auxiliary')
+  assert.equal(classifySourceFile('packages/e2e-tools/src/index.ts'), 'production')
 })
