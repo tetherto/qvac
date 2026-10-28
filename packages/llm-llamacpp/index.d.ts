@@ -602,8 +602,8 @@ declare namespace LlmLlamacpp {
          * this model, as any `cacheKey` file it used does, until files named
          * or picked as a prompt's closest match more recently push it out (the
          * model keeps the 256 most recent, as far as 64 MiB of memory holds
-         * their prompt records). Text models only; no effect with
-         * `cache_share_across_keys: 'false'`.
+         * their prompt records). No effect with `cache_share_across_keys:
+         * 'false'`.
          */
         baseCacheKey?: string;
         /**

@@ -15,13 +15,14 @@
 
 ### Changed
 
-- A text request reuses the longest prompt prefix it shares with any
+- A request reuses the longest prompt prefix it shares with any
   conversation the model holds (in memory, in another batch slot, in the RAM
   tier, or in a `cacheKey` file used in this process), not only its own
-  `cacheKey`'s. The other conversation is copied, never changed. Multimodal
-  models, and loads with `cache_share_across_keys: 'false'`, are unchanged
+  `cacheKey`'s. The other conversation is copied, never changed. On
+  multimodal models an image the two share is not encoded again. Loads with
+  `cache_share_across_keys: 'false'` are unchanged
   ([#5417](https://github.com/tetherto/qvac/pull/5417)).
-- A text request without a `cacheKey` keeps its state in memory for the next
+- A request without a `cacheKey` keeps its state in memory for the next
   request instead of resetting the context, unless the load sets
   `cache_share_across_keys: 'false'`; it is never written to a file.
   `CacheTokens` after such a request reports the tokens kept
