@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.24.0] - 2026-10-26
+
+### Breaking
+
+- The RPC protocol major goes 111 -> 112: two ops join the ggml op enum
+  (`GGML_OP_COUNT` 125 -> 127). A `ggml-rpc-server` and its RPC client must
+  both run this fabric; a 111 peer refuses the connection.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11259.0.1` -> `11259.1.0`. No `llama.h`,
+  `common/` or `mtmd` header changes; native consumers rebuild against the new
+  ggml op enum without source changes.
+
+### Added
+
+- Deferred gated delta net state commit for speculative decoding on Qwen3.5 and
+  Qwen3.5-MoE, opt-in with `LLAMA_GDN_DEFERRED=1`, with CPU, CUDA, Vulkan and
+  Metal kernels. The base state is replayed from the rows a draft kept instead
+  of a state snapshot per draft token. New ggml APIs
+  `ggml_gated_delta_net_deferred`, `ggml_gated_delta_net_rec_size` and
+  `ggml_gdn_conv_deferred`. Ignored on devices without the deferred ops, and
+  disabled on MUSA.
+- Hexagon speech kernels (convolution, layout, activation, matmul, attention and
+  `GET_ROWS` paths). This package does not build the Hexagon backend.
+
 ## [0.23.1] - 2026-10-24
 
 ### Fixed

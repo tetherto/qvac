@@ -1,4 +1,5 @@
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
+import { RerankExecutor } from '../shared/executors/rerank-executor.js'
 import { MobileSpeakerAwareExecutor } from './executors/speaker-aware-executor.js'
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { Platform } from 'react-native'
@@ -220,6 +221,7 @@ export const executor = createExecutor({
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new DecisionExecutor(resources),
+    new RerankExecutor(resources),
     new MobileRagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),

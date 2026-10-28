@@ -11,6 +11,7 @@ import { getEngineLogger } from '@/logging/index'
 import { PathTraversalError } from '@/errors/index'
 import { Buffer } from 'bare-buffer'
 import { markAutoCacheKey } from '@/plugins/ops/kv-cache-retention'
+import type { Tool } from '@/schemas/tools'
 
 const logger = getEngineLogger()
 
@@ -34,9 +35,16 @@ export function generateConfigHash(systemPrompt: string | null): string {
   return hash.digest('hex').substring(0, 16)
 }
 
-export function generateCacheKey(messages: CacheMessage[]): string {
+export function generateCacheKey(messages: CacheMessage[], tools?: readonly Tool[]): string {
   const hash = crypto.createHash('sha-256')
-  const historyString = JSON.stringify(messages)
+  // Before the first assistant reply, the rendered tools are part of the
+  // reusable prefix. Keep those primes isolated; established conversations
+  // retain history-only keys so the addon can trim a changed tool block.
+  const historyString = JSON.stringify(
+    tools?.length && !messages.some((message) => message.role === 'assistant')
+      ? { messages, tools }
+      : messages
+  )
   const historyBuffer = Buffer.from(historyString, 'utf8')
   hash.update(historyBuffer)
   const hashString = hash.digest('hex')
@@ -71,14 +79,16 @@ export async function getCacheFilePath(
 export async function findMatchingCache(
   modelId: string,
   configHash: string,
-  currentHistory: CacheMessage[]
+  currentHistory: CacheMessage[],
+  tools?: readonly Tool[]
 ): Promise<{ cacheKey: string; cachePath: string } | null> {
-  if (currentHistory.length <= 1) {
+  if (currentHistory.length === 0) {
     return null
   }
 
   const previousHistory = getAutoCacheLookupHistory(currentHistory)
-  const cacheKey = generateCacheKey(previousHistory)
+  if (previousHistory.length === 0 && !tools?.length) return null
+  const cacheKey = generateCacheKey(previousHistory, tools)
   const cachePath = resolveCacheFilePath(modelId, configHash, cacheKey)
 
   try {
@@ -93,12 +103,13 @@ export async function findMatchingCache(
 export async function getCurrentCacheInfo(
   modelId: string,
   configHash: string,
-  currentHistory: CacheMessage[]
+  currentHistory: CacheMessage[],
+  tools?: readonly Tool[]
 ): Promise<{
   cacheKey: string
   cachePath: string
 }> {
-  const cacheKey = generateCacheKey(currentHistory)
+  const cacheKey = generateCacheKey(currentHistory, tools)
   await markAutoCacheKey(cacheKey)
   const cachePath = await getCacheFilePath(modelId, configHash, cacheKey)
   return { cacheKey, cachePath }

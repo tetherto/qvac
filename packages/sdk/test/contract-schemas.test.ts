@@ -138,6 +138,17 @@ test('contract world load config: memory controls reach generated clients', (t) 
 // round-trip checks for these same schemas live in @qvac/inference's suite; here
 // we only assert the exported JSON Schema contract stays faithful to them.
 
+test('contract completion requests: prefill is an optional boolean', (t) => {
+  for (const type of ['completionStream', 'completionOrchestrate']) {
+    const request = { type, modelId: 'model', history: [], stream: false, kvCache: 'prime' }
+    for (const prefill of [undefined, false, true]) {
+      const wire = JSON.parse(JSON.stringify({ ...request, prefill }))
+      t.ok(contractValidate(`${type}.request`, wire).valid)
+    }
+    t.is(contractValidate(`${type}.request`, { ...request, prefill: 'true' }).valid, false)
+  }
+})
+
 test('contract completionStream.response: validates streaming event chunks', (t) => {
   const statsChunk = {
     type: 'completionStream',

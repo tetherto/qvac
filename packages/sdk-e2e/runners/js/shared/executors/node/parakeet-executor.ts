@@ -51,6 +51,9 @@ export class ParakeetExecutor extends AbstractModelExecutor<typeof parakeetTests
     if (testId.startsWith('parakeet-ctc-')) return 'parakeet-ctc'
     if (testId.startsWith('parakeet-unified-')) return 'parakeet-unified'
     if (testId.startsWith('parakeet-sortformer-')) return 'parakeet-sortformer'
+    if (testId.startsWith('parakeet-transcribepsy-coreml-')) return 'parakeet-transcribepsy-coreml'
+    if (testId === 'parakeet-transcribepsy-windowed') return 'parakeet-transcribepsy-windowed'
+    if (testId.startsWith('parakeet-transcribepsy-')) return 'parakeet-transcribepsy'
     return 'parakeet-tdt'
   }
 }

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-10-27
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.23.1` -> `^0.24.0`, which carries
+  `qvac-fabric` `11259.0.1` -> `11259.1.0`
+  ([#5374](https://github.com/tetherto/qvac/pull/5374)): an opt-in deferred
+  gated delta net state commit for Qwen3.5 / Qwen3.5-MoE speculative decoding
+  and the two ggml ops it adds. A caret on a `0.x` version locks the minor, so
+  `^0.23.1` would not have resolved `0.24.0` on its own. The mobile dev
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.24.0` with it.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.24.0` together.
+- No API change for this package.
+
 ## [0.22.1] - 2026-10-26
 
 ### Security
