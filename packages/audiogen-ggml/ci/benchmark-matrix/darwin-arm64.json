@@ -1,0 +1,35 @@
+[
+  {
+    "ditVariant": "turbo-q4",
+    "useGPU": false,
+    "backendHint": "cpu"
+  },
+  {
+    "ditVariant": "turbo-q8",
+    "useGPU": false,
+    "backendHint": "cpu"
+  },
+  {
+    "ditVariant": "sft",
+    "useGPU": false,
+    "backendHint": "cpu",
+    "numWarmup": 0,
+    "numRuns": 1
+  },
+  {
+    "ditVariant": "turbo-q4",
+    "useGPU": true,
+    "backendHint": "metal"
+  },
+  {
+    "ditVariant": "turbo-q8",
+    "useGPU": true,
+    "backendHint": "metal"
+  },
+  {
+    "ditVariant": "sft",
+    "useGPU": true,
+    "backendHint": "metal",
+    "numRuns": 2
+  }
+]
