@@ -1018,6 +1018,15 @@ synthesis, the analysis half only to clone a voice or run a dialogue, so a
 text-only deployment can omit `files.mossCodecEncoder`.  The backbones have 8B
 parameters, so MOSS targets desktop hosts; mobile is not supported.
 
+On Metal, the backbone projects only the text-control logits needed during
+audio generation and omits text projection during the forced drain. Embedding
+tables stay on the GPU, and the model weight type is preserved.
+
+When `dialogueReferences` contains one recording, its encoded codes also serve
+as continuation, avoiding a duplicate encoder pass during engine creation.
+Multiple references retain their joined-audio continuation encoding. Prepared
+reference codes stay cached per instance for batch and streaming synthesis.
+
 ```js
 const model = new TTSGgml({
   engine: TTSGgml.ENGINE_MOSS,

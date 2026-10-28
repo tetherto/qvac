@@ -9,6 +9,8 @@ import type {
   DownloadSecurityOptions
 } from '@/handlers/load-model/types'
 import { mergeDownloadStats } from '@/handlers/load-model/download-stats'
+import { getRegistryModelPlatformRefusal } from '@/handlers/load-model/coreml-sidecars'
+import { ModelLoadFailedError } from '@/errors/index'
 import { getRuntimeContext } from '@/runtime/state'
 
 export interface ResolveSessionOptions {
@@ -63,6 +65,12 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
   }
 
   async function resolvePrimaryModelPath(modelSrc: unknown, fallbackSrc?: string) {
+    // A GGUF that only runs with Core ML bundles beside it is refused before
+    // its download anywhere the loader cannot stage them. `downloadAsset` does
+    // not pass here, so fetching it for another machine still works.
+    const refusal = getRegistryModelPlatformRefusal(modelSrc, getRuntimeContext().platform)
+    if (refusal !== undefined) throw new ModelLoadFailedError(refusal)
+
     if (profilingEnabled) {
       const result = await resolveModelPathWithStats(
         modelSrc,
