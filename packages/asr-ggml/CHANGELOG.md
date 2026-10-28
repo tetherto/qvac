@@ -20,6 +20,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   memory of the Core ML diarizer sidecars a Nemotron 3 Diarization or
   Sortformer v2.1 workload can load, which the verdict counts on unified
   memory. It is 0 without sidecars and on other platforms.
+- `mossTranscribeConfig.backend` and the MOSS `assessFit` request accept
+  `metal`, which selects the Metal device.
+
+### Changed
+
+- MOSS-Transcribe-Diarize decodes 29-42% faster on Metal (M3 Ultra), with
+  identical transcripts.
 
 ### Changed
 
