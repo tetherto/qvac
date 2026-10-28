@@ -642,12 +642,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       }
     }
     const cache::Ledger fullLedger = ledgerFromChunks(chunks);
-    if (cacheSourceProvider_ && sharesCacheAcrossKeys()) {
-      adoptBestCacheSource(fullLedger);
-    }
     // Reconciliation trims or replaces the cached conversation, so a prompt
     // that cannot fit is refused before it, against the prefix it shares
-    // with the cache.
+    // with the cache, and before another conversation's state is copied in
+    // (see TextLlmContext::preparePrefill).
     const size_t shared = cache::commonPrefix(residentLedger_, fullLedger);
     const llama_pos sharedPositions = fullLedger.positions(shared);
     const llama_pos sharedTokens = fullLedger.cacheTokens(shared);
@@ -656,6 +654,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
         sharedTokens,
         fullLedger.positions() - sharedPositions,
         fullLedger.cacheTokens() - sharedTokens);
+    if (cacheSourceProvider_ && sharesCacheAcrossKeys()) {
+      adoptBestCacheSource(fullLedger);
+    }
     beginCacheRequest();
     reconciledPlan = reconcilePrompt(std::move(fullPlan), fullLedger, prefill);
   }
@@ -1953,12 +1954,13 @@ PrefillPlan MtmdLlmContext::preparePrefill(
 
   if (cacheReconciliationEnabled_) {
     const cache::Ledger fullLedger = ledgerFromChunks(chunks);
+    // Reconciliation trims or replaces the cached conversation, so a prompt
+    // that cannot fit even with its shared prefix reused is refused before it,
+    // and before another conversation's state is copied in.
+    throwIfOverflows(fullLedger.positions(), fullLedger.cacheTokens());
     if (cacheSourceProvider_ && sharesCacheAcrossKeys()) {
       adoptBestCacheSource(fullLedger);
     }
-    // Reconciliation trims or replaces the cached conversation, so a prompt
-    // that cannot fit even with its shared prefix reused is refused before it.
-    throwIfOverflows(fullLedger.positions(), fullLedger.cacheTokens());
     beginCacheRequest();
     plan = reconcilePrompt(std::move(plan), fullLedger, isPrefillOnlyRequest);
     if (historyCheckpointEntries_ > 0) {
