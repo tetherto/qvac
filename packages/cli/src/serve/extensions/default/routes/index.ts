@@ -9,6 +9,7 @@ import registry from '@/serve/extensions/default/routes/registry'
 import system from '@/serve/extensions/default/routes/system'
 import translate from '@/serve/extensions/default/routes/translate'
 import upscale from '@/serve/extensions/default/routes/upscale'
+import world from '@/serve/extensions/default/routes/world'
 
 // Mount order determines the order of paths in the OpenAPI document.
 export const routes: readonly FastifyPluginAsyncZod[] = [
@@ -21,5 +22,6 @@ export const routes: readonly FastifyPluginAsyncZod[] = [
   classifications,
   registry,
   upscale,
-  music
+  music,
+  world
 ]

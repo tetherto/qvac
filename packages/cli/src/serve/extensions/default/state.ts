@@ -6,9 +6,14 @@ import {
   type MusicJobKind,
   type MusicJobsStore
 } from '@/serve/extensions/default/music-jobs-store'
+import {
+  createWorldScenesStore,
+  type WorldScenesStore
+} from '@/serve/extensions/default/world-scenes-store'
 
 export interface DefaultState {
   musicJobs: { [K in MusicJobKind]: MusicJobsStore<K> }
+  worldScenes: WorldScenesStore
   /** Probed on the first encoded `/content` request, then reused. */
   ffmpegAvailable?: Promise<boolean>
   /** Test seams — override the SDK calls when set. */
@@ -16,6 +21,8 @@ export interface DefaultState {
   audioEditOverride?: typeof sdk.audioEdit
   audioUnderstandOverride?: typeof sdk.audioUnderstand
   cancelOverride?: typeof sdk.cancel
+  worldCreateSceneOverride?: typeof sdk.worldCreateScene
+  worldStepOverride?: typeof sdk.worldStep
 }
 
 declare module '@/serve/core/context' {
@@ -46,12 +53,16 @@ export function createDefaultState(
       }
     })
   }
-  return { musicJobs: { generation: store('generation'), edit: store('edit') } }
+  return {
+    musicJobs: { generation: store('generation'), edit: store('edit') },
+    worldScenes: createWorldScenesStore()
+  }
 }
 
 export function defaultBanners(state: DefaultState): string[] {
   const max = state.musicJobs.generation.maxEntries
   return [
-    `audio generations/edits: in-memory only — job IDs and rendered audio are lost on restart, max ${max} entries each`
+    `audio generations/edits: in-memory only — job IDs and rendered audio are lost on restart, max ${max} entries each`,
+    `world scenes (experimental): in-memory only — one live scene per model, max ${state.worldScenes.maxEntries} ids kept`
   ]
 }

@@ -25,6 +25,9 @@ described in [README.md](README.md) and applies here. Its own configuration live
 | `POST`          | `/qvac/v1/audio/edits`                   | Music edit job (ACE-Step)               |
 | `GET`, `DELETE` | `/qvac/v1/audio/{generations,edits}/...` | Poll, download, list, delete jobs       |
 | `POST`          | `/qvac/v1/audio/understandings`          | Describe a recording (ACE-Step)         |
+| `POST`          | `/qvac/v1/world/scenes`                  | Create a world scene (experimental)     |
+| `GET`           | `/qvac/v1/world/scenes/{id}`             | A scene and whether it is still live    |
+| `POST`          | `/qvac/v1/world/scenes/{id}/steps`       | Walk a scene one block (experimental)   |
 
 ## Binary inputs
 
@@ -866,6 +869,133 @@ curl -sS http://localhost:11434/qvac/v1/images/upscale \
       "upscaler": {
         "model": "REALESRGAN_X4PLUS",
         "config": { "mode": "upscale", "upscaler": { "tile_size": 128 } }
+      }
+    }
+  }
+}
+```
+
+## World: `/qvac/v1/world/scenes` (experimental)
+
+> **Experimental.** The request and response shapes may change in a minor release.
+
+Walk an interactive world with an ABot-World model, backed by the SDK's `worldCreateScene()`
+and `worldStep()`. `model` names a `serve.models` alias whose endpoint category is `world`: an
+`sdcpp-generation` model with `config.mode: "world"`.
+
+A model holds one live scene. Creating a scene replaces the model's previous one and restarts
+the walk, so the older scene id answers `409 scene_replaced`. A model reload drops its scene
+too. Scene ids are kept in memory and are lost on restart.
+
+### `POST /qvac/v1/world/scenes`
+
+Create a scene from a prompt and a first frame. Send JSON or `multipart/form-data`; `image`
+takes any of the [binary input](#binary-inputs) forms.
+
+| Field        | Type         | Required | Meaning                                                                      |
+| ------------ | ------------ | -------- | ---------------------------------------------------------------------------- |
+| `model`      | `string`     | Yes      | A `serve.models` alias with endpoint category `world`                        |
+| `prompt`     | `string`     | Yes      | Scene prompt, encoded verbatim                                               |
+| `image`      | binary input | Yes      | First frame, PNG or JPEG up to 3 MB, cover-scaled and cropped to the scene   |
+| `width`      | `integer`    | No       | Multiple of 32 up to 4096 (default 832); `width` x `height` ≤ 1920x1088      |
+| `height`     | `integer`    | No       | Multiple of 32 up to 4096 (default 480)                                      |
+| `returnPack` | `boolean`    | No       | Return the 10+ MB scene pack base64 in `pack`, to reuse as `config.sceneSrc` |
+
+It answers `201`:
+
+```json
+{
+  "id": "scene_3f1c...",
+  "object": "world.scene",
+  "created": 1767225600,
+  "model": "abot-world",
+  "status": "active",
+  "width": 832,
+  "height": 480,
+  "scene_create_ms": 5400
+}
+```
+
+Scene creation cannot be cancelled: a client disconnect drops the response, but the scene is
+still created and replaces the previous one.
+
+### `GET /qvac/v1/world/scenes/{id}`
+
+The scene, with `status` `active` or `replaced`.
+
+### `POST /qvac/v1/world/scenes/{id}/steps`
+
+Generate the next block of frames.
+
+| Field    | Type       | Required | Meaning                                                              |
+| -------- | ---------- | -------- | -------------------------------------------------------------------- |
+| `keys`   | `string[]` | No       | Keys held for the block: `W` `A` `S` `D` move, `I` `J` `K` `L` steer |
+| `stream` | `boolean`  | No       | Send each frame as a server-sent event as it is decoded              |
+
+A block is 9 frames after the model loads and 12 after that at the default
+`world.numFramePerBlock`. Frames are PNG, or JPEG when the model sets
+`world.frameJpegQuality`. One block runs at a time per model; send the next step after the
+previous one returns.
+
+```json
+{
+  "object": "world.step",
+  "scene_id": "scene_3f1c...",
+  "output_format": "jpeg",
+  "data": [{ "b64_json": "/9j/4AAQ..." }],
+  "stats": { "step_ms": 1800, "total_steps": 1, "total_frames": 9, "width": 832, "height": 480 }
+}
+```
+
+With `stream: true` the response is server-sent events: one `world.step.frame` event per frame
+(`index`, `output_format`, `b64_json`), then `world.step.completed` with `frames` and `stats`,
+then `[DONE]`. A client disconnect cancels the block.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/world/scenes \
+  -F model=abot-world -F prompt='| unknown | A forest path' -F image=@first-frame.jpg
+curl -sS http://localhost:11434/qvac/v1/world/scenes/scene_3f1c.../steps \
+  -H 'Content-Type: application/json' -d '{"keys":["W"]}'
+```
+
+### Errors
+
+| HTTP | `error.code`                 | When                                                                                  |
+| ---- | ---------------------------- | ------------------------------------------------------------------------------------- |
+| 400  | `invalid_json`               | Body is not valid JSON                                                                |
+| 400  | `missing_model`              | `model` is missing                                                                    |
+| 400  | `missing_prompt`             | `prompt` is missing or empty                                                          |
+| 400  | `missing_image`              | `image` is missing                                                                    |
+| 400  | `unsupported_image_format`   | `image` is not a PNG or JPEG                                                          |
+| 400  | `image_too_large`            | `image` is over 3 MB                                                                  |
+| 400  | `invalid_dimensions`         | `width` or `height` is not a multiple of 32 up to 4096, or the area is over 1920x1088 |
+| 400  | `invalid_scene`              | The model refused the scene: unreadable or oversized first frame, missing encoders    |
+| 400  | `invalid_keys`               | `keys` holds something other than `W A S D I J K L`                                   |
+| 400  | `invalid_request`            | The body carries an unknown field                                                     |
+| 400  | `invalid_model_type`         | Alias is not a `world` model                                                          |
+| 404  | `model_not_found`            | Unknown alias                                                                         |
+| 404  | `scene_not_found`            | Unknown scene id                                                                      |
+| 409  | `scene_replaced`             | A newer scene was created on the model, or the model reloaded                         |
+| 429  | `request_rejected_by_policy` | A scene or step is already running on the model                                       |
+| 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled                                         |
+
+`image` can also fail with the [binary input](#binary-inputs) codes.
+
+### Configuring a world model
+
+```json
+{
+  "serve": {
+    "models": {
+      "abot-world": {
+        "model": "ABOT_WORLD_0_5B_Q8_0",
+        "config": {
+          "mode": "world",
+          "taehvModelSrc": "ABOT_WORLD_0_5B_LF_TAEHV_VAE",
+          "t5XxlModelSrc": "UMT5_XXL_ENC_Q8_0",
+          "vaeModelSrc": "ABOT_WORLD_0_5B_LF_WAN_VAE",
+          "world": { "kvCache": true, "frameJpegQuality": 85 }
+        }
       }
     }
   }
