@@ -14,6 +14,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [0.11.2] - 2026-10-28
 
+### Fixed
+
+- Nemotron streaming with a `chunkMs` the model was not trained for (anything
+  but 80, 160, 320, 560 or 1120 ms) is rejected before the session opens, with
+  `INVALID_CONFIG` naming the supported values. A session start the engine
+  refuses now fails with `FAILED_TO_START_STREAMING` instead of
+  `FAILED_TO_APPEND`. `ASRGgml.NEMOTRON_STREAMING_CHUNK_MS` exposes the list.
+
 ### Added
 
 - `assessFit` reports `coremlBytes` for Parakeet models on macOS and iOS: the

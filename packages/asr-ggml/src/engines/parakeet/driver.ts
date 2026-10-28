@@ -10,7 +10,10 @@ import {
   ERR_CODES_PARAKEET,
   QvacErrorAddonASRGgml,
 } from "../../lib/error";
-import { END_OF_INPUT } from "../../lib/constants";
+import {
+  END_OF_INPUT,
+  NEMOTRON_STREAMING_CHUNK_MS,
+} from "../../lib/constants";
 import { normalizeAudioStream } from "../../lib/audio";
 import type {
   ASRRunOutput,
@@ -385,6 +388,9 @@ export class ParakeetDriver implements AsrDriver {
   ): Promise<StreamingSession> {
     const streamingOpts = this._validateStreamingOptions(opts);
     const addon = this._requireAddon();
+    this._assertNemotronChunkMs(
+      this._effectiveStreamingChunkMs(streamingOpts.chunkMs),
+    );
     const response = this.ctx.job.start() as QvacResponse<ASRStreamOutput>;
     let closing = false;
     const markClosing = (): void => {
@@ -417,6 +423,36 @@ export class ParakeetDriver implements AsrDriver {
         return closing;
       },
     };
+  }
+
+  /**
+   * The cadence the native session will run at, following its own fallback
+   * rules: a run-level `chunkMs` of 0 is ignored (`applyStreamingOverrides`),
+   * a load-time `streamingChunkMs` of 0 means the model default
+   * (`resolveStreamingChunkMs`). `undefined` = the model default, which is
+   * always a trained cadence.
+   */
+  _effectiveStreamingChunkMs(runChunkMs: number | undefined): number | undefined {
+    if (runChunkMs !== undefined && runChunkMs > 0) return runChunkMs;
+    const loadChunkMs = this.params.streamingChunkMs;
+    if (loadChunkMs !== undefined && loadChunkMs > 0) return loadChunkMs;
+    return undefined;
+  }
+
+  /**
+   * Nemotron's cache-aware encoder only runs at its trained chunk cadences;
+   * the engine rejects any other `chunkMs` when the session opens. Reject it
+   * here first, before a response is started, so the run settles with a
+   * configuration error instead of a failed session start.
+   */
+  _assertNemotronChunkMs(chunkMs: number | undefined): void {
+    if (chunkMs === undefined) return;
+    if (this.getBackendInfo()?.modelType !== "nemotron") return;
+    if (NEMOTRON_STREAMING_CHUNK_MS.includes(chunkMs)) return;
+    throw new QvacErrorAddonASRGgml({
+      code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+      adds: `chunkMs ${chunkMs} is not supported by Nemotron streaming; use one of ${NEMOTRON_STREAMING_CHUNK_MS.join(", ")} ms`,
+    });
   }
 
   _validateStreamingOptions(

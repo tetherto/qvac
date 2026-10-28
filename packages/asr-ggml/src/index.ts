@@ -9,6 +9,7 @@ import {
 } from "@qvac/infer-base";
 
 import { QvacErrorAddonASRGgml, ERR_CODES } from "./lib/error";
+import { NEMOTRON_STREAMING_CHUNK_MS } from "./lib/constants";
 import {
   assessFit as assessFitImpl,
   type AsrFitRequest,
@@ -211,6 +212,8 @@ class ASRGgml {
   static readonly ENGINE_MOSS_TRANSCRIBE = ENGINE_MOSS_TRANSCRIBE;
 
   static readonly ERR_CODES = ERR_CODES;
+  /** Chunk cadences (ms) Nemotron streaming accepts; see `runStreaming()`. */
+  static readonly NEMOTRON_STREAMING_CHUNK_MS = NEMOTRON_STREAMING_CHUNK_MS;
   static readonly Error = QvacErrorAddonASRGgml;
 
   static readonly inferenceManagerConfig = Object.freeze({

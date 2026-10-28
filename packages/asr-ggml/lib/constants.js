@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MAX_BUFFERED_BYTES = exports.END_OF_INPUT = void 0;
+exports.NEMOTRON_STREAMING_CHUNK_MS = exports.MAX_BUFFERED_BYTES = exports.END_OF_INPUT = void 0;
 /** Sentinel `append()` type that submits the buffered audio as one job. */
 exports.END_OF_INPUT = "end of job";
 /**
@@ -18,3 +18,8 @@ exports.END_OF_INPUT = "end of job";
  * and by far the most common whisper input.
  */
 exports.MAX_BUFFERED_BYTES = 500 * 1024 * 1024;
+/**
+ * Streaming chunk cadences Nemotron accepts, in ms. The engine's cache-aware
+ * encoder is trained at these operating points and rejects any other value.
+ */
+exports.NEMOTRON_STREAMING_CHUNK_MS = [80, 160, 320, 560, 1120];

@@ -15,3 +15,8 @@ export declare const END_OF_INPUT = "end of job";
  * and by far the most common whisper input.
  */
 export declare const MAX_BUFFERED_BYTES: number;
+/**
+ * Streaming chunk cadences Nemotron accepts, in ms. The engine's cache-aware
+ * encoder is trained at these operating points and rejects any other value.
+ */
+export declare const NEMOTRON_STREAMING_CHUNK_MS: readonly number[];

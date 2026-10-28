@@ -189,6 +189,7 @@ class ParakeetDriver {
     async createStreamingSession(audio, opts = {}) {
         const streamingOpts = this._validateStreamingOptions(opts);
         const addon = this._requireAddon();
+        this._assertNemotronChunkMs(this._effectiveStreamingChunkMs(streamingOpts.chunkMs));
         const response = this.ctx.job.start();
         let closing = false;
         const markClosing = () => {
@@ -216,6 +217,39 @@ class ParakeetDriver {
                 return closing;
             },
         };
+    }
+    /**
+     * The cadence the native session will run at, following its own fallback
+     * rules: a run-level `chunkMs` of 0 is ignored (`applyStreamingOverrides`),
+     * a load-time `streamingChunkMs` of 0 means the model default
+     * (`resolveStreamingChunkMs`). `undefined` = the model default, which is
+     * always a trained cadence.
+     */
+    _effectiveStreamingChunkMs(runChunkMs) {
+        if (runChunkMs !== undefined && runChunkMs > 0)
+            return runChunkMs;
+        const loadChunkMs = this.params.streamingChunkMs;
+        if (loadChunkMs !== undefined && loadChunkMs > 0)
+            return loadChunkMs;
+        return undefined;
+    }
+    /**
+     * Nemotron's cache-aware encoder only runs at its trained chunk cadences;
+     * the engine rejects any other `chunkMs` when the session opens. Reject it
+     * here first, before a response is started, so the run settles with a
+     * configuration error instead of a failed session start.
+     */
+    _assertNemotronChunkMs(chunkMs) {
+        if (chunkMs === undefined)
+            return;
+        if (this.getBackendInfo()?.modelType !== "nemotron")
+            return;
+        if (constants_1.NEMOTRON_STREAMING_CHUNK_MS.includes(chunkMs))
+            return;
+        throw new error_1.QvacErrorAddonASRGgml({
+            code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+            adds: `chunkMs ${chunkMs} is not supported by Nemotron streaming; use one of ${constants_1.NEMOTRON_STREAMING_CHUNK_MS.join(", ")} ms`,
+        });
     }
     _validateStreamingOptions(opts) {
         for (const key of Object.keys(opts)) {

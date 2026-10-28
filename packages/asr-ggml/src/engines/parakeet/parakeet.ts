@@ -677,7 +677,7 @@ export class ParakeetInterface {
       const normalized = normalizeError(error);
       return Promise.reject(
         createParakeetError(
-          ERR_CODES.FAILED_TO_APPEND,
+          ERR_CODES.FAILED_TO_START_STREAMING,
           normalized.message,
           error,
         ),

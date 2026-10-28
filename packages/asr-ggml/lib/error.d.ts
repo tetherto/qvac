@@ -59,6 +59,7 @@ export declare const ERR_CODES_PARAKEET: Readonly<{
     BUFFER_LIMIT_EXCEEDED: 24017;
     INSTANCE_DESTROYED: 24018;
     JOB_CANCELLED: 24019;
+    FAILED_TO_START_STREAMING: 24020;
 }>;
 /**
  * Registers this package's codes, tolerating the one collision the merge

@@ -405,7 +405,7 @@ class ParakeetInterface {
         }
         catch (error) {
             const normalized = normalizeError(error);
-            return Promise.reject(createParakeetError(error_1.ERR_CODES_PARAKEET.FAILED_TO_APPEND, normalized.message, error));
+            return Promise.reject(createParakeetError(error_1.ERR_CODES_PARAKEET.FAILED_TO_START_STREAMING, normalized.message, error));
         }
     }
     appendStreamingAudio(data) {
