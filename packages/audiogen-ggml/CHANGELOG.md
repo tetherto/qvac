@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Update the shared `speech-cpp` native dependency to `2026-10-27#1`.
+- Update the shared `speech-cpp` native dependency to `2026-10-28`.
 
 - Update the shared `speech-cpp` runtime alongside the speech addons.
 - The shared native `ggml-speech` moves to `2026-10-27` across the speech

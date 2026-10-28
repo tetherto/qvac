@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <tts-cpp/lavasr/coreml.h>
 
 namespace qvac::ttsggml::cosyvoice {
 
@@ -173,11 +174,13 @@ struct CosyvoiceConfig {
   // Bandwidth-extends the native 24 kHz output to 48 kHz, on both the batch
   // path and native chunk streaming. Empty disables enhancement.
   std::string enhancerGgufPath;
+  tts_cpp::lavasr::CoreMLOptions enhancerCoreml;
 
   // Denoises the synthesized PCM before the enhancer, rate-preserving. Empty
   // disables it. Batch-only: tts-cpp exposes a one-shot denoise(), so
   // CosyvoiceModel::validateConfig rejects it with native chunk streaming.
   std::string denoiserGgufPath;
+  tts_cpp::lavasr::CoreMLOptions denoiserCoreml;
 };
 
 } // namespace qvac::ttsggml::cosyvoice
