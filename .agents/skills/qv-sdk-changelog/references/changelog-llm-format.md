@@ -18,15 +18,11 @@ Read all files from `{PACKAGE_ROOT}/changelog/{VERSION}/`:
 
 Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelines.
 
-> **Downstream rendering:** the docs site inlines this file **verbatim**
-> under a `### @qvac/<pkg>` subsection of the release-notes page of the
-> SDK's current documentation line
-> (`content/docs/sdk/(v<X.Y>)/reference/release-notes.mdx`). The H1 banner
-> is stripped and every remaining
-> heading is demoted by two levels — `##` becomes `####`, `###` becomes
-> `#####`, etc. Multiple SDK pod packages contribute siblings under
-> the same `## v<X.Y.Z>` section, so prose should stand on its own
-> without assuming surrounding category context.
+> **Downstream rendering:** this file is the body of the version's GitHub
+> release, which is where readers land — the documentation site's sidebar links
+> each line straight at it. Multiple SDK pod packages contribute sibling
+> sections to the same release, so prose should stand on its own without
+> assuming surrounding category context.
 
 
 ### Format Requirements

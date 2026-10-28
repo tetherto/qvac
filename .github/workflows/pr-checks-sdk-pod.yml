@@ -160,8 +160,11 @@ jobs:
           # a tarball of this commit (the `train` source). Its backmerge into
           # the default branch carries the same versions, so it does the same.
           # A train with fromNpm packages builds only with those packages out
-          # of the workspace, which the default branch keeps, so its backmerge
-          # checks the published train instead and passes once npm has it.
+          # of the workspace, which the default branch keeps, and the default
+          # branch's code may already need versions of them npm does not have.
+          # Its backmerge checks the published train instead: the commit npm
+          # records as its gitHead, with every package from npm, as the train
+          # run's checks after publishing do. It passes once npm has the train.
           TRAIN="${TRAIN_INPUT:-}"
           BACKMERGE=false
           if [ -z "$TRAIN" ] && [[ "${BASE_REF:-}" =~ ^release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -172,12 +175,17 @@ jobs:
             BACKMERGE=true
           fi
           SOURCE=""
+          REF=""
           if [ -n "$TRAIN" ]; then SOURCE="${SOURCE_INPUT:-train}"; fi
           if [ "$BACKMERGE" = "true" ] && [ "$(node .github/scripts/release-train.mjs from-npm "$TRAIN")" != "[]" ]; then
             SOURCE=published
+            REF=$(node .github/scripts/release-train.mjs published-commit "${HEAD_REF#backmerge/}")
           fi
-          echo "train=${TRAIN}" >> "$GITHUB_OUTPUT"
-          echo "source=${SOURCE}" >> "$GITHUB_OUTPUT"
+          {
+            echo "train=${TRAIN}"
+            echo "source=${SOURCE}"
+            echo "ref=${REF}"
+          } >> "$GITHUB_OUTPUT"
 
           if [ -n "$TRAIN" ]; then
             SLUGS=$(node .github/scripts/release-train.mjs slugs "$TRAIN")
@@ -219,7 +227,7 @@ jobs:
         if: steps.detect.outputs.has_changes == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ inputs.ref || steps.detect.outputs.ref || github.event.pull_request.head.sha || github.ref }}
 
       - name: Setup Node
         if: steps.detect.outputs.has_changes == 'true'

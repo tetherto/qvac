@@ -4,7 +4,7 @@ Every rule below is a pattern the current pages already follow. Obey them and th
 
 Where the corpus is inconsistent, this file says so. Match the page you are editing. Never normalise a neighbour.
 
-Page paths below are relative to the SDK's current documentation line, `content/docs/sdk/<line>/` — the only line this skill writes to, per [docs-scope.md](docs-scope.md). URLs are written as the site serves them: version-less, because the current line is what answers those addresses.
+Page paths below are relative to the SDK's development line, `content/_unpublished/sdk/next/` — the only line this skill writes to, per [docs-scope.md](docs-scope.md). URLs are written as the site serves them: version-less, because that is what the line answers once the cutoff publishes it.
 
 Primary exemplars: `ai-capabilities/text-generation.mdx` is the richest page, `ai-capabilities/image-classification.mdx` the minimal canonical one.
 
@@ -39,7 +39,7 @@ Frontmatter `title` capitalization is not normalized across the corpus (`Text ge
 
 Frontmatter `icon` is a Lucide export name, and it is what draws the page's sidebar entry: a versioned collection composes its navigation from the content, so the icon is declared here and nowhere else. A capability's icon must match the one its card renders on the Ecosystem overview, which the parity gate checks.
 
-Only capability pages get `schemaType: HowTo`. `cli/<line>/index.mdx` uses `schemaType: TechArticle` and adds `ogImage`.
+Only capability pages get `schemaType: HowTo`. the CLI line's `index.mdx` uses `schemaType: TechArticle` and adds `ogImage`.
 
 ### `## Overview`
 
@@ -171,7 +171,7 @@ Rules that follow from that shape:
 
 `<Tabs>` is the pattern for runnable scripts, not a universal wrapper. `configuration/index.mdx` shows its schema with `<WrapCode>` and a single JSON fence, because there is one language and nothing to switch between.
 
-Inline snippets are permitted where a whole runnable file would be noise. Observed uses: a call-shape illustration, a `loadModel({…})` recipe inside `## Models`, an event-loop pattern, a shell one-liner in `cli/<line>/index.mdx`, and a sample of log output in a bare fence. The `kvCache` block is the model to follow:
+Inline snippets are permitted where a whole runnable file would be noise. Observed uses: a call-shape illustration, a `loadModel({…})` recipe inside `## Models`, an event-loop pattern, a shell one-liner in the CLI line's `index.mdx`, and a sample of log output in a bare fence. The `kvCache` block is the model to follow:
 
 ````mdx
 ```js

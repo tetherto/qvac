@@ -16,6 +16,8 @@ qvac.config.e2e.generated.json
 rag-hyperdb/
 rag-turbovec/
 .sdk-e2e/
-qvac/
+/qvac/
+runners/kotlin/.gradle/
+runners/kotlin/.kotlin/
 reports/*
 !reports/.gitkeep
