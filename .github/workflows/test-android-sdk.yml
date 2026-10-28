@@ -14,6 +14,14 @@ on:
         description: "Root project directory (where package.json lives)"
         required: true
         type: string
+      app:
+        description: >-
+          The consumer app that runs on the device: js (the React Native consumer,
+          platform mobile-android) or kotlin (the Kotlin SDK consumer in
+          packages/sdk-e2e/runners/kotlin, platform kotlin-android).
+        required: false
+        type: string
+        default: js
       consumer-timeout:
         description: "Timeout in seconds for consumer connection (mobile needs longer)"
         required: false
@@ -132,10 +140,13 @@ on:
         required: true
 
 env:
-  # Unique: test-sdk.yml calls this workflow once per run. A UI re-run keeps
-  # run_id, so build, device-farm, wait-device-farm-running and run-producer
-  # reject re-runs.
-  E2E_RUN_ID: android-pr${{ github.event.pull_request.number || '0' }}-${{ github.run_id }}
+  # Report family and artifact-name prefix: test-sdk.yml may call this for both
+  # apps in one run.
+  E2E_FAMILY: ${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}
+  # Unique: test-sdk.yml calls this workflow once per app per run. A UI re-run
+  # keeps run_id, so build, device-farm, wait-device-farm-running and
+  # run-producer reject re-runs.
+  E2E_RUN_ID: ${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}-pr${{ github.event.pull_request.number || '0' }}-${{ github.run_id }}
 
 permissions:
   actions: read
@@ -145,7 +156,7 @@ permissions:
 
 jobs:
   report-start:
-    name: "[android] report-start"
+    name: "[${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}] report-start"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -162,8 +173,8 @@ jobs:
         id: report
         uses: ./.github/actions/sdk-e2e-report-start
         with:
-          family: android
-          platforms: '["android"]'
+          family: ${{ env.E2E_FAMILY }}
+          platforms: '["${{ env.E2E_FAMILY }}"]'
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
@@ -171,10 +182,11 @@ jobs:
           test-suite-provenance: ${{ inputs.test-suite-provenance }}
 
   build:
-    name: "[android] build"
+    name: "[${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}] build"
     runs-on: qvac-ubuntu2204-x64
     environment: release
-    timeout-minutes: 30
+    # The Kotlin app builds the Android runtime from source (worker bundle, CMake).
+    timeout-minutes: ${{ inputs.app == 'kotlin' && 60 || 30 }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Not secrets: GitHub masks a short secret such as a port inside other
@@ -191,6 +203,16 @@ jobs:
           echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
           exit 1
 
+      # Every other value would fall through to the React Native app.
+      - name: Check the app input
+        env:
+          APP: ${{ inputs.app }}
+        run: |
+          case "$APP" in
+            js|kotlin) ;;
+            *) echo "::error::app must be js or kotlin, got '$APP'"; exit 1 ;;
+          esac
+
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
@@ -201,10 +223,12 @@ jobs:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
+          # The Kotlin app also needs the Kotlin SDK; an empty line is ignored.
           sparse-checkout: |
             ${{ inputs.project-directory }}
             ${{ inputs.working-directory }}
             packages/inference
+            ${{ inputs.app == 'kotlin' && 'packages/sdk-kotlin' || '' }}
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
 
@@ -222,6 +246,12 @@ jobs:
           # Drops `tools` from the action's default: the obsolete SDK Tools
           # package is gone from Google's repository and fails provisioning.
           packages: platform-tools
+
+      - name: Install Android NDK (Kotlin runtime)
+        if: inputs.app == 'kotlin'
+        # The NDK packages/sdk-kotlin pins; r30 links a libc++ the prebuilt addons
+        # cannot load.
+        run: sdkmanager 'ndk;29.0.14206865'
 
       - name: Configure npm registries
         shell: node {0}
@@ -323,6 +353,7 @@ jobs:
         run: npm run build
 
       - name: Build mobile consumer APK
+        if: inputs.app != 'kotlin'
         working-directory: ${{ inputs.working-directory }}
         env:
           NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ inputs.working-directory }}/.npmrc
@@ -345,15 +376,54 @@ jobs:
             exit 1
           fi
 
+      # Packs this commit's @qvac/sdk and @qvac/inference as pr-checks-sdk-kotlin.yml
+      # does, so the app tests the branch; inference-source applies to the producer only.
+      - name: Build Kotlin consumer APK
+        if: inputs.app == 'kotlin'
+        shell: bash
+        env:
+          INFERENCE_SOURCE: ${{ inputs.inference-source }}
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        run: |
+          set -euo pipefail
+          if [ "$INFERENCE_SOURCE" != "branch" ]; then
+            echo "::notice::The Kotlin consumer builds against this checkout's packages/inference; inference-source=$INFERENCE_SOURCE applies to the producer only."
+          fi
+
+          pushd packages/sdk
+          git checkout -- package.json
+          npm run sdk-source:workspace
+          npx tsc --project tsconfig.json
+          npm run postcompile:aliases
+          git checkout -- package.json
+          sdk_tgz=$(npm pack --ignore-scripts --silent)
+          popd
+
+          pushd packages/inference
+          inf_tgz=$(npm pack --ignore-scripts --silent)
+          popd
+
+          pushd packages/sdk-kotlin
+          npm pkg set "overrides.@qvac/inference=file:../inference/${inf_tgz}"
+          npm install --ignore-scripts --legacy-peer-deps --no-package-lock "../sdk/${sdk_tgz}"
+          popd
+
+          # packages/sdk is built above: skip Gradle's rebuild of it and its Python step.
+          cd "$WORKING_DIRECTORY"
+          echo "Building the Kotlin consumer APK (run $E2E_RUN_ID)..."
+          node runners/kotlin/scripts/device.mjs build --prebuilt-sdk
+          ls -lh build/consumers/kotlin-android/consumer.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: consumer-apk-android
-          path: ${{ inputs.working-directory }}/build/consumers/android/consumer.apk
+          name: consumer-apk-${{ env.E2E_FAMILY }}
+          path: ${{ inputs.working-directory }}/build/consumers/${{ env.E2E_FAMILY }}/consumer.apk
           retention-days: 7
+          if-no-files-found: error
 
   device-farm:
-    name: "[android] device-farm"
+    name: "[${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}] device-farm"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -388,7 +458,7 @@ jobs:
       - name: Download APK artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          name: consumer-apk-android
+          name: consumer-apk-${{ env.E2E_FAMILY }}
           path: ./apk
 
       - name: Configure AWS credentials
@@ -416,9 +486,10 @@ jobs:
           curl -T "./apk/consumer.apk" "$APP_UPLOAD_URL"
 
           echo "Waiting for APK to be processed..."
-          for i in {1..30}; do
+          # 10 min: the Kotlin APK is several hundred MB and processes slowly.
+          for i in {1..60}; do
             STATUS=$(aws devicefarm get-upload --arn "$APP_UPLOAD_ARN" --query "upload.status" --output text)
-            echo "Status (attempt $i/30): $STATUS"
+            echo "Status (attempt $i/60): $STATUS"
 
             if [ "$STATUS" = "SUCCEEDED" ]; then
               echo "APK upload successful"
@@ -433,6 +504,10 @@ jobs:
 
             sleep 10
           done
+          if [ "$STATUS" != "SUCCEEDED" ]; then
+            echo "::error::Device Farm did not finish processing the APK (last status: $STATUS)"
+            exit 1
+          fi
 
       - name: Create and upload dummy test package
         id: upload-test-pkg
@@ -471,6 +546,9 @@ jobs:
 
       - name: Upload test spec to Device Farm
         id: upload-spec
+        env:
+          APP: ${{ inputs.app }}
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
         run: |
           SPEC_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
@@ -483,9 +561,18 @@ jobs:
 
           echo "spec-arn=$SPEC_ARN" >> $GITHUB_OUTPUT
 
+          SPEC="$WORKING_DIRECTORY/device-farm/test-spec-android.yml"
           TIMEOUT_SECONDS=$(( ${{ inputs.device-farm-timeout || 90 }} * 60 ))
-          sed -i "s/DEVICEFARM_TIMEOUT:-5400/DEVICEFARM_TIMEOUT:-${TIMEOUT_SECONDS}/" "${{ inputs.working-directory }}/device-farm/test-spec-android.yml"
-          curl -T "${{ inputs.working-directory }}/device-farm/test-spec-android.yml" "$SPEC_URL"
+          sed -i "s/DEVICEFARM_TIMEOUT:-5400/DEVICEFARM_TIMEOUT:-${TIMEOUT_SECONDS}/" "$SPEC"
+          # The spec targets the React Native app; swap in the Kotlin package and log
+          # tag (the awaited log lines are the same).
+          if [ "$APP" = "kotlin" ]; then
+            sed -i \
+              -e "s#io.tether.qvac_test_consumer_mobile/.MainActivity#io.tether.qvac.e2e.kotlin/io.tether.qvac.e2e.MainActivity#" \
+              -e "s/ReactNativeJS/QvacE2E/g" \
+              "$SPEC"
+          fi
+          curl -T "$SPEC" "$SPEC_URL"
 
           echo "Waiting for test spec to be processed..."
           for i in {1..15}; do
@@ -519,10 +606,14 @@ jobs:
 
       - name: Schedule Device Farm run
         id: schedule
+        env:
+          RUN_PREFIX: ${{ inputs.app == 'kotlin' && 'kotlin-android' || 'mobile' }}
+          POOL_NAME: ${{ steps.select.outputs.name }}
         run: |
-          echo "Scheduling Device Farm run on ${{ steps.select.outputs.name }}..."
+          echo "Scheduling Device Farm run on $POOL_NAME..."
 
-          RUN_NAME="mobile-${{ steps.select.outputs.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
+          # The two apps share pools; the prefix tells their runs apart in the console.
+          RUN_NAME="${RUN_PREFIX}-${POOL_NAME}-${{ github.run_number }}-${{ github.run_attempt }}"
 
           RUN_ARN=$(aws devicefarm schedule-run \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
@@ -539,9 +630,9 @@ jobs:
           PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
           RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
           DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
-          echo "Device Farm Console (${{ steps.select.outputs.name }}): $DF_URL"
+          echo "Device Farm Console ($POOL_NAME): $DF_URL"
 
-          echo "### Device Farm: ${{ steps.select.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Device Farm: $POOL_NAME" >> $GITHUB_STEP_SUMMARY
           echo "[Open Device Farm Console]($DF_URL)" >> $GITHUB_STEP_SUMMARY
 
       - name: Save run ARN
@@ -559,7 +650,7 @@ jobs:
           retention-days: 1
 
   wait-device-farm-running:
-    name: "[android] wait-device-farm-running"
+    name: "[${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}] wait-device-farm-running"
     needs: [build, device-farm]
     runs-on: ubuntu-latest
     environment: release
@@ -597,7 +688,7 @@ jobs:
           start-timeout-minutes: ${{ inputs.device-farm-start-timeout }}
 
   run-producer:
-    name: "[android] run-producer"
+    name: "[${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}] run-producer"
     needs: [build, wait-device-farm-running]
     runs-on: ubuntu-latest
     environment: release
@@ -780,7 +871,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: results-android
+          name: results-${{ env.E2E_FAMILY }}
           path: ${{ inputs.working-directory }}/reports/
           retention-days: 30
 
@@ -791,7 +882,7 @@ jobs:
         with:
           workflow: test-android-sdk.yml
           branch: ${{ github.event.pull_request.base.ref }}
-          name: baseline-android
+          name: baseline-${{ env.E2E_FAMILY }}
           path: ${{ inputs.working-directory }}/baseline
           github_token: ${{ github.token }}
           if_no_artifact_found: warn
@@ -828,7 +919,7 @@ jobs:
           const baseline = path.join('baseline', baselineFiles[0]);
           const current = path.join('reports', currentFiles[0]);
           execSync(
-            `npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "comparison-android.json"`,
+            `npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "comparison-${process.env.E2E_FAMILY}.json"`,
             { stdio: 'inherit' }
           );
 
@@ -840,13 +931,13 @@ jobs:
           const fs = require('fs');
           const { execSync } = require('child_process');
 
-          const input = 'comparison-android.json';
+          const input = `comparison-${process.env.E2E_FAMILY}.json`;
           if (!fs.existsSync(input)) {
             console.log('No comparison json - skipping format.');
             process.exit(0);
           }
           execSync(
-            `npx qvac-test report:format --input "${input}" --format markdown --output "section-android.md"`,
+            `npx qvac-test report:format --input "${input}" --format markdown --output "section-${process.env.E2E_FAMILY}.md"`,
             { stdio: 'inherit' }
           );
 
@@ -854,7 +945,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: report-section-android
+          name: report-section-${{ env.E2E_FAMILY }}
           path: |
             ${{ inputs.working-directory }}/section-*.md
             ${{ inputs.working-directory }}/comparison-*.json
@@ -865,7 +956,7 @@ jobs:
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: baseline-android
+          name: baseline-${{ env.E2E_FAMILY }}
           path: ${{ inputs.working-directory }}/reports/results-*.json
           retention-days: 90
           overwrite: true
@@ -903,7 +994,7 @@ jobs:
           done
 
   cleanup-device-farm:
-    name: "[android] cleanup-device-farm"
+    name: "[${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}] cleanup-device-farm"
     needs: [build, device-farm, wait-device-farm-running, run-producer]
     if: always()
     runs-on: ubuntu-latest
@@ -984,14 +1075,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: device-farm-logs-android-${{ env.E2E_RUN_ID }}
+          name: device-farm-logs-${{ env.E2E_FAMILY }}-${{ env.E2E_RUN_ID }}
           path: ./device-farm-logs/
           retention-days: 30
           # A cleanup re-run replaces the logs of the earlier attempt.
           overwrite: true
 
   report-finalize:
-    name: "[android] report-finalize"
+    name: "[${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}] report-finalize"
     needs: [report-start, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest
@@ -1007,8 +1098,8 @@ jobs:
 
       - uses: ./.github/actions/sdk-e2e-report-finalize
         with:
-          family: android
-          platforms: '["android"]'
+          family: ${{ env.E2E_FAMILY }}
+          platforms: '["${{ env.E2E_FAMILY }}"]'
           comment-ids: ${{ needs.report-start.outputs.comment-ids }}
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
@@ -1019,7 +1110,7 @@ jobs:
           device-pool-availability: ${{ needs.device-farm.outputs.availability }}
 
   report-artifacts-refresh:
-    name: "[android] report-artifacts-refresh"
+    name: "[${{ inputs.app == 'kotlin' && 'kotlin-android' || 'android' }}] report-artifacts-refresh"
     needs: [report-start, run-producer, cleanup-device-farm, device-farm]
     if: always()
     runs-on: ubuntu-latest
@@ -1035,8 +1126,8 @@ jobs:
 
       - uses: ./.github/actions/sdk-e2e-report-finalize
         with:
-          family: android
-          platforms: '["android"]'
+          family: ${{ env.E2E_FAMILY }}
+          platforms: '["${{ env.E2E_FAMILY }}"]'
           comment-ids: ${{ needs.report-start.outputs.comment-ids }}
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}

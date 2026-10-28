@@ -3,11 +3,9 @@ import ImgStableDiffusion, {
   VideoStableDiffusion,
   assessFit as diffusionAssessFit,
   type DiffusionFiles,
-  type EsrganUpscalerConfig,
   type SdConfig,
   type VideoStableDiffusionArgs
 } from '@qvac/diffusion-cpp'
-import type { WorldConfig } from '@qvac/diffusion-cpp/world'
 import {
   definePlugin,
   defineHandler,
@@ -48,6 +46,11 @@ import {
   worldScenePath,
   worldStep
 } from '@/plugins/builtin/sdcpp-generation/ops/world'
+import {
+  flattenUpscalerKeys,
+  toEsrganAddonConfig
+} from '@/plugins/builtin/sdcpp-generation/upscaler-config'
+import { splitWorldConfig } from '@/plugins/builtin/sdcpp-generation/world-config'
 
 // Wait for op cleanup before emitting completion.
 async function* withCompletionFrame<TChunk, TResult>(
@@ -81,39 +84,6 @@ type DiffusionArtifactKey =
   | 'esrganModelPath'
   | 'taehvModelPath'
   | 'seedScenePath'
-
-// Single source of truth for `SdcppConfig.upscaler.*` → addon-config key
-// mapping. Used by both the diffusion-mode (post-generation upscaler) and the
-// standalone-upscale-mode branches; keeping the mapping in one place avoids
-// drift if `@qvac/diffusion-cpp` ever adds or renames an `upscaler_*` key.
-function flattenUpscalerKeys(upscaler: SdcppConfig['upscaler']): Partial<EsrganUpscalerConfig> {
-  if (!upscaler) return {}
-  return {
-    ...(upscaler.tile_size !== undefined && {
-      upscaler_tile_size: upscaler.tile_size
-    }),
-    ...(upscaler.direct !== undefined && {
-      upscaler_direct: upscaler.direct
-    }),
-    ...(upscaler.offload_params_to_cpu !== undefined && {
-      upscaler_offload_params_to_cpu: upscaler.offload_params_to_cpu
-    }),
-    ...(upscaler.threads !== undefined && {
-      upscaler_threads: upscaler.threads
-    })
-  }
-}
-
-// `mode: "upscale"` builds an EsrganUpscaler directly (not via SdCtx), so the
-// top-level `device` field has to be forwarded explicitly — it is not part of
-// the `upscaler.*` block.
-function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
-  return {
-    ...flattenUpscalerKeys(config.upscaler),
-    ...(config.device !== undefined && { device: config.device }),
-    ...(config.verbosity !== undefined && { verbosity: config.verbosity })
-  }
-}
 
 /**
  * Stable-diffusion.cpp plugin for image diffusion, upscaling, and Wan video.
@@ -462,10 +432,7 @@ export const diffusionPlugin = definePlugin({
           taehv: artifacts['taehvModelPath'],
           scene: worldScenePath(modelId)
         },
-        // Cast rather than rebuild: `exactOptionalPropertyTypes` will not widen
-        // the schema's `x?: T` into the addon's `x?: T` without it, and the
-        // addon already drops undefined values before stringifying them.
-        config: (config.world ?? {}) as WorldConfig,
+        config: splitWorldConfig(config.world).session,
         encoders: {
           t5: artifacts['t5XxlModelPath'],
           vae: artifacts['vaeModelPath']

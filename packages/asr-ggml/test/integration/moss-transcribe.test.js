@@ -89,7 +89,7 @@ test(
       const info = model.getBackendInfo()
       t.ok(info, 'backend info is available')
       if (backend !== 'auto') {
-        const expectedId = { cpu: 0, cuda: 2, vulkan: 3 }[backend]
+        const expectedId = { cpu: 0, metal: 1, cuda: 2, vulkan: 3 }[backend]
         if (expectedId !== undefined) {
           t.is(info.backendId, expectedId, 'requested backend is active')
         } else {
