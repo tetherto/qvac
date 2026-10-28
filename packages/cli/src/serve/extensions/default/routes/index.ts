@@ -3,6 +3,7 @@ import chatBatch from '@/serve/extensions/default/routes/chat-batch'
 import classifications from '@/serve/extensions/default/routes/classifications'
 import kvCache from '@/serve/extensions/default/routes/kv-cache'
 import modelFit from '@/serve/extensions/default/routes/model-fit'
+import music from '@/serve/extensions/default/routes/music'
 import ocr from '@/serve/extensions/default/routes/ocr'
 import system from '@/serve/extensions/default/routes/system'
 import translate from '@/serve/extensions/default/routes/translate'
@@ -17,5 +18,6 @@ export const routes: readonly FastifyPluginAsyncZod[] = [
   translate,
   ocr,
   classifications,
-  upscale
+  upscale,
+  music
 ]
