@@ -54,6 +54,7 @@ The QVAC surface supports:
 * [Text translation](#post-qvacv1translate) — via `/qvac/v1/translate`, backed by an NMT model.
 * [OCR](#post-qvacv1ocr) — via `/qvac/v1/ocr`, text recognition in an image.
 * [Image classification](#post-qvacv1classifications) — via `/qvac/v1/classifications`, ranked labels for an image.
+* [Model registry](#get-qvacv1registrymodels) — via `/qvac/v1/registry/models`: browse and search the live registry, read-only.
 * [Image upscaling](#post-qvacv1imagesupscale) — via `/qvac/v1/images/upscale`, backed by an ESRGAN model.
 * [Music](#music-qvacv1audio) — via `/qvac/v1/audio/generations`, `/qvac/v1/audio/edits` and `/qvac/v1/audio/understandings`, backed by an `audiogen` model.
 
@@ -743,6 +744,82 @@ An alias without `src` loads the addon's bundled MobileNetV3-Small, whose labels
 `report` and `other`. Set `src` to the path of a GGUF classifier to use your own; its labels
 come from the GGUF metadata.
 
+### `GET /qvac/v1/registry/models`
+
+Browse and search the live QVAC model registry, backed by the SDK's
+`modelRegistrySearch()`. Read-only: nothing is downloaded or loaded.
+
+Filter with query params (all optional, combined with AND); with none, every
+entry is listed.
+
+| Param | Meaning |
+| --- | --- |
+| `search` | Case-insensitive substring match on name, registry path, addon or engine |
+| `addon` | Addon / capability category: `llm`, `whisper`, `embeddings`, `ocr`, … |
+| `engine` | Inference engine, e.g. `llamacpp-completion` |
+| `quantization` | e.g. `q4` |
+| `limit` | Page size; omit for no limit (returns all matching entries) |
+| `offset` | Rows to skip (default 0) |
+
+Entries are registry models, not `serve.models` aliases. To call one, add an
+alias whose `src` is `registry://<registrySource>/<registryPath>`. The first
+request after start-up connects to the registry over P2P and can take several
+seconds.
+
+```bash
+curl -sS "http://localhost:11434/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "name": "Qwen3-0.6B-Q4_0",
+      "registryPath": "unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_0.gguf",
+      "registrySource": "hf",
+      "modelId": "Qwen3-0.6B-Q4_0.gguf",
+      "addon": "llm",
+      "engine": "llamacpp-completion",
+      "quantization": "q4",
+      "params": "600M",
+      "expectedSize": 382156480,
+      "sha256Checksum": "33bcc57074ec7b6eada5a90651ee546ec0c2b271002c22baf9f1b2dd1e8f75cb",
+      "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+      "blobBlockOffset": 380426,
+      "blobBlockLength": 5832,
+      "blobByteOffset": 24929383097
+    }
+  ],
+  "has_more": true
+}
+```
+
+| HTTP | `error.code` | When |
+| --- | --- | --- |
+| 400 | `invalid_addon` | `addon` is not a registry addon |
+| 400 | `invalid_limit` | `limit` is not a positive integer |
+| 400 | `invalid_offset` | `offset` is not a non-negative integer |
+| 502 | `registry_query_failed` | The registry could not be reached or queried |
+
+### `GET /qvac/v1/registry/models/lookup`
+
+Fetch one registry entry by the `registrySource` and `registryPath` a list row
+carries. Same shape as a list row. Both params are required.
+
+```bash
+curl -sS -G http://localhost:11434/qvac/v1/registry/models/lookup \
+  --data-urlencode registrySource=hf \
+  --data-urlencode registryPath=unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_0.gguf
+```
+
+| HTTP | `error.code` | When |
+| --- | --- | --- |
+| 400 | `invalid_registry_source` | `registrySource` is missing or empty |
+| 400 | `invalid_registry_path` | `registryPath` is missing or empty |
+| 404 | `model_not_found` | No registry entry has this source and path |
+| 502 | `registry_query_failed` | The registry could not be reached or queried |
+
 ### `POST /qvac/v1/images/upscale`
 
 Upscale an image with an ESRGAN model, backed by the SDK's `upscale()`.
@@ -1136,8 +1213,9 @@ Response: `{ "object": "list", "data": [ … ], "has_more": <bool> }`, each entr
 }
 ```
 
-`GET /v1/models/catalog/:id` returns a single catalog entry. The live remote registry and
-on-disk download state are planned follow-ups.
+`GET /v1/models/catalog/:id` returns a single catalog entry. The catalog does not include
+on-disk download state; to browse the live remote registry, use
+[`GET /qvac/v1/registry/models`](#get-qvacv1registrymodels).
 
 ### Chat
 

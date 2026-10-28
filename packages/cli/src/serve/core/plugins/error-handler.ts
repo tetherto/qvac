@@ -17,10 +17,13 @@ export interface ErrorHandlerOptions {
   fieldCodes?: Record<string, string>
 }
 
-// `model` is core's: every route resolves it through `requireModel`. Each
+// `model` is core's: every route resolves it through `requireModel`. Paging is
+// core's too, so its codes don't depend on which extensions are mounted. Each
 // extension contributes the fields of its own request bodies.
 const CORE_FIELD_CODES: Record<string, string> = {
-  model: 'missing_model'
+  model: 'missing_model',
+  limit: 'invalid_limit',
+  offset: 'invalid_offset'
 }
 
 // lunte-disable-next-line require-await

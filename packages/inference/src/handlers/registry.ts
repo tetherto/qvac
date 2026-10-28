@@ -16,7 +16,7 @@ import {
 } from '@/schemas/engine-addon-map'
 import { getRegistryClient } from '@/runtime/registry-client'
 import { getEngineLogger } from '@/logging/index'
-import { ModelRegistryQueryFailedError } from '@/errors/index'
+import { ModelRegistryModelNotFoundError, ModelRegistryQueryFailedError } from '@/errors/index'
 
 interface QvacError extends Error {
   code?: number
@@ -189,9 +189,7 @@ export async function handleModelRegistryGetModel(
     const rawModel = await client.getModel(request.registryPath, request.registrySource)
 
     if (!rawModel) {
-      throw new ModelRegistryQueryFailedError(
-        `Model not found: ${request.registrySource}/${request.registryPath}`
-      )
+      throw new ModelRegistryModelNotFoundError(request.registrySource, request.registryPath)
     }
 
     const model = processRegistryModel(rawModel)
@@ -210,6 +208,8 @@ export async function handleModelRegistryGetModel(
       model
     }
   } catch (error) {
+    if (error instanceof ModelRegistryModelNotFoundError) throw error
+
     logger.error('QVAC model registry get model failed:', error)
 
     // Re-throw registry client errors directly (19001-19003)

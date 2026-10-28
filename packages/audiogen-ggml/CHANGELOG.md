@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Expose the full MiniMax Core ML runtime through `coremlProfileDir` and
+  `coremlComputeUnits` on macOS 15+, with four explicit Apple device policies.
+  The compiled profile stays resident across generations. Native generation
+  keeps its existing behavior when these options are absent.
+
 ### Changed
 
 - Align the shared native `speech-cpp` source to `2026-10-27` across the speech addons.
@@ -253,7 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cause for clearer diagnostics. Without this the wrong module was returned
   verbatim and the first symptom was `createInstance is not a function` deep in
   a model load. Local source-build behaviour is unchanged.
-  
+
 ### Fixed
 
 - Mobile platform packages (`@qvac/audiogen-ggml-android-arm64`,
