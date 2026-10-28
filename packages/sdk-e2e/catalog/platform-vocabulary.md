@@ -13,6 +13,7 @@ expensive: it has to mean the same thing on every client.
 | `snap-linux`                                           | strict-confined Snap         |
 | `mobile-ios`, `mobile-android`                         | the mobile app               |
 | `desktop-python`                                       | the Python client on desktop |
+| `kotlin-android`                                       | the Kotlin client on Android |
 
 The OS is part of the name because such skips already exist in practice: OCR
 is off on iOS for ONNX/CoreML OOM, parakeet streaming is off on Android as
@@ -42,6 +43,14 @@ so narrowing a rule is a one-line change rather than a sweep.
 Segment matching, rather than `startsWith`, is deliberate — otherwise a new
 consumer whose name happens to begin with an existing one would silently
 inherit its skips.
+
+## Shared devices
+
+`kotlin-android` runs on the same phones as `mobile-android`, so
+`SAME_DEVICE` in `platform-skips.ts` adds it to every skip that applies there:
+a model too large for the device is too large whichever client loads it. A skip
+that belongs to one client rather than to the device goes under that client's
+label.
 
 ## Equivalence
 
