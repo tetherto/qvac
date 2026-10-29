@@ -210,7 +210,9 @@
 # The API summary and the release notes used to keep one page per minor
 # series alongside the current one. Versioning by line replaced that: each
 # line carries its own reference pages, so the sixteen series pages left
-# `content/docs` and their URLs redirect to the section's current page.
+# `content/docs` and their URLs redirect to the section's current page —
+# except the release notes, which the site stopped publishing altogether
+# and which go to the docs home instead (see the section below).
 #
 # The Markdown twins are listed one by one, above the patterns, because a
 # `:version` placeholder matches a whole segment and cannot tell
@@ -224,37 +226,60 @@
 /sdk/reference/api/v0.13.x.md            /sdk/reference/api.md             301
 /sdk/reference/api/v0.14.x.md            /sdk/reference/api.md             301
 /sdk/reference/api/v0.15.x.md            /sdk/reference/api.md             301
-/sdk/reference/release-notes/v0.8.x.md   /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.9.x.md   /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.10.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.11.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.12.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.13.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.14.x.md  /sdk/reference/release-notes.md   301
-/sdk/reference/release-notes/v0.15.x.md  /sdk/reference/release-notes.md   301
+/sdk/reference/release-notes/v0.8.x.md   /ecosystem.md   301
+/sdk/reference/release-notes/v0.9.x.md   /ecosystem.md   301
+/sdk/reference/release-notes/v0.10.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.11.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.12.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.13.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.14.x.md  /ecosystem.md   301
+/sdk/reference/release-notes/v0.15.x.md  /ecosystem.md   301
 
 # The page form, in both shapes. The pattern is safe here: its target has
 # one segment fewer than its source, so a redirected request cannot match
 # it again.
 /sdk/reference/api/:version/             /sdk/reference/api/             301
-/sdk/reference/release-notes/:version/   /sdk/reference/release-notes/   301
+/sdk/reference/release-notes/:version/   /ecosystem/                     301
 /sdk/reference/api/:version              /sdk/reference/api/             301
-/sdk/reference/release-notes/:version    /sdk/reference/release-notes/   301
+/sdk/reference/release-notes/:version    /ecosystem/                     301
 
 # The same two sections at their pre-collections paths, sent straight to
 # the current page. The bare form is listed because Pretty URLs skips
 # dot-containing segments, so a bare `/reference/api/v0.7.x` is never
 # normalized into the with-slash form the generated block above carries.
 /reference/api/:version/             /sdk/reference/api/             301
-/reference/release-notes/:version/   /sdk/reference/release-notes/   301
+/reference/release-notes/:version/   /ecosystem/                     301
 /reference/api/:version              /sdk/reference/api/             301
-/reference/release-notes/:version    /sdk/reference/release-notes/   301
+/reference/release-notes/:version    /ecosystem/                     301
+
+# ======================================================================
+# RETIRED RELEASE-NOTES PAGES
+# ----------------------------------------------------------------------
+# The site no longer publishes release notes: each line's sidebar entry
+# links to that minor's GitHub release, which is the record the release
+# train already produces. The pages that did exist are sent to the docs
+# home — the rules above, which used to land on them, now land here too,
+# so no chain grew a hop.
+#
+# Two shapes answer the section itself, and two cover it inside a line.
+# The line form is a placeholder rather than one rule per line: unlike the
+# line index rules further down, these never need to reach a bare
+# dot-containing path, because the pages they stand for are gone and
+# nothing links them.
+#
+# ORDER MATTERS: the line form must precede the per-line `/sdk/vX.Y/*`
+# splats below, which would otherwise rewrite the request to an
+# index.html that was never built and drop it on the catch-all 404.
+/sdk/reference/release-notes/            /ecosystem/     301
+/sdk/reference/release-notes.md          /ecosystem.md   301
+/sdk/:line/reference/release-notes/      /ecosystem/     301
+/sdk/:line/reference/release-notes.md    /ecosystem.md   301
 
 # ======================================================================
 # DOCUMENTATION LINES
 # ----------------------------------------------------------------------
 # A line that is not the current one answers under its own version
-# segment, `/sdk/v0.18/…`, so every URL of the line carries a dot. Pretty
+# segment, `/sdk/vX.Y/…`, so every URL of the line carries a dot. Pretty
 # URLs skips any path with a dot in it, wherever the dot sits, so no bare
 # line URL gains its trailing slash on its own. Each line carries three
 # rules to make up for it.
@@ -294,24 +319,12 @@
 # one, it would not reach the bare form anyway, and a literal line makes a
 # cut visible in the diff. `scripts/cut-line.ts` writes all three rules of
 # the line a cut preserves.
-/sdk/v0.22/        /sdk/v0.22/index.html        200
-/sdk/v0.22         /sdk/v0.22/                  301
-/sdk/v0.22/*       /sdk/v0.22/:splat/index.html 200
 /sdk/v0.21/        /sdk/v0.21/index.html        200
 /sdk/v0.21         /sdk/v0.21/                  301
 /sdk/v0.21/*       /sdk/v0.21/:splat/index.html 200
 /sdk/v0.20/        /sdk/v0.20/index.html        200
 /sdk/v0.20         /sdk/v0.20/                  301
 /sdk/v0.20/*       /sdk/v0.20/:splat/index.html 200
-/sdk/v0.19/        /sdk/v0.19/index.html        200
-/sdk/v0.19         /sdk/v0.19/                  301
-/sdk/v0.19/*       /sdk/v0.19/:splat/index.html 200
-/sdk/v0.18/        /sdk/v0.18/index.html        200
-/sdk/v0.18         /sdk/v0.18/                  301
-/sdk/v0.18/*       /sdk/v0.18/:splat/index.html 200
-/cli/v0.17/        /cli/v0.17/index.html        200
-/cli/v0.17         /cli/v0.17/                  301
-/cli/v0.17/*       /cli/v0.17/:splat/index.html 200
 /cli/v0.16/        /cli/v0.16/index.html        200
 /cli/v0.16         /cli/v0.16/                  301
 /cli/v0.16/*       /cli/v0.16/:splat/index.html 200
@@ -321,12 +334,36 @@
 /cli/v0.14/        /cli/v0.14/index.html        200
 /cli/v0.14         /cli/v0.14/                  301
 /cli/v0.14/*       /cli/v0.14/:splat/index.html 200
-/cli/v0.13/        /cli/v0.13/index.html        200
-/cli/v0.13         /cli/v0.13/                  301
-/cli/v0.13/*       /cli/v0.13/:splat/index.html 200
-/cli/v0.12/        /cli/v0.12/index.html        200
-/cli/v0.12         /cli/v0.12/                  301
-/cli/v0.12/*       /cli/v0.12/:splat/index.html 200
+
+# ======================================================================
+# RETIRED DOCUMENTATION LINES
+# ----------------------------------------------------------------------
+# The two oldest lines of each collection left `content/docs`. The site's
+# build time and output size grow with every line retained, and the CDN
+# build is what they have to fit in, so the oldest lines are dropped as
+# newer ones are cut.
+#
+# Their URLs redirect rather than 404: search engines and external links
+# already point at them. Every page of a dropped line also exists in the
+# collection's current line, so the splat carries the reader to the same
+# page there instead of to the collection root — checked before the lines
+# were removed.
+#
+# Same order as the rules above, and for the same reason: the with-slash
+# source first, then the bare form, then the splat, so the line root is
+# answered by its own rule and not by the splat with an empty match.
+/sdk/v0.19/        /sdk/                        301
+/sdk/v0.19         /sdk/                        301
+/sdk/v0.19/*       /sdk/:splat                  301
+/sdk/v0.18/        /sdk/                        301
+/sdk/v0.18         /sdk/                        301
+/sdk/v0.18/*       /sdk/:splat                  301
+/cli/v0.13/        /cli/                        301
+/cli/v0.13         /cli/                        301
+/cli/v0.13/*       /cli/:splat                  301
+/cli/v0.12/        /cli/                        301
+/cli/v0.12         /cli/                        301
+/cli/v0.12/*       /cli/:splat                  301
 
 # ======================================================================
 # SOFTWARE INVENTORY VERSIONS
@@ -367,7 +404,7 @@
 # years-old link still takes one hop. These three cover the addresses the SDK
 # serves today.
 #
-# Their line-scoped forms — `/sdk/v0.18/tutorials/**` and the rest — get no
+# Their line-scoped forms — `/sdk/vX.Y/tutorials/**` and the rest — get no
 # rule. The site has never served them: production is still on the
 # pre-collections tree, and those paths exist only on this branch.
 /sdk/troubleshooting/       /resources/troubleshooting/       301

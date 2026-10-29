@@ -10,7 +10,8 @@ export function assignSamplingParams(
     parameters.temperature = Number(setup.settings.temperature);
   }
   if (setup.settings.topK != null) parameters.topK = setup.settings.topK | 0;
-  if (setup.settings.topP != null) parameters.topP = Number(setup.settings.topP);
+  if (setup.settings.topP != null)
+    parameters.topP = Number(setup.settings.topP);
   if (setup.settings.maxFrames != null) {
     parameters.maxFrames = setup.settings.maxFrames | 0;
   }
@@ -25,7 +26,8 @@ export function assignBackendParams(
   parameters: TTSConfigurationParams,
 ): void {
   if (setup.settings.seed != null) parameters.seed = setup.settings.seed | 0;
-  if (setup.settings.threads != null) parameters.threads = setup.settings.threads | 0;
+  if (setup.settings.threads != null)
+    parameters.threads = setup.settings.threads | 0;
   if (setup.outputSampleRate != null) {
     parameters.outputSampleRate = setup.outputSampleRate | 0;
   }
@@ -46,7 +48,8 @@ export function assignCommonNativeParams(
   parameters: TTSConfigurationParams,
 ): void {
   if (setup.settings.seed != null) parameters.seed = setup.settings.seed | 0;
-  if (setup.settings.threads != null) parameters.threads = setup.settings.threads | 0;
+  if (setup.settings.threads != null)
+    parameters.threads = setup.settings.threads | 0;
   if (setup.settings.nGpuLayers != null) {
     parameters.nGpuLayers = setup.settings.nGpuLayers | 0;
   }
@@ -75,5 +78,17 @@ export function assignLavasrParams(
   }
   if (setup.backend.denoiserGgufPath) {
     parameters.lavasrDenoiserPath = setup.backend.denoiserGgufPath;
+  }
+  if (setup.backend.enhancerCoremlModelPath !== undefined) {
+    parameters.lavasrEnhancerCoremlModelPath =
+      setup.backend.enhancerCoremlModelPath;
+    parameters.lavasrEnhancerCoremlComputeUnits =
+      setup.backend.enhancerCoremlComputeUnits;
+  }
+  if (setup.backend.denoiserCoremlModelPath !== undefined) {
+    parameters.lavasrDenoiserCoremlModelPath =
+      setup.backend.denoiserCoremlModelPath;
+    parameters.lavasrDenoiserCoremlComputeUnits =
+      setup.backend.denoiserCoremlComputeUnits;
   }
 }

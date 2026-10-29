@@ -489,11 +489,14 @@ void ParlerModel::loadLocked() {
   LoadedEnhancer enhancer = loadEnhancer(
       cfg_.enhancerGgufPath,
       backend.device == kBackendDeviceGpu,
-      "ParlerModel::load: lavasr enhancer: ");
+      "ParlerModel::load: lavasr enhancer: ",
+      0,
+      cfg_.enhancerCoreml);
   LoadedDenoiser denoiser = loadDenoiser(
       cfg_.denoiserGgufPath,
       backend.device == kBackendDeviceGpu,
-      "ParlerModel::load: lavasr denoiser: ");
+      "ParlerModel::load: lavasr denoiser: ",
+      cfg_.denoiserCoreml);
 
   decoderSidecarLoaded_ = engine->decoder_on_coreml();
   dacSidecarLoaded_ = engine->dac_on_coreml();

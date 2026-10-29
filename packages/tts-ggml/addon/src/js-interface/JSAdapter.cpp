@@ -397,6 +397,14 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   // qvac-fabric-speech.cpp PR #78 (activates once the pinned tts-cpp has it).
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  cfg.enhancerCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlModelPath");
+  cfg.enhancerCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlComputeUnits");
+  cfg.denoiserCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlModelPath");
+  cfg.denoiserCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlComputeUnits");
   return cfg;
 }
 
@@ -488,6 +496,14 @@ JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  cfg.enhancerCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlModelPath");
+  cfg.enhancerCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlComputeUnits");
+  cfg.denoiserCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlModelPath");
+  cfg.denoiserCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlComputeUnits");
   return cfg;
 }
 
@@ -654,6 +670,14 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   // qvac-fabric-speech.cpp PR #78 (activates once the pinned tts-cpp has it).
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  cfg.enhancerCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlModelPath");
+  cfg.enhancerCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlComputeUnits");
+  cfg.denoiserCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlModelPath");
+  cfg.denoiserCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlComputeUnits");
   return cfg;
 }
 
@@ -714,6 +738,14 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  cfg.enhancerCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlModelPath");
+  cfg.enhancerCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlComputeUnits");
+  cfg.denoiserCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlModelPath");
+  cfg.denoiserCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlComputeUnits");
   return cfg;
 }
 

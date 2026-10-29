@@ -133,6 +133,10 @@ export interface SynthesisSettings extends ParlerCoremlFields {
 export interface BackendPaths {
     enhancerGgufPath?: string;
     denoiserGgufPath?: string;
+    enhancerCoremlModelPath?: string;
+    enhancerCoremlComputeUnits?: string;
+    denoiserCoremlModelPath?: string;
+    denoiserCoremlComputeUnits?: string;
     backendsDir?: string;
     openclCacheDir?: string;
     vulkanCacheDir?: string;

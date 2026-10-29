@@ -10022,5 +10022,16 @@
     "tags": ["generation", "dflash2", "qwen3.8-flash-next", "draft"],
     "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen3.8 Flash Next entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
     "link": "https://huggingface.co/incoai/Qwen3.8-Flash-Next-DFlash2-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/mobilenetv3-3class/2026-10-28/mobilenetv3_3class_v3_fp16.gguf",
+    "engine": "ggml-classification",
+    "description": "MobileNetV3-Small 3-class image classifier (food / report / other), FP16 GGUF",
+    "quantization": "fp16",
+    "params": "2.5M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "mobilenetv3"],
+    "notes": "",
+    "link": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml"
   }
 ]
