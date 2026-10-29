@@ -99,6 +99,7 @@ jobs:
           .github/scripts/test/publish-branch-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
           .github/scripts/test/mobile-caller-permissions.test.mjs
+          .github/scripts/test/mobile-fabric-consumers.test.mjs
           .github/scripts/test/await-ts-checks.test.mjs
           .github/scripts/test/ts-check-names.test.mjs
           .github/scripts/test/nx-lockfile-mode.test.mjs

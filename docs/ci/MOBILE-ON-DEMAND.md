@@ -660,6 +660,51 @@ never accidentally stack two Device Farm runs (and two bills). Dispatches on
 in parallel. The `workflow_call` paths (benchmarks / weekend / on-merge) are never
 cancelled by this.
 
+## Fabric consumers in one run
+
+**Mobile Tests (Fabric Consumers)** (`mobile-test-fabric-consumers.yml`) runs
+every fabric consumer's mobile suite against a fabric PR from one dispatch:
+`classification-ggml`, `embed-llamacpp`, `ggml-rpc-server`, `llm-llamacpp`,
+`model-fit`, `ocr-ggml`, `translation-nmtcpp`, `turbovec-ggml` and `vla`, each on
+Android and iOS, in parallel. Every device gets the PR's `fabric-prebuilds` in
+place of the published `@qvac/fabric`.
+
+- **Addon prebuilds.** Each consumer installs its addon from the run id given for
+  it, or the published release when that input is empty. An ABI-breaking fabric
+  (a changed ggml struct, a bumped RPC protocol) needs the run ids: published
+  addons cannot load against it. The runs exist only when the PR carries the
+  `prebuilds` label.
+- **Devices.** Each consumer's `workflow_call` defaults (its pool, dual flagship
+  or sharded pool), not the one-device manual path. Narrow a failure afterwards
+  with a single-consumer dispatch.
+- **Fail fast.** The first job checks every run id, and that each run holds the
+  artifact a selected consumer needs, before anything builds.
+- **Re-runs.** A second dispatch for the same fabric run cancels the first.
+  Re-run only the failed consumers with `gh run rerun <id> --failed`.
+
+```bash
+PR=<fabric PR number>
+SHA=$(gh pr view "$PR" --repo tetherto/qvac --json headRefOid --jq .headRefOid)
+# The run on that commit that uploaded artifact $1.
+run_with() {
+  for rid in $(gh api "repos/tetherto/qvac/actions/runs?head_sha=$SHA&per_page=100" \
+                 --jq '.workflow_runs[].id'); do
+    gh api "repos/tetherto/qvac/actions/runs/$rid/artifacts?per_page=100" \
+      --jq ".artifacts[]|select(.name==\"$1\" and .expired==false)|.name" \
+      2>/dev/null | grep -q . && { echo "$rid"; return; }
+  done
+}
+
+gh workflow run mobile-test-fabric-consumers.yml --repo tetherto/qvac --ref main \
+  -f fabric_prebuild_run_id="$(run_with fabric-prebuilds)" \
+  -f nx_prebuild_run_id="$(run_with prebuilds-llm-llamacpp)" \
+  -f classification_prebuild_run_id="$(run_with prebuilds-classification-ggml)" \
+  -f vla_prebuild_run_id="$(run_with prebuilds-vla-ggml)"
+```
+
+Add `-f consumers=llm-llamacpp,ocr-ggml` to run a subset, and
+`-f ref=refs/pull/$PR/head` when the PR also changes consumer test code.
+
 ## Typical flow (worked example)
 
 A manual run targets **one platform at a time** (the `platform` input is `Android`
