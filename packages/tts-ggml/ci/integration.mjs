@@ -19,7 +19,7 @@ export function options(argv, base = process.env) {
       script: { type: 'string', default: 'test:integration' },
       lib: { type: 'string', multiple: true, default: [] },
       set: { type: 'string', multiple: true, default: [] },
-      config: { type: 'string' }
+      matrix: { type: 'string' }
     },
     strict: true
   })
@@ -35,7 +35,7 @@ export function options(argv, base = process.env) {
     if (at < 1) throw new Error(`--set takes NAME=value, got '${pair}'`)
     env[pair.slice(0, at)] = pair.slice(at + 1)
   }
-  return { script: values.script, config: values.config, env }
+  return { script: values.script, matrix: values.matrix, env }
 }
 
 export function run(cmd, args, env) {

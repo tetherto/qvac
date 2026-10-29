@@ -373,49 +373,49 @@
       },
       "configurations": {
         "linux-x64": {
-          "args": "--config linux-x64 --suite rtf --no-gpu --set QVAC_ASR_GGML_BENCHMARK_DEVICE=qvac-ubuntu2204-x64 --set QVAC_ASR_GGML_BENCHMARK_RUNNER=qvac-ubuntu2204-x64",
+          "args": "--matrix cpu --suite rtf --no-gpu",
           "ci": {
             "runner": "linux_ubuntu2204_x64"
           }
         },
         "linux-x64-gpu2204": {
-          "args": "--config linux-x64-gpu2204 --suite rtf --set QVAC_ASR_GGML_BENCHMARK_DEVICE=qvac-ubuntu2204-x64-gpu --set QVAC_ASR_GGML_BENCHMARK_RUNNER=qvac-ubuntu2204-x64-gpu",
+          "args": "--matrix cpu-vulkan --suite rtf",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu"
           }
         },
         "linux-x64-gpu": {
-          "args": "--config linux-x64-gpu --suite rtf --set QVAC_ASR_GGML_BENCHMARK_DEVICE=qvac-ubuntu2404-x64-gpu --set QVAC_ASR_GGML_BENCHMARK_RUNNER=qvac-ubuntu2404-x64-gpu",
+          "args": "--matrix cpu-vulkan --suite rtf",
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
           }
         },
         "linux-x64-2604": {
-          "args": "--config linux-x64-2604 --suite rtf --no-gpu --set QVAC_ASR_GGML_BENCHMARK_DEVICE=ubuntu-26.04 --set QVAC_ASR_GGML_BENCHMARK_RUNNER=ubuntu-26.04",
+          "args": "--matrix cpu --suite rtf --no-gpu",
           "ci": {
             "runner": "ubuntu_2604"
           }
         },
         "linux-arm64": {
-          "args": "--config linux-arm64 --suite rtf --no-gpu --set QVAC_ASR_GGML_BENCHMARK_DEVICE=ubuntu-24.04-arm --set QVAC_ASR_GGML_BENCHMARK_RUNNER=ubuntu-24.04-arm",
+          "args": "--matrix cpu --suite rtf --no-gpu",
           "ci": {
             "runner": "ubuntu_2404_arm"
           }
         },
         "darwin-arm64": {
-          "args": "--config darwin-arm64 --suite rtf --set QVAC_ASR_GGML_BENCHMARK_DEVICE=qvac-macos26-arm64-gpu --set QVAC_ASR_GGML_BENCHMARK_RUNNER=qvac-macos26-arm64-gpu",
+          "args": "--matrix cpu-metal-coreml --suite rtf",
           "ci": {
             "runner": "macos_arm64_gpu"
           }
         },
         "darwin-x64": {
-          "args": "--config darwin-x64 --suite rtf --no-gpu --set QVAC_ASR_GGML_BENCHMARK_DEVICE=macos-15-large --set QVAC_ASR_GGML_BENCHMARK_RUNNER=macos-15-large",
+          "args": "--matrix cpu-metal --suite rtf --no-gpu",
           "ci": {
             "runner": "macos_15_large"
           }
         },
         "win32-x64": {
-          "args": "--config win32-x64 --suite rtf --set GGML_VK_VISIBLE_DEVICES=1 --set QVAC_ASR_GGML_BENCHMARK_DEVICE=qvac-win25-x64-gpu --set QVAC_ASR_GGML_BENCHMARK_RUNNER=qvac-win25-x64-gpu",
+          "args": "--matrix cpu-vulkan --suite rtf --set GGML_VK_VISIBLE_DEVICES=1",
           "ci": {
             "runner": "win_2025_x64_gpu"
           }

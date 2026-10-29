@@ -300,7 +300,7 @@ npm --prefix packages/tts-ggml run test:benchmark:rtf
 
 ### CI wiring
 
-- **Desktop** (the `benchmark` target, `ci/benchmark-matrix/<configuration>.json`): each matrix carries
+- **Desktop** (the `benchmark` target, a `--matrix` set in `ci/benchmark-matrix.json`): each set carries
   `enhancer:"lavasr"` and `denoiser:"lavasr"` rows for `supertonic` + `chatterbox`
   (CPU everywhere, plus Vulkan/Metal on GPU runners), plus an enhancer quant sweep
   (`enhancerVariant` = `f32` / `q8_0`) on `supertonic` across CPU + the platform
@@ -387,9 +387,9 @@ total wall time.
 
 ## Adding a new platform
 
-1. Add the `(engine, useGPU, backendHint)` rows to the configuration's
-   `ci/benchmark-matrix/<configuration>.json`, or add a `benchmark` configuration
-   for the platform in `project.json` with its own matrix file.
+1. Add a `benchmark` configuration for the platform in `project.json` whose
+   `--matrix` names a set in `ci/benchmark-matrix.json`, adding a set with the
+   platform's `(engine, useGPU, backendHint)` rows when no existing set fits.
 2. Add the platform's GPU backend, if any, to
    `scripts/perf-report/aggregate-tts-ggml-rtf.js`'s `SUPPORTED_GPU_BACKENDS`.
 3. For unavailable backends (CUDA, OpenCL, hosted-macOS Metal), drop fixtures

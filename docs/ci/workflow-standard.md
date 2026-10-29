@@ -58,7 +58,7 @@ Each platform a target runs on is an Nx configuration of that target, named `<pl
 - `ci.runner`: the runner key from `reusable-runner-names.yml`.
 - `ci.setup`: extra host toolkits: `cuda` or `rocm`, or `python` for Python 3.10 on a desktop leg.
 
-`benchmark` may also define `report`, the one configuration not named for a platform. `benchmarks.yml` runs it once on Linux after every other configuration and the mobile runs finish, with their results downloaded under `<dir>/benchmarks/results/`. A benchmark command writes its own results there, and reads `BENCHMARK_ARGS`, `QVAC_PERF_RUNS` and `QVAC_PERF_WARMUP_RUNS` when the dispatch sets them.
+`benchmark` may also define `report`, the one configuration not named for a platform. `benchmarks.yml` runs it once on Linux after every other configuration and the mobile runs finish, with their results downloaded under `<dir>/benchmarks/results/`. A benchmark command writes its own results there, and reads `BENCHMARK_ARGS`, `QVAC_PERF_RUNS` and `QVAC_PERF_WARMUP_RUNS` when the dispatch sets them. Every desktop command also gets `CI_RUNNER_LABEL`, the runner label its configuration resolves to, so results can name their host without repeating it in `args`.
 
 `nx run-many -c <configuration>` passes the configuration to the target's dependencies that define it, so `ci:system` and the build of a native dependency run with the same configuration.
 

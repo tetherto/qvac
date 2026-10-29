@@ -355,43 +355,43 @@
       },
       "configurations": {
         "linux-x64-gpu2204": {
-          "args": "--config linux-x64-gpu2204",
+          "args": "--matrix cpu-vulkan",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu"
           }
         },
         "linux-x64-gpu": {
-          "args": "--config linux-x64-gpu",
+          "args": "--matrix cpu-vulkan",
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
           }
         },
         "linux-x64-2604": {
-          "args": "--config linux-x64-2604 --set NO_GPU=true",
+          "args": "--matrix cpu --set NO_GPU=true",
           "ci": {
             "runner": "ubuntu_2604"
           }
         },
         "linux-arm64": {
-          "args": "--config linux-arm64 --set NO_GPU=true",
+          "args": "--matrix cpu --set NO_GPU=true",
           "ci": {
             "runner": "ubuntu_2404_arm"
           }
         },
         "darwin-arm64": {
-          "args": "--config darwin-arm64",
+          "args": "--matrix cpu-metal",
           "ci": {
             "runner": "macos_arm64_gpu"
           }
         },
         "darwin-x64": {
-          "args": "--config darwin-x64 --set NO_GPU=true",
+          "args": "--matrix cpu --set NO_GPU=true",
           "ci": {
             "runner": "macos_15_large"
           }
         },
         "win32-x64": {
-          "args": "--config win32-x64",
+          "args": "--matrix cpu-vulkan",
           "ci": {
             "runner": "win_2025_x64_gpu"
           }
