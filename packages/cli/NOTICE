@@ -43,7 +43,7 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/inference@0.22.0
     https://github.com/tetherto/qvac
-  @qvac/langdetect-text@0.1.2
+  @qvac/langdetect-text@0.1.3
     https://github.com/tetherto/qvac
   @qvac/llm-llamacpp@0.61.2
     https://github.com/tetherto/qvac
@@ -71,13 +71,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/adaptive-timeout
   b4a@1.9.0
     https://github.com/holepunchto/b4a
-  bare-abort@2.0.13
+  bare-abort@2.0.14
     https://github.com/holepunchto/bare-abort
   bare-abort-controller@1.1.2
     https://github.com/holepunchto/bare-abort-controller
   bare-addon-resolve@1.11.0
     https://github.com/holepunchto/bare-addon-resolve
-  bare-ansi-escapes@2.2.3
+  bare-ansi-escapes@2.2.4
     https://github.com/holepunchto/bare-ansi-escapes
   bare-assert@1.3.0
     https://github.com/holepunchto/bare-assert
@@ -85,7 +85,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-buffer
   bare-bundle@1.11.0
     https://github.com/holepunchto/bare-bundle
-  bare-bundle-id@1.0.2
+  bare-bundle-id@1.0.3
     https://github.com/holepunchto/bare-bundle-id
   bare-cov@1.2.3
     https://github.com/holepunchto/bare-cov
@@ -93,9 +93,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-cpu-info
   bare-crypto@1.15.4
     https://github.com/holepunchto/bare-crypto
-  bare-debug-log@2.0.0
+  bare-debug-log@2.0.1
     https://github.com/holepunchto/bare-debug-log
-  bare-dns@2.3.0
+  bare-dns@2.3.1
     https://github.com/holepunchto/bare-dns
   bare-encoding@1.0.3
     https://github.com/holepunchto/bare-encoding
@@ -109,7 +109,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-ffmpeg
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
-  bare-format@1.0.2
+  bare-format@1.0.3
     https://github.com/holepunchto/bare-format
   bare-fs@4.8.4
     https://github.com/holepunchto/bare-fs
@@ -119,7 +119,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-hrtime
   bare-http-parser@2.1.4
     https://github.com/holepunchto/bare-http-parser
-  bare-http1@4.6.2
+  bare-http1@4.6.3
     https://github.com/holepunchto/bare-http1
   bare-https@3.1.0
     https://github.com/holepunchto/bare-https
@@ -129,13 +129,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-inspector
   bare-lief@0.2.10
     https://github.com/holepunchto/bare-lief
-  bare-link@4.0.1
+  bare-link@4.1.0
     https://github.com/holepunchto/bare-link
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
   bare-module@6.4.0
     https://github.com/holepunchto/bare-module
-  bare-module-lexer@1.6.6
+  bare-module-lexer@1.7.0
     https://github.com/holepunchto/bare-module-lexer
   bare-module-resolve@1.12.6
     https://github.com/holepunchto/bare-module-resolve
@@ -181,17 +181,17 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-subprocess
   bare-tcp@2.6.1
     https://github.com/holepunchto/bare-tcp
-  bare-tls@3.1.13
+  bare-tls@3.2.0
     https://github.com/holepunchto/bare-tls
   bare-tty@5.2.1
     https://github.com/holepunchto/bare-tty
   bare-type@1.4.0
     https://github.com/holepunchto/bare-type
-  bare-type-stripper@0.1.6
+  bare-type-stripper@0.1.7
     https://github.com/holepunchto/bare-type-stripper
   bare-url@2.5.5
     https://github.com/holepunchto/bare-url
-  bare-utils@1.6.0
+  bare-utils@1.6.1
     https://github.com/holepunchto/bare-utils
   bare-v8-to-istanbul@1.0.4
     https://github.com/holepunchto/bare-v8-to-istanbul
@@ -225,7 +225,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-errors
   hypercore-id-encoding@1.3.0
     https://github.com/holepunchto/hypercore-id-encoding
-  hypercore-stats@2.5.1
+  hypercore-stats@2.5.2
     https://github.com/holepunchto/hypercore-stats
   hypercore-storage@3.4.0
     https://github.com/holepunchto/hypercore-storage
@@ -251,15 +251,15 @@ JavaScript Dependencies
     https://github.com/holepunchto/noise-handshake
   paparam@1.14.0
     https://github.com/holepunchto/paparam
-  passive-core-watcher@1.0.1
+  passive-core-watcher@1.0.2
     https://github.com/holepunchto/passive-core-watcher
   quickbit-native@2.4.9
     https://github.com/holepunchto/quickbit-native
-  rabin-native@2.0.0
+  rabin-native@2.0.1
     https://github.com/holepunchto/rabin-native
   rabin-stream@2.0.0
     https://github.com/holepunchto/rabin-stream
-  rache@1.0.0
+  rache@1.0.1
     https://github.com/holepunchto/rache
   refcounter@1.0.0
     https://github.com/holepunchto/refcounter
@@ -273,7 +273,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
-  simdle-native@1.3.9
+  simdle-native@1.3.10
     https://github.com/holepunchto/simdle-native
   sub-encoder@2.1.3
     https://github.com/holepunchto/sub-encoder
@@ -281,7 +281,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/text-decoder
   udx-native@1.22.0
     https://github.com/holepunchto/udx-native
-  unslab@1.3.0
+  unslab@1.3.1
     https://github.com/holepunchto/unslab
   which-runtime@1.4.0
     https://github.com/holepunchto/which-runtime
@@ -326,7 +326,7 @@ JavaScript Dependencies
     https://github.com/emilbayes/nanoassert
   noise-curve-ed@2.1.0
     https://github.com/chm-diederichs/noise-curve-ed
-  quickbit-universal@2.2.0
+  quickbit-universal@2.2.1
     https://github.com/holepunchto/quickbit-universal
   semver@7.8.5
     https://github.com/npm/node-semver
@@ -334,7 +334,7 @@ JavaScript Dependencies
     https://github.com/wesleytodd/setprototypeof
   signal-exit@4.1.0
     https://github.com/tapjs/signal-exit
-  simdle-universal@1.1.2
+  simdle-universal@1.1.3
     https://github.com/holepunchto/simdle-universal
   split2@4.2.0
     https://github.com/mcollina/split2
@@ -373,43 +373,43 @@ JavaScript Dependencies
     https://github.com/fastify/proxy-addr
   @fastify/send@4.2.0
     https://github.com/fastify/send
-  @fastify/static@10.1.7
+  @fastify/static@10.1.8
     https://github.com/fastify/fastify-static
   @fastify/swagger@9.9.2
     https://github.com/fastify/fastify-swagger
   @fastify/swagger-ui@6.1.2
     https://github.com/fastify/fastify-swagger-ui
-  @inquirer/ansi@2.0.9
+  @inquirer/ansi@2.0.10
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/checkbox@5.2.7
+  @inquirer/checkbox@5.2.8
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/confirm@6.3.4
+  @inquirer/confirm@6.3.5
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/core@12.0.5
+  @inquirer/core@12.0.6
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/editor@5.3.5
+  @inquirer/editor@5.3.6
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/expand@5.1.7
+  @inquirer/expand@5.1.8
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/external-editor@3.0.6
+  @inquirer/external-editor@3.0.7
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/figures@2.0.9
+  @inquirer/figures@2.0.10
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/input@5.1.8
+  @inquirer/input@5.1.9
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/number@4.2.5
+  @inquirer/number@4.2.6
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/password@5.2.4
+  @inquirer/password@5.2.5
     https://github.com/SBoudrias/Inquirer.js
   @inquirer/prompts@8.5.2
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/rawlist@5.3.7
+  @inquirer/rawlist@5.3.8
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/search@4.3.5
+  @inquirer/search@4.3.6
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/select@5.2.7
+  @inquirer/select@5.2.8
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/type@4.2.0
+  @inquirer/type@4.2.1
     https://github.com/SBoudrias/Inquirer.js
   @jridgewell/resolve-uri@3.1.2
     https://github.com/jridgewell/resolve-uri
@@ -459,7 +459,7 @@ JavaScript Dependencies
     https://github.com/thlorenz/convert-source-map
   cookie@2.0.1
     https://github.com/jshttp/cookie
-  corestore@7.16.0
+  corestore@7.16.1
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
@@ -469,7 +469,7 @@ JavaScript Dependencies
     https://github.com/dougwilson/nodejs-depd
   dequal@2.0.3
     https://github.com/lukeed/dequal
-  dht-rpc@6.27.0
+  dht-rpc@6.28.0
     https://github.com/holepunchto/dht-rpc
   error-stack-parser@2.1.4
     https://github.com/stacktracejs/error-stack-parser
@@ -483,7 +483,7 @@ JavaScript Dependencies
     https://github.com/epoberezkin/fast-deep-equal
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
-  fast-json-stringify@7.1.3
+  fast-json-stringify@7.2.0
     https://github.com/fastify/fast-json-stringify
   fast-querystring@1.1.2
     https://github.com/anonrig/fast-querystring
@@ -517,11 +517,11 @@ JavaScript Dependencies
     https://github.com/jshttp/http-errors
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.39.0
+  hypercore@11.39.5
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.34.1
+  hyperdht@6.35.0
     https://github.com/holepunchto/hyperdht
   hyperswarm@4.17.2
     https://github.com/holepunchto/hyperswarm
