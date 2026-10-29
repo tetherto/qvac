@@ -59,7 +59,7 @@ public:
   /**
    * The destructor.
    */
-  ~MtmdLlmContext() override = default;
+  ~MtmdLlmContext() override;
   MtmdLlmContext(const MtmdLlmContext&) = delete;
   MtmdLlmContext& operator=(const MtmdLlmContext&) = delete;
   MtmdLlmContext(MtmdLlmContext&&) = delete;
