@@ -1,0 +1,629 @@
+{
+  "title": "QVAC diffusion performance evaluation - round two draft",
+  "intro": "Working draft, 29 October 2026. Pending runs are explicitly marked; this is not the final recommendation. V means tried, including rejected experiments. X means no defensible speed measurement. Speedup = baseline time / candidate time; percentages describe latency reductions, not quality percentages. R2 native controls already include H3 flash attention, FLUX GEMM VAE and LTX residency. Most R2 screens have one warmup plus one measured request; confirmation runs and fresh-process CLI measurements are labeled separately. Quality is measured against the same-host quantized control, not an original full-precision ground truth.",
+  "sections": [
+    {
+      "title": "1. MiniMax-H3",
+      "description": "Joint video and audio generation from text and optional visual references. Tested: the FL2VA Q4 checkpoint in text-to-video mode, 960 x 544, 124 frames at 24 fps, 8 steps, with stereo 32 kHz audio. FL2VA image conditioning and Ref2VA are outside this validation. <a href=\"https://huggingface.co/MiniMaxAI/MiniMax-H3\">Official model</a>.",
+      "headers": [
+        "Short name",
+        "Type",
+        "Checked",
+        "Speed effect",
+        "Quality",
+        "HW affected",
+        "Why implement / reject",
+        "Notes"
+      ],
+      "rows": [
+        [
+          "Global flash attention",
+          "Existing kernel selection",
+          "V",
+          "RTX: 1.057x; 5.42% lower latency<br/>Spark: 1.091x; 8.31% lower latency",
+          "Visually similar reviewed clips; small video differences; audio bit exact",
+          "Confirmed: RTX 5090 and Spark",
+          "Suggest an explicit profile on the pinned engine. Repeated speed gain and very small reviewed video differences; retain the memory caveat.",
+          "Set flash_attn:true. Baseline already enables diffusion_fa:true; the extra gain comes from attention outside the DiT, especially video decoding. Additional Spark prompts also improved."
+        ],
+        [
+          "Isolated upstream H3 fusions",
+          "Engine / ggml kernel and graph changes",
+          "V",
+          "RTX: 96.94 to 89.58 s; 1.082x; 7.59% lower generation latency. Spark: 341.57 to 300.04 s; 1.138x; 12.16% lower. Two extra prompts: RTX 6.90-7.92%, Spark 11.63-11.84% lower.",
+          "Five RTX clip pairs byte exact including audio. Spark video PSNR 52.34-55.16 dB, SSIM 0.99823-0.99912; differences similar to unchanged-run variation; audio bit exact",
+          "RTX and Spark",
+          "Recommend isolating a minimal QVAC backport. Ablations on both GPUs attribute the gain to H3 operations; shared-runtime-only changes are nearly neutral. Not a production-ready package upgrade.",
+          "Sampled GPU peak falls 17292 to 16892 MiB (-400 MiB, -2.31%) on the repeated prompt. Restores parent projection/modulation layout; separate CLI generation timing, not warm-addon timing."
+        ],
+        [
+          "Full upstream PR #2240",
+          "Engine algorithm/layout + kernels",
+          "V",
+          "RTX screen: 102.11 to 90.04 s; 1.134x; 11.82% lower generation latency. Spark second fresh invocation: 347.05 to 294.38 s; 1.179x; 15.18% lower.",
+          "Visible motion/geometry and audio changes. RTX/Spark PSNR 20.98/22.72 dB, SSIM 0.7618/0.8259, audio SNR 9.21/6.67 dB",
+          "RTX and Spark",
+          "Reject the complete patch for the visually identical tier.",
+          "A faster broad upstream patch is not automatically an acceptable QVAC engine upgrade."
+        ],
+        [
+          "EasyCache 0.05 / 0.20",
+          "Approximate denoising reuse",
+          "V",
+          "0.20: RTX: 113.649 to 104.789 s; 1.085x; 7.80% lower latency<br/>Spark: 604.611 to 535.998 s; 1.128x; 11.35% lower latency",
+          "0.05: byte exact, zero skipped steps. 0.20: video PSNR 35.16/34.90 dB; audio SNR 2.85/3.07 dB",
+          "RTX and Spark",
+          "Reject 0.20 for the quality target; 0.05 offers no useful acceleration.",
+          "0.20 skips one of eight denoising steps and changes motion/detail and audio."
+        ],
+        [
+          "DBCache / TaylorSeer flags",
+          "Approximate denoising reuse",
+          "V",
+          "RTX: 113.649 to 92.487 / 91.396 s (18.62% / 19.58% lower). Spark: 604.611 to 471.004 / 472.186 s (22.10% / 21.90% lower).",
+          "Visible artifacts; RTX/Spark PSNR 16.83/17.20 dB, SSIM 0.6620/0.6758; audio SNR 1.32/1.22 dB",
+          "RTX and Spark",
+          "Reject these tested settings: substantial output changes exceed the accepted quality tier.",
+          "Both flags skip two of eight steps and produce the same output within each host. They use the pinned engine's whole-condition reuse path."
+        ],
+        [
+          "CUDA graphs / graph optimization",
+          "Build and scheduling parameters",
+          "V",
+          "RTX: 113.649 to 114.078 s; 0.996x; 0.38% higher latency<br/>Spark: 604.611 to 611.753 s; 0.988x; 1.18% higher latency",
+          "Byte exact in tested outputs",
+          "RTX and Spark",
+          "Reject as a default change: no reliable speed gain.",
+          "Actual cudaGraphLaunch observed. GGML_CUDA_GRAPH_OPT=1 was also slower: RTX +1.30%, Spark +0.64% latency."
+        ],
+        [
+          "CPU threads 2 / 16",
+          "Runtime parameters",
+          "V",
+          "RTX: 114.314 / 114.322 s vs 113.649 s. Spark: 606.780 / 606.052 s vs 604.611 s.",
+          "Output byte exact",
+          "RTX and Spark",
+          "Keep the tested 8-thread control; extra tuning showed no benefit.",
+          "Changes are smaller than 0.6% and do not support a new default."
+        ],
+        [
+          "CUDA launch queue 4x",
+          "Process-scoped CUDA scheduling",
+          "V",
+          "RTX: 115.007 to 114.331 s; 1.006x; 0.59% lower. Spark: 601.678 to 599.833 s; 1.003x; 0.31% lower.",
+          "Four matched clip pairs per host byte exact",
+          "RTX and Spark",
+          "Reject as a speed recommendation: differences are too small and within run variability.",
+          "Three measured warm requests per side. No system-level setting is changed."
+        ],
+        [
+          "GPU parameter residency",
+          "Memory placement",
+          "V",
+          "Spark: 1.003x; 0.33% lower latency",
+          "Output bit exact; 0% changed values",
+          "Spark only; RTX selective profile failed",
+          "Keep the memory-fitting configuration. Spark gain is noise; RTX selective residency failed a subsequent request.",
+          "Spark: 661.899 to 659.693 s, within run-to-run noise. Not a gain over an already resident default. RTX warmed up, then ran out of memory on a later request."
+        ],
+        [
+          "VAE weights on GPU",
+          "Module-specific parameter placement",
+          "V",
+          "RTX: 113.649 to 113.903 s; 0.998x; 0.22% higher latency",
+          "Byte exact",
+          "RTX only",
+          "No speed recommendation. Consider separately for lower host RSS.",
+          "Host RSS 39.836 to 33.734 GB; retain capacity checks. Not a denoising acceleration."
+        ],
+        [
+          "SGLang Diffusion",
+          "Alternative runtime",
+          "V",
+          "Spark: 3.501x versus attention-tuned QVAC; 71.43% lower latency",
+          "Different generated video/audio; equal quality not established",
+          "Spark only",
+          "Keep as a runtime-comparison track; larger serving-stack scope and output parity is not established.",
+          "172.799 s warm median; 3.82x versus the 659.693 s original resident baseline. Same quantized DiT/encoder source files; different RNG/math and AVI versus MP4 encoding."
+        ],
+        [
+          "Forced cuBLAS build",
+          "Matrix backend selection",
+          "V",
+          "Spark: about 1.02x",
+          "Rejected: black video and corrupted audio",
+          "Spark; FLUX build also tried on RTX",
+          "Reject: corrupt output outweighs the small timing gain.",
+          "H3: PSNR 9.65 dB, SSIM 0.3005, audio SNR -51.4 dB. This specific forced-backend experiment failed quality."
+        ],
+        [
+          "BF16 DiT matrices",
+          "Precision selection",
+          "V",
+          "Spark: 1.022x; 2.18% lower latency, single measured run",
+          "Rejected: substantial video/audio differences",
+          "Spark only",
+          "Reject as a quality-preserving optimization; changed values, small single-run gain.",
+          "Existing Q4 matrices dequantized to BF16, not the original BF16 checkpoint. Video PSNR 23.53 dB, SSIM 0.8504; audio RMSE 0.001478 and SNR 5.21 dB."
+        ],
+        [
+          "NVFP4 text encoder",
+          "Quantization / loader support",
+          "",
+          "X - unmeasured",
+          "Unvalidated",
+          "Future: Blackwell CUDA",
+          "Defer to a cold-start/long-prompt study: requires an unmerged loader and different encoder checkpoint; negligible ceiling for this measured warm workload.",
+          "Pinned engine lacks the ComfyUI NVFP4 AWQ loader. <a href=\"https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/49\">Draft engine PR #49</a> provides a candidate and reports separate T2V/I2V checks, but our campaign has not benchmarked it or validated quality against the default encoder. In the measured warm H3 workload, conditioning is about 0.4 s of 605 s on Spark: eliminating it entirely would save only about 0.07%. Cold-load and long-prompt benefits remain unmeasured."
+        ],
+        [
+          "VAE-only flash plus isolated fusions",
+          "Per-module attention and engine combination",
+          "V",
+          "RTX: 104.18 to 89.55 s; 1.163x; 14.04% lower generation latency. Two extra prompt pairs: 14.93% and 15.19% lower. Spark: 401.45 to 307.42 s; 1.306x; 23.42% lower.",
+          "No visible difference in inspected frames; RTX PSNR 52.32-56.23 dB; Spark 52.55-52.70 dB. Audio sample exact on both",
+          "RTX three prompts; Spark one prompt, three repeats",
+          "Recommend for a focused backport/profile experiment; directly measured cumulative gains on both hosts, with memory trade-offs and remaining scope checks.",
+          "Uses upstream flash selection off,diffusion=on,vae=on, keeping text-encoder flash off. This per-module VAE selection is not exposed by the pinned engine/addon."
+        ],
+        [
+          "Shared-runtime-only H3 ablation",
+          "Engine change-scope isolation",
+          "V",
+          "RTX parent to shared-only: 97.23 to 97.06 s (0.17% lower); adding H3 operations: 89.39 s (7.90% lower). Spark: 340.04 to 337.52 s (0.74% lower), then 298.41 s (11.59% lower).",
+          "RTX paired outputs byte exact. Spark shared-to-isolated PSNR 52.66-53.85 dB, SSIM 0.99836-0.99875; audio exact",
+          "RTX and Spark",
+          "Reject shared-runtime-only as a speed change. Focus the backport on H3 operations and the ggml APIs they require.",
+          "Three fresh processes per variant. Parent to isolated: RTX 1.088x, 8.06% lower; Spark 1.140x, 12.24% lower. Neutral shared-only performance does not prove the required ggml operations are unnecessary."
+        ]
+      ],
+      "details": [
+        [
+          "Provisional optimal set and cumulative result",
+          "On the pinned QVAC engine, retain the memory-fitting H3 configuration and use the global-flash profile as the only established speed candidate: RTX 1.057x and Spark 1.091x versus the original control, with small reviewed video differences and exact audio. The isolated upstream fusion experiment is the strongest engine candidate: RTX 1.082x with exact output and Spark 1.138x with tiny video differences comparable to repeated unchanged runs and exact audio. The directly measured RTX fusion-plus-VAE-only-flash combination reaches 1.163x (14.04% less generation latency), with tiny video differences and exact audio; two additional prompts save 14.93% and 15.19%. Spark saves 23.42% (401.45 to 307.42 s, 1.306x) on three repeated runs of one prompt, with tiny video differences and exact audio. A minimal QVAC backport remains required; RTX ablation attributes the useful gain to the H3-specific changes. <b>Do not multiply these gains:</b> on the newer upstream engine, no-global-flash parent to isolated-plus-global-flash measured 105.39 to 89.58 s (1.176x, 15.00% lower), but changed motion and audio (PSNR 23.68 dB, SSIM 0.8472, audio SNR 10.85 dB). That combination fails the visually identical target. On RTX, fusion alone was byte exact against its already-global-flash parent."
+        ],
+        [
+          "Isolated H3 fusions above 5%: scope and risk",
+          "The tested upstream experiment retains fused SwiGLU, strided QKV views, partial RoPE and AV input-view changes, plus shared runner and ggml changes, while restoring the parent TransformerBlock projection/modulation layout. RTX paired prompt medians are 96.94 to 89.58 s; two additional prompts each had one invocation per variant: 96.82 to 89.15 s and 96.95 to 90.26 s. All five matched AVI comparisons (ten files) are byte exact including audio. On the repeated prompt, sampled GPU peak falls 17292 to 16892 MiB (-400 MiB, -2.31%); process-tree RSS falls 36.273 to 35.877 GB (-1.09%). These are one-second sampled peaks, not allocator-level guarantees. This result is measured on upstream parent 77b72a2e and an isolated variant of <a href=\"https://github.com/leejet/stable-diffusion.cpp/pull/2240\">PR #2240</a>, not on a new QVAC engine package. QVAC has custom H3 GGUF/audio handling, so implementation requires a minimal engine backport, temporary addon overlay validation, then the normal engine/registry/addon sequence. No SDK change is indicated."
+        ],
+        [
+          "Approximate reuse above 5%: why it is rejected",
+          "EasyCache at 0.20 skips one of eight H3 steps; DBCache/TaylorSeer skip two. Their speedups are real, but fixed-seed video motion/detail and audio waveforms change. The more aggressive modes show visible artifacts on both GPUs. In this pinned engine, the two flags reuse whole condition outputs and produce identical files to each other; they are not validated equivalents of every published block-cache algorithm. The logged warmup counter is not enforced by the inspected before-condition reuse path. No cache implementation fix or default change is proposed from these results."
+        ],
+        [
+          "Upstream repeatability and shared-engine validation",
+          "In the Spark confirmation, repeated unchanged parent runs differ at PSNR 52.55-52.90 dB and SSIM 0.99832-0.99841 with exact audio. The isolated candidate versus parent is in the same small-difference range on that prompt: PSNR 52.43-53.07 dB, SSIM 0.99823-0.99850 and exact audio. Two additional prompts give PSNR 55.16 and 52.34 dB with exact audio. The inspected frames show no material visual distinction; this is not a bit-exact guarantee on Spark. Generation medians for the repeated prompt are 341.57 to 300.04 s (12.16% less); the two additional prompt pairs are 342.32 to 301.80 s and 328.21 to 290.04 s. The full PR changes are much larger: PSNR 22.72 dB and audio SNR 6.67 dB against the second parent invocation. The first screening parent timing overlapped task-local CPU conversion; the later confirmations above were collected after conversion. An unrelated-model check also found all-white LTX output on the second invocation of both upstream builds. Consequently an upstream pin update cannot be treated as a validated substitute for a minimal H3 backport."
+        ],
+        [
+          "Cumulative H3 gain: preserve text conditioning",
+          "A separate comparison enables flash attention only in diffusion and the VAE, leaving the text encoder unchanged. The RTX parent uses diffusion-only flash; the isolated candidate adds VAE flash. Generation times are 104.18 to 89.55 s for the repeated prompt, 104.89 to 89.23 s for the teapot and 104.70 to 88.80 s for the robot. The first prompt has three fresh-process measurements per side; the other two each have one. The first baseline ran before the user-requested pause; the two additional paired prompts ran after resume and support the same direction. All five audio comparisons are sample exact. Video PSNR is 52.32-56.23 dB and SSIM 0.99878-0.99929; sampled frames, including native-resolution comparisons, show no visible distinction. This is directly measured cumulative performance, not multiplication of individual gains. Scope would include the minimal H3 engine backport and an independent VAE attention setting in the engine/addon. The pinned engine currently exposes global and diffusion-only booleans; the upstream CLI selector is not an existing QVAC request flag. Spark generation medians are 401.45 to 307.42 s (1.306x, 23.42% less) over three fresh processes. Spark PSNR is 52.55-52.70 dB, SSIM 0.99835-0.99840, and all audio samples match. Sampled frames and a native-resolution comparison show no visible distinction. Two additional Spark prompts are queued, so its current combination evidence is narrower than RTX. For this combined RTX profile, sampled GPU peak falls 400 MiB (2.31%), while process RSS rises from 35.879 to 36.262 GB (+0.383 GB, +1.07%). Spark process RSS rises from 2.592 to 2.771 GB (+0.179 GB, +6.90%); RSS excludes accelerator allocations and is not total UMA usage. It is therefore a measured speed/quality candidate with a small host-memory trade-off, not an improvement in every metric."
+        ],
+        [
+          "Global flash attention: measured scope",
+          "<b>RTX:</b> 120.398 s to 113.872 s. <b>Spark:</b> 659.693 s to 604.903 s. The change is one existing constructor option, <code>flash_attn:true</code>. It selects fused attention in additional engine modules; <code>diffusion_fa:true</code> already selected it for diffusion. VAE medians fell from 25.716 to 19.252 s on RTX and 106.949 to 57.055 s on Spark. No new kernel, engine dependency, SDK API, version or registry pin is required. Baseline/candidate measured ranges were 120.287-120.471 / 113.487-114.108 s on RTX and 651.259-661.465 / 604.847-612.133 s on Spark."
+        ],
+        [
+          "Quality and repeatability",
+          "<b>Spark:</b> PSNR 53.67 dB; SSIM 0.998728; pixel RMSE 0.528/255 (0.207% of full range); audio RMSE 0 in float PCM sample units. <b>RTX:</b> PSNR 53.58 dB; SSIM 0.998652; pixel RMSE 0.534/255 (0.209% of full range); audio RMSE 0 in float PCM sample units. All 124 exported frames and 331200 stereo audio sample values per clip were compared. Two additional Spark prompts improved 661.053 to 619.842 s (6.23%) and 667.320 to 611.614 s (8.35%); each is one request, not a repeated timing median. Their PSNR was 52.50 and 46.71 dB, SSIM 0.998533 and 0.997668, with audio still bit exact. Sampled frames remained visually similar; this is not a universal perceptual guarantee."
+        ],
+        [
+          "Memory limits of the H3 result",
+          "RTX sampled GPU peak was 23740 versus 23728 MiB and host RSS 40.031 versus 39.406 GB. Spark primary RSS was approximately 5.91 GB in both profiles; the system-wide MemAvailable decline was 44.513 versus 46.466 GB (+4.39%), with background model seeding confounding that proxy. These measurements do not establish exact peak UMA parity. Keep the option explicit until memory is validated with allocator-level measurements and longer clips."
+        ],
+        [
+          "SGLang: faster warm requests, larger integration scope",
+          "SGLang Diffusion 0.5.22 produced a 5.17-second clip in a warm median of 172.799 s versus 659.693 s for original resident QVAC (3.82x), or 604.903 s with QVAC attention tuning (3.501x; 71.43% less latency). Load plus the first warmup request was 384.647 versus 611.751 s for attention-tuned QVAC; this is not a disk-cold benchmark. QVAC saved MJPEG/float-PCM AVI, SGLang H.264/AAC MP4. Pixel PSNR 16.26 dB and SSIM 0.5705 describe different realizations and codecs; they do not prove a quality loss or parity. Adopting SGLang requires a separate Python/Torch serving stack. <a href=\"https://github.com/vllm-project/vllm-omni/blob/main/recipes/MiniMaxAI/MiniMax-H3.md\">vLLM-Omni also documents H3</a>, but its GGUF plugin has no matched H3 adapter; no vLLM H3 timing is claimed."
+        ],
+        [
+          "Other-model checks and a minimal implementation boundary",
+          "The same isolated upstream build also ran FLUX on Spark: three fresh generation times give 11.95 to 11.63 s median (1.028x, 2.68% less), with three byte-identical image pairs. Scaled LTX is approximately neutral: 41.33 to 41.00 s (0.80% less). However, repeated unchanged upstream LTX runs on Spark themselves differ substantially (PSNR 23.63 dB and audio SNR 1.20 dB), so that diagnostic does not establish QVAC-quality parity. Unscaled LTX remains invalid. The next implementation should preserve QVAC's custom paths and backport only the required H3 operations, with backend fallback and full addon tests. The pinned ggml already has SwiGLU; the tested partial-RoPE API needs a focused ggml change or a measured fallback. Metal and Vulkan performance still require their own booked-host validation."
+        ]
+      ]
+    },
+    {
+      "title": "2. FLUX.2 / FLUX 3 Klein",
+      "description": "Image generation and reference-based editing. Measured: FLUX.2 Klein 4B Q8 with a Q4 Qwen3 encoder and the standard FLUX.2 VAE. Main comparison: 1024 x 1024, 10 steps, guidance/CFG 1. Additional Spark cases cover 512 x 512, 2048 x 1024, a batch of two and image editing. FLUX 3 Image Klein is a separate, newer model and was not executed. <a href=\"https://github.com/black-forest-labs/flux2\">FLUX.2 source</a>; <a href=\"https://huggingface.co/black-forest-labs/flux-3-image-klein\">FLUX 3 model</a>.",
+      "headers": [
+        "Short name",
+        "Type",
+        "Checked",
+        "Speed effect",
+        "Quality",
+        "HW affected",
+        "Why implement / reject",
+        "Notes"
+      ],
+      "rows": [
+        [
+          "GEMM VAE, no tiling",
+          "Existing CUDA VAE parameter",
+          "V",
+          "RTX: 8.792-8.843 to 2.851-2.860 s; 3.074-3.102x; 67.47-67.76% lower latency. Spark: 40.956-41.052 to 15.405-15.433 s; 2.654-2.665x; 62.32-62.47% lower.",
+          "Reviewed images visually identical; not bit exact. PSNR 58.65-60.31 dB; SSIM 0.99934-0.99959",
+          "FLUX.2 Klein 4B on RTX and Spark; three prompts per host",
+          "Recommend as an explicit CUDA performance profile with a memory budget. Strong repeatable gain.",
+          "vae_conv_direct:false. RTX sampled GPU peak 11356 to 15636 MiB (+4280 MiB, +37.69%). Other family checkpoints require validation."
+        ],
+        [
+          "GEMM with CPU parameters",
+          "Kernel selection + placement",
+          "V",
+          "RTX: 2.62-2.65x versus direct VAE; 61.89-62.21% lower latency<br/>Spark: 0.955-0.959x versus resident GEMM; 4.24-4.70% higher latency",
+          "Byte exact to resident GEMM on both HW; visually identical reviewed RTX samples versus direct VAE",
+          "Both tested; lower-VRAM use case confirmed on RTX",
+          "Recommend an optional lower-VRAM RTX profile; reject it on Spark because it increases latency and host memory.",
+          "RTX: 8.693-8.785 to 3.313-3.320 s; GPU peak -30.20%, host RSS +254.27%, later progress. Spark gains nothing over resident GEMM: keep parameters resident there."
+        ],
+        [
+          "GPU parameter residency",
+          "Memory placement",
+          "V",
+          "RTX: 1.043-1.055x; 4.10-5.17% lower latency",
+          "Output bit exact; 0% changed values",
+          "RTX; not a new resident-default gain",
+          "Keep when capacity permits; already the default, not an additional cumulative gain.",
+          "9.176-9.305 to 8.800-8.830 s across three prompts. Sampled GPU peak 5994 to 11356 MiB (+89.46%)."
+        ],
+        [
+          "Small FLUX.2 decoder",
+          "Distilled VAE checkpoint",
+          "V",
+          "RTX: 2.860/2.859/2.851 to 2.784/2.776/2.784 s; 1.024-1.030x; 2.35-2.90% lower after GEMM. Spark: 15.433/15.433/15.405 to 15.024/15.032/15.044 s; 1.024-1.027x; 2.34-2.65% lower.",
+          "Visually close, not identical: PSNR 35.99-42.85 dB, SSIM 0.9764-0.9850 across both hosts; subtle texture and background tint changes",
+          "Klein 4B on RTX and Spark; three prompts per host",
+          "Optional memory trade-off only; reject automatic replacement for this quality tier.",
+          "RTX GPU peak 15636 to 13802 MiB (-1834 MiB, -11.73%). Authors claim compatibility across open FLUX.2; other checkpoints and FLUX 3 unvalidated."
+        ],
+        [
+          "EasyCache 0.05 / 0.20",
+          "Approximate denoising reuse",
+          "V",
+          "RTX 2.836 to 2.837/2.839 s; Spark 15.388 to 15.281/15.330 s; no reliable gain",
+          "Byte exact; zero skipped steps",
+          "RTX and Spark",
+          "Reject as a performance change: no work saved.",
+          "Tested at 10 steps with the GEMM VAE."
+        ],
+        [
+          "DBCache / TaylorSeer flags",
+          "Approximate denoising reuse",
+          "V",
+          "RTX 2.836 to 1.899/1.900 s (1.493x, about 33% lower). Spark 15.388 to 10.056/10.305 s (1.530/1.493x, 34.65/33.03% lower).",
+          "Visible texture/geometry differences: RTX/Spark PSNR 19.98/19.62 dB; SSIM 0.8066/0.8020",
+          "RTX and Spark",
+          "Reject for the visually identical tier.",
+          "Both modes skip four of ten steps and produce the same output within each host."
+        ],
+        [
+          "Four-step distilled preset",
+          "Sampling parameters",
+          "V",
+          "2.072x; 51.74% lower latency",
+          "Different output; quality parity not established",
+          "Spark only",
+          "Offer only as a clearly labeled sampling choice. Faster, but not the same fixed-seed output or a proven quality-preserving change.",
+          "10 to 4 steps with GEMM VAE. Four steps are recommended for distilled Klein 4B by its authors. This is a sampling trade-off, not a bit-exact kernel optimization."
+        ],
+        [
+          "CUDA graphs / graph optimization",
+          "Build and scheduling parameters",
+          "V",
+          "RTX screen: 2.836 to 2.836 s (1.000x). Spark repeated R1: 1.49-2.12% higher latency; R2 screen approximately neutral.",
+          "Byte exact in tested outputs",
+          "RTX and Spark",
+          "Keep graphs off for this profile; no reliable improvement.",
+          "Nsight confirms graph launches. Additional graph optimization flag: RTX 0.00%, Spark 0.34% lower latency, within noise."
+        ],
+        [
+          "CPU threads / global flash / launch queues",
+          "Runtime parameters",
+          "V",
+          "Thread/flash screens within about 1%. RTX queues: 2.858 to 2.852 s; 1.002x; 0.21% lower. Spark queues: 15.341 to 15.378 s; 0.998x; 0.24% higher.",
+          "Exact output where paired equality was checked",
+          "RTX and Spark",
+          "No default change: effects are too small to justify added complexity.",
+          "Do not add these nominal gains to GEMM speedup."
+        ],
+        [
+          "vLLM-Omni / SGLang",
+          "Alternative runtime",
+          "V",
+          "vLLM: 15.324 to 6.512 s; 2.353x; 57.50% lower warm latency. SGLang inference queued.",
+          "Different RNG/math; perceptual parity not established",
+          "Spark",
+          "Separate serving-stack comparison; not a drop-in native optimization.",
+          "SGLang Q8 layout conversion is reversible and all 169 expected transformer weights passed the real loader probe. Q4 text weights are dequantized to BF16."
+        ],
+        [
+          "GEMM plus actual VAE tiles",
+          "Kernel / memory trade-off",
+          "V",
+          "Spark: 2.446-2.466x; 59.12-59.45% lower latency versus direct VAE",
+          "Rejected for visually identical tier: visible tone/contrast changes",
+          "Spark only",
+          "Reject for the accepted quality tier: visible contrast/tone changes.",
+          "32-latent-pixel tiles, 25% overlap. PSNR 25.60-27.97 dB; SSIM 0.8910-0.9825. Lower memory does not offset this output deviation."
+        ],
+        [
+          "Backend-specific VAE tuning",
+          "Kernel selection / autotuning",
+          "",
+          "X - unmeasured",
+          "Unvalidated",
+          "Future: M3 Metal and Strix Vulkan/ROCm",
+          "Defer hardware conclusions until booked M3 and Strix measurements exist.",
+          "Measure both convolution paths and memory budgets independently. CUDA results cannot choose defaults for other backends."
+        ],
+        [
+          "FLUX 3 compatibility",
+          "Model / loader integration",
+          "",
+          "X - unmeasured",
+          "Unvalidated",
+          "All target HW pending",
+          "Defer to loader/checkpoint integration; FLUX.2 VAE evidence cannot validate a different model.",
+          "FLUX 3 Image Klein uses a different 5.6B model and Qwen3-VL encoder. Current pinned QVAC engine has no FLUX 3 loader; FLUX.2 results do not validate it. The official distilled model uses 16 steps and recommends prompt upsampling; this is a separate workload and integration path."
+        ]
+      ],
+      "details": [
+        [
+          "Provisional optimal set and cumulative result",
+          "Use the standard decoder with <code>vae_conv_direct:false</code> and resident parameters when the GPU memory budget permits. New three-prompt RTX medians are 8.792/8.815/8.843 to 2.860/2.859/2.851 s: 3.074-3.102x, 67.47-67.76% less latency. Spark medians are 40.956/41.032/41.052 to 15.433/15.433/15.405 s: 2.654-2.665x, 62.32-62.47% less latency. Keep the CPU-parameter GEMM profile as a separate RTX low-VRAM option; it is slower on Spark. GEMM plus the small decoder reaches 3.158-3.176x from direct VAE (68.33-68.52% less), but the decoder adds only 2.35-2.90% beyond GEMM and introduces visible texture/tint changes. Spark cumulative direct-to-small results are 2.726-2.730x (63.32-63.37% less), but the decoder adds only 2.34-2.65% beyond GEMM. Thus the reliable quality-preserving set uses GEMM with the standard decoder; caches, tiling and four-step sampling are not silently included."
+        ],
+        [
+          "New FLUX confirmation and approximate combinations",
+          "Standard GEMM versus direct decoding across the new three-prompt RTX run gives PSNR 58.72-60.28 dB, SSIM 0.99935-0.99959 and RMS error 0.247-0.295/255, with maximum channel error 2. Spark gives PSNR 58.65-60.31 dB, SSIM 0.99935-0.99957, RMS error 0.246-0.298/255 and maximum error 3. Each variant is deterministic across its four runs per prompt on each host. The small decoder is 28M rather than 50M parameters and lowers sampled GPU peak by 11.73% versus standard GEMM, but its marginal speed gain is below 3%. DBCache/TaylorSeer reduce denoising work by skipping four of ten steps, giving about 33-35% less incremental latency but visible image changes. Their scope would be request parameters; the small decoder would additionally change the model artefact. Neither belongs in the visually identical default set."
+        ],
+        [
+          "GEMM VAE: what changes and why it is faster",
+          "<b>Original-round evidence:</b> The exact configuration change is <code>vae_conv_direct:false</code>. Instead of the direct 2D convolution path, the existing engine forms convolution patches with im2col and multiplies them through its matrix backend. On RTX, median VAE time fell from 6237.650 to 273.530 ms (95.61% less), and total request latency from 8.800 to 2.786 s (68.34% less). A later matched three-prompt rerun gave 3.12-3.14x, with byte-identical exported outputs to the first comparison. Spark VAE time fell from 27321.766 to 1719.887 ms (93.70% less), and total latency from 40.841 to 15.324 s (62.48% less). Denoising settings and checkpoint weights are unchanged. This is kernel selection, with no new CUDA kernel. Denoising then accounts for roughly 84-87% of generation time, making it the next bottleneck."
+        ],
+        [
+          "Memory and delay: the trade-off",
+          "RTX sampled GPU peak rose from 11356 to 15636 MiB: +4280 MiB (+37.69%). Spark process-tree RSS rose from 1.204 to 2.322 GB (+92.88%); system MemAvailable declined by 13.812 versus 17.779 GB (+28.72% larger decline). RSS is not total UMA allocation, and MemAvailable is a system-wide proxy. One-second sampling may miss short peaks. First-progress time did not improve consistently (RTX photograph 77 to 83 ms); the benefit is time to the actual image. A strict no-memory-regression default is therefore not justified."
+        ],
+        [
+          "A lower-VRAM RTX alternative above 5%",
+          "Combine <code>vae_conv_direct:false</code> with <code>params_backend:\"cpu\"</code>. Parameters stay in host memory while computation runs on CUDA. Across three prompts, adjacent direct-VAE resident controls took 8.693-8.785 s; this profile took 3.313-3.320 s (2.62-2.65x, 61.89-62.21% less latency). Sampled GPU peak fell by 3430 MiB, from 11356 to 7926 MiB (-30.20%). Host RSS rose by 6.647 GB, from 2.614 to 9.262 GB (+254.27%); first progress rose from 77-80 to 302-310 ms. All 12 images were byte-exact to resident GEMM, and the repeated resident/direct outputs matched the previously reviewed files by SHA256. The one comparison below therefore covers both GEMM profiles. Scope: two existing configuration options; no engine/SDK change. This is a host-RAM/VRAM trade-off, not a universal default or an 8 GB card capacity claim."
+        ],
+        [
+          "Spark does not benefit from the RTX placement choice",
+          "On Spark, moving GEMM parameters to CPU storage increased matched three-prompt medians from 15.254-15.318 s to 15.901-16.038 s (+4.24-4.70% latency). All 12 image pairs remained byte exact. RSS rose from 1.196 to 9.216 GB (+670.60%); the system MemAvailable decline was 16.679 versus 17.002 GB, which also shows no memory saving. Spark uses shared memory, so the RTX discrete-VRAM rationale does not transfer. Keep resident GEMM as the faster Spark option; no cross-hardware placement default is proposed."
+        ],
+        [
+          "Exact-output placement alternative",
+          "Changing CPU parameter storage to <code>params_backend:\"cuda0\"</code> removes transfers while preserving all exported bytes. It recovered 4.10-5.17% on RTX across three prompts, with higher VRAM use. Native residency is already the default, so this only improves an explicitly offloaded configuration; it adds no speed to an already resident one."
+        ],
+        [
+          "Quality: what about 59 dB means",
+          "<b>Original-round evidence:</b> Across three RTX text-to-image prompts, PSNR was 59.43-59.82 dB, SSIM 0.999022-0.999585, and pixel RMSE 0.260-0.272 on the 0-255 scale (0.102-0.107% of full range). PSNR = 20 log10(255/RMSE); exactly 59 dB means about 0.29 of one 8-bit level RMS difference. Changed channels were usually off by one level; maximum observed error was three levels. The reviewed images and native crops were visually indistinguishable. This means small numerical differences, not bit-exact output and not a measured percentage of quality loss. There is no universal PSNR threshold for human perception. <a href=\"https://www.cns.nyu.edu/pub/lcv/wang03-preprint.pdf\">Perceptual-metric reference</a>."
+        ],
+        [
+          "Broader workloads and family coverage",
+          "On Spark, GEMM gave 2.477x at 512 x 512 (9.771 to 3.945 s), 2.429x at 2048 x 1024 (91.268 to 37.582 s), and 2.749x for a batch of two 768 x 768 images (44.781 to 16.288 s per request). Text-to-image PSNR was 59.28-59.89 dB across the extended cases. Image editing improved 1.878x (79.097 to 42.112 s, 46.76% less), with PSNR 49.48 dB, SSIM 0.997690 and RMSE 0.857/255 (0.336% of range); the reviewed result remained visually similar, with isolated errors up to 44 levels. Encoding differences can be amplified through denoising, so the 59 dB finding is not an editing guarantee. Only Klein 4B Q8 was measured. Shared FLUX.2 VAE architecture makes wider FLUX.2 applicability plausible, but 9B, base/dev, FLUX.1 and FLUX 3 remain unvalidated."
+        ],
+        [
+          "Code change scope and alternatives",
+          "The feature branch contains the benchmark runner, helper/tests, README and an unapplied H3 research reproduction patch; it does not change production inference. The separate proposal changes <code>ImgStableDiffusion._load()</code> to add <code>vae_conv_direct:false</code> for explicitly selected CUDA FLUX.2 loads when callers have not selected convolution, fallback or precision rules; generated JS and override tests accompany it. That proposal is not promoted: its guard covers more FLUX.2 checkpoints than the tested 4B model, and the memory cost is material. Callers can already opt in with the existing flag. Actual spatial tiling reduced the memory proxy but visibly changed contrast, so it is rejected here. Tile sizes use latent pixels: a 512 setting did not split the tested images and cannot count as tiling validation; actual 32-latent-pixel tiles were tested separately. The <a href=\"https://huggingface.co/black-forest-labs/FLUX.2-small-decoder\">official small decoder</a> was tested in round two and remains an optional memory trade-off, as shown in the table."
+        ],
+        [
+          "Why CUDA graphs stay off",
+          "With the same GEMM VAE and three prompts, medians increased from 15.254/15.277/15.318 s to 15.578/15.595/15.547 s. All 12 PNG pairs were byte exact. A separate Nsight trace of the same 1024 x 1024, 10-step shape observed actual CUDA graph launches; profiler overhead is excluded from the latency figures. This was a real enabled build, not an environment flag applied to a build compiled without graph support. The repeated warmup-reset messages warrant profiling before further graph work; no engine pin or build default is changed."
+        ],
+        [
+          "Runtime and sampling comparisons above 5%",
+          "vLLM-Omni warm median was 6.512 s versus QVAC GEMM 15.324 s (2.353x); load plus the first request was 68.093 versus 17.732 s, so the faster warm path has a startup cost. Images use different RNG/math: PSNR 11.69 dB and SSIM 0.3044 do not measure perceptual parity. Its stack used vLLM 0.32.0, vLLM-Omni 0.1.dev1 and GGUF plugin 0.0.3. The four-step preset changes the trajectory: 15.324 s to 7.396 s (2.072x; 51.74% less latency). Its image is coherent but differs from the ten-step result (PSNR 17.91 dB, SSIM 0.7251); these are deviation metrics, not a quality ranking. SGLang 0.5.22 rejected the original fused-QKV layout. Round two prepared a reversible Q8-block layout conversion and validated every expected transformer weight through its actual GGUF loader. Full inference is queued; the original loader failure remains recorded."
+        ]
+      ]
+    },
+    {
+      "title": "3. LTX",
+      "description": "Joint video and audio generation. Measured: QVAC's LTX-2.3 22B distilled 1.1 Q5_K_M checkpoint, Q4 Gemma3 encoder and matching VAEs/connectors; 512 x 320, 97 frames at 24 fps, 8 steps, CFG 1. This is not a result for every LTX release. Upstream now also publishes LTX-2.5 with changed components. <a href=\"https://huggingface.co/Lightricks/LTX-2.3\">LTX-2.3</a>; <a href=\"https://huggingface.co/Lightricks/LTX-2.5\">LTX-2.5</a>.",
+      "headers": [
+        "Short name",
+        "Type",
+        "Checked",
+        "Speed effect",
+        "Quality",
+        "HW affected",
+        "Why implement / reject",
+        "Notes"
+      ],
+      "rows": [
+        [
+          "GPU parameter residency",
+          "Existing memory-placement parameter",
+          "V",
+          "Spark: 39.777 to 37.802 s; 1.052x; 4.97% lower warm latency. Load plus first output: 56.237 to 44.075 s; 21.63% lower.",
+          "Video and audio byte exact",
+          "Spark; full residency fails allocation on RTX",
+          "Keep Spark resident parameters, already the default. Preserve CPU offload on RTX to fit memory.",
+          "First progress 2.056 to 1.313 s (-36.14%). One prompt, one warmup and three measured requests per side. This is a gain versus explicit offload, not a new gain over the existing default."
+        ],
+        [
+          "Official distilled sigma schedule",
+          "Sampling configuration / addon capability",
+          "V",
+          "RTX upstream CLI generation median: 29.97 to 30.65 s; 0.978x; 2.27% higher latency. Spark: 41.60 to 41.51 s; 1.002x; 0.22% lower, within noise.",
+          "Different scene/audio, not a quality ranking: RTX PSNR 11.27 dB, SSIM 0.3722; Spark PSNR 11.07-11.16 dB, SSIM 0.3818-0.3863",
+          "RTX and Spark",
+          "Reject as a transparent speed change. Consider separately as sampling-correctness / model integration work.",
+          "Three fresh invocations per side with numerical scaling. Earlier native custom_sigmas probes changed nothing: the pinned video addon ignores the parameter. SGLang uses the explicit distilled schedule, so its native-addon comparison is not schedule matched."
+        ],
+        [
+          "Direct vs GEMM 3D convolution",
+          "Newer engine VAE kernels",
+          "V",
+          "RTX generation median: 30.78 to 31.85 s; 0.966x; 3.48% higher latency. Spark: 41.33 to 48.58 s; 0.851x; 17.54% higher.",
+          "RTX PSNR 49.78 dB, SSIM 0.9978; audio SNR 19.81 dB. Spark output varies even without a setting change",
+          "RTX and Spark",
+          "Reject the tested GEMM path: consistently slower on both hosts.",
+          "Three fresh invocations per side with scaling 1/128. Spark paired PSNR 23.23-27.41 dB is confounded by unchanged-parent variation (23.63 dB). Unscaled runs are invalid white video. Distinct from the pinned addon's 2D flag."
+        ],
+        [
+          "Broad upstream engine upgrade",
+          "Engine / ggml update",
+          "V",
+          "X - failed output validation",
+          "Unscaled tests produced 97 all-white frames and saturated audio on both parent and candidate builds",
+          "RTX and Spark",
+          "Reject a broad engine upgrade. Isolate any useful kernels and preserve QVAC behavior.",
+          "Not attributed specifically to H3 PR #2240. Scaling by 1/128 restored valid RTX output, but it differs from QVAC (PSNR 21.40 dB, SSIM 0.7477, audio SNR -1.80 dB). This is a diagnostic recovery, not a validated QVAC upgrade."
+        ],
+        [
+          "Global flash attention",
+          "Existing kernel selection",
+          "V",
+          "RTX: 1.001x; 0.05% lower latency<br/>Spark: 0.981x; 1.91% higher latency",
+          "Video and audio bit exact; 0% changed values",
+          "RTX 5090 and Spark",
+          "Reject: neutral on RTX and slower on Spark.",
+          "No useful gain: effectively neutral on RTX, slightly slower on Spark. Not promoted for LTX."
+        ],
+        [
+          "Full temporal VAE decode",
+          "Decode scheduling / memory trade-off",
+          "V",
+          "RTX three prompts: 13.294/13.237/13.334 to 12.551/12.634/12.685 s; 1.048-1.059x; 4.56-5.59% lower latency. Spark: 37.802/37.935/38.031 to 36.678/36.834/36.877 s; 1.030-1.031x; 2.90-3.03% lower.",
+          "Small video changes; subtle texture/contrast differences. RTX PSNR 43.82-50.71 dB, Spark 44.15-51.05 dB; SSIM 0.99647-0.99786; audio bit exact",
+          "RTX and Spark; three prompts each",
+          "Optional small-change profile for tested short clips; reject as a universal visually identical default.",
+          "temporal_tiling:false. RTX 97-frame GPU peak +164 MiB (+0.81%); process RSS +0.363 GB (+1.00%). A 193-frame RTX check saves 7.06% with +400 MiB GPU memory; larger resolutions remain unvalidated."
+        ],
+        [
+          "EasyCache / DBCache / TaylorSeer",
+          "Approximate denoising reuse",
+          "V",
+          "RTX DBCache/TaylorSeer: 13.316 to 13.196/13.371 s (-0.90%/+0.41% latency); EasyCache: 14.021/14.302 s (+5.29%/+7.40%). Spark: 38.570 to 38.167-38.388 s (0.47-1.04% lower).",
+          "All tested video/audio byte exact; zero skipped steps",
+          "RTX and Spark",
+          "Reject: no denoising work saved, and EasyCache adds overhead on RTX.",
+          "Pinned addon schedule only. Native runs named distilled are ignored-parameter checks, not a second schedule."
+        ],
+        [
+          "CUDA graphs / optimization",
+          "Build / graph scheduling",
+          "V",
+          "RTX: 13.316 to 13.314 s (1.000x); graph optimization 13.438 s (+0.92%). Spark: 38.570 to 38.228 s (-0.89%); graph optimization 38.126 s (-1.15%).",
+          "Byte exact in tested outputs",
+          "RTX and Spark",
+          "No reliable speed recommendation from these single measured requests.",
+          "Actual cudaGraphLaunch verified; profiler timing excluded."
+        ],
+        [
+          "CPU threads / launch queues",
+          "Runtime parameters",
+          "V",
+          "RTX threads 2/16: 13.320/13.352 s versus 13.316 s; queues 13.318 s. Spark threads: 38.309/38.212 s versus 38.570 s. Spark queues: 38.270 to 38.199 s; 0.19% lower.",
+          "Byte exact for tested variants",
+          "RTX and Spark",
+          "Keep current settings; no reliable speed gain.",
+          "No cumulative gain is claimed for timing noise."
+        ],
+        [
+          "Selective RTX GPU residency",
+          "Module-specific parameter placement",
+          "V",
+          "VAE-only: 13.316 to 13.100 s; 1.016x; 1.62% lower latency. DiT profiles: X - allocation failures.",
+          "VAE-only output bit exact; DiT residency fails repeated use",
+          "RTX",
+          "Reject as a speed default. DiT residency is unreliable; VAE-only benefit is small for its VRAM cost.",
+          "VAE-only sampled GPU peak +1384 MiB (+6.81%), host RSS -1.626 GB (-4.53%). DiT-only succeeds once then fails its next request; DiT+VAE and fully resident configurations fail allocation."
+        ],
+        [
+          "2D convolution GEMM flag",
+          "Kernel selection",
+          "V",
+          "Spark: approximately 1.00x; less than 1% difference",
+          "All 12 exported AVI pairs byte identical",
+          "Spark only",
+          "Reject: no useful effect on this decoder.",
+          "vae_conv_direct:false does not deliver FLUX-like gains for the LTX decoder. It is not an accepted LTX optimization."
+        ],
+        [
+          "Forced cuBLAS build",
+          "Matrix backend selection",
+          "V",
+          "Spark: 0.926x; 7.96% higher latency",
+          "Rejected: video/audio differences",
+          "Spark only",
+          "Reject: slower and changes video/audio.",
+          "37.879 to 40.895 s in the original single-prompt comparison. Video PSNR 24.85 dB, SSIM 0.8708; audio SNR -1.28 dB."
+        ],
+        [
+          "SGLang / vLLM-Omni",
+          "Alternative runtime",
+          "V",
+          "X - inference pending",
+          "BF16-from-quantized comparator; not equal quantization or established output parity",
+          "Spark",
+          "Keep separate from implementation recommendations until actual inference and review.",
+          "Native SGLang shapes verified: 4186 DiT tensors, 626 text tensors, 170 video VAE, 102 audio VAE, 1227 vocoder, 262 connectors. Stock LTX GGUF construction fails on unnamed linear layers; BF16 dequantization fallback prepared. vLLM GGUF plugin has no matched LTX adapter."
+        ],
+        [
+          "DiT and 3D VAE kernels",
+          "Engine / backend kernels",
+          "",
+          "X - unmeasured",
+          "Target: same output tolerance",
+          "Future: M3 Metal, Strix Vulkan/ROCm, CUDA",
+          "3D CUDA experiment is listed separately. Metal/Strix-specific kernels remain untested, not rejected.",
+          "DiT denoising is about 70% of Spark generation time: prioritize Q5 matrix/attention kernels, then 3D convolution and temporal allocation. Vulkan stateful decoding already exists; it is not a new gain."
+        ],
+        [
+          "LTX-2.5 compatibility",
+          "Model / loader integration",
+          "",
+          "X - unmeasured",
+          "Unvalidated",
+          "All HW pending",
+          "Separate model upgrade; do not transfer LTX-2.3 findings.",
+          "New Gemma4 encoder and optional diffusion video decoder require separate loader/checkpoint validation. Do not transfer LTX-2.3 speed or quality claims."
+        ],
+        [
+          "Exact stateful decoder on CUDA",
+          "Engine decoder execution policy",
+          "V",
+          "RTX CLI generation: tiled 31.87 to stateful 35.50 s; 0.898x; 11.39% higher latency. Complete decode 30.75 s: stateful is 15.45% slower.",
+          "Small numerical video differences: PSNR 48.44 dB vs tiled, 48.80 dB vs complete; audio bit exact",
+          "RTX; Spark queued",
+          "Reject as a CUDA speed optimization on this workload. The existing Vulkan policy remains separate.",
+          "Research-only hook in the pinned engine, three fresh invocations each; all existing build tests pass. GPU sampled peak unchanged at 19702 MiB; process RSS +0.299 GB (+0.86%) vs tiled. No production policy change."
+        ]
+      ],
+      "details": [
+        [
+          "Provisional optimal set and cumulative result",
+          "Keep resident parameters on Spark and CPU-offloaded parameters on the 32 GB RTX card, with the existing tiled decode path for the strict visual tier. For a small visual-change option on tested 97-frame clips, full temporal decoding saves 4.56-5.59% on RTX with exact audio and a modest measured memory increase. A 193-frame RTX confirmation saves 7.06% with exact audio and small video changes. It is not a universal default: subtle texture/contrast differences remain, and larger workloads need capacity validation. No new exact-output >5% warm native LTX gain has been established. Spark residency alone saves 4.97% versus explicit offload with byte-exact output. Adding full temporal decoding saves another 2.90-3.03% across three prompts. The directly measured cumulative change is 39.777 to 36.678 s (1.084x, 7.79% less warm latency) on one prompt; load plus first output falls 56.237 to 42.962 s (23.61% less). This combined profile has small video differences and exact audio; it does not qualify for the strict visual tier. The schedule and 3D-kernel experiments do not currently justify a production change."
+        ],
+        [
+          "Full temporal decode: measured scope and change",
+          "Set the existing request parameter <code>temporal_tiling:false</code> to decode the complete temporal latent together, avoiding temporal tile overlap work. The RTX confirmation contains three prompts, one warmup and three measured requests per prompt per profile. End-to-end median reductions are 5.59%, 4.56% and 4.87%; VAE time falls from about 3.60-3.62 s to 2.96 s. The first measured request of one full-decode series took 13.807 s; the other two were 12.550/12.551 s, so this is a median throughput benefit, not a tail-latency guarantee. All four outputs within each prompt/profile are byte identical. Across profiles, all 97 frames were compared numerically and audio was sample exact; nine sampled frames per prompt and selected native-resolution frames were inspected. Subtle texture/contrast changes remain. Spark repeats confirm 2.90-3.03% less end-to-end latency across three prompts, with VAE time falling from about 10.0 s to 8.34-8.36 s. Spark video PSNR is 44.15-51.05 dB with exact audio; all four outputs per prompt/profile are byte identical. Its process RSS changes from 5.509 to 5.515 GB (+0.006 GB, +0.11%); this is not total UMA memory. A longer 193-frame RTX clip also completed four requests per profile: median 22.545 to 20.953 s (1.076x, 7.06% less). VAE time falls 7.383 to 5.726 s (22.45% less); video PSNR is 46.39 dB and SSIM 0.99698, with 772800 exact audio sample values. GPU peak rises 20948 to 21348 MiB (+400 MiB, +1.91%) and process RSS 36.204 to 36.597 GB (+0.393 GB, +1.09%). Four outputs per profile are internally byte identical, but cross-profile video is not. Spark long-clip confirmation remains queued. Scope is a documented optional request profile; no kernel, dependency or SDK change is needed. The measured memory values are one-second samples, not worst-case guarantees."
+        ],
+        [
+          "Distilled schedule: effective parameters matter",
+          "The pinned image addon forwards <code>custom_sigmas</code>, but its video handler does not. Native experiments carrying that key therefore repeated the original schedule; their byte equality is not evidence that two schedules are equivalent. A separate upstream CLI test supplied the actual eight-step distilled schedule and changed the generated scene and audio. On RTX, three fresh-process generation medians changed from 29.97 to 30.65 s; process-wall medians changed from 36.325 to 37.079 s. Spark generation medians are 41.60 to 41.51 s, a negligible 0.22% reduction. Neither host shows a reliable speed benefit. The different output is not automatically inferior: schedule correctness and perceptual quality need their own evaluation. Implementing this capability would be an addon change with explicit parameter validation and video forwarding; it is outside the accepted transparent-performance set. SGLang uses the official fixed schedule, so its comparison with the pinned native addon also changes sampling, in addition to runtime and precision."
+        ],
+        [
+          "Attention and temporal decode experiments",
+          "<b>Original-round evidence:</b> <b>Global flash:</b> RTX 13.272 s to 13.265 s; Spark 37.879 s to 38.602 s. <b>Full temporal decode on Spark:</b> 37.879 s to 37.096 s. These use existing options, not new engine kernels. A setting is eligible only if its measured speed, output and memory satisfy the selected quality tier; the measured effects and final recommendation must be read together."
+        ],
+        [
+          "Video and audio quality",
+          "<b>Original-round evidence:</b> <b>Global flash, Spark:</b> Video bit exact: MAE 0/255, 0% changed values, SSIM 1; audio RMSE 0 in float PCM sample units. <b>Global flash, RTX:</b> Video bit exact: MAE 0/255, 0% changed values, SSIM 1; audio RMSE 0 in float PCM sample units. <b>Full temporal decode, Spark:</b> PSNR 48.40 dB; SSIM 0.997254; pixel RMSE 0.969/255 (0.380% of full range); audio RMSE 0 in float PCM sample units. Exact output for placement tuning was checked across all 12 exported AVI pairs from three prompts, including audio."
+        ]
+      ]
+    }
+  ],
+  "validation": [
+    "<b>Branches only; no PRs.</b> The benchmark branch and isolated CUDA-VAE proposal remain separate. The benchmark branch was refreshed from upstream main 1a7d690fc, including diffusion-cpp 0.32.1 and engine package 2026-08-11#8. Native performance measurements use the recorded 0.31.0 addon and engine 4ec33ca2 (#7); they are not relabeled as measurements of the new release. The upstream #8 engine change adds per-device memory-fit reporting; it is distinct from the experimental H3 kernels. No additional production engine pin, SDK API, package dependency, version or changelog change is proposed by this research report.",
+    "<b>Validation status:</b> current benchmark head e9b06f3e0 includes the upstream merge and H3 experimental reproduction patch. It passed 137 Bare tests (519 assertions), 54 Node tests, lint and type checks; lint retains 69 existing JavaScript warnings. <a href=\"https://github.com/tetherto/qvac/actions/runs/40913852390\">The full workflow for this revision passed all 37 executed jobs</a>; 14 unrelated or conditional workflow jobs were skipped by the existing routing. Previous head e7c19f4d2 passed <a href=\"https://github.com/tetherto/qvac/actions/runs/40881116488\">all 37 jobs</a>. This CI validates the benchmark changes and unchanged addon; experimental upstream binaries are validated separately on the booked hosts. The separately isolated default proposal has prior passing validation. The separate proposal head is a47bce0daa6825777a573af8551c1dd27878b085; its earlier <a href=\"https://github.com/tetherto/qvac/actions/runs/40753555832\">37-job workflow passed</a>, but it has not been refreshed or revalidated for this new release. No existing tests were deleted, disabled or weakened; no AWS Device Farm runs were used.",
+    "<b>Coverage:</b> CUDA performance was measured on RTX 5090 (32 GiB-class discrete VRAM) and DGX Spark GB10 (128 GB-class shared memory). CI correctness on another GPU or a Mac does not establish inference performance on M3 Ultra/Pro or Strix Halo. Those measurements remain outstanding.",
+    "<b>Reproduction:</b> addon 0.31.0; engine 4ec33ca21eec64b9778b6fd16d58e88cd501936d; ggml 9f94f330ac196e0a2e3176e798b36226b22091a5. All within-host A/B pairs use identical checkpoint hashes and workloads. The RTX and Spark FLUX Q8 files come from different conversions, so absolute cross-host times are not a controlled hardware comparison. Model transfer/load is separate from generation. Different runtime codecs, RNG and precision paths are identified above.",
+    "<b>Acceptance:</b> no automatic default is promoted on the strength of these runs. A requirement for zero regression in every metric is not yet met: fast settings have memory, progress-delay or numerical-output trade-offs, and M3/Strix inference performance is unmeasured. The benchmark feature branch contains tooling and an unapplied experimental H3 reproduction patch; production inference behavior is unchanged. Rejected builds and visible tiling deviations stay rejected. Cross-runtime output differences need an independent perceptual/prompt-adherence study; PSNR between different generated realizations is not a quality ranking.",
+    "<b>Reproduction bundle:</b> sanitized benchmark JSON inputs and checkpoint SHA256 identities accompany the report. They contain no model weights, host connection details or credentials. Use the feature branch runner and select the permitted physical GPU externally; the inputs use its logical CUDA index.",
+    "<b>Branch readiness and next validation:</b> codex/diffusion-performance is validated benchmark infrastructure and an unapplied research patch, not a production H3 backport. Its measured CUDA candidates are ready to guide the next implementation and Mac Studio investigation; it is not evidence of Metal or Strix performance. On Mac Studio, first establish the same-checkpoint Metal baseline on the current QVAC revision, then compare applicable options with repeated cold/warm latency, first output, memory, and video/audio or image quality checks. Cover multiple prompts, image sizes, image editing where supported, and short/long clips. CUDA-only settings must preserve the Metal path. For H3, implement the focused engine backport and required ggml operations with backend fallbacks, then validate through a temporary addon overlay while preserving QVAC-specific loading/audio behavior. Re-run CUDA controls on that exact implementation revision before claiming the research gains survived integration. After Mac and CUDA acceptance, prepare same-repository PRs and run the complete existing desktop build/unit/integration matrix, including Vulkan correctness. Use the engine, separate registry-pin, then addon sequence if those layers change. A later addon release/version/changelog PR remains separate. No PR is opened in this research step.",
+    "<b>R2 execution limits:</b> RTX LTX follow-ups resumed after verified QVAC registry downloads. Fully resident weights failed allocation on the 32 GB card; RTX uses CPU-offloaded parameters for the paired control. H3 and FLUX three-prompt confirmations are complete on both hosts; additional LTX and combination checks remain in progress. Preparatory CPU conversion overlapped initial upstream screening; the repeated H3 confirmations were collected after conversion. Such screens are not used as final repeated-performance evidence. Current reruns use ordinary local checkpoint files in the test directory.",
+    "<b>Source-only elimination:</b> GGML_CUDA_FORCE_MMQ does not introduce a new dispatch path for these supported quantized tensors on Blackwell: the inspected pinned ggml already selects MMQ when Turing-or-newer tensor-core instructions are available. No additional build or speed claim is made for that flag. Numerical-scaling diagnostics follow the <a href=\"https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/troubleshooting.md\">upstream troubleshooting guidance</a>; white output alone does not prove the root cause."
+  ]
+}
