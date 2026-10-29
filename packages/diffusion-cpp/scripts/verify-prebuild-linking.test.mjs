@@ -236,3 +236,102 @@ test('standalone and integration ELF readers reject the same runtime-symbol fail
     assert.throws(() => read(missingSymbols), /missing or invalid .dynsym/)
   }
 })
+
+async function integrationLayout({
+  arch = 'x64',
+  env = {},
+  cuda = null,
+  addon = ['libc.so.6'],
+  vulkan = ['libvulkan.so.1']
+} = {}) {
+  const file = new URL('../test/integration/prebuild-dynamic-linking.test.js', import.meta.url)
+  const directory = path.dirname(fileURLToPath(file))
+  const target = path.resolve(directory, '../../prebuilds', `linux-${arch}`)
+  const moduleName = `qvac__diffusion-cpp-linux-${arch}`
+  const addonPath = path.join(target, `${moduleName}.bare`)
+  const vulkanPath = path.join(target, moduleName, 'libqvac-diffusion-ggml-vulkan.so')
+  const cudaPath = path.join(target, moduleName, 'libqvac-diffusion-ggml-cuda.so')
+  const files = new Map([
+    [addonPath, elf(addon)],
+    [vulkanPath, elf(vulkan)]
+  ])
+  if (cuda) files.set(cudaPath, elf(cuda))
+  const reads = []
+  const comments = []
+  const failures = []
+  const tests = new Map()
+  const modules = {
+    'bare-path': path,
+    'bare-os': { platform: () => 'linux', arch: () => arch },
+    'bare-process': { env },
+    'bare-fs': {
+      existsSync: (file) => files.has(file),
+      readFileSync(file) {
+        reads.push(file)
+        assert.ok(files.has(file), `must not read a missing module: ${file}`)
+        return files.get(file)
+      }
+    },
+    brittle: (name, ...args) => tests.set(name, args.at(-1))
+  }
+  vm.runInNewContext(fs.readFileSync(file, 'utf8'), {
+    __dirname: directory,
+    require(name) {
+      assert.ok(Object.hasOwn(modules, name), `unexpected module: ${name}`)
+      return modules[name]
+    }
+  })
+  const layout = tests.get(
+    'linux prebuild has no hard GPU-loader deps and ships DL backend modules'
+  )
+  assert.equal(typeof layout, 'function')
+  await layout({
+    ok: (value, message) => assert.ok(value, message),
+    absent: (value, message) => assert.ok(!value, message),
+    alike: (actual, expected, message) =>
+      assert.deepEqual(Array.from(actual), Array.from(expected), message),
+    fail: (message) => failures.push(message),
+    pass() {},
+    comment: (message) => comments.push(message)
+  })
+  return { reads, comments, failures, addonPath, vulkanPath, cudaPath }
+}
+
+for (const arch of ['x64', 'arm64']) {
+  test(`${arch} local integration checks addon and Vulkan without requiring CUDA`, async () => {
+    const result = await integrationLayout({ arch })
+    assert.deepEqual(result.reads, [result.addonPath, result.vulkanPath])
+    assert.deepEqual(result.failures, [])
+    assert.ok(result.comments.some((message) => message.includes('skipping CUDA checks')))
+  })
+
+  for (const env of [{ CI: 'true' }, { QVAC_REQUIRE_CUDA_MODULE: 'true' }]) {
+    test(`${arch} integration reports missing CUDA cleanly with ${JSON.stringify(env)}`, async () => {
+      const result = await integrationLayout({ arch, env })
+      assert.deepEqual(result.reads, [result.addonPath, result.vulkanPath])
+      assert.equal(result.failures.length, 1)
+      assert.match(result.failures[0], /CUDA DL backend module missing/)
+    })
+  }
+
+  test(`${arch} local integration validates CUDA whenever it is present`, async () => {
+    const result = await integrationLayout({ arch, cuda: ['libcudart.so.13'] })
+    assert.deepEqual(result.reads, [result.addonPath, result.vulkanPath, result.cudaPath])
+    assert.deepEqual(result.failures, [])
+    await assert.rejects(
+      integrationLayout({ arch, cuda: ['libcudart.so.13', 'libstdc++.so.6'] }),
+      /CUDA module must not depend on/
+    )
+  })
+}
+
+test('local integration still rejects broken addon or Vulkan linkage without CUDA', async () => {
+  await assert.rejects(
+    integrationLayout({ addon: ['libc.so.6', 'libcudart.so.13'] }),
+    /addon must not hard-link/
+  )
+  await assert.rejects(
+    integrationLayout({ vulkan: ['libvulkan.so.1', 'libstdc++.so.6'] }),
+    /Vulkan module must not depend on/
+  )
+})

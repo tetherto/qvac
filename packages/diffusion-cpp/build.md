@@ -157,24 +157,26 @@ PATH so the Linux triplet resolves the intended compilers. Build native
 CUDA cubins and install the backend modules alongside the addon:
 
 ```bash
-export PATH=/usr/lib/llvm-22/bin:/usr/local/cuda/bin:$PATH
+export CUDA_PATH=/usr/local/cuda-13.0
+export CUDACXX="$CUDA_PATH/bin/nvcc"
+export PATH=/usr/lib/llvm-22/bin:$CUDA_PATH/bin:$PATH
 export CUDAHOSTCXX=/usr/lib/llvm-22/bin/clang++
-export CUDAARCHS=121a # DGX Spark; use 120a for RTX 5090
-export CUDAToolkit_ROOT=/usr/local/cuda
 export VCPKG_ROOT=/path/to/vcpkg
 npm run build:ts
-bare-make generate -D SD_CUDA=ON -D CMAKE_CUDA_ARCHITECTURES="$CUDAARCHS"
+bare-make generate -D SD_CUDA=ON
 bare-make build
 bare-make install
 npm run link:platform
 ```
 
-`CUDAARCHS` also reaches the vcpkg ggml sub-build; the top-level architecture
-flag alone does not configure that separate build. The registry port searches
-`/usr/local/cuda/bin/nvcc` first, so verify the compiler it actually selects in
-the vcpkg logs and ggml `CMakeCache.txt`. The tested Spark toolchain uses LLVM
-22, libc++, CUDA 13.3, and driver 580.178.04. The Linux toolchain supplies
-nvcc's `-allow-unsupported-compiler` flag for the newer Clang host compiler.
+Set `CUDA_PATH` to the actual CUDA 13.0.3 installation (nvcc 13.0.88).
+The registry port honors `CUDACXX` first, then searches `CUDA_PATH` hints,
+the default search including `PATH`, and finally `/usr/local/cuda`. Verify
+the selected compiler in the vcpkg logs and ggml `CMakeCache.txt`.
+The Linux toolchain supplies nvcc's `-allow-unsupported-compiler` flag for
+the newer Clang host compiler. The registry configures the separate ggml
+sub-build's architecture list; a top-level `CMAKE_CUDA_ARCHITECTURES` or
+`CUDAARCHS` setting does not replace that explicit list.
 
 Ensure `libqvac-diffusion-ggml-cuda.so` is installed under
 `prebuilds/linux-arm64/qvac__diffusion-cpp-linux-arm64/` on Spark or
@@ -183,8 +185,9 @@ resolves its CUDA libraries. GPU selection and weight residency are
 independent; the CUDA example explicitly sets both to `cuda0`. See the
 package README's measured CUDA recipe for assets and generation commands.
 
-Release builds retain ggml's non-native architecture list, including both
-SM120a and SM121a, rather than the single-device `CUDAARCHS` setting above.
+The registry uses Fabric's per-platform architecture lists: Linux x64 includes
+SM120a, while Linux ARM64 ships only SM121a. See the README's
+[CUDA architecture table](README.md#building-from-source) for the full lists.
 The existing prebuild workflow enables `SD_CUDA` for both Linux legs and
 packages them together; post-artifact validation requires CUDA and Vulkan
 modules on each leg before the merged artifact can be published.

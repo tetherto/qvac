@@ -174,7 +174,13 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
   }
 
   const cudaPath = path.join(PREBUILDS_DIR, target, moduleName, 'libqvac-diffusion-ggml-cuda.so')
-  t.ok(fs.existsSync(cudaPath), `CUDA DL backend module present: ${cudaPath}`)
+  const requireCuda = proc.env.CI === 'true' || proc.env.QVAC_REQUIRE_CUDA_MODULE === 'true'
+  if (!fs.existsSync(cudaPath)) {
+    if (requireCuda) t.fail(`CUDA DL backend module missing: ${cudaPath}`)
+    else t.comment('CUDA module not built (SD_CUDA=OFF); skipping CUDA checks')
+    return
+  }
+  t.pass(`CUDA DL backend module present: ${cudaPath}`)
   const { needed: cudaNeeded, unresolvedCxx: cudaUnresolvedCxx } = elfInfo(
     fs.readFileSync(cudaPath)
   )
