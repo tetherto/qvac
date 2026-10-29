@@ -24,7 +24,6 @@ using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
 
-
 void requireFile(const std::string& path, const char* what) {
   if (!std::filesystem::exists(path)) {
     throw createTTSError(

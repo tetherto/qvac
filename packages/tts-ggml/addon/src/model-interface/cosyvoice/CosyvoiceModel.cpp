@@ -1,5 +1,4 @@
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
-#include "model-interface/cosyvoice/ForcedSpeechTokens.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -26,6 +25,7 @@
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/PcmConversion.hpp"
 #include "model-interface/StreamingEnhancer.hpp"
+#include "model-interface/cosyvoice/ForcedSpeechTokens.hpp"
 
 namespace qvac::ttsggml::cosyvoice {
 
