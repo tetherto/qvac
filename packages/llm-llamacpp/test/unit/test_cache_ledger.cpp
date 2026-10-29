@@ -1,4 +1,6 @@
 #include <deque>
+#include <filesystem>
+#include <fstream>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -322,6 +324,15 @@ cache::Checkpoint checkpointOver(std::vector<llama_token> tokens) {
   checkpoint.ledger = cache::fromTokens(tokens);
   return checkpoint;
 }
+
+qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry
+ramEntryOver(std::vector<llama_token> tokens) {
+  qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry entry;
+  entry.state.assign(16, 0);
+  const auto count = static_cast<llama_pos>(tokens.size());
+  entry.ledgerWords = cache::serialize(cache::fromTokens(tokens), count, count);
+  return entry;
+}
 } // namespace
 
 // Trimmable memory serves the whole shared prefix, wherever it diverges.
@@ -360,19 +371,11 @@ TEST(CacheSourceSelection, UntrimmableMemoryNeedsAPrefixOrACheckpoint) {
 TEST(CacheSourceSelection, RamTierLendsItsLongestPrefixWithoutGivingItUp) {
   using qvac_lib_inference_addon_llama::batching::SlotStateCache;
   using qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry;
-  const auto entryOver = [](std::vector<llama_token> tokens) {
-    SlotStateCacheEntry entry;
-    entry.state.assign(16, 0);
-    const auto count = static_cast<llama_pos>(tokens.size());
-    entry.ledgerWords =
-        cache::serialize(cache::fromTokens(tokens), count, count);
-    return entry;
-  };
   SlotStateCache tier(1 << 20);
-  ASSERT_TRUE(tier.insert("short", entryOver({1, 2})));
-  ASSERT_TRUE(tier.insert("long", entryOver({1, 2, 3, 4, 8})));
-  ASSERT_TRUE(tier.insert("other", entryOver({5, 6, 7})));
-  SlotStateCacheEntry broken = entryOver({1, 2, 3});
+  ASSERT_TRUE(tier.insert("short", ramEntryOver({1, 2})));
+  ASSERT_TRUE(tier.insert("long", ramEntryOver({1, 2, 3, 4, 8})));
+  ASSERT_TRUE(tier.insert("other", ramEntryOver({5, 6, 7})));
+  SlotStateCacheEntry broken = ramEntryOver({1, 2, 3});
   broken.ledgerWords.back() ^= 1;
   ASSERT_TRUE(tier.insert("broken", std::move(broken)));
 
@@ -397,4 +400,41 @@ TEST(CacheSourceSelection, RamTierLendsItsLongestPrefixWithoutGivingItUp) {
   EXPECT_EQ(lent(prompt, true, 4), 0u) << "nothing serves more than 4";
   EXPECT_EQ(lent(cache::fromTokens({9}), true, 0), 0u);
   EXPECT_EQ(tier.size(), 4u);
+}
+
+// A conversation whose file its caller deleted was dropped: its RAM-tier entry
+// lends nothing, while one whose file is still there does.
+TEST(CacheSourceSelection, RamTierLendsNothingWhoseFileWasDeleted) {
+  namespace fs = std::filesystem;
+  using qvac_lib_inference_addon_llama::batching::SlotStateCache;
+  using qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry;
+  const fs::path dir = fs::temp_directory_path() / "ram_tier_deleted_file";
+  fs::create_directories(dir);
+  const std::string kept = (dir / "kept.bin").string();
+  const std::string deleted = (dir / "deleted.bin").string();
+  for (const auto& path : {kept, deleted}) {
+    std::ofstream(path, std::ios::binary) << "state";
+  }
+  SlotStateCache tier(1 << 20);
+  SlotStateCacheEntry shorter = ramEntryOver({1, 2});
+  shorter.activeCacheSavedToDisk = true;
+  SlotStateCacheEntry longer = ramEntryOver({1, 2, 3, 4});
+  longer.activeCacheSavedToDisk = true;
+  ASSERT_TRUE(tier.insert(kept, std::move(shorter)));
+  ASSERT_TRUE(tier.insert(deleted, std::move(longer)));
+  fs::remove(deleted);
+
+  size_t lent = 0;
+  EXPECT_TRUE(tier.useLongestPrefix(
+      cache::fromTokens({1, 2, 3, 4, 5}),
+      true,
+      0,
+      [&lent](const SlotStateCacheEntry& entry) {
+        lent = cache::deserialize(
+                   entry.ledgerWords.data(), entry.ledgerWords.size())
+                   .ledger.entries.size();
+        return true;
+      }));
+  EXPECT_EQ(lent, 2u) << "the entry whose file was deleted was lent";
+  fs::remove_all(dir);
 }

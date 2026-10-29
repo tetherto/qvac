@@ -112,8 +112,9 @@ public:
   /// Hands `use` the entry with the longest `cache::reusablePrefix` of
   /// `prompt` when it exceeds `minimum`, under the lock; the newest wins a
   /// tie. The entry stays in place: a request that starts from another
-  /// conversation copies it. Returns what `use` returned, or false when no
-  /// entry qualified.
+  /// conversation copies it. An entry whose file its caller deleted is
+  /// skipped: that conversation was dropped. Returns what `use` returned, or
+  /// false when no entry qualified.
   bool useLongestPrefix(
       const cache::Ledger& prompt, bool trimmable, size_t minimum,
       const std::function<bool(const SlotStateCacheEntry&)>& use) {
@@ -122,6 +123,10 @@ public:
     size_t bestReusable = minimum;
     for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
       const SlotStateCacheEntry& entry = it->second;
+      if (entry.activeCacheSavedToDisk &&
+          CacheManager::persistedBackingStoreMissing(it->first)) {
+        continue;
+      }
       try {
         const cache::DecodedLedger decoded = cache::deserialize(
             entry.ledgerWords.data(), entry.ledgerWords.size());
