@@ -273,6 +273,16 @@ IPC reads/writes also run on the main thread. An in-flight frame finishes before
 cancellation releases the write lock; a write failure or 10-second write timeout
 closes the connection rather than letting later requests use a partial frame.
 
+`QvacWorkerService` is declared `android:exported="false"` in the library
+manifest and has no intent filter, so Android only lets components running
+under the owning application's UID bind it. There is no cross-application
+caller, so the Binder surface carries no authentication token; the
+per-session token described under Desktop JVM applies to the loopback TCP
+transport only. Keep `android:exported="false"` when merging the manifest
+(do not override it with `tools:replace`). Exporting the service, or sharing
+it across applications through a shared UID, would need an explicit caller
+check before dispatch, which the service does not implement.
+
 The committed `qvac.config*.json` files define the immutable published profiles.
 The Gradle `aio`, `assistant`, `llm`, `speech`, `vision`, `media`, and `robotics`
 product flavors build those profiles reproducibly. Pass `-PqvacProfile=<name>` to
