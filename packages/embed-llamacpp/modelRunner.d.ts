@@ -1,6 +1,6 @@
 import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
-import { type AddonOutputCallback, type LoadWeightsData } from "./addon";
+import { type AddonOutputCallback } from "./addon";
 /** A native event normalized by a model's event mapper. */
 export type MappedModelEvent<Output> = {
     type: "JobEnded";
@@ -23,8 +23,6 @@ export interface ModelConfigurationParams<Config> {
 /** The binding calls every native model instance shares. */
 export interface ModelBinding {
     activate(handle: unknown): Promise<void> | void;
-    /** @deprecated Always throws ERR_WEIGHT_STREAMING_UNSUPPORTED. */
-    loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
     cancel(handle: unknown): Promise<void>;
     destroyInstance(handle: unknown): void;
 }
@@ -42,15 +40,13 @@ export declare abstract class ModelInterface<Config, Binding extends ModelBindin
      */
     protected abstract _createInstance(configurationParams: ModelConfigurationParams<Config>, outputCb: AddonOutputCallback): object;
     cancel(): Promise<void>;
-    /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
-    loadWeights(_data: LoadWeightsData): Promise<void>;
     activate(): Promise<void>;
     unload(): Promise<void>;
 }
 export interface ModelRunnerArgs<Config> {
     /** One absolute disk path, or only the first shard path. Weight streaming is unsupported. */
     files: {
-        model: string[];
+        model: [string];
     };
     /** Required, with at least `device`. */
     config: Config;

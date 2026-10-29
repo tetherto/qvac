@@ -2,7 +2,7 @@ import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { type Addon, type EmbedRunInput, type GGMLConfig } from "./addon";
 export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon, EmbedMediaPart, EmbedInputPart, EmbedMultimodalInput, EmbedBatchInput, EmbedRunInput, } from "./addon";
-export { BertInterface, pickPrimaryGgufPath } from "./addon";
+export { BertInterface, validateModelPath } from "./addon";
 export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type { LayaConfig, LayaRequest, LayaSingleRequest, LayaBatchRequest, LayaQuestion, LayaChoiceQuestion, LayaScoreQuestion, LayaNoulQuestion, LayaState, LayaCriterion, LayaResponse, LayaResult, LayaAnswer, LayaChoiceAnswer, LayaScoreAnswer, LayaNoulAnswer, LayaUsage, LayaDecisionsArgs, } from "./laya";
 export { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
@@ -20,7 +20,7 @@ export interface GGMLBertArgs {
      * EmbeddingGemma 2.
      */
     files: {
-        model: string[];
+        model: [string];
         projectionModel?: string;
     };
     config?: GGMLConfig;

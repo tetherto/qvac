@@ -1,22 +1,11 @@
-#include <filesystem>
-#include <fstream>
 #include <functional>
-#include <future>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <set>
 #include <string>
-#include <thread>
 
 #include <gtest/gtest.h>
 #include <llama-cpp.h>
 
-#include "model-interface/LlamaModel.hpp"
 #include "model-interface/ModelMetadata.hpp"
 #include "test_common.hpp"
-
-namespace fs = std::filesystem;
 
 // ---- Common types ----
 
@@ -50,16 +39,14 @@ protected:
         MP("Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf",
            "SHARDED_MODEL_FIRST_SHARD_PATH",
            MP::OnMissing::Skip,
-           "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ-1_S-sharded",
-           true /* isSharded */);
+           "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ-1_S-sharded");
 
     // https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded
     bitnetModelSharded_ =
         MP("bitnet_b1_58-large-TQ2_0-00001-of-00008.gguf",
            nullptr,
            MP::OnMissing::Skip,
-           "https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded",
-           true /* isSharded */);
+           "https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded");
   }
 
   test_common::TestModelPath normalModel_;
@@ -80,39 +67,8 @@ protected:
     check(meta);
   }
 
-  void parseDiskShards(
-      const std::string& path, const GGUFShards&, MetaChecker check) {
+  void parseDiskShards(const std::string& path, MetaChecker check) {
     parseDiskSingleFile(path, check);
-  }
-
-  void expectStreamingRejected(const std::string& path) {
-    LlamaModel model(std::string(path), std::string(), {{"device", "cpu"}});
-    EXPECT_THROW(
-        model.setWeightsForFile(
-            fs::path(path).filename().string(),
-            std::make_unique<std::stringbuf>("weights")),
-        qvac_errors::StatusError);
-    EXPECT_FALSE(model.isLoaded());
-  }
-
-  void parseStreamingSingleFile(const std::string& path, MetaChecker check) {
-    expectStreamingRejected(path);
-    parseDiskSingleFile(path, check);
-  }
-
-  void parseStreamingShards(
-      const std::string& path, const GGUFShards&, MetaChecker check) {
-    expectStreamingRejected(path);
-    parseDiskSingleFile(path, check);
-  }
-
-  void parseAsyncLoaderSingleFile(const std::string& path, MetaChecker check) {
-    parseStreamingSingleFile(path, check);
-  }
-
-  void parseAsyncLoaderShards(
-      const std::string& path, const GGUFShards& shards, MetaChecker check) {
-    parseStreamingShards(path, shards, check);
   }
 };
 
@@ -138,68 +94,16 @@ TEST_F(
 
 TEST_F(ModelMetadataTest, DiskShards_NormalModel_HasOneBitQuantizationFalse) {
   REQUIRE_MODEL(normalModelSharded_);
-  parseDiskShards(
-      normalModelSharded_.path,
-      normalModelSharded_.shards,
-      [](const ModelMetaData& meta) {
-        EXPECT_FALSE(meta.hasOneBitQuantization());
-      });
-}
-
-TEST_F(ModelMetadataTest, DiskShards_BitnetModel_HasOneBitQuantizationTrue) {
-  REQUIRE_MODEL(bitnetModelSharded_);
-  parseDiskShards(
-      bitnetModelSharded_.path,
-      bitnetModelSharded_.shards,
-      [](const ModelMetaData& meta) {
-        EXPECT_TRUE(meta.hasOneBitQuantization());
-      });
-}
-
-// ---- Streaming single file ----
-
-TEST_F(
-    ModelMetadataTest,
-    RejectedStreamingSingleFile_NormalModel_HasOneBitQuantizationFalse) {
-  REQUIRE_MODEL(normalModel_);
-  parseStreamingSingleFile(normalModel_.path, [](const ModelMetaData& meta) {
+  parseDiskShards(normalModelSharded_.path, [](const ModelMetaData& meta) {
     EXPECT_FALSE(meta.hasOneBitQuantization());
   });
 }
 
-TEST_F(
-    ModelMetadataTest,
-    RejectedStreamingSingleFile_BitnetModel_HasOneBitQuantizationTrue) {
-  REQUIRE_MODEL(bitnetModel_);
-  parseStreamingSingleFile(bitnetModel_.path, [](const ModelMetaData& meta) {
+TEST_F(ModelMetadataTest, DiskShards_BitnetModel_HasOneBitQuantizationTrue) {
+  REQUIRE_MODEL(bitnetModelSharded_);
+  parseDiskShards(bitnetModelSharded_.path, [](const ModelMetaData& meta) {
     EXPECT_TRUE(meta.hasOneBitQuantization());
   });
-}
-
-// ---- Streaming shards ----
-
-TEST_F(
-    ModelMetadataTest,
-    RejectedStreamingShards_NormalModel_HasOneBitQuantizationFalse) {
-  REQUIRE_MODEL(normalModelSharded_);
-  parseStreamingShards(
-      normalModelSharded_.path,
-      normalModelSharded_.shards,
-      [](const ModelMetaData& meta) {
-        EXPECT_FALSE(meta.hasOneBitQuantization());
-      });
-}
-
-TEST_F(
-    ModelMetadataTest,
-    RejectedStreamingShards_BitnetModel_HasOneBitQuantizationTrue) {
-  REQUIRE_MODEL(bitnetModelSharded_);
-  parseStreamingShards(
-      bitnetModelSharded_.path,
-      bitnetModelSharded_.shards,
-      [](const ModelMetaData& meta) {
-        EXPECT_TRUE(meta.hasOneBitQuantization());
-      });
 }
 
 // ---- tryGetString: architecture detection via "general.architecture" ----
@@ -223,102 +127,6 @@ TEST_F(ModelMetadataTest, DiskSingleFile_BitnetModel_ArchitectureIsBitnet) {
     ASSERT_TRUE(arch.has_value());
     EXPECT_EQ(arch.value(), "bitnet");
   });
-}
-
-TEST_F(
-    ModelMetadataTest,
-    RejectedStreamingSingleFile_NormalModel_ArchitectureIsNotBitnet) {
-  REQUIRE_MODEL(normalModel_);
-  parseStreamingSingleFile(normalModel_.path, [](const ModelMetaData& meta) {
-    auto arch = meta.tryGetString("general.architecture");
-    ASSERT_TRUE(arch.has_value());
-    EXPECT_NE(arch.value(), "bitnet");
-  });
-}
-
-TEST_F(
-    ModelMetadataTest,
-    RejectedStreamingSingleFile_BitnetModel_ArchitectureIsBitnet) {
-  REQUIRE_MODEL(bitnetModel_);
-  parseStreamingSingleFile(bitnetModel_.path, [](const ModelMetaData& meta) {
-    auto arch = meta.tryGetString("general.architecture");
-    ASSERT_TRUE(arch.has_value());
-    EXPECT_EQ(arch.value(), "bitnet");
-  });
-}
-
-// ---- Removed streaming rejects; disk metadata stays readable ----
-
-TEST_F(
-    ModelMetadataTest,
-    RejectedAsyncLoader_SingleFile_NormalModel_DiskMetadataRemainsReadable) {
-  REQUIRE_MODEL(normalModel_);
-  parseAsyncLoaderSingleFile(normalModel_.path, [](const ModelMetaData& meta) {
-    EXPECT_FALSE(meta.hasOneBitQuantization());
-  });
-}
-
-TEST_F(
-    ModelMetadataTest,
-    RejectedAsyncLoader_SingleFile_BitnetModel_DiskMetadataRemainsReadable) {
-  REQUIRE_MODEL(bitnetModel_);
-  parseAsyncLoaderSingleFile(bitnetModel_.path, [](const ModelMetaData& meta) {
-    EXPECT_TRUE(meta.hasOneBitQuantization());
-  });
-}
-
-TEST_F(ModelMetadataTest, RejectedStreaming_DoesNotRequireOrPopulateMetadata) {
-  REQUIRE_MODEL(normalModel_);
-  expectStreamingRejected(normalModel_.path);
-  ModelMetaData meta;
-  EXPECT_FALSE(meta.tryGetU32("general.file_type").has_value());
-  meta.parse(normalModel_.path, "Test");
-  EXPECT_TRUE(meta.tryGetU32("general.file_type").has_value());
-}
-
-// ---- AsyncWeightsLoader: streaming shards ----
-
-TEST_F(
-    ModelMetadataTest, RejectedAsyncLoader_Shards_NormalModel_MetadataParsed) {
-  REQUIRE_MODEL(normalModelSharded_);
-  parseAsyncLoaderShards(
-      normalModelSharded_.path,
-      normalModelSharded_.shards,
-      [](const ModelMetaData& meta) {
-        EXPECT_FALSE(meta.hasOneBitQuantization());
-      });
-}
-
-TEST_F(
-    ModelMetadataTest, RejectedAsyncLoader_Shards_BitnetModel_MetadataParsed) {
-  REQUIRE_MODEL(bitnetModelSharded_);
-  parseAsyncLoaderShards(
-      bitnetModelSharded_.path,
-      bitnetModelSharded_.shards,
-      [](const ModelMetaData& meta) {
-        EXPECT_TRUE(meta.hasOneBitQuantization());
-      });
-}
-
-TEST_F(ModelMetadataTest, RejectedStreaming_ShardsDoNotStartBackgroundLoading) {
-  REQUIRE_MODEL(normalModelSharded_);
-  LlamaModel model(
-      std::string(normalModelSharded_.path),
-      std::string(),
-      {{"device", "cpu"}});
-  for (const char* name :
-       {"model.tensors.txt",
-        "model-00001-of-00003.gguf",
-        "model-00002-of-00003.gguf"}) {
-    EXPECT_THROW(
-        model.setWeightsForFile(
-            name, std::make_unique<std::stringbuf>("weights")),
-        qvac_errors::StatusError);
-  }
-  EXPECT_FALSE(model.isLoaded());
-  ModelMetaData meta;
-  meta.parse(normalModelSharded_.path, "Test");
-  EXPECT_TRUE(meta.tryGetString("general.architecture").has_value());
 }
 
 // ---- Disk single file – isU32OneOf: quantization per architecture ----

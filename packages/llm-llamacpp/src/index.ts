@@ -358,7 +358,7 @@ function normalizeFinetuneParams(opts: FinetuneOptions): FinetuneParamsPayload {
  * Validates the single disk path. For a sharded GGUF, pass only the first
  * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-function pickPrimaryGgufPath(files: string[]): string {
+function validateModelPath(files: string[]): string {
   if (!Array.isArray(files) || files.length === 0) {
     throw new TypeError("files.model must contain one absolute disk path");
   }
@@ -445,14 +445,14 @@ interface LlmLlamacpp {
 interface LlmLlamacppConstructor {
   new (args: LlmLlamacppArgs): LlmLlamacpp;
   readonly prototype: LlmLlamacpp;
-  /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
-  readonly pickPrimaryGgufPath: typeof pickPrimaryGgufPath;
+  /** Validates and returns the single absolute disk path; split models require the first shard. */
+  readonly validateModelPath: typeof validateModelPath;
   readonly assessFit: typeof assessFitImpl;
 }
 
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
-  static readonly pickPrimaryGgufPath = pickPrimaryGgufPath;
+  static readonly validateModelPath = validateModelPath;
   static readonly assessFit = assessFitImpl;
   // Attached for tests; untyped because `typeof QvacResponse` is not nameable by consumers.
   static readonly QvacResponse = QvacResponse;
@@ -474,7 +474,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   private _checkpointSaveDir: string | null;
 
   constructor({ files, config, logger = null, opts = {} }: LlmLlamacppArgs) {
-    this._modelPath = pickPrimaryGgufPath(files?.model);
+    this._modelPath = validateModelPath(files?.model);
     if (files.projectionModel !== undefined) {
       if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
         throw new TypeError("files.projectionModel must be an absolute path string");
@@ -1065,11 +1065,6 @@ namespace LlmLlamacpp {
   export type AddonBatchRunResult = AddonModule.AddonBatchRunResult;
 
   export interface Addon {
-    /** @deprecated Weight streaming was removed. Always rejects; use files.model with one disk path. */
-    loadWeights(
-      data: { filename: string; chunk: Uint8Array | null; completed: boolean },
-      logger?: QvacLogger,
-    ): Promise<void>;
     activate(): Promise<void>;
     /** Single-request admission: resolves the accepted flag plus the native-assigned job id. */
     runJob(data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
@@ -1370,7 +1365,7 @@ namespace LlmLlamacpp {
 
   export interface LlmLlamacppArgs {
     /** One absolute disk path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported. */
-    files: { model: string[]; projectionModel?: string };
+    files: { model: [string]; projectionModel?: string };
     config: LlamaConfig;
     logger?: QvacLogger | Console | null;
     /**
@@ -1770,7 +1765,7 @@ export = LlmLlamacpp;
 
 // Runtime-redundant: ESM named imports need the top-level `module.exports.X =` form.
 /* eslint-disable @typescript-eslint/no-unsafe-member-access -- `module.exports` is untyped CommonJS surface. */
-module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+module.exports.validateModelPath = validateModelPath;
 module.exports.assessFit = assessFitImpl;
 module.exports.QvacResponse = QvacResponse;
 /* eslint-enable @typescript-eslint/no-unsafe-member-access */

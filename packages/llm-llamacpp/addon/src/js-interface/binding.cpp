@@ -3,17 +3,6 @@
 
 #include "../addon/AddonJs.hpp"
 
-namespace {
-js_value_t* rejectWeightStreaming(js_env_t* env, js_callback_info_t*) {
-  js_throw_error(
-      env,
-      "ERR_WEIGHT_STREAMING_UNSUPPORTED",
-      "Weight streaming is no longer supported. Pass a disk path; for a "
-      "sharded model, pass only the first shard path.");
-  return nullptr;
-}
-} // namespace
-
 js_value_t*
 qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
   if (!qvacAddonBindFabric()) {
@@ -37,7 +26,6 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
   V("createInstance", qvac_lib_inference_addon_llama::createInstance)
   V("runJob", qvac_lib_inference_addon_llama::runJob)
 
-  V("loadWeights", rejectWeightStreaming)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
   V("activeJobs", qvac_lib_inference_addon_cpp::JsInterface::activeJobs)
   V("activeSlots", qvac_lib_inference_addon_llama::activeSlots)

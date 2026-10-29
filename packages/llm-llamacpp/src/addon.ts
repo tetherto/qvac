@@ -69,13 +69,6 @@ export type AddonBatchRunResult =
     }
   | { accepted: false; id?: never; ids: string[] };
 
-/** @deprecated Weight streaming was removed. Kept only to report a migration error. */
-export interface LoadWeightsData {
-  filename: string;
-  chunk: Uint8Array | null;
-  completed: boolean;
-}
-
 export interface AddonConfigurationParams {
   path: string;
   projectionPath: string;
@@ -97,8 +90,6 @@ export interface LlamaBinding {
     outputCallback: AddonOutputCallback,
     reserved: null,
   ): object;
-  /** @deprecated Always throws ERR_WEIGHT_STREAMING_UNSUPPORTED. */
-  loadWeights(handle: unknown, data: LoadWeightsData): Promise<void> | void;
   activate(handle: unknown): Promise<void> | void;
   activeJobs(handle: unknown): number;
   activeSlots(handle: unknown): number;
@@ -204,15 +195,6 @@ export class LlamaInterface {
     }
 
     this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
-  }
-
-  /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
-  loadWeights(_weightsData: LoadWeightsData): Promise<void> {
-    void _weightsData;
-    return Promise.reject(Object.assign(
-      new Error("Weight streaming is no longer supported. Pass a disk path; for a sharded model, pass only the first shard path."),
-      { code: "ERR_WEIGHT_STREAMING_UNSUPPORTED" },
-    ));
   }
 
   /**

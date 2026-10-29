@@ -209,8 +209,3 @@ async function runRerankTest (options = {}) { // eslint-disable-line no-unused-v
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runRerankTest')) return __FILTERED
   return runIntegrationModule('../integration/rerank.test.js', options)
 }
-
-async function runWeightLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runWeightLoadingTest')) return __FILTERED
-  return runIntegrationModule('../integration/weight-loading.test.js', options)
-}

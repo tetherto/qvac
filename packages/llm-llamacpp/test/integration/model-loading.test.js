@@ -1,5 +1,7 @@
 'use strict'
 
+const binding = require('../../binding.js')
+
 const test = require('brittle')
 
 const LlmLlamacpp = require('../../index.js')
@@ -176,4 +178,22 @@ test(
 // which can cause segfaults (exit code 139)
 setImmediate(() => {
   setTimeout(() => {}, 500)
+})
+
+test('native binding does not expose weight streaming', function (t) {
+  t.is(binding.loadWeights, undefined)
+})
+
+// prestage-ignore: missing-model-00001-of-10000000.gguf — intentionally missing path for the allocation regression
+test('oversized shard count in a missing disk filename does not allocate shard names', async function (t) {
+  const model = new LlmLlamacpp({
+    files: { model: [path.resolve(__dirname, 'missing-model-00001-of-10000000.gguf')] },
+    config: { device: 'cpu', gpu_layers: '0', ctx_size: '256' }
+  })
+  try {
+    await t.exception(() => model.load(), /Failed to read GGUF metadata from disk/)
+    t.is(model.getState().configLoaded, false)
+  } finally {
+    await model.unload()
+  }
 })

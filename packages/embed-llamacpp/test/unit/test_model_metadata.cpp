@@ -1,14 +1,14 @@
 #include <chrono>
 #include <filesystem>
-#include <fstream>
 #include <memory>
-#include <thread>
+#include <sstream>
 
 #include <ggml.h>
 #include <gguf.h>
 #include <gtest/gtest.h>
 
-#include "model-interface/BertModel.hpp"
+#include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/LlamaModelLoader.hpp"
 #include "model-interface/ModelMetadata.hpp"
 
 namespace fs = std::filesystem;
@@ -34,16 +34,6 @@ std::string findTestModelPath() {
     }
   }
   return "";
-}
-
-std::unique_ptr<std::basic_streambuf<char>>
-readFileToStreambufBinary(const std::string& path) {
-  auto filebuf = std::make_unique<std::filebuf>();
-  if (filebuf->open(path, std::ios::in | std::ios::binary) == nullptr) {
-    return nullptr;
-  }
-  filebuf->pubseekpos(0, std::ios::in);
-  return filebuf;
 }
 
 } // namespace
@@ -84,44 +74,6 @@ TEST_F(ModelMetadataTest, TryGetU32ReturnsNulloptForUnknownKey) {
   meta.parse(test_model_path_, "Test");
 
   EXPECT_FALSE(meta.tryGetU32("definitely.not.a.real.key").has_value());
-}
-
-TEST_F(ModelMetadataTest, RejectedStreamingLeavesDiskMetadataReadable) {
-  if (!fs::exists(test_model_path_)) {
-    GTEST_SKIP() << "Test model not found at: " << test_model_path_;
-  }
-
-  ModelMetaData diskMeta;
-  diskMeta.parse(test_model_path_, "Test");
-  std::optional<std::string> diskArch =
-      diskMeta.tryGetString("general.architecture");
-  ASSERT_TRUE(diskArch.has_value());
-  const std::string contextLengthKey = *diskArch + ".context_length";
-  std::optional<uint32_t> diskCtx =
-      diskMeta.tryGetU32(contextLengthKey.c_str());
-  ASSERT_TRUE(diskCtx.has_value());
-
-  std::unique_ptr<std::basic_streambuf<char>> streambuf =
-      readFileToStreambufBinary(test_model_path_);
-  ASSERT_NE(streambuf, nullptr);
-  BertModel model(test_model_path_, {{"device", "cpu"}});
-  EXPECT_THROW(
-      model.setWeightsForFile("test-model.gguf", std::move(streambuf)),
-      qvac_errors::StatusError);
-  EXPECT_FALSE(model.isLoaded());
-  ModelMetaData streamMeta;
-  streamMeta.parse(test_model_path_, "Test");
-
-  std::optional<std::string> streamArch =
-      streamMeta.tryGetString("general.architecture");
-  ASSERT_TRUE(streamArch.has_value());
-  EXPECT_EQ(*streamArch, *diskArch);
-  std::optional<uint32_t> streamCtx =
-      streamMeta.tryGetU32(contextLengthKey.c_str());
-  ASSERT_TRUE(streamCtx.has_value());
-  EXPECT_EQ(*streamCtx, *diskCtx);
-
-  EXPECT_EQ(streamMeta.hasAnyTensor({"token_embd.weight"}), true);
 }
 
 TEST_F(ModelMetadataTest, PoolingTypeAndTensorsFromDisk) {
@@ -202,4 +154,19 @@ TEST_F(DiskShardMetadataTest, FilenameCannotOverrideHeaderShardCount) {
   meta.parse(misleading.string(), "Test");
   EXPECT_EQ(meta.hasAnyTensor({"token_embd.weight"}), true);
   EXPECT_FALSE(meta.hasAnyTensor({"cls.weight"}).has_value());
+}
+
+TEST(LlamaModelLoaderTest, RejectsWeightBuffersBeforeDiskLoading) {
+  LlamaModelLoader loader(
+      {}, "model-00001-of-00003.gguf", {{"device", "cpu"}}, "");
+  EXPECT_THROW(
+      loader.setWeightsForFile(
+          "model.tensors.txt", std::make_unique<std::stringbuf>("tensors")),
+      qvac_errors::StatusError);
+  EXPECT_THROW(
+      loader.setWeightsForFile(
+          "model-00001-of-00003.gguf",
+          std::make_unique<std::stringbuf>("weights")),
+      qvac_errors::StatusError);
+  EXPECT_FALSE(loader.isLoaded());
 }

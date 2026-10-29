@@ -7,7 +7,6 @@ endif()
 add_executable(
   addon-test
   test_addon_cpp.cpp
-  test_async_weights_loader.cpp
   test_backend_selection.cpp
   test_cancel_stale_flag.cpp
   test_bert_model.cpp

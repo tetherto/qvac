@@ -24,11 +24,6 @@ class ModelInterface {
             return;
         await this._binding.cancel(this._handle);
     }
-    /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
-    loadWeights(_data) {
-        void _data;
-        return Promise.reject(Object.assign(new Error("Weight streaming is no longer supported. Pass a disk path; for a sharded model, pass only the first shard path."), { code: "ERR_WEIGHT_STREAMING_UNSUPPORTED" }));
-    }
     async activate() {
         return this._binding.activate(this._handle);
     }
@@ -59,7 +54,7 @@ class ModelRunner {
     _run;
     _hasActiveResponse;
     constructor({ files, config = {}, logger = null, opts = {} }) {
-        this._modelPath = (0, addon_1.pickPrimaryGgufPath)(files?.model);
+        this._modelPath = (0, addon_1.validateModelPath)(files?.model);
         this._config = config;
         this.logger = new QvacLogger(logger);
         this.opts = opts;

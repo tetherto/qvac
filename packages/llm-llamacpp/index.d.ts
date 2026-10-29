@@ -18,7 +18,7 @@ type RunOptions = LlmLlamacpp.RunOptions;
  * Validates the single disk path. For a sharded GGUF, pass only the first
  * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-declare function pickPrimaryGgufPath(files: string[]): string;
+declare function validateModelPath(files: string[]): string;
 interface LlmLlamacpp {
     /** The native addon, or `null` before `load()` and after `unload()`. Advanced/test access only. */
     addon: LlmLlamacpp.Addon | null;
@@ -76,8 +76,8 @@ interface LlmLlamacpp {
 interface LlmLlamacppConstructor {
     new (args: LlmLlamacppArgs): LlmLlamacpp;
     readonly prototype: LlmLlamacpp;
-    /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
-    readonly pickPrimaryGgufPath: typeof pickPrimaryGgufPath;
+    /** Validates and returns the single absolute disk path; split models require the first shard. */
+    readonly validateModelPath: typeof validateModelPath;
     readonly assessFit: typeof assessFitImpl;
 }
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
@@ -102,12 +102,6 @@ declare namespace LlmLlamacpp {
      */
     type AddonBatchRunResult = AddonModule.AddonBatchRunResult;
     interface Addon {
-        /** @deprecated Weight streaming was removed. Always rejects; use files.model with one disk path. */
-        loadWeights(data: {
-            filename: string;
-            chunk: Uint8Array | null;
-            completed: boolean;
-        }, logger?: QvacLogger): Promise<void>;
         activate(): Promise<void>;
         /** Single-request admission: resolves the accepted flag plus the native-assigned job id. */
         runJob(data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
@@ -406,7 +400,7 @@ declare namespace LlmLlamacpp {
     interface LlmLlamacppArgs {
         /** One absolute disk path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported. */
         files: {
-            model: string[];
+            model: [string];
             projectionModel?: string;
         };
         config: LlamaConfig;

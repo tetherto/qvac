@@ -11,7 +11,6 @@
 
 #include <gtest/gtest.h>
 
-#include "inference-addon-cpp/GGUFShards.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/ModelMetadata.hpp"
 
@@ -130,9 +129,8 @@ struct BaseTestModelPath {
  * covering both single-file and sharded GGUF layouts.
  *
  * Construction resolves the path once: it checks @p envVar first, then
- * looks for @p filename under BaseTestModelPath. When @p isSharded is true
- * the shard list is also expanded via GGUFShards::expandGGUFIntoShards().
- * Shard fixture paths are resolved relative to the first shard's directory.
+ * looks for @p filename under BaseTestModelPath. Sharded models use only
+ * the first shard path; Fabric discovers the remaining files.
  *
  * Use REQUIRE_MODEL() in the test body to skip or fail automatically when
  * the model is absent.
@@ -144,7 +142,7 @@ struct BaseTestModelPath {
  *
  * Sharded example:
  *   TestModelPath m("my-model-00001-of-00008.gguf", "MY_SHARD_PATH",
- *                   TestModelPath::OnMissing::Skip, "https://...", true);
+ *                   TestModelPath::OnMissing::Skip, "https://...");
  */
 struct TestModelPath {
   enum class OnMissing { Fail, Skip };
@@ -154,16 +152,14 @@ struct TestModelPath {
   std::string envVar;   ///< Env-var name shown in the diagnostic (may be "").
   std::string hfUrl;   ///< HuggingFace URL shown in the diagnostic (may be "").
   OnMissing onMissing; ///< Whether to FAIL or GTEST_SKIP when absent.
-  bool isSharded;      ///< True when the model is split across multiple files.
-  GGUFShards shards;   ///< Absolute fixture paths when isSharded.
 
-  TestModelPath() : onMissing(OnMissing::Skip), isSharded(false) {}
+  TestModelPath() : onMissing(OnMissing::Skip) {}
 
   TestModelPath(
       const char* filename, const char* envVar, OnMissing onMissing,
-      const char* hfUrl = "", bool isSharded = false)
+      const char* hfUrl = "")
       : filename(filename), envVar(envVar ? envVar : ""), hfUrl(hfUrl),
-        onMissing(onMissing), isSharded(isSharded) {
+        onMissing(onMissing) {
     const char* env = envVar ? std::getenv(envVar) : nullptr;
     if (env && fs::exists(env)) {
       path = env;
@@ -172,24 +168,9 @@ struct TestModelPath {
       if (fs::exists(p))
         path = p;
     }
-    if (isSharded && !path.empty()) {
-      shards = GGUFShards::expandGGUFIntoShards(path);
-      const auto baseDir = fs::path(path).parent_path();
-      for (auto& shard : shards.gguf_files) {
-        shard = (baseDir / shard).string();
-      }
-      shards.tensors_file = (baseDir / shards.tensors_file).string();
-    }
   }
 
-  /**
-   * Returns true when the model is ready to use.
-   * For sharded models this requires at least one shard to have been
-   * resolved; for single-file models a non-empty path suffices.
-   */
-  [[nodiscard]] bool found() const {
-    return isSharded ? !shards.gguf_files.empty() : !path.empty();
-  }
+  [[nodiscard]] bool found() const { return !path.empty(); }
 
   [[nodiscard]] std::string missingMessage() const {
     std::string msg = filename + " not found";
@@ -236,15 +217,6 @@ private:
   bool oneBitQuant_;
   std::string arch_;
 };
-
-inline std::unique_ptr<std::basic_streambuf<char>>
-readFileToStreambufBinary(const std::string& path) {
-  auto buf = std::make_unique<std::filebuf>();
-  if (!buf->open(path, std::ios::binary | std::ios::in)) {
-    return nullptr;
-  }
-  return buf;
-}
 
 } // namespace test_common
 

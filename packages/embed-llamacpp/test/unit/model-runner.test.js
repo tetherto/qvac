@@ -23,10 +23,6 @@ function fakeBinding({ accept = true, activateError = null } = {}) {
       binding.calls.push('activate')
       return activateError ? Promise.reject(activateError) : Promise.resolve()
     },
-    loadWeights() {
-      binding.calls.push('loadWeights')
-      return Promise.resolve()
-    },
     cancel() {
       binding.calls.push('cancel')
       return Promise.resolve()

@@ -12,7 +12,7 @@ import {
 import {
   BertInterface,
   mapAddonEvent,
-  pickPrimaryGgufPath,
+  validateModelPath,
   toBertJobInput,
   type Addon,
   type AddonConfigurationParams,
@@ -35,7 +35,7 @@ export type {
   EmbedBatchInput,
   EmbedRunInput,
 } from "./addon";
-export { BertInterface, pickPrimaryGgufPath } from "./addon";
+export { BertInterface, validateModelPath } from "./addon";
 export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type {
   LayaConfig,
@@ -86,7 +86,7 @@ export interface GGMLBertArgs {
    * embed images and audio, for multimodal embedding models such as
    * EmbeddingGemma 2.
    */
-  files: { model: string[]; projectionModel?: string };
+  files: { model: [string]; projectionModel?: string };
   config?: GGMLConfig;
   logger?: QvacLogger | Console | null;
   opts?: { stats?: boolean };
@@ -108,7 +108,7 @@ export class GGMLBert {
   private _hasActiveResponse: boolean;
 
   constructor({ files, config = {} as GGMLConfig, logger = null, opts = {} }: GGMLBertArgs) {
-    this._modelPath = pickPrimaryGgufPath(files?.model);
+    this._modelPath = validateModelPath(files?.model);
     if (files.projectionModel !== undefined) {
       if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
         throw new TypeError("files.projectionModel must be an absolute path string");
@@ -299,7 +299,7 @@ export default GGMLBert;
 
 const cjsExports = GGMLBert as typeof GGMLBert & {
   default?: typeof GGMLBert;
-  pickPrimaryGgufPath?: typeof pickPrimaryGgufPath;
+  validateModelPath?: typeof validateModelPath;
   GGMLBert?: typeof GGMLBert;
   BertInterface?: typeof BertInterface;
   LayaDecisions?: typeof LayaDecisions;
@@ -311,7 +311,7 @@ const cjsExports = GGMLBert as typeof GGMLBert & {
   assessFit?: typeof assessFitImpl;
 };
 cjsExports.default = GGMLBert;
-cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+cjsExports.validateModelPath = validateModelPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = BertInterface;
 cjsExports.LayaDecisions = LayaDecisions;

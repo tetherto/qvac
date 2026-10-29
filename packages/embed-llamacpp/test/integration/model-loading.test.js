@@ -1,5 +1,9 @@
 'use strict'
 
+const binding = require('../../binding.js')
+const test = require('brittle')
+const { LayaDecisions, Reranker } = require('../../index.js')
+
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
@@ -122,3 +126,23 @@ safeTest(
     }
   }
 )
+
+test('native binding does not expose weight streaming', function (t) {
+  t.is(binding.loadWeights, undefined)
+})
+
+// prestage-ignore: missing-model-00001-of-10000000.gguf — intentionally missing path for the allocation regression
+test('all model classes reject missing disk filenames without expanding oversized shard counts', async function (t) {
+  for (const Model of [GGMLBert, LayaDecisions, Reranker]) {
+    const model = new Model({
+      files: { model: [path.resolve(__dirname, 'missing-model-00001-of-10000000.gguf')] },
+      config: { device: 'cpu', gpu_layers: '0' }
+    })
+    try {
+      await t.exception(() => model.load(), /Failed to read GGUF metadata from disk/)
+      t.is(model.getState().configLoaded, false)
+    } finally {
+      await model.unload()
+    }
+  }
+})

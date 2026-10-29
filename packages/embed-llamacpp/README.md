@@ -121,8 +121,7 @@ the GGUF metadata, discovers the remaining shards and reads their weights.
 No JavaScript weight buffers or `.tensors.txt` file are needed.
 
 Passing multiple paths or weight buffers is rejected. Migrate an old all-files
-list to `[firstShardPath]`. The legacy `loadWeights()` method always rejects
-with `ERR_WEIGHT_STREAMING_UNSUPPORTED`; it does not forward buffers to Fabric.
+list to `[firstShardPath]`. The `loadWeights()` API has been removed.
 This removes model-weight streaming, while generated output still streams as before.
 
 ```js

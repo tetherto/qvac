@@ -43,7 +43,6 @@ add_executable(
   test_log_safe_string.cpp
   test_stop_string_match.cpp
   test_llama_lazy_init_backend.cpp
-  test_borrow_tracked_shared_buffer.cpp
   test_continuous_batching_default.cpp
   test_continuous_batch_finalize.cpp
   test_batch_entry_guard.cpp

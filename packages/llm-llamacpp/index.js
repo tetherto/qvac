@@ -242,7 +242,7 @@ function normalizeFinetuneParams(opts) {
  * Validates the single disk path. For a sharded GGUF, pass only the first
  * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-function pickPrimaryGgufPath(files) {
+function validateModelPath(files) {
     if (!Array.isArray(files) || files.length === 0) {
         throw new TypeError("files.model must contain one absolute disk path");
     }
@@ -273,7 +273,7 @@ function sanitizePromptForLog(prompt) {
 }
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp = class LlmLlamacpp {
-    static pickPrimaryGgufPath = pickPrimaryGgufPath;
+    static validateModelPath = validateModelPath;
     static assessFit = fit_1.assessFit;
     // Attached for tests; untyped because `typeof QvacResponse` is not nameable by consumers.
     static QvacResponse = infer_base_1.QvacResponse;
@@ -292,7 +292,7 @@ const LlmLlamacpp = class LlmLlamacpp {
     _batchHandler;
     _checkpointSaveDir;
     constructor({ files, config, logger = null, opts = {} }) {
-        this._modelPath = pickPrimaryGgufPath(files?.model);
+        this._modelPath = validateModelPath(files?.model);
         if (files.projectionModel !== undefined) {
             if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
                 throw new TypeError("files.projectionModel must be an absolute path string");
@@ -817,7 +817,7 @@ const LlmLlamacpp = class LlmLlamacpp {
 };
 // Runtime-redundant: ESM named imports need the top-level `module.exports.X =` form.
 /* eslint-disable @typescript-eslint/no-unsafe-member-access -- `module.exports` is untyped CommonJS surface. */
-module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+module.exports.validateModelPath = validateModelPath;
 module.exports.assessFit = fit_1.assessFit;
 module.exports.QvacResponse = infer_base_1.QvacResponse;
 module.exports = LlmLlamacpp;

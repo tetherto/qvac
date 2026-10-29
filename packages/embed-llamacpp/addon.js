@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BertInterface = void 0;
 exports.toBertJobInput = toBertJobInput;
 exports.mapAddonEvent = mapAddonEvent;
-exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+exports.validateModelPath = validateModelPath;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path uses CommonJS.
 const path = require("bare-path");
 function isMediaPart(part) {
@@ -109,7 +109,7 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
  * Validates the single disk path. For a sharded GGUF, pass only the first
  * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-function pickPrimaryGgufPath(files) {
+function validateModelPath(files) {
     if (!Array.isArray(files) || files.length === 0) {
         throw new TypeError("files.model must contain one absolute disk path");
     }
@@ -151,11 +151,6 @@ class BertInterface {
      */
     async runJob(data) {
         return this._binding.runJob(this._handle, data);
-    }
-    /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
-    loadWeights(_data) {
-        void _data;
-        return Promise.reject(Object.assign(new Error("Weight streaming is no longer supported. Pass a disk path; for a sharded model, pass only the first shard path."), { code: "ERR_WEIGHT_STREAMING_UNSUPPORTED" }));
     }
     /** Activates the model to start processing the queue. */
     async activate() {

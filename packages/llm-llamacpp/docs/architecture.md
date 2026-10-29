@@ -415,7 +415,7 @@ graph TB
 `LlamaModel` reads metadata from the supplied disk path and calls Fabric's
 `common_init_from_params()`. Fabric discovers disk shards from the first GGUF.
 There is no addon-side weight-buffer queue, shard-name expansion or metadata
-handoff worker. The legacy `loadWeights()` binding rejects immediately.
+handoff worker. The native binding no longer exports `loadWeights()`.
 
 #### **CacheManager (model-interface/CacheManager.cpp)**
 
@@ -641,8 +641,7 @@ the GGUF metadata, discovers the remaining shards and reads their weights.
 No JavaScript weight buffers or `.tensors.txt` file are needed.
 
 Passing multiple paths or weight buffers is rejected. Migrate an old all-files
-list to `[firstShardPath]`. The legacy `loadWeights()` method always rejects
-with `ERR_WEIGHT_STREAMING_UNSUPPORTED`; it does not forward buffers to Fabric.
+list to `[firstShardPath]`. The `loadWeights()` API has been removed.
 This removes model-weight streaming, while generated output still streams as before.
 
 
@@ -654,8 +653,7 @@ both single-file and split models, so Fabric owns file discovery and weight
 reading. The addon does not expand a filename into a list of shard names.
 
 The old buffer-loading implementation and its first-shard handoff worker have
-been removed. `loadWeights()` remains only as a migration error, including at
-the native binding, and never accepts or retains a weight buffer.
+been removed. `loadWeights()` is no longer exposed by either the JS or native API.
 
 ## Decision 5: Chat Message Format (JSON Serialization)
 

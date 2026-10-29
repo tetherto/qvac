@@ -848,7 +848,7 @@ TEST_F(BertModelTest, ContextOverflowUsesRuntimeContextSizeForSequences) {
       { model.encodeHostF32Sequences(sequences); }, qvac_errors::StatusError);
 }
 
-TEST_F(BertModelTest, RejectedStreamingKeepsDiskContextCap) {
+TEST_F(BertModelTest, DiskLoadKeepsTrainedContextCap) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -857,18 +857,6 @@ TEST_F(BertModelTest, RejectedStreamingKeepsDiskContextCap) {
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
 
-  std::unique_ptr<std::filebuf> filebuf = std::make_unique<std::filebuf>();
-  ASSERT_NE(
-      filebuf->open(getValidModelPath(), std::ios::in | std::ios::binary),
-      nullptr);
-  filebuf->pubseekpos(0, std::ios::in);
-  std::unique_ptr<std::basic_streambuf<char>> sb(std::move(filebuf));
-
-  const std::string filename =
-      fs::path(getValidModelPath()).filename().string();
-  EXPECT_THROW(
-      model.setWeightsForFile(filename, std::move(sb)),
-      qvac_errors::StatusError);
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());

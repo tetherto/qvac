@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GGMLBert = exports.assessFit = exports.mapRerankEvent = exports.RerankInterface = exports.Reranker = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.pickPrimaryGgufPath = exports.BertInterface = void 0;
+exports.GGMLBert = exports.assessFit = exports.mapRerankEvent = exports.RerankInterface = exports.Reranker = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.validateModelPath = exports.BertInterface = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
@@ -12,7 +12,7 @@ const laya_1 = require("./laya");
 const rerank_1 = require("./rerank");
 var addon_2 = require("./addon");
 Object.defineProperty(exports, "BertInterface", { enumerable: true, get: function () { return addon_2.BertInterface; } });
-Object.defineProperty(exports, "pickPrimaryGgufPath", { enumerable: true, get: function () { return addon_2.pickPrimaryGgufPath; } });
+Object.defineProperty(exports, "validateModelPath", { enumerable: true, get: function () { return addon_2.validateModelPath; } });
 var laya_2 = require("./laya");
 Object.defineProperty(exports, "LayaDecisions", { enumerable: true, get: function () { return laya_2.LayaDecisions; } });
 Object.defineProperty(exports, "LayaInterface", { enumerable: true, get: function () { return laya_2.LayaInterface; } });
@@ -37,7 +37,7 @@ class GGMLBert {
     _run;
     _hasActiveResponse;
     constructor({ files, config = {}, logger = null, opts = {} }) {
-        this._modelPath = (0, addon_1.pickPrimaryGgufPath)(files?.model);
+        this._modelPath = (0, addon_1.validateModelPath)(files?.model);
         if (files.projectionModel !== undefined) {
             if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
                 throw new TypeError("files.projectionModel must be an absolute path string");
@@ -204,7 +204,7 @@ exports.GGMLBert = GGMLBert;
 exports.default = GGMLBert;
 const cjsExports = GGMLBert;
 cjsExports.default = GGMLBert;
-cjsExports.pickPrimaryGgufPath = addon_1.pickPrimaryGgufPath;
+cjsExports.validateModelPath = addon_1.validateModelPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = addon_1.BertInterface;
 cjsExports.LayaDecisions = laya_1.LayaDecisions;

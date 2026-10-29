@@ -8,9 +8,8 @@ import {
   type QvacResponse,
 } from "@qvac/infer-base";
 import {
-  pickPrimaryGgufPath,
+  validateModelPath,
   type AddonOutputCallback,
-  type LoadWeightsData,
 } from "./addon";
 
 /** A native event normalized by a model's event mapper. */
@@ -28,8 +27,6 @@ export interface ModelConfigurationParams<Config> {
 /** The binding calls every native model instance shares. */
 export interface ModelBinding {
   activate(handle: unknown): Promise<void> | void;
-  /** @deprecated Always throws ERR_WEIGHT_STREAMING_UNSUPPORTED. */
-  loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
   cancel(handle: unknown): Promise<void>;
   destroyInstance(handle: unknown): void;
 }
@@ -67,15 +64,6 @@ export abstract class ModelInterface<Config, Binding extends ModelBinding> {
     await this._binding.cancel(this._handle);
   }
 
-  /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
-  loadWeights(_data: LoadWeightsData): Promise<void> {
-    void _data;
-    return Promise.reject(Object.assign(
-      new Error("Weight streaming is no longer supported. Pass a disk path; for a sharded model, pass only the first shard path."),
-      { code: "ERR_WEIGHT_STREAMING_UNSUPPORTED" },
-    ));
-  }
-
   async activate(): Promise<void> {
     return this._binding.activate(this._handle);
   }
@@ -90,7 +78,7 @@ export abstract class ModelInterface<Config, Binding extends ModelBinding> {
 
 export interface ModelRunnerArgs<Config> {
   /** One absolute disk path, or only the first shard path. Weight streaming is unsupported. */
-  files: { model: string[] };
+  files: { model: [string] };
   /** Required, with at least `device`. */
   config: Config;
   logger?: QvacLogger | Console | null;
@@ -128,7 +116,7 @@ export abstract class ModelRunner<
   protected abstract readonly _modelName: string;
 
   constructor({ files, config = {} as Config, logger = null, opts = {} }: ModelRunnerArgs<Config>) {
-    this._modelPath = pickPrimaryGgufPath(files?.model);
+    this._modelPath = validateModelPath(files?.model);
     this._config = config;
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
     this.opts = opts;

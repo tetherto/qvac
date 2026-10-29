@@ -1174,8 +1174,7 @@ TEST_F(LlamaModelTest, DiskShardedModelReloadsAfterRejectedStreaming) {
       "Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf",
       "SHARDED_MODEL_FIRST_SHARD_PATH",
       MP::OnMissing::Fail,
-      "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded",
-      true);
+      "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded");
   REQUIRE_MODEL(shardedModel);
   LlamaModel model(
       std::string(shardedModel.path),

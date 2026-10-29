@@ -1,11 +1,22 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.diskPathTypes = diskPathTypes;
 exports.pollingTypes = pollingTypes;
 exports.layaTypes = layaTypes;
 exports.rerankerTypes = rerankerTypes;
 const embed_llamacpp_1 = require("@qvac/embed-llamacpp");
 const rootConstructor = embed_llamacpp_1.default;
 void rootConstructor;
+function diskPathTypes() {
+    for (const Model of [embed_llamacpp_1.default, embed_llamacpp_1.LayaDecisions, embed_llamacpp_1.Reranker]) {
+        // @ts-expect-error model weights must be one disk path
+        void new Model({ files: { model: ['/abs/first.gguf', '/abs/second.gguf'] }, config: { device: 'cpu' } });
+        // @ts-expect-error an empty model list is not a disk path
+        void new Model({ files: { model: [] }, config: { device: 'cpu' } });
+        // @ts-expect-error weight buffers are not disk paths
+        void new Model({ files: { model: [new Uint8Array(8)] }, config: { device: 'cpu' } });
+    }
+}
 function pollingTypes(model) {
     return new embed_llamacpp_1.default({
         files: { model: [model] },
