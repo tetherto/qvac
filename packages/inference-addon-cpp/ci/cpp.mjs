@@ -27,7 +27,17 @@ export function pinnedCmake(env = process.env) {
     mkdirSync(root, { recursive: true })
     const url = `https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/${name}.zip`
     run('curl', ['-fsSL', '--retry', '3', url, '-o', join(root, `${name}.zip`)], root, env)
-    run('tar', ['-xf', `${name}.zip`], root, env)
+    // Expand-Archive as main did: the tar first on the runner's PATH may be GNU tar, which cannot read a zip.
+    run(
+      'powershell',
+      [
+        '-NoProfile',
+        '-Command',
+        `Expand-Archive -LiteralPath '${name}.zip' -DestinationPath . -Force`
+      ],
+      root,
+      env
+    )
   }
   return prependPath(env, join(root, name, 'bin'))
 }

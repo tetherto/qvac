@@ -60,7 +60,7 @@ jobs:
           package-json-file: src/package.json
       - uses: ./.github/actions/setup-vulkan
         with:
-          arch: ${{ matrix.row.arch }}
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
       - uses: ./.github/actions/vcpkg-bootstrap
       - uses: ./.github/actions/vcpkg-cache-setup
         with:

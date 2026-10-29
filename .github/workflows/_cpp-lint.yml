@@ -68,7 +68,7 @@ jobs:
           package-json-file: src/package.json
       - uses: ./.github/actions/setup-vulkan
         with:
-          arch: ${{ matrix.row.arch }}
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
       # A provider's exported CMake config may find_dependency its toolkits, so the host's are here plus the configuration's.
       - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'cuda') || contains(matrix.row.setup, 'cuda')
         uses: ./.github/actions/setup-cuda
