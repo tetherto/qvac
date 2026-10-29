@@ -99,13 +99,6 @@ MtmdLlmContext::MtmdLlmContext(
   initializeCommonState();
 }
 
-MtmdLlmContext::~MtmdLlmContext() {
-  // See ~TextLlmContext.
-  if (llamaInit_ && modelCtx_.lctx != nullptr) {
-    llama_synchronize(modelCtx_.lctx);
-  }
-}
-
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void MtmdLlmContext::initializeCommonState() {
   if (modelCtx_.model == nullptr) {
