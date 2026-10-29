@@ -14,6 +14,20 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 512 }
   },
 
+  // Keeps its multi-token-prediction layers, for speculative decoding.
+  'llm-mtp': {
+    constant: { $const: 'QWEN3_5_0_8B_MTP_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { verbosity: 0, ctx_size: 2048 }
+  },
+
+  // The same model without its MTP layers, drafted for by `llm-mtp`'s head.
+  'llm-no-mtp': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { verbosity: 0, ctx_size: 2048 }
+  },
+
   'llm-batch': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llm',
@@ -57,6 +71,13 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'llamacpp-embedding'
   },
 
+  // The reranker the addon's own tests use, pinned until a reranker is in the registry.
+  rerank: {
+    modelSrc:
+      'https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf',
+    type: 'llamacpp-rerank'
+  },
+
   whisper: {
     constant: { $const: 'WHISPER_TINY' },
     type: 'whispercpp-transcription',
@@ -86,6 +107,18 @@ export const RESOURCE_TABLE: ResourceTable = {
     constant: { $const: 'QWEN3_1_7B_INST_Q4' },
     type: 'llamacpp-completion',
     config: { ctx_size: 4096, tools: true }
+  },
+
+  'prefill-llm': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { ctx_size: 4096, tools: true, parallel: 1 }
+  },
+
+  'prefill-llm-parallel': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { ctx_size: 4096, tools: true, parallel: 2 }
   },
 
   'tools-qwen35': {
@@ -448,6 +481,31 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: {}
   },
 
+  'parakeet-transcribepsy': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0' },
+    type: 'parakeet-transcription',
+    config: {}
+  },
+
+  // The same GGUF with explicit 15 s long-form windows (188 encoder frames) and
+  // 1.28 s of context on each side, so a fixture longer than one window is
+  // encoded in pieces and stitched back together.
+  'parakeet-transcribepsy-windowed': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0' },
+    type: 'parakeet-transcription',
+    config: { longFormWindowFrames: 188, longFormContextFrames: 16 }
+  },
+
+  // The Core ML distribution: an encoder-less GGUF whose encoder and decoder
+  // bundles the loader stages beside it on macOS and iOS. Anywhere else the
+  // load is refused, so the key exists only where it can load.
+  'parakeet-transcribepsy-coreml': {
+    on: ['desktop-macos', 'electron-macos', 'mobile-ios'],
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0' },
+    type: 'parakeet-transcription',
+    config: {}
+  },
+
   bci: {
     // Defined on every leg: `model-fit-bci` assesses the load without running it. Mobile
     // never loads it, so it must not pay for the weights.
@@ -571,6 +629,22 @@ export const RESOURCE_TABLE: ResourceTable = {
       threads: 4,
       prediction: 'v',
       params_backend: 'vae=cpu',
+      upscaler: {
+        type: 'esrgan',
+        model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },
+        tile_size: 128
+      }
+    }
+  },
+
+  'diffusion-esrgan-fit-probe': {
+    on: ['desktop'],
+    constant: { $const: 'SD_V2_1_1B_Q8_0' },
+    type: 'sdcpp-generation',
+    config: {
+      device: 'gpu',
+      threads: 4,
+      prediction: 'v',
       upscaler: {
         type: 'esrgan',
         model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },

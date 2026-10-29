@@ -233,8 +233,7 @@ export function toSdkChatArgs(body: ChatCompletionsBody): SdkChatArgs {
         extractGenerationParams(body as Record<string, unknown>, 'max_completion_tokens'),
         extractToolChoice(body as Record<string, unknown>, tools)
       ),
-      body.parallel_tool_calls,
-      tools
+      body.parallel_tool_calls
     ),
     responseFormat: responseFmt,
     stream: Boolean(body.stream)

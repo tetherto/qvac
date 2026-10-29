@@ -11,6 +11,7 @@ const { builtinModules } = require('node:module')
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const PACKAGE_NAME = '@qvac/translation-nmtcpp'
+const PATCHED_BROTLI_BASELINE = '61d7eaeb094a6acbc23d9c2e54de9208175fda47'
 const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const BARE_COMMAND = process.platform === 'win32' ? 'bare.cmd' : 'bare'
 const JAVASCRIPT_FILE_PATTERN = /\.(?:cjs|js|mjs)$/
@@ -44,6 +45,21 @@ Module._load = function (request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain)
 }
 `
+
+test('Brotli resolves exclusively from its patched native registry', () => {
+  const configuration = JSON.parse(
+    fs.readFileSync(path.join(PACKAGE_ROOT, 'vcpkg-configuration.json'), 'utf8')
+  )
+  const registries = configuration.registries.filter((registry) =>
+    registry.packages.includes('brotli')
+  )
+
+  assert.equal(registries.length, 1)
+  assert.equal(registries[0].kind, 'git')
+  assert.equal(registries[0].repository, 'https://github.com/microsoft/vcpkg')
+  assert.equal(registries[0].baseline, PATCHED_BROTLI_BASELINE)
+  assert.deepEqual(registries[0].packages, ['brotli'])
+})
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8' })

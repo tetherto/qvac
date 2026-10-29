@@ -20,8 +20,6 @@ For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.q
 
 ## Supported environments and installation
 
-For mobile apps that use only raw PCM streaming transcription, list the required audio plugins and set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. You can also use `qvac bundle sdk --defer bare-ffmpeg`. Both options leave `bare-ffmpeg` out of the native addon manifest. Bundle FFmpeg when the app decodes compressed audio files or asks `audiogen-ggml` for a compressed output format; PCM and WAV output need no FFmpeg.
-
 See https://docs.qvac.tether.io/sdk/getting-started/installation
 
 On Node.js, the SDK installs and launches its own Bare worker through `bare-runtime`.
@@ -31,52 +29,7 @@ package manager can replace an older, incompatible runtime. Remove any override
 or resolution that forces the worker below that requirement; installing a newer
 global `bare` executable does not change the SDK's worker dependency.
 
-## TTS 0.11 engines and memory fit
-
-`@qvac/tts-ggml` 0.11 adds two desktop batch engines to `textToSpeech`.
-Load MOSS-SoundEffect with `modelType: 'tts-ggml'` and
-`modelConfig: { ttsEngine: 'moss-sfx' }`; the primary source is its single
-GGUF. With an `AUDIOGEN_MOSS_SFX_V2_*` constant, pass its `.src` URL as
-`modelSrc`, because the full descriptor selects the audiogen plugin. This also applies to fit assessment: use explicit `modelType` and `ttsEngine`, and a downloaded local file for metadata-only TTS fit. The bare `.src` URL lacks checksum/registry coordinates for a weightless stub; the audiogen descriptor/resource profile does not identify the TTS engine. Use
-a text description, with optional `seconds`
-(up to 30), `negativePrompt`, `steps`, `guidance` and `shift`. These controls
-can also be load defaults. The output is 48 kHz.
-
-Load MOSS-Speech with `modelConfig: { ttsEngine: 'moss-speech',
-mossSpeechCodecModelSrc: <codec source> }` and the language-model GGUF as
-`modelSrc`. Use either `text`, or `audio` plus
-`sampleRate`. Audio is a JSON array of normalized mono samples in [-1, 1].
-Earlier turns go in `messages`; each turn has a `role` and either `text` or
-`audio` plus `sampleRate`. Per-call controls include `systemPrompt`,
-`replyVoice` plus `replyVoiceSampleRate`, `maxReplySeconds`, `maxNewTokens`,
-`textReply`, `greedy`, `temperature`, `topP` and `topK`. Consume `bufferStream` in the default streaming mode, or await `buffer` with
-`stream: false`, then await `result.text` for any reply text.
-Spoken mode can return an audio-only reply; use `textReply: true` when text is required.
-Spoken replies are 24 kHz; `textReply: true` returns text with an empty audio
-buffer. Omitting `maxNewTokens` preserves the addon's remaining-context budget.
-Both engines run one native batch job. The default `stream: true` emits the completed audio as one chunk; `stream: false` collects it in `buffer`. Neither supports sentence streaming or duplex text input.
-
-Standalone examples: [basic sound effects](examples/tts/moss-sound-effect.ts),
-[sound-effect controls](examples/tts/moss-sound-effect-controls.ts),
-[typed question to text reply](examples/tts/moss-speech.ts), and
-[spoken question to spoken reply](examples/tts/moss-speech-audio.ts).
-Run them from this package with `node --import tsx examples/tts/<file>.ts`;
-the spoken-question example also takes a WAV file path. Each example downloads
-its model, returns text or writes a WAV reply, unloads the model, and closes the SDK worker.
-
-`assessModelFit` supports metadata-only MOSS-TTS/TTSD and MOSS-SoundEffect
-projections. Add `ttsWorkload` beside `modelConfig` on the assessment candidate:
-`{ promptRows, referenceSamples, streaming }` for MOSS, or
-`{ prompt, seconds }` for sound effects. MOSS needs its backbone and codec
-decoder; reference encoding also needs the codec encoder. Prompt rows must
-cover the complete native prompt, including dialogue and reference rows.
-Missing workloads return an unknown assessment rather than guessing.
-MOSS-Speech has no native fitter in this release and remains unknown. Workloads are fit-only; loading a MOSS model does not accept them and its automatic fit preflight remains unknown.
-
-The CLI configuration picker includes both engines. Their conversation and
-sound-effect request controls are library-only because the OpenAI speech
-endpoint cannot represent those requests. Native performance and backend fixes
-in the addon release are inherited without additional SDK controls.
+For mobile apps that use only raw PCM streaming transcription, list the required audio plugins and set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. You can also use `qvac bundle sdk --defer bare-ffmpeg`. Both options leave `bare-ffmpeg` out of the native addon manifest. Bundle FFmpeg when the app decodes compressed audio files or asks `audiogen-ggml` for a compressed output format; PCM and WAV output need no FFmpeg.
 
 ## Quickstart
 
@@ -137,154 +90,29 @@ call fails with `RPC_INIT_TIMEOUT`. Re-running usually succeeds; to give every
 start more room, raise `rpcInitTimeoutMs` in `qvac.config.*` or set the
 `QVAC_RPC_INIT_TIMEOUT_MS` environment variable.
 
-## System resource diagnostics
+## Documentation
 
-Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and
-driver capabilities. Pass `sample: true` only when you also need a fresh usage
-sample:
+The [QVAC SDK documentation](https://docs.qvac.tether.io/sdk/) covers each
+capability with its configuration and examples. See the
+[API reference](https://docs.qvac.tether.io/sdk/reference/api/) for the full API
+and the [release notes](https://docs.qvac.tether.io/sdk/reference/release-notes/)
+for what changed in each release.
 
-```ts
-import { getSystemResources } from '@qvac/sdk'
-
-const resources = await getSystemResources({ sample: true })
-
-if (resources.capabilities.memory.totalBytes.status === 'supported') {
-  console.log('System memory:', resources.capabilities.memory.totalBytes.value)
-}
-
-if (resources.sample?.cpu.status === 'supported') {
-  console.log('CPU utilization:', resources.sample.cpu.value)
-}
-```
-
-See the [system resources support matrix](./docs/system-resources-support-matrix.md)
-for metric-level evidence and platform limitations.
-
-Every metric reports `supported`, `unavailable`, `unverified`, or `failed`.
-Supported values include provenance with a source and optional scope. These
-values are diagnostics; they do not reserve memory or guarantee that a model
-can be loaded.
-
-GPU capabilities expose observed driver names, versions, and graphics APIs.
-These observations do not prove that an inference backend is compatible.
-
-Profiled inference operation events may include `event.backend` with the
-selected backend and device, graphics API, driver, fallback reason, and probe
-result. Addons attach backend metadata with `attachBackendDiagnostics`; the SDK
-validates it before recording the operation event. `gpuId`, when present,
-identifies a GPU from the current worker resource collector and is stable only
-for that collector's lifetime. The SDK does not infer compatibility from driver
-inventory or log text.
-
-### Profiler resource gauges
-
-Resource gauges are disabled by default. Enable them explicitly to attach one
-worker resource sample to each profiled operation:
-
-```ts
-import { profiler } from '@qvac/sdk'
-
-profiler.enable({ mode: 'verbose', includeResourceGauges: true })
-
-// Run SDK operations, then inspect recentEvents[].resources.
-const profile = profiler.exportJSON()
-```
-
-The sample uses the same status, provenance, and scope semantics as
-`getSystemResources({ sample: true })`. Its `sampledAt` uses the same monotonic
-clock as the profiling event's `ts`, so the two timestamps are comparable.
-`resources.origin` records that the sample was taken on the `local` worker.
-Samples are delivered to `profiler.onRecord`; they
-are retained in `exportJSON().recentEvents` only in `verbose` mode. Enabling
-gauges in `summary` mode still incurs the sampling cost without retaining them.
-Disabling profiling or omitting `includeResourceGauges` performs no resource
-sampling. Enabling gauges adds one CPU query and one query per GPU to each
-profiled operation's response path. If the worker resource collector is not
-initialized, the event omits the resource block.
-
-## Pre-download model fit assessment
-
-Use `assessModelFit` to check, before downloading anything, whether models are
-likely to fit in this device's memory. Each candidate is described as `loadModel`
-takes it. It reads generated catalog metadata plus a fresh memory sample, and for
-a single candidate the registry's weightless description of the artifact, so the
-engine's own fitter can answer — no weights, no load:
-
-```ts
-import { assessModelFit, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'
-
-const result = await assessModelFit({
-  models: [{ modelSrc: QWEN3_8B_INST_Q4_K_M, modelType: 'llm', modelConfig: { ctx_size: 8192 } }],
-  execution: 'sequential',
-  policy: 'interactive-v1'
-})
-
-console.log(result.verdict) // 'likely-fits' | 'likely-too-large' | 'unknown'
-```
-
-The result is advisory: it does not block `loadModel`, reserve memory, or make a
-performance claim. `unknown` is a real answer meaning the evidence does not
-support a call either way — show it as "can't say", not as "no".
-
-The assessment holds back a reserve of its own, beyond the headroom the engine's
-fitter leaves, so a model the engine calls a fit can still come back
-`likely-too-large` on a host with little room.
-
-See [pre-download model fit assessment](./docs/assess-model-fit.md) for the
-budget arithmetic, the reserve, and the supported engine and workload matrix.
-
-## Streaming transcription statistics
-
-Whisper and Parakeet duplex transcription sessions expose terminal engine
-statistics after their event iterator completes:
-
-```ts
-const session = await transcribeStream({ modelId })
-
-for await (const text of session) {
-  process.stdout.write(text)
-}
-
-const stats = await session.stats
-console.log(stats?.audioDuration, stats?.realTimeFactor)
-```
-
-`session.stats` resolves to `undefined` when the engine does not report
-statistics.
-
-Batch `transcribe()` calls also expose terminal statistics:
-
-```ts
-const call = transcribe({ modelId, audioChunk })
-const text = await call
-const stats = await call.stats
-console.log(text, stats?.encoderUsedCoreml)
-```
-
-`call.stats` resolves to `undefined` when the engine reports no statistics and
-rejects if transcription fails.
-
-## Parakeet Core ML encoders on Apple devices
-
-Load a supported Parakeet registry constant as usual. On macOS and iOS, the SDK
-downloads any complete, published Core ML encoder bundle with its GGUF and
-places the `.mlmodelc` directory where the native addon discovers it. This is
-available for TDT 0.6B v3, Unified English 0.6B, EOU 120M v1, and streaming
-Sortformer v2.1. The download includes the sidecar weights, so first load takes
-more time and disk space. Other platforms download only the GGUF. If the
-sidecar is unavailable or cannot load, inference uses the GGUF encoder.
-Sortformer v2.1 also needs a GGUF with the
-`parakeet.model_variant=sortformer-streaming-v2.1-aosc` metadata. Caching both
-sidecars alone does not activate Core ML. See
-[`examples/asr/parakeet-unified-coreml.ts`](examples/asr/parakeet-unified-coreml.ts)
-for a local check of a Unified GGUF and its encoder bundle.
+TranscribePsy (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`, eight European
+languages) has a separate Core ML distribution instead of a sidecar:
+`PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose
+encoder and decoder bundles the SDK stages beside it, so both stages run on
+the Neural Engine. It loads on macOS and iOS only; elsewhere the load is
+refused up front with the ggml constant to use instead. See
+[`examples/asr/parakeet-transcribepsy-filesystem.ts`](examples/asr/parakeet-transcribepsy-filesystem.ts),
+which also shows the `longFormWindowFrames` / `longFormContextFrames` knobs
+that bound the offline encoder window on long recordings.
 
 ## Examples
 
-In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:
-
-1. Build the SDK from source (see [Build](#build) section).
-2. Run with Node.js:
+The [`examples`](./examples) directory has scripts covering every SDK capability.
+To run one, set up the SDK from source as described in
+[`CONTRIBUTING.md`](./CONTRIBUTING.md), then from `packages/sdk`:
 
 ```bash
 # Compiled output
@@ -294,274 +122,8 @@ node dist/examples/path/to/example.js
 npx tsx examples/path/to/example.ts
 ```
 
-`examples/abot-world.ts` has a companion guide covering the hardware
-requirements, scene-pack lifecycle, cancellation semantics and concurrency rules
-of an interactive world session: see
-[ABot-World interactive world sessions](./docs/abot-world.md).
-
-## Build
-
-Node.js 22 and npm are the only tools needed. No lockfile is committed; `package-lock.json` is gitignored.
-
-Build and test against the in-repo engine at the same commit (this is what CI does):
-
-```bash
-npm run sdk-source:workspace
-```
-
-This installs and builds `../inference`, points `@qvac/inference` at it, and installs the SDK's dependencies. A plain `npm install` resolves `@qvac/inference` to its published release instead, which fails with `ERESOLVE` whenever the SDK on `main` already depends on addon versions the published engine has not been released against.
-
-```bash
-npm run build  # or `watch` for hotreload
-```
-
-```bash
-npm run build:pack
-```
-
-This outputs a tarball under `dist/qvac-sdk-{version}.tgz` that you can install in your project, e.g.:
-
-```bash
-npm i path/to/qvac-sdk-0.21.0.tgz
-```
-
-## Testing
-
-The SDK test suite is organized into two buckets by runtime:
-
-| Bucket            | Runtime   | Location      | Command                                            |
-| ----------------- | --------- | ------------- | -------------------------------------------------- |
-| Unit              | Node      | `test/`       | `npm run test:unit`                                |
-| Client (consumer) | Node / RN | `../sdk-e2e/` | See [`../sdk-e2e/README.md`](../sdk-e2e/README.md) |
-
-See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
-
 ## Contributing
 
-### Commit Message and PR Title Format
-
-This repository enforces structured commit messages and PR titles to maintain consistency and generate changelogs automatically.
-
-#### Format
-
-**Commit messages:**
-
-```
-prefix[tags]?: subject
-```
-
-**PR titles:**
-
-```
-TICKET prefix[tags]: subject
-```
-
-#### Allowed Prefixes
-
-- `feat` - New features or capabilities
-- `fix` - Bug fixes
-- `doc` - Documentation changes
-- `test` - Test additions or modifications
-- `mod` - Model-related changes
-- `chore` - Maintenance tasks
-- `infra` - CI/CD, tooling, infrastructure
-
-#### Allowed Tags
-
-Tags are optional:
-
-- `[api]` - API changes (non-breaking)
-- `[bc]` - Breaking changes (including breaking API changes)
-
-#### Examples
-
-**Valid commit messages:**
-
-```bash
-feat: add RAG support for LanceDB
-fix[api]: fix completion stream error handling
-doc: update installation instructions
-feat[bc]: redesign loadModel signature
-chore: update dependencies
-```
-
-**Valid PR titles:**
-
-```bash
-QVAC-123 feat: add RAG support for LanceDB
-QVAC-456 fix[api]: fix completion stream error handling
-QVAC-789 doc: update installation instructions
-QVAC-101 feat[bc]: redesign loadModel signature
-```
-
-#### Code Examples Requirements
-
-When creating PRs with specific tags, you must include code examples in the PR description:
-
-**`[bc]` tag requirements:**
-
-Must include BEFORE/AFTER code examples showing the migration path:
-
-````markdown
-## BC Changes
-
-**BEFORE:**
-
-```typescript
-const model = await loadModel('model-path')
-```
-
-**AFTER:**
-
-```typescript
-const modelId = await loadModel('model-path', { modelType: 'llm' })
-```
-````
-
-Or using inline comments:
-
-````markdown
-```typescript
-// old
-const model = await loadModel('model-path')
-
-// new
-const modelId = await loadModel('model-path', { modelType: 'llm' })
-```
-````
-
-**`[api]` tag requirements (non-breaking):**
-
-Must include at least one fenced code block showing the new API usage:
-
-````markdown
-## New API
-
-```typescript
-// New completion API with streaming support
-for await (const token of completion({
-  modelId,
-  history: [{ role: 'user', content: 'Hello!' }]
-}).tokenStream) {
-  process.stdout.write(token)
-}
-```
-````
-
-#### Validation
-
-- **Commit messages** are validated automatically via Husky commit-msg hook
-- **PR titles and descriptions** are validated via GitHub Actions on PR creation/update
-- Invalid commits or PRs will be rejected with helpful error messages
-- **Auto-skipped commits:** The following Git-generated commits bypass validation:
-  - Merge commits (e.g., `Merge pull request #123`)
-  - Version bumps (e.g., `1.0.0`, `v1.0.0`)
-  - Revert commits (e.g., `Revert "feat: add feature"`)
-  - Squash commits (e.g., `squash! fix: bug fix`)
-
-#### Generating Changelogs
-
-Once your PRs are merged into `dev`, you can generate a changelog:
-
-```bash
-npm run changelog:generate
-```
-
-This will:
-
-1. Compare versions between `dev` and `main` branches
-2. Collect all merged PRs
-3. Parse and classify each PR by prefix
-4. Generate `changelog/<version>/CHANGELOG.md`
-5. Generate `changelog/<version>/breaking.md` for BC changes (with code examples)
-6. Generate `changelog/<version>/api.md` for API changes (with code examples)
-
-## Speaker-aware transcription
-
-ASR 0.8 adds `MODEL_TYPES.mossTranscribe` and the
-`@qvac/sdk/moss-transcribe/plugin` entry point. MOSS processes a whole recording;
-use `transcribe`, since it has no duplex streaming or configuration reload.
-
-```ts
-import { loadModel, transcribe, MOSS_TRANSCRIBE_DIARIZE_Q8_0 } from '@qvac/sdk'
-
-const modelId = await loadModel({
-  modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0,
-  modelConfig: { useGPU: true, maxThreads: 4 }
-})
-const segments = await transcribe({
-  modelId,
-  audioChunk: '/recordings/meeting.wav',
-  metadata: true,
-  hotwords: ['QVAC'],
-  maxNewTokens: 2048
-})
-```
-
-For a runnable example with download progress and resource cleanup, see
-[the MOSS file transcription example](examples/asr/moss-transcribe-filesystem.ts).
-From `packages/sdk`, run:
-
-```bash
-npx tsx examples/asr/moss-transcribe-filesystem.ts examples/audio/diarization-sample-16k.wav
-# Use local weights and per-request hotwords:
-npx tsx examples/asr/moss-transcribe-filesystem.ts meeting.wav ./moss.gguf QVAC OpenMOSS
-```
-
-Segments retain `speaker` labels such as `S01`, zero-based `speakerId`, and
-`startMs`/`endMs`. Hotwords apply to each request: at most 64 nonempty terms of
-64 UTF-8 bytes each. A MOSS `prompt` replaces the default instruction and cannot
-be combined with hotwords. `maxNewTokens: 0` uses the model default. These two
-MOSS-specific options are rejected for Whisper and Parakeet models.
-
-The published addon contains Whisper v1.9.4, so existing Whisper calls keep
-their API and use the updated backend. MOSS memory-fit assessment projects the
-declared recording and decoding options without loading weights:
-
-```typescript
-const fit = await assessModelFit({
-  models: [
-    {
-      modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0,
-      modelConfig: { useGPU: false },
-      transcriptionWorkload: { audioSeconds: 300, hotwords: ['Erin'], maxNewTokens: 0 }
-    }
-  ]
-})
-```
-
-Import `assessModelFit` from `@qvac/sdk`. Use the longest recording you intend
-to transcribe, with the same prompt/hotwords and token limit as the request.
-Without `transcriptionWorkload`, MOSS has no native fit evidence, its recording
-window is omitted, and the result can remain `unknown`. Assessment uses a registry description when available,
-or a local model path; it downloads no full weights. MOSS CoreML requires an
-addon revision newer than the published 0.8.0 release.
-
-The SDK and inference use the published `@qvac/asr-ggml` package at `^0.8.0`.
-
-## Nemotron 3 Diarization
-
-Load a local Nemotron 3 Diarization GGUF with `modelType: 'parakeet-transcription'`.
-The addon detects the variant from the GGUF and supports up to eight speakers,
-including overlapping activity. This model reports speaker turns rather than words.
-
-Use `transcribe({ modelId, audioChunk, metadata: true })` for offline diarization.
-Each result can include `speakerSegments` with zero-based `speakerId`, `startMs`,
-and `endMs`. Load with `modelConfig.streaming: true` before using `transcribeStream`.
-Streaming metadata carries `speakerId` on each diarization segment.
-For streaming speaker-activity events, enable `streamingSpeakerVad` at load or
-`emitSpeakerVad` under `parakeetStreamingConfig` per `transcribeStream` call;
-conversation VAD events retain their dominant `speakerId`.
-
-`diarizationThreshold` (0–1) and `diarizationMinSegmentMs` (nonnegative integer)
-are supported in `modelConfig` and per-call `parakeetStreamingConfig`. Omit them
-to preserve model defaults. Nemotron defaults to a 0.5 threshold and 200 ms minimum
-turn; its default left context is 0 ms, while an explicitly configured 80 ms is
-preserved. CLI `verbose_json` exposes offline turns as `speaker_segments` with
-`speaker_id` and start/end timestamps in seconds.
-
-See [the local Nemotron diarization example](examples/asr/nemotron-diarization-filesystem.ts):
-
-```bash
-npx tsx examples/asr/nemotron-diarization-filesystem.ts ./nemotron-diarization.gguf meeting.wav
-```
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for building from source, commit and
+PR title format, and changelog generation, and [`TESTING.md`](./TESTING.md) for
+where new tests belong.

@@ -1,5 +1,6 @@
 import { speakerAwareTests } from './speaker-aware-tests.js'
 import { decisionTests } from './decision-tests.js'
+import { rerankTests } from './rerank-tests.js'
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { Step, TestDefinition } from '@qvac/test-suite'
@@ -31,6 +32,7 @@ import { loggingTests } from './logging-tests.js'
 import { registryTests } from './registry-tests.js'
 import { shardedModelTests } from './sharded-model-tests.js'
 import { httpEmbeddingTests } from './http-embedding-tests.js'
+import { speculativeDecodingTests } from './speculative-decoding-tests.js'
 import { parakeetTests } from './parakeet-tests.js'
 import { parakeetStreamTests } from './parakeet-stream-tests.js'
 import { bciTests } from './bci-tests.js'
@@ -592,6 +594,7 @@ const catalog: TestDefinition[] = [
 
   // HTTP embedding tests
   ...httpEmbeddingTests,
+  ...speculativeDecodingTests,
 
   // Model info tests (includes both registry-side and loaded-model introspection)
   ...modelInfoTests,
@@ -616,6 +619,7 @@ const catalog: TestDefinition[] = [
   // Classification tests
   ...classificationTests,
   ...decisionTests,
+  ...rerankTests,
 
   // TTS tests
   ...ttsTests,

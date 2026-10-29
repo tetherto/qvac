@@ -1,7 +1,4 @@
-import { randomBytes } from 'node:crypto'
-import { writeFile, unlink } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { extname, join } from 'node:path'
+import { unlink } from 'node:fs/promises'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { transcribe, textToSpeech, textToSpeechStream } from '@qvac/sdk'
@@ -9,6 +6,7 @@ import type { TextToSpeechStreamResponse, TranscribeSegment } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { multipartToBody } from '@/serve/lib/multipart'
+import { writeTempAudio } from '@/serve/lib/temp-audio'
 import {
   formatTimedTranscription,
   isTimedTranscriptionFormat
@@ -185,11 +183,11 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       assertKnownTranscriptionFormat(responseFormat)
       if (body.language !== undefined) {
         app.qvac.logger.warn(
-          `language="${String(body.language)}" is configured at model load time. Per-request language override is not yet supported.`
+          'language is configured at model load time. Per-request language override is not yet supported.'
         )
       }
       if (body.temperature !== undefined) {
-        app.qvac.logger.warn(`Ignoring unsupported param: temperature=${String(body.temperature)}`)
+        app.qvac.logger.warn('Ignoring unsupported param: temperature')
       }
 
       const { sdkModelId, alias, entry } = await resolveAndCheckModel(
@@ -270,7 +268,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
       assertKnownTranscriptionFormat(responseFormat)
       if (body.temperature !== undefined) {
-        app.qvac.logger.warn(`Ignoring unsupported param: temperature=${String(body.temperature)}`)
+        app.qvac.logger.warn('Ignoring unsupported param: temperature')
       }
 
       const { sdkModelId, alias, entry } = await resolveAndCheckModel(
@@ -676,22 +674,12 @@ async function streamSpeech(
       : firstPcm
   sendSSE(raw, { type: 'speech.audio.delta', audio: firstChunk.toString('base64') })
 
-  // Fastify drops errors thrown after hijack, so a failure here has to end
-  // the stream itself or the client would hang.
-  try {
-    for (let frame = await nextAudioFrame(frames); frame; frame = await nextAudioFrame(frames)) {
-      samples += frame.buffer.length
-      sendSSE(raw, {
-        type: 'speech.audio.delta',
-        audio: int16SamplesToBuffer(frame.buffer).toString('base64')
-      })
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    logger.error(`  speech stream failed after samples=${samples}: ${message}`)
-    sendSSE(raw, { error: { message, type: 'server_error', code: 'internal_error' } })
-    endSSE(raw, { sentinel: false })
-    return
+  for (let frame = await nextAudioFrame(frames); frame; frame = await nextAudioFrame(frames)) {
+    samples += frame.buffer.length
+    sendSSE(raw, {
+      type: 'speech.audio.delta',
+      audio: int16SamplesToBuffer(frame.buffer).toString('base64')
+    })
   }
 
   // Local synthesis has no billable tokens; OpenAI's schema still requires usage.
@@ -826,31 +814,6 @@ function resolveVoice(raw: SpeechVoice | undefined, fallback: string | null): st
   const name = typeof raw === 'object' ? raw.id : raw
   const trimmed = name?.trim()
   return trimmed ? trimmed : fallback
-}
-
-const MIME_TO_EXT: Record<string, string> = {
-  'audio/mpeg': '.mp3',
-  'audio/mp4': '.mp4',
-  'audio/ogg': '.ogg',
-  'audio/wav': '.wav',
-  'audio/wave': '.wav',
-  'audio/webm': '.webm',
-  'audio/flac': '.flac',
-  'audio/aac': '.aac',
-  'audio/x-m4a': '.m4a'
-}
-
-// Returns the temp file path for an audio buffer. The caller is responsible
-// for deleting it (typically in a finally block).
-async function writeTempAudio(
-  audio: Buffer,
-  fileMeta: { filename: string; mimetype: string } | undefined
-): Promise<string> {
-  const originalName = fileMeta?.filename ?? ''
-  const ext = extname(originalName) || MIME_TO_EXT[fileMeta?.mimetype ?? ''] || '.bin'
-  const tmpPath = join(tmpdir(), `qvac-audio-${randomBytes(8).toString('hex')}${ext}`)
-  await writeFile(tmpPath, audio)
-  return tmpPath
 }
 
 export default plugin

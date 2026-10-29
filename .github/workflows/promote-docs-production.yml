@@ -131,6 +131,70 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The content this promotion changes, for the documentation engineer who
+      # signs off on a release. Releasing packages and docs together always
+      # ends in a human reading what is about to go public; the commit list
+      # above says which commits, and this says which prose. It is what makes a
+      # line documenting a feature its release never shipped visible before
+      # publication rather than after (QVAC-27286).
+      #
+      # Informational only. It runs before the approval gate, in the job that
+      # cannot push, and never fails the promotion: a diff that is hard to read
+      # is not a reason to refuse a reviewed commit.
+      - name: Summarize the content this promotion publishes
+        if: steps.validate.outputs.promote == 'true'
+        continue-on-error: true
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.validate.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+
+          production_sha="$(git rev-parse origin/docs-production)"
+          content="docs/website/content/docs/"
+          range="${production_sha}..${TARGET_SHA}"
+
+          if git diff --quiet "$production_sha" "$TARGET_SHA" -- "$content"; then
+            {
+              echo ""
+              echo "### Documentation content"
+              echo ""
+              echo "No page changes. This promotion carries only site code,"
+              echo "configuration or redirects."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo ""
+            echo "### Documentation content this promotion publishes"
+            echo ""
+            echo '```'
+            git diff --stat "$production_sha" "$TARGET_SHA" -- "$content"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # The step summary is capped at 1 MiB, and a release's prose diff can
+          # pass that on its own. The stat above is always complete; the patch
+          # is cut off with a pointer to the compare view, which is not.
+          patch="$(git diff "$production_sha" "$TARGET_SHA" -- "$content")"
+          budget=1200
+          {
+            echo ""
+            echo "<details><summary>Full diff</summary>"
+            echo ""
+            echo '```diff'
+            sed -n "1,${budget}p" <<<"$patch"
+            if [ "$(printf '%s\n' "$patch" | wc -l)" -gt "$budget" ]; then
+              echo "..."
+              echo "# truncated at ${budget} lines — read the rest at"
+              echo "# ${{ github.server_url }}/${{ github.repository }}/compare/${range}"
+            fi
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   promote:
     name: Fast-forward docs-production to the requested commit
     needs: preflight

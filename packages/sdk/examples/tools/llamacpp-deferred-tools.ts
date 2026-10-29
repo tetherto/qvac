@@ -1,8 +1,8 @@
 // Deferred tool loading: a large tool set stays out of the prompt until the
 // model asks for it. Only `get_weather` and the built-in `tool_search` (whose
 // description carries a name-and-description catalog of the rest) are in the
-// initial prompt; the deferred schemas arrive in the conversation when the
-// model searches for them.
+// initial prompt; a deferred schema is declared in the prompt once the model
+// has searched for it.
 import {
   TOOL_SEARCH_NAME,
   completion,
@@ -64,15 +64,15 @@ try {
     console.log(`\n\n▸ The model searched: ${JSON.stringify(search.arguments)}`)
 
     // Running the search is the SDK's job, not a tool handler's. The result is
-    // an ordinary tool message: appending it is what makes the definitions
-    // callable on the next turn.
+    // an ordinary tool message naming what it loaded: keeping it in the history
+    // is what declares those definitions on the next turn.
     history.push({ role: 'assistant', content: await first.text })
     history.push({
       role: 'tool',
       content: executeToolSearch(tools, search.arguments, history)
     })
 
-    console.log('▸ Definitions appended. Turn 2 — the model can now call them directly.\n')
+    console.log('▸ Definitions loaded. Turn 2 — the model can now call them directly.\n')
     const second = completion({ modelId, history, stream: true, tools })
     for await (const token of second.tokenStream) process.stdout.write(token)
 

@@ -24,6 +24,15 @@ Configuration lives under `serve` in `qvac.config.*`. `serve.models`, `serve.loa
 `serve.cors` are server-wide and documented here; each extension reads its own
 `serve.<name>` block, documented in that extension's page.
 
+## Errors
+
+An SDK `ContextOverflowError` returns HTTP `400` with
+`error.type: "invalid_request_error"` and `error.code: "context_length_exceeded"`.
+Shorten the input, start a new conversation, or increase the model's `ctx_size`
+before retrying. If SSE headers have already been sent, the status stays `200`;
+the server emits the same error envelope as an SSE frame and closes the stream,
+using the extension's usual termination sentinel.
+
 ## Network security and CORS
 
 The default `127.0.0.1` bind is unauthenticated. A non-loopback `--host` refuses to start without `--api-key <key>` or `--api-key-file <path>`; `--allow-unauthenticated` downgrades that refusal to a warning for operators who accept the exposure.
@@ -77,6 +86,15 @@ Loading is transparent: a request may name any configured alias whether or not i
 currently loaded. Unloading an alias frees its resources but keeps it configured, so the
 next request loads it again. There is no "load" endpoint — send a normal request, or set
 `preload: true`.
+
+Model-load failures return `503 model_load_failed`. If the worker exits during
+startup, the response names its exit code or signal. If startup times out while
+the worker is still running, the response reports a startup timeout.
+Full diagnostics, including worker stderr, are written to the server's error log;
+the HTTP response contains only the startup summary. Check the terminal running
+`qvac serve` or your service's captured stderr for the cause.
+A per-load deadline set with `serve.load.timeoutMs` returns
+`503 model_load_timeout` instead.
 
 ### Load management (`serve.load`)
 

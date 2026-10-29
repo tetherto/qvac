@@ -1,4 +1,5 @@
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
+import { RerankExecutor } from '../shared/executors/rerank-executor.js'
 import { MobileSpeakerAwareExecutor } from './executors/speaker-aware-executor.js'
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { Platform } from 'react-native'
@@ -17,6 +18,7 @@ import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-execut
 import { TranslationExecutor } from '../shared/executors/translation-executor.js'
 import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor.js'
 import { HttpEmbeddingExecutor } from '../shared/executors/http-embedding-executor.js'
+import { SpeculativeDecodingExecutor } from '../shared/executors/speculative-decoding-executor.js'
 import { KvCacheExecutor } from '../shared/executors/kv-cache-executor.js'
 import { MobileLoggingExecutor } from './executors/logging-executor.js'
 import { RegistryExecutor } from '../shared/executors/registry-executor.js'
@@ -87,10 +89,10 @@ async function resolveTablePackageAsset(pkg: string, file: string): Promise<stri
 // platform policy; see catalog/platform-policy.ts.
 const resources = new ResourceManager(policyFor('mobile'))
 
-// One table, shared with every other client, applied here.
+// One table, shared with every other client, applied here as `mobile-<os>` so an entry can target one OS.
 applyResourceTable(
   RESOURCE_TABLE,
-  'mobile',
+  `mobile-${Platform.OS}`,
   (dep, definition) => resources.define(dep, definition as never),
   {
     const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],
@@ -219,6 +221,7 @@ export const executor = createExecutor({
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new DecisionExecutor(resources),
+    new RerankExecutor(resources),
     new MobileRagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
@@ -237,6 +240,7 @@ export const executor = createExecutor({
     new MobileLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
+    new SpeculativeDecodingExecutor(resources),
     new KvCacheExecutor(resources),
     new MobileParakeetStreamExecutor(resources),
     new MobileParakeetExecutor(resources),
