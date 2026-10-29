@@ -1928,8 +1928,8 @@ void ContinuousBatchScheduler::setFileIndex(
 bool ContinuousBatchScheduler::offerDonorLocked(
     llama_seq_id seqId, const cache::Ledger& prompt, bool trimmable,
     size_t minimum, const cache::DonorAdopter& adopt) {
-  // Another parked sequence wins a tie: its cells are copied without leaving
-  // the device.
+  // Another parked sequence wins a tie: its state is copied without a file
+  // read.
   std::optional<uint32_t> parkedDonor;
   size_t inParked = minimum;
   for (uint32_t donor = 0; donor < parked_.size(); ++donor) {

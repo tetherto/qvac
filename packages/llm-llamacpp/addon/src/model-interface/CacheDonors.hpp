@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -16,21 +18,30 @@
 // sequence and leaves the original as it was.
 namespace qvac_lib_inference_addon_llama::cache {
 
-// A conversation parked in another sequence of the same context: the cells
-// are shared with, or copied to, the requesting sequence, as llama-server's
-// `server_slot::copy_state_to` does.
+// A conversation parked in another sequence of the same context: its state
+// is copied to the requesting sequence through host memory. Between KV
+// streams `llama_memory_seq_cp` only queues the copy for the next decode,
+// and the sequence may be saved, or either one overwritten, before that.
 inline DonorState sequenceDonor(
     llama_seq_id source, const std::vector<llama_token>& ledgerWords,
     const Checkpoints& checkpoints) {
   return DonorState{
       .copyInto =
           [source](llama_context* lctx, llama_seq_id seqId) {
-            llama_memory_t mem = llama_get_memory(lctx);
-            if (mem == nullptr || source == seqId) {
+            if (source == seqId) {
               return false;
             }
-            llama_memory_seq_rm(mem, seqId, -1, -1);
-            llama_memory_seq_cp(mem, source, seqId, -1, -1);
+            const size_t size = llama_state_seq_get_size_ext(lctx, source, 0);
+            if (size == 0) {
+              return false;
+            }
+            std::vector<uint8_t> state(size);
+            if (llama_state_seq_get_data_ext(
+                    lctx, state.data(), size, source, 0) != size ||
+                llama_state_seq_set_data_ext(
+                    lctx, state.data(), size, seqId, 0) == 0) {
+              return false;
+            }
             speculative::resetDraftSequence(lctx, seqId);
             return true;
           },

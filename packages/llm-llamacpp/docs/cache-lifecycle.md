@@ -209,11 +209,11 @@ prompt, or its longest checkpoint within the shared prefix; in practice, a
 system prompt and tools primed with `prefill` serve every conversation that
 starts with them.
 
-The source is copied and never changes: a parked slot with
-`llama_memory_seq_cp`, as llama-server's `copy_state_to` does, a RAM-tier
-entry from its bytes, a file by loading it. The copy then belongs to the
-request, which reconciles it as above and writes it only to its own key's
-file. This is llama-server's `--slot-prompt-similarity` and `--cache-ram`,
+The source is copied and never changes: a parked slot through host memory
+(`llama_memory_seq_cp` between KV streams only queues the copy for the next
+decode), a RAM-tier entry from its bytes, a file by loading it. The copy
+then belongs to the request, which reconciles it as above and writes it only
+to its own key's file. This is llama-server's `--slot-prompt-similarity` and `--cache-ram`,
 with any shared prefix taken. A request without a key keeps its state in
 memory the same way, never written to a file. Multimodal models keep a key's
 state to that key for now.

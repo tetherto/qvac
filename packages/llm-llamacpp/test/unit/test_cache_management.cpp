@@ -4132,6 +4132,49 @@ TEST(CrossKeyPrefixTest, BatchHybridCopyLeavesThePrimedStateIntact) {
   }
 }
 
+// A second key primed with the prompt another parked conversation already
+// holds decodes nothing, so its copy must be complete before it is saved:
+// the copy's file answers like the file of the conversation it came from.
+TEST(CrossKeyPrefixTest, BatchPrimedCopyIsSavedWhole) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_saved_copy_a.bin", "cross_batch_saved_copy_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadBatchedModel();
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    for (const auto& key : keys) {
+      LlamaModel::Prompt prompt;
+      prompt.input = chatInput({{"system", fruitStallRules()}});
+      prompt.cacheKey = key;
+      prompt.prefill = true;
+      model->processPromptBatch({prompt});
+      model->saveCache(key);
+    }
+    ASSERT_EQ(harness.scheduler().donorHitsForTesting(), 1u)
+        << "test setup: the second key did not copy the first";
+  }
+  const auto answerFrom = [](const std::string& key) {
+    auto model = loadBatchedModel();
+    EXPECT_TRUE(model->isLoaded());
+    return BatchedCacheHarness(*model).run(fruitQuestion("banana"), key);
+  };
+  const BatchedTurn original = answerFrom(keys[0]);
+  const BatchedTurn copy = answerFrom(keys[1]);
+  EXPECT_GT(copy.reuse, K_SHARED_RULES_TOKENS);
+  EXPECT_EQ(copy.reuse, original.reuse);
+  EXPECT_EQ(copy.output, original.output)
+      << "the copy was saved before its state arrived";
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
 // A conversation parked without a key is evicted before any keyed one, even
 // a more recent one: dropping it writes nothing.
 TEST(CrossKeyPrefixTest, BatchEvictsAnonymousStatesFirst) {

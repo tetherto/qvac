@@ -747,8 +747,8 @@ private:
   [[nodiscard]] bool isFreeLocked(uint32_t seqId) const;
   /// The `cache::CacheSourceProvider` of the driver admitted on `seqId`,
   /// called from its `preparePrefill` under the scheduler lock. A parked
-  /// sequence lends its cells (`seq_cp`), the RAM tier and the files a copy;
-  /// none of them changes.
+  /// sequence, the RAM tier and the files each lend a copy; none of them
+  /// changes.
   bool offerDonorLocked(
       llama_seq_id seqId, const cache::Ledger& prompt, bool trimmable,
       size_t minimum, const cache::DonorAdopter& adopt);
