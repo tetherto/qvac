@@ -116,6 +116,7 @@ extra.
 | `advisory_model_fit.py`            | `advisory-model-fit.ts`                                | `load_model` with `model_fit_policy`, `logging_stream`, `SDK_LOG_ID`                                                      |
 | `sharded_models.py`                | `llamacpp-sharded.ts`                                  | `load_model` with a sharded `model_src`; per-shard progress from `on_progress`'s `shard_info`                             |
 | `logging_streams.py`               | `logging-streaming.ts`                                 | `logging_stream`, `SDK_LOG_ID`                                                                                            |
+| `logging_global.py`                | `logging-global.ts`                                    | `subscribe_server_logs` fan-in; `config/logging/logging.config.json` passed as `Client(config=...)`                     |
 | `classify_image.py`                | `classification/classify-image.ts`                     | `classify` (`ClassifyRequest`) with a base64 image on the bundled MobileNetV3-Small model (`model_type` only)           |
 | `decisions.py`                     | `decisions.ts`                                         | `decide` (`DecideRequest`): choice, score and `noul` questions on one state; optional local GGUF argument               |
 | `rerank.py`                        | `rerank.ts`                                            | `rerank` (`RerankRequest`): one score per document, sorted; optional GGUF path or URL argument                          |
