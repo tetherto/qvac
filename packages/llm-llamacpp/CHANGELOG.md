@@ -35,8 +35,13 @@
   conversation the model holds (in memory, in another batch slot, in the RAM
   tier, or in a `cacheKey` file used in this process), not only its own
   `cacheKey`'s. The other conversation is copied, never changed. On
-  multimodal models an image the two share is not encoded again
+  multimodal models an image the two share is not encoded again.
+  Encoder-decoder models are unchanged
   ([#5417](https://github.com/tetherto/qvac/pull/5417)).
+- An image is now identified by the SHA-256 of its encoded bytes, not by a
+  hash of its pixels, so a multimodal cache file written by an earlier version
+  re-encodes its images once (on hybrid and sliding-window models its next
+  turn may start cold).
 - A request without a `cacheKey` keeps its state in memory for the next
   request instead of resetting the context; it is never written to a file.
   `CacheTokens` after such a request reports the tokens kept
