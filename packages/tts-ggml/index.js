@@ -363,8 +363,17 @@ class TTSGgml {
         const existingAddon = this._optionalAddon();
         if (existingAddon)
             await existingAddon.destroyInstance();
-        this.addon = this._spawnAddon(parameters);
-        await this._requireAddon().activate();
+        const addon = this._spawnAddon(parameters);
+        this.addon = addon;
+        try {
+            await addon.activate();
+        }
+        catch (error) {
+            if (this.addon === addon)
+                this.addon = null;
+            await addon.destroyInstance();
+            throw error;
+        }
     }
     static getModelKey(_params) {
         void _params;

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/turbovec-ggml",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "CPU vector index with TurboVec quantization for qvac",
   "addon": true,
   "engines": {
@@ -52,8 +52,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.24.0",
-    "@qvac/fabric-ios": "^0.24.0",
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0",
     "@types/node": "^24.2.1",
     "bare-fs": "^4.5.1",
     "bare-os": "^3.6.2",
@@ -74,18 +74,18 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.24.0"
+    "@qvac/fabric": "^0.25.0"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.24.0",
-    "@qvac/fabric-linux-arm64": "^0.24.0",
-    "@qvac/fabric-darwin-arm64": "^0.24.0",
-    "@qvac/fabric-darwin-x64": "^0.24.0",
-    "@qvac/fabric-win32-x64": "^0.24.0"
+    "@qvac/fabric-linux-x64": "^0.25.0",
+    "@qvac/fabric-linux-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-x64": "^0.25.0",
+    "@qvac/fabric-win32-x64": "^0.25.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.24.0",
-    "@qvac/fabric-ios": "^0.24.0"
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {

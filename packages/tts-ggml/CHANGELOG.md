@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Explicit LavaSR Core ML models and compute policies in the enhancer and
+  denoiser options.
+
+### Changed
+
+- Update the shared `speech-cpp` native dependency to `2026-10-28`
+  ([#5420](https://github.com/tetherto/qvac/pull/5420)).
+
+### Fixed
+
+- Preserve the active TTS instance when an older overlapping reload fails.
+
 ## [0.14.1] - 2026-10-28
 
 ### Changed
