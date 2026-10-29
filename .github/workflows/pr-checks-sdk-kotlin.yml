@@ -88,6 +88,7 @@ jobs:
               "packages/sdk/package.json",
               ".github/workflows/pr-checks-sdk-kotlin.yml",
               ".github/workflows/publish-sdk-kotlin.yml",
+              ".github/workflows/build-sdk-kotlin-release-assets.yml",
               ".github/workflows/on-pr-sdk-kotlin-e2e.yml"
             ] as $paths
             | ($files | split("\n") | map(select(length > 0))) as $changed
