@@ -9,6 +9,7 @@ import {
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
+import { openaiState } from '@/serve/extensions/openai/state'
 import {
   completionsBody,
   COMPLETIONS_UNSUPPORTED_PARAMS,
@@ -86,7 +87,8 @@ async function runOne(
   tokenCount: number
   finishReason: OpenAiFinishReason
 }> {
-  const result = completion({
+  const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
+  const result = completionFn({
     modelId: p.sdkModelId,
     history: legacyPromptToHistory(prompt),
     stream: false,
@@ -107,7 +109,8 @@ async function runStreaming(
   p: SharedParams,
   prompt: string
 ): Promise<void> {
-  const result = completion({
+  const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
+  const result = completionFn({
     modelId: p.sdkModelId,
     history: legacyPromptToHistory(prompt),
     stream: true,

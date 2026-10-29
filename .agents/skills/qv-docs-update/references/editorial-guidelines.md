@@ -194,7 +194,7 @@ Write exactly one introductory sentence, in the shape "The following script …"
 
 > The following script loads a `parallel: 4` model, fires four completions at once, and then cancels one of two long runs to show its peer keeps decoding:
 
-> The following script classifies a JPEG image using the bundled MobileNetV3-Small model:
+> The following script classifies a JPEG image using the registry MobileNetV3-Small model:
 
 The sentence states what the script does, concretely, naming the parameters and values it demonstrates. It does not explain why the reader would want that.
 

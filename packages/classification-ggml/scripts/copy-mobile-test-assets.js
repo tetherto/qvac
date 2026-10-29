@@ -11,14 +11,11 @@
 //      copies the framework cannot match a native binary for the device
 //      arch flavour it is targeting (e.g. android-x64, ios-arm64-simulator).
 //
-//   2. Copy the FP16 GGUF weights bundle from `weights/` into
-//      `test/mobile/testAssets/`. On mobile, the bare runtime cannot
-//      access files in the npm package's `weights/` directory at runtime
-//      because the worklet is loaded from a packed `.bundle`; the test
-//      framework instead pushes everything under `test/mobile/testAssets/`
-//      to the device and exposes their on-device paths via
-//      `global.assetPaths`. Without this copy `ImageClassifier.load()`
-//      fails with `MobileNet GGUF weights not found at /app.bundle/...`.
+//   2. Copy the FP16 GGUF from `weights/` into `test/mobile/testAssets/`.
+//      Mobile integration tests pass that staged path as `modelPath`.
+//      The worklet is loaded from a packed `.bundle`, so the test
+//      framework pushes everything under `test/mobile/testAssets/` to the
+//      device and exposes their on-device paths via `global.assetPaths`.
 //
 // Idempotent: every action is a copy that overwrites silently if the
 // destination already exists.
