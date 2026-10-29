@@ -3,6 +3,7 @@
 #include <any>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <functional>
 #include <future>
 #include <memory>
@@ -34,6 +35,7 @@
 #include "handlers/GenerationParamHandlers.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/SpeculativeRuntime.hpp"
 #include "utils/ParallelLimits.hpp"
 #include "utils/ParseUnsigned.hpp"
 
@@ -646,6 +648,10 @@ inline FitResult runFit(FitRequest request) {
 
   common_params loadParams;
   try {
+    // Addon-only key, consumed before llama.cpp's parser sees it, as at load.
+    const auto speculativeConfig =
+        qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
+            configFilemap);
     ModelMetaData metadata;
     metadata.parse(modelPath, GGUFShards{}, false, ADDON_ID);
     auto normalized = load_fit_normalization::normalizeLoadForFit(
@@ -656,8 +662,25 @@ inline FitResult runFit(FitRequest request) {
         load_fit_normalization::productionDependencies(
             LlamaModel::llamaLogCallback));
     loadParams = std::move(normalized.params);
+    qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
+        speculativeConfig, loadParams);
   } catch (const std::exception&) {
     return errorResult("unsupported-config");
+  }
+  // The draft model (DFlash or an MTP head) is a second file the fit reads;
+  // probed like the target above. The load requires a regular file, and
+  // `fopen` opens a directory on POSIX.
+  if (const std::string& draftPath = loadParams.speculative.draft.mparams.path;
+      !draftPath.empty()) {
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(draftPath, error)) {
+      return errorResult("model-unreadable");
+    }
+    if (std::FILE* file = std::fopen(draftPath.c_str(), "rb")) {
+      std::fclose(file);
+    } else {
+      return errorResult("model-unreadable");
+    }
   }
   loadParams.embedding = false;
 
@@ -721,6 +744,26 @@ inline FitResult runFit(FitRequest request) {
     return errorResult("unsupported-config");
   }
 
+  // A draft context (MTP, or a DFlash draft model) is fitted next to the
+  // model, as the load does.
+  const auto speculativeFit =
+      qvac_lib_inference_addon_llama::speculative::SpeculativeFitModel::create(
+          loadParams);
+
+  // The load refuses an external MTP head for another model; so does the
+  // projection, comparing the same header values.
+  if (speculativeFit && speculativeFit->isMtp() &&
+      !speculativeFit->extra()->shares_model) {
+    namespace spec = qvac_lib_inference_addon_llama::speculative;
+    const auto head = spec::readGgufShape(speculativeFit->extra()->path_model);
+    const auto target = spec::readGgufShape(modelPath);
+    if (!spec::mtpHeadMismatch(
+             head.width, target.width, head.vocab, target.vocab)
+             .empty()) {
+      return errorResult("unsupported-config");
+    }
+  }
+
   common_params_fit_status status{};
   try {
     status = common_fit_params(
@@ -731,7 +774,7 @@ inline FitResult runFit(FitRequest request) {
         buftOverrides.data(),
         margins.data(),
         minCtx,
-        nullptr,
+        speculativeFit ? speculativeFit->extra() : nullptr,
         false,
         GGML_LOG_LEVEL_INFO,
         // The load's fit passes it too, so `moe-cache-mib: auto` sizes the
@@ -778,6 +821,19 @@ inline FitResult runFit(FitRequest request) {
     measured = false;
     devices.clear();
     breakdown.clear();
+  }
+  // The figures count the draft side, as the verdict does. A draft model the
+  // fit cannot measure stays out of both, as fabric fits without it. An MTP
+  // draft that cannot be measured, such as one without MTP layers, fails the
+  // load, so it is refused. A failed fit leaves `n_ctx` 0, which the load
+  // resolves to the trained context.
+  llama_context_params draftCparams = cparams;
+  draftCparams.n_ctx = cparams.n_ctx != 0 ? cparams.n_ctx : trainCtx;
+  if (measured && speculativeFit &&
+      !speculativeFit->addMemory(
+          modelPath.c_str(), mparams, draftCparams, devices, breakdown) &&
+      speculativeFit->isMtp()) {
+    return errorResult("unsupported-config");
   }
 
   // The probe returns one row per device the model was assigned to, then a

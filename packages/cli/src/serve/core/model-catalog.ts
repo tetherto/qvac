@@ -39,6 +39,10 @@ export function roleForAddon(addon: string): string {
   return normalizeEndpointCategory(addon)
 }
 
+function roleForModel(model: ModelConstant): string {
+  return model.engine ? normalizeEndpointCategory(model.engine) : roleForAddon(model.addon)
+}
+
 function metaFrom(modelSrc: string | ModelConstant, sdkType: string) {
   if (typeof modelSrc === 'string') {
     return { addon: null, engine: sdkType || null, quantization: null, params: null, size: null }
@@ -100,7 +104,7 @@ export function buildBuiltinCatalog(constants: Map<string, ModelConstant>): Mode
       configured: false,
       usable: false,
       state: 'not_configured',
-      role: roleForAddon(model.addon),
+      role: roleForModel(model),
       addon: model.addon ?? null,
       engine: model.engine ?? null,
       quantization: model.quantization || null,
@@ -133,11 +137,11 @@ export function filterCatalog(
 
 // No default limit: an omitted `limit` returns every matching entry from
 // `offset` onward. A limit is applied only when the caller asks for one.
-export function paginate(
-  entries: ModelCatalogEntry[],
+export function paginate<T>(
+  entries: T[],
   limit?: number,
   offset = 0
-): { data: ModelCatalogEntry[]; hasMore: boolean } {
+): { data: T[]; hasMore: boolean } {
   const end = limit === undefined ? entries.length : offset + limit
   const data = entries.slice(offset, end)
   return { data, hasMore: end < entries.length }

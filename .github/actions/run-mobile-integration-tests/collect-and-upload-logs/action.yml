@@ -3,6 +3,9 @@ description: |
   Phase 6 of the mobile integration test pipeline.
 
   Always runs, even on monitor failure (so crashes get full forensic data).
+  Starts by deleting the workspace directories it writes. Self-hosted runners
+  keep the workspace between jobs, so an earlier job's Device Farm logs would
+  otherwise be extracted and uploaded as this run's.
   Refreshes AWS credentials, downloads only the essential artifacts from
   Device Farm (Customer_Artifacts.zip + Logcat + test-spec output), extracts
   bare_console.log, test-results.json, logcat_full.txt, host-phase diagnostics,
@@ -48,6 +51,12 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Clear log directories left in the workspace by an earlier job
+      if: always()
+      shell: bash
+      run: |
+        rm -rf devicefarm-logs console-logs perf-report
+
     - name: Refresh AWS credentials before log download
       if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
       uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -176,16 +185,23 @@ runs:
         mkdir -p "$CONSOLE_DIR"
         # Artifacts live under <LOG_DIR>/<run_device>/<suite>/.  Use the
         # job-level dir (grandparent) as the device label for extracted files.
+        # Keep the per-suite directory for the raw captures: a flat name
+        # collides across Setup/Tests/Teardown and drops the Tests_Suite
+        # logcat, the only one holding on-device engine output.
         find "$LOG_DIR" -type f \( -iname "Logcat.*" -o -iname "*Customer_Artifacts.zip" -o -iname "*test*spec*output*" -o -iname "*standard*output*" \) | while read -r f; do
           fname=$(basename "$f")
           device=$(basename "$(dirname "$(dirname "$f")")")
+          # Mirror Device Farm's own layout for the raw captures.
+          rel="${f#"$LOG_DIR"/}"
           if echo "$fname" | grep -qiE "Logcat\."; then
-            cp "$f" "$CONSOLE_DIR/${device}_${fname}"
-            echo "  Console log: ${device}_${fname}"
+            mkdir -p "$CONSOLE_DIR/$(dirname "$rel")"
+            cp "$f" "$CONSOLE_DIR/$rel"
+            echo "  Console log: $rel"
           fi
           if echo "$fname" | grep -qiE "(test.*spec.*output|standard.*output)"; then
-            cp "$f" "$CONSOLE_DIR/${device}_${fname}"
-            echo "  Host phase log: ${device}_${fname}"
+            mkdir -p "$CONSOLE_DIR/$(dirname "$rel")"
+            cp "$f" "$CONSOLE_DIR/$rel"
+            echo "  Host phase log: $rel"
           fi
           if echo "$fname" | grep -qiE "Customer_Artifacts\.zip$"; then
             tmpdir=$(mktemp -d)
@@ -341,8 +357,6 @@ runs:
                 title = t.get('title', '?')
                 status = t.get('status', 'unknown')
                 dur = t.get('duration', 0) or 0
-                if status == 'passed' and dur < 500:
-                    status = 'skipped'
                 runner_rows.setdefault(title, {})[dev] = {
                     'status': status, 'durationMs': dur
                 }

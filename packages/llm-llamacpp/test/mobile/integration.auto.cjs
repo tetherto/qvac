@@ -521,6 +521,11 @@ async function runOcrUnlimitedTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/ocr-unlimited.test.js', options)
 }
 
+async function runPrimeSystemToolsTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runPrimeSystemToolsTest')) return __FILTERED
+  return runIntegrationModule('../integration/prime-system-tools.test.js', options)
+}
+
 async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQuantizedKvcacheTest')) return __FILTERED
   return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
@@ -564,6 +569,11 @@ async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-v
 async function runReasoningTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runReasoningTest')) return __FILTERED
   return runIntegrationModule('../integration/reasoning.test.js', options)
+}
+
+async function runSpeculativeDecodingTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runSpeculativeDecodingTest')) return __FILTERED
+  return runIntegrationModule('../integration/speculative-decoding.test.js', options)
 }
 
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars

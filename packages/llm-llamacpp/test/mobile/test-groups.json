@@ -29,9 +29,11 @@
       "runModelLoadingTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
+      "runPrimeSystemToolsTest",
       "runQwen35Test",
       "runTurboquantTest",
-      "runUtf8OutputTest"
+      "runUtf8OutputTest",
+      "runSpeculativeDecodingTest"
     ]
   },
   "android": {
@@ -54,7 +56,8 @@
     "funcShardC": [
       "runToolCallingTest",
       "runReasoningTest",
-      "runGenerationParamsTest"
+      "runGenerationParamsTest",
+      "runSpeculativeDecodingTest"
     ],
     "funcShardD": [
       "runGemma4Test"
@@ -63,6 +66,7 @@
       "runApiBehaviorTest",
       "runFitTest",
       "runMultiInstanceTest",
+      "runPrimeSystemToolsTest",
       "runQwen35Test",
       "runModelLoadingTest",
       "runImageFruitPlateTest",

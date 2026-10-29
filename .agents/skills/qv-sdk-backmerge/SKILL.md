@@ -23,10 +23,20 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 
 **On a release train** (`qv-release-train`), run it once for the whole train:
 read `release-train-<train>-<x.y.z>` wherever this skill says
-`release-<pkg>-<x.y.z>`. The source carries several manifests, changelogs and
-`pnpm-lock.yaml`; that is release metadata for Step 2's sanity check. Never
-carry a `.nx/version-plans/` file to `main`: if the cherry-pick brings one,
-`git rm` it before committing, or the next train applies it again.
+`release-<pkg>-<x.y.z>`, so the head is `backmerge/release-train-<train>-<x.y.z>`
+and the title names `release-train-<train>-<x.y.z>`. `pr-checks-sdk-pod.yml`
+recognises that head name and checks the backmerge against the train's
+tarballs, because npm does not have the new versions until the train publishes.
+The source carries several manifests, changelogs and `pnpm-lock.yaml`; that is
+release metadata for the sanity check in "Resolve the cherry-pick source".
+Never carry a `.nx/version-plans/` file to `main`: if the cherry-pick brings
+one, `git rm` it before committing, or the next train applies it again. A train
+with `fromNpm` packages also changes `pnpm-workspace.yaml` on its release
+branch: keep `main`'s copy (`git checkout ORG_REMOTE/main --
+pnpm-workspace.yaml`) and regenerate `pnpm-lock.yaml` as the `pnpm-lock.yaml`
+rule in "Conflict triage" describes. Its backmerge checks install the train
+from npm, so they pass only after the push run publishes.
+`docs/ci/RELEASE-TRAIN.md` ("Making a release") says when to merge it.
 
 ## Inputs (resolve in priority order)
 
@@ -61,7 +71,7 @@ In command examples below, `ORG_REMOTE` / `FORK_REMOTE` are placeholders — sub
 | Standalone with merged release PR     | The PR's merge/squash commit on `ORG_REMOTE/release-<pkg>-<x.y.z>` (`gh pr view <num> --json mergeCommit,headRefName`) |
 | Standalone with `--commit=<sha>`      | That single commit                                                                                               |
 
-**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and for `--package=sdk` the two generated reference pages under `docs/website/content/docs/sdk/`). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
+**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and the `packages/sdk-python` and `packages/sdk-kotlin` files `qv-sdk-inference-version` Steps 3 and 3b change). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
 
 ### Step 3: Detect no-op (main already aligned)
 
@@ -143,8 +153,6 @@ Never drop `pnpm-lock.yaml` from the cherry-pick: CI's `pnpm install
 --frozen-lockfile` fails on `main` when a manifest's range and the lockfile
 disagree.
 
-**Docs-website conflicts are never auto-resolvable.** An `--package=sdk` release commit also carries the two generated pages of the SDK's current documentation line (`docs/website/content/docs/sdk/(v<X.Y>)/reference/{api,release-notes}.mdx`, see `qv-sdk-changelog` Step 8). A conflict there — or a cherry-pick that cannot find the path at all — usually means `main` has since been cut to a newer line, so the folder the release wrote into is now the plain `v<X.Y>` one. STOP and hand it to the documentation engineer: choosing which line the content belongs in is their call, not a merge resolution.
-
 When stopping, print:
 
 - `git status -sb`
@@ -219,7 +227,6 @@ Lands the release metadata for `<pkg>@<x.y.z>` on `main`, per [gitflow.md](../..
 - `<pkg-dir>/changelog/<x.y.z>/` — generated changelog files
 - `<pkg-dir>/CHANGELOG.md` — aggregated changelog
 - `<pkg-dir>/NOTICE` — updated dependency attributions (if present)
-- `docs/website/content/docs/sdk/(v<X.Y>)/reference/` — API summary (minor only) and release notes of the SDK's current documentation line (`--package=sdk` only)
 - (any other release-metadata files included in the cherry-pick)
 ~~~
 
@@ -249,7 +256,7 @@ Print the new PR URL as a clickable hyperlink. When chained from `sdk-pr-create`
 
 Before completing:
 
-- [ ] Branch name is exactly `backmerge/release-<pkg>-<x.y.z>`
+- [ ] Branch name is exactly `backmerge/release-<pkg>-<x.y.z>` (`backmerge/release-train-<train>-<x.y.z>` on a train)
 - [ ] Title contains `[skiplog]` tag (combined as `[skiplog|notask]` if tickless)
 - [ ] Body links the companion release PR
 - [ ] Cherry-pick used `-x` (so the original SHA is recorded in commit messages)

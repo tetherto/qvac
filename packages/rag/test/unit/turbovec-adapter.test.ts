@@ -2204,3 +2204,218 @@ test('TurboVecAdapter prunes the mutations a checkpoint covers', async (t) => {
   await adapter.close()
   await store.close()
 })
+
+function deferred() {
+  let resolve = () => {}
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+test('TurboVecAdapter waits for async creation before queued mutations and close', async (t) => {
+  const directory = await tmp()
+  const store = new Corestore(path.join(directory, 'store'))
+  const started = deferred()
+  const gate = deferred()
+  const events: string[] = []
+  const provider: TurboVecIndexProvider = {
+    async create(options) {
+      started.resolve()
+      await gate.promise
+      events.push('create')
+      const index = new IdMapIndex(options)
+      const add = index.addWithIds.bind(index)
+      const remove = index.remove.bind(index)
+      const dispose = index.dispose.bind(index)
+      index.addWithIds = (vectors, ids) => {
+        events.push('add')
+        add(vectors, ids)
+      }
+      index.remove = (id) => {
+        events.push('remove')
+        return remove(id)
+      }
+      index.dispose = () => {
+        events.push('dispose')
+        dispose()
+      }
+      return index
+    },
+    async load(snapshotPath) {
+      return await indexProvider.load(snapshotPath)
+    }
+  }
+  const adapter = new TurboVecAdapter({ store, indexProvider: provider })
+  let closing: Promise<void> | undefined
+  try {
+    await adapter.ready()
+    const saving = adapter.saveEmbeddings([
+      { id: 'async', content: 'async', embeddingModelId: 'model', embedding: vector(8, 0) }
+    ])
+    await started.promise
+    const deleting = adapter.deleteEmbeddings(['async'])
+    let closed = false
+    closing = adapter.close().then(() => {
+      closed = true
+    })
+    await Promise.resolve()
+    t.alike(events, [], 'no mutation runs before the index is ready')
+    t.absent(closed, 'close waits for pending creation')
+    gate.resolve()
+    t.is((await saving)[0].status, 'fulfilled')
+    t.is(await deleting, true)
+    await closing
+    t.alike(events, ['create', 'add', 'remove', 'dispose'])
+  } finally {
+    gate.resolve()
+    if (closing) await closing
+    await adapter.close()
+    await store.close()
+  }
+})
+
+test('TurboVecAdapter awaits async rebuilds and checkpoint loads during close', async (t) => {
+  const directory = await tmp()
+  const store = new Corestore(path.join(directory, 'store'))
+  const checkpointDir = path.join(directory, 'index')
+  const started = deferred()
+  const gate = deferred()
+  let creates = 0
+  let disposes = 0
+  const provider: TurboVecIndexProvider = {
+    async create(options) {
+      creates++
+      return await indexProvider.create(options)
+    },
+    async load(snapshotPath) {
+      started.resolve()
+      await gate.promise
+      const index = await indexProvider.load(snapshotPath)
+      const dispose = index.dispose.bind(index)
+      index.dispose = () => {
+        disposes++
+        dispose()
+      }
+      return index
+    }
+  }
+  const first = new TurboVecAdapter({ store, checkpointDir, indexProvider: provider })
+  const reopened = new TurboVecAdapter({ store, checkpointDir, indexProvider: provider })
+  let closing: Promise<void> | undefined
+  try {
+    await first.ready()
+    await first.saveEmbeddings([
+      { id: 'async-load', content: 'async', embeddingModelId: 'model', embedding: vector(8, 0) }
+    ])
+    t.ok((await first.reindex()).reindexed)
+    t.is(creates, 2, 'creation and rebuild both await the provider')
+    await first.checkpoint()
+    await first.close()
+    const opening = reopened.ready()
+    await started.promise
+    let closed = false
+    closing = reopened.close().then(() => {
+      closed = true
+    })
+    await Promise.resolve()
+    t.absent(closed, 'close waits for pending checkpoint loading')
+    t.is(disposes, 0)
+    gate.resolve()
+    await opening
+    await closing
+    t.is(disposes, 1, 'the loaded index is disposed once')
+    t.is(creates, 2, 'a valid async load does not rebuild')
+  } finally {
+    gate.resolve()
+    if (closing) await closing
+    await reopened.close()
+    await first.close()
+    await store.close()
+  }
+})
+
+test('TurboVecAdapter handles async provider failures with storage fallback and scanning', async (t) => {
+  const directory = await tmp()
+  const store = new Corestore(path.join(directory, 'store'))
+  const attempts: string[] = []
+  let unavailable = false
+  const provider: TurboVecIndexProvider = {
+    async create(options) {
+      attempts.push(options.storage)
+      await Promise.resolve()
+      if (options.storage === 'turbovec-q4' || unavailable) throw new Error('async native failure')
+      return indexProvider.create(options)
+    },
+    async load() {
+      await Promise.resolve()
+      throw new Error('async snapshot failure')
+    }
+  }
+  const adapter = new TurboVecAdapter({ store, indexProvider: provider })
+  try {
+    await adapter.ready()
+    await adapter.saveEmbeddings([
+      { id: 'fallback', content: 'fallback', embeddingModelId: 'model', embedding: vector(8, 0) }
+    ])
+    t.alike(attempts, ['turbovec-q4', 'q8'])
+    t.is(adapter.vectorStorage, 'q8')
+    unavailable = true
+    await adapter.reindex()
+    t.is(adapter.vectorStorage, null)
+    t.is((await adapter.search('fallback', vector(8, 0), { topK: 1 }))[0]?.id, 'fallback')
+  } finally {
+    await adapter.close()
+    await store.close()
+  }
+})
+
+for (const unavailable of [false, true]) {
+  test(`TurboVecAdapter recovers from a rejected async checkpoint load, unavailable=${unavailable}`, async (t) => {
+    const directory = await tmp()
+    const store = new Corestore(path.join(directory, 'store'))
+    const checkpointDir = path.join(directory, 'index')
+    const first = new TurboVecAdapter({ store, checkpointDir, indexProvider })
+    let loads = 0
+    const attempts: string[] = []
+    const reopened = new TurboVecAdapter({
+      store,
+      checkpointDir,
+      indexProvider: {
+        async create(options) {
+          attempts.push(options.storage)
+          await Promise.resolve()
+          if (unavailable) throw new Error('dependency unavailable')
+          return indexProvider.create(options)
+        },
+        async load() {
+          loads++
+          await Promise.resolve()
+          throw new Error('checkpoint could not load')
+        }
+      }
+    })
+    try {
+      await first.ready()
+      await first.saveEmbeddings([
+        {
+          id: 'recovered',
+          content: 'recovered',
+          embeddingModelId: 'model',
+          embedding: vector(8, 0)
+        }
+      ])
+      await first.checkpoint()
+      await first.close()
+      await reopened.ready()
+      t.is(loads, 1, 'the checkpoint load is attempted')
+      t.alike(attempts, unavailable ? ['turbovec-q4', 'q8'] : ['turbovec-q4'])
+      t.is(reopened.vectorStorage, unavailable ? null : 'turbovec-q4')
+      t.is((await reopened.search('recovered', vector(8, 0), { topK: 1 }))[0]?.id, 'recovered')
+    } finally {
+      await reopened.close()
+      await first.close()
+      await store.close()
+    }
+  })
+}

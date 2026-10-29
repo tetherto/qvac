@@ -5,8 +5,10 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -26,6 +28,8 @@
 #include "model-interface/BertModel.hpp"
 #include "model-interface/LayaModel.hpp"
 #include "model-interface/LlamaLazyInitializeBackend.hpp"
+#include "model-interface/RerankModel.hpp"
+#include "model-interface/utils.hpp"
 
 namespace qvac_lib_inference_addon_embed {
 
@@ -42,6 +46,7 @@ namespace qvac_lib_inference_addon_embed {
 
 struct FitRequest {
   std::string modelPath;
+  std::string projectionModel;
   std::unordered_map<std::string, std::string> config;
   std::optional<double> minCtxSize;
   std::optional<double> marginBytes;
@@ -59,6 +64,8 @@ struct FitDevice {
 struct FitResult {
   std::string status = "error";
   std::string reason;
+  // What caused an `error` status, for the caller to act on; empty otherwise.
+  std::string message;
   double gpuLayers = 0;
   double ctxSize = 0;
   std::vector<FitDevice> devices;
@@ -68,9 +75,10 @@ struct FitResult {
   double expertCount = 0;
 };
 
-inline FitResult errorResult(const char* reason) {
+inline FitResult errorResult(const char* reason, std::string message) {
   FitResult result;
   result.reason = reason;
+  result.message = std::move(message);
   return result;
 }
 
@@ -83,6 +91,10 @@ inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   FitRequest parsed;
   parsed.modelPath =
       request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+  parsed.projectionModel = request
+                               .getOptionalPropertyAs<js::String, std::string>(
+                                   env, "projectionModel")
+                               .value_or("");
 
   auto number = [&](const char* name) -> std::optional<double> {
     auto value = request.getOptionalProperty<js::Number>(env, name);
@@ -136,6 +148,24 @@ inline FitResult runFit(FitRequest request) {
   const std::string backendsDir = takeConfig("backendsDir");
   const std::string openclCacheDir = takeConfig("openclCacheDir");
 
+  // A projector is a second resident file, with its own compute buffers, that
+  // the fitter does not count: a multimodal load would be projected as if it
+  // were text only, so it is refused, as @qvac/llm-llamacpp refuses an mmproj.
+  // Projector options in the config mark such a load too.
+  if (!request.projectionModel.empty()) {
+    return errorResult(
+        "unsupported-config",
+        "projectionModel: the fitter does not count a projector, so a "
+        "multimodal load cannot be projected");
+  }
+  // The options go through the same function load uses: without a projection
+  // model it refuses any of them, as load does.
+  try {
+    takeMultimodalOptions(configFilemap, /* hasProjectionModel = */ false);
+  } catch (const std::exception& e) {
+    return errorResult("unsupported-config", e.what());
+  }
+
   // `common_fit_params` reads ggml's global device registry and loads nothing
   // itself, so whatever is registered here is its whole view of the machine.
   // The handle holds the reference count for the call: a model unloading on
@@ -145,7 +175,8 @@ inline FitResult runFit(FitRequest request) {
   // An empty registry would still yield a verdict, measured against a machine
   // the fitter cannot see.
   if (ggml_backend_dev_count() == 0) {
-    return errorResult("no-backend-device");
+    return errorResult(
+        "no-backend-device", "no ggml backend device is registered");
   }
 
   // A path llama cannot open reaches it as a `runtime_error` carrying no
@@ -154,35 +185,41 @@ inline FitResult runFit(FitRequest request) {
   if (std::FILE* file = std::fopen(modelPath.c_str(), "rb")) {
     std::fclose(file);
   } else {
-    return errorResult("model-unreadable");
+    return errorResult("model-unreadable", "cannot open " + modelPath);
   }
 
   // The fitter measures device memory, and a cpu load's weights stay
   // file-backed, so it would project `fits` for nearly any model.
   if (auto device = configFilemap.find("device");
       device != configFilemap.end() && device->second == "cpu") {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "device: a cpu load keeps its weights file-backed, which the fitter "
+        "does not measure");
   }
 
   common_params loadParams;
   try {
     loadParams = setupParams(modelPath, std::move(configFilemap)).params;
-  } catch (const std::exception&) {
-    return errorResult("unsupported-config");
+  } catch (const std::exception& e) {
+    return errorResult("unsupported-config", e.what());
   }
   loadParams.embedding = true;
 
   // A second resident file the projection does not count, so a load carrying
   // one would come back understated.
   if (!loadParams.lora_adapters.empty()) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config", "lora: the fitter does not count a LoRA adapter");
   }
 
   // `BertModel::configureParams` applies both to every embedding load: a
   // non-causal model decodes one ubatch at a time, and a single sequence needs
-  // no split cache.
+  // no split cache but must still admit every sequence id (sized below, once
+  // the context is pinned).
   loadParams.n_ubatch = loadParams.n_batch;
-  if (loadParams.n_parallel == 1) {
+  const bool unifiedFallback = loadParams.n_parallel == 1;
+  if (unifiedFallback) {
     loadParams.kv_unified = true;
   }
 
@@ -208,6 +245,9 @@ inline FitResult runFit(FitRequest request) {
     }
   } catch (const std::exception&) {
   }
+  if (unifiedFallback) {
+    loadParams.n_parallel = unifiedSequenceLimit(loadParams);
+  }
 
   llama_model_params mparams = common_model_params_to_llama(loadParams);
   llama_context_params cparams = common_context_params_to_llama(loadParams);
@@ -217,7 +257,9 @@ inline FitResult runFit(FitRequest request) {
   const auto requestedMinCtx = request.minCtxSize;
   if (requestedMinCtx.has_value() &&
       (!std::isfinite(*requestedMinCtx) || *requestedMinCtx < 0)) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "minCtxSize must be a finite number of 0 or more");
   }
   const uint32_t minCtx =
       requestedMinCtx.has_value()
@@ -227,7 +269,9 @@ inline FitResult runFit(FitRequest request) {
   const auto requestedMargin = request.marginBytes;
   if (requestedMargin.has_value() &&
       (!std::isfinite(*requestedMargin) || *requestedMargin < 0)) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "marginBytes must be a finite number of 0 or more");
   }
 
   // In/out: the fitter rewrites only the entries still holding a llama
@@ -240,7 +284,9 @@ inline FitResult runFit(FitRequest request) {
   // llama walks this array to its `{nullptr, nullptr}` terminator, so a list
   // that does not fit with the terminator would be read past its end.
   if (loadParams.tensor_buft_overrides.size() > buftOverrides.size()) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "override-tensor: more tensor overrides than llama accepts");
   }
   std::copy_n(
       loadParams.tensor_buft_overrides.begin(),
@@ -260,7 +306,10 @@ inline FitResult runFit(FitRequest request) {
 
   // Without the fitter the load places nothing, so there is no verdict.
   if (!loadParams.fit_params) {
-    return errorResult("unsupported-config");
+    return errorResult(
+        "unsupported-config",
+        "fit: the load turns the fitter off, so there is no placement to "
+        "project");
   }
 
   common_params_fit_status status{};
@@ -279,10 +328,10 @@ inline FitResult runFit(FitRequest request) {
         // The load's fit passes it too, so `moe-cache-mib: auto` sizes the
         // same expert cache in the projection as in the load.
         loadParams.moe_cache_auto_explicit);
-  } catch (const std::exception&) {
+  } catch (const std::exception& e) {
     // `common_fit_params` answers its own failures with a status, so a throw
     // escaping it came from the setup around the probe.
-    return errorResult("unsupported-config");
+    return errorResult("unsupported-config", e.what());
   }
 
   const char* statusName = "error";
@@ -293,7 +342,8 @@ inline FitResult runFit(FitRequest request) {
   }
 
   if (status == COMMON_PARAMS_FIT_STATUS_ERROR) {
-    return errorResult("model-unreadable");
+    return errorResult(
+        "model-unreadable", "the fitter could not read " + modelPath);
   }
 
   // The per-device breakdown is a second no-alloc probe, so it costs about
@@ -357,7 +407,8 @@ inline FitResult runFit(FitRequest request) {
   uint32_t fittedCtx = cparams.n_ctx;
   if (fittedCtx == 0 && measured) {
     if (trainCtx == 0) {
-      return errorResult("model-unreadable");
+      return errorResult(
+          "model-unreadable", modelPath + " declares no trained context");
     }
     fittedCtx = trainCtx;
   }
@@ -385,6 +436,9 @@ inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
   auto result = js::Object::create(env);
   result.setProperty(env, "status", js::String::create(env, fit.status));
   result.setProperty(env, "reason", js::String::create(env, fit.reason));
+  if (!fit.message.empty()) {
+    result.setProperty(env, "message", js::String::create(env, fit.message));
+  }
   result.setProperty(env, "gpuLayers", js::Number::create(env, fit.gpuLayers));
   result.setProperty(env, "ctxSize", js::Number::create(env, fit.ctxSize));
   auto devices = js::Array::create(env);
@@ -427,20 +481,32 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
+/// Creates the JS instance of a @p ModelT whose outputs @p OutputHandlerT
+/// delivers. Args: [jsHandle, { path, config, backendsDir }, outputCallback],
+/// plus `projectionPath` for a BertModel.
+template <typename ModelT, typename OutputHandlerT>
+js_value_t* createModelInstance(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
   JsArgsParser args(env, info);
 
-  auto model = make_unique<BertModel>(
-      args.getMapEntry(1, "path"),
-      args.getSubmap(1, "config"),
-      args.getMapEntry(1, "backendsDir"));
+  unique_ptr<ModelT> model;
+  if constexpr (is_same_v<ModelT, BertModel>) {
+    model = make_unique<BertModel>(
+        args.getMapEntry(1, "path"),
+        args.getSubmap(1, "config"),
+        args.getMapEntry(1, "backendsDir"),
+        args.getMapEntry(1, "projectionPath"));
+  } else {
+    model = make_unique<ModelT>(
+        args.getMapEntry(1, "path"),
+        args.getSubmap(1, "config"),
+        args.getMapEntry(1, "backendsDir"));
+  }
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(
-      make_shared<out_handl::Js2DArrayOutputHandler<BertEmbeddings, float>>());
+  outHandlers.add(make_shared<OutputHandlerT>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),
@@ -450,6 +516,13 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
 
   return JsInterface::createInstance(env, std::move(addon));
+}
+
+inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
+  return createModelInstance<
+      BertModel,
+      qvac_lib_inference_addon_cpp::out_handl::
+          Js2DArrayOutputHandler<BertEmbeddings, float>>(env, info);
 }
 JSCATCH
 
@@ -467,27 +540,27 @@ struct JsLayaDecisionOutputHandler
 
 inline js_value_t*
 createLayaInstance(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
+  return createModelInstance<LayaModel, JsLayaDecisionOutputHandler>(env, info);
+}
+JSCATCH
 
-  JsArgsParser args(env, info);
+/// Delivers the scores as a Float32Array, one per document.
+struct JsRerankScoresOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          RerankScores> {
+  JsRerankScoresOutputHandler()
+      : JsBaseOutputHandler<
+            RerankScores>([this](const RerankScores& out) -> js_value_t* {
+          std::span<const float> scores{out.scores.data(), out.scores.size()};
+          return qvac_lib_inference_addon_cpp::js::TypedArray<float>::create(
+              this->env_, scores);
+        }) {}
+};
 
-  auto model = make_unique<LayaModel>(
-      args.getMapEntry(1, "path"),
-      args.getSubmap(1, "config"),
-      args.getMapEntry(1, "backendsDir"));
-
-  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(make_shared<JsLayaDecisionOutputHandler>());
-  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
-      env,
-      args.get(0, "jsHandle"),
-      args.getFunction(2, "outputCallback"),
-      std::move(outHandlers));
-
-  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
-
-  return JsInterface::createInstance(env, std::move(addon));
+inline js_value_t*
+createRerankInstance(js_env_t* env, js_callback_info_t* info) try {
+  return createModelInstance<RerankModel, JsRerankScoresOutputHandler>(
+      env, info);
 }
 JSCATCH
 
@@ -511,6 +584,54 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     return sequences;
   };
 
+  // [[{type: 'text', text} | {type: 'media', data: Uint8Array}, ...], ...]
+  auto parseMultimodal =
+      [&](js::Object inputObj) -> std::vector<MultimodalInput> {
+    if (!js::is<js::Array>(env, inputObj)) {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "Expected array of inputs for multimodal type"};
+    }
+    js::Array inputsArr{env, inputObj};
+    std::vector<MultimodalInput> inputs(inputsArr.size(env));
+    for (size_t i = 0; i < inputs.size(); i++) {
+      auto partsObj = inputsArr.get<js::Object>(env, i);
+      if (!js::is<js::Array>(env, partsObj)) {
+        throw StatusError{
+            general_error::InvalidArgument,
+            "Expected array of parts for multimodal input"};
+      }
+      js::Array partsArr{env, partsObj};
+      size_t nParts = partsArr.size(env);
+      inputs[i].reserve(nParts);
+      for (size_t j = 0; j < nParts; j++) {
+        auto partObj = partsArr.get<js::Object>(env, j);
+        auto partType =
+            js::String(env, partObj.getProperty<js::String>(env, "type"))
+                .as<std::string>(env);
+        MultimodalPart part;
+        if (partType == "text") {
+          part.text =
+              js::String(env, partObj.getProperty<js::String>(env, "text"))
+                  .as<std::string>(env);
+        } else if (partType == "media") {
+          part.isMedia = true;
+          part.media =
+              js::TypedArray<uint8_t>(
+                  env,
+                  partObj.getProperty<js::TypedArray<uint8_t>>(env, "data"))
+                  .as<std::vector<uint8_t>>(env);
+        } else {
+          throw StatusError(
+              general_error::InvalidArgument,
+              "Unknown multimodal part type: " + partType);
+        }
+        inputs[i].push_back(std::move(part));
+      }
+    }
+    return inputs;
+  };
+
   JsArgsParser args(env, info);
   any input;
   {
@@ -519,6 +640,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
       input = js::String(env, jsInput).as<std::string>(env);
     } else if (type == "sequences") {
       input = parseSequences(js::Object(env, jsInput));
+    } else if (type == "multimodal") {
+      input = parseMultimodal(js::Object(env, jsInput));
     } else {
       throw StatusError(
           general_error::InvalidArgument, "Unknown input type: " + type);

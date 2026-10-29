@@ -26,6 +26,7 @@ export interface VideoDiffusionFiles {
   highNoiseDiffusionModel?: string
   t5Xxl?: string
   llm?: string
+  llmVision?: string
   vae?: string
   clipVision?: string
   audioVae?: string
@@ -95,8 +96,7 @@ export interface VideoGenerationBaseParams {
 }
 
 export type VideoGenerationParams = VideoGenerationBaseParams &
-  (| { mode: 'txt2vid'; init_image?: never }
-    | { mode: 'img2vid'; init_image: Uint8Array })
+  ({ mode: 'txt2vid'; init_image?: never } | { mode: 'img2vid'; init_image: Uint8Array })
 
 export interface VideoRuntimeStats {
   modelLoadMs: number
@@ -302,6 +302,7 @@ export default class VideoStableDiffusion {
       clipGPath: '',
       t5XxlPath: this._files.t5Xxl || '',
       llmPath: this._files.llm || '',
+      llmVisionPath: this._files.llmVision || '',
       vaePath: this._files.vae || '',
       clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',

@@ -145,6 +145,7 @@ export {
   loadedToolNames,
   searchDeferredTools
 } from '@/utils/tools/defer'
+export { untilAborted } from '@/utils/until-aborted'
 
 // The full value-clean schema, profiling, and constant barrels: the @qvac/sdk client
 // and worker source every internal schema/const/profiling name from here, so it
@@ -160,7 +161,8 @@ export {
   getAddonFromEngine,
   resolveCanonicalEngine,
   ENGINE_TO_ADDON,
-  LEGACY_ENGINE_TO_CANONICAL
+  LEGACY_ENGINE_TO_CANONICAL,
+  LEGACY_REGISTRY_ENGINE_RULES
 } from '@/schemas/engine-addon-map'
 export { generateProfileId } from '@/profiling/clock'
 export { readModelExecutionMs } from '@/profiling/model-execution'
@@ -190,6 +192,7 @@ export {
   RequestRejectedByPolicyError,
   RequestValidationFailedError,
   ModelNotLoadedError,
+  ModelRegistryModelNotFoundError,
   TranslationFailedError,
   PluginDefinitionInvalidError,
   PluginModelTypeReservedError,

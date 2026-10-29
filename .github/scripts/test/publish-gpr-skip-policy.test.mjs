@@ -251,9 +251,9 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
     }
   })
 
-  // Fixing publish-gpr must not switch merge-time integration tests on: they
-  // already run on the PR, and the PR's merge-guard consumes their result
-  // before the merge is allowed.
+  // Fixing publish-gpr must not switch merge-time integration tests on.
+  // Desktop integration remains available on PRs via run-desktop-addon-tests;
+  // publishing does not require that opt-in run.
   //
   // Matched on co-occurrence rather than one exact spelling: the point is that
   // publish-gpr's result must not gate this step at all, however it is written
@@ -262,10 +262,9 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
     const gate = jobBlock(read(carrier), 'post-build-gate')
     assert.ok(gate, 'post-build-gate exists')
 
-    // The consolidated gate serves five packages under two policies, so the rule
-    // cannot be "publish-gpr is absent from the step". It is per package: this
-    // slug must not opt in. asr-ggml, bci-whispercpp and tts-ggml do opt in,
-    // matching what their own on-merge-<pkg>.yml intends on main.
+    // The consolidated gate supports a per-package GPR opt-in, so inspect this
+    // slug's policy rather than requiring publish-gpr to be absent from the
+    // generic gate. OCR and translation now opt out for both npm and GPR.
     if (carrier === CONSOLIDATED) {
       assert.match(
         gate,
@@ -274,12 +273,12 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
       )
       const ci =
         JSON.parse(read(`packages/${slug}/project.json`)).targets?.['on-merge']?.options?.ci ?? {}
+      assert.equal(ci.testGateMode, 'none', `${slug}: neither npm nor GPR should launch integration tests`)
       assert.notEqual(
         ci.postIntegrationOnGpr,
         true,
         `${slug} must not set postIntegrationOnGpr: a GPR dev publish must not ` +
-          're-run its integration tests, they already ran on the PR and ' +
-          'merge-guard gated on them (#4175).',
+          'launch integration tests during publishing.',
       )
       return
     }

@@ -33,6 +33,7 @@ from .models import (
     CompletionOrchestrateResponse,
     CompletionStreamRequest,
     CompletionStreamResponse,
+    DecideResponse,
     DeleteCacheResponse,
     DiffusionStreamRequest,
     DiffusionStreamResponse,
@@ -71,6 +72,8 @@ from .models import (
     PluginInvokeStreamRequest,
     PluginInvokeStreamResponse,
     RagProgressResponse,
+    RerankRequest,
+    RerankResponse,
     ResumeRequest,
     ResumeResponse,
     StartRpcServerRequest,
@@ -115,6 +118,7 @@ from .models import (
     WorldStepStreamResponse,
 )
 from .models.cancel import Request as CancelRequest
+from .models.decide import Request as DecideRequest
 from .models.deleteCache import Request as DeleteCacheRequest
 from .models.finetune import Request as FinetuneRequest
 from .models.loadModel import Request as LoadModelRequest
@@ -152,6 +156,8 @@ __all__ = [
     "CompletionOrchestrateResponse",
     "CompletionStreamRequest",
     "CompletionStreamResponse",
+    "DecideRequest",
+    "DecideResponse",
     "DeleteCacheRequest",
     "DeleteCacheResponse",
     "DiffusionStreamRequest",
@@ -195,6 +201,8 @@ __all__ = [
     "RagProgressResponse",
     "RagRequest",
     "RagResponse",
+    "RerankRequest",
+    "RerankResponse",
     "ResumeRequest",
     "ResumeResponse",
     "StartRpcServerRequest",

@@ -12,6 +12,7 @@ import {
   withToolChoice,
   parseToolCallArguments,
   nameToolResults,
+  withParallelToolCalls,
   type GenerationParams,
   type ResponseFormat,
   type ToolTurnFields
@@ -419,15 +420,18 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
       ? (meta as Record<string, unknown>)
       : undefined
 
-  const parallel = body.parallel_tool_calls
-  const parallelToolCalls = typeof parallel === 'boolean' ? parallel : true
+  const parallel =
+    typeof body.parallel_tool_calls === 'boolean' ? body.parallel_tool_calls : undefined
 
   return {
     history,
     tools,
-    generationParams: withToolChoice(
-      extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
-      extractToolChoice(body as Record<string, unknown>, tools)
+    generationParams: withParallelToolCalls(
+      withToolChoice(
+        extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
+        extractToolChoice(body as Record<string, unknown>, tools)
+      ),
+      parallel
     ),
     responseFormat: responseFmt,
     storeEnabled,
@@ -442,7 +446,7 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
         : typeof body.max_tokens === 'number'
           ? body.max_tokens
           : undefined,
-    parallelToolCalls,
+    parallelToolCalls: parallel ?? true,
     stream: Boolean(body.stream)
   }
 }

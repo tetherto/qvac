@@ -8,6 +8,10 @@ Server-wide behavior — authentication, CORS, model loading and `serve.models` 
 described in [README.md](README.md) and applies here. This page covers the routes this
 extension adds and the `serve.openai` config block it reads.
 
+Warnings for ignored OpenAI parameters report their names without their values.
+Fields such as `user`, `instructions`, `suffix`, `stop`, and `reasoning` can contain
+private text or metadata; these warnings do not copy that content into server logs.
+
 ## Endpoints
 
 | Method   | Path                             | Notes                                                                                                       |
@@ -23,6 +27,7 @@ extension adds and the `serve.openai` config block it reads.
 | `GET`    | `/v1/responses/{id}`             | Retrieve a stored response                                                                                  |
 | `DELETE` | `/v1/responses/{id}`             | Delete a stored response                                                                                    |
 | `GET`    | `/v1/responses/{id}/input_items` | Paginate the original input items                                                                           |
+| `POST`   | `/v1/decisions`                  | Typed decisions with local text models. See [Decisions](#post-v1decisions).                                 |
 | `POST`   | `/v1/embeddings`                 | Embeddings                                                                                                  |
 | `POST`   | `/v1/audio/transcriptions`       | Speech-to-text (source language)                                                                            |
 | `POST`   | `/v1/audio/translations`         | Speech-to-text **into English** (Whisper translate task)                                                    |
@@ -119,8 +124,8 @@ curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'
 curl 'http://localhost:11434/v1/models/catalog?search=qwen'
 ```
 
-The live remote model registry and on-disk download state are not included yet (planned
-follow-ups).
+The catalog does not include on-disk download state. To browse the live remote model registry,
+use [`GET /qvac/v1/registry/models`](default.md#get-qvacv1registrymodels) on the QVAC surface.
 
 ## Tools: deferred loading
 
@@ -149,25 +154,24 @@ curl -sS http://127.0.0.1:11434/v1/chat/completions \
   }'
 ```
 
-`tool_search` never reaches the client: the server runs it, appends the
-definitions and asks the model again, so the response only ever carries tool
-calls you can execute. Up to four searches run per request before the turn is
-answered as it stands.
+`tool_search` never reaches the client: the server runs it, records the names it
+loaded, declares those tools in the next round's tools block, and asks the model
+again. The response therefore only carries tool calls you can execute. Up to
+four searches run per request before the turn is answered as it stands.
 
 Consequences worth knowing:
 
-- The search happens inside one request. The `tool` message holding the loaded
-  definitions is not part of the response, so a later request re-searches if the
-  model needs the same tool again.
+- The search happens inside one request. The internal `tool` message naming the
+  loaded definitions is not part of the response, so a later request re-searches
+  if the model needs the same tool again.
 - On `stream: true`, a search round stays on the same SSE stream, so a model
   that says something before searching streams that text too.
 - A turn that asks for a search _and_ calls a tool you can run is returned as it
   stands with the search dropped — the call is yours to answer, and the model
   searches again on your next request.
 - `usage` counts every round the request ran, search rounds included.
-- The round after a search runs without the tool-call grammar unless the
-  request sets a `tool_choice` other than `auto`: the grammar only knows the
-  tools in the prompt, and the loaded definitions sit in the conversation.
+- The round after a search declares the loaded definitions and includes them in
+  the tool-call grammar, so the model can call the tool it just loaded.
 - `tool_choice` naming a deferred tool is rejected with `400`
   `invalid_tool_choice` — its schema is not in the prompt, so the call cannot be
   forced. Name `tool_search` instead.
@@ -253,19 +257,20 @@ and the chat template decides how much earlier reasoning stays in the cache.
 
 ### Errors
 
-| HTTP | `error.code`            | When                                                                           |
-| ---- | ----------------------- | ------------------------------------------------------------------------------ |
-| 400  | `invalid_json`          | Body is not valid JSON                                                         |
-| 400  | `missing_model`         | `model` field is missing                                                       |
-| 400  | `invalid_prompt`        | Prompt is missing, empty, has empty array entries, or is provided as token ids |
-| 400  | `unsupported_streaming` | Multi-prompt input combined with `"stream": true`                              |
-| 400  | `invalid_model_type`    | Alias is not a `chat` model                                                    |
-| 404  | `model_not_found`       | Unknown alias                                                                  |
-| 503  | `model_not_loaded`      | Model not loaded and lazy loading is disabled (`serve.load.lazy: false`)       |
-| 503  | `model_load_failed`     | Lazy load (cold start) of the model failed                                     |
-| 503  | `model_load_timeout`    | Lazy load exceeded `serve.load.timeoutMs`                                      |
-| 503  | `model_not_ready`       | Rare fallback: load reported done but the model is not READY                   |
-| 500  | `completion_error`      | SDK / engine failure                                                           |
+| HTTP | `error.code`              | When                                                                           |
+| ---- | ------------------------- | ------------------------------------------------------------------------------ |
+| 400  | `invalid_json`            | Body is not valid JSON                                                         |
+| 400  | `missing_model`           | `model` field is missing                                                       |
+| 400  | `invalid_prompt`          | Prompt is missing, empty, has empty array entries, or is provided as token ids |
+| 400  | `unsupported_streaming`   | Multi-prompt input combined with `"stream": true`                              |
+| 400  | `invalid_model_type`      | Alias is not a `chat` model                                                    |
+| 400  | `context_length_exceeded` | SDK reports that the request exceeds the model's effective context capacity    |
+| 404  | `model_not_found`         | Unknown alias                                                                  |
+| 503  | `model_not_loaded`        | Model not loaded and lazy loading is disabled (`serve.load.lazy: false`)       |
+| 503  | `model_load_failed`       | Lazy load (cold start) of the model failed                                     |
+| 503  | `model_load_timeout`      | Lazy load exceeded `serve.load.timeoutMs`                                      |
+| 503  | `model_not_ready`         | Rare fallback: load reported done but the model is not READY                   |
+| 500  | `internal_error`          | SDK / engine failure                                                           |
 
 ## `POST /v1/responses`
 
@@ -304,13 +309,150 @@ curl -sS http://127.0.0.1:11434/v1/responses \
   -d '{"model":"<alias>","input":"and now?","previous_response_id":"resp_..."}'
 ```
 
-## `POST /v1/images/generations` and `POST /v1/images/edits`
+## `POST /v1/decisions`
 
-OpenAI-compatible image routes backed by the SDK's `diffusion()` primitive. The two endpoints share the same validation, response shape, and error model; `/v1/images/edits` adds a multipart-only `image` (init image, img2img) and an optional `strength`.
+`qvac serve --openai` mounts `POST /v1/decisions`, backed by SDK `decide()`
+and a local Laya checkpoint. The request and response follow the
+[official OpenAI Decisions API reference](https://developers.openai.com/api/reference/resources/decisions/methods/create).
+See the [OpenAI Decisions guide](https://developers.openai.com/api/docs/guides/decisions)
+for question design and answer interpretation.
 
 ### Loaded model
 
-Both routes require an alias whose **endpoint category** is `image`. Built-in SDK addons that resolve to this category are `diffusion` and `sdcpp-generation`. Register a diffusion model in `serve.models` and (typically) `preload: true`:
+Requires an alias whose endpoint category is `decision`. Register a Laya decision
+checkpoint in `serve.models` with SDK model type `llamacpp-decision`. An
+embedding-only checkpoint cannot answer decision questions.
+
+```bash
+qvac configure --modality decision
+qvac serve --openai --no-default
+```
+
+`configure` selects `LAYA_MULTILINGUAL_322M_Q8_0` and writes the following entry.
+The interactive Decision capability lists models with the decision engine,
+with this Laya checkpoint marked as recommended. The SDK defaults to GPU; set
+`device` to `cpu` in the parameter editor
+or configuration to run on CPU.
+
+```json
+{
+  "serve": {
+    "models": {
+      "laya-multilingual-322m-q8-0": {
+        "model": "LAYA_MULTILINGUAL_322M_Q8_0",
+        "type": "llamacpp-decision",
+        "preload": false
+      }
+    }
+  }
+}
+```
+
+The first request loads the model. Set `preload: true` or pass
+`--model laya-multilingual-322m-q8-0` to load it at startup.
+
+Choose another Laya checkpoint in interactive configuration. To use a local GGUF,
+replace `model` with `src` in the entry above and set it to the file path.
+Named model constants select their plugin from the canonical engine, including
+when added through "Search all models". An explicit `type` is needed for a local
+file path.
+
+### Request
+
+Send JSON with `model`, `input`, and `questions`:
+
+- `model` is a configured decision model alias. Use your local alias in place of
+  the hosted OpenAI model name.
+- `input` is a string or an ordered array of text conversation items. Messages
+  support user, developer, system, and assistant roles. System messages become
+  developer messages. Non-assistant messages use `input_text` parts; assistant
+  messages use `output_text` or `refusal` parts. String content is also accepted.
+  Function and custom tool calls and their matching outputs can be supplied as
+  evidence. Each output must refer to an earlier call of the same type.
+- `questions` is an array of 1 to 200 questions. Each has `instructions`, `type`,
+  and an optional `name`. Names need not be unique. Answers retain request order,
+  and unnamed questions return `name: null`.
+- `predicate` estimates the probability that a statement holds.
+- `choice` takes `choices`, an array of 2 to 255 distinct string or boolean
+  `value` fields with optional `description` fields. Boolean `true` and string
+  `"true"` are distinct values.
+- `score` takes ordered `levels`, each with a `label` and optional `description`.
+  Level values start at zero. The score is the probability-weighted level index.
+
+### Local model limits
+
+Laya accepts text only. Images, files, audio, and item references are rejected
+with HTTP 400 before model loading. Local models require nonempty instructions
+and at least two score levels. Tool items are evidence, and the server does not
+execute them.
+
+`safety_identifier` and `prompt_cache_key` are accepted as caller metadata and
+have no effect on local inference. Prompt caching is unavailable. Non-null
+`prompt_cache_options` and content `prompt_cache_breakpoint` fields are rejected.
+
+The route returns a complete JSON response. Streaming and batching are unsupported.
+Use SDK `decide()` directly for Laya token budgets or batch inputs.
+
+### Response
+
+`model` is the configured alias. `answers` is an array with one answer per
+question. Predicate answers contain `probability`. Choice answers contain the
+selected typed `choice`, `confidence`, and a `probabilities` array with each
+original `value`. Score answers contain `score`, `confidence`, and a
+`probabilities` array with each level's numeric `value` and original `label`.
+
+Confidence uses Laya's entropy-based confidence. These values come from the
+local checkpoint and are not calibrated to OpenAI's hosted model. The response
+schema includes OpenAI's `refusal` answer type, but Laya does not emit refusals.
+
+`usage` contains `input_tokens`, `output_tokens`, `total_tokens`,
+`input_tokens_details` with `cached_tokens` and `cache_write_tokens`, and
+`output_tokens_details` with `reasoning_tokens`. Cache and reasoning counts are
+zero. Laya's internal truncation, option, action, and answer-confidence fields
+are not included in the OpenAI response.
+
+A client disconnect cancels the SDK request. Each model runs one decision
+request at a time, with up to 64 requests waiting in a FIFO queue. Additional
+requests receive HTTP 429 with error type `rate_limit_error` and code
+`request_rejected_by_policy`.
+
+### Example
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/decisions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "laya-multilingual-322m-q8-0",
+    "input": "I was charged twice. Please refund.",
+    "questions": [
+      {
+        "type": "choice",
+        "name": "route",
+        "instructions": "Which queue should receive this ticket?",
+        "choices": [
+          {"value": "billing", "description": "Payment issues"},
+          {"value": "technical", "description": "Software bugs"}
+        ]
+      },
+      {
+        "type": "predicate",
+        "name": "urgent",
+        "instructions": "Does this require immediate human attention?"
+      }
+    ]
+  }'
+```
+
+Use an OpenAI client that supports Decisions, or send the request directly over
+HTTP with base URL `http://127.0.0.1:11434/v1` and your configured model alias.
+
+## `POST /v1/images/generations` and `POST /v1/images/edits`
+
+OpenAI-compatible image routes backed by the SDK's `diffusion()` primitive. The two endpoints share the same validation, response shape, and error model; `/v1/images/edits` accepts multipart `image` or `image[]` files for img2img or reference editing, plus an optional `strength`.
+
+### Loaded model
+
+Both routes require an alias whose **endpoint category** is `image`: a `diffusion` or `sdcpp-generation` model in its default `diffusion` mode. Register a diffusion model in `serve.models` and (typically) `preload: true`:
 
 ```json
 {
@@ -433,18 +575,28 @@ curl -sS http://127.0.0.1:11434/v1/images/edits \
 
 Response shape matches `/v1/images/generations`.
 
+For models with multi-reference support, including FLUX.2 and Qwen-Image-2.1, send repeated `image[]` files. The server forwards every image in upload order as SDK `init_images`; a single file still uses `init_image`. Configure the model with its required companion files and prediction settings before sending edits.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/images/edits \
+  -F "image[]=@reference-a.png" \
+  -F "image[]=@reference-b.png" \
+  -F "model=my-diffusion" \
+  -F "prompt=Place the referenced subjects together in one scene."
+```
+
 ### Multipart edits — accepted fields
 
-| Field                  | Description                                                                                           |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `image` (or `image[]`) | Source image file. **Required.** If multiple files are sent, only the first is used (warning logged). |
-| `model`, `prompt`      | Same as JSON variants. **Required.**                                                                  |
-| `size`                 | `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`.                                                        |
-| `n`                    | Positive integer.                                                                                     |
-| `seed`                 | Integer.                                                                                              |
-| `strength`             | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric → `400 invalid_strength`.           |
-| `response_format`      | `b64_json` (default) or `url` (requires `--public-base-url`).                                         |
-| `stream`               | When `true`, response is `text/event-stream` (see Streaming above).                                   |
+| Field                  | Description                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `image` (or `image[]`) | Source image files. **Required.** Multiple files are forwarded in upload order; the model must support multiple references. |
+| `model`, `prompt`      | Same as JSON variants. **Required.**                                                                                        |
+| `size`                 | `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`.                                                                              |
+| `n`                    | Positive integer.                                                                                                           |
+| `seed`                 | Integer.                                                                                                                    |
+| `strength`             | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric → `400 invalid_strength`.                                 |
+| `response_format`      | `b64_json` (default) or `url` (requires `--public-base-url`).                                                               |
+| `stream`               | When `true`, response is `text/event-stream` (see Streaming above).                                                         |
 
 ## `POST /v1/audio/transcriptions`
 
@@ -462,7 +614,7 @@ Transcribes audio in its source language using a transcription model.
   - `response_format` (optional) — `json` (default), `text`, `srt`, `vtt`, or `verbose_json`
 - `json` and `text` work with Whisper, Parakeet, and MOSS. SRT and WebVTT require Whisper or MOSS segment metadata. Parakeet supports `verbose_json`, including Nemotron diarization. Requesting SRT or WebVTT from Parakeet returns `400 unsupported_response_format`.
 - In partial `verbose_json`, `duration` is the latest segment or speaker-turn end, not the submitted audio length. MOSS segments also include `speaker` and `speaker_id` when available. Parakeet offline diarization includes `speaker_segments` with zero-based `speaker_id` and start/end times in seconds; overlapping turns are preserved.
-- `language` is configured when the model loads; a per-request value is logged and ignored. `temperature` is also logged and ignored.
+- `language` is configured when the model loads; a per-request override is ignored with a warning. `temperature` is also ignored with a warning. These warnings report parameter names without values.
 
 ```bash
 curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
@@ -613,6 +765,7 @@ You normally use the **same** underlying weights for both transcription and tran
 | 400  | `unsupported_param`              | `language` is present on a translation request                                                               |
 | 400  | `invalid_response_format`        | Format is not `json`, `text`, `srt`, `vtt`, or `verbose_json`                                                |
 | 400  | `unsupported_response_format`    | `srt`, `vtt`, or `verbose_json` requested from a model without Whisper segment metadata (including Parakeet) |
+| 400  | `unsupported_stream_format`      | `stream_format: "sse"` with a MOSS-SoundEffect or MOSS-Speech alias                                          |
 | 400  | `invalid_model_type`             | Alias does not match the endpoint category (`transcription` or `audio-translation`)                          |
 | 404  | `model_not_found`                | Unknown alias                                                                                                |
 | 503  | `model_not_ready`                | Model not loaded yet                                                                                         |
@@ -714,7 +867,8 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
   - `input` (required) — non-empty string, capped at **`serve.openai.audio.speech.maxInputChars`** (default **4096**, OpenAI's documented limit; set to `null` to disable)
   - `voice` (optional, defaults to `defaultVoice`) — an OpenAI built-in voice name (`alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`, `onyx`, `nova`, `sage`, `shimmer`, `verse`, `marin`, `cedar`), any other string, or a custom voice reference `{ "id": "voice_1234" }`. The object form routes the same way as its `id` string.
   - `response_format` (optional) — `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. The encoded formats are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`; when ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`). The default stays `wav` so synthesis works on hosts without ffmpeg.
-- **Accepted but ignored:** `speed`, `instructions`, `stream_format` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
+  - `stream_format` (optional) — `audio` (default, one audio body) or `sse` (see [Streaming](#streaming-stream_format-sse)). Other values return `400 invalid_stream_format`.
+- **Accepted but ignored:** `speed`, `instructions` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
 
 ### Response
 
@@ -729,7 +883,31 @@ Binary audio body. Headers include:
 | `X-Audio-Bits-Per-Sample` | Always `16`. Only sent for `wav`/`pcm`.                                                                                                                                                                                                       |
 | `X-QVAC-Ignored-Params`   | Comma-separated list of accepted-but-dropped OpenAI fields (only present when at least one was sent).                                                                                                                                         |
 
-The route always **buffers the full audio** before responding (chunked HTTP streaming is tracked as a follow-up).
+With the default `stream_format: "audio"` the route buffers the full audio before responding.
+
+### Streaming (`stream_format: "sse"`)
+
+Set `stream_format` to `"sse"` to receive audio as it is synthesized instead of one body at the end. The response is `text/event-stream` with OpenAI's speech events:
+
+```text
+data: {"type":"speech.audio.delta","audio":"<base64 audio chunk>"}
+
+data: {"type":"speech.audio.done","usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}
+```
+
+- Text is split into sentences, and each synthesized chunk arrives as one `speech.audio.delta` event.
+- `response_format` must be `pcm` or `wav`; other formats return `400 unsupported_response_format`. With `wav`, the first delta starts with a RIFF header whose size fields are `0xFFFFFFFF` (unknown length).
+- MOSS-SoundEffect and MOSS-Speech aliases (`ttsEngine` `moss-sfx` / `moss-speech`) are batch-only and return `400 unsupported_stream_format`.
+- `X-Audio-Sample-Rate`, `X-Audio-Channels` and `X-Audio-Bits-Per-Sample` describe the PCM in the deltas.
+- `usage` token counts are always `0`.
+- Errors raised before the first audio chunk return the usual JSON error and status code. A failure after that ends the stream with a final `{"error":{...}}` event and no `speech.audio.done`.
+- The stream has no `[DONE]` sentinel. `speech.audio.done` is the last event.
+
+```bash
+curl -N http://localhost:11434/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-tts","voice":"alloy","input":"Hello from QVAC.","response_format":"pcm","stream_format":"sse"}'
+```
 
 ### Examples
 
@@ -754,21 +932,23 @@ ffplay -f s16le -ar 24000 -ac 1 speech.pcm  # rate/channels come from the respon
 
 ### Errors
 
-| HTTP | `error.code`              | When                                                                                                    |
-| ---- | ------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 400  | `invalid_json`            | Body is not valid JSON                                                                                  |
-| 400  | `missing_model`           | `model` field is missing                                                                                |
-| 400  | `missing_input`           | `input` is missing or empty/whitespace                                                                  |
-| 400  | `input_too_long`          | `input.length` exceeds `maxInputChars` (default 4096)                                                   |
-| 400  | `missing_voice`           | `voice` not sent and `defaultVoice` is `null`, or `voice` is neither a string nor `{ "id": "..." }`     |
-| 400  | `invalid_response_format` | Anything other than `wav` / `pcm` / `mp3` / `opus` / `aac` / `flac`                                     |
-| 400  | `invalid_model_type`      | Alias is not a `speech` model                                                                           |
-| 404  | `model_not_found`         | No `voices` mapping, no hyphen alias, no bare alias matches                                             |
-| 502  | `speech_empty`            | The SDK returned zero samples — surfaced loudly so callers can distinguish "no audio" from "audio body" |
-| 502  | `transcode_failed`        | ffmpeg failed (or timed out) encoding `mp3` / `opus` / `aac` / `flac` — retry with `wav`/`pcm`          |
-| 503  | `transcode_unavailable`   | `mp3` / `opus` / `aac` / `flac` requested but `ffmpeg` is not on the server's `PATH`                    |
-| 503  | `model_not_ready`         | Model not loaded yet                                                                                    |
-| 500  | `speech_error`            | SDK / engine failure (message goes to server logs only)                                                 |
+| HTTP | `error.code`                  | When                                                                                                    |
+| ---- | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 400  | `invalid_json`                | Body is not valid JSON                                                                                  |
+| 400  | `missing_model`               | `model` field is missing                                                                                |
+| 400  | `missing_input`               | `input` is missing or empty/whitespace                                                                  |
+| 400  | `input_too_long`              | `input.length` exceeds `maxInputChars` (default 4096)                                                   |
+| 400  | `missing_voice`               | `voice` not sent and `defaultVoice` is `null`, or `voice` is neither a string nor `{ "id": "..." }`     |
+| 400  | `invalid_response_format`     | Anything other than `wav` / `pcm` / `mp3` / `opus` / `aac` / `flac`                                     |
+| 400  | `invalid_stream_format`       | `stream_format` is not `audio` or `sse`                                                                 |
+| 400  | `unsupported_response_format` | `stream_format: "sse"` with `mp3` / `opus` / `aac` / `flac`                                             |
+| 400  | `invalid_model_type`          | Alias is not a `speech` model                                                                           |
+| 404  | `model_not_found`             | No `voices` mapping, no hyphen alias, no bare alias matches                                             |
+| 502  | `speech_empty`                | The SDK returned zero samples — surfaced loudly so callers can distinguish "no audio" from "audio body" |
+| 502  | `transcode_failed`            | ffmpeg failed (or timed out) encoding `mp3` / `opus` / `aac` / `flac` — retry with `wav`/`pcm`          |
+| 503  | `transcode_unavailable`       | `mp3` / `opus` / `aac` / `flac` requested but `ffmpeg` is not on the server's `PATH`                    |
+| 503  | `model_not_ready`             | Model not loaded yet                                                                                    |
+| 500  | `speech_error`                | SDK / engine failure (message goes to server logs only)                                                 |
 
 ## `GET /v1/audio/voices`
 
@@ -807,15 +987,15 @@ creates a job and returns immediately with `status: "queued"`; generation runs
 in the background. Poll `GET /v1/videos/{id}` until `status` is `completed` (or
 `failed`), then fetch bytes from `GET /v1/videos/{id}/content`.
 
-Requires an alias whose **endpoint category** is `video` (SDK addon
-`sdcpp-video`). Register it in `serve.models`.
+Requires an alias whose **endpoint category** is `video`: type `sdcpp-video`, or
+`sdcpp-generation` with `config.mode: "video"`. Register it in `serve.models`.
 
 Two generation modes:
 
 - **txt2vid** — JSON body with `prompt` only. No image required.
 - **img2vid** — include `input_reference` in one of these forms:
   - **multipart file field** — send `multipart/form-data` with `input_reference` as a file field (this is what the OpenAI SDK sends when you pass a local `File`/`Blob`/`fs.ReadStream` as `Uploadable`)
-  - **JSON `{ image_url }`** — base64 data URI (`data:image/jpeg;base64,...`) or an HTTP(S) URL (the server fetches it; 100 MB / 30 s limits apply)
+  - **JSON `{ image_url }`** — base64 data URI (`data:image/jpeg;base64,...`) or a public HTTP(S) URL (the server fetches it; 100 MB / 30 s limits apply)
   - **JSON `{ file_id }`** — ID of a file previously uploaded via `POST /v1/files`
 
   Mode is inferred from the presence of `input_reference`; no explicit `mode` field needed.
@@ -838,13 +1018,13 @@ Two generation modes:
 - `size` accepts any `WxH` (multiples of 16) in addition to OpenAI's 4-value enum.
 - `Content-Type: video/mp4` is produced by a server-side ffmpeg transcode; `?format=avi` returns the native container.
 - The list endpoint is **in-memory only** — a restart clears it.
-- HTTP(S) URL fetches for `input_reference.image_url` are capped at 100 MB and 30 s.
+- HTTP(S) URL fetches for `input_reference.image_url` are capped at 100 MB and 30 s. The server refuses loopback, private, link-local and cloud-metadata addresses, including after a redirect or DNS resolution; send a data URI or `file_id` for images on those hosts. Any fetch failure returns the same message.
 
 ### Errors
 
 | HTTP | `error.code`              | When                                                                                                                                                                               |
 | ---- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400  | `invalid_input_reference` | Data URI has invalid base64, decodes to empty bytes, or is missing the comma separator; HTTP(S) URL returned non-200, timed out, or exceeded the 100 MB limit; `file_id` not found |
+| 400  | `invalid_input_reference` | Data URI has invalid base64, decodes to empty bytes, or is missing the comma separator; HTTP(S) URL fetch failed or was refused, or exceeded the 100 MB limit; `file_id` not found |
 | 400  | `invalid_strength`        | `strength` outside `[0, 1]` or non-numeric                                                                                                                                         |
 | 400  | `invalid_model_type`      | Alias is not a `video` model                                                                                                                                                       |
 | 404  | `video_not_found`         | Unknown job id                                                                                                                                                                     |

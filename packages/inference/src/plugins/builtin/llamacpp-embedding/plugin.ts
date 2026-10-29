@@ -1,4 +1,4 @@
-import EmbedLlamacpp, { IdMapIndex, assessFit as embedAssessFit } from '@qvac/embed-llamacpp'
+import EmbedLlamacpp, { assessFit as embedAssessFit } from '@qvac/embed-llamacpp'
 import type { TurboVecIndexProvider } from '@qvac/rag'
 import {
   definePlugin,
@@ -20,11 +20,24 @@ import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
 
+async function getIdMapIndex() {
+  try {
+    return (await import('@qvac/turbovec-ggml')).IdMapIndex
+  } catch (err) {
+    throw new Error(
+      'Vector indexing requires the optional peer dependency @qvac/turbovec-ggml; install it to create or load an index',
+      { cause: err }
+    )
+  }
+}
+
 const turbovecIndexProvider: TurboVecIndexProvider = {
-  create(options) {
+  async create(options) {
+    const IdMapIndex = await getIdMapIndex()
     return new IdMapIndex(options)
   },
-  load(snapshotPath) {
+  async load(snapshotPath) {
+    const IdMapIndex = await getIdMapIndex()
     return IdMapIndex.load(snapshotPath)
   }
 }

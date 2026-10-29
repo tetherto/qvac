@@ -76,6 +76,8 @@ export const registry: Record<string, HandlerEntry> = {
     handler: handleUnloadModel
   },
   embed: { type: 'reply', pluginOp: true, handler: pluginReply('embed') },
+  decide: { type: 'reply', pluginOp: true, handler: pluginReply('decide') },
+  rerank: { type: 'reply', pluginOp: true, handler: pluginReply('rerank') },
   cancel: {
     type: 'reply',
     handler: cancelHandler
@@ -130,7 +132,7 @@ export const registry: Record<string, HandlerEntry> = {
   worldStepStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldStepStream') },
   worldSceneStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldSceneStream') },
   classify: { type: 'stream', pluginOp: true, handler: pluginStream('classify') },
-  loggingStream: { type: 'stream', handler: handleLoggingStream },
+  loggingStream: { type: 'stream', handler: handleLoggingStream, endsOnAbort: true },
   pluginInvokeStream: { type: 'stream', handler: handlePluginInvokeStream },
 
   // Duplex

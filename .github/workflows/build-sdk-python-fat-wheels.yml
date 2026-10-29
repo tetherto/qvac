@@ -181,6 +181,9 @@ jobs:
           WHEEL_PLATFORM: ${{ matrix.platform }}
         run: python scripts/build_wheel.py --out-dir dist --platform "$WHEEL_PLATFORM"
 
+      # A wheel records no commit and a rebuild is not byte-identical, so a
+      # re-run replaces the assets. Re-attaching to an existing release is what
+      # the dispatch trigger is for, and setup checks SDK_VERSION against the tag.
       - name: Upload wheel to release
         shell: bash
         env:

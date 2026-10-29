@@ -17,6 +17,22 @@ LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
 which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
 
 
+### CosyVoice3 Core ML sidecars
+
+Apple builds support optional CosyVoice3 Core ML sidecars through the native
+`speech-cpp` 2026-10-19 dependency. Export and placement details are in the
+[CosyVoice3 Core ML guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/ea128498e23d20cd122729275e92361b11a361df/engines/tts/docs/cosyvoice3.md#core-ml-sidecars).
+Re-export existing CosyVoice3 LM sidecars with the updated exporter to include
+the cache feedback correction for consecutive predictions.
+
+The LM, flow frontend/decoder, F0 predictor and HiFT vocoder use resident
+sidecars when present and fall back to ggml when unavailable. HiFT exports
+use FP32 for waveform parity. Core ML chooses operation placement, so a
+sidecar does not guarantee ANE execution or a speed improvement.
+When a sidecar is present, `assessFit` returns an error with reason
+`coreml-memory-estimate-unavailable`; its memory usage is not projected.
+
+
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
 preload, the ggml backend, and any voice-conditioning tensors are
 loaded once and reused across every synthesis call.  GPU acceleration
@@ -38,7 +54,7 @@ and registry prerequisites described under [MOSS](#moss).
 
 - Batch synthesis (`run({ input })` → single PCM buffer).
 - **Sentence-granularity streaming** — `runStreaming(asyncIterable)`:
-  yields one audio chunk per input sentence.
+  yields audio for each input sentence; Audio8 emits PCM as codec windows finish.
 - **Native per-chunk streaming** — set `streamChunkTokens` and audio
   flows out of the C++ engine chunk-by-chunk as T3 tokens produce
   S3Gen+HiFT output; sub-second first-audio-out inside a single
@@ -561,7 +577,7 @@ accepting a new one, so changing voices means constructing a new instance.
 
 Opt-in neural post-processing that bandwidth-extends the synthesized audio to
 **48 kHz** with a synthesised high band, using the LavaSR Vocos enhancer
-(ConvNeXt backbone + ISTFT spec head) converted to a single GGUF. It follows the
+(ConvNeXt backbone + ISTFT spec head) converted to a single GGUF. Without an explicit Core ML selection, it follows the
 engine's GPU intent: with `config.useGPU: true` (or `nGpuLayers`) the enhancer
 runs on the GPU (Vulkan on Linux/Windows, Metal on macOS/iOS) and falls back to
 CPU otherwise. It is fully backward compatible — provide no enhancer GGUF and
@@ -682,6 +698,50 @@ Notes:
   (scalar CPU port, validated bit-close to the ONNX reference); it requires a
   `tts-cpp` build that includes that port — see the pinned version in `vcpkg.json`.
 
+
+### LavaSR Core ML
+
+On Apple platforms, either stage can use a compiled Core ML model explicitly.
+Provide `coremlModelPath` and `coremlComputeUnits` together inside `enhancer`
+or `denoiser`, alongside the corresponding GGUF path (or its `files` alias).
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_SUPERTONIC,
+  files: { supertonicModel: 'models/supertonic.gguf' },
+  enhancer: {
+    type: 'lavasr',
+    enhancerPath: 'models/lavasr-enhancer.gguf',
+    coremlModelPath: 'models/enhancer.mlmodelc',
+    coremlComputeUnits: 'CPU_AND_NE'
+  },
+  denoiser: {
+    type: 'lavasr',
+    denoiserPath: 'models/lavasr-denoiser.gguf',
+    coremlModelPath: 'models/denoiser.mlmodelc',
+    coremlComputeUnits: 'CPU_AND_NE'
+  }
+})
+```
+
+The accepted policies are `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE`, and `ALL`.
+Each stage has its own policy; it does not change the synthesis engine's
+`config.useGPU`. Models stay loaded with the instance. Omitting both options
+keeps the existing ggml/scalar selection. An invalid, missing, incompatible,
+or unsupported explicitly selected Core ML model fails loading; it does not
+fall back to ggml. Existing streaming restrictions still apply.
+
+Core ML policies select eligible devices; they do not guarantee that every
+operation runs on ANE or GPU. Stage stats report device `2` for Core ML-managed
+placement and backend id `99` (other), rather than claiming CPU or GPU.
+
+Export matching models with the native Fabric
+[`export-lavasr-coreml.py`](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/8d9c6247ac18ff912bb3e1269da5f3fd679e77aa/engines/tts/scripts/export-lavasr-coreml.py)
+script; precision is explicit (`float32` or `float16`). See the
+[native LavaSR guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/8d9c6247ac18ff912bb3e1269da5f3fd679e77aa/engines/tts/docs/lavasr.md#core-ml)
+for export and compilation commands. A runnable addon example is
+[`examples/lavasr-coreml.js`](examples/lavasr-coreml.js).
+
 ## Backends & GPU acceleration
 
 The addon delegates backend selection to `tts-cpp`'s registry-only
@@ -722,7 +782,8 @@ published model set yet; supply your own to opt in.
 | MOSS, MOSS-TTSD | `moss-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec decoder, 25 frames (2 s) per call, keeping its attention cache between calls (macOS 15 / iOS 18) | non-streaming synthesis and streams with `streamChunkTokens` above 25, which ggml decodes faster in one pass | `MOSS_COREML_DISABLE=1` |
 | MOSS-SoundEffect | `moss-sfx-v2-dit.mlmodelc` and `moss-sfx-v2-vae.mlmodelc` | diffusion transformer, one velocity per call; VAE decoder in 320-frame windows | a call that fails on the sidecar, which retires it | `MOSS_COREML_DISABLE=1` |
 | MOSS-Speech | `moss-speech-codec-tokenizer.mlmodelc`, beside the codec GGUF | speech tokenizer (Whisper-VQ encoder), one full 30 s segment per call | segments shorter than 30 s, which ggml encodes faster; so most spoken questions | `MOSS_COREML_DISABLE=1` |
-| Chatterbox, Parler, CosyVoice3, LavaSR | none | — | always | — |
+| LavaSR | explicit `enhancer.coremlModelPath` / `denoiser.coremlModelPath` | denoiser and enhancer neural cores | only when Core ML options are absent; explicit load errors fail | omit both Core ML options |
+| Chatterbox, Parler, CosyVoice3 | none | — | always | — |
 
 Set the force-ggml variables in the process environment before `load()`.
 Audio8 reports its codec path in `response.stats`: `codecSidecarLoaded` is 1
@@ -966,6 +1027,19 @@ await model.load()
 await model.run({ input: 'Hello from a fully on-device pipeline.' })
 ```
 
+`runStream(text)`, `runStreaming(asyncIterable)` and
+`run({ input: text, streamOutput: true })` emit PCM as codec windows finish,
+before the current text chunk's complete waveform is ready. Ordinary `run()`
+retains batch synthesis. Native end markers have an empty `outputArray`. Use `response.await()`
+for completion and aggregate statistics, including for asynchronous text input. PCM window sizes are fixed by the codec, so
+`streamChunkTokens` and `streamFirstChunkTokens` remain unsupported.
+
+The native streaming API is included in the pinned `speech-cpp` dependency.
+Rebuild the addon to use it; an older published prebuild does not gain native
+streaming from a JavaScript update alone.
+Use [audio8-streaming.js](examples/audio8-streaming.js) to measure first PCM
+and completion through the wrapper, excluding model loading.
+
 Sampling is **repetition-aware**: a semantic token that repeats one from the
 recent window is re-drawn under a narrower nucleus at a higher temperature,
 which is what keeps the model out of the babble attractor that pure top-p
@@ -988,6 +1062,15 @@ frame on a delay pattern, and a transformer codec turns those codes back into
 synthesis, the analysis half only to clone a voice or run a dialogue, so a
 text-only deployment can omit `files.mossCodecEncoder`.  The backbones have 8B
 parameters, so MOSS targets desktop hosts; mobile is not supported.
+
+On Metal, the backbone projects only the text-control logits needed during
+audio generation and omits text projection during the forced drain. Embedding
+tables stay on the GPU, and the model weight type is preserved.
+
+When `dialogueReferences` contains one recording, its encoded codes also serve
+as continuation, avoiding a duplicate encoder pass during engine creation.
+Multiple references retain their joined-audio continuation encoding. Prepared
+reference codes stay cached per instance for batch and streaming synthesis.
 
 ```js
 const model = new TTSGgml({
@@ -1074,20 +1157,16 @@ The combined desktop CUDA/Vulkan speech changes in
 [Vulkan #308](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/308),
 including [CUDA #321](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/321),
 merged to native master at `84b02694001cfea863167776dbc185474a816656`.
-This checkout consumes the merged [registry #423](https://github.com/tetherto/qvac-registry-vcpkg/pull/423)
-at `e31be272ecdf9f20970302ebf8a2943d47803001`: `speech-cpp` 2026-10-12#1
-pins that merged revision, and `ggml-speech` 2026-10-07#1 pins
-`06f1b66806626a635904f31db6914ad2d0e71197`. The earlier native `f4d4c257`
+The exact native dependency versions are declared in [vcpkg.json](vcpkg.json),
+and the registry configuration is declared in
+[vcpkg-configuration.json](vcpkg-configuration.json). The earlier native `f4d4c257`
 passed ten smaller-model CUDA/Vulkan cases; those results do not establish GPU
 validation of the final native revision or the packaged addon. Rebuild the addon
 before running its GPU tests. Native desktop results also do not establish
 Android support or speech-quality signoff.
 
-The registry `baseline` is the main commit containing #423. The shared exact
-`speech-cpp` overrides and backend implementation are already on qvac main.
-This baseline update completes the TTS registry configuration; packaged-addon
-CUDA/Vulkan inference still requires validation on provisioned GPU hosts before
-claiming a validated release.
+Packaged-addon CUDA/Vulkan inference still requires validation on provisioned
+GPU hosts before claiming a validated release.
 
 From `packages/tts-ggml`, resolve the checked-in manifest without building or
 downloading models (with `VCPKG_ROOT` set):
@@ -1169,6 +1248,15 @@ flow-matching steps, and a DAC decoder turns it into 48 kHz mono audio of up
 to 30 seconds.  It is not a speech model, and it ships as one GGUF.  Select it
 with `engine: TTSGgml.ENGINE_MOSS_SFX` or by staging `moss-sfx-*.gguf` in the
 `modelDir`.
+
+Native generation reuses fixed cross-attention K/V across diffusion steps and
+uses Metal DiT FlashAttention when the GPU supports both attention shapes.
+Memory preflight includes the request cache (360 MiB for guided generation
+with the released models) alongside the scheduler's retained peak across text
+encoding, diffusion and VAE decoding, including repeated requests.
+FlashAttention can slightly change waveform samples. See the
+[native SoundEffect guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/33174cc8693b1c8cdb44b5ff57b0f120bc89e454/engines/tts/docs/moss.md#moss-soundeffect)
+for precision details and the M1 Ultra measurements.
 
 ```js
 const sfx = new TTSGgml({
@@ -1335,7 +1423,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English; MOSS takes it as a prompt hint (`en`, `zh`, ...) |
 | `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / CUDA / Vulkan / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal, linux CUDA, and Android/ARM Mali Vulkan; CosyVoice3 and Audio8 offload on Apple/Metal, desktop linux CUDA/Vulkan, Windows Vulkan, and Android OpenCL/Adreno; MOSS, MOSS-SoundEffect and MOSS-Speech GPU offload is validated on Apple/Metal. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
 | `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic / Parler / Audio8 44.1 kHz, CosyVoice3 24 kHz, MOSS 24 kHz, MOSS-SoundEffect 48 kHz, MOSS-Speech 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active; MOSS, MOSS-SoundEffect and MOSS-Speech accept only their native rate |
-| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), `enhancerBackendDevice` / `enhancerBackendId` and `denoiserBackendDevice` / `denoiserBackendId` (`-1` when that LavaSR stage is off), and the engine's own stage stats: Chatterbox `t3Ms` / `s3genMs` / `t3Tokens`; CosyVoice3 per-stage ms (`lmPrefillMs` … `hiftDecodeMs`, `stageTotalMs`) and work counters (`speechTokens`, `decodeSteps`, …); Audio8 per-stage ms (`prefillMs`, `fastDecodeMs`, `codecSynthMs`, …, `stageTotalMs`) |
+| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), `enhancerBackendDevice` / `enhancerBackendId` and `denoiserBackendDevice` / `denoiserBackendId` (`-1` when that LavaSR stage is off; device `2` and id `99` for Core ML-managed placement), and the engine's own stage stats: Chatterbox `t3Ms` / `s3genMs` / `t3Tokens`; CosyVoice3 per-stage ms (`lmPrefillMs` … `hiftDecodeMs`, `stageTotalMs`) and work counters (`speechTokens`, `decodeSteps`, …); Audio8 per-stage ms (`prefillMs`, `fastDecodeMs`, `codecSynthMs`, …, `stageTotalMs`) |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
 ### Methods
@@ -1568,11 +1656,13 @@ Runnable demos under `examples/`:
 | `supertonic-mtl-sweep-tts.js` | Multilingual Supertonic sweep across languages |
 | `supertonic-sentence-stream-tts.js` | Supertonic sentence-level streaming |
 | `supertonic-chunk-stream-tts.js` | Supertonic native chunk streaming via `streamChunkTokens`, with streaming playback |
+| `lavasr-coreml.js` | Supertonic + explicit Core ML denoiser/enhancer. Run without arguments for usage. |
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
 | `cosyvoice-tts.js` | CosyVoice3 batch synth with the cross-engine emotion option (24 kHz; CPU by default, `--gpu` opts into Metal / desktop Vulkan / Android GPU). `bare examples/cosyvoice-tts.js --gpu "Hello" happy` |
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
+| `audio8-streaming.js` | Measure Audio8 wrapper batch, streaming, or duplex latency: `bare examples/audio8-streaming.js ./models stream "Hello"`. Modes: `batch`, `stream`, `duplex`. |
 | `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for the desktop GPU backend (CUDA or Vulkan on linux, Vulkan on Windows). `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
 | `moss-tts.js` | MOSS batch synth, optionally cloning a reference. Set `QVAC_TTS_MOSS_STREAM_FRAMES=25` for native chunk streaming, `QVAC_TTS_MOSS_DURATION=38` for a target length and `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-tts.js "Hello" voice.wav` |
 | `moss-sound-effect.js` | MOSS-SoundEffect text-to-sound-effects at 48 kHz. Set `QVAC_TTS_MOSS_SFX_GPU=1` for the GPU backend and `QVAC_TTS_MOSS_SFX_STEPS` to trade quality for time. `bare examples/moss-sound-effect.js "Rain on a tin roof." 5` |
@@ -1743,5 +1833,10 @@ OpenCL; Xclipse and Mali use Vulkan).
 Apache-2.0.  See [LICENSE](./LICENSE).
 
 ## Pocket TTS
+
+The native `speech-cpp` dependency includes Pocket Metal, CUDA, Vulkan and
+OpenCL support in the native library. The JavaScript Pocket API continues
+to require `config.useGPU: false`; updating the native dependency does not
+remove that addon validation.
 
 See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.

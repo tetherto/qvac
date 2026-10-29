@@ -36,6 +36,7 @@ add_executable(
   # Utility tests
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp
+  test_prime_tools_prefix.cpp
   test_reasoning_utils.cpp
   test_sequence_state_snapshot.cpp
   test_logging_macros.cpp
@@ -50,6 +51,7 @@ add_executable(
   test_image_token_budget.cpp
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
+  test_speculative.cpp
   test_continuous_batching_integration.cpp
   test_concurrent_process_by_id.cpp
   test_single_path_cancel_ownership.cpp
@@ -86,6 +88,8 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SpeculativeRuntime.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SpeculativeSequence.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp

@@ -1,9 +1,9 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.13.0",
+  "version": "0.14.1",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 + moss + moss-sfx + moss-speech + Pocket engines from tts-cpp)",
   "qvac": {
-    "ggml-speech": "2026-10-07#1"
+    "ggml-speech": "2026-10-27"
   },
   "engines": {
     "bare": ">=1.19.0"
@@ -79,7 +79,7 @@
     "test:benchmark:streaming": "npm run build:ts && brittle-bare test/benchmark/streaming-benchmark.test.js",
     "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target tts_ggml_tests && bare-make install",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target tts_ggml_tests",
     "test:cpp:run": "cd build && LLVM_PROFILE_FILE=default.profraw ./tts_ggml_tests --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "fuzz:build": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target tts-config-parse-fuzz",
@@ -129,6 +129,7 @@
     "test/utils/mossBackend.js",
     "test/utils/mossGpuValidation.js",
     "test/utils/gpuOnly.js",
+    "test/utils/desktopGpuBackend.js",
     "test/utils/testThreads.js",
     "test/utils/perf-helper.js",
     "test/utils/runChatterboxTTS.js",

@@ -9,6 +9,7 @@ import { parseServeConfig, unknownServeKeys } from '@/serve/core/config'
 import { resolveServeApiKey } from '@/serve/core/api-key'
 import { checkNetworkExposure, validateServeStartup } from '@/serve/core/startup'
 import { createModelRegistry } from '@/serve/core/model-registry'
+import { createEphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
 import { createLoadManager, defaultLoadFn } from '@/serve/core/load-manager'
 import { preloadModels, shouldRefuseStart } from '@/serve/core/lifecycle'
 import type { QvacContext } from '@/serve/core/context'
@@ -35,6 +36,10 @@ export interface StartServerOptions {
   allowUnauthenticated?: boolean | undefined
   cors?: boolean | undefined
   corsOrigins?: string[] | undefined
+  /** Hostnames accepted in the Host header beyond loopback, IP literals and the bind host. */
+  allowedHosts?: string[] | undefined
+  /** Accept any Host header, turning off the DNS-rebinding check. */
+  allowAnyHost?: boolean | undefined
   publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
   /** Silence the logger entirely. Useful when capturing the OpenAPI spec or
@@ -100,6 +105,11 @@ async function buildServerParts(
     serveConfig,
     loadManager,
     logger,
+    files: createEphemeralFilesStore(undefined, {
+      onEvict: (id, reason) => {
+        logger.warn(`ephemeral file evicted id=${id} reason=${reason}`)
+      }
+    }),
     extensions: {},
     get loadModelOverride() {
       return overrideRef.current
@@ -117,6 +127,8 @@ async function buildServerParts(
     apiKey,
     docs: options.docs,
     corsOrigins: serveConfig.cors.origins,
+    allowedHosts: serveConfig.allowedHosts,
+    publicBaseUrl: serveConfig.publicBaseUrl,
     extensions
   })
 

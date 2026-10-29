@@ -1,10 +1,14 @@
 #include <bare.h>
+#include <qvac-addon/fabric-bind.h>
 
 #include "addon/AddonJs.hpp"
 
-js_value_t* classification_ggml_exports(
-    js_env_t* env,
-    js_value_t* exports) { // NOLINT(readability-identifier-naming)
+// NOLINTNEXTLINE(readability-identifier-naming)
+js_value_t* classification_ggml_exports(js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
@@ -22,7 +26,7 @@ js_value_t* classification_ggml_exports(
   V("runJob", classification_ggml::bindings::runJob)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
-  V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
+  V("activate", classification_ggml::bindings::activate)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)

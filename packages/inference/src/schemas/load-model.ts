@@ -56,6 +56,8 @@ import {
 } from './model-types'
 import { sdcppConfigSchema, type SdcppConfig } from './sdcpp-config'
 import { vlaConfigSchema } from './vla'
+import { decisionConfigBaseSchema } from './decision'
+import { rerankConfigBaseSchema } from './rerank'
 import { classificationConfigSchema } from './classification'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
 
@@ -107,6 +109,8 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   [ModelType.parakeetTranscription, configKeys(parakeetLoadConfigSchema)],
   [ModelType.mossTranscribe, configKeys(mossTranscribeConfigSchema)],
   [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
+  [ModelType.llamacppDecision, configKeys(decisionConfigBaseSchema)],
+  [ModelType.llamacppRerank, configKeys(rerankConfigBaseSchema)],
   [ModelType.nmtcppTranslation, configKeys(...nmtConfigBaseSchema.options)],
   [
     ModelType.ttsGgml,
@@ -164,6 +168,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export const loadBuiltinModelOptionsBaseSchema = z.union([
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: z.literal(ModelType.llamacppDecision),
+      modelConfig: decisionConfigBaseSchema.optional()
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: z.literal(ModelType.llamacppRerank),
+      modelConfig: rerankConfigBaseSchema.optional()
+    })
+    .strict(),
   z
     .object({
       ...loadModelCommonFields,
@@ -510,6 +528,40 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
   z
     .object({
       ...loadModelRequestCommonFields,
+      modelType: z.literal(ModelType.llamacppDecision),
+      modelConfig: decisionConfigBaseSchema.optional()
+    })
+    .strict()
+    .transform((data) => ({
+      type: 'loadModel' as const,
+      modelType: ModelType.llamacppDecision,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig,
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      ...optionalRequestFields(data)
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
+      modelType: z.literal(ModelType.llamacppRerank),
+      modelConfig: rerankConfigBaseSchema.optional()
+    })
+    .strict()
+    .transform((data) => ({
+      type: 'loadModel' as const,
+      modelType: ModelType.llamacppRerank,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig,
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      ...optionalRequestFields(data)
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
       modelType: vlaModelTypeSchema,
       modelConfig: vlaConfigSchema.strict().optional()
     })
@@ -648,6 +700,20 @@ export const loadMossTranscribeModelRequestSchema = commonModelConfigSchema
   })
   .strict()
 
+export const loadDecisionModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.llamacppDecision),
+    modelConfig: decisionConfigBaseSchema.optional()
+  })
+  .strict()
+
+export const loadRerankModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.llamacppRerank),
+    modelConfig: rerankConfigBaseSchema.optional()
+  })
+  .strict()
+
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppEmbedding),
@@ -723,6 +789,8 @@ export const loadModelSrcRequestSchema = z
     loadParakeetModelRequestSchema,
     loadMossTranscribeModelRequestSchema,
     loadEmbeddingsModelRequestSchema,
+    loadDecisionModelRequestSchema,
+    loadRerankModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,

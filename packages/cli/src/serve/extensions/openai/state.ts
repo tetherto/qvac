@@ -1,11 +1,10 @@
 import type * as sdk from '@qvac/sdk'
+import type { DecideFn } from '@/serve/extensions/openai/adapters/decisions'
 import type { QvacContext } from '@/serve/core/context'
 import { createResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
 import { createChunkAttributionStore } from '@/serve/extensions/openai/adapters/chunk-attribution-store'
-import { createEphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
 import { createVectorStoresStore } from '@/serve/core/stores/vector-stores'
 import type { VectorStoresStore } from '@/serve/core/stores/vector-stores'
-import type { EphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
 import type { ChunkAttributionStore } from '@/serve/extensions/openai/adapters/chunk-attribution-store'
 import type { ResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
 import { createVideoJobsStore } from '@/serve/extensions/openai/video-jobs-store'
@@ -16,17 +15,21 @@ import { probeFfmpegAvailable } from '@/serve/lib/video-transcode'
 export interface OpenAIState {
   responsesStore: ResponsesStore
   vectorStores: VectorStoresStore
-  ephemeralFiles: EphemeralFilesStore
   chunkAttributions: ChunkAttributionStore
   videoJobsStore: VideoJobsStore
   /** Set at server start: `true` when `ffmpeg` is on PATH (probed once).
    * Gates both video MP4 transcoding and audio mp3/opus/aac/flac encoding. */
   ffmpegAvailable: boolean
+  decideOverride?: DecideFn
   transcribeOverride?: (
     opts: Parameters<typeof sdk.transcribe>[0]
   ) => Promise<string | sdk.TranscribeSegment[]> & { requestId: string }
   /** Test seam — overrides `completion()` from `@qvac/sdk` when set. */
   completionOverride?: typeof sdk.completion
+  /** Test seam — overrides `textToSpeechStream()` from `@qvac/sdk` when set. */
+  textToSpeechStreamOverride?: typeof sdk.textToSpeechStream
+  /** Test seam — overrides `diffusion()` from `@qvac/sdk` when set. */
+  diffusionOverride?: typeof sdk.diffusion
   /** Test seam — overrides `video()` from `@qvac/sdk` when set. */
   videoOverride?: typeof sdk.video
   /** Test seam — overrides `cancel()` from `@qvac/sdk` when set. */
@@ -40,6 +43,7 @@ declare module '@/serve/core/context' {
 }
 
 export interface OpenAIExtensionOptions {
+  decideOverride?: DecideFn
   transcribeOverride?: OpenAIState['transcribeOverride']
 }
 
@@ -70,11 +74,6 @@ export async function createOpenAIState(
   const state: OpenAIState = {
     responsesStore: createResponsesStore(),
     vectorStores: createVectorStoresStore(),
-    ephemeralFiles: createEphemeralFilesStore(undefined, {
-      onEvict: (id, reason) => {
-        logger.warn(`ephemeral file evicted id=${id} reason=${reason}`)
-      }
-    }),
     chunkAttributions: createChunkAttributionStore(),
     videoJobsStore: createVideoJobsStore({
       onEvict: (job, reason) => {
@@ -83,6 +82,7 @@ export async function createOpenAIState(
       }
     }),
     ffmpegAvailable,
+    ...(options?.decideOverride !== undefined ? { decideOverride: options.decideOverride } : {}),
     ...(options?.transcribeOverride !== undefined
       ? { transcribeOverride: options.transcribeOverride }
       : {})

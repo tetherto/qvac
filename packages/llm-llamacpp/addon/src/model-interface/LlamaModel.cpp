@@ -19,6 +19,7 @@
 #include <common/arg.h>
 #include <common/chat.h>
 #include <common/common.h>
+#include <common/json.h>
 #include <common/log.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
@@ -32,6 +33,7 @@
 #include "ImagePixelLimit.hpp"
 #include "MediaLoadOrder.hpp"
 #include "MtmdLlmContext.hpp"
+#include "SpeculativeRuntime.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
 #include "handlers/LoadConfigHandlers.hpp"
@@ -47,6 +49,53 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
+
+namespace {
+
+// llama-server's `draft_n` / `draft_n_accepted` timings, reported only when
+// the model decodes speculatively, and its acceptance log lines.
+void appendSpeculativeStats(
+    qvac_lib_inference_addon_cpp::RuntimeStats& stats, bool enabled,
+    const qvac_lib_inference_addon_llama::speculative::SpeculativeStats&
+        speculative) {
+  if (!enabled) {
+    return;
+  }
+  stats.emplace_back(
+      "draftTokens", static_cast<int64_t>(speculative.draftTokens));
+  stats.emplace_back(
+      "draftAcceptedTokens", static_cast<int64_t>(speculative.draftAccepted));
+  if (speculative.draftTokens == 0) {
+    return;
+  }
+  // llama-server's "draft acceptance" and per-position rate lines.
+  const auto verifySteps = static_cast<double>(speculative.verifySteps);
+  std::string perPos;
+  for (size_t i = 0;
+       speculative.verifySteps > 0 && i < speculative.acceptedPerPos.size();
+       ++i) {
+    perPos += string_format(
+        "%s%.3f",
+        i > 0 ? ", " : "",
+        static_cast<double>(speculative.acceptedPerPos[i]) / verifySteps);
+  }
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "[Speculative] draft acceptance = %0.5f (%llu accepted / %llu "
+          "generated), mean len = %5.2f, acc per pos = (%s)\n",
+          static_cast<double>(speculative.draftAccepted) /
+              static_cast<double>(speculative.draftTokens),
+          static_cast<unsigned long long>(speculative.draftAccepted),
+          static_cast<unsigned long long>(speculative.draftTokens),
+          speculative.verifySteps > 0
+              ? 1.0 +
+                    static_cast<double>(speculative.draftAccepted) / verifySteps
+              : 1.0,
+          perPos.c_str()));
+}
+
+} // namespace
 
 static void preflightImagePixels(
     const ParsedPromptPayload& parsed,
@@ -252,7 +301,11 @@ void LlamaModel::init(bool acquireLock) {
   }
 
   // Addon-only knobs: consume them here so they are not forwarded to
-  // llama.cpp's argument parser, which would reject them as unknown.
+  // llama.cpp's argument parser, which would reject them as unknown. The
+  // speculative keys are llama-server flags that the parser only registers
+  // for the server and CLI examples.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeConfig
+      speculativeConfig;
   try {
     snap->cacheCheckpointPolicy_ =
         qvac_lib_inference_addon_llama::cache::parseCheckpointPolicy(
@@ -260,6 +313,11 @@ void LlamaModel::init(bool acquireLock) {
     snap->cacheRamBytes_ =
         qvac_lib_inference_addon_llama::cache::parseCacheRamBytes(
             configFilemap);
+    speculativeConfig =
+        qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
+            configFilemap);
+    qvac_lib_inference_addon_llama::speculative::requireDraftModelFile(
+        speculativeConfig);
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());
@@ -290,6 +348,13 @@ void LlamaModel::init(bool acquireLock) {
   runtimeBackendDevice_ = normalized.runtimeBackendDevice;
   common_params params = std::move(normalized.params);
   const bool isStreaming = snap->asyncWeightsLoader_.isStreaming();
+  try {
+    qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
+        speculativeConfig, params);
+  } catch (const std::invalid_argument& e) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument, e.what());
+  }
 
   // Match llama-server for every on-disk GGUF. llama_model_load_from_file
   // discovers the remaining split files from shard 0, while
@@ -323,11 +388,22 @@ void LlamaModel::init(bool acquireLock) {
     return;
   }
 
+  std::unique_ptr<
+      qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+      speculative;
+  if (llamaInit && llamaInit->model() != nullptr &&
+      llamaInit->context() != nullptr) {
+    speculative =
+        qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime::create(
+            params, llamaInit->model(), llamaInit->context());
+  }
+
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
-      std::move(llamaInit));
+      std::move(llamaInit),
+      std::move(speculative));
 
   if (snap->llmContext_) {
     snap->llmContext_->setCacheCheckpointPolicy(snap->cacheCheckpointPolicy_);
@@ -460,6 +536,7 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       .model = mdl,
       .lctx = ctx,
       .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
+      .speculative = state.llmContext_->getSpeculative(),
   };
   // The scheduler validates its own geometry (ctxTotalTokens / batchSize, and
   // batchCapacity >= batchSize) with std::invalid_argument, which would escape
@@ -1037,6 +1114,9 @@ std::string LlamaModel::processConcurrent(
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
     jobStats_[id] = std::move(terminal);
   }
+  if (prompt.outputCallback) {
+    return {};
+  }
   return result.outputs.empty() ? std::string{}
                                 : std::move(result.outputs.front());
 }
@@ -1078,6 +1158,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
   if (observed.stopReason.has_value()) {
     terminal.emplace_back(
         "stopReason", static_cast<int64_t>(*observed.stopReason));
+  }
+  if (state_->llmContext_->getSpeculative() != nullptr) {
+    terminal.emplace_back("draftTokens", observed.draftTokens);
+    terminal.emplace_back("draftAcceptedTokens", observed.draftAcceptedTokens);
   }
   return terminal;
 }
@@ -1632,7 +1716,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
   // races a mid-decode peer. The counters are cleared instead at the
   // batch-entry epoch boundary (processPromptBatchImpl), which is
   // exclusive with respect to the scheduler.
-  return {
+  qvac_lib_inference_addon_cpp::RuntimeStats result{
       {"TTFT", stats.prefillTimeMs()},
       {"TPS", stats.decodeTokensPerSecond()},
       {"ppTPS", stats.prefillTokensPerSecond()},
@@ -1645,6 +1729,11 @@ LlamaModel::batchRuntimeStatsLocked() const {
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
+  appendSpeculativeStats(
+      result,
+      state_->llmContext_->getSpeculative() != nullptr,
+      stats.speculative);
+  return result;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats
@@ -1672,7 +1761,7 @@ LlamaModel::singleRuntimeStatsLocked() const {
                              static_cast<double>(promptTokenCount)
                        : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
-  return {
+  qvac_lib_inference_addon_cpp::RuntimeStats stats{
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
       {"ppTPS", promptProcessingTPS},
@@ -1703,6 +1792,13 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
+  appendSpeculativeStats(
+      stats,
+      state_->llmContext_->getSpeculative() != nullptr,
+      wasPrefill
+          ? qvac_lib_inference_addon_llama::speculative::SpeculativeStats{}
+          : state_->llmContext_->speculativeStats());
+  return stats;
 }
 
 namespace {
@@ -1726,10 +1822,40 @@ std::string optionalString(
   return it->second.get<std::string>();
 }
 
+// The same value in an order-preserving parse of the request, or null when
+// that parse failed or lacks it.
+const common_json* orderedChild(const common_json* parent, const char* key) {
+  if (parent == nullptr || !parent->is_object() || !parent->contains(key)) {
+    return nullptr;
+  }
+  return &parent->at(key);
+}
+
+const common_json* orderedChild(const common_json* parent, size_t idx) {
+  if (parent == nullptr || !parent->is_array() || idx >= parent->size()) {
+    return nullptr;
+  }
+  return &parent->at(idx);
+}
+
+// A tool's schema and a past call's arguments are written out in the caller's
+// key order. picojson's object is a std::map, so its serialize() sorts keys,
+// and fabric builds the tool grammar with object properties in schema order:
+// a sorted schema rejects arguments written in the order the caller declared
+// them. `ordered` is the value from an order-preserving parse of the request;
+// without it the value keeps picojson's order.
+std::string serializeInCallerOrder(
+    const picojson::value& value, const common_json* ordered) {
+  return ordered != nullptr ? ordered->dump() : value.serialize();
+}
+
 // Past tool calls on an assistant turn, and the call a tool result answers, so
 // the chat template renders them in the model's own format instead of the
-// caller flattening them into `content`.
-void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
+// caller flattening them into `content`. `orderedMsg` is the same message from
+// an order-preserving parse, see serializeInCallerOrder.
+void readToolTurnFields(
+    const picojson::object& obj, const common_json* orderedMsg,
+    common_chat_msg& msg) {
   auto calls = obj.find("tool_calls");
   if (calls != obj.end()) {
     if (msg.role != "assistant") {
@@ -1738,7 +1864,10 @@ void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
     if (!calls->second.is<picojson::array>()) {
       throwInvalidToolTurn("tool_calls must be an array");
     }
-    for (const picojson::value& entry : calls->second.get<picojson::array>()) {
+    const picojson::array& entries = calls->second.get<picojson::array>();
+    const common_json* orderedCalls = orderedChild(orderedMsg, "tool_calls");
+    for (size_t idx = 0; idx < entries.size(); ++idx) {
+      const picojson::value& entry = entries[idx];
       if (!entry.is<picojson::object>()) {
         throwInvalidToolTurn("each tool_calls entry must be an object");
       }
@@ -1772,7 +1901,9 @@ void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
         }
         toolCall.arguments = text;
       } else if (args->second.is<picojson::object>()) {
-        toolCall.arguments = args->second.serialize();
+        toolCall.arguments = serializeInCallerOrder(
+            args->second,
+            orderedChild(orderedChild(orderedCalls, idx), "arguments"));
       } else {
         throwInvalidToolTurn(
             "tool_calls arguments must be an object or a JSON object string");
@@ -1807,6 +1938,18 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
 
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
+    // Only read for key order, see serializeInCallerOrder.
+    const common_json orderedJson = common_json::parse_no_throw(input);
+    const common_json* ordered =
+        orderedJson.is_discarded() ? nullptr : &orderedJson;
+    if (ordered == nullptr) {
+      // picojson accepts input common_json rejects: trailing text after the
+      // array, raw invalid UTF-8, numbers like `01`.
+      QLOG_IF(
+          Priority::DEBUG,
+          "[LlamaModel] formatPrompt: request is not strict JSON, so tool "
+          "schemas and call arguments keep sorted key order\n");
+    }
 
     int addMediaPlaceholder = 0;
     bool isNextUser = false;
@@ -1814,6 +1957,7 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
       const auto& subObj = obj[i];
       if (subObj.is<picojson::object>()) {
         picojson::object jsonObj = subObj.get<picojson::object>();
+        const common_json* orderedEntry = orderedChild(ordered, i);
 
         if (jsonObj.find("type") != jsonObj.end() &&
             jsonObj["type"].get<std::string>() == "function") {
@@ -1823,7 +1967,9 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
             tool.description = jsonObj["description"].get<std::string>();
           }
           if (jsonObj.find("parameters") != jsonObj.end()) {
-            tool.parameters = jsonObj["parameters"].serialize();
+            tool.parameters = serializeInCallerOrder(
+                jsonObj["parameters"],
+                orderedChild(orderedEntry, "parameters"));
           }
           tools.push_back(tool);
           continue;
@@ -1900,7 +2046,7 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
           }
         }
         try {
-          readToolTurnFields(jsonObj, newMsg);
+          readToolTurnFields(jsonObj, orderedEntry, newMsg);
         } catch (...) {
           state_->llmContext_->resetMedia();
           throw;
@@ -1943,13 +2089,17 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result_ptr llamaInit) {
+    common_init_result_ptr llamaInit,
+    std::unique_ptr<
+        qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+        speculative) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), maxImagePixels_);
+        params, std::move(llamaInit), maxImagePixels_, std::move(speculative));
   }
-  return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
+  return std::make_unique<TextLlmContext>(
+      params, std::move(llamaInit), std::move(speculative));
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

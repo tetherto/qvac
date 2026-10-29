@@ -101,8 +101,8 @@ Add `@qvac/fabric` and its platform packages to the consumer's `package.json`:
     "@qvac/fabric-ios": { "optional": true }
   },
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.21.1",
-    "@qvac/fabric-ios": "0.21.1",
+    "@qvac/fabric-android-arm64": "^0.21.1",
+    "@qvac/fabric-ios": "^0.21.1",
     "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0"
   }
@@ -120,10 +120,12 @@ dependencies. Hence each kind of declaration:
   150 MB) with every install. The application installs the one it ships,
   pinned to the exact `@qvac/fabric` version. The SDK's
   `installMissingPrebuilds` does that for you.
-- **Exact-pinned `devDependencies` (mobile).** These are what an addon that
-  cross-builds Android or iOS prebuilds links against. Bump them together with
-  the `@qvac/fabric` range. When one is missing, configure fails and names the
-  package to add.
+- **`devDependencies` (mobile).** These are what an addon that cross-builds
+  Android or iOS prebuilds links against. Use the same caret range as
+  `@qvac/fabric`: the meta requires its mobile packages at its own exact
+  version, so npm installs a matching pair, and a fabric patch needs no
+  manifest change. When one is missing, configure fails and names the package
+  to add.
 
 After `npm install`, the headers and CMake config are under
 `node_modules/@qvac/fabric/prebuilds/`, and the host's prebuilt `.bare` and ggml
@@ -163,7 +165,7 @@ Do **not** add `qvac-fabric`.
 
 Addons on the shared template (`cmake/qvac-addon`, see
 `docs/architecture/ADDON-CMAKE-TEMPLATE.md`) call `qvac_addon_use_fabric()`, which
-does all of the below and sets `qvac_fabric_target`.
+does all of the below and sets `qvac_fabric_target` and `qvac_fabric_soname`.
 
 ```cmake
 # Provides llama/ggml/common headers + the host helpers.
@@ -242,7 +244,7 @@ own `symbols.map` / `exports.txt`, not in the consumer.
 
 ---
 
-## Step 4 — JS-side: pre-loading @qvac/fabric
+## Step 4 — Pre-loading and binding @qvac/fabric
 
 Consumer addons that dynamically link against the fabric runtime **must**
 pre-load it in `binding.js` before calling `require.addon()`, so the bare runtime
@@ -260,6 +262,25 @@ module.exports = require.addon()
 
 Every `require()` and `require.addon()` specifier must be a string literal:
 `bare-pack` and `bare-link` only follow what the module lexer can see.
+
+Pre-loading makes the runtime findable but does not bind it. Windows
+delay-loads it, and Bare resolves it only on a thread that is loading an addon,
+so a first fabric call on a worker thread fails with 0xC06D007E. Bind fabric in
+the addon's exports function, which runs inside `require.addon()`. With
+`qvac_addon_link_fabric()` the helper and the runtime's file name are already
+on the include path and in the defines:
+
+```cpp
+#include <qvac-addon/fabric-bind.h>
+
+js_value_t* exports(js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
+  // ...register functions...
+}
+```
 
 ### Locating the ggml backends
 
@@ -333,10 +354,10 @@ bare-pack --host <host> --linked index.js > /dev/null   # bundles without errors
 
 | # | Step | What to verify |
 |---|------|----------------|
-| 1 | `package.json` | `@qvac/fabric` `^0.21.1` in `dependencies`; the desktop platform packages in `optionalDependencies` and the mobile ones as optional `peerDependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies`, plus exact-pinned `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` when building mobile prebuilds |
+| 1 | `package.json` | `@qvac/fabric` `^0.21.1` in `dependencies`; the desktop platform packages in `optionalDependencies` and the mobile ones as optional `peerDependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies`, plus `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` at the `@qvac/fabric` caret range when building mobile prebuilds |
 | 2 | `vcpkg.json` | `qvac-fabric` is **not** listed; `vk-profiling` feature removed; addon-specific deps remain |
 | 3 | `CMakeLists.txt` | `qvac_addon_use_fabric()`, or `find_package(qvac-fabric ...)` + `qvac_addon_fabric_layout()`; `qvac-fabric::headers`; no runtime or backend install |
-| 4 | `binding.js` | `require('@qvac/fabric')` **before** `require.addon()`, literal specifiers only; no backends path in JS |
+| 4 | `binding.js`, exports function | `require('@qvac/fabric')` **before** `require.addon()`, literal specifiers only; no backends path in JS; the exports function calls `qvacAddonBindFabric()` and throws if it fails |
 | 5 | Backends | native code calls `qvac_fabric_load_backends()` unless the caller passed `backendsDir` |
 | 6 | Build | `npm run build` succeeds; `readelf -d` shows `NEEDED qvac__fabric-<host>@0.bare`; consumer `.bare` is small (no embedded ggml/llama); `bare-pack` succeeds |
 

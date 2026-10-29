@@ -10,6 +10,15 @@ qvac_addon_project_setup()
 
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
+
+# Fuzz-only configure: StopStringMatch / forLogMessage are header-only and
+# need no fabric. See docs/architecture/ADDON-FUZZING.md.
+if(BUILD_FUZZING AND NOT BUILD_TESTING)
+  enable_testing()
+  add_subdirectory(test/fuzz)
+  return()
+endif()
+
 # Required to call llama.cpp's `json_schema_to_grammar()` for per-request
 # JSON-Schema → GBNF conversion. The function lives in libcommon inside the
 # shared runtime but takes a `nlohmann::ordered_json`, so we need the full
@@ -24,6 +33,7 @@ find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 # (dynamically linked, loaded once per process); sets qvac_fabric_target.
 qvac_addon_use_fabric()
 
+if(NOT BUILD_FUZZING)
 add_bare_module(inference-addon-llama EXPORTS)
 
 set(ADDON_SOURCES
@@ -45,6 +55,8 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SpeculativeRuntime.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SpeculativeSequence.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
@@ -77,10 +89,11 @@ target_link_libraries(
 
 qvac_addon_link_fabric(${inference-addon-llama} ${qvac_fabric_target})
 qvac_addon_finalize(${inference-addon-llama})
+endif()
 
 # Option to build CLI
 option(BUILD_CLI "Build CLI tool example" FALSE)
-if(BUILD_CLI)
+if(BUILD_CLI AND NOT BUILD_FUZZING)
   # Cache management integration test with automatic model download
   add_executable(cli_tool
     ${PROJECT_SOURCE_DIR}/addon/src/cli/cli_tool.cc
@@ -144,4 +157,8 @@ if(BUILD_TESTING)
   # Integration tests for model classes (includes backend selection tests)
   # Pass ENABLE_COVERAGE option to test subdirectory
   add_subdirectory(test/unit)
+endif()
+
+if(BUILD_FUZZING)
+  add_subdirectory(test/fuzz)
 endif()

@@ -9,10 +9,14 @@ import type {
 import Buffer from 'bare-buffer'
 import type { QVACModelEntry } from '@qvac/registry-client'
 import { REGISTRY_ERROR_CODES } from '@/schemas/errors'
-import { getAddonFromEngine, resolveCanonicalEngine } from '@/schemas/engine-addon-map'
+import {
+  getAddonFromEngine,
+  resolveCanonicalEngine,
+  resolveRegistryEngine
+} from '@/schemas/engine-addon-map'
 import { getRegistryClient } from '@/runtime/registry-client'
 import { getEngineLogger } from '@/logging/index'
-import { ModelRegistryQueryFailedError } from '@/errors/index'
+import { ModelRegistryModelNotFoundError, ModelRegistryQueryFailedError } from '@/errors/index'
 
 interface QvacError extends Error {
   code?: number
@@ -30,8 +34,8 @@ function toHexString(value: Buffer | string | { data: number[] } | undefined): s
   return ''
 }
 
-function processRegistryModel(model: QVACModelEntry): ModelRegistryEntry | null {
-  const engine = resolveCanonicalEngine(model.engine || '')
+export function processRegistryModel(model: QVACModelEntry): ModelRegistryEntry | null {
+  const engine = resolveRegistryEngine(model.engine || '', model.tags)
   if (!engine) {
     logger.warn(`Skipping model with unknown engine "${model.engine}": ${model.path}`)
     return null
@@ -185,9 +189,7 @@ export async function handleModelRegistryGetModel(
     const rawModel = await client.getModel(request.registryPath, request.registrySource)
 
     if (!rawModel) {
-      throw new ModelRegistryQueryFailedError(
-        `Model not found: ${request.registrySource}/${request.registryPath}`
-      )
+      throw new ModelRegistryModelNotFoundError(request.registrySource, request.registryPath)
     }
 
     const model = processRegistryModel(rawModel)
@@ -206,6 +208,8 @@ export async function handleModelRegistryGetModel(
       model
     }
   } catch (error) {
+    if (error instanceof ModelRegistryModelNotFoundError) throw error
+
     logger.error('QVAC model registry get model failed:', error)
 
     // Re-throw registry client errors directly (19001-19003)

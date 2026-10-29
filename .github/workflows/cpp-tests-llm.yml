@@ -157,6 +157,21 @@ jobs:
         run: |
           npm install
 
+      # Local install, not `npm install -g`. The global pin is bare-make
+      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
+      # is prepended so generate and the vcpkg toolchain's
+      # find_program(bare-make) both use the current package. It runs before
+      # the overlay: npm reconciles node_modules on every install and prunes
+      # the PR platform package the overlay nests inside @qvac/fabric, so the
+      # build would silently link the released runtime from npm instead.
+      - name: Install current bare-make locally
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          npm install --no-save --ignore-scripts bare-make
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          ./node_modules/.bin/bare-make --version
+
       - name: Download fabric-prebuilds for overlay
         if: ${{ inputs.fabric-overlay-artifact != '' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
@@ -175,18 +190,6 @@ jobs:
           # overlay-local-fabric concatenates `${PLATFORM}-${ARCH}` verbatim.
           platform: ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }}
           arch: ${{ matrix.arch || 'x64' }}
-
-      # Local install, not `npm install -g`. The global pin is bare-make
-      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
-      # is prepended so generate and the vcpkg toolchain's
-      # find_program(bare-make) both use the current package.
-      - name: Install current bare-make locally
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          npm install --no-save --ignore-scripts bare-make
-          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          ./node_modules/.bin/bare-make --version
 
       - name: Cache C++ test models
         id: model-cache
@@ -353,3 +356,17 @@ jobs:
             cat build/test/unit/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
+
+      # After coverage has harvested the BUILD_TESTING tree. fuzz:build
+      # reconfigures build/ with BUILD_FUZZING=ON and would otherwise wipe
+      # the coverage artefacts. Bounded unit-test mode; coverage-guided
+      # `--fuzz_for` is a later scheduled job. See docs/architecture/ADDON-FUZZING.md.
+      - name: Build fuzz targets
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:run

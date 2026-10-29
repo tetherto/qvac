@@ -230,8 +230,8 @@ qvac-test run:local:electron
 qvac-test run:local:snap
 qvac-test run:local:android
 qvac-test run:local:ios
-qvac-test run:local:python          # any consumers.external entry named "python"
-qvac-test run:local:external --name=<name>
+qvac-test run:local:<name>          # the consumers.external entry of that name
+qvac-test run:local:external --name=<name>   # the same, spelled out
 
 # Separate producer / consumer (advanced)
 qvac-test run:producer
@@ -261,15 +261,29 @@ qvac-test report:matrix --report desktop=reports/desktop.json --report python=re
 ## Non-JS clients
 
 An entry under `consumers.external` launches a client the framework does not
-build. The framework keeps MQTT, the queue, timeouts and reporting; the client
-reads one definition at a time off stdin and answers with a verdict.
+build, in one of two modes:
+
+- `bridge`: the framework keeps MQTT, the queue, timeouts and reporting; the
+  client reads one definition at a time off stdin and answers with a verdict.
+- `mqtt`: the client speaks the consumer protocol to the broker itself, as an
+  app on a device must. The framework only starts the command with the run in
+  its environment (`QVAC_RUN_ID`, `QVAC_TEST_PLATFORM`, `QVAC_MQTT_BROKER_URL`,
+  and `QVAC_MQTT_USERNAME` / `QVAC_MQTT_PASSWORD` / `QVAC_MQTT_SESSION_EXPIRY`
+  when set), and the consumer lives as long as the command does.
+
+An optional `prepare` step (e.g. building the app) runs to completion before
+`run:local:<name>` starts the producer, whose consumer-registration window is
+too short for a build. `--skip-build` skips it.
 
 ```js
 consumers: {
   external: [
     { name: 'python', platform: 'desktop-python', mode: 'bridge',
-      interpreter: '../../sdk-python/.venv/bin/python',
-      args: ['-m', 'qvac_e2e.runner'], cwd: './python' }
+      interpreter: '../sdk-python/.venv/bin/python',
+      args: ['-m', 'qvac_e2e.runner'], cwd: './runners/python' },
+    { name: 'kotlin-android', platform: 'kotlin-android', mode: 'mqtt',
+      prepare: { interpreter: 'node', args: ['runners/kotlin/scripts/device.mjs', 'prepare'] },
+      interpreter: 'node', args: ['runners/kotlin/scripts/device.mjs', 'run'] }
   ]
 }
 ```
@@ -309,8 +323,8 @@ npm run check
 npm run build
 ```
 
-Its in-repo consumer is `packages/sdk/e2e`, which holds the SDK's e2e test definitions and
-`qvac-test.config.js`.
+Its in-repo consumer is `packages/sdk-e2e`, which holds the SDK's e2e catalog, the JS and Python
+runners for it, and `qvac-test.config.js`.
 
 ## CI integration
 
@@ -321,7 +335,7 @@ In this monorepo that consumer is `.github/workflows/test-sdk.yml`, which builds
 desktop, Electron, Snap, Android, and iOS. Its `test-suite-source` input selects where this framework comes
 from for a given run:
 
-- `manifest` — whatever `packages/sdk/e2e/package.json` declares (the default)
+- `manifest` — whatever `packages/sdk-e2e/package.json` declares (the default)
 - `branch` — build and pack `packages/test-suite` from the checked-out ref, then install that tarball
 - `npm` — resolve a published version or dist-tag via `test-suite-version`
 

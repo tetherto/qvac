@@ -225,6 +225,97 @@ test('llmConfigBaseSchema: rejects reasoning_budget other values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: REASONING_BUDGET_MAX + 1 }).success, false)
 })
 
+test('llmConfigBaseSchema: accepts cache_checkpoints from 0 to 1024', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 0 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 2 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 1024 }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects cache_checkpoints the addon refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 1025 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints: '2' }).success, false)
+})
+
+test('llmConfigSchema: does not inject a default for cache_checkpoints', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.absent('cache_checkpoints' in result.data)
+})
+
+test('loadModelOptionsToRequestSchema: accepts cache_checkpoints for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { cache_checkpoints: 2 }
+    }).success,
+    true
+  )
+})
+
+test('llmConfigBaseSchema: accepts the checkpoint budget and storage keys', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: 0 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: 8589934592 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_storage: 'memory' }).success, true)
+  t.is(
+    llmConfigBaseSchema.safeParse({
+      cache_checkpoint_storage: 'disk',
+      cache_checkpoint_dir: '/data/cache'
+    }).success,
+    true
+  )
+})
+
+test('llmConfigBaseSchema: rejects checkpoint budget and storage values the addon refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: 0.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoints_max_bytes: '1024' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_storage: 'ram' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_dir: '' }).success, false)
+})
+
+test('llmConfigBaseSchema: leaves the disk storage and directory pairing to the addon', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_storage: 'disk' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_checkpoint_dir: '/data/cache' }).success, true)
+})
+
+test('llmConfigBaseSchema: accepts cache_ram_mib from 0 to 1048576', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 0 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 2048 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 1048576 }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects cache_ram_mib the addon refuses', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 1048577 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: '2048' }).success, false)
+})
+
+test('llmConfigSchema: does not inject a default for the other prompt-cache keys', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) {
+    t.absent('cache_checkpoints_max_bytes' in result.data)
+    t.absent('cache_checkpoint_storage' in result.data)
+    t.absent('cache_checkpoint_dir' in result.data)
+    t.absent('cache_ram_mib' in result.data)
+  }
+})
+
+test('loadModelOptionsToRequestSchema: keeps the other prompt-cache keys for LLM', (t) => {
+  const modelConfig = {
+    cache_checkpoints_max_bytes: 1073741824,
+    cache_checkpoint_storage: 'disk',
+    cache_checkpoint_dir: '/data/cache',
+    cache_ram_mib: 512
+  }
+  const result = loadModelOptionsToRequestSchema.safeParse({ ...LLM_BASE, modelConfig })
+  t.is(result.success, true)
+  if (result.success) t.alike(result.data.modelConfig, modelConfig)
+})
+
 test('llmConfigBaseSchema: accepts valid image_tile_mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'disabled' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 'batched' }).success, true)
@@ -316,6 +407,39 @@ test('loadModelOptionsToRequestSchema: accepts mmproj-use-gpu for LLM', (t) => {
   )
 })
 
+test('llmConfigBaseSchema: accepts a positive integer image-max-megapixels', (t) => {
+  const result = llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 20 })
+  t.is(result.success, true)
+  if (result.success) t.is(result.data['image-max-megapixels'], 20)
+})
+
+test('llmConfigBaseSchema: rejects invalid image-max-megapixels', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': '20' }).success, false)
+})
+
+test('llmConfigBaseSchema: bounds image-max-megapixels at the addon maximum', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 18_446_744_073_709 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 18_446_744_073_710 }).success, false)
+})
+
+test('llmConfigSchema: does not inject a default for image-max-megapixels', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.absent('image-max-megapixels' in result.data)
+})
+
+test('loadModelOptionsToRequestSchema: accepts image-max-megapixels for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { 'image-max-megapixels': 100 }
+    }).success,
+    true
+  )
+})
+
 test('llmConfigBaseSchema: accepts valid tensor-read-lazy values', (t) => {
   for (const value of ['on', 'auto', 'off']) {
     t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': value }).success, true)
@@ -382,4 +506,102 @@ test('llmConfigSchema: gpu_layers stays unset', (t) => {
 test('llmConfigSchema: an explicit gpu_layers is kept', (t) => {
   t.is(llmConfigSchema.parse({ gpu_layers: 20 }).gpu_layers, 20)
   t.is(llmConfigSchema.parse({ fit: true, gpu_layers: 20 }).gpu_layers, 20)
+})
+
+test('llmConfigBaseSchema: accepts every spec_type value', (t) => {
+  for (const value of ['none', 'draft-mtp', 'draft-dflash']) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_type: value }).success, true)
+  }
+  t.is(llmConfigBaseSchema.safeParse({ spec_type: 'draft-eagle' }).success, false)
+})
+
+test('llmConfigBaseSchema: bounds the speculative draft limits at the addon ranges', (t) => {
+  for (const value of [1, 64]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_max: value }).success, true)
+  }
+  for (const value of [0, 65, 2.5]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_max: value }).success, false)
+  }
+  for (const value of [0, 64]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_min: value }).success, true)
+  }
+  for (const value of [-1, 65, 1.5]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_n_min: value }).success, false)
+  }
+  for (const value of [0, 0.75, 1]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_p_min: value }).success, true)
+  }
+  for (const value of [-0.1, 1.1]) {
+    t.is(llmConfigBaseSchema.safeParse({ spec_draft_p_min: value }).success, false)
+  }
+})
+
+test('llmConfigBaseSchema: leaves the n_min / n_max relation to the addon', (t) => {
+  t.is(
+    llmConfigBaseSchema.safeParse({
+      spec_type: 'draft-mtp',
+      spec_draft_n_max: 2,
+      spec_draft_n_min: 5
+    }).success,
+    true
+  )
+})
+
+test('llmConfigSchema: injects no speculative defaults', (t) => {
+  const result = llmConfigSchema.parse({})
+  t.absent('spec_type' in result)
+  t.absent('spec_draft_n_max' in result)
+})
+
+test('loadModelOptionsToRequestSchema: accepts draft-dflash with a draftModelSrc for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: {
+        spec_type: 'draft-dflash',
+        spec_draft_n_max: 7,
+        draftModelSrc: 'https://example.com/dflash.gguf'
+      }
+    }).success,
+    true
+  )
+})
+
+test('loadModelOptionsToRequestSchema: accepts draft-mtp with a draftModelSrc for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { spec_type: 'draft-mtp', draftModelSrc: 'https://example.com/mtp.gguf' }
+    }).success,
+    true
+  )
+})
+
+test('llmConfigSchema: rejects a draftModelSrc without speculative decoding', (t) => {
+  for (const config of [
+    { draftModelSrc: 'https://example.com/dflash.gguf' },
+    { spec_type: 'none', draftModelSrc: 'https://example.com/dflash.gguf' }
+  ]) {
+    const result = llmConfigSchema.safeParse(config)
+    t.is(result.success, false)
+    t.alike(result.error?.issues[0]?.path, ['draftModelSrc'])
+  }
+})
+
+test('llmConfigSchema: accepts a draftModelSrc with speculative decoding', (t) => {
+  for (const spec_type of ['draft-mtp', 'draft-dflash'] as const) {
+    t.is(
+      llmConfigSchema.safeParse({ spec_type, draftModelSrc: 'https://example.com/draft.gguf' })
+        .success,
+      true
+    )
+  }
+})
+
+test('llmConfigBaseSchema: leaves the draftModelSrc / spec_type pairing to the merged config', (t) => {
+  t.is(
+    llmConfigBaseSchema.safeParse({ draftModelSrc: 'https://example.com/draft.gguf' }).success,
+    true
+  )
+  t.ok(llmConfigBaseSchema.pick({ draftModelSrc: true }))
 })

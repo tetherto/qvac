@@ -46,15 +46,11 @@ const {
 } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { assertDesktopGpuBackend } = require('../utils/desktopGpuBackend')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isApple = platform === 'darwin' || platform === 'ios'
-const GPU_BACKEND_IDS = { metal: 1, cuda: 2, vulkan: 3, opencl: 4 }
-// CI rows whose prebuild bundles more than one usable GPU backend (the linux
-// runners carry CUDA and Vulkan) pin the engine cascade through
-// TTS_CPP_GPU_BACKEND; the assertions expect whatever the row pinned and fall
-// back to the platform's cascade default when unset.
 const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 // Parler GPU coverage is validated on Apple, the Android Device Farm, and the
 // linux CUDA lane. Keep desktop Vulkan out until dedicated runs prove it there.
@@ -153,12 +149,7 @@ function assertGpuBackend(t, engineTag, stats, allowPolicyCpu = false) {
   if (platform === 'darwin' || platform === 'ios') {
     t.is(id, 1, `${engineTag}/${platform}: expected Metal backendId=1, got ${name}`)
   } else if (platform === 'linux' || platform === 'win32') {
-    const expectedId = GPU_BACKEND_IDS[PINNED_GPU_BACKEND] || GPU_BACKEND_IDS.vulkan
-    t.is(
-      id,
-      expectedId,
-      `${engineTag}/${platform}: expected ${backendIdToName(expectedId)} backendId=${expectedId}, got ${name}`
-    )
+    assertDesktopGpuBackend(t, `${engineTag}/${platform}`, dev, id, PINNED_GPU_BACKEND)
   } else if (platform === 'android') {
     t.ok(
       id === 3 || id === 4,

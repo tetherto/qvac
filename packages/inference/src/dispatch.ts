@@ -5,7 +5,8 @@ import type {
   CanonicalModelType,
   ProfilingRequestMeta,
   QvacConfig,
-  RPCOptions
+  RPCOptions,
+  AbortableRPCOptions
 } from '@/schemas/index'
 import {
   normalizeModelType,
@@ -19,7 +20,7 @@ import os from 'bare-os'
 import Buffer from 'bare-buffer'
 import { PassThrough, type Readable } from 'bare-stream'
 import { registry } from '@/registry'
-import type { HandlerEntry } from '@/handlers/types'
+import type { HandlerEntry, StreamHandler, StreamHandlerContext } from '@/handlers/types'
 import { handlerSupportsProgress, selectHandler } from '@/selection'
 import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
 import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
@@ -180,10 +181,11 @@ function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {
  * parse would drop, so it is carried across.
  */
 function prepareRequest<T extends Request>(request: T): Request {
-  const withDeviceDefaults = applyDeviceDefaults(request)
-  const profilingMeta = getProfilingMeta(withDeviceDefaults)
+  let withDeviceDefaults: Request
   let validated: Request
   try {
+    // Resolving device defaults parses the model config, so a bad value fails here.
+    withDeviceDefaults = applyDeviceDefaults(request)
     validated = requestSchema.parse(withDeviceDefaults)
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -191,6 +193,7 @@ function prepareRequest<T extends Request>(request: T): Request {
     }
     throw error
   }
+  const profilingMeta = getProfilingMeta(withDeviceDefaults)
   if (profilingMeta !== undefined) {
     ;(validated as Record<PropertyKey, unknown>)[PROFILING_KEY] = profilingMeta
   }
@@ -200,6 +203,16 @@ function prepareRequest<T extends Request>(request: T): Request {
 function invokeHandler(request: Request, handler: HandlerEntry['handler']): HandlerResult {
   const directHandler = handler as Handler
   return directHandler(request)
+}
+
+function invokeStreamHandler(
+  request: Request,
+  entry: HandlerEntry,
+  handler: HandlerEntry['handler'],
+  context: StreamHandlerContext
+): HandlerResult {
+  if (!entry.endsOnAbort) return invokeHandler(request, handler)
+  return (handler as StreamHandler)(request, context)
 }
 
 function isAsyncGenerator(result: HandlerResult): result is AsyncGenerator<Response> {
@@ -273,9 +286,10 @@ export async function send<T extends Request>(
   )
 }
 
+/** `options.signal` ends the stream only for a handler with `endsOnAbort`. */
 export async function* stream<T extends Request>(
   request: T,
-  _options?: RPCOptions
+  options?: AbortableRPCOptions
 ): AsyncGenerator<Response> {
   await ensureReady()
   assertLifecycleAllowed(request)
@@ -283,13 +297,16 @@ export async function* stream<T extends Request>(
   const processed = prepareRequest(request)
   const entry = getHandlerEntry(processed.type)
   const handler = selectHandler(entry)
+  const signal = entry.endsOnAbort ? options?.signal : undefined
+  if (signal?.aborted) return
+  const context: StreamHandlerContext = signal ? { signal } : {}
 
   async function* run(): AsyncGenerator<Response> {
     if (handlerSupportsProgress(entry, processed)) {
       yield* streamWithProgress(processed, handler)
       return
     }
-    const result = invokeHandler(processed, handler)
+    const result = invokeStreamHandler(processed, entry, handler, context)
     if (isAsyncGenerator(result)) {
       yield* result
     } else {

@@ -446,13 +446,16 @@ test('diffusionRequestSchema: rejects lora as relative path', (t) => {
   t.is(resultSubdir.success, false)
 })
 
-test('diffusionRequestSchema: accepts init_images with multiple base64 buffers', (t) => {
-  const result = diffusionRequestSchema.safeParse({
-    modelId: 'model-1',
-    prompt: 'blend @image1 and @image2',
-    init_images: ['iVBORw0KGgoAAAANSUhEUg==', '/9j/4AAQSkZJRgABAQEASABIAAA=']
-  })
-  t.is(result.success, true)
+test('diffusionRequestSchema: accepts ordered init_images and rejects empty or invalid references', (t) => {
+  const base = { modelId: 'model-1', prompt: 'blend @image1 and @image2' }
+  const references = ['iVBORw0KGgoAAAANSUhEUg==', '/9j/4AAQSkZJRgABAQEASABIAAA=']
+  t.alike(
+    diffusionRequestSchema.parse({ ...base, init_images: references }).init_images,
+    references
+  )
+  for (const init_images of [[], [''], ['not base64!']]) {
+    t.is(diffusionRequestSchema.safeParse({ ...base, init_images }).success, false)
+  }
 })
 
 test('diffusionRequestSchema: accepts increase_ref_index boolean', (t) => {

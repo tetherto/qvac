@@ -10,12 +10,12 @@ OpenAPI document, and mounts one or more **extensions** that contribute the actu
 | `openai`  | `--openai`         | `/v1/...`      | [openai.md](openai.md)   |
 
 ```bash
-qvac serve                        # the QVAC surface
-qvac serve --openai               # QVAC + OpenAI-compatible
-qvac serve --openai --no-default  # OpenAI-compatible only
+qvac serve                          # the QVAC surface
+qvac serve --openai                 # QVAC + OpenAI-compatible
+qvac serve --openai --no-default    # OpenAI-compatible only
 ```
 
-`qvac serve openai` is a deprecated alias for the last form.
+`qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 
 The OpenAPI document describes whatever is mounted. It is always at `/openapi.json`;
 `--docs` additionally serves Swagger UI at `/docs`.
@@ -24,11 +24,28 @@ Configuration lives under `serve` in `qvac.config.*`. `serve.models`, `serve.loa
 `serve.cors` are server-wide and documented here; each extension reads its own
 `serve.<name>` block, documented in that extension's page.
 
+## Errors
+
+An SDK `ContextOverflowError` returns HTTP `400` with
+`error.type: "invalid_request_error"` and `error.code: "context_length_exceeded"`.
+Shorten the input, start a new conversation, or increase the model's `ctx_size`
+before retrying. If SSE headers have already been sent, the status stays `200`;
+the server emits the same error envelope as an SSE frame and closes the stream,
+using the extension's usual termination sentinel.
+
 ## Network security and CORS
 
 The default `127.0.0.1` bind is unauthenticated. A non-loopback `--host` refuses to start without `--api-key <key>` or `--api-key-file <path>`; `--allow-unauthenticated` downgrades that refusal to a warning for operators who accept the exposure.
 
 Prefer `--api-key-file`: `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. The file must be a regular file, and the CLI warns when it is readable beyond its owner (`chmod 600`).
+
+CORS only governs cross-origin requests. A page that points its own domain at `127.0.0.1` (DNS rebinding) is same-origin with the server, so every request, `/openapi.json` included, must also carry a `Host` header naming a loopback host (`localhost`, `*.localhost`, `127.0.0.0/8`, `[::1]`), an IP address, the bind host, the `--public-base-url` host or an allowed host; the port is ignored and anything else gets `403 host_not_allowed`. Add names that reach the server through a proxy or DNS with `--allowed-host` or `serve.allowedHosts`; a leading dot covers the domain and its subdomains:
+
+```bash
+qvac serve --openai --allowed-host qvac.internal --allowed-host .corp.example
+```
+
+`--allow-any-host` (or `"allowedHosts": true`) turns the check off.
 
 Browser access requires explicit trusted origins unless `--docs` enables its same-port loopback defaults. Repeat `--cors-origin` or configure `serve.cors.origins`; wildcard (`*`) is rejected:
 
@@ -70,6 +87,15 @@ currently loaded. Unloading an alias frees its resources but keeps it configured
 next request loads it again. There is no "load" endpoint — send a normal request, or set
 `preload: true`.
 
+Model-load failures return `503 model_load_failed`. If the worker exits during
+startup, the response names its exit code or signal. If startup times out while
+the worker is still running, the response reports a startup timeout.
+Full diagnostics, including worker stderr, are written to the server's error log;
+the HTTP response contains only the startup summary. Check the terminal running
+`qvac serve` or your service's captured stderr for the cause.
+A per-load deadline set with `serve.load.timeoutMs` returns
+`503 model_load_timeout` instead.
+
 ### Load management (`serve.load`)
 
 Tune lazy-load behavior under `serve.load` in `qvac.config.*` (each has a CLI
@@ -87,6 +113,43 @@ flag override):
   "serve": {
     "load": { "lazy": true, "concurrency": 1, "timeoutMs": 600000, "cancelOnDisconnect": true },
     "models": { "my-llm": { "model": "QWEN3_600M_INST_Q4" } }
+  }
+}
+```
+
+## Endpoint categories
+
+Each alias gets an endpoint category from its model type, and a route only accepts aliases of
+its own category (`400 invalid_model_type` otherwise). `GET /v1/models/catalog` reports it as
+`role`.
+
+| Model type                                                                                     | Category            |
+| ---------------------------------------------------------------------------------------------- | ------------------- |
+| `llamacpp-completion`, `llm`                                                                   | `chat`              |
+| `llamacpp-embedding`, `embeddings`                                                             | `embedding`         |
+| `llamacpp-decision`                                                                            | `decision`          |
+| `whispercpp-transcription`, `parakeet-transcription`, `moss-transcribe`, `whisper`, `parakeet` | `transcription`     |
+| `whispercpp-audio-translation`                                                                 | `audio-translation` |
+| `bci-whispercpp-transcription`, `bci`                                                          | `bci`               |
+| `nmtcpp-translation`, `nmt`                                                                    | `translation`       |
+| `tts-ggml`, `onnx-tts`, `tts`                                                                  | `speech`            |
+| `ggml-ocr`, `ocr`                                                                              | `ocr`               |
+| `ggml-classification`, `classification`                                                        | `classification`    |
+| `audiogen-ggml`, `audiogen`                                                                    | `audiogen`          |
+| `ggml-vla`, `vla`                                                                              | `vla`               |
+| `sdcpp-generation`, `diffusion`                                                                | by `config.mode`    |
+| `sdcpp-video`                                                                                  | `video`             |
+
+An `sdcpp-generation` model serves one operation, chosen by `config.mode`: `diffusion` (the
+default) is `image`, and `video`, `upscale` and `world` are categories of the same name. Any other
+`mode` fails at startup.
+
+```json
+{
+  "serve": {
+    "models": {
+      "upscaler": { "model": "REALESRGAN_X4PLUS", "config": { "mode": "upscale" } }
+    }
   }
 }
 ```

@@ -116,6 +116,8 @@ TEST(LayaModelConfigTest, AcceptsLayaLoadOptions) {
       {"flash_attn", "auto"},
       {"threads", "1"},
       {"threads-batch", "0"},
+      {"poll", "50"},
+      {"poll-batch", "1"},
       {"openclCacheDir", "/tmp"}};
   EXPECT_NO_THROW(LayaModel::checkConfig(config));
 }
@@ -139,6 +141,24 @@ TEST(LayaModelConfigTest, RejectsOptionsThatDoNotApply) {
       EXPECT_NE(std::string(error.what()).find(key), std::string::npos)
           << error.what();
     }
+  }
+}
+
+TEST(LayaModelConfigTest, RejectionNamesTheAcceptedOptions) {
+  try {
+    LayaModel::checkConfig({{"device", "cpu"}, {"pooling", "mean"}});
+    FAIL() << "pooling must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_EQ(
+        std::string(error.what())
+            .rfind(
+                "checkConfig: 'pooling' is not a Laya load option; accepted: "
+                "device, gpu_layers, batch_size, verbosity, main-gpu, "
+                "split-mode, tensor-split, flash_attn, threads, "
+                "threads-batch, poll, poll-batch, openclCacheDir",
+                0),
+        0U)
+        << error.what();
   }
 }
 

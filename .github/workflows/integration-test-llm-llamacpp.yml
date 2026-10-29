@@ -373,6 +373,8 @@ jobs:
             npx brittle -r test/integration/all.js "${{ matrix.single_test }}"
           } else {
             npm run test:integration:generate
+            bare test/integration/fit.test.js
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           bare test/integration/all.js --exit | Tee-Object test-output.log
         shell: powershell

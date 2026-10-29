@@ -3075,7 +3075,7 @@ object Models {
         expectedSize = 844548128,
         sha256Checksum = "33dac85dcf22281d56e3a4fcb78def3c8fa59131c208af45a2e5c57cbe268de4",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "f16",
         params = "421M",
     )
@@ -3093,7 +3093,7 @@ object Models {
         expectedSize = 449919008,
         sha256Checksum = "1270162611a0c7074cc2a376380ddaca825702c62bebf2433baf42269de246fe",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "q8_0",
         params = "421M",
     )
@@ -3111,7 +3111,7 @@ object Models {
         expectedSize = 649973184,
         sha256Checksum = "e658ac8a717089528a1f402caa6b91aec8a4059b76c9c35114a70ba32b2fb469",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "f16",
         params = "322M",
     )
@@ -3129,7 +3129,7 @@ object Models {
         expectedSize = 348425664,
         sha256Checksum = "59a61f840e6f125c25037f7cc0363efafee1aeea3394b504d25551b4bda5a219",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "q8_0",
         params = "322M",
     )
@@ -3147,7 +3147,7 @@ object Models {
         expectedSize = 844548256,
         sha256Checksum = "5a44e3f8060290ab40b390a83242961aeab7af62913853530a4342bc5ec9ebe8",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "f16",
         params = "421M",
     )
@@ -3165,7 +3165,7 @@ object Models {
         expectedSize = 449919104,
         sha256Checksum = "72d5e753a4861f5532e0e3e065b9644ff6f6894efef82fa74af0898fa93ba899",
         addon = "embeddings",
-        engine = "llamacpp-embedding",
+        engine = "llamacpp-decision",
         quantization = "q8_0",
         params = "421M",
     )
@@ -4934,6 +4934,42 @@ object Models {
         params = "1.1B",
     )
 
+    val PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0 = ModelConstant(
+        name = "PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0",
+        src = "registry://hf/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
+        registryPath = "qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1780751,
+        blobBlockLength = 265,
+        blobByteOffset = 116675069421,
+        modelId = "transcribepsy-250m-eu-sub-coreml.gguf",
+        expectedSize = 17313056,
+        sha256Checksum = "9b7a82f33891a8f55917333b58b920878fdcca3d29a1e92d4748c228ba6eb882",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q8_0",
+        params = "250M",
+    )
+
+    val PARAKEET_TRANSCRIBEPSY_250M_Q8_0 = ModelConstant(
+        name = "PARAKEET_TRANSCRIBEPSY_250M_Q8_0",
+        src = "registry://hf/qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
+        registryPath = "qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1781017,
+        blobBlockLength = 4653,
+        blobByteOffset = 116692385165,
+        modelId = "transcribepsy-250m-eu-sub.gguf",
+        expectedSize = 304879584,
+        sha256Checksum = "a93ef324d38e410b5e49389db95d06364eddbb890b74a69f311e482d2fda6f4b",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q8_0",
+        params = "250M",
+    )
+
     val PARAKEET_UNIFIED_0_6B_F16 = ModelConstant(
         name = "PARAKEET_UNIFIED_0_6B_F16",
         src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.f16.gguf",
@@ -5150,6 +5186,24 @@ object Models {
         params = "4B",
     )
 
+    val QWEN3_5_0_8B_MTP_Q4_K_M = ModelConstant(
+        name = "QWEN3_5_0_8B_MTP_Q4_K_M",
+        src = "registry://hf/unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/Qwen3.5-0.8B-Q4_K_M.gguf",
+        registryPath = "unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/Qwen3.5-0.8B-Q4_K_M.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1785671,
+        blobBlockLength = 8388,
+        blobByteOffset = 116997328557,
+        modelId = "Qwen3.5-0.8B-Q4_K_M.gguf",
+        expectedSize = 549698976,
+        sha256Checksum = "ac7c9d7a1b3e3695bb3bd50f8ceaa97f9c93e99ccc3d3d1a620301b6dd6d3d86",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q4_k_m",
+        params = "0.8B",
+    )
+
     val QWEN3_5_0_8B_MULTIMODAL_Q4_K_M = ModelConstant(
         name = "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M",
         src = "registry://hf/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_K_M.gguf",
@@ -5202,6 +5256,24 @@ object Models {
         engine = "llamacpp-completion",
         quantization = "q8_0",
         params = "0.8B",
+    )
+
+    val QWEN3_5_2B_MTP_Q4_K_M = ModelConstant(
+        name = "QWEN3_5_2B_MTP_Q4_K_M",
+        src = "registry://hf/unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/Qwen3.5-2B-Q4_K_M.gguf",
+        registryPath = "unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/Qwen3.5-2B-Q4_K_M.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1794060,
+        blobBlockLength = 20292,
+        blobByteOffset = 117547049325,
+        modelId = "Qwen3.5-2B-Q4_K_M.gguf",
+        expectedSize = 1329851808,
+        sha256Checksum = "18c92228fc1498a02506f64593f7cc8cc02f406f732a217c6ba99ad1254d4f0b",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q4_k_m",
+        params = "2B",
     )
 
     val QWEN3_5_2B_MULTIMODAL_Q4_K_M = ModelConstant(
@@ -5258,6 +5330,42 @@ object Models {
         params = "2B",
     )
 
+    val QWEN3_5_4B_DFLASH_Q8_0 = ModelConstant(
+        name = "QWEN3_5_4B_DFLASH_Q8_0",
+        src = "registry://hf/AtomicChat/Qwen3.5-4B-DFlash-GGUF/resolve/50b43bb3a4c1c973dc65ed4460f74dc98878cc12/Qwen3.5-4B-DFlash.Q8_0.gguf",
+        registryPath = "AtomicChat/Qwen3.5-4B-DFlash-GGUF/resolve/50b43bb3a4c1c973dc65ed4460f74dc98878cc12/Qwen3.5-4B-DFlash.Q8_0.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1947166,
+        blobBlockLength = 10455,
+        blobByteOffset = 127580781133,
+        modelId = "Qwen3.5-4B-DFlash.Q8_0.gguf",
+        expectedSize = 685133984,
+        sha256Checksum = "f0689eadab0d46468bc2629bb2706f4aba7f794b63e1c9f6eb291269d572a52b",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q8_0",
+        params = "4B",
+    )
+
+    val QWEN3_5_4B_MTP_Q4_K_M = ModelConstant(
+        name = "QWEN3_5_4B_MTP_Q4_K_M",
+        src = "registry://hf/unsloth/Qwen3.5-4B-MTP-GGUF/resolve/86835bf9949e4d14d6860f7910b1340ad4f271a9/Qwen3.5-4B-Q4_K_M.gguf",
+        registryPath = "unsloth/Qwen3.5-4B-MTP-GGUF/resolve/86835bf9949e4d14d6860f7910b1340ad4f271a9/Qwen3.5-4B-Q4_K_M.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1814353,
+        blobBlockLength = 43259,
+        blobByteOffset = 118876922925,
+        modelId = "Qwen3.5-4B-Q4_K_M.gguf",
+        expectedSize = 2834975040,
+        sha256Checksum = "3874209241c9a397e2f62cd3f70f80fd2dfbf0dfccb6838416bdb48a714e8630",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q4_k_m",
+        params = "4B",
+    )
+
     val QWEN3_5_4B_MULTIMODAL_Q4_K_M = ModelConstant(
         name = "QWEN3_5_4B_MULTIMODAL_Q4_K_M",
         src = "registry://hf/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
@@ -5292,6 +5400,24 @@ object Models {
         engine = "llamacpp-completion",
         quantization = "q6_k",
         params = "4B",
+    )
+
+    val QWEN3_5_9B_MTP_Q4_K_M = ModelConstant(
+        name = "QWEN3_5_9B_MTP_Q4_K_M",
+        src = "registry://hf/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/Qwen3.5-9B-Q4_K_M.gguf",
+        registryPath = "unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/Qwen3.5-9B-Q4_K_M.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1857613,
+        blobBlockLength = 89552,
+        blobByteOffset = 121711926029,
+        modelId = "Qwen3.5-9B-Q4_K_M.gguf",
+        expectedSize = 5868826976,
+        sha256Checksum = "e8dd94817e95d6c0939102049d068418269978377b13616c4726235e232841fe",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q4_k_m",
+        params = "9B",
     )
 
     val QWEN3_5_9B_MULTIMODAL_Q4_K_M = ModelConstant(
@@ -5438,6 +5564,24 @@ object Models {
         params = "8B",
     )
 
+    val QWEN3_8_27B_DFLASH2_Q8_0 = ModelConstant(
+        name = "QWEN3_8_27B_DFLASH2_Q8_0",
+        src = "registry://hf/incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf",
+        registryPath = "incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1957622,
+        blobBlockLength = 31379,
+        blobByteOffset = 128265920685,
+        modelId = "Qwen3.8-27B-DFlash2-Q8_0.gguf",
+        expectedSize = 2056414816,
+        sha256Checksum = "651a1b2930c9825080480f79cf38057e681c9b175d580a357c14f67cf77ccf49",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q8_0",
+        params = "27B",
+    )
+
     val QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL = ModelConstant(
         name = "QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL",
         src = "registry://hf/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q4_K_XL.gguf",
@@ -5472,6 +5616,24 @@ object Models {
         engine = "llamacpp-completion",
         quantization = "UD-Q8_K_XL",
         params = "27B",
+    )
+
+    val QWEN3_8_FLASH_NEXT_177B_DFLASH2_Q8_0 = ModelConstant(
+        name = "QWEN3_8_FLASH_NEXT_177B_DFLASH2_Q8_0",
+        src = "registry://hf/incoai/Qwen3.8-Flash-Next-DFlash2-GGUF/resolve/4f5a39be8f0a9e9a573ac9824251830a8f4096d9/Qwen3.8-Flash-Next-DFlash2-Q8_0.gguf",
+        registryPath = "incoai/Qwen3.8-Flash-Next-DFlash2-GGUF/resolve/4f5a39be8f0a9e9a573ac9824251830a8f4096d9/Qwen3.8-Flash-Next-DFlash2-Q8_0.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1989002,
+        blobBlockLength = 9951,
+        blobByteOffset = 130322342317,
+        modelId = "Qwen3.8-Flash-Next-DFlash2-Q8_0.gguf",
+        expectedSize = 652101024,
+        sha256Checksum = "541f4d6ee230747a34d4a2c6890e6e08cc8b19c461226dc1829701a544e46e8a",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q8_0",
+        params = "177B",
     )
 
     val QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD = ModelConstant(
@@ -8502,6 +8664,8 @@ object Models {
         PARAKEET_TDT_0_6B_V3_Q8_0,
         PARAKEET_TDT_1_1B_F16,
         PARAKEET_TDT_1_1B_Q8_0,
+        PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0,
+        PARAKEET_TRANSCRIBEPSY_250M_Q8_0,
         PARAKEET_UNIFIED_0_6B_F16,
         PARAKEET_UNIFIED_0_6B_Q4_0,
         PARAKEET_UNIFIED_0_6B_Q8_0,
@@ -8514,14 +8678,19 @@ object Models {
         QWEN3_4B_INST_Q4_SHARD,
         QWEN3_4B_INST_Q4_TENSORS,
         QWEN3_4B_Q4_K_M,
+        QWEN3_5_0_8B_MTP_Q4_K_M,
         QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
         QWEN3_5_0_8B_MULTIMODAL_Q6_K,
         QWEN3_5_0_8B_MULTIMODAL_Q8_0,
+        QWEN3_5_2B_MTP_Q4_K_M,
         QWEN3_5_2B_MULTIMODAL_Q4_K_M,
         QWEN3_5_2B_MULTIMODAL_Q6_K,
         QWEN3_5_2B_MULTIMODAL_Q8_0,
+        QWEN3_5_4B_DFLASH_Q8_0,
+        QWEN3_5_4B_MTP_Q4_K_M,
         QWEN3_5_4B_MULTIMODAL_Q4_K_M,
         QWEN3_5_4B_MULTIMODAL_Q6_K,
+        QWEN3_5_9B_MTP_Q4_K_M,
         QWEN3_5_9B_MULTIMODAL_Q4_K_M,
         QWEN3_5_9B_MULTIMODAL_Q6_K,
         QWEN3_600M_INST_Q4,
@@ -8530,8 +8699,10 @@ object Models {
         QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M,
         QWEN3_6_35B_A3B_MULTIMODAL_Q6_K_XL,
         QWEN3_8B_INST_Q4_K_M,
+        QWEN3_8_27B_DFLASH2_Q8_0,
         QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL,
         QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL,
+        QWEN3_8_FLASH_NEXT_177B_DFLASH2_Q8_0,
         QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD,
         QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD,
         REALESRGAN_X4PLUS,

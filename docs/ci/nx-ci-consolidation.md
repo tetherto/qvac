@@ -21,7 +21,7 @@ This builds on the pnpm + Nx workspace. Read `docs/pnpm-nx-workspace.md` first f
 2. Reads each affected package's `options.ci` for that target from a **trusted ref** via `git show <config-ref>:packages/<pkg>/project.json` — never the checked-out (PR-head) tree.
 3. Emits a flattened `{package, platform, ...ci-fields}` JSON matrix, an `any` boolean, and a `carveouts` list (packages flagged `carveOut: true`, routed to bespoke reusables instead of the generic matrix).
 
-`config-ref` defaults to the affected base; callers on `pull_request_target` pass `github.event.repository.default_branch` so config is always read from the trusted default branch. See "Fork safety".
+`config-ref` defaults to the affected base; callers on `pull_request_target` pass `github.event.repository.default_branch` so config is always read from the trusted default branch. A manual `on-pr-nx.yml` dispatch can set `config_ref_override` to test package selection and desktop integration configuration from an explicit trusted branch. The integration caller forwards that manual override as its `base-ref`; PR events continue to use the default branch. See "Fork safety".
 
 ## Workflow wiring
 
@@ -42,10 +42,11 @@ on-pr-nx.yml            (pull_request_target)  ── PR orchestrator
   ├─ publish-cpp-test-status  (scripts/prebuild-status/publish.mjs KIND=cpp-tests → qvac/cpp-tests-<pkg>)
   └─ merge-guard        → public-pr.yml                  (package-level merge-guard / validate-pr; not the required check)
 
-on-merge-nx.yml         (push to main/release/feature/tmp)  ── publish orchestrator
+on-merge-nx.yml         (release-* push / workflow_dispatch)  ── publish orchestrator
   ├─ detect             (per-package prebuild/publish matrices)
   ├─ prebuild           → prebuilds-nx.yml     (packages: ["<pkg>"] override)
-  ├─ integration        → integration-test-nx.yml (packages override, desktop gate)
+  ├─ verify-generated   → verify-generated-wrappers.yml (publish integrity gate)
+  ├─ integration        → integration-test-nx.yml (opt-in; no current packages)
   └─ publish            (GPR/npm + tag, per package)
 
 benchmark-performance-nx.yml  (workflow_dispatch)  ── matrix → prebuilds-nx → integration-test-nx (RTF)
@@ -68,7 +69,7 @@ Per-run overrides are possible via the action's `overrides` input, but only for 
 
 For `asr-ggml`, `tts-ggml`, `audiogen-ggml`, and `bci-whispercpp`, PR-time cpp-lint additionally requires a changed C/C++ source or header (`.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, or `.hxx`) inside that package. The filter uses API-reported paths, including deleted files and previous paths for renames. Vcpkg version-only bumps skip cpp-lint, and the merge guard accepts that skipped job. Manual dispatch retains the affected packages' cpp-lint lanes.
 
-Speech C++ tests for `asr-ggml`, `tts-ggml`, and `bci-whispercpp` use the Ubuntu 22.04 x64 CPU runner in both their `test:cpp.options.ci.platforms` rows and standalone coverage workflows. The consolidated PR lane reads those target rows; changing only a standalone workflow does not change PR runner selection. `audiogen-ggml` builds its native addon on the Ubuntu 22.04 CPU runner, with trusted vcpkg and per-package compiler caches and two build workers. Addon-level C++ tests remain a stub. Default-branch pushes, a schedule every 2 days, and dispatches warm the AudioGen caches. `runner-names.test.mjs`, included in the security policy suite, guards both routing paths.
+Speech C++ tests for `asr-ggml`, `tts-ggml`, and `bci-whispercpp` use the Ubuntu 22.04 x64 CPU runner in both their `test:cpp.options.ci.platforms` rows and standalone coverage workflows. The consolidated PR lane reads those target rows; changing only a standalone workflow does not change PR runner selection. `audiogen-ggml` builds its native addon on the Ubuntu 22.04 CPU runner, with trusted vcpkg and per-package compiler caches and two build workers. It has no addon-level C++ unit tests yet; after those caches are saved the same lane runs the bounded config-parse fuzz target, and a fuzz failure fails the job. Default-branch pushes, a schedule every 2 days, and dispatches warm the AudioGen caches. `runner-names.test.mjs`, included in the security policy suite, guards both routing paths.
 
 AudioGen non-PR runs pin checkout to the triggering repository and commit, and
 reject inputs requesting other code. Caller-selected PR-head checkouts are
@@ -150,7 +151,30 @@ Packages with bespoke flows set `carveOut: true` on the relevant target. `nx-pro
 
 ## Mobile
 
-Mobile is intentionally **not** consolidated. The per-package `integration-mobile-test-<pkg>.yml` and `on-merge` mobile gates stay byte-identical to `main`. The only mobile touchpoints in the nx line are the asr/tts on-device `coload-smoke-mobile` job (main-parity) on PRs and the dispatch-only mobile benchmark jobs.
+Mobile tests use the per-package `integration-mobile-test-<pkg>.yml` workflows.
+Speech, OCR and translation publishing in `on-merge-nx.yml` does not launch
+desktop integration or mobile E2E tests: `asr-ggml`, `tts-ggml`, `bci-whispercpp`,
+`decoder-audio`, `audiogen-ggml`, `ocr-ggml` and `translation-nmtcpp` set
+`on-merge.options.ci.testGateMode` to `none`. The workflow reads this policy
+from the trusted default branch. Prebuilds, generated-wrapper verification and
+publishing remain enabled. Wrapper verification is a publish-integrity gate for
+release pushes and manual dispatches, including those that never open a PR.
+
+The pre-publish integration job, post-build gate, post-publish integration job
+and publish-step test gates remain supported opt-in paths controlled by
+`testGateMode` (and `postIntegrationOnGpr` for GPR post-publish tests). No current
+package opts in; their integration matrices are empty. Synthetic policy tests
+exercise both selectors and the pre/post-publish gates so these paths remain
+covered without enabling them for a real package.
+Desktop test targets, on-demand mobile tests, and benchmark workflows remain
+available independently of publishing.
+
+Desktop integration on PRs requires the `run-desktop-addon-tests` label; mobile
+E2E tests require an explicit dispatch. Publishing does not require either run,
+so a release can reach npm without integration coverage. Removing the
+post-publish runs also removes their automatic signal of a broken published
+build. No replacement schedule or mandatory release-PR integration gate is
+introduced by this policy.
 
 ## Adding / changing a package's CI
 

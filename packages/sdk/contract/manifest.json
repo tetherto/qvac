@@ -67,6 +67,12 @@
       "responseSchema": "schema.json#/$defs/completionStream.response"
     },
     {
+      "name": "decide",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/decide.request",
+      "responseSchema": "schema.json#/$defs/decide.response"
+    },
+    {
       "name": "deleteCache",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/deleteCache.request",
@@ -195,6 +201,12 @@
         "condition": "request.withProgress === true && ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)",
         "responseSchema": "schema.json#/$defs/rag:progress.response"
       }
+    },
+    {
+      "name": "rerank",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/rerank.request",
+      "responseSchema": "schema.json#/$defs/rerank.response"
     },
     {
       "name": "resume",

@@ -42,7 +42,9 @@ import {
   historyPrefixFromStoredResponse,
   UnsupportedToolTypeError,
   InvalidResponsesConversationError,
-  InvalidResponsesBackgroundError
+  InvalidResponsesBackgroundError,
+  responsesBody,
+  toSdkResponsesArgs
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   parseLegacyPrompt,
@@ -1373,7 +1375,7 @@ describe('chat tool_choice wiring', () => {
   })
 
   it('leaves generationParams undefined when nothing was set', () => {
-    const args = toSdkChatArgs(chatCompletionsBody.parse(body({})))
+    const args = toSdkChatArgs(chatCompletionsBody.parse(body({ tools: undefined })))
     assert.equal(args.generationParams, undefined)
   })
 
@@ -1384,5 +1386,56 @@ describe('chat tool_choice wiring', () => {
       tool_choice: 'required'
     })
     assert.throws(() => toSdkChatArgs(parsed), InvalidToolChoiceError)
+  })
+})
+
+describe('parallel_tool_calls wiring', () => {
+  const tools = [
+    {
+      type: 'function',
+      function: { name: 'get_weather', parameters: { type: 'object', properties: {} } }
+    }
+  ]
+  const messages = [{ role: 'user', content: 'Weather in Lugano and Rome?' }]
+
+  function chatParams(extra: Record<string, unknown>) {
+    return toSdkChatArgs(chatCompletionsBody.parse({ model: 'm', messages, ...extra }))
+      .generationParams
+  }
+
+  function responsesParams(extra: Record<string, unknown>) {
+    return toSdkResponsesArgs(responsesBody.parse({ model: 'm', input: 'hi', ...extra }))
+      .generationParams
+  }
+
+  it('leaves an unset chat value to the SDK default', () => {
+    assert.equal(chatParams({ tools }), undefined)
+  })
+
+  it('forwards an explicit false on a chat request', () => {
+    assert.deepEqual(chatParams({ tools, parallel_tool_calls: false }), {
+      parallel_tool_calls: false
+    })
+  })
+
+  it('rides along with tool_choice', () => {
+    assert.deepEqual(chatParams({ tools, tool_choice: 'required', parallel_tool_calls: true }), {
+      tool_choice: 'required',
+      parallel_tool_calls: true
+    })
+  })
+
+  it('forwards an explicit responses value, echoes true when unset', () => {
+    const responsesTools = [
+      { type: 'function', name: 'get_weather', parameters: { type: 'object' } }
+    ]
+    const unset = toSdkResponsesArgs(
+      responsesBody.parse({ model: 'm', input: 'hi', tools: responsesTools })
+    )
+    assert.equal(unset.generationParams, undefined)
+    assert.equal(unset.parallelToolCalls, true)
+    assert.deepEqual(responsesParams({ tools: responsesTools, parallel_tool_calls: false }), {
+      parallel_tool_calls: false
+    })
   })
 })

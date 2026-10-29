@@ -76,6 +76,7 @@ export interface DuplexPluginHandlerDefinition<
  *
  * Built-in artifact keys:
  * - `projectionModelPath` - LLM multimodal projection model
+ * - `draftModelPath` - LLM speculative-decoding draft model (DFlash model or external MTP head)
  * - `vadModelPath` - Whisper voice activity detection model
  * - `s3genPath` - TTS (Chatterbox GGML) S3Gen + HiFT GGUF
  * - `referenceAudioPath` - TTS (Chatterbox GGML) path to reference WAV file for voice cloning
@@ -354,6 +355,18 @@ export const pluginDefinitionRuntimeSchema = z
 export const PLUGIN_LLM = '@qvac/inference/llamacpp-completion/plugin' as const
 
 /**
+ * Decision plugin (llama.cpp).
+ * Provides: typed choice, score, and noul answers about a state.
+ */
+export const PLUGIN_DECISION = '@qvac/inference/llamacpp-decision/plugin' as const
+
+/**
+ * Rerank plugin (llama.cpp).
+ * Provides: relevance scores for documents against a query.
+ */
+export const PLUGIN_RERANK = '@qvac/inference/llamacpp-rerank/plugin' as const
+
+/**
  * Text embedding plugin (llama.cpp).
  * Provides: vector embeddings for RAG and semantic search.
  */
@@ -432,6 +445,8 @@ export const PLUGIN_CLASSIFICATION = '@qvac/inference/ggml-classification/plugin
 export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_DECISION,
+  PLUGIN_RERANK,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_PARAKEET,

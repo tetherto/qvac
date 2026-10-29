@@ -3,11 +3,22 @@ packages:
   # ASR consumers need the published native platform packages. Build the local
   # addon separately with its package-owned tooling instead of workspace linking.
   - "!packages/asr-ggml"
+  # infer-base commits its .ts sources next to the generated .d.ts files, and
+  # TypeScript resolves `./src/QvacResponse` to the .ts source. Linked into the
+  # workspace, every package that compiles against it (inference through
+  # decoder-audio) type-checks those sources under its own compiler options and
+  # fails. Its dependents install the published package, which ships only the
+  # .d.ts files. infer-base installs and tests with npm in its own directory.
+  - "!packages/infer-base"
   # sdk-kotlin is a Gradle package; its package.json only declares the Android
   # BareKit npm deps, installed locally by Gradle. Keeping it out of the pnpm
   # workspace avoids an importer the root lockfile has no entry for, which would
   # fail every --frozen-lockfile install.
   - "!packages/sdk-kotlin"
+  # sdk-e2e is the SDK's private e2e consumer and installs its own npm tree
+  # (`install:build`, with the SDK as a `file:` dependency). As a workspace
+  # importer it would need a root lockfile entry for a tree pnpm never installs.
+  - "!packages/sdk-e2e"
   - "packages/registry-server/client"
   - "packages/registry-server/shared"
   - "plugins/*"
@@ -52,6 +63,14 @@ overrides:
   "@qvac/audiogen-ggml-darwin-arm64": "-"
   "@qvac/audiogen-ggml-darwin-x64": "-"
   "@qvac/audiogen-ggml-win32-x64": "-"
+  # diffusion-cpp's desktop platform packages are not on npm until the split
+  # release publishes them. The workspace stages a source build with
+  # `npm run link:platform` instead.
+  "@qvac/diffusion-cpp-linux-x64": "-"
+  "@qvac/diffusion-cpp-linux-arm64": "-"
+  "@qvac/diffusion-cpp-darwin-arm64": "-"
+  "@qvac/diffusion-cpp-darwin-x64": "-"
+  "@qvac/diffusion-cpp-win32-x64": "-"
 
 blockExoticSubdeps: true
 
@@ -70,13 +89,90 @@ allowBuilds:
   tree-sitter-bash: false
 
 minimumReleaseAgeExclude:
-  - '@qvac/asr-ggml@0.8.1'
-  - '@qvac/bci-whispercpp@0.11.2'
-  - '@qvac/fabric-android-arm64@0.21.1 || 0.22.0'
-  - '@qvac/fabric-ios@0.21.1 || 0.22.0'
-  - '@qvac/fabric-darwin-arm64@0.21.1 || 0.22.0'
-  - '@qvac/fabric-darwin-x64@0.21.1 || 0.22.0'
-  - '@qvac/fabric-linux-arm64@0.21.1 || 0.22.0'
-  - '@qvac/fabric-linux-x64@0.21.1 || 0.22.0'
-  - '@qvac/fabric-win32-x64@0.21.1 || 0.22.0'
-  - '@qvac/fabric@0.21.1'
+  - '@qvac/*'
+  - bare
+  - bare-abort
+  - bare-abort-controller
+  - bare-addon-resolve
+  - bare-ansi-escapes
+  - bare-assert
+  - bare-buffer
+  - bare-bundle
+  - bare-bundle-id
+  - bare-channel
+  - bare-console
+  - bare-cov
+  - bare-cpu-info
+  - bare-crypto
+  - bare-debug-log
+  - bare-diagnostics-channel
+  - bare-dns
+  - bare-encoding
+  - bare-env
+  - bare-events
+  - bare-fetch
+  - bare-ffmpeg
+  - bare-form-data
+  - bare-format
+  - bare-fs
+  - bare-gpu-info
+  - bare-hrtime
+  - bare-http-parser
+  - bare-http1
+  - bare-https
+  - bare-inspect
+  - bare-inspector
+  - bare-lief
+  - bare-link
+  - bare-logger
+  - bare-mime
+  - bare-module
+  - bare-module-lexer
+  - bare-module-resolve
+  - bare-module-traverse
+  - bare-net
+  - bare-os
+  - bare-pack
+  - bare-path
+  - bare-performance
+  - bare-pipe
+  - bare-posix
+  - bare-process
+  - bare-prom-client
+  - bare-readline
+  - bare-rpc
+  - bare-runtime
+  - bare-runtime-android-arm
+  - bare-runtime-android-arm64
+  - bare-runtime-android-ia32
+  - bare-runtime-android-x64
+  - bare-runtime-darwin-arm64
+  - bare-runtime-darwin-x64
+  - bare-runtime-ios-arm64
+  - bare-runtime-ios-arm64-simulator
+  - bare-runtime-ios-x64-simulator
+  - bare-runtime-linux-arm64
+  - bare-runtime-linux-x64
+  - bare-runtime-win32-arm64
+  - bare-runtime-win32-x64
+  - bare-semver
+  - bare-signals
+  - bare-stdio
+  - bare-stream
+  - bare-structured-clone
+  - bare-stylize
+  - bare-subprocess
+  - bare-system-logger
+  - bare-tcp
+  - bare-timers
+  - bare-tls
+  - bare-tty
+  - bare-type
+  - bare-type-stripper
+  - bare-url
+  - bare-utils
+  - bare-v8
+  - bare-v8-to-istanbul
+  - bare-worker
+  - bare-ws
+  - bare-zlib

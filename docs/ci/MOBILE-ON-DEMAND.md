@@ -12,8 +12,8 @@ This applies to all 16 mobile addons: `asr-ggml`, `audiogen-ggml`,
 `vla`.
 
 Except for its dedicated section, the guidance below applies to the other 15
-addons. `ggml-rpc-server` has different device inputs and no test filter or
-package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
+addons. `ggml-rpc-server` has per-platform device dropdowns and no test filter
+or package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
 
 ## How to run a mobile test
 
@@ -27,10 +27,13 @@ package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
 
 ### ggml-rpc-server dispatch
 
-This workflow accepts `platform`, `android_device` or `ios_device`, `ref`,
-`workdir`, and `prebuild_run_id`. It does **not** accept `device`,
-`devices_custom`, `device_model_operator`, `tests`, or `package`. A run exercises
-its complete managed RPC lifecycle probe on the selected device.
+This workflow accepts `platform`, `android_device` or `ios_device`,
+`devices_custom`, `device_model_operator`, `ref`, `workdir`, and
+`prebuild_run_id`. It does **not** accept `device`, `tests`, or `package`. A run
+exercises its complete managed RPC lifecycle probe on each selected device.
+`devices_custom` takes a comma-separated list and overrides the platform's
+dropdown, so one dispatch covers the
+[supported devices](#which-devices-to-run-on), one Device Farm run per device.
 
 To test prebuilds already produced for your PR, find the run id as described in
 the [quick start below](#quick-start--test-your-own-pr-on-a-device), then dispatch:
@@ -39,15 +42,23 @@ the [quick start below](#quick-start--test-your-own-pr-on-a-device), then dispat
 PR=1234 # your PR number
 gh workflow run integration-mobile-test-ggml-rpc-server.yml --repo tetherto/qvac \
   --ref main -f ref="refs/pull/$PR/head" \
-  -f platform=Android -f android_device="Google Pixel 9" \
+  -f platform=Android \
+  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
+  -f device_model_operator=EQUALS \
   -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
 ```
 
 The workflow runs from upstream `main`; its `ref` input checks out your PR's
 head from the upstream pull-request ref, so your branch need not exist upstream.
-For iOS, use `-f platform=iOS -f ios_device="Apple iPhone 16 Pro"` instead of
-the Android platform and device inputs. Without `prebuild_run_id`, a standalone
-dispatch builds prebuilds from the selected ref in the same run before packaging
+For iOS, dispatch again after the Android run finishes, replacing the platform
+and device inputs with:
+
+```bash
+  -f platform=iOS \
+  -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
+```
+
+Without `prebuild_run_id`, a standalone dispatch builds prebuilds from the selected ref in the same run before packaging
 the device app. With a run id, it skips that build and installs the named run's
 artifact, failing if the artifact cannot be used.
 
@@ -757,12 +768,18 @@ and free.
 - The **`run-mobile-addon-tests` label is kept** but no longer starts a standalone
   mobile suite. See [LABELS.md](./LABELS.md).
 
-## What did **not** change
+## Publishing and reusable workflows
 
-The reusable (`workflow_call`) paths are untouched — benchmarks, the weekend run,
-and on-merge triggers still call the same `integration-mobile-test-<addon>.yml`
-workflows with their existing inputs and scheduling (sharded / dual-flagship /
-single-pool). The on-demand behaviour is additive and only kicks in for a direct
+Speech, OCR and translation publishing in `on-merge-nx.yml` does not launch
+mobile E2E or desktop integration tests. ASR, TTS, BCI, decoder-audio, AudioGen,
+OCR and translation opt out of post-publish testing in their package CI
+configuration. Generated-wrapper verification remains a pre-publish integrity
+gate, including on release pushes and manual dispatches without a PR.
+The publish workflow has no speech mobile callers.
+
+The reusable (`workflow_call`) interfaces remain available to benchmarks and
+other test workflows with their existing inputs and scheduling (sharded /
+dual-flagship / single-pool). The on-demand behaviour only kicks in for a direct
 `workflow_dispatch` run.
 
 ## Re-enabling automatic PR runs (later)

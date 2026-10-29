@@ -1,21 +1,25 @@
 import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
-import { type Addon, type GGMLConfig } from "./addon";
-import type ActualIdMapIndex from "./idMapIndex";
-import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
-export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon, } from "./addon";
-export type { IdMapIndexBitWidth, IdMapIndexOptions, IdMapIndexSearchResult, IdMapIndexStorage, } from "./idMapIndex";
+import { type Addon, type EmbedRunInput, type GGMLConfig } from "./addon";
+export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon, EmbedMediaPart, EmbedInputPart, EmbedMultimodalInput, EmbedBatchInput, EmbedRunInput, } from "./addon";
 export { BertInterface, pickPrimaryGgufPath } from "./addon";
 export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type { LayaConfig, LayaRequest, LayaSingleRequest, LayaBatchRequest, LayaQuestion, LayaChoiceQuestion, LayaScoreQuestion, LayaNoulQuestion, LayaState, LayaCriterion, LayaResponse, LayaResult, LayaAnswer, LayaChoiceAnswer, LayaScoreAnswer, LayaNoulAnswer, LayaUsage, LayaDecisionsArgs, } from "./laya";
+export { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
+export type { RerankConfig, RerankRequest, RerankScores, RerankerArgs, } from "./rerank";
 export { assessFit } from "./fit";
 export type { EmbedFitDevice, EmbedFitRequest, EmbedFitResult, EmbedFitStatus } from "./fit";
 export type { QvacResponse };
-export declare const IdMapIndex: typeof ActualIdMapIndex;
-export declare const IdMapIndexFilter: typeof ActualIdMapIndexFilter;
 export interface GGMLBertArgs {
+    /**
+     * `model`: the GGUF file, or all shards of a sharded GGUF.
+     * `projectionModel`: optional projection model (mmproj) that lets `run()`
+     * embed images and audio, for multimodal embedding models such as
+     * EmbeddingGemma 2.
+     */
     files: {
         model: string[];
+        projectionModel?: string;
     };
     config?: GGMLConfig;
     logger?: QvacLogger | Console | null;
@@ -34,6 +38,7 @@ export declare class GGMLBert {
         configLoaded: boolean;
     };
     private readonly _files;
+    private readonly _projectionModelPath;
     private readonly _config;
     private readonly _job;
     private readonly _run;
@@ -42,7 +47,11 @@ export declare class GGMLBert {
     load(): Promise<void>;
     private _load;
     private _streamShards;
-    run(input: string | string[]): Promise<QvacResponse>;
+    /**
+     * Embed text, or text mixed with images and audio when the model was given
+     * `files.projectionModel`. See {@link EmbedRunInput} for the input shapes.
+     */
+    run(input: EmbedRunInput): Promise<QvacResponse>;
     private _runInternal;
     private _addonOutputCallback;
     private _createAddon;

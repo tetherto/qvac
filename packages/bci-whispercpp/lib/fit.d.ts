@@ -19,7 +19,7 @@ export interface BciFitRequest {
     decoders?: number;
     /** Free memory that must remain for the projection to count as fitting. */
     marginBytes?: number;
-    /** Where the dynamically-loaded ggml backends live. */
+    /** Directory scanned, as given, for the dynamically-loaded ggml backends. */
     backendsDir?: string;
 }
 export type BciFitStatus = 'fits' | 'does-not-fit' | 'error';
@@ -60,8 +60,8 @@ export interface BciFitResult {
  * cannot read resolves to `status: "error"`; a broken request, or a host
  * with no native binding, rejects. Concurrent calls run one at a time.
  *
- * The backend directory defaults to the one a real load uses. The native side
- * registers backends once per process, so a fit that let it fall back to the
- * default search path would fix that path for every later load too.
+ * Unset, the backend directory is the one a real load uses, next to the loaded
+ * module. The native side registers backends once per process, so the
+ * directory a fit scans is the one every later load gets too.
  */
 export declare function assessFit(request: BciFitRequest): Promise<BciFitResult>;

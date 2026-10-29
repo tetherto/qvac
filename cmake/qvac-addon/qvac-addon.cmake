@@ -26,6 +26,28 @@
 #   ...
 #   qvac_addon_add_fuzz_subdirectory()      # combined tests+fuzz configure
 #
+# Unmigrated addons that cannot call qvac_addon_preproject() (it also sets
+# overlay triplets and Android STL) still reuse the fuzz helpers:
+#
+#   include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+#   qvac_addon_fuzz_manifest()              # BEFORE project()
+#   project(<name> LANGUAGES C CXX)
+#   ...find_path(inference-addon-cpp)...
+#   qvac_addon_fuzz_only_return()           # skips engines + .bare when fuzz-only
+#   ...
+#   qvac_addon_add_fuzz_subdirectory()      # combined tests+fuzz configure
+#
+# Unmigrated addons that cannot call qvac_addon_preproject() (it also sets
+# overlay triplets and Android STL) still reuse the fuzz helpers:
+#
+#   include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+#   qvac_addon_fuzz_manifest()              # BEFORE project()
+#   project(<name> LANGUAGES C CXX)
+#   ...find_path(inference-addon-cpp)...
+#   qvac_addon_fuzz_only_return()           # skips engines + .bare when fuzz-only
+#   ...
+#   qvac_addon_add_fuzz_subdirectory()      # combined tests+fuzz configure
+#
 # qvac_addon_preproject / _project_setup / _use_fabric are macros on purpose:
 # they set directory-scope state (VCPKG_MANIFEST_FEATURES, the vcpkg toolchain,
 # ANDROID_STL, CMAKE_CXX_STANDARD, the fabric target var, ...) that must land in
@@ -33,7 +55,76 @@
 
 include_guard(GLOBAL)
 
-set(QVAC_ADDON_CMAKE_VERSION "0.3.0")
+set(QVAC_ADDON_CMAKE_VERSION "0.4.0")
+set(QVAC_ADDON_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
+# ---------------------------------------------------------------------------
+# qvac_addon_fuzz_manifest()
+#
+# Enable the vcpkg "fuzz" feature. Safe to call from unmigrated addons that
+# cannot use qvac_addon_preproject() (that macro also sets overlay triplets
+# and Android STL). Must run BEFORE project().
+# ---------------------------------------------------------------------------
+macro(qvac_addon_fuzz_manifest)
+  option(BUILD_FUZZING "Build fuzz targets (Google FuzzTest, from vcpkg)" OFF)
+  # The "fuzz" feature installs FuzzTest's dependency stack from the shared
+  # binary cache. See qvac_addon_enable_fuzztest() and
+  # docs/architecture/ADDON-FUZZING.md.
+  if(BUILD_FUZZING)
+    list(APPEND VCPKG_MANIFEST_FEATURES "fuzz")
+  endif()
+endmacro()
+
+macro(qvac_addon_add_fuzz_subdirectory)
+  if(BUILD_FUZZING)
+    enable_testing()
+    add_subdirectory(test/fuzz)
+  endif()
+endmacro()
+
+# Fuzz-only configure: BUILD_FUZZING without BUILD_TESTING. Builds just the
+# fuzz targets and skips the .bare module + engine find_package()s so pure
+# parse/transform drivers keep full ASan + LSan.
+macro(qvac_addon_fuzz_only_return)
+  if(BUILD_FUZZING AND NOT BUILD_TESTING)
+    qvac_addon_add_fuzz_subdirectory()
+    return()
+  endif()
+endmacro()
+
+# ---------------------------------------------------------------------------
+# qvac_addon_fuzz_manifest()
+#
+# Enable the vcpkg "fuzz" feature. Safe to call from unmigrated addons that
+# cannot use qvac_addon_preproject() (that macro also sets overlay triplets
+# and Android STL). Must run BEFORE project().
+# ---------------------------------------------------------------------------
+macro(qvac_addon_fuzz_manifest)
+  option(BUILD_FUZZING "Build fuzz targets (Google FuzzTest, from vcpkg)" OFF)
+  # The "fuzz" feature installs FuzzTest's dependency stack from the shared
+  # binary cache. See qvac_addon_enable_fuzztest() and
+  # docs/architecture/ADDON-FUZZING.md.
+  if(BUILD_FUZZING)
+    list(APPEND VCPKG_MANIFEST_FEATURES "fuzz")
+  endif()
+endmacro()
+
+macro(qvac_addon_add_fuzz_subdirectory)
+  if(BUILD_FUZZING)
+    enable_testing()
+    add_subdirectory(test/fuzz)
+  endif()
+endmacro()
+
+# Fuzz-only configure: BUILD_FUZZING without BUILD_TESTING. Builds just the
+# fuzz targets and skips the .bare module + engine find_package()s so pure
+# parse/transform drivers keep full ASan + LSan.
+macro(qvac_addon_fuzz_only_return)
+  if(BUILD_FUZZING AND NOT BUILD_TESTING)
+    qvac_addon_add_fuzz_subdirectory()
+    return()
+  endif()
+endmacro()
 
 # ---------------------------------------------------------------------------
 # qvac_addon_fuzz_manifest()
@@ -151,6 +242,9 @@ endmacro()
 # Consume the shared @qvac/fabric prebuilt ggml runtime. Sets, in the caller's
 # scope:
 #   qvac_fabric_target    — the fabric bare-module target (link its _module)
+#   qvac_fabric_soname    — the file name the runtime is linked and loaded
+#                           under, qvac__fabric-<suffix>@<major>.bare, with
+#                           <major> read from the installed platform package
 #
 # The runtime is the host's platform package, @qvac/fabric-<suffix>, whose
 # prebuilds/<host>/qvac__fabric-<suffix>.bare the module gets a DT_NEEDED on.
@@ -168,6 +262,12 @@ macro(qvac_addon_use_fabric)
     _qvac_fabric_specifier _qvac_fabric_working_dir _qvac_fabric_prebuilds)
   include_bare_module("${_qvac_fabric_specifier}" qvac_fabric_target PREBUILD
     WORKING_DIRECTORY "${_qvac_fabric_working_dir}")
+
+  qvac_fabric_module_name("${bare_target_value}" _qvac_fabric_module)
+  file(READ "${_qvac_fabric_prebuilds}/../package.json" _qvac_fabric_manifest)
+  string(JSON _qvac_fabric_version GET "${_qvac_fabric_manifest}" version)
+  string(REGEX MATCH "^[0-9]+" _qvac_fabric_major "${_qvac_fabric_version}")
+  set(qvac_fabric_soname "${_qvac_fabric_module}@${_qvac_fabric_major}.bare")
 endmacro()
 
 # ---------------------------------------------------------------------------
@@ -315,11 +415,19 @@ endfunction()
 # The two-target link split: compile the addon library against the ggml headers,
 # and give the .bare module a DT_NEEDED on the shared runtime — which on Linux
 # is also where its C++ runtime comes from.
+#
+# The addon library also gets <qvac-addon/fabric-bind.h> and
+# QVAC_FABRIC_MODULE_NAME, qvac_addon_use_fabric()'s qvac_fabric_soname, for
+# qvacAddonBindFabric().
 # ---------------------------------------------------------------------------
 function(qvac_addon_link_fabric addon_target fabric_target)
   target_link_libraries(${addon_target} PRIVATE qvac-fabric::headers)
   target_link_libraries(${addon_target}_module PRIVATE ${fabric_target}_module)
   qvac_addon_import_fabric_cxx_runtime(${addon_target}_module ${fabric_target})
+
+  target_compile_definitions(${addon_target} PRIVATE
+    QVAC_FABRIC_MODULE_NAME="${qvac_fabric_soname}")
+  target_include_directories(${addon_target} PRIVATE "${QVAC_ADDON_CMAKE_DIR}/include")
 endfunction()
 
 # ---------------------------------------------------------------------------
@@ -569,16 +677,12 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
   qvac_addon_fabric_layout("${_qvac_host}" "${CMAKE_SOURCE_DIR}"
     _qvac_fabric_test_specifier _qvac_fabric_test_working_dir _qvac_fabric_test_prebuilds)
   qvac_fabric_module_name("${_qvac_host}" _qvac_fabric_module)
-  file(READ "${_qvac_fabric_test_prebuilds}/../package.json" _qvac_fabric_manifest)
-  string(JSON _qvac_fabric_version GET "${_qvac_fabric_manifest}" version)
-  string(REGEX MATCH "^[0-9]+" _qvac_fabric_major "${_qvac_fabric_version}")
-  set(_qvac_fabric_soname "${_qvac_fabric_module}@${_qvac_fabric_major}.bare")
 
   add_custom_command(TARGET ${test_target} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       $<TARGET_FILE:${fabric_target}_module>
-      ${CMAKE_CURRENT_BINARY_DIR}/${_qvac_fabric_soname}
-    COMMENT "Copying ${_qvac_fabric_soname} to test directory")
+      ${CMAKE_CURRENT_BINARY_DIR}/${qvac_fabric_soname}
+    COMMENT "Copying ${qvac_fabric_soname} to test directory")
 
   file(GLOB _qvac_fabric_test_backends
     "${_qvac_fabric_test_prebuilds}/${_qvac_host}/${_qvac_fabric_module}/*${CMAKE_SHARED_LIBRARY_SUFFIX}")

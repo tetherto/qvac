@@ -620,6 +620,65 @@ TEST_F(
   fs::remove(cachePath);
 }
 
+// Qwen3.5's template renders no tools without a user turn. A prefill of the
+// system prompt and tools still caches them, and an image question with the
+// same system prompt and tools continues from every primed token.
+TEST_F(
+    MtmdLlmContextTest, Qwen35SystemAndToolsPrefillIsReusedByAnImageQuestion) {
+  if (!hasValidQwen35Model()) {
+    FAIL() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    FAIL() << "Multimodal test image not found";
+  }
+
+  config_files["tools"] = "true";
+  auto model = createQwen35Model();
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+  auto* ctx =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(ctx, nullptr);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-qwen35-mtmd-prime-tools.bin";
+  fs::remove(cachePath);
+
+  const std::string systemAndTools =
+      R"([{"role": "system", "content": "You describe images."},)"
+      R"( {"type": "function", "name": "lookupFruit",)"
+      R"(  "description": "Look up facts about a fruit",)"
+      R"(  "parameters": {"type": "object",)"
+      R"(   "properties": {"name": {"type": "string"}},)"
+      R"(   "required": ["name"]}})";
+
+  LlamaModel::Prompt prime;
+  prime.input = systemAndTools + "]";
+  prime.cacheKey = cachePath.string();
+  prime.prefill = true;
+  ASSERT_NO_THROW({ model->processPrompt(prime); });
+  const auto primedStats = model->runtimeStats();
+  EXPECT_EQ(getStatValue(primedStats, "toolDefinitionsDropped"), 0)
+      << "the prefill left the tool definitions out";
+  const double primedTokens = getStatValue(primedStats, "CacheTokens");
+  ASSERT_GT(primedTokens, 0);
+
+  LlamaModel::Prompt question;
+  question.input = systemAndTools +
+                   R"(, {"role": "user", "type": "media", "content": ""},)"
+                   R"( {"role": "user", "content": "Which fruit is this?"}])";
+  question.cacheKey = cachePath.string();
+  question.media.push_back(readBinaryFile(imagePath));
+  ASSERT_NO_THROW({ model->processPrompt(question); });
+  EXPECT_EQ(ctx->lastCacheReuseForTesting(), static_cast<size_t>(primedTokens))
+      << "the image question did not continue from the primed system prompt "
+         "and tools";
+
+  model.reset();
+  fs::remove(cachePath);
+}
+
 // A generation that stops at `n_predict` inside reasoning is a completed
 // request from the caller's side: the partial answer was streamed. Like on the
 // text path (CacheManagementTest.PredictionLimitGenerationCommitsCache) it

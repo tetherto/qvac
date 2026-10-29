@@ -20,6 +20,7 @@ add_executable(
   test_cancel_stale_flag.cpp
   test_img2img.cpp
   test_sd_gen_handlers.cpp
+  test_custom_sigmas.cpp
   test_sd_vid_gen_handlers.cpp
   test_sd_video_frames.cpp
   test_video_model_capabilities.cpp
@@ -72,9 +73,13 @@ target_compile_features(addon-test PRIVATE cxx_std_20)
 
 # Define test binary directory path for runtime use
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
+# BackendLoader.cpp includes ModuleBackendsDir.hpp whenever ggml exports
+# GGML_BACKEND_DL (Linux and Android). That header requires the same module
+# name the addon target is built with; darwin and win32 leave the header out.
 target_compile_definitions(addon-test PRIVATE
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
   PROJECT_ROOT="${CMAKE_SOURCE_DIR}"
+  QVAC_ADDON_MODULE_NAME="${module_name}"
 )
 
 # Optional coverage instrumentation

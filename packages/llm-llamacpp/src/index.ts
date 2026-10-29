@@ -1117,6 +1117,17 @@ namespace LlmLlamacpp {
     backend?: string;
     gpu_layers?: NumericLike;
     ctx_size?: NumericLike;
+    /**
+     * Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100
+     * (maximum polling). Defaults to 0. Values above 0 can reduce worker wake
+     * latency for CPU-heavy workloads, but consume CPU while GPU work runs.
+     */
+    poll?: NumericLike;
+    /**
+     * Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when
+     * neither option is set.
+     */
+    "poll-batch"?: NumericLike;
     system_prompt?: string;
     lora?: string;
     temp?: NumericLike;
@@ -1330,6 +1341,43 @@ namespace LlmLlamacpp {
      * maximum is 1048576 (1 TiB). Also accepted as `cache-ram-mib`.
      */
     cache_ram_mib?: NumericLike;
+    /**
+     * Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'`
+     * drafts with the model's own multi-token-prediction (MTP / NextN) head,
+     * or with the external MTP head given as `spec_draft_model`; the model or
+     * the head must ship MTP layers (`blk.N.nextn.*`), or the load fails.
+     * `'draft-dflash'` drafts with the DFlash model given as
+     * `spec_draft_model`. Either way the model verifies the draft, so the
+     * output keeps the distribution of plain decoding. `'none'` (default)
+     * decodes one token per step. Works on single prompts, multimodal
+     * prompts and continuous batching. Also accepted as `spec-type`.
+     */
+    spec_type?: "none" | "draft-mtp" | "draft-dflash";
+    /**
+     * Absolute path of the draft model, as llama-server's
+     * `--spec-draft-model` (`-md`): the DFlash model, required by
+     * `spec_type: 'draft-dflash'`, or an external MTP head for
+     * `spec_type: 'draft-mtp'`. The draft model is placed like the model
+     * (`device`, `gpu_layers`). Also accepted as `spec-draft-model`.
+     */
+    spec_draft_model?: string;
+    /**
+     * Longest draft per step (default 3, maximum 64), as
+     * `--spec-draft-n-max`. Requires `spec_type`. Also accepted as
+     * `spec-draft-n-max`.
+     */
+    spec_draft_n_max?: NumericLike;
+    /**
+     * Shortest draft worth verifying (default 0); shorter drafts are
+     * dropped. As `--spec-draft-n-min`. Also accepted as `spec-draft-n-min`.
+     */
+    spec_draft_n_min?: NumericLike;
+    /**
+     * Minimum draft-head probability for a token to extend the draft
+     * (default 0, between 0 and 1), as `--spec-draft-p-min`. Also accepted
+     * as `spec-draft-p-min`.
+     */
+    spec_draft_p_min?: NumericLike;
     [key: string]: string | number | boolean | string[] | undefined;
   }
 
@@ -1580,6 +1628,13 @@ namespace LlmLlamacpp {
      */
     avgConcurrentSeq: number;
     backendDevice: "cpu" | "gpu";
+    /**
+     * Draft tokens proposed by speculative decoding, and how many of them
+     * the model accepted (llama-server's `draft_n` / `draft_n_accepted`).
+     * Present only when the model was loaded with `spec_type`.
+     */
+    draftTokens?: number;
+    draftAcceptedTokens?: number;
     /**
      * Why generation stopped. Per-sequence, so it is reported for a single
      * request on either path (sequential or one prompt on a parallel model).

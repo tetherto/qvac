@@ -1,4 +1,5 @@
 import { mossTranscribeBackend, mossTranscribeJobFields, type MossTranscribeRunOptions } from '../engines/moss/driver'
+import { validateParakeetBackend } from '../engines/parakeet/options'
 
 interface AsrFitCommon {
   /** Absolute path to the model, or to a weightless copy where one exists. */
@@ -14,6 +15,8 @@ interface AsrFitCommon {
 
 export interface ParakeetFitRequest extends AsrFitCommon {
   engine?: 'parakeet'
+  /** Native selector, matching parakeetConfig.backend; overrides gpuLayers. */
+  backend?: string
   threads?: number
   longFormWindowFrames?: number
   longFormContextFrames?: number
@@ -71,6 +74,14 @@ export interface AsrFitResult {
   hostBytes: number
   report: string
 
+  /**
+   * Parakeet on macOS and iOS: system RAM of the Core ML diarizer sidecars
+   * (`<stem>-diarizer-<frames>.mlmodelc`) a Nemotron 3 Diarization or
+   * Sortformer v2.1 workload can load, counted in the verdict on unified
+   * memory. 0 without sidecars and on other platforms.
+   */
+  coremlBytes?: number
+
   /** Parakeet and MOSS-Transcribe. */
   encoderComputeBytes?: number
   decoderStateBytes?: number
@@ -120,6 +131,8 @@ export async function assessFit(request: AsrFitRequest): Promise<AsrFitResult> {
       hotwords: request.hotwords,
       maxNewTokens: request.maxNewTokens
     })
+  } else if (request.engine === 'parakeet' || request.engine === undefined) {
+    validateParakeetBackend(request.backend)
   }
 
   return await binding.assessFit(request)

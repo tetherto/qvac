@@ -18,8 +18,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const MODULE_NAME = 'qvac__diffusion-cpp'
 const TARGETS = ['linux-x64', 'linux-arm64']
+
+// Platform-package module name. Every iOS host shares `ios`; desktop and
+// Android use the host triple. Keep in sync with CMakeLists.txt and
+// SLICE_DEFINITIONS in scripts/ci/slice-platform-packages.mjs.
+function moduleNameForHost(host) {
+  const suffix = host.startsWith('ios-') ? 'ios' : host
+  return `qvac__diffusion-cpp-${suffix}`
+}
 const FORBIDDEN_NEEDED = [
   'libvulkan.',
   'libOpenCL.',
@@ -95,7 +102,8 @@ const fail = (msg) => {
 }
 
 for (const target of TARGETS) {
-  const addonPath = path.join(prebuildsDir, target, `${MODULE_NAME}.bare`)
+  const moduleName = moduleNameForHost(target)
+  const addonPath = path.join(prebuildsDir, target, `${moduleName}.bare`)
   if (!fs.existsSync(addonPath)) {
     console.log(`SKIP ${target}: no prebuild at ${addonPath}`)
     continue
@@ -103,19 +111,14 @@ for (const target of TARGETS) {
   checkedTargets++
 
   const addonNeeded = elfNeeded(fs.readFileSync(addonPath))
-  console.log(`${target}/${MODULE_NAME}.bare NEEDED: ${addonNeeded.join(', ')}`)
+  console.log(`${target}/${moduleName}.bare NEEDED: ${addonNeeded.join(', ')}`)
   for (const lib of [...FORBIDDEN_NEEDED, ...FORBIDDEN_RUNTIME]) {
     if (addonNeeded.some((n) => n.startsWith(lib))) {
       fail(`${target}: addon hard-links ${lib}* (breaks CPU-only hosts)`)
     }
   }
 
-  const modulePath = path.join(
-    prebuildsDir,
-    target,
-    MODULE_NAME,
-    'libqvac-diffusion-ggml-vulkan.so'
-  )
+  const modulePath = path.join(prebuildsDir, target, moduleName, 'libqvac-diffusion-ggml-vulkan.so')
   if (!fs.existsSync(modulePath)) {
     fail(`${target}: Vulkan DL backend module missing at ${modulePath}`)
     continue

@@ -12,9 +12,11 @@ add_executable(
   test_cancel_stale_flag.cpp
   test_bert_model.cpp
   test_laya_model.cpp
+  test_rerank_model.cpp
   test_llama_lazy_init_backend.cpp
   test_logging.cpp
   test_model_metadata.cpp
+  test_multimodal_options.cpp
   test_utils.cpp
   backend_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
@@ -22,8 +24,12 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LayaModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/RerankModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultimodalEmbedder.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AudioLengthLimit.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/logging.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/utils.cpp
 )

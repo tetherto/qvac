@@ -63,6 +63,12 @@ graph TB
   it also carries the newest checkpoint after the sequence state, so a
   conversation loaded in a new process restores it on its next turn. Older
   checkpoints do not survive a process restart.
+- With speculative decoding (`spec-type`), the **draft context's state** of
+  the sequence travels with the pre-request snapshot, the checkpoints and the
+  RAM tier, and is always kept in host RAM, even for a checkpoint whose target
+  state is on disk (the RAM tier counts it). The `cacheKey` file, checkpoint
+  included, holds the target state only; loading it restarts drafting from the
+  next decoded token.
 
 ## Three kinds of models
 
@@ -315,6 +321,12 @@ No end-of-history checkpoint is taken for:
 - `cache_checkpoints: 0`: nothing would keep it, so the prefill does not stop
   for it either.
 
+A prefill-only request needs none: its committed state is itself the end of
+the history. When a system-and-tools prefill produces a matching prefix, the
+next request reuses that state without trimming or restoring it. See
+[cache-api.md](./cache-api.md#prefill-the-system-prompt-and-tools) for the
+template and rendering requirements.
+
 ### Restoring a checkpoint
 
 A restore writes the saved part back
@@ -410,7 +422,8 @@ partial state, as in memory. `llama_state_seq_load_file` stops reading at the
 end of the sequence state, so older addon versions load these files and
 ignore the checkpoint. A checkpoint that is damaged, from a newer format, or
 not a prefix of the loaded ledger is skipped with a warning and the state
-still loads. The pre-request snapshot is never written. A load checks the ledger
+still loads. The pre-request snapshot is never written, nor is a speculative
+draft context's state (as in llama-server's slot files). A load checks the ledger
 against the state it describes: a corrupt current-format file is an error
 (`UnableToLoadSessionFile`), and a file without a ledger is a cold miss.
 

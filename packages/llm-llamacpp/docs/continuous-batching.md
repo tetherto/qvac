@@ -521,7 +521,9 @@ whether a per-job stats source exists for that id:
 - Per-job override (the job ran through the batch engine): the job's terminal
   snapshot starts from that same aggregate, then `TTFT`, `TPS`,
   `generatedTokens` and `promptTokens` are overridden with the job's OWN
-  observed figures. All other keys (`ppTPS`, `CacheTokens`,
+  observed figures, and so are `draftTokens` / `draftAcceptedTokens` when
+  the model decodes speculatively (`spec-type`; see the README's
+  speculative decoding section). All other keys (`ppTPS`, `CacheTokens`,
   `avgConcurrentSeq`, `backendDevice`) stay
   model-level.
 

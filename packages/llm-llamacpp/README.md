@@ -25,6 +25,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 - [Architecture](#architecture)
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
+  - [Fuzzing](#fuzzing)
 - [Glossary](#glossary)
 - [License](#license)
 
@@ -180,6 +181,8 @@ const config = {
 | device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
 | gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
 | ctx_size          | 0 – model-dependent                         | 4096 (0 = loaded from model) | Context window size                                   |
+| poll              | integer 0 – 100                             | 0                            | Main GGML threadpool busy-wait level. `0` sleeps while idle; higher values can reduce wake latency but consume CPU during GPU work |
+| poll-batch        | integer 0 – 100                             | `poll`                       | Batch GGML threadpool busy-wait level                  |
 | lora              | string                                      | —                            | Path to LoRA adapter file                             |
 | temp              | 0.00 – 2.00                                 | 0.8                          | Sampling temperature                                  |
 | top_p             | 0 – 1                                       | 0.9                          | Top-p (nucleus) sampling                              |
@@ -208,6 +211,11 @@ const config = {
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
 | mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
+| spec-type         | `"none"`, `"draft-mtp"` or `"draft-dflash"` | `"none"`                     | Speculative decoding, as llama-server's `--spec-type`: `draft-mtp` drafts with the model's own multi-token-prediction head, `draft-dflash` with the DFlash model in `spec-draft-model` (see [Speculative decoding](#speculative-decoding-mtp-dflash) below). Also accepted as `spec_type` |
+| spec-draft-model  | absolute path                               | –                            | Draft model, as llama-server's `--spec-draft-model` (`-md`): the DFlash model, required by `spec-type: "draft-dflash"`, or an external MTP head for `spec-type: "draft-mtp"`. Placed like the model (`device`, `gpu-layers`). Also accepted as `spec_draft_model` |
+| spec-draft-n-max  | 1 – 64                                      | 3                            | Longest draft per step. Also accepted as `spec_draft_n_max` |
+| spec-draft-n-min  | 0 – `spec-draft-n-max`                      | 0                            | Drafts shorter than this are not verified. Also accepted as `spec_draft_n_min` |
+| spec-draft-p-min  | 0 – 1                                       | 0                            | Minimum draft-head probability for a token to extend the draft. Also accepted as `spec_draft_p_min` |
 
 
 #### KV-cache type & auto-default
@@ -251,6 +259,23 @@ An explicit `mmproj-use-gpu` value always wins over the auto-default, in either 
 itself runs on the CPU backend (`device: "cpu"` or GPU fallback), the key is ignored with a warning and the
 projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
 `[LlamaModel] multimodal projector backend: …`.
+
+
+#### Speculative decoding (MTP, DFlash)
+
+`spec-type: 'draft-mtp'` turns on llama-server's multi-token-prediction speculative decoding for models that ship their MTP layers (`blk.N.nextn.*`, e.g. Qwen3.5 / Qwen3.6 GGUFs that keep them; quantizations that strip them fail to load with this option unless an external head is given, see below). Every step the MTP head drafts up to `spec-draft-n-max` tokens from the model's own hidden states, the model verifies the sampled token and the draft in one decode, and the longest matching prefix plus one new token is kept. The sampler decides every kept token, so sampling settings, grammars and stop conditions behave as without speculation. The implementation follows llama-server step by step: the same draft limits, rollback by trimming or by a checkpoint for memory that cannot trim, and the same replay.
+
+For a model without MTP layers, give an external MTP head as `spec-draft-model` (llama-server's `--spec-type draft-mtp -md <head>`): a GGUF with MTP layers for the same model, such as the MTP quantization of it, or a Gemma 4 assistant for its Gemma 4 model. The head is loaded next to the model and placed like it (`device`, `gpu-layers`), and the load's fit and `assessFit` count its weights as well as its context. A head without MTP layers fails the load, and `assessFit` refuses it with `unsupported-config`. A head for another model, with a different hidden width or vocabulary, also fails the load, and `assessFit` refuses it the same way. A Gemma 4 assistant reads the model's own tensors, so fabric measures it next to the model, as the load creates it.
+
+`spec-type: 'draft-dflash'` drafts with a separate DFlash model instead, given as `spec-draft-model` (an absolute path; llama-server's `-md`). The DFlash model reads the hidden states of the target layers it was trained on and denoises a whole block of draft tokens in one pass, so a step drafts up to its block size minus one tokens (`spec-draft-n-max` caps it further). It is loaded next to the model and placed like it (`device`, `gpu-layers`). The load's fit and `assessFit` count its weights and context, measured next to the model when the drafter borrows the model's embeddings and output head. A draft model fabric still cannot measure is left out of both, and fabric logs `failed to measure the memory of the extra model, fitting without it`. Everything else (verification, rollback, batching, caches, stats) is the same as for MTP.
+
+MTP and DFlash work on single prompts, multimodal prompts and continuous batching (`parallel >= 2`), together with `cacheKey` conversations: the draft context's state travels with checkpoints and the RAM tier, and a `cacheKey` file (target state only, like llama-server's slot files) restarts drafting from the next decoded token.
+
+- Runtime stats gain `draftTokens` and `draftAcceptedTokens` (llama-server's `draft_n` / `draft_n_accepted`); per-position acceptance rates are logged at debug level.
+- `spec-draft-n-max` is lowered at load, with a warning, so the sampled token and the draft fit one `ubatch-size` and each sequence's share of `batch-size` (`batch-size / parallel`); a batch too small for even one draft token fails the load.
+- `spec-draft-model` must be a regular local file.
+- Greedy output can differ from plain decoding where two tokens are nearly tied: the verification batch evaluates several positions at once, which changes floating-point rounding.
+- The gain depends on the device being bandwidth bound. On a Radeon 8060S, Qwen3.6-27B-MTP Q4_K_M decodes a single prompt at about 30 t/s instead of 13 t/s with 80% of the drafts accepted; with four concurrent sequences the larger verification batches cost more than they save, as they do in llama-server.
 
 ### 4. Create Model Instance
 
@@ -317,6 +342,8 @@ const response = await model.run([
 ```
 
 `arguments` is an object or the text of a JSON object, and `content` may be empty on the assistant turn. A malformed tool turn is rejected with `InvalidInputFormat`. [`examples/toolCalling.js`](./examples/toolCalling.js) shows a full round trip.
+
+The tool grammar holds the model to the order of `parameters`. Inside an object it accepts the required properties first, in declared order, then the optional ones, also in declared order. When the model writes a property out of that order, the call isn't rejected with an error: the model drops a field, writes a broken value or never finishes the call. Declare `required` properties before optional ones at every level, and declare each group in the order the model is likely to write it. This applies to nested objects, and to every argument in formats that write the arguments as one JSON object (Qwen3). Qwen3.5's top-level `<parameter=...>` arguments are less strict: up to six required arguments in any order, then the optional ones in any order. An optional argument before a required one is still rejected there.
 
 #### Batch inference
 
@@ -427,6 +454,8 @@ fit.hostBytes // the same, for the trailing host row
 ```
 
 `config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`. A setting left out takes llama's default.
+
+With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the per-device figures; on a model or head without MTP layers the load fails, so the projection is refused with `unsupported-config`. A DFlash draft model or a Gemma 4 assistant is fitted the same way, measured next to the model since it reads the model's tensors, and is in the verdict and the figures too (see [Speculative decoding](#speculative-decoding-mtp-dflash)).
 
 Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
 
@@ -675,6 +704,28 @@ npm run test:cpp:models:ci   # exactly what .github/workflows/cpp-tests-llm.yml
 ```
 
 First-run downloads pull several GB from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` (see `test/unit/test_common.hpp`).
+
+### Fuzzing
+
+`forLogMessage`, `toLowerAscii`, and `matchesAnyStopString` have a
+[Google FuzzTest][fuzztest] target, `llm-string-fuzz`. Fuzzing is Linux-only:
+it needs clang with libFuzzer and AddressSanitizer, CMake 3.25 or newer,
+[vcpkg](https://vcpkg.io/) (set `VCPKG_ROOT`) and `bare-make`. The target does
+not link `@qvac/fabric`, so it runs with full ASan and LeakSanitizer.
+
+```bash
+npm install
+npm run fuzz                     # bounded run of every FUZZ_TEST, as Linux CI does
+npm run fuzz:continuous          # coverage-guided, one FUZZ_TEST at a time
+npm run fuzz:continuous -- LlmStringFuzz.MatchesAnyStopNeverCrashes --fuzz_for=30m
+```
+
+Flags other than `--continuous` and `--build-dir` go to the fuzz binary. See
+[`docs/architecture/ADDON-FUZZING.md`](../../docs/architecture/ADDON-FUZZING.md)
+for the fuzzing design, the vcpkg-supplied FuzzTest stack, and how to add a
+target.
+
+[fuzztest]: https://github.com/google/fuzztest
 
 ## Glossary
 

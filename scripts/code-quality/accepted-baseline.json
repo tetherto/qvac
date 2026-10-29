@@ -989,6 +989,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:0750f55d6e15315a80d3bea82416f54dbdf2a5e190938f27e822dd8e2335a12d",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/conformance/run.mjs",
+        "symbol": "runCase#1"
+      },
+      "summary": "runCase#1 in packages/sdk-e2e/runners/js/conformance/run.mjs exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/conformance/run.mjs",
+        "line": 50,
+        "column": 1
+      },
+      "measurement": {
+        "value": 21,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
       "fingerprint": "quality-v1:07594af55e9756a4d4b5e4b392b250b054631b193300aba3afbf6001e4ef09fc",
       "detector": "structure",
       "rule": "function-lines",
@@ -1230,28 +1255,28 @@
       }
     },
     {
-      "fingerprint": "quality-v1:08b724ea77fb1a60303f76c7df75e03b7367523fd8d5924b06cce05bec7ca309",
+      "fingerprint": "quality-v1:08d39e911b82a552283af65892a46b762f80bd2f83b6f12f6989c2871431bbeb",
       "detector": "structure",
-      "rule": "nesting-depth",
-      "category": "nesting",
-      "severity": "advisory",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "high",
       "subject": {
         "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts",
-        "symbol": "KvCacheExecutor > cancelKeepsCommittedCache#1"
+        "path": "packages/sdk-e2e/scripts/impacted-tests.mjs",
+        "symbol": "analyze#1"
       },
-      "summary": "KvCacheExecutor > cancelKeepsCommittedCache#1 in packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts exceeds the nesting-depth threshold",
-      "remediation": "Use guard clauses or extract nested branches into named functions.",
+      "summary": "analyze#1 in packages/sdk-e2e/scripts/impacted-tests.mjs exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts",
-        "line": 755,
-        "column": 15
+        "path": "packages/sdk-e2e/scripts/impacted-tests.mjs",
+        "line": 433,
+        "column": 1
       },
       "measurement": {
-        "value": 6,
-        "unit": "levels",
-        "advisoryThreshold": 5,
-        "highThreshold": 7
+        "value": 40,
+        "unit": "branches",
+        "advisoryThreshold": 20,
+        "highThreshold": 35
       }
     },
     {
@@ -1528,6 +1553,28 @@
       }
     },
     {
+      "fingerprint": "quality-v1:0a7f4cac5ad83bd4c10e0d620e24b25b3c03336aea9ff34e2cabb480fe9931a1",
+      "detector": "dependencies",
+      "rule": "local-fan-out",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/sdk-e2e/runners/js/electron/consumer.ts"
+      },
+      "summary": "packages/sdk-e2e/runners/js/electron/consumer.ts imports 40 local modules",
+      "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/electron/consumer.ts"
+      },
+      "measurement": {
+        "value": 40,
+        "unit": "local modules",
+        "advisoryThreshold": 25,
+        "highThreshold": 40
+      }
+    },
+    {
       "fingerprint": "quality-v1:0aef8e311cb76dd12613385fed591b153be73c2767e4fa12041ecbbfeebfbe7b",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -1675,31 +1722,6 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:0c36c59a0e8ce3c73341b0503789459bc8cde035c5a51e79e03449a71f4ef0ae",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/embed-llamacpp/test/integration/rag-id-map-index.test.js",
-        "symbol": "safeTest \"desktop RAG workflow exercises all IdMapIndex operations\" callback#1"
-      },
-      "summary": "safeTest \"desktop RAG workflow exercises all IdMapIndex operations\" callback#1 in packages/embed-llamacpp/test/integration/rag-id-map-index.test.js exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/embed-llamacpp/test/integration/rag-id-map-index.test.js",
-        "line": 74,
-        "column": 3
-      },
-      "measurement": {
-        "value": 138,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
       }
     },
     {
@@ -1975,31 +1997,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:0e94883cf7ffe3443aa0ed7909715c988cd6539d43ae09dfe452012d6854bfb7",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/scripts/impacted-tests.mjs",
-        "symbol": "analyze#1"
-      },
-      "summary": "analyze#1 in packages/sdk/e2e/scripts/impacted-tests.mjs exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/scripts/impacted-tests.mjs",
-        "line": 433,
-        "column": 1
-      },
-      "measurement": {
-        "value": 40,
-        "unit": "branches",
-        "advisoryThreshold": 20,
-        "highThreshold": 35
-      }
-    },
-    {
       "fingerprint": "quality-v1:0e9929522667674d32a5a2d3cad2c157aec5258cfcb4d27fad45111ce5de0c80",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -2171,31 +2168,6 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:10c8b0712533e11794396db5faea2eabc763677b1eb067a89d3f9206f150c211",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts",
-        "symbol": "KvCacheExecutor > autoCacheConcurrency#1"
-      },
-      "summary": "KvCacheExecutor > autoCacheConcurrency#1 in packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts",
-        "line": 211,
-        "column": 3
-      },
-      "measurement": {
-        "value": 110,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
       }
     },
     {
@@ -2621,25 +2593,27 @@
       }
     },
     {
-      "fingerprint": "quality-v1:14d2c2250331086a2405baeec11c2b423195007c6303cfe2d44675e639b19324",
-      "detector": "dependencies",
-      "rule": "local-fan-out",
-      "category": "dependency",
+      "fingerprint": "quality-v1:14a4dc93fb17c401d2c00b8e3817dafe3a7fe2e3455d2e2674fcb101dc3e1f6f",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
       "severity": "advisory",
       "subject": {
         "kind": "file",
-        "path": "packages/sdk/e2e/tests/mobile/consumer.ts"
+        "path": "packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts"
       },
-      "summary": "packages/sdk/e2e/tests/mobile/consumer.ts imports 37 local modules",
-      "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
+      "summary": "packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/mobile/consumer.ts"
+        "path": "packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts",
+        "line": 713,
+        "column": 1
       },
       "measurement": {
-        "value": 37,
-        "unit": "local modules",
-        "advisoryThreshold": 25,
-        "highThreshold": 40
+        "value": 776,
+        "unit": "code lines",
+        "advisoryThreshold": 600,
+        "highThreshold": 1000
       }
     },
     {
@@ -3695,6 +3669,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:1f920b743761446dd189332fdfaa00e972e1356fdabe06b50e4f10ae313b278c",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/shared/executors/node/kv-cache-restart-executor.ts",
+        "symbol": "KvCacheRestartExecutor > workerRestart#1"
+      },
+      "summary": "KvCacheRestartExecutor > workerRestart#1 in packages/sdk-e2e/runners/js/shared/executors/node/kv-cache-restart-executor.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/shared/executors/node/kv-cache-restart-executor.ts",
+        "line": 34,
+        "column": 3
+      },
+      "measurement": {
+        "value": 101,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
       "fingerprint": "quality-v1:1faf24e3addf3cd0ad859bb3d498bcb6d679e283d1391f50e81233195a06357f",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -3891,6 +3890,30 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:21ac5fc0526b8b491f5e39de45a568633315c2e3850d3746748ac2aa53067899",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/sdk-e2e/runners/js/mobile/consumer.ts"
+      },
+      "summary": "packages/sdk-e2e/runners/js/mobile/consumer.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/mobile/consumer.ts",
+        "line": 709,
+        "column": 1
+      },
+      "measurement": {
+        "value": 608,
+        "unit": "code lines",
+        "advisoryThreshold": 600,
+        "highThreshold": 1000
       }
     },
     {
@@ -7651,31 +7674,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:4093876b73ceaea4e145e048115f040461db5c1633d00653ab4b187c6647c1f3",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/executors/node/no-lingering-bare-executor.ts",
-        "symbol": "NoLingeringBareExecutor > runTest#1"
-      },
-      "summary": "NoLingeringBareExecutor > runTest#1 in packages/sdk/e2e/tests/shared/executors/node/no-lingering-bare-executor.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/executors/node/no-lingering-bare-executor.ts",
-        "line": 136,
-        "column": 3
-      },
-      "measurement": {
-        "value": 110,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
-      }
-    },
-    {
       "fingerprint": "quality-v1:40cae35e95a3cc54f6c4fc4085846e3310b07e69d6e8456ad8d60d380c9820e7",
       "detector": "structure",
       "rule": "function-lines",
@@ -7847,28 +7845,6 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:421236da7775bb4052844023bc312a6303c2aa408e7d554d5439642fc20f0200",
-      "detector": "dependencies",
-      "rule": "local-fan-out",
-      "category": "dependency",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/sdk/e2e/tests/electron/consumer.ts"
-      },
-      "summary": "packages/sdk/e2e/tests/electron/consumer.ts imports 40 local modules",
-      "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/electron/consumer.ts"
-      },
-      "measurement": {
-        "value": 40,
-        "unit": "local modules",
-        "advisoryThreshold": 25,
-        "highThreshold": 40
       }
     },
     {
@@ -8530,6 +8506,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:49360dc49984faeb1b2bd2eec71733a2d00441370e8559b33c9d4f4acff7014f",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/shared/executors/diffusion-executor.ts",
+        "symbol": "DiffusionExecutor > buildParams#1"
+      },
+      "summary": "DiffusionExecutor > buildParams#1 in packages/sdk-e2e/runners/js/shared/executors/diffusion-executor.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/shared/executors/diffusion-executor.ts",
+        "line": 416,
+        "column": 3
+      },
+      "measurement": {
+        "value": 24,
+        "unit": "branches",
+        "advisoryThreshold": 20,
+        "highThreshold": 35
+      }
+    },
+    {
       "fingerprint": "quality-v1:4979be46d24ce12adde91626fd778d76bb3b5f610b33b1bb0474421ff5226645",
       "detector": "dependencies",
       "rule": "type-only-cycle",
@@ -8846,30 +8847,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:4c32cf8b36dd734cd082b43d4dd2a1c3178ef909fdf1d1a229009ea5253164ee",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/sdk/e2e/tests/mobile/consumer.ts"
-      },
-      "summary": "packages/sdk/e2e/tests/mobile/consumer.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/mobile/consumer.ts",
-        "line": 709,
-        "column": 1
-      },
-      "measurement": {
-        "value": 608,
-        "unit": "code lines",
-        "advisoryThreshold": 600,
-        "highThreshold": 1000
-      }
-    },
-    {
       "fingerprint": "quality-v1:4c33d3d8fb58b70a98c66cd9e5559371b3d078133706cc806c297812f72c237a",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -8917,6 +8894,30 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:4c914a838b1074fa8cb8d9e6f23b5e8c15bd65715cdb8d32f20f8e5cc398468d",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/sdk-e2e/runners/js/desktop/consumer.ts"
+      },
+      "summary": "packages/sdk-e2e/runners/js/desktop/consumer.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/desktop/consumer.ts",
+        "line": 696,
+        "column": 1
+      },
+      "measurement": {
+        "value": 653,
+        "unit": "code lines",
+        "advisoryThreshold": 600,
+        "highThreshold": 1000
       }
     },
     {
@@ -9287,6 +9288,31 @@
       },
       "measurement": {
         "value": 123,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:4e1b90216cff8d28a688300b4ddeaab262bc67da3501f3a180a9257fe2215f96",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/shared/executors/cancellation-executor.ts",
+        "symbol": "CancellationExecutor > cancelIsolatesConcurrentBatches#1"
+      },
+      "summary": "CancellationExecutor > cancelIsolatesConcurrentBatches#1 in packages/sdk-e2e/runners/js/shared/executors/cancellation-executor.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/shared/executors/cancellation-executor.ts",
+        "line": 751,
+        "column": 3
+      },
+      "measurement": {
+        "value": 104,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -10498,6 +10524,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:5bb84c8591abe783073efd98b96337bdae16b78278eb7fc7763fd4f4bbf6870d",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/shared/parakeet-stream-runner.ts",
+        "symbol": "runParakeetStreamMetadata#1"
+      },
+      "summary": "runParakeetStreamMetadata#1 in packages/sdk-e2e/runners/js/shared/parakeet-stream-runner.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/shared/parakeet-stream-runner.ts",
+        "line": 167,
+        "column": 8
+      },
+      "measurement": {
+        "value": 23,
+        "unit": "branches",
+        "advisoryThreshold": 20,
+        "highThreshold": 35
+      }
+    },
+    {
       "fingerprint": "quality-v1:5bf79148655dcfcac66cdb9350f4ed49cf9da2fc8fa85ad2ced1587a70bb206b",
       "detector": "structure",
       "rule": "file-lines",
@@ -10569,30 +10620,6 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
-      }
-    },
-    {
-      "fingerprint": "quality-v1:5c754f1b63470220d59c124e21f073d00d0175d056f803efa2a486e55753d3dd",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/sdk/e2e/tests/desktop/consumer.ts"
-      },
-      "summary": "packages/sdk/e2e/tests/desktop/consumer.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/desktop/consumer.ts",
-        "line": 696,
-        "column": 1
-      },
-      "measurement": {
-        "value": 653,
-        "unit": "code lines",
-        "advisoryThreshold": 600,
-        "highThreshold": 1000
       }
     },
     {
@@ -11207,28 +11234,28 @@
       }
     },
     {
-      "fingerprint": "quality-v1:61cc3886945bb08fb16f60935e970c408f8b474fd974df40e7ebd91404925ce1",
+      "fingerprint": "quality-v1:617c78f435f34d6394aa60dac86a8af9de04da1739faeff00b614c947e158f6a",
       "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
+      "rule": "nesting-depth",
+      "category": "nesting",
       "severity": "advisory",
       "subject": {
         "kind": "function",
-        "path": "packages/sdk/e2e/scripts/impacted-tests.mjs",
-        "symbol": "analyze#1"
+        "path": "packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts",
+        "symbol": "KvCacheExecutor > cancelKeepsCommittedCache#1"
       },
-      "summary": "analyze#1 in packages/sdk/e2e/scripts/impacted-tests.mjs exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "summary": "KvCacheExecutor > cancelKeepsCommittedCache#1 in packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts exceeds the nesting-depth threshold",
+      "remediation": "Use guard clauses or extract nested branches into named functions.",
       "primaryLocation": {
-        "path": "packages/sdk/e2e/scripts/impacted-tests.mjs",
-        "line": 433,
-        "column": 1
+        "path": "packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts",
+        "line": 755,
+        "column": 15
       },
       "measurement": {
-        "value": 142,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
+        "value": 6,
+        "unit": "levels",
+        "advisoryThreshold": 5,
+        "highThreshold": 7
       }
     },
     {
@@ -11431,31 +11458,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:634be6cc8426c8610ee52fbd4bcab34addc3db1b90e2da4953d4bf3c0c9400ea",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/executors/cancellation-executor.ts",
-        "symbol": "CancellationExecutor > cancelIsolatesConcurrentBatches#1"
-      },
-      "summary": "CancellationExecutor > cancelIsolatesConcurrentBatches#1 in packages/sdk/e2e/tests/shared/executors/cancellation-executor.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/executors/cancellation-executor.ts",
-        "line": 751,
-        "column": 3
-      },
-      "measurement": {
-        "value": 104,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
-      }
-    },
-    {
       "fingerprint": "quality-v1:637fc49439a55533243abeec8b5d09527d326607b845e3f87ae1a6d1e4d2a21a",
       "detector": "structure",
       "rule": "function-lines",
@@ -11481,30 +11483,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:641f4af15972fa4f66e6a84efdcd25956422964e83173eaf550c972ed08277e3",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/sdk/e2e/tests/shared/executors/cancellation-executor.ts"
-      },
-      "summary": "packages/sdk/e2e/tests/shared/executors/cancellation-executor.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/executors/cancellation-executor.ts",
-        "line": 697,
-        "column": 1
-      },
-      "measurement": {
-        "value": 917,
-        "unit": "code lines",
-        "advisoryThreshold": 600,
-        "highThreshold": 1000
-      }
-    },
-    {
       "fingerprint": "quality-v1:64278c4cf2842cf84c9dbc00958de19dde1a17e6d7941acf7165337152c014ed",
       "detector": "dependencies",
       "rule": "runtime-cycle",
@@ -11523,6 +11501,30 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/inference/src/api/completion-stream.ts"
+      }
+    },
+    {
+      "fingerprint": "quality-v1:6445e2b69eb0ccdaefc34b225f7b1bcd9e4fd83d3619cd9afe57296b3bb4a18c",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/sdk-e2e/runners/js/electron/consumer.ts"
+      },
+      "summary": "packages/sdk-e2e/runners/js/electron/consumer.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/electron/consumer.ts",
+        "line": 686,
+        "column": 1
+      },
+      "measurement": {
+        "value": 605,
+        "unit": "code lines",
+        "advisoryThreshold": 600,
+        "highThreshold": 1000
       }
     },
     {
@@ -13687,31 +13689,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:75c25be39207b0d839dc265cbfb9645fed6c9086feec743ebb6cc8f6b7c2fc1d",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/parakeet-stream-runner.ts",
-        "symbol": "runParakeetStreamIteratorThrow#1"
-      },
-      "summary": "runParakeetStreamIteratorThrow#1 in packages/sdk/e2e/tests/shared/parakeet-stream-runner.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/parakeet-stream-runner.ts",
-        "line": 394,
-        "column": 8
-      },
-      "measurement": {
-        "value": 122,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
-      }
-    },
-    {
       "fingerprint": "quality-v1:763a4be93c2a0ec05f654cb1c4a6201a2053b2412451419c59f9fa8c53ef639b",
       "detector": "structure",
       "rule": "function-lines",
@@ -13832,31 +13809,6 @@
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
-      }
-    },
-    {
-      "fingerprint": "quality-v1:77c962d134efe4f45ece4f1006232c84becd1926e25d0b3ebcb7aff5e29627cd",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/parakeet-stream-runner.ts",
-        "symbol": "runParakeetStreamIteratorThrow#1"
-      },
-      "summary": "runParakeetStreamIteratorThrow#1 in packages/sdk/e2e/tests/shared/parakeet-stream-runner.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/parakeet-stream-runner.ts",
-        "line": 394,
-        "column": 8
-      },
-      "measurement": {
-        "value": 27,
-        "unit": "branches",
-        "advisoryThreshold": 20,
-        "highThreshold": 35
       }
     },
     {
@@ -14031,30 +13983,6 @@
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
-      }
-    },
-    {
-      "fingerprint": "quality-v1:7904d48b38415ace3f61511b05d68680f96f1292c5e500772e71fbc36325895f",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/sdk/e2e/tests/completion-tests.ts"
-      },
-      "summary": "packages/sdk/e2e/tests/completion-tests.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/completion-tests.ts",
-        "line": 683,
-        "column": 1
-      },
-      "measurement": {
-        "value": 678,
-        "unit": "code lines",
-        "advisoryThreshold": 600,
-        "highThreshold": 1000
       }
     },
     {
@@ -14547,6 +14475,28 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:7baf90e1c18d2f87640ab2f14f0382dc95d874ee543b963fde1255b555c098b0",
+      "detector": "dependencies",
+      "rule": "local-fan-out",
+      "category": "dependency",
+      "severity": "high",
+      "subject": {
+        "kind": "file",
+        "path": "packages/sdk-e2e/runners/js/desktop/consumer.ts"
+      },
+      "summary": "packages/sdk-e2e/runners/js/desktop/consumer.ts imports 45 local modules",
+      "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/desktop/consumer.ts"
+      },
+      "measurement": {
+        "value": 45,
+        "unit": "local modules",
+        "advisoryThreshold": 25,
+        "highThreshold": 40
       }
     },
     {
@@ -15530,30 +15480,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:85367b260ff449dd3103a7cfa783200637705dc8449b2618cb153970e778aea2",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/sdk/e2e/tests/electron/consumer.ts"
-      },
-      "summary": "packages/sdk/e2e/tests/electron/consumer.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/electron/consumer.ts",
-        "line": 686,
-        "column": 1
-      },
-      "measurement": {
-        "value": 605,
-        "unit": "code lines",
-        "advisoryThreshold": 600,
-        "highThreshold": 1000
-      }
-    },
-    {
       "fingerprint": "quality-v1:8606f8d9aae80ffc929fa639693c140fde444eece69e4fcf388ab7469735ad49",
       "detector": "structure",
       "rule": "function-lines",
@@ -16167,31 +16093,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:8b37909193d8f76b5a4d955e672c236883f300ed39665422798fc70ceca9438f",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/parakeet-stream-runner.ts",
-        "symbol": "runParakeetStreamMetadata#1"
-      },
-      "summary": "runParakeetStreamMetadata#1 in packages/sdk/e2e/tests/shared/parakeet-stream-runner.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/parakeet-stream-runner.ts",
-        "line": 167,
-        "column": 8
-      },
-      "measurement": {
-        "value": 23,
-        "unit": "branches",
-        "advisoryThreshold": 20,
-        "highThreshold": 35
-      }
-    },
-    {
       "fingerprint": "quality-v1:8bae3f772b16b89ee18cb9209abca48f81db41d717c5b637b18f87054536efad",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -16637,31 +16538,6 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
-      }
-    },
-    {
-      "fingerprint": "quality-v1:8ef297161f3efb0117cd8c59db3afcb15f0f65d1429d32781368c574c0c3ef1e",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/conformance/run.mjs",
-        "symbol": "runCase#1"
-      },
-      "summary": "runCase#1 in packages/sdk/e2e/conformance/run.mjs exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/conformance/run.mjs",
-        "line": 50,
-        "column": 1
-      },
-      "measurement": {
-        "value": 68,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -18801,6 +18677,30 @@
       }
     },
     {
+      "fingerprint": "quality-v1:a04816db9458f4d0e6e49b8556214ce42752ed8edb65e904679b661e0d7e5885",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/sdk-e2e/catalog/completion-tests.ts"
+      },
+      "summary": "packages/sdk-e2e/catalog/completion-tests.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/catalog/completion-tests.ts",
+        "line": 683,
+        "column": 1
+      },
+      "measurement": {
+        "value": 678,
+        "unit": "code lines",
+        "advisoryThreshold": 600,
+        "highThreshold": 1000
+      }
+    },
+    {
       "fingerprint": "quality-v1:a17b1a7addebddc87af66605221c6ca0072dd819bba43f53abe8ee01433d7eee",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -19870,30 +19770,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:aafde16405500be0e67dfcabc505db31dd80fc131dac62c7c8af37c194052447",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts"
-      },
-      "summary": "packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts",
-        "line": 713,
-        "column": 1
-      },
-      "measurement": {
-        "value": 776,
-        "unit": "code lines",
-        "advisoryThreshold": 600,
-        "highThreshold": 1000
-      }
-    },
-    {
       "fingerprint": "quality-v1:ab4866e7b004dc8aef100b46f1d794216b732d296b00a016a50f338c95e1eea5",
       "detector": "dependencies",
       "rule": "local-fan-out",
@@ -20735,31 +20611,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:b4e0605df6f6939d53f174eac243572c947d01963097ed9b31d4bbbc47706170",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts",
-        "symbol": "KvCacheExecutor > cancelThenNewPrompt#1"
-      },
-      "summary": "KvCacheExecutor > cancelThenNewPrompt#1 in packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/executors/kv-cache-executor.ts",
-        "line": 565,
-        "column": 3
-      },
-      "measurement": {
-        "value": 118,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
-      }
-    },
-    {
       "fingerprint": "quality-v1:b5474bb3e759e4e5b4c60e65eb7c65a488bb27d7e95d52be8549362ef3caf501",
       "detector": "structure",
       "rule": "file-lines",
@@ -21401,6 +21252,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:ba56c99fbf9ce421f2a9f524278f050c5fae658f573cf0a7467bbaff59e14352",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/shared/executors/node/no-lingering-bare-executor.ts",
+        "symbol": "NoLingeringBareExecutor > runTest#1"
+      },
+      "summary": "NoLingeringBareExecutor > runTest#1 in packages/sdk-e2e/runners/js/shared/executors/node/no-lingering-bare-executor.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/shared/executors/node/no-lingering-bare-executor.ts",
+        "line": 136,
+        "column": 3
+      },
+      "measurement": {
+        "value": 110,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
       "fingerprint": "quality-v1:ba57a33a535893882ccc31fb115d233e6c11903fd0b20f1ebd076b966960423e",
       "detector": "structure",
       "rule": "function-lines",
@@ -21845,31 +21721,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:c0f3c905e6dcf509de35086388365876e315f3b163b2b67405504a149a6d0970",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/conformance/run.mjs",
-        "symbol": "runCase#1"
-      },
-      "summary": "runCase#1 in packages/sdk/e2e/conformance/run.mjs exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/conformance/run.mjs",
-        "line": 50,
-        "column": 1
-      },
-      "measurement": {
-        "value": 21,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
       "fingerprint": "quality-v1:c131d1da1a0a3da05648937a8fbb23182893d5ec1d7eefbb7736fe22895952c5",
       "detector": "structure",
       "rule": "file-lines",
@@ -21941,6 +21792,28 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:c19c8d3e0070829a803e4492eb904a9e2ef70923a66f21e8ad4fbd78ded380bc",
+      "detector": "dependencies",
+      "rule": "local-fan-out",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/sdk-e2e/runners/js/mobile/consumer.ts"
+      },
+      "summary": "packages/sdk-e2e/runners/js/mobile/consumer.ts imports 37 local modules",
+      "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/mobile/consumer.ts"
+      },
+      "measurement": {
+        "value": 37,
+        "unit": "local modules",
+        "advisoryThreshold": 25,
+        "highThreshold": 40
       }
     },
     {
@@ -22164,28 +22037,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:c454d2850546901c96e4a2bab47e3c919b7d0a06ded9bbb0a673dedc45952f07",
-      "detector": "dependencies",
-      "rule": "local-fan-out",
-      "category": "dependency",
-      "severity": "high",
-      "subject": {
-        "kind": "file",
-        "path": "packages/sdk/e2e/tests/desktop/consumer.ts"
-      },
-      "summary": "packages/sdk/e2e/tests/desktop/consumer.ts imports 45 local modules",
-      "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/desktop/consumer.ts"
-      },
-      "measurement": {
-        "value": 45,
-        "unit": "local modules",
-        "advisoryThreshold": 25,
-        "highThreshold": 40
-      }
-    },
-    {
       "fingerprint": "quality-v1:c45c4cd90931edcbd355f7106d812341e8202f84ab55bc01f457196b0140d835",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -22257,6 +22108,31 @@
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
+      }
+    },
+    {
+      "fingerprint": "quality-v1:c5523cb17a925e4f8e1d84920f3ea44aeddd705d735984c9d1282429424c2bdb",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/scripts/impacted-tests.mjs",
+        "symbol": "analyze#1"
+      },
+      "summary": "analyze#1 in packages/sdk-e2e/scripts/impacted-tests.mjs exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/scripts/impacted-tests.mjs",
+        "line": 433,
+        "column": 1
+      },
+      "measurement": {
+        "value": 142,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
       }
     },
     {
@@ -24308,28 +24184,27 @@
       }
     },
     {
-      "fingerprint": "quality-v1:d693e8d8c3ec8159e3ab79f04c360dfa3fef02e99009bff1974c7b4ed9f9461e",
+      "fingerprint": "quality-v1:d6e7edcc76e36428937c112073de4228384670f357243406ec82bf72a7a963c1",
       "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
+      "rule": "file-lines",
+      "category": "size",
       "severity": "advisory",
       "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/executors/diffusion-executor.ts",
-        "symbol": "DiffusionExecutor > buildParams#1"
+        "kind": "file",
+        "path": "packages/sdk-e2e/runners/js/shared/executors/cancellation-executor.ts"
       },
-      "summary": "DiffusionExecutor > buildParams#1 in packages/sdk/e2e/tests/shared/executors/diffusion-executor.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "summary": "packages/sdk-e2e/runners/js/shared/executors/cancellation-executor.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/executors/diffusion-executor.ts",
-        "line": 416,
-        "column": 3
+        "path": "packages/sdk-e2e/runners/js/shared/executors/cancellation-executor.ts",
+        "line": 697,
+        "column": 1
       },
       "measurement": {
-        "value": 24,
-        "unit": "branches",
-        "advisoryThreshold": 20,
-        "highThreshold": 35
+        "value": 917,
+        "unit": "code lines",
+        "advisoryThreshold": 600,
+        "highThreshold": 1000
       }
     },
     {
@@ -24523,6 +24398,31 @@
       },
       "measurement": {
         "value": 189,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:d8a53605f9d3ca215c2e9aca3dca95291d00a49dd6ec0730523b69100bc598e2",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts",
+        "symbol": "KvCacheExecutor > cancelThenNewPrompt#1"
+      },
+      "summary": "KvCacheExecutor > cancelThenNewPrompt#1 in packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts",
+        "line": 565,
+        "column": 3
+      },
+      "measurement": {
+        "value": 118,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -24993,6 +24893,31 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:dcdeb76c51fb378ad484346b9fe60d057388814c53c362cd854fe70b43b87adf",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/shared/parakeet-stream-runner.ts",
+        "symbol": "runParakeetStreamIteratorThrow#1"
+      },
+      "summary": "runParakeetStreamIteratorThrow#1 in packages/sdk-e2e/runners/js/shared/parakeet-stream-runner.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/shared/parakeet-stream-runner.ts",
+        "line": 394,
+        "column": 8
+      },
+      "measurement": {
+        "value": 27,
+        "unit": "branches",
+        "advisoryThreshold": 20,
+        "highThreshold": 35
       }
     },
     {
@@ -26358,6 +26283,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:e86897ac9873b0cbf2feefea88703649dfd447295b2689293e4e96ae55c450b9",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts",
+        "symbol": "KvCacheExecutor > autoCacheConcurrency#1"
+      },
+      "summary": "KvCacheExecutor > autoCacheConcurrency#1 in packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/shared/executors/kv-cache-executor.ts",
+        "line": 211,
+        "column": 3
+      },
+      "measurement": {
+        "value": 110,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
       "fingerprint": "quality-v1:e8fd8fedf3435ddec4392a33ea475c63ccda693503bc4965beb6b9642c60ab7c",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -26480,6 +26430,31 @@
         "unit": "levels",
         "advisoryThreshold": 4,
         "highThreshold": 6
+      }
+    },
+    {
+      "fingerprint": "quality-v1:e9d9dc63964edb13fab15995070f0772d681a7ad2a7d376996e40782875e59ca",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/sdk-e2e/runners/js/shared/parakeet-stream-runner.ts",
+        "symbol": "runParakeetStreamIteratorThrow#1"
+      },
+      "summary": "runParakeetStreamIteratorThrow#1 in packages/sdk-e2e/runners/js/shared/parakeet-stream-runner.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/runners/js/shared/parakeet-stream-runner.ts",
+        "line": 394,
+        "column": 8
+      },
+      "measurement": {
+        "value": 122,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
       }
     },
     {
@@ -27016,31 +26991,6 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/asr-ggml/src/engines/types.ts"
-      }
-    },
-    {
-      "fingerprint": "quality-v1:eebe0a241e9cfc4ba9cc78e63f73e0bb492c22aade0611efdb5ee753b07e3ba0",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/e2e/tests/shared/executors/node/kv-cache-restart-executor.ts",
-        "symbol": "KvCacheRestartExecutor > workerRestart#1"
-      },
-      "summary": "KvCacheRestartExecutor > workerRestart#1 in packages/sdk/e2e/tests/shared/executors/node/kv-cache-restart-executor.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/shared/executors/node/kv-cache-restart-executor.ts",
-        "line": 34,
-        "column": 3
-      },
-      "measurement": {
-        "value": 101,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
       }
     },
     {
@@ -27583,6 +27533,28 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:f175146555bc07ae4c1848299f58956709abbde2bf0b7921138e05d62d91ddfd",
+      "detector": "dependencies",
+      "rule": "local-fan-out",
+      "category": "dependency",
+      "severity": "high",
+      "subject": {
+        "kind": "file",
+        "path": "packages/sdk-e2e/catalog/test-definitions.ts"
+      },
+      "summary": "packages/sdk-e2e/catalog/test-definitions.ts imports 45 local modules",
+      "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
+      "primaryLocation": {
+        "path": "packages/sdk-e2e/catalog/test-definitions.ts"
+      },
+      "measurement": {
+        "value": 45,
+        "unit": "local modules",
+        "advisoryThreshold": 25,
+        "highThreshold": 40
       }
     },
     {
@@ -28883,28 +28855,6 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
-      }
-    },
-    {
-      "fingerprint": "quality-v1:f9204f418b3c762c883b9271f09e251451226f8575d3846141f6f59f3fb852be",
-      "detector": "dependencies",
-      "rule": "local-fan-out",
-      "category": "dependency",
-      "severity": "high",
-      "subject": {
-        "kind": "file",
-        "path": "packages/sdk/e2e/tests/test-definitions.ts"
-      },
-      "summary": "packages/sdk/e2e/tests/test-definitions.ts imports 45 local modules",
-      "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
-      "primaryLocation": {
-        "path": "packages/sdk/e2e/tests/test-definitions.ts"
-      },
-      "measurement": {
-        "value": 45,
-        "unit": "local modules",
-        "advisoryThreshold": 25,
-        "highThreshold": 40
       }
     },
     {

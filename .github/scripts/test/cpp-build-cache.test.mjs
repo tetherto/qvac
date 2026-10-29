@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -11,6 +12,62 @@ import { CPP_TEST_KEYS } from '../prebuild-status/lib.mjs'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const SPEECH_PACKAGES = ['asr-ggml', 'tts-ggml', 'bci-whispercpp']
 const WORKFLOW = readFileSync(join(ROOT, '.github/workflows/cpp-tests-nx.yml'), 'utf8')
+const FINGERPRINT_ACTION = '.github/actions/vcpkg-toolchain-fingerprint/action.yml'
+const VCPKG_VERSION_LINE = 'vcpkg package management program version 2026-10-01-fixture'
+const LARGE_VERSION_NOTES = 'Additional version output\n'.repeat(100000)
+const VCPKG_FAILURE_EXIT_CODE = 23
+
+function fingerprintVersionOutput(versionOutput, exitCode = 0) {
+  const source = readFileSync(join(ROOT, FINGERPRINT_ACTION), 'utf8').replaceAll('\r\n', '\n')
+  const body = source.split('      run: |\n')[1].split('\n    - if:')[0]
+    .split('\n').map((line) => line.slice(8)).join('\n')
+  const directory = mkdtempSync(join(tmpdir(), 'toolchain-fingerprint-'))
+  const output = join(directory, 'github-env')
+  const versionFile = join(directory, 'version-output')
+  try {
+    writeFileSync(output, '')
+    writeFileSync(versionFile, versionOutput)
+    writeFileSync(join(directory, 'vcpkg'), '#!/usr/bin/env bash\ncat "$VERSION_OUTPUT_FILE"\nexit "$VERSION_EXIT_CODE"\n', { mode: 0o755 })
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-c', body], {
+      encoding: 'utf8',
+      env: { ...process.env, RUNNER_OS: 'Linux', CC: process.execPath, VCPKG_ROOT: directory,
+        GITHUB_ENV: output, VERSION_OUTPUT_FILE: versionFile, VERSION_EXIT_CODE: String(exitCode) },
+    })
+    return { ...result, githubEnv: readFileSync(output, 'utf8') }
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+function expectedFingerprint() {
+  const digest = createHash('sha256').update(process.version + '\nvcpkg=' + VCPKG_VERSION_LINE).digest('hex')
+  return 'TOOLCHAIN_FINGERPRINT=' + digest.slice(0, 16) + '\n'
+}
+
+test('toolchain fingerprint uses the reported version line', () => {
+  const result = fingerprintVersionOutput(VCPKG_VERSION_LINE + '\n')
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.githubEnv, expectedFingerprint())
+})
+
+test('toolchain fingerprint consumes verbose version output without a broken pipe', () => {
+  const result = fingerprintVersionOutput(VCPKG_VERSION_LINE + '\n' + LARGE_VERSION_NOTES)
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.githubEnv, expectedFingerprint())
+})
+
+test('toolchain fingerprint rejects an empty version', () => {
+  const result = fingerprintVersionOutput('')
+  assert.equal(result.status, 1, result.stderr)
+  assert.equal(result.githubEnv, '')
+  assert.match(result.stdout, /printed nothing/)
+})
+
+test('toolchain fingerprint preserves version command failures', () => {
+  const result = fingerprintVersionOutput(VCPKG_VERSION_LINE + '\n', VCPKG_FAILURE_EXIT_CODE)
+  assert.equal(result.status, VCPKG_FAILURE_EXIT_CODE, result.stderr)
+  assert.equal(result.githubEnv, '')
+})
 
 function step(name) {
   const block = WORKFLOW.split('\n      - ').find((text) => text.startsWith(`name: ${name}\n`))
@@ -66,17 +123,25 @@ test('documented TTS dispatch exercises matrix flattening and override validatio
 
 test('AudioGen native build restores caches, limits builds and propagates failures', () => {
   const source = readFileSync(join(ROOT, '.github/workflows/cpp-test-coverage-audiogen-ggml.yml'), 'utf8')
-  assert.doesNotMatch(source, /fuzz-ready|needs.detect|fuzz:build|fuzz:run/)
+  assert.doesNotMatch(source, /fuzz-ready|needs.detect/)
   const manifest = JSON.parse(readFileSync(join(ROOT, 'packages/audiogen-ggml/package.json'), 'utf8'))
   assert.ok(manifest.scripts['build:native'])
+  assert.ok(manifest.scripts['fuzz:build'])
+  assert.ok(manifest.scripts['fuzz:run'])
   assert.match(source, /cppBuildJobs: 2/)
   assert.match(source, /hasCcache: true/)
   assert.match(source, /vcpkg-binary-cache-dir/)
   assert.match(source, /vcpkg-toolchain-fingerprint/)
   assert.match(source, /configure-cpp-build.mjs/)
   assert.match(source, /npm run build:native/)
+  assert.match(source, /npm install --ignore-scripts/)
   assert.match(source, /No addon-level C\+\+ tests yet/)
+  assert.match(source, /npm run fuzz:build/)
+  assert.match(source, /npm run fuzz:run/)
   assert.doesNotMatch(source, /continue-on-error/)
+  const saveCcache = source.indexOf('name: Save ccache (trusted contexts)')
+  const fuzzBuild = source.indexOf('name: Build fuzz targets')
+  assert.ok(saveCcache > 0 && fuzzBuild > saveCcache, 'fuzz reconfigure must follow the native cache save')
   const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c',
     'npm() { return 134; }\nnpm run build:native'], { encoding: 'utf8' })
   assert.equal(result.status, 134, result.stderr)

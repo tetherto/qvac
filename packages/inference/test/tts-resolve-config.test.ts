@@ -2,58 +2,61 @@ import test from 'brittle'
 import { ttsConfigSchema } from '@/schemas/text-to-speech'
 import { LegacyTtsModelDeprecatedError } from '@/errors/index'
 
+// TTS 0.14 groups resolved constructor state under _setup. These assertions
+// check the same model paths, synthesis controls and backend options as before.
 type TtsGgmlDebugModel = {
-  _streamChunkTokens?: number
-  _streamFirstChunkTokens?: number
-  _cfmSteps?: number
-  _cfgRate?: number
-  _threads?: number
-  _nGpuLayers?: number
-  _seed?: number
-  _mecabDictPath?: string
-  _cangjieTsvPath?: string
-  _enhancerGgufPath?: string
-  _denoiserGgufPath?: string
-  _parlerModelPath?: string
-  _description?: string
-  _voice?: string
-  _emotion?: string
-  _temperature?: number
-  _topK?: number
-  _topP?: number
-  _maxFrames?: number
-  _minNewTokens?: number
-  _normalizeNumbers?: boolean
-  _outputSampleRate?: number | null
-  _cosyvoiceModelDir?: string
-  _cosyvoiceLlmModelPath?: string
-  _instruct?: string
-  _pace?: string
-  _audio8LmPath?: string
-  _audio8CodecDecoderPath?: string
-  _audio8CodecEncoderPath?: string
-  _mossBackbonePath?: string
-  _mossCodecDecoderPath?: string
-  _mossCodecEncoderPath?: string
-  _dialogueReferences?: string[]
-  _durationTokens?: number
-  _referenceText?: string
-  _greedy?: boolean
-  _nCtx?: number
-  _kvCacheType?: string
-  _speed?: number
-  _steps?: number
-  _referenceAudio?: string
-  _promptText?: string
-  _cosyvoiceS3tokModelPath?: string
-  _cosyvoiceCampplusModelPath?: string
-  _config?: {
-    language?: string
-    useGPU?: boolean
-    outputSampleRate?: number
-    vulkanCacheDir?: string
-    backendsDir?: string
-    openclCacheDir?: string
+  _setup: {
+    config: import('@qvac/tts-ggml').TTSGgmlRuntimeConfig
+    outputSampleRate?: number | null
+    paths: {
+      mecabDictPath?: string
+      cangjieTsvPath?: string
+      parlerModelPath?: string
+      cosyvoiceModelDir?: string
+      cosyvoiceLlmModelPath?: string
+      audio8LmPath?: string
+      audio8CodecDecoderPath?: string
+      audio8CodecEncoderPath?: string
+      mossBackbonePath?: string
+      mossCodecDecoderPath?: string
+      mossCodecEncoderPath?: string
+      cosyvoiceS3tokModelPath?: string
+      cosyvoiceCampplusModelPath?: string
+    }
+    backend: {
+      enhancerGgufPath?: string
+      denoiserGgufPath?: string
+    }
+    settings: {
+      streamChunkTokens?: number
+      streamFirstChunkTokens?: number
+      cfmSteps?: number
+      cfgRate?: number
+      threads?: number
+      nGpuLayers?: number
+      seed?: number
+      description?: string
+      voice?: string
+      emotion?: string
+      temperature?: number
+      topK?: number
+      topP?: number
+      maxFrames?: number
+      minNewTokens?: number
+      normalizeNumbers?: boolean
+      instruct?: string
+      pace?: string
+      dialogueReferences?: string[]
+      durationTokens?: number
+      referenceText?: string
+      greedy?: boolean
+      nCtx?: number
+      kvCacheType?: string
+      speed?: number
+      steps?: number
+      referenceAudio?: string
+      promptText?: string
+    }
   }
   getEngineType?: () => string
 }
@@ -108,15 +111,15 @@ test('ttsPlugin createModel: forwards Chatterbox native constructor options', as
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
-  t.is(model._streamChunkTokens, 25)
-  t.is(model._streamFirstChunkTokens, 10)
-  t.is(model._cfmSteps, 1)
-  t.is(model._cfgRate, 0.7)
-  t.is(model._threads, 8)
-  t.is(model._nGpuLayers, 99)
-  t.is(model._seed, 42)
-  t.alike(model._config, { language: 'en', useGPU: true })
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.streamChunkTokens, 25)
+  t.is(model._setup.settings.streamFirstChunkTokens, 10)
+  t.is(model._setup.settings.cfmSteps, 1)
+  t.is(model._setup.settings.cfgRate, 0.7)
+  t.is(model._setup.settings.threads, 8)
+  t.is(model._setup.settings.nGpuLayers, 99)
+  t.is(model._setup.settings.seed, 42)
+  t.alike(model._setup.config, { language: 'en', useGPU: true })
 })
 
 test('ttsPlugin resolveConfig: keeps Parler config runtime-only', async (t) => {
@@ -166,24 +169,24 @@ test('ttsPlugin createModel: wires the full Parler constructor surface', async (
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
+  const model = result.model as unknown as TtsGgmlDebugModel
   t.is(model.getEngineType?.(), 'parler')
-  t.is(model._parlerModelPath, '/tmp/parler-mini-v1-q8_0.gguf')
-  t.is(model._voice, 'Rohit')
-  t.is(model._emotion, 'happy')
-  t.is(model._temperature, 0.9)
-  t.is(model._topK, 40)
-  t.is(model._topP, 0.95)
-  t.is(model._maxFrames, 860)
-  t.is(model._minNewTokens, -1)
-  t.is(model._normalizeNumbers, false)
-  t.is(model._streamChunkTokens, 43)
-  t.is(model._streamFirstChunkTokens, 20)
-  t.is(model._threads, 2)
-  t.is(model._nGpuLayers, 99)
-  t.is(model._seed, 7)
-  t.is(model._outputSampleRate, 44100)
-  t.alike(model._config, { useGPU: true, outputSampleRate: 44100 })
+  t.is(model._setup.paths.parlerModelPath, '/tmp/parler-mini-v1-q8_0.gguf')
+  t.is(model._setup.settings.voice, 'Rohit')
+  t.is(model._setup.settings.emotion, 'happy')
+  t.is(model._setup.settings.temperature, 0.9)
+  t.is(model._setup.settings.topK, 40)
+  t.is(model._setup.settings.topP, 0.95)
+  t.is(model._setup.settings.maxFrames, 860)
+  t.is(model._setup.settings.minNewTokens, -1)
+  t.is(model._setup.settings.normalizeNumbers, false)
+  t.is(model._setup.settings.streamChunkTokens, 43)
+  t.is(model._setup.settings.streamFirstChunkTokens, 20)
+  t.is(model._setup.settings.threads, 2)
+  t.is(model._setup.settings.nGpuLayers, 99)
+  t.is(model._setup.settings.seed, 7)
+  t.is(model._setup.outputSampleRate, 44100)
+  t.alike(model._setup.config, { useGPU: true, outputSampleRate: 44100 })
 })
 
 test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets', async (t) => {
@@ -303,11 +306,11 @@ test('ttsPlugin createModel: forwards LavaSR files + outputSampleRate (supertoni
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
-  t.is(model._enhancerGgufPath, '/tmp/lavasr-enhancer.gguf')
-  t.is(model._denoiserGgufPath, '/tmp/lavasr-denoiser.gguf')
-  t.is(model._outputSampleRate, 48000)
-  t.alike(model._config, {
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.backend.enhancerGgufPath, '/tmp/lavasr-enhancer.gguf')
+  t.is(model._setup.backend.denoiserGgufPath, '/tmp/lavasr-denoiser.gguf')
+  t.is(model._setup.outputSampleRate, 48000)
+  t.alike(model._setup.config, {
     language: 'en',
     useGPU: false,
     outputSampleRate: 48000,
@@ -331,11 +334,11 @@ test('ttsPlugin createModel: forwards LavaSR enhancer (chatterbox)', async (t) =
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
-  t.is(model._enhancerGgufPath, '/tmp/lavasr-enhancer.gguf')
-  t.is(model._denoiserGgufPath, undefined)
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.backend.enhancerGgufPath, '/tmp/lavasr-enhancer.gguf')
+  t.is(model._setup.backend.denoiserGgufPath, undefined)
   // Chatterbox does not resample; outputSampleRate is never forwarded.
-  t.is(model._outputSampleRate ?? null, null)
+  t.is(model._setup.outputSampleRate ?? null, null)
 })
 
 test('ttsPlugin createModel: forwards Chatterbox multilingual tokenizer paths', async (t) => {
@@ -355,9 +358,9 @@ test('ttsPlugin createModel: forwards Chatterbox multilingual tokenizer paths', 
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
-  t.is(model._mecabDictPath, '/tmp/mecab-ipadic')
-  t.is(model._cangjieTsvPath, '/tmp/Cangjie5_TC.tsv')
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.paths.mecabDictPath, '/tmp/mecab-ipadic')
+  t.is(model._setup.paths.cangjieTsvPath, '/tmp/Cangjie5_TC.tsv')
 })
 
 test('ttsPlugin resolveConfig: resolves CosyVoice3 LavaSR artifacts and strips *Src', async (t) => {
@@ -403,21 +406,24 @@ test('ttsPlugin createModel: wires the CosyVoice3 constructor surface', async (t
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
+  const model = result.model as unknown as TtsGgmlDebugModel
   t.is(model.getEngineType?.(), 'cosyvoice3')
   // The companion set co-locates the model files, so the model dir is the
   // primary GGUF's containing directory.
-  t.is(model._cosyvoiceModelDir, '/tmp/qvac/sets/cosyvoice3')
-  t.is(model._cosyvoiceLlmModelPath, '/tmp/qvac/sets/cosyvoice3/cosyvoice3-llm-q8_0.gguf')
-  t.is(model._emotion, 'happy')
-  t.is(model._enhancerGgufPath, '/tmp/lavasr-enhancer.gguf')
-  t.is(model._streamChunkTokens, 25)
-  t.is(model._streamFirstChunkTokens, 10)
-  t.is(model._threads, 4)
-  t.is(model._nGpuLayers, 99)
-  t.is(model._seed, 42)
-  t.is(model._outputSampleRate, 24000)
-  t.alike(model._config, { useGPU: true, outputSampleRate: 24000 })
+  t.is(model._setup.paths.cosyvoiceModelDir, '/tmp/qvac/sets/cosyvoice3')
+  t.is(
+    model._setup.paths.cosyvoiceLlmModelPath,
+    '/tmp/qvac/sets/cosyvoice3/cosyvoice3-llm-q8_0.gguf'
+  )
+  t.is(model._setup.settings.emotion, 'happy')
+  t.is(model._setup.backend.enhancerGgufPath, '/tmp/lavasr-enhancer.gguf')
+  t.is(model._setup.settings.streamChunkTokens, 25)
+  t.is(model._setup.settings.streamFirstChunkTokens, 10)
+  t.is(model._setup.settings.threads, 4)
+  t.is(model._setup.settings.nGpuLayers, 99)
+  t.is(model._setup.settings.seed, 42)
+  t.is(model._setup.outputSampleRate, 24000)
+  t.alike(model._setup.config, { useGPU: true, outputSampleRate: 24000 })
 })
 
 test('ttsPlugin createModel: renders the CosyVoice3 structured instruct', async (t) => {
@@ -432,8 +438,8 @@ test('ttsPlugin createModel: renders the CosyVoice3 structured instruct', async 
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
-  t.is(model._instruct, '请用广东话表达。')
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.instruct, '请用广东话表达。')
 })
 
 test('ttsPlugin resolveConfig: resolves Audio8 component GGUFs and strips *Src', async (t) => {
@@ -503,21 +509,21 @@ test('ttsPlugin createModel: wires the Audio8 constructor surface', async (t) =>
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
+  const model = result.model as unknown as TtsGgmlDebugModel
   t.is(model.getEngineType?.(), 'audio8')
-  t.is(model._audio8LmPath, '/tmp/audio8-lm-q8_0.gguf')
-  t.is(model._audio8CodecDecoderPath, '/tmp/audio8-codec-decoder-q8_0.gguf')
-  t.is(model._audio8CodecEncoderPath, '/tmp/audio8-codec-encoder-q8_0.gguf')
-  t.is(model._referenceText, 'Exactly what the recording says.')
-  t.is(model._temperature, 0.7)
-  t.is(model._topK, 50)
-  t.is(model._topP, 0.9)
-  t.is(model._maxFrames, 430)
-  t.is(model._threads, 4)
-  t.is(model._nGpuLayers, 99)
-  t.is(model._seed, 42)
-  t.is(model._outputSampleRate, 44100)
-  t.alike(model._config, { useGPU: true, outputSampleRate: 44100 })
+  t.is(model._setup.paths.audio8LmPath, '/tmp/audio8-lm-q8_0.gguf')
+  t.is(model._setup.paths.audio8CodecDecoderPath, '/tmp/audio8-codec-decoder-q8_0.gguf')
+  t.is(model._setup.paths.audio8CodecEncoderPath, '/tmp/audio8-codec-encoder-q8_0.gguf')
+  t.is(model._setup.settings.referenceText, 'Exactly what the recording says.')
+  t.is(model._setup.settings.temperature, 0.7)
+  t.is(model._setup.settings.topK, 50)
+  t.is(model._setup.settings.topP, 0.9)
+  t.is(model._setup.settings.maxFrames, 430)
+  t.is(model._setup.settings.threads, 4)
+  t.is(model._setup.settings.nGpuLayers, 99)
+  t.is(model._setup.settings.seed, 42)
+  t.is(model._setup.outputSampleRate, 44100)
+  t.alike(model._setup.config, { useGPU: true, outputSampleRate: 44100 })
 })
 
 function stubResolve(resolved: string[]) {
@@ -613,19 +619,19 @@ test('ttsPlugin createModel: wires the MOSS constructor surface', async (t) => {
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
+  const model = result.model as unknown as TtsGgmlDebugModel
   t.is(model.getEngineType?.(), 'moss')
-  t.is(model._mossBackbonePath, '/tmp/moss-tts-delay-f16.gguf')
-  t.is(model._mossCodecDecoderPath, '/tmp/moss-codec-decoder-f16.gguf')
-  t.is(model._mossCodecEncoderPath, '/tmp/moss-codec-encoder-f16.gguf')
-  t.is(model._referenceAudio, '/tmp/speaker-24k.wav')
-  t.is(model._dialogueReferences, undefined)
-  t.is(model._durationTokens, 38)
-  t.is(model._streamChunkTokens, 25)
-  t.is(model._threads, 8)
-  t.is(model._nGpuLayers, 99)
-  t.is(model._seed, 7)
-  t.alike(model._config, { language: 'zh', useGPU: true, backendsDir: '/opt/backends' })
+  t.is(model._setup.paths.mossBackbonePath, '/tmp/moss-tts-delay-f16.gguf')
+  t.is(model._setup.paths.mossCodecDecoderPath, '/tmp/moss-codec-decoder-f16.gguf')
+  t.is(model._setup.paths.mossCodecEncoderPath, '/tmp/moss-codec-encoder-f16.gguf')
+  t.is(model._setup.settings.referenceAudio, '/tmp/speaker-24k.wav')
+  t.is(model._setup.settings.dialogueReferences, undefined)
+  t.is(model._setup.settings.durationTokens, 38)
+  t.is(model._setup.settings.streamChunkTokens, 25)
+  t.is(model._setup.settings.threads, 8)
+  t.is(model._setup.settings.nGpuLayers, 99)
+  t.is(model._setup.settings.seed, 7)
+  t.alike(model._setup.config, { language: 'zh', useGPU: true, backendsDir: '/opt/backends' })
 })
 
 test('ttsPlugin createModel: hands the MOSS-TTSD references to the addon in order', async (t) => {
@@ -643,11 +649,11 @@ test('ttsPlugin createModel: hands the MOSS-TTSD references to the addon in orde
     modelConfig: { ttsEngine: 'moss' }
   })
 
-  const model = result.model as TtsGgmlDebugModel
-  t.is(model._mossBackbonePath, '/tmp/moss-ttsd-f16.gguf')
-  t.alike(model._dialogueReferences, ['/tmp/alice.wav', '/tmp/bob.wav'])
-  t.is(model._referenceAudio, undefined)
-  t.is(model._config?.language, 'en', 'the SDK defaults the language hint like Chatterbox')
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.paths.mossBackbonePath, '/tmp/moss-ttsd-f16.gguf')
+  t.alike(model._setup.settings.dialogueReferences, ['/tmp/alice.wav', '/tmp/bob.wav'])
+  t.is(model._setup.settings.referenceAudio, undefined)
+  t.is(model._setup.config?.language, 'en', 'the SDK defaults the language hint like Chatterbox')
 })
 
 test('ttsPlugin createModel: MOSS without its codec decoder is an artifacts error', async (t) => {
@@ -686,16 +692,16 @@ test('ttsPlugin createModel: wires the Chatterbox options the addon gained', asy
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
+  const model = result.model as unknown as TtsGgmlDebugModel
   // `speed` is a top-level constructor option, not a `config` field.
-  t.is(model._speed, 1.25)
-  t.is(model._nCtx, 1000)
-  t.is(model._kvCacheType, 'q8_0')
-  t.is(model._outputSampleRate, 16000)
-  t.is(model._config?.language, 'en')
-  t.is(model._config?.outputSampleRate, 16000)
-  t.is(model._config?.backendsDir, '/opt/backends')
-  t.is(model._config?.openclCacheDir, '/cache/opencl')
+  t.is(model._setup.settings.speed, 1.25)
+  t.is(model._setup.settings.nCtx, 1000)
+  t.is(model._setup.settings.kvCacheType, 'q8_0')
+  t.is(model._setup.outputSampleRate, 16000)
+  t.is(model._setup.config?.language, 'en')
+  t.is(model._setup.config?.outputSampleRate, 16000)
+  t.is(model._setup.config?.backendsDir, '/opt/backends')
+  t.is(model._setup.config?.openclCacheDir, '/cache/opencl')
 })
 
 test('ttsPlugin createModel: wires the Supertonic options the addon honours', async (t) => {
@@ -716,13 +722,13 @@ test('ttsPlugin createModel: wires the Supertonic options the addon honours', as
     }
   })
 
-  const model = result.model as TtsGgmlDebugModel
-  t.is(model._pace, 'fast')
-  t.is(model._threads, 4)
-  t.is(model._nGpuLayers, 99)
-  t.is(model._seed, 7)
-  t.is(model._config?.backendsDir, '/opt/backends')
-  t.is(model._config?.useGPU, true, 'nGpuLayers alone states GPU intent')
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.pace, 'fast')
+  t.is(model._setup.settings.threads, 4)
+  t.is(model._setup.settings.nGpuLayers, 99)
+  t.is(model._setup.settings.seed, 7)
+  t.is(model._setup.config?.backendsDir, '/opt/backends')
+  t.is(model._setup.config?.useGPU, true, 'nGpuLayers alone states GPU intent')
 })
 
 test('ttsPlugin createModel: derives the Supertonic useGPU default from nGpuLayers', async (t) => {
@@ -748,8 +754,8 @@ test('ttsPlugin createModel: derives the Supertonic useGPU default from nGpuLaye
         ...(nGpuLayers !== undefined ? { nGpuLayers } : {})
       }
     })
-    const model = result.model as TtsGgmlDebugModel
-    t.is(model._config?.useGPU, expected, `nGpuLayers ${String(nGpuLayers)}`)
+    const model = result.model as unknown as TtsGgmlDebugModel
+    t.is(model._setup.config?.useGPU, expected, `nGpuLayers ${String(nGpuLayers)}`)
   }
 })
 
@@ -793,10 +799,10 @@ test('ttsPlugin createModel: forwards the Parler LavaSR files', async (t) => {
     modelConfig: { ttsEngine: 'parler' }
   })
 
-  const model = result.model as TtsGgmlDebugModel
+  const model = result.model as unknown as TtsGgmlDebugModel
   t.is(model.getEngineType?.(), 'parler')
-  t.is(model._enhancerGgufPath, '/tmp/enhancer.gguf')
-  t.is(model._denoiserGgufPath, '/tmp/denoiser.gguf')
+  t.is(model._setup.backend.enhancerGgufPath, '/tmp/enhancer.gguf')
+  t.is(model._setup.backend.denoiserGgufPath, '/tmp/denoiser.gguf')
 })
 
 test('ttsPlugin resolveConfig: resolves the CosyVoice3 cloning artifacts', async (t) => {
@@ -845,12 +851,12 @@ test('ttsPlugin createModel: wires CosyVoice3 voice cloning', async (t) => {
     modelConfig: { ttsEngine: 'cosyvoice3', promptText: 'the verbatim transcript' }
   })
 
-  const model = result.model as TtsGgmlDebugModel
+  const model = result.model as unknown as TtsGgmlDebugModel
   t.is(model.getEngineType?.(), 'cosyvoice3')
-  t.is(model._referenceAudio, '/tmp/reference.wav')
-  t.is(model._promptText, 'the verbatim transcript')
+  t.is(model._setup.settings.referenceAudio, '/tmp/reference.wav')
+  t.is(model._setup.settings.promptText, 'the verbatim transcript')
   // Explicit paths, not name-prefix discovery: the cloning GGUFs are separate
   // registry artifacts and do not land in the model directory.
-  t.is(model._cosyvoiceS3tokModelPath, '/tmp/s3tok.gguf')
-  t.is(model._cosyvoiceCampplusModelPath, '/tmp/campplus.gguf')
+  t.is(model._setup.paths.cosyvoiceS3tokModelPath, '/tmp/s3tok.gguf')
+  t.is(model._setup.paths.cosyvoiceCampplusModelPath, '/tmp/campplus.gguf')
 })

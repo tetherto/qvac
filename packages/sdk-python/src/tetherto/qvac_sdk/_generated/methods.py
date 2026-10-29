@@ -37,6 +37,8 @@ from . import (
     CompletionOrchestrateResponse,
     CompletionStreamRequest,
     CompletionStreamResponse,
+    DecideRequest,
+    DecideResponse,
     DeleteCacheRequest,
     DeleteCacheResponse,
     DiffusionStreamRequest,
@@ -78,6 +80,8 @@ from . import (
     RagProgressResponse,
     RagRequest,
     RagResponse,
+    RerankRequest,
+    RerankResponse,
     ResumeRequest,
     ResumeResponse,
     StartRpcServerRequest,
@@ -195,6 +199,11 @@ async def completion_stream(
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield CompletionStreamResponse.model_validate(chunk)
+
+
+async def decide(transport: Transport, params: DecideRequest) -> DecideResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return DecideResponse.model_validate(await transport.call(payload))
 
 
 async def delete_cache(
@@ -396,6 +405,11 @@ async def rag_with_progress(
             yield RagResponse.model_validate(chunk)
 
 
+async def rerank(transport: Transport, params: RerankRequest) -> RerankResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return RerankResponse.model_validate(await transport.call(payload))
+
+
 async def resume(transport: Transport, params: ResumeRequest) -> ResumeResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return ResumeResponse.model_validate(await transport.call(payload))
@@ -523,6 +537,7 @@ __all__ = [
     "classify",
     "completion_orchestrate",
     "completion_stream",
+    "decide",
     "delete_cache",
     "diffusion_stream",
     "discover_rpc_servers",
@@ -546,6 +561,7 @@ __all__ = [
     "plugin_invoke_stream",
     "rag",
     "rag_with_progress",
+    "rerank",
     "resume",
     "start_rpc_server",
     "state",

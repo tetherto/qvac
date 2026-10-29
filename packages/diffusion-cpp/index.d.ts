@@ -69,6 +69,7 @@ export interface DiffusionFiles {
     clipG?: string;
     t5Xxl?: string;
     llm?: string;
+    llmVision?: string;
     vae?: string;
     esrgan?: string;
     highNoiseDiffusionModel?: string;
@@ -123,6 +124,10 @@ export interface GenerationParams {
     sampling_method?: SamplerMethod;
     sampler?: SamplerMethod;
     scheduler?: ScheduleType;
+    /** Strictly decreasing finite non-negative sigmas ending in zero.
+     * Overrides scheduler and steps; the step count is array length minus one.
+     */
+    custom_sigmas?: number[];
     seed?: number;
     batch_count?: number;
     vae_tiling?: boolean;
