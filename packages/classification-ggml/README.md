@@ -186,9 +186,9 @@ to populate `test/mobile/testAssets/` (driven by `scripts/copy-mobile-test-asset
 | iOS arm64           | ✅   |                  |
 
 
-All platforms are produced by the shared `reusable-prebuilds.yml`
-matrix and merged into a single `prebuilds` artifact for downstream
-consumption. GPU (Vulkan / Metal / CUDA) is not currently supported.
+All platforms are built by the CI contract's `_build.yml`, one job per
+`build` configuration in `project.json`, and merged into a single
+`prebuilds-classification-ggml` bundle for downstream consumption. GPU (Vulkan / Metal / CUDA) is not currently supported.
 
 ## Performance
 

@@ -13,7 +13,7 @@ Secret-bearing CI on **external fork PRs** is gated by the GitHub Actions **`for
 | | |
 |---|---|
 | **Mechanism** | The `fork-approval` job in each privileged `pull_request_target` workflow pauses until a member of `@tetherto/qvac-internal-merge` or `@tetherto/qvac-internal-release` approves the run in the GitHub Actions UI. |
-| **Per-commit** | Each new push starts a fresh workflow run that must be re-approved. After approval, the run records a `qvac/fork-verified` commit status on the PR head SHA (used by unprivileged `pull_request` self-hosted jobs such as `pr-test-inference-addon-cpp*`). |
+| **Per-commit** | Each new push starts a fresh workflow run that must be re-approved. After approval, the run records a `qvac/fork-verified` commit status on the PR head SHA (read by unprivileged `pull_request` jobs before they run fork code). |
 | **Internal PRs** | Same-repo PRs skip the environment gate (empty environment) and run without an approval prompt. |
 | **Implementation** | `fork-approval` job calls [`.github/workflows/reusable-fork-approval.yml`](../../.github/workflows/reusable-fork-approval.yml) from each privileged workflow. The `authorize` / `resolve-config` job runs **after** `fork-approval`, checks out `authorize-pr` from the **default branch only**, and `authorize-pr` reads the `qvac/fork-verified` status on the current head SHA as belt-and-suspenders. |
 | **Ops verification** | Run `node .github/scripts/verify-fork-ci-environment.mjs` (requires `gh` auth with environments read) to confirm required reviewers are configured on the `fork-ci` environment. |
@@ -25,7 +25,7 @@ There is **no self-service path** for external contributors — a merge/release 
 Two different workflow families react to a fork PR, and only one of them waits for you:
 
 - **`pull_request_target`** workflows (`on-pr-*`) contain the `fork-approval` job. They pause on the `fork-ci` environment and resume the moment you approve.
-- **`pull_request`** workflows that run on self-hosted runners (`pr-test-inference-addon-cpp*`) never see the environment prompt. Their `authorize` job reads the `qvac/fork-verified` commit status at run time, and that status does not exist until `fork-approval` has been approved.
+- **`pull_request`** workflows that run on self-hosted runners never see the environment prompt. Their trust check reads the `qvac/fork-verified` commit status at run time, and that status does not exist until `fork-approval` has been approved.
 
 Writing a commit status is not a `pull_request` event, so approving `fork-ci` does **not** wake up a `pull_request` run that already finished. If you apply `run-cpp-addon-tests` first and approve second, the native tests report skipped and stay skipped — the PR looks green without ever having run them.
 
@@ -61,7 +61,7 @@ The `verified` label is **no longer used to authorize CI**. It may still appear 
 | `test-e2e-rerun-failed` | Re-runs only the tests that failed on the last smoke/full run, on the platforms where they failed. | `on-pr-test-sdk.yml` | Self-clearing — removed as soon as the run consumes it, so it can be applied again for each attempt. See [Re-running failed SDK e2e tests](#re-running-failed-sdk-e2e-tests). |
 | `e2e-tested` | Set automatically once a **base** E2E run has completed against the PR. | E2E workflows | Status indicator only; does not pass/fail by itself — see linked run. A `test-e2e-rerun-failed` or `test-e2e-python` run never sets it: neither covers the whole matrix. |
 | `NLP` | Marks PRs touching `packages/llm-llamacpp/` or `packages/embed-llamacpp/`. | Routing in approval workflows | Casing matters: it's `NLP`, not `nlp`. |
-| `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`, `run-mobile-addon-tests` | Select expensive CI stages on addon PR workflows. | `ci-router` composite in `on-pr-*` workflows | External forks can use these after `fork-ci` approval; internal same-repo PRs skip the fork-ci gate. A package can opt its C++ tests out of the label by setting `cppTestsBaseline: true` on its `on-pr` target (`docs/ci/nx-ci-consolidation.md`); `on-pr-nx` then runs that lane on every PR that affects it, and `run-cpp-addon-tests` widens the run to every affected package. |
+| `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`, `run-mobile-addon-tests` | Select expensive CI stages on addon PR workflows. | `ci-route-stages` composite in `pr-build-test.yml` | External forks can use these after `fork-ci` approval; internal same-repo PRs skip the fork-ci gate. A package can opt its C++ tests out of the label with `metadata.baseline: true` on its `cpp:tests` target (`docs/ci/workflow-standard.md`); `pr-build-test.yml` then runs them on every PR that affects it, and `run-cpp-addon-tests` widens the run to every affected package. |
 
 > **`run-mobile-addon-tests` no longer starts a standalone mobile suite.** Per-addon
 > mobile (AWS Device Farm) tests are now **on-demand only** — run them from

@@ -1065,9 +1065,9 @@ only ever loads a platform package. `build:native:cuda` is the same chain with
 
 ### Test
 
-The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
-compiler cache, and two build workers. C++ test failures block the merge guard.
-See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+The C++ tests run through the CI contract's `cpp:build` and `cpp:tests` targets,
+with the shared vcpkg cache and two build workers. C++ test failures block the
+merge guard. See [the package CI contract](../../docs/ci/workflow-standard.md).
 for cache warming and resource settings.
 
 ```bash

@@ -131,7 +131,7 @@ bare-make generate --platform android --arch arm64 -D ANDROID_STL=c++_shared
 bare-make generate --platform ios --arch arm64
 ```
 
-CI: `.github/workflows/integration-mobile-test-inference-addon-cpp.yml` builds
-the `android-arm64` / `ios-arm64` prebuilds and runs the suite on Device Farm;
-`.github/workflows/on-pr-inference-addon-cpp.yml` gates it behind the `verified`
-+ `run-mobile-addon-tests` labels.
+CI: a `mobile-tests.yml` dispatch with `-f packages=inference-addon-cpp` runs
+`ci/prepare-mobile.mjs`, which generates the suite, builds and tests this addon on
+the Linux host (Android leg), builds the `android-arm64` / `ios-arm64` prebuild,
+and runs the suite on Device Farm. No pull request starts it.

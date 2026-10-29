@@ -146,9 +146,8 @@ Two consequences for fuzzing, both important:
   `.github/actions/setup-llvm` (the single source of truth for the LLVM major).
   libFuzzer ships with that clang, so no new compiler is required.
 - C++ tests run on self-hosted `qvac-*` runners, gated by the SHA-bound fork-CI
-  trust policy: through `cpp-tests-nx.yml` for packages on `on-pr-nx.yml`, and
-  through each package's `cpp:build`/`cpp:tests` targets in `_cpp-tests.yml` for
-  packages on the CI contract (e.g. `classification-ggml`).
+  trust policy, through each package's `cpp:build`/`cpp:tests` targets in
+  `_cpp-tests.yml` (e.g. `classification-ggml`).
 - Builds are CMake + vcpkg with existing `BUILD_TESTING` and `ENABLE_COVERAGE`
   options — a `BUILD_FUZZING` option added to `qvac_addon_preproject` follows the
   same established pattern, mapping a `fuzz` vcpkg manifest feature the way

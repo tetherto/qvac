@@ -23,8 +23,8 @@ Before changing a package's CI, check whether its `project.json` carries the
 - Tagged: change the package's own `project.json`, `ci/` directory or model manifest.
   Change a shared workflow or action only when most packages on the contract need it,
   and never add a package-specific condition to one. Use the `qv-ci-contract` skill.
-- Untagged: keep to the path it is on. `on-pr-nx.yml` reads the package's
-  `options.ci` in `project.json`; a carved-out package has its own `on-pr-<pkg>.yml`.
+- Untagged: keep to the workflows the package names itself, such as the SDK's
+  `pr-checks-sdk-pod.yml`.
 
 When editing workflows or composite actions:
 

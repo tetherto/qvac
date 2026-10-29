@@ -382,16 +382,17 @@ CI runs automatically on PR open/sync:
   `qvac-fabric` port — pick up the overlay at compile time when the PR updates
   that package's `vcpkg-configuration.json` (covered by the existing
   `packages/<pkg>/**` path filters).
-- **`packages/fabric`** builds `@qvac/fabric` prebuilds and publishes a
-  `fabric-prebuilds` artifact.
-- **npm-runtime consumers** (see `.github/fabric-consumers.json`) overlay that
-  artifact into `node_modules/@qvac/fabric` before `bare-make generate`, and the
-  `overlay-local-fabric` action then links the overlaid host builds as
-  `node_modules/@qvac/fabric/node_modules/@qvac/fabric-<suffix>`
-  (`slice-platform-packages.mjs --link-local`, as `npm run link:platform` does).
-  `#host-addon` and `qvac_addon_fabric_layout()` both resolve from fabric's real
-  path, so headers, link and runtime all match the unreleased engine instead of
-  the released platform package npm installed. No dev npm publish is required.
+- **`packages/fabric`** is a provider on the CI contract: a run that builds any
+  package depending on its `link:platform` builds fabric first, once per
+  configuration, and uploads `prebuild-fabric-<configuration>`.
+- **npm-runtime consumers** (every package whose targets depend on
+  `@qvac/fabric`'s `link:platform`) restore that artifact into the workspace
+  fabric and run its `link:platform`, which links the host builds as
+  `packages/fabric/node_modules/@qvac/fabric-<suffix>`
+  (`slice-platform-packages.mjs --link-local`). `#host-addon` and
+  `qvac_addon_fabric_layout()` both resolve from fabric's real path, so headers,
+  link and runtime all match the engine in the pull request. No dev npm publish
+  is required.
 
 Author checklist:
 
@@ -399,7 +400,7 @@ Author checklist:
 |------|--------|
 | Overlay | Keep `vcpkg-overlays/ports/qvac-fabric/portfile.cmake` REF in sync with the `qvac-fabric-llm.cpp` branch under test |
 | Lockstep | Run `verify-qvac-fabric-lockstep` — every `packages/*/vcpkg.json` that still lists `qvac-fabric` must satisfy `version>=` |
-| Combined PR | When changing consumer code *and* fabric APIs, ensure both `on-pr-fabric` and the consumer `on-pr-*` workflow run. The `vcpkg-configuration.json` edit is the trigger — it sits under the consumer's own `packages/<pkg>/**` path filter, whereas a change confined to `vcpkg-overlays/` starts nothing |
-| Manifest | When a package migrates to `@qvac/fabric`, add it to `npm_runtime` in `.github/fabric-consumers.json` — that list drives the consumer smoke matrix |
+| Combined PR | A fabric change selects its dependents through Nx, and their build legs in the same `PR build and test` run compile against the new fabric. A change confined to `vcpkg-overlays/` selects no package |
+| Consumers | When a package migrates to `@qvac/fabric`, depend on `@qvac/fabric`'s `link:platform` from its `build`, `cpp:lint` and `cpp:build` targets, and keep its ranges on fabric and `@qvac/fabric-<host>` within fabric's workspace version (`pr-checks.yml` fails otherwise) |
 
 See `docs/architecture/qips/fabric-stack-ci.md` for the full CI design.
