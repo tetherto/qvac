@@ -22,6 +22,8 @@ export interface ModelEntry {
   createdAt: number
   error: string | null
   sdkModelId: string | null
+  /** Bumped on every load. The SDK id is a config hash, so it survives a reload. */
+  loadCount: number
 }
 
 export interface ModelRegistry {
@@ -73,7 +75,8 @@ export function createModelRegistry(): ModelRegistry {
       state: STATES.IDLE,
       createdAt: Date.now(),
       error: null,
-      sdkModelId: null
+      sdkModelId: null,
+      loadCount: 0
     }
     models.set(alias, entry)
     return entry
@@ -92,6 +95,7 @@ export function createModelRegistry(): ModelRegistry {
     if (entry) {
       entry.state = STATES.READY
       entry.error = null
+      entry.loadCount += 1
       if (sdkModelId) entry.sdkModelId = sdkModelId
     }
   }

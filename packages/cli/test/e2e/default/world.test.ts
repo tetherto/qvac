@@ -144,9 +144,13 @@ function fakeStep(frames: Uint8Array[], stats = { stepMs: 5, totalSteps: 1 }): W
 }
 
 describe('qvac world: scenes and steps against a stubbed SDK', () => {
+  let loads = 0
   const server = useServer({
     config: STUB_CONFIG,
-    loadModelOverride: () => Promise.resolve('sdk-world')
+    loadModelOverride: () => {
+      loads++
+      return Promise.resolve('sdk-world')
+    }
   })
 
   function state() {
@@ -260,5 +264,66 @@ describe('qvac world: scenes and steps against a stubbed SDK', () => {
       )) as never
     const res = await server().inject({ method: 'POST', url: SCENES, payload: SCENE })
     assertStatusAndError(res, 400, 'invalid_scene')
+  })
+  it('retires a scene when its model unloads, without loading it again', async () => {
+    stubScene()
+    state().worldStepOverride = () => fakeStep([tinyPng()])
+    const scene = await createScene()
+    const { registry } = server().qvac
+
+    registry.markUnloaded('world')
+    const before = loads
+    assertStatusAndError(
+      await server().inject({ method: 'POST', url: `${SCENES}/${scene.id}/steps`, payload: {} }),
+      409,
+      'scene_replaced'
+    )
+    assert.equal(loads, before)
+
+    // The SDK id is a config hash, so a reload hands back the same one.
+    registry.setLoading('world')
+    registry.setReady('world', 'sdk-world')
+    const res = await server().inject({ method: 'GET', url: `${SCENES}/${scene.id}` })
+    assert.equal((res.json() as { status: string }).status, 'replaced')
+    assertStatusAndError(
+      await server().inject({ method: 'POST', url: `${SCENES}/${scene.id}/steps`, payload: {} }),
+      409,
+      'scene_replaced'
+    )
+  })
+
+  it('ends the stream with an error event when a block fails after a frame', async () => {
+    stubScene()
+    const failure = new Error('native session died')
+    state().worldStepOverride = () => {
+      const run = fakeStep([])
+      const frames = Promise.reject(failure)
+      const stats = Promise.reject(failure)
+      stats.catch(() => undefined)
+      return {
+        ...run,
+        frameStream: (async function* () {
+          yield tinyPng()
+          throw failure
+        })(),
+        frames,
+        stats
+      }
+    }
+    const scene = await createScene()
+
+    const res = await server().inject({
+      method: 'POST',
+      url: `${SCENES}/${scene.id}/steps`,
+      payload: { stream: true }
+    })
+    assert.equal(res.statusCode, 200)
+    const events = collectSSE(res.body)
+    assert.equal((events[0]!.data as { type: string }).type, 'world.step.frame')
+    assert.deepEqual(
+      (events.at(-1)!.data as { error: { code: string } }).error.code,
+      'internal_error'
+    )
+    assert.ok(!events.some((e) => e.data === '[DONE]'))
   })
 })

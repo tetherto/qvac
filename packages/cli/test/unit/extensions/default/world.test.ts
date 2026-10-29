@@ -81,28 +81,28 @@ describe('WORLD_FIELD_CODES', () => {
 describe('createWorldScenesStore', () => {
   it('keeps one active scene per model', () => {
     const store = createWorldScenesStore()
-    const first = store.add({ alias: 'world', sdkModelId: 'm1' })
-    const other = store.add({ alias: 'world-2', sdkModelId: 'm2' })
-    assert.equal(store.isActive(first, 'm1'), true)
+    const first = store.add({ alias: 'world', loadCount: 1 })
+    const other = store.add({ alias: 'world-2', loadCount: 1 })
+    assert.equal(store.isActive(first, 1), true)
 
-    const second = store.add({ alias: 'world', sdkModelId: 'm1' })
-    assert.equal(store.isActive(first, 'm1'), false)
-    assert.equal(store.isActive(second, 'm1'), true)
-    assert.equal(store.isActive(other, 'm2'), true)
+    const second = store.add({ alias: 'world', loadCount: 1 })
+    assert.equal(store.isActive(first, 1), false)
+    assert.equal(store.isActive(second, 1), true)
+    assert.equal(store.isActive(other, 1), true)
   })
 
-  it('treats a reloaded model as having lost its scene', () => {
+  it('treats a reloaded or unloaded model as having lost its scene', () => {
     const store = createWorldScenesStore()
-    const scene = store.add({ alias: 'world', sdkModelId: 'm1' })
-    assert.equal(store.isActive(scene, 'm1-reloaded'), false)
+    const scene = store.add({ alias: 'world', loadCount: 1 })
+    assert.equal(store.isActive(scene, 2), false)
     assert.equal(store.isActive(scene, undefined), false)
   })
 
   it('evicts the oldest retired ids and never a live one', () => {
     const store = createWorldScenesStore(2)
-    const live = store.add({ alias: 'a', sdkModelId: 'ma' })
-    const retired = store.add({ alias: 'b', sdkModelId: 'mb' })
-    const latest = store.add({ alias: 'b', sdkModelId: 'mb' })
+    const live = store.add({ alias: 'a', loadCount: 1 })
+    const retired = store.add({ alias: 'b', loadCount: 1 })
+    const latest = store.add({ alias: 'b', loadCount: 1 })
 
     assert.equal(store.get(retired.id), undefined)
     assert.equal(store.get(live.id), live)

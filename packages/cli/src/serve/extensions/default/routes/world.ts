@@ -1,10 +1,11 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
-import type { FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import {
   RequestValidationFailedError,
   SDK_SERVER_ERROR_CODES,
   worldCreateScene,
   worldStep,
+  type WorldStepResult,
   type WorldStepStats
 } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
@@ -75,9 +76,14 @@ A block is 9 frames after the model loads and 12 after that at the default
 \`world.frameJpegQuality\`. One block runs at a time per model: send the next step
 after the previous one returns.
 
+A failed or cancelled block ends the walk: the next step restarts it from the
+scene's first frame.
+
 With \`stream: true\` the response is server-sent events: one
 \`world.step.frame\` event per frame as it is decoded, then \`world.step.completed\`
-with the block's stats, then \`[DONE]\`. A client disconnect cancels the block.
+with the block's stats, then \`[DONE]\`. A block that fails after its first frame
+ends the stream with an \`error\` event and no \`[DONE]\`. A client disconnect
+cancels the block.
 `.trim()
 
 // lunte-disable-next-line require-await
@@ -137,7 +143,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     async (req, reply) => {
       const { prompt, width, height, returnPack } = req.body
-      const { sdkModelId, alias } = req.qvacModel!
+      const { sdkModelId, alias, entry } = req.qvacModel!
       const state = defaultState(app.qvac)
       const bytes = image.get(req)
 
@@ -164,7 +170,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       const scene = state.worldScenes.add({
         alias,
-        sdkModelId,
+        loadCount: entry.loadCount,
         ...(stats?.width !== undefined ? { width: stats.width } : {}),
         ...(stats?.height !== undefined ? { height: stats.height } : {}),
         ...(stats?.sceneCreateMs !== undefined ? { sceneCreateMs: stats.sceneCreateMs } : {})
@@ -197,12 +203,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     // lunte-disable-next-line require-await
     async (req) => {
       const scene = findScene(req, req.params.id)
-      const entry = app.qvac.registry.getEntry(scene.alias)
-      const live = defaultState(app.qvac).worldScenes.isActive(
-        scene,
-        entry?.state === app.qvac.registry.STATES.READY ? (entry.sdkModelId ?? entry.id) : undefined
-      )
-      return sceneResource(scene, live ? 'active' : 'replaced')
+      return sceneResource(scene, isLive(req, scene) ? 'active' : 'replaced')
     }
   )
 
@@ -237,15 +238,12 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     async (req, reply) => {
       const scene = findScene(req, req.params.id)
+      // Checked before the load so a stale id never pays for one, and again after
+      // in case the model reloaded while this request waited.
+      assertLive(req, scene)
       const { sdkModelId } = await resolveAndCheckModel(req, reply, scene.alias, 'world')
+      assertLive(req, scene)
       const state = defaultState(app.qvac)
-      if (!state.worldScenes.isActive(scene, sdkModelId)) {
-        throw new HttpError(
-          409,
-          'scene_replaced',
-          `Scene "${scene.id}" is no longer live on model "${scene.alias}". Create a new scene.`
-        )
-      }
 
       const keys = req.body.keys ?? []
       app.qvac.logger.info(`  world_step scene=${scene.id} keys=${keys.join('+') || 'idle'}`)
@@ -256,36 +254,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       bindClientDisconnectCancel(reply.raw, run.requestId, app.qvac.logger, state.cancelOverride)
 
       if (req.body.stream === true) {
-        // Frames arrive on frameStream; the aggregate rejects with the same error.
-        run.frames.catch(() => undefined)
-        let format: 'png' | 'jpeg' | undefined
-        let index = 0
-        try {
-          for await (const frame of run.frameStream) {
-            if (index === 0) {
-              initSSE(reply)
-              format = frameFormat(frame)
-            }
-            sendSSE(reply.raw, {
-              type: 'world.step.frame',
-              scene_id: scene.id,
-              index: index++,
-              output_format: format,
-              b64_json: Buffer.from(frame).toString('base64')
-            })
-          }
-        } catch (err) {
-          rethrow(err)
-        }
-        const stats = await run.stats.catch(rethrow)
-        if (index === 0) initSSE(reply)
-        sendSSE(reply.raw, {
-          type: 'world.step.completed',
-          scene_id: scene.id,
-          frames: index,
-          stats: stepStats(stats)
-        })
-        endSSE(reply.raw)
+        await streamStep(req, reply, scene, run)
         return reply
       }
 
@@ -300,6 +269,73 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
     }
   )
+}
+
+async function streamStep(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  scene: WorldSceneRecord,
+  run: WorldStepResult
+): Promise<void> {
+  // Frames arrive on frameStream; the aggregate rejects with the same error.
+  run.frames.catch(() => undefined)
+  const frames = run.frameStream[Symbol.asyncIterator]()
+
+  // Waiting for the first frame before opening the stream lets a failure there,
+  // such as a busy model, come back as a JSON error.
+  const first = await frames.next().catch(rethrow)
+
+  initSSE(reply)
+  const raw = reply.raw
+  const format = first.done === true ? undefined : frameFormat(first.value)
+  let index = 0
+
+  // Fastify drops errors thrown after hijack, so a failure here has to end
+  // the stream itself or the client would hang.
+  try {
+    for (let next = first; next.done !== true; next = await frames.next()) {
+      sendSSE(raw, {
+        type: 'world.step.frame',
+        scene_id: scene.id,
+        index: index++,
+        output_format: format,
+        b64_json: Buffer.from(next.value).toString('base64')
+      })
+    }
+    const stats = await run.stats
+    sendSSE(raw, {
+      type: 'world.step.completed',
+      scene_id: scene.id,
+      frames: index,
+      stats: stepStats(stats)
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    req.server.qvac.logger.error(`  world_step stream failed scene=${scene.id}: ${message}`)
+    sendSSE(raw, {
+      error: { message: 'World step failed.', type: 'server_error', code: 'internal_error' }
+    })
+    endSSE(raw, { sentinel: false })
+    return
+  }
+  endSSE(raw)
+}
+
+function isLive(req: FastifyRequest, scene: WorldSceneRecord): boolean {
+  const { registry } = req.server.qvac
+  const entry = registry.getEntry(scene.alias)
+  const loadCount = entry?.state === registry.STATES.READY ? entry.loadCount : undefined
+  return defaultState(req.server.qvac).worldScenes.isActive(scene, loadCount)
+}
+
+function assertLive(req: FastifyRequest, scene: WorldSceneRecord): void {
+  if (!isLive(req, scene)) {
+    throw new HttpError(
+      409,
+      'scene_replaced',
+      `Scene "${scene.id}" is no longer live on model "${scene.alias}". Create a new scene.`
+    )
+  }
 }
 
 function findScene(req: FastifyRequest, id: string): WorldSceneRecord {

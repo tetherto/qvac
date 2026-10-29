@@ -892,14 +892,14 @@ too. Scene ids are kept in memory and are lost on restart.
 Create a scene from a prompt and a first frame. Send JSON or `multipart/form-data`; `image`
 takes any of the [binary input](#binary-inputs) forms.
 
-| Field        | Type         | Required | Meaning                                                                      |
-| ------------ | ------------ | -------- | ---------------------------------------------------------------------------- |
-| `model`      | `string`     | Yes      | A `serve.models` alias with endpoint category `world`                        |
-| `prompt`     | `string`     | Yes      | Scene prompt, encoded verbatim                                               |
-| `image`      | binary input | Yes      | First frame, PNG or JPEG up to 3 MB, cover-scaled and cropped to the scene   |
-| `width`      | `integer`    | No       | Multiple of 32 up to 4096 (default 832); `width` x `height` ≤ 1920x1088      |
-| `height`     | `integer`    | No       | Multiple of 32 up to 4096 (default 480)                                      |
-| `returnPack` | `boolean`    | No       | Return the 10+ MB scene pack base64 in `pack`, to reuse as `config.sceneSrc` |
+| Field        | Type         | Required | Meaning                                                                    |
+| ------------ | ------------ | -------- | -------------------------------------------------------------------------- |
+| `model`      | `string`     | Yes      | A `serve.models` alias with endpoint category `world`                      |
+| `prompt`     | `string`     | Yes      | Scene prompt, encoded verbatim                                             |
+| `image`      | binary input | Yes      | First frame, PNG or JPEG up to 3 MB, cover-scaled and cropped to the scene |
+| `width`      | `integer`    | No       | Multiple of 32 up to 4096 (default 832); `width` x `height` ≤ 1920x1088    |
+| `height`     | `integer`    | No       | Multiple of 32 up to 4096 (default 480)                                    |
+| `returnPack` | `boolean`    | No       | Return the 10+ MB scene pack base64 in `pack`                              |
 
 It answers `201`:
 
@@ -935,7 +935,8 @@ Generate the next block of frames.
 A block is 9 frames after the model loads and 12 after that at the default
 `world.numFramePerBlock`. Frames are PNG, or JPEG when the model sets
 `world.frameJpegQuality`. One block runs at a time per model; send the next step after the
-previous one returns.
+previous one returns. A failed or cancelled block ends the walk: the next step
+restarts it from the scene's first frame.
 
 ```json
 {
@@ -949,7 +950,8 @@ previous one returns.
 
 With `stream: true` the response is server-sent events: one `world.step.frame` event per frame
 (`index`, `output_format`, `b64_json`), then `world.step.completed` with `frames` and `stats`,
-then `[DONE]`. A client disconnect cancels the block.
+then `[DONE]`. A block that fails after its first frame ends the stream with an `error`
+event and no `[DONE]`. A client disconnect cancels the block.
 
 ```bash
 curl -sS http://localhost:11434/qvac/v1/world/scenes \

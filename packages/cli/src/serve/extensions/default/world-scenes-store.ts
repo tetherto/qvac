@@ -5,8 +5,8 @@ const DEFAULT_MAX_ENTRIES = 256
 export interface WorldSceneRecord {
   id: string
   alias: string
-  /** The load the scene lives on; a reload drops it. */
-  sdkModelId: string
+  /** The model load the scene lives on; a reload drops it. */
+  loadCount: number
   created: number
   width?: number
   height?: number
@@ -18,7 +18,7 @@ export interface WorldScenesStore {
   add(scene: Omit<WorldSceneRecord, 'id' | 'created'>): WorldSceneRecord
   get(id: string): WorldSceneRecord | undefined
   /** The model holds one live scene, so creating one retires the alias's older ids. */
-  isActive(scene: WorldSceneRecord, sdkModelId: string | undefined): boolean
+  isActive(scene: WorldSceneRecord, loadCount: number | undefined): boolean
 }
 
 export function createWorldScenesStore(maxEntries = DEFAULT_MAX_ENTRIES): WorldScenesStore {
@@ -46,8 +46,8 @@ export function createWorldScenesStore(maxEntries = DEFAULT_MAX_ENTRIES): WorldS
     get(id) {
       return scenes.get(id)
     },
-    isActive(scene, sdkModelId) {
-      return active.get(scene.alias) === scene.id && scene.sdkModelId === sdkModelId
+    isActive(scene, loadCount) {
+      return active.get(scene.alias) === scene.id && scene.loadCount === loadCount
     }
   }
 }

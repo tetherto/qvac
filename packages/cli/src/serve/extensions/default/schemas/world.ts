@@ -42,10 +42,7 @@ export const worldSceneBody = z
     height: sceneDimension('height', 480),
     returnPack: formBoolean()
       .optional()
-      .describe(
-        'Return the scene pack (10+ MB) base64 in `pack`. Pass a saved pack back as ' +
-          '`config.sceneSrc` on the model to walk the same world after a restart. Default false.'
-      )
+      .describe('Return the scene pack (10+ MB) base64 in `pack`. Default false.')
   })
   .superRefine((body, ctx) => {
     if (body.width === undefined || body.height === undefined) return
