@@ -14,6 +14,15 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- Parakeet backend selection through `parakeetConfig.backend` and `assessFit`.
+- Native speaker-attributed batch transcription with a separate diarization
+  model and merge, minimum-duration and padding options.
+- Parakeet streaming token IDs, finality, chunk indices and native end-of-turn
+  timing and confidence, including empty final markers. Transcript chunks are
+  delivered before their end-of-turn event in framework and duplex streaming.
+
 ### Changed
 
 - Update the shared `speech-cpp` native dependency to `2026-10-28`

@@ -57,6 +57,7 @@ import {
   type ParakeetConfig,
   type ParakeetEngineConfig,
   type ParakeetStreamingRunConfig,
+  type ParakeetSpeakerAttributionConfig as ParakeetSpeakerAttributionConfigShape,
 } from "./engines/parakeet/driver";
 import {
   ENGINE_MOSS_TRANSCRIBE,
@@ -639,6 +640,7 @@ namespace ASRGgml {
   export import BackendId = BackendIdEnum;
 
   export const assessFit = assessFitImpl;
+  export type ParakeetSpeakerAttributionConfig = ParakeetSpeakerAttributionConfigShape;
 }
 
 export = ASRGgml;
