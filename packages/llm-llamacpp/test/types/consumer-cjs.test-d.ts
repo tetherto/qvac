@@ -94,6 +94,7 @@ const runOptions: LlmLlamacpp.RunOptions = {
   prefill: false,
   generationParams,
   cacheKey: "k",
+  baseCacheKey: "base",
   ephemeral: false,
   rejectWhenBusy: true,
 };
@@ -102,6 +103,10 @@ void runOptions;
 // @ts-expect-error - saveCacheToDisk was removed; use saveCache(cacheKey)
 const removedSave: LlmLlamacpp.RunOptions = { saveCacheToDisk: true };
 void removedSave;
+
+// @ts-expect-error - baseCacheKey is a cacheKey file path
+const badBaseCacheKey: LlmLlamacpp.RunOptions = { baseCacheKey: 1 };
+void badBaseCacheKey;
 
 const messages: LlmLlamacpp.Message[] = [
   { role: "user", content: "hello" },
