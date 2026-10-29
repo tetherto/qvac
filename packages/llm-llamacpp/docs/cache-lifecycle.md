@@ -560,7 +560,9 @@ Each of the `parallel` sequences ("slots") holds at most one conversation.
    2. the RAM tier is on: its state is copied to RAM with its ledger,
       checkpoints, unsaved-turns mark and `ephemeral` flag, and nothing is
       written yet (unless the copy is larger than the whole RAM budget, which
-      falls through to the next check);
+      falls through to the next check). A state without a key goes in only
+      where it fits beside the keyed ones, and is the first to leave when a
+      keyed one needs the room;
    3. it has unsaved turns and is not ephemeral: its file is written;
       otherwise it is dropped.
 

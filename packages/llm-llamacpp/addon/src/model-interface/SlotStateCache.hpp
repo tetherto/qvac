@@ -80,7 +80,10 @@ public:
 
   /// Keeps `entry` under `key` and returns true. When it does not fit the
   /// budget even alone, `entry` is left untouched and false is returned: the
-  /// caller saves it the way it would without the tier.
+  /// caller saves it the way it would without the tier. An entry without a
+  /// key (a request that named none) only serves a prefix others may share:
+  /// it never pushes out a keyed conversation, and is false when it does not
+  /// fit beside them; a keyed entry that needs the room drops it first.
   bool insert(const std::string& key, SlotStateCacheEntry&& entry) {
     std::scoped_lock lock(mutex_);
     const uint64_t size = entry.bytes();
@@ -88,6 +91,12 @@ public:
       return false;
     }
     eraseLocked(key);
+    if (totalBytesLocked() + size > budget_) {
+      if (key.empty()) {
+        return false;
+      }
+      eraseLocked("");
+    }
     while (!entries_.empty() && totalBytesLocked() + size > budget_) {
       dropOldestLocked();
     }

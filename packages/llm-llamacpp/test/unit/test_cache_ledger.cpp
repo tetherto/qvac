@@ -438,3 +438,27 @@ TEST(CacheSourceSelection, RamTierLendsNothingWhoseFileWasDeleted) {
   EXPECT_EQ(lent, 2u) << "the entry whose file was deleted was lent";
   fs::remove_all(dir);
 }
+
+// A state without a key never pushes a keyed conversation out of the RAM
+// tier, and is the first to go when a keyed one needs the room.
+TEST(CacheSourceSelection, RamTierStateWithoutAKeyYieldsToKeyedOnes) {
+  using qvac_lib_inference_addon_llama::batching::SlotStateCache;
+  const uint64_t entryBytes = ramEntryOver({1, 2}).bytes();
+  const uint64_t twoEntries = entryBytes * 2 + entryBytes / 2;
+
+  SlotStateCache full(twoEntries);
+  ASSERT_TRUE(full.insert("a", ramEntryOver({1, 2})));
+  ASSERT_TRUE(full.insert("b", ramEntryOver({3, 4})));
+  EXPECT_FALSE(full.insert("", ramEntryOver({5, 6})));
+  EXPECT_TRUE(full.take("a").has_value());
+  EXPECT_TRUE(full.take("b").has_value());
+
+  SlotStateCache tier(twoEntries);
+  ASSERT_TRUE(tier.insert("a", ramEntryOver({1, 2})));
+  ASSERT_TRUE(tier.insert("", ramEntryOver({5, 6})));
+  ASSERT_TRUE(tier.insert("b", ramEntryOver({3, 4})));
+  EXPECT_FALSE(tier.take("").has_value());
+  EXPECT_TRUE(tier.take("a").has_value())
+      << "a keyed conversation went before the state without a key";
+  EXPECT_TRUE(tier.take("b").has_value());
+}
