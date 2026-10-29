@@ -796,15 +796,18 @@ jobs:
     with:
       version: ${{ needs.publish-npm.outputs.published_version }}
 
-  # Build the Kotlin SDK Maven repository and attach one zip per Android
-  # runtime profile, plus the desktop JVM client, to the same release, so a
-  # Gradle project consumes the Kotlin SDK from an extracted zip without a
-  # Maven registry. Dispatchable by hand for backfills, like the wheels.
+  # Build the Kotlin SDK Maven repository, run its release gates, and attach
+  # one zip per Android runtime profile, plus the desktop JVM client, to the
+  # same release, so a Gradle project consumes the Kotlin SDK from an extracted
+  # zip without a Maven registry. The Kotlin workflow is dispatchable by hand
+  # for backfills and for its registry destinations.
   attach-kotlin-maven-zips:
     needs: [publish-release, publish-npm]
     if: ${{ needs.publish-npm.outputs.published_version != '' }}
     permissions:
       contents: write
-    uses: ./.github/workflows/build-sdk-kotlin-release-assets.yml
+      packages: write
+    uses: ./.github/workflows/publish-sdk-kotlin.yml
     with:
+      destination: release-assets
       version: ${{ needs.publish-npm.outputs.published_version }}
