@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.31.1] - 2026-10-29
+
+This patch moves the addon to stable-diffusion-cpp `2026-08-11#8`. It retains
+the existing model support and JavaScript API.
+
+## Bug Fixes
+
+Memory fitting plans on the integrated GPUs when there is no discrete GPU,
+caps the free memory of a GPU that shares host memory at the host's, and on an
+iOS device plans against the app's own memory limit.
+
+The addon requires stable-diffusion-cpp `2026-08-11#8` from the QVAC registry
+while retaining the existing registry baseline
+([#5446](https://github.com/tetherto/qvac/pull/5446)).
+
 ## [0.31.0] - 2026-10-21
 
 This release adds Qwen-Image-2.1 generation and reference editing, including
