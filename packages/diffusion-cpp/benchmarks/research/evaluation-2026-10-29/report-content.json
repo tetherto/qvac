@@ -34,7 +34,7 @@
           "Five RTX clip pairs byte exact including audio. Spark video PSNR 52.34-55.16 dB, SSIM 0.99823-0.99912; differences similar to unchanged-run variation; audio bit exact",
           "RTX and Spark",
           "Recommend isolating a minimal QVAC backport. Ablations on both GPUs attribute the gain to H3 operations; shared-runtime-only changes are nearly neutral. Not a production-ready package upgrade.",
-          "Sampled GPU peak falls 17292 to 16892 MiB (-400 MiB, -2.31%) on the repeated prompt. Restores parent projection/modulation layout; separate CLI generation timing, not warm-addon timing."
+          "RTX sampled GPU peak falls 17292 to 16892 MiB (-400 MiB, -2.31%) on the repeated prompt. Restores parent projection/modulation layout; separate CLI generation timing, not warm-addon timing."
         ],
         [
           "Full upstream PR #2240",
@@ -328,11 +328,11 @@
           "vLLM-Omni / SGLang",
           "Alternative runtime",
           "V",
-          "vLLM: 15.324 to 6.512 s; 2.353x; 57.50% lower warm latency. SGLang inference queued.",
+          "vLLM: 15.324 to 6.512 s; 2.353x; 57.50% lower warm latency. SGLang: 15.433 to 5.993 s; 2.575x; 61.17% lower.",
           "Different RNG/math; perceptual parity not established",
           "Spark",
           "Separate serving-stack comparison; not a drop-in native optimization.",
-          "SGLang Q8 layout conversion is reversible and all 169 expected transformer weights passed the real loader probe. Q4 text weights are dequantized to BF16."
+          "SGLang: three measured requests, output internally exact. Load plus first output 17.602 to 58.792 s (234.01% higher). Q8 layout conversion is reversible; Q4 text weights are dequantized to BF16."
         ],
         [
           "GEMM plus actual VAE tiles",
@@ -345,7 +345,7 @@
           "32-latent-pixel tiles, 25% overlap. PSNR 25.60-27.97 dB; SSIM 0.8910-0.9825. Lower memory does not offset this output deviation."
         ],
         [
-          "Backend-specific VAE tuning",
+          "Backend VAE tuning",
           "Kernel selection / autotuning",
           "",
           "X - unmeasured",
@@ -373,6 +373,10 @@
         [
           "New FLUX confirmation and approximate combinations",
           "Standard GEMM versus direct decoding across the new three-prompt RTX run gives PSNR 58.72-60.28 dB, SSIM 0.99935-0.99959 and RMS error 0.247-0.295/255, with maximum channel error 2. Spark gives PSNR 58.65-60.31 dB, SSIM 0.99935-0.99957, RMS error 0.246-0.298/255 and maximum error 3. Each variant is deterministic across its four runs per prompt on each host. The small decoder is 28M rather than 50M parameters and lowers sampled GPU peak by 11.73% versus standard GEMM, but its marginal speed gain is below 3%. DBCache/TaylorSeer reduce denoising work by skipping four of ten steps, giving about 33-35% less incremental latency but visible image changes. Their scope would be request parameters; the small decoder would additionally change the model artefact. Neither belongs in the visually identical default set."
+        ],
+        [
+          "SGLang comparison above 5%: warm throughput versus startup",
+          "With the same prompt, 1024 x 1024 size, ten steps and seed, SGLang 0.5.22 completed one warmup and three measured requests on Spark. Warm median request time is 5.993 s versus 15.433 s for the native GEMM profile: 2.575x, 61.17% less latency. Load plus first output is 58.792 s versus 17.602 s: 41.190 s or 234.01% more. The four SGLang images are byte identical to one another, but differ from the native image (PSNR 11.67 dB, SSIM 0.30438). The inspected image is a valid prompt-consistent scene with a different composition. This is not evidence of inferior or equivalent perceptual quality: runtime RNG and numerical computation differ. The harness preserves Q8 DiT blocks through reversible QKV/AdaLN layout conversion, uses BF16-dequantized Q4 text weights, and extends the harness-local weight discovery list to recognize a real GGUF file; the installed runtime source is unchanged. Torch compilation and breakable CUDA graphs are disabled, and conditioning caching is disabled. A Python serving integration and explicit quality acceptance would be separate work. Do not combine this ratio with native VAE gains or claim a controlled SGLang-versus-vLLM ranking from runs collected in different sessions."
         ],
         [
           "GEMM VAE: what changes and why it is faster",
@@ -412,7 +416,7 @@
         ],
         [
           "Runtime and sampling comparisons above 5%",
-          "vLLM-Omni warm median was 6.512 s versus QVAC GEMM 15.324 s (2.353x); load plus the first request was 68.093 versus 17.732 s, so the faster warm path has a startup cost. Images use different RNG/math: PSNR 11.69 dB and SSIM 0.3044 do not measure perceptual parity. Its stack used vLLM 0.32.0, vLLM-Omni 0.1.dev1 and GGUF plugin 0.0.3. The four-step preset changes the trajectory: 15.324 s to 7.396 s (2.072x; 51.74% less latency). Its image is coherent but differs from the ten-step result (PSNR 17.91 dB, SSIM 0.7251); these are deviation metrics, not a quality ranking. SGLang 0.5.22 rejected the original fused-QKV layout. Round two prepared a reversible Q8-block layout conversion and validated every expected transformer weight through its actual GGUF loader. Full inference is queued; the original loader failure remains recorded."
+          "vLLM-Omni warm median was 6.512 s versus QVAC GEMM 15.324 s (2.353x); load plus the first request was 68.093 versus 17.732 s, so the faster warm path has a startup cost. Images use different RNG/math: PSNR 11.69 dB and SSIM 0.3044 do not measure perceptual parity. Its stack used vLLM 0.32.0, vLLM-Omni 0.1.dev1 and GGUF plugin 0.0.3. The four-step preset changes the trajectory: 15.324 s to 7.396 s (2.072x; 51.74% less latency). Its image is coherent but differs from the ten-step result (PSNR 17.91 dB, SSIM 0.7251); these are deviation metrics, not a quality ranking. SGLang 0.5.22 rejected the original fused-QKV layout. Round two prepared a reversible Q8-block layout conversion, validated every expected transformer weight through its actual GGUF loader, and completed four image requests. The original loader failure remains recorded."
         ]
       ]
     },
@@ -554,11 +558,11 @@
           "SGLang / vLLM-Omni",
           "Alternative runtime",
           "V",
-          "X - inference pending",
-          "BF16-from-quantized comparator; not equal quantization or established output parity",
+          "SGLang warm median: 37.802 to 12.578 s; 3.005x; 66.73% lower. Load plus first output: 44.075 to 326.362 s; 640.47% higher.",
+          "Different scene/audio: PSNR 10.74 dB, SSIM 0.39096. Different schedule, BF16 computation/storage, RNG and codecs; no parity claim",
           "Spark",
-          "Keep separate from implementation recommendations until actual inference and review.",
-          "Native SGLang shapes verified: 4186 DiT tensors, 626 text tensors, 170 video VAE, 102 audio VAE, 1227 vocoder, 262 connectors. Stock LTX GGUF construction fails on unnamed linear layers; BF16 dequantization fallback prepared. vLLM GGUF plugin has no matched LTX adapter."
+          "Separate runtime research only. Strong warm speed, but startup, memory, output parity and shutdown reliability prevent a drop-in recommendation.",
+          "One warmup plus three requests; 97 valid frames and finite unclipped audio. Peak reserved 68336 MiB. Worker forced at shutdown; one leaked semaphore warning. vLLM has no matched LTX GGUF adapter."
         ],
         [
           "DiT and 3D VAE kernels",
@@ -584,11 +588,11 @@
           "Exact stateful decoder on CUDA",
           "Engine decoder execution policy",
           "V",
-          "RTX CLI generation: tiled 31.87 to stateful 35.50 s; 0.898x; 11.39% higher latency. Complete decode 30.75 s: stateful is 15.45% slower.",
-          "Small numerical video differences: PSNR 48.44 dB vs tiled, 48.80 dB vs complete; audio bit exact",
-          "RTX; Spark queued",
+          "RTX CLI generation: tiled 31.87 to stateful 35.50 s; 11.39% slower. Spark: 42.29 to 46.89 s; 10.88% slower. Versus complete decode: 15.45% / 14.53% slower.",
+          "Small numerical video differences: RTX/Spark PSNR 48.44/48.45 dB vs tiled; audio bit exact",
+          "RTX and Spark",
           "Reject as a CUDA speed optimization on this workload. The existing Vulkan policy remains separate.",
-          "Research-only hook in the pinned engine, three fresh invocations each; all existing build tests pass. GPU sampled peak unchanged at 19702 MiB; process RSS +0.299 GB (+0.86%) vs tiled. No production policy change."
+          "Research-only hook in the pinned engine, three fresh invocations each; all existing build tests pass. RTX sampled GPU peak unchanged at 19702 MiB; RSS +0.299 GB (+0.86%) vs tiled. Spark RSS +0.002 GB (+0.03%). No production policy change."
         ]
       ],
       "details": [
@@ -603,6 +607,10 @@
         [
           "Distilled schedule: effective parameters matter",
           "The pinned image addon forwards <code>custom_sigmas</code>, but its video handler does not. Native experiments carrying that key therefore repeated the original schedule; their byte equality is not evidence that two schedules are equivalent. A separate upstream CLI test supplied the actual eight-step distilled schedule and changed the generated scene and audio. On RTX, three fresh-process generation medians changed from 29.97 to 30.65 s; process-wall medians changed from 36.325 to 37.079 s. Spark generation medians are 41.60 to 41.51 s, a negligible 0.22% reduction. Neither host shows a reliable speed benefit. The different output is not automatically inferior: schedule correctness and perceptual quality need their own evaluation. Implementing this capability would be an addon change with explicit parameter validation and video forwarding; it is outside the accepted transparent-performance set. SGLang uses the official fixed schedule, so its comparison with the pinned native addon also changes sampling, in addition to runtime and precision."
+        ],
+        [
+          "SGLang comparison above 5%: valid inference with substantial trade-offs",
+          "SGLang 0.5.22 completed one warmup and three measured 512 x 320, 97-frame, 24-fps requests at eight steps. Warm times were 12.784, 12.578 and 12.480 s: median 12.578 s versus native resident QVAC 37.802 s (3.005x, 66.73% less latency). Load plus first output took 326.362 s versus 44.075 s: +282.287 s, +640.47%. Peak PyTorch reserved memory was 68336 MiB (66.73 GiB); this is not directly comparable to native Spark RSS and does not establish an RTX 32 GB fit. The fallback expands the default quantized DiT, encoder and connector values into BF16 files. It uses the official distilled sigma sequence and a harness configuration selecting plain unguided sampling while preserving the explicit LTX-2.3 pipeline architecture. The installed SGLang source is unchanged. All 97 frames decode, and inspected frames show a coherent claymation cat playing piano, with a different scene from QVAC. Cross-runtime PSNR 10.74 dB and SSIM 0.39096 are deviation diagnostics, not a quality ranking. Audio is finite and unclipped; AAC decodes to 384960 sample values versus native PCM 388800, so sample equality is not claimed. Two repeated SGLang outputs have identical decoded video but small audio differences (43.15 dB SNR). The runtime forced its worker to terminate during shutdown and reported one leaked semaphore despite an overall zero exit code. Production use needs lifecycle and memory validation, more prompts and an independent perceptual/audio study. This serving-stack experiment is not included in the recommended native change set."
         ],
         [
           "Attention and temporal decode experiments",
