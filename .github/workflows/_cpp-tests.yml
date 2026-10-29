@@ -95,8 +95,10 @@ jobs:
         env:
           NPM: ${{ matrix.row.npm }}
         run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
-      # The build job's prebuilds for this platform: the package's and its native dependencies'.
-      - uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      # The build job's prebuilds for this platform: the package's and its native dependencies'. A package without a
+      # build target has none, and its C++ tests build against the checkout alone.
+      - if: matrix.row.hasBuild
+        uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.platform }}-${{ matrix.row.arch }}
           path: src
@@ -109,6 +111,7 @@ jobs:
         run: pnpm exec nx run-many -t ci:system -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
       # Links each restored package's prebuilds where its dependents look for them, without rebuilding.
       - name: link:platform
+        if: matrix.row.hasBuild
         shell: bash
         working-directory: src
         run: |

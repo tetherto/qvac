@@ -48,6 +48,8 @@ const METADATA = {
   toolchain: ['build'],
   mobile: ['test:mobile'],
   publish: ['publish'],
+  // Prebuild directories besides the platform ones that the meta package ships, such as fabric's include and share.
+  prebuildExtraDirs: ['publish'],
   secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile'],
   baseline: ['cpp:tests'],
   perfReport: ['test:integration']
