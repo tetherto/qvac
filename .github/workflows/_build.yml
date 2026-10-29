@@ -149,6 +149,13 @@ jobs:
           cuda-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.cuda }}
           # Only commands that load it compile with MSVC 14.44; the rest keep the runner's default toolset, as on main.
           msvc-scope: file
+      # Jetson's CUDA 12 beside the host's CUDA 13: only the package command that reads QVAC_CUDA_JETSON_PATH uses it.
+      - if: contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'cuda-jetson')
+        uses: ./.github/actions/setup-cuda
+        with:
+          cuda-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.cudaJetson }}
+          cuda-target: jetson
+          export: path
       - if: contains(fromJSON(inputs.rows)[matrix.leg.i].toolchain.hostSetup[format('{0}-{1}', fromJSON(inputs.rows)[matrix.leg.i].platform, fromJSON(inputs.rows)[matrix.leg.i].arch)], 'rocm') || contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'rocm')
         uses: ./.github/actions/setup-rocm
         with:

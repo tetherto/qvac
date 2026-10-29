@@ -38,8 +38,9 @@ export const TARGETS = [
 export const CONFIG_NAME = /^(linux|android|ios|darwin|win32)-(x64|arm64)(-[a-z0-9]+)?$/
 const CONFIG_KEYS = ['args', 'commands', 'ci']
 const CI_KEYS = ['runner', 'setup']
-// Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json.
-const SETUP = ['cuda', 'rocm', 'python']
+// Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json. cuda-jetson puts
+// CUDA 12 for Jetson beside the host's CUDA 13 and exports only QVAC_CUDA_JETSON_PATH.
+const SETUP = ['cuda', 'cuda-jetson', 'rocm', 'python']
 
 // The metadata a target may carry, and on which targets. toolchain is nx.json's, merged into every build target.
 const METADATA = {
