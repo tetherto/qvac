@@ -1,4 +1,4 @@
-package io.tether.qvac.sdk.rpc
+package io.tether.qvac.sdk
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,7 +10,7 @@ class JsonLinesDecoderTest {
         val decoder = JsonLinesDecoder(4)
         assertEquals(listOf("1234", "1234"), decoder.feed("1234\n1234\n".encodeToByteArray()))
         decoder.feed("123".encodeToByteArray())
-        assertFailsWith<BareRpcLimitException> { decoder.feed("45".encodeToByteArray()) }
+        assertFailsWith<QvacWorkerProtocolException> { decoder.feed("45".encodeToByteArray()) }
     }
     @Test
     fun decodesLinesSplitAcrossChunks() {
