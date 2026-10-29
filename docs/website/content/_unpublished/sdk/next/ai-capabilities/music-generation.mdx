@@ -513,13 +513,14 @@ This example loads the registry-hosted ACE-Step models, reports progress, genera
   The generated Python client exposes the contract-level `audio_gen_stream()`,
   `audio_edit_stream()`, and `audio_understand()` methods. Unlike the TypeScript
   `audioGen()`, `audioEdit()`, and `audioUnderstand()` wrappers, each yields
-  progress, base64 payloads, and the terminal stats frame on one iterator;
-  callers decode and concatenate the PCM chunks themselves. Two further
-  differences apply to every Python tab below: `sourceAudio` and
+  progress and the terminal stats frame on one iterator. The generation and
+  edit streams carry base64 PCM chunks that callers decode and concatenate
+  themselves; `audio_understand()` yields the description in its `understand`
+  field instead. In the cover, edit, and understand tabs, `sourceAudio` and
   `referenceAudio` are tagged unions (`{"type": "filePath", "value": path}` or
-  `{"type": "base64", "value": ...}`) rather than bare strings, and `model_type`
-  must be the canonical `"audiogen-ggml"` — `"audiogen"` is an alias there and
-  warns before it is normalized.
+  `{"type": "base64", "value": ...}`) rather than bare strings. The Python tabs
+  pass the canonical `model_type` `"audiogen-ggml"`; `"audiogen"` is a
+  deprecated alias that still loads but emits a `DeprecationWarning`.
 </Callout>
 
 <Tabs>

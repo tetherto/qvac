@@ -107,6 +107,8 @@ async def main() -> int:
             threads = number_from_env("AUDIOGEN_THREADS")
             max_frames = number_from_env("AUDIOGEN_MAX_FRAMES")
             inference_steps = number_from_env("AUDIOGEN_STEPS")
+            seed = number_from_env("AUDIOGEN_SEED")
+            cfg_scale = number_from_env("AUDIOGEN_CFG_SCALE")
 
             print("▸ Loading MiniMax-Music3 models...")
             model_id = await load_model(
@@ -134,8 +136,8 @@ async def main() -> int:
                     "requestId": request_id,
                     "caption": caption,
                     "lyrics": os.environ.get("AUDIOGEN_LYRICS", "[Instrumental]"),
-                    "seed": int(number_from_env("AUDIOGEN_SEED") or 7),
-                    "cfgScale": number_from_env("AUDIOGEN_CFG_SCALE") or 1.7,
+                    "seed": int(seed) if seed is not None else 7,
+                    "cfgScale": cfg_scale if cfg_scale is not None else 1.7,
                     # maxFrames and duration are mutually exclusive; this
                     # example takes the explicit frame cap when one is set.
                     **(
