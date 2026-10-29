@@ -215,11 +215,12 @@ public:
   /// `process` renders it. `tools` alone has no message to render and throws,
   /// as `process` does; pass an empty `text` to count a tool list with an
   /// empty user turn. Tools the template leaves out are not counted, and a
-  /// `prefill` request, which renders without a user turn, can differ. Media is not counted. Every invalid request, a media message
-  /// included, throws `InvalidArgument` prefixed `calcTokens:`; a chat template
-  /// that cannot render the conversation fails as it would for `process`.
-  /// Reads only load-time state and never enters the job scheduler, so it runs
-  /// beside in-flight requests.
+  /// `prefill` request, which renders without a user turn, can differ. Media is
+  /// not counted. Every invalid request, a media message included, throws
+  /// `InvalidArgument` prefixed `calcTokens:`; a chat template that cannot
+  /// render the conversation fails as it would for `process`. Reads only
+  /// load-time state and never enters the job scheduler, so it runs beside
+  /// in-flight requests.
   [[nodiscard]] size_t calcTokens(const CalcTokensRequest& request) const;
 
   /**
