@@ -1,6 +1,6 @@
-package io.tether.qvac.sdk.rpc
+package io.tether.qvac.sdk
 
-class JsonLinesDecoder(private val maxLineBytes: Int = 16 * 1024 * 1024) {
+internal class JsonLinesDecoder(private val maxLineBytes: Int = DEFAULT_MAX_LINE_BYTES) {
     // A single JSON line can span many feed() chunks (multi-MB base64 frames).
     // Keep one growable buffer and only scan bytes that are new since the last
     // feed, so assembling an N-byte line costs O(N) rather than O(N^2).
@@ -35,7 +35,7 @@ class JsonLinesDecoder(private val maxLineBytes: Int = 16 * 1024 * 1024) {
     private fun checkLength(length: Int) {
         if (length > maxLineBytes) {
             reset()
-            throw BareRpcLimitException("JSON line exceeds $maxLineBytes bytes")
+            throw QvacWorkerProtocolException("JSON line exceeds $maxLineBytes bytes")
         }
     }
 
@@ -78,5 +78,9 @@ class JsonLinesDecoder(private val maxLineBytes: Int = 16 * 1024 * 1024) {
     ) {
         val value = bytes.copyOfRange(start, end).decodeToString()
         if (value.isNotBlank()) destination += value
+    }
+
+    private companion object {
+        const val DEFAULT_MAX_LINE_BYTES = 16 * 1024 * 1024
     }
 }
