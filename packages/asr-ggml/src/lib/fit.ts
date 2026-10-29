@@ -1,4 +1,5 @@
 import { mossTranscribeBackend, mossTranscribeJobFields, type MossTranscribeRunOptions } from '../engines/moss/driver'
+import { validateParakeetBackend } from '../engines/parakeet/options'
 
 interface AsrFitCommon {
   /** Absolute path to the model, or to a weightless copy where one exists. */
@@ -14,6 +15,8 @@ interface AsrFitCommon {
 
 export interface ParakeetFitRequest extends AsrFitCommon {
   engine?: 'parakeet'
+  /** Native selector, matching parakeetConfig.backend; overrides gpuLayers. */
+  backend?: string
   threads?: number
   longFormWindowFrames?: number
   longFormContextFrames?: number
@@ -128,6 +131,8 @@ export async function assessFit(request: AsrFitRequest): Promise<AsrFitResult> {
       hotwords: request.hotwords,
       maxNewTokens: request.maxNewTokens
     })
+  } else if (request.engine === 'parakeet' || request.engine === undefined) {
+    validateParakeetBackend(request.backend)
   }
 
   return await binding.assessFit(request)

@@ -12,6 +12,8 @@ interface AsrFitCommon {
 }
 export interface ParakeetFitRequest extends AsrFitCommon {
     engine?: 'parakeet';
+    /** Native selector, matching parakeetConfig.backend; overrides gpuLayers. */
+    backend?: string;
     threads?: number;
     longFormWindowFrames?: number;
     longFormContextFrames?: number;
