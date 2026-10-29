@@ -112,7 +112,5 @@ exercise.
 - **Primary design source:** [Composable QVAC Agent Stack QIP v2](https://github.com/tetherto/qvac-runtime-experiments/blob/6c51f97972e3cc235747d79772a036280a493b03/docs/arch/qip/agentic-sdk-p2p-layering-v2.md)
   (Draft), reviewed at revision `6c51f97`.
 - **PoC repository:** [High Stack runtime experiments](https://github.com/tetherto/qvac-runtime-experiments).
-- **SDK implementation background:** [QVAC architecture](../architecture/ARCHITECTURE.md)
-  and [Bare inference engine](../../packages/inference/README.md).
 - **SDK design principles:** [QVAC architectural principles](../architecture/PRINCIPLES.md).
 - Implementation baseline: QVAC monorepo revision `df75dd2ca`.
