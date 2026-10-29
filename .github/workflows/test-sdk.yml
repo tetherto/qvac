@@ -106,7 +106,7 @@ on:
         default: 60
       # Replaced device-farm-start-timeout: dispatch is at the 25-input limit.
       device-farm-billing-method:
-        description: "Device Farm billing (METERED = pay-as-you-go, last resort)"
+        description: "Device Farm billing (UNMETERED falls back to METERED after 15 min in queue)"
         type: choice
         options:
           - UNMETERED
@@ -172,9 +172,8 @@ on:
         type: string
         default: UNMETERED
       device-farm-start-timeout:
-        description: "Device Farm start wait (minutes); 0 = 180 UNMETERED, 15 METERED"
         type: number
-        default: 0
+        default: 15
       android-device-pool:
         type: string
         default: ""
@@ -744,7 +743,7 @@ jobs:
       exclude-suite: ${{ inputs.exclude-suite }}
       include: ${{ inputs.include }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
-      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || (inputs.device-farm-billing-method == 'METERED' && '15' || '180')) }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-billing-method: ${{ inputs.device-farm-billing-method || 'UNMETERED' }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
@@ -782,7 +781,7 @@ jobs:
       exclude-suite: ${{ inputs.exclude-suite }}
       include: ${{ inputs.include }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
-      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || (inputs.device-farm-billing-method == 'METERED' && '15' || '180')) }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-billing-method: ${{ inputs.device-farm-billing-method || 'UNMETERED' }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
@@ -817,7 +816,7 @@ jobs:
       exclude-suite: ${{ inputs.exclude-suite }}
       include: ${{ inputs.include }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
-      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || (inputs.device-farm-billing-method == 'METERED' && '15' || '180')) }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-billing-method: ${{ inputs.device-farm-billing-method || 'UNMETERED' }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}

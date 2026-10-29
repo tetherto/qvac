@@ -46,7 +46,7 @@ on:
         type: number
         default: 90
       device-farm-billing-method:
-        description: "Device Farm billing: UNMETERED (shared slots) or METERED (pay-as-you-go)."
+        description: "Device Farm billing: UNMETERED (shared slots, METERED after 15 min in queue) or METERED."
         required: false
         type: string
         default: UNMETERED
@@ -452,7 +452,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 45
+    timeout-minutes: 60
     outputs:
       name: ${{ steps.select.outputs.name }}
       availability: ${{ steps.select.outputs.availability }}
@@ -474,7 +474,9 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-          sparse-checkout: .github/actions/sdk-device-farm-select-pool
+          sparse-checkout: |
+            .github/actions/sdk-device-farm-select-pool
+            .github/actions/sdk-device-farm-schedule-run
           sparse-checkout-cone-mode: false
           path: .workflow
 
@@ -619,39 +621,17 @@ jobs:
 
       - name: Schedule Device Farm run
         id: schedule
-        env:
-          BILLING_METHOD: ${{ inputs.device-farm-billing-method }}
-        run: |
-          # Any case, like test-sdk.yml.
-          BILLING_METHOD="${BILLING_METHOD^^}"
-          case "$BILLING_METHOD" in
-            UNMETERED|METERED) ;;
-            *) echo "::error::device-farm-billing-method must be UNMETERED or METERED, got '$BILLING_METHOD'"; exit 1 ;;
-          esac
-          echo "Scheduling $BILLING_METHOD Device Farm run on ${{ steps.select.outputs.name }}..."
-
-          RUN_NAME="ios-${{ steps.select.outputs.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
-
-          RUN_ARN=$(aws devicefarm schedule-run \
-            --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --device-pool-arn "${{ steps.select.outputs.arn }}" \
-            --app-arn "${{ steps.upload-app.outputs.app-arn }}" \
-            --name "$RUN_NAME" \
-            --test type=APPIUM_NODE,testPackageArn=${{ steps.upload-test-pkg.outputs.pkg-arn }},testSpecArn=${{ steps.upload-spec.outputs.spec-arn }} \
-            --execution-configuration jobTimeoutMinutes=${{ inputs.device-farm-timeout }} \
-            --configuration billingMethod="$BILLING_METHOD" \
-            --query 'run.arn' --output text)
-
-          echo "run-arn=$RUN_ARN" >> $GITHUB_OUTPUT
-          echo "Device Farm run scheduled: $RUN_ARN"
-
-          PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
-          RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
-          DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
-          echo "Device Farm Console (${{ steps.select.outputs.name }}): $DF_URL"
-
-          echo "### Device Farm: ${{ steps.select.outputs.name }} ($BILLING_METHOD)" >> $GITHUB_STEP_SUMMARY
-          echo "[Open Device Farm Console]($DF_URL)" >> $GITHUB_STEP_SUMMARY
+        uses: ./.workflow/.github/actions/sdk-device-farm-schedule-run
+        with:
+          project-arn: ${{ inputs.device-farm-project-arn }}
+          device-pool-arn: ${{ steps.select.outputs.arn }}
+          pool-name: ${{ steps.select.outputs.name }}
+          app-arn: ${{ steps.upload-app.outputs.app-arn }}
+          test-package-arn: ${{ steps.upload-test-pkg.outputs.pkg-arn }}
+          test-spec-arn: ${{ steps.upload-spec.outputs.spec-arn }}
+          run-name: ios-${{ steps.select.outputs.name }}-${{ github.run_number }}-${{ github.run_attempt }}
+          job-timeout-minutes: ${{ inputs.device-farm-timeout }}
+          billing-method: ${{ inputs.device-farm-billing-method }}
 
       - name: Save run ARN
         id: save-arn
@@ -704,8 +684,6 @@ jobs:
           platform: ios
           run-arns-directory: ./run-arns
           start-timeout-minutes: ${{ inputs.device-farm-start-timeout }}
-          # Renew AWS credentials during long waits.
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
   run-producer:
     name: "[ios] run-producer"

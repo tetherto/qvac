@@ -359,13 +359,13 @@ runs:
         # Prefer HIGHLY_AVAILABLE, then AVAILABLE. Availability is only a hint for
         # public devices, so if none report ready proceed with a best-effort pick
         # and warn loudly — Device Farm queues the run and wait-device-farm-running
-        # fails once the start-timeout passes without a device starting.
+        # fails fast (short start-timeout) so a busy fleet surfaces quickly.
         if [ -n "$HIGH_IDX" ]; then
           emit_pool "${NAMES[$HIGH_IDX]}" "${ARNS[$HIGH_IDX]}" "random: HIGHLY_AVAILABLE" "HIGHLY_AVAILABLE"
         elif [ -n "$AVAIL_IDX" ]; then
           emit_pool "${NAMES[$AVAIL_IDX]}" "${ARNS[$AVAIL_IDX]}" "random: AVAILABLE" "AVAILABLE"
         else
           SEL_AVAIL="${AVAIL_BY_IDX[$FALLBACK_IDX]:-UNKNOWN}"
-          echo "::warning::Device Farm busy: no candidate pool reported AVAILABLE/HIGHLY_AVAILABLE (best pick '${NAMES[$FALLBACK_IDX]}' is $SEL_AVAIL). Proceeding, but the run fails if no device starts within the start-timeout."
+          echo "::warning::Device Farm busy: no candidate pool reported AVAILABLE/HIGHLY_AVAILABLE (best pick '${NAMES[$FALLBACK_IDX]}' is $SEL_AVAIL). Proceeding, but the run will fail fast if no device starts within the start-timeout."
           emit_pool "${NAMES[$FALLBACK_IDX]}" "${ARNS[$FALLBACK_IDX]}" "random: best-effort ($SEL_AVAIL)" "$SEL_AVAIL"
         fi

@@ -9,17 +9,13 @@ inputs:
     description: "Directory containing one .txt file per scheduled Device Farm run ARN."
     required: true
   start-timeout-minutes:
-    description: "Maximum minutes to wait for a run to enter RUNNING (ends 3 min early)."
+    description: "Maximum minutes to wait for at least one run to enter RUNNING."
     required: false
     default: "90"
   poll-interval-seconds:
     description: "Seconds between get-run polling attempts."
     required: false
     default: "15"
-  role-to-assume:
-    description: "OIDC role to re-assume before the 1h session expires."
-    required: false
-    default: ""
 
 runs:
   using: composite
@@ -31,7 +27,6 @@ runs:
         RUN_ARNS_DIRECTORY: ${{ inputs.run-arns-directory }}
         START_TIMEOUT_MINUTES: ${{ inputs.start-timeout-minutes }}
         POLL_INTERVAL_SECONDS: ${{ inputs.poll-interval-seconds }}
-        ROLE_TO_ASSUME: ${{ inputs.role-to-assume }}
       run: |
         const fs = require('fs');
         const path = require('path');
@@ -115,99 +110,6 @@ runs:
           return JSON.parse(stdout);
         }
 
-        // OIDC sessions last 1h; renew at 45 min.
-        const CREDENTIAL_TTL_MS = 60 * 60 * 1000;
-        const CREDENTIAL_RENEW_MS = 45 * 60 * 1000;
-        const CREDENTIAL_EXPIRY_MARGIN_MS = 2 * 60 * 1000;
-        const CREDENTIAL_ENV_KEYS = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'];
-        // The job timeout also covers earlier steps; stop before it.
-        const JOB_TIMEOUT_MARGIN_MS = 3 * 60 * 1000;
-        const MAX_POLL_INTERVAL_SECONDS = 300;
-        let credentialsIssuedAt = Date.now();
-        let credentialsExpireAt = credentialsIssuedAt + CREDENTIAL_TTL_MS;
-
-        async function requestOidcToken() {
-          const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
-          const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
-          if (!requestUrl || !requestToken) {
-            throw new Error('ACTIONS_ID_TOKEN_REQUEST_URL is not set; the job needs id-token: write');
-          }
-          const url = new URL(requestUrl);
-          url.searchParams.set('audience', 'sts.amazonaws.com');
-          const response = await fetch(url, {
-            headers: { Authorization: `Bearer ${requestToken}` },
-            signal: AbortSignal.timeout(30 * 1000),
-          });
-          if (!response.ok) {
-            throw new Error(`OIDC token request failed: HTTP ${response.status}`);
-          }
-          const { value } = await response.json();
-          if (!value) {
-            throw new Error('OIDC token response has no value');
-          }
-          console.log(`::add-mask::${value}`);
-          return value;
-        }
-
-        async function renewCredentials(roleToAssume) {
-          const tokenFile = path.join(process.env.RUNNER_TEMP, `device-farm-wait-oidc-${process.pid}`);
-          fs.writeFileSync(tokenFile, await requestOidcToken(), { mode: 0o600 });
-
-          // Unsigned call; drop the expiring credentials.
-          const env = { ...process.env };
-          CREDENTIAL_ENV_KEYS.forEach((key) => delete env[key]);
-          let credentials;
-          try {
-            credentials = JSON.parse(execFileSync('aws', [
-              'sts',
-              'assume-role-with-web-identity',
-              '--role-arn',
-              roleToAssume,
-              '--role-session-name',
-              'GitHubActions',
-              '--web-identity-token',
-              `file://${tokenFile}`,
-              '--duration-seconds',
-              '3600',
-              '--query',
-              'Credentials',
-              '--output',
-              'json',
-            ], { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'], timeout: 60 * 1000 }));
-          } finally {
-            fs.rmSync(tokenFile, { force: true });
-          }
-
-          const values = [credentials.AccessKeyId, credentials.SecretAccessKey, credentials.SessionToken];
-          if (values.some((value) => !value)) {
-            throw new Error('assume-role-with-web-identity returned incomplete credentials');
-          }
-          values.forEach((value) => console.log(`::add-mask::${value}`));
-          CREDENTIAL_ENV_KEYS.forEach((key, index) => {
-            process.env[key] = values[index];
-          });
-          credentialsIssuedAt = Date.now();
-          const expiresAt = Date.parse(credentials.Expiration);
-          credentialsExpireAt = Number.isFinite(expiresAt) ? expiresAt : credentialsIssuedAt + CREDENTIAL_TTL_MS;
-          console.log(`[device-farm-wait] Renewed AWS credentials; expire ${credentials.Expiration}`);
-        }
-
-        // False when the session is about to expire and renewal failed.
-        async function renewCredentialsIfDue(roleToAssume) {
-          if (!roleToAssume || Date.now() - credentialsIssuedAt < CREDENTIAL_RENEW_MS) {
-            return true;
-          }
-          try {
-            await renewCredentials(roleToAssume);
-          } catch (error) {
-            const stderr = error.stderr ? String(error.stderr).trim() : '';
-            console.log(
-              `[device-farm-wait] AWS credential renewal failed; retrying next poll: ${error.message}${stderr ? ` stderr=${stderr}` : ''}`,
-            );
-          }
-          return Date.now() < credentialsExpireAt - CREDENTIAL_EXPIRY_MARGIN_MS;
-        }
-
         function getRun(run) {
           const response = awsJson([
             'devicefarm',
@@ -265,15 +167,10 @@ runs:
           const platform = process.env.PLATFORM || 'mobile';
           const runArnsDirectory = process.env.RUN_ARNS_DIRECTORY || './run-arns';
           const timeoutMinutes = parsePositiveInteger(process.env.START_TIMEOUT_MINUTES, 90, 'START_TIMEOUT_MINUTES');
-          // Cap so renewal is never skipped.
-          const pollIntervalSeconds = Math.min(
-            parsePositiveInteger(process.env.POLL_INTERVAL_SECONDS, 15, 'POLL_INTERVAL_SECONDS'),
-            MAX_POLL_INTERVAL_SECONDS,
-          );
-          const timeoutMs = Math.max(timeoutMinutes * 60 * 1000 - JOB_TIMEOUT_MARGIN_MS, 60 * 1000);
+          const pollIntervalSeconds = parsePositiveInteger(process.env.POLL_INTERVAL_SECONDS, 15, 'POLL_INTERVAL_SECONDS');
+          const timeoutMs = timeoutMinutes * 60 * 1000;
           const pollIntervalMs = pollIntervalSeconds * 1000;
           const startedAt = Date.now();
-          const roleToAssume = process.env.ROLE_TO_ASSUME || '';
           const runs = readRunArns(runArnsDirectory);
 
           console.log(`[device-farm-wait] Waiting for ${runs.length} ${platform} Device Farm run(s); producer starts when the first run enters RUNNING`);
@@ -282,12 +179,6 @@ runs:
           appendSummary(`Waiting up to ${timeoutMinutes} minute(s) for at least one of ${runs.length} run(s) to enter \`RUNNING\`.`);
 
           while (true) {
-            if (!(await renewCredentialsIfDue(roleToAssume))) {
-              console.log('[device-farm-wait] AWS credentials are about to expire and could not be renewed');
-              stopActiveRuns(runs, 'AWS credentials could not be renewed');
-              appendSummary('Device Farm readiness failed: AWS credentials could not be renewed during the wait.');
-              process.exit(1);
-            }
             for (const run of runs) {
               try {
                 const latest = getRun(run);
