@@ -241,6 +241,9 @@ public:
     cacheSourceProvider_ = std::move(provider);
   }
   void resetStateKeepingMemory(bool resetStats) override;
+  [[nodiscard]] bool holdsBorrowedState() const override {
+    return residentStateBorrowed_;
+  }
   void setCacheCheckpointPolicy(
       const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy)
       override {
@@ -586,6 +589,8 @@ private:
   // cancel after it keeps the prompt and streamed tokens, cached or not.
   bool prefillComplete_ = false;
   qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
+  // See `holdsBorrowedState`.
+  bool residentStateBorrowed_ = false;
   llama_token pendingResidentToken_ = LLAMA_TOKEN_NULL;
   // Scope of every rollback snapshot and checkpoint this context takes (see
   // `untrimmableSnapshotScope`). Only meaningful when

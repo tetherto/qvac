@@ -1382,7 +1382,9 @@ void MtmdLlmContext::resetState(bool resetStats) {
 
 void MtmdLlmContext::resetStateKeepingMemory(bool resetStats) {
   // Between requests the memory, `current_`, the ledger and the checkpoints
-  // agree; only what a request leaves behind is dropped.
+  // agree; only what a request leaves behind is dropped. What stays is no
+  // longer any key's until a request reconciles it.
+  residentStateBorrowed_ = current_.pos > 0;
   discardPendingResidentToken();
   pendingPromptLedger_.entries.clear();
   preRequestLedger_.entries.clear();
@@ -1597,6 +1599,7 @@ bool MtmdLlmContext::adoptDonorState(
     current_ = {
         .pos = residentLedger_.positions(), .cacheTokens = best->cacheTokens};
   }
+  residentStateBorrowed_ = true;
   coldGuard.dismiss();
   ++donorAdoptions_;
   QLOG_IF(
@@ -1717,6 +1720,8 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
     historyCheckpointEntries_ =
         fullLedger.entries.size() - generationPromptTokens_;
   }
+  // What is left is a prefix of this request's own prompt.
+  residentStateBorrowed_ = false;
   rebuildSamplerFromLedger(residentLedger_);
 
   PrefillPlan suffix;
@@ -2515,12 +2520,14 @@ void MtmdLlmContext::restoreCacheStateTokens(
       decoded.ledger, llama_vocab_n_tokens(modelCtx_.vocab));
   residentLedger_ = decoded.ledger;
   current_ = {.pos = decoded.nPast, .cacheTokens = decoded.cacheTokens};
+  residentStateBorrowed_ = false;
   cacheCheckpoints_.clear();
   pendingHistoryCheckpoint_.reset();
 }
 
 void MtmdLlmContext::clearCacheReconciliationState() {
   residentLedger_.entries.clear();
+  residentStateBorrowed_ = false;
   pendingPromptLedger_.entries.clear();
   preRequestLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();

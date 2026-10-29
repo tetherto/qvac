@@ -4594,6 +4594,47 @@ TEST(CrossKeyMultimodalTest, RequestsWithoutAKeyLeaveTheirImage) {
   fs::remove(key);
 }
 
+// A new key whose first request fails before it runs never owned the image
+// conversation set aside in place: switching away or unloading writes
+// nothing to its file, and the memory still serves the next key.
+TEST(CrossKeyMultimodalTest, AFailedFirstRequestSavesNoOtherConversation) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_failed_first_b.bin", "cross_vision_failed_first_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, ""));
+
+  std::string tooLong = K_COLOUR;
+  for (int i = 0; i < 6000; ++i) {
+    tooLong += " filler";
+  }
+  EXPECT_ANY_THROW(
+      runSingle(*model, imageQuestion("elephant.jpg", tooLong, keys[0])));
+  EXPECT_ANY_THROW(model->saveCache(keys[0]))
+      << "saveCache wrote a conversation the key never ran";
+  EXPECT_FALSE(fs::exists(keys[0]));
+
+  const SingleTurn colour =
+      runSingle(*model, imageQuestion("elephant.jpg", K_COLOUR, keys[1]));
+  EXPECT_FALSE(fs::exists(keys[0]))
+      << "the switch wrote the conversation without a key to the failed key";
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the conversation set aside in place stopped serving";
+  EXPECT_GT(colour.reuse, 0u);
+  model.reset();
+  EXPECT_FALSE(fs::exists(keys[0]));
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
 // `baseCacheKey` serves a fresh model a primed image, and the file stays as
 // it was.
 TEST(CrossKeyMultimodalTest, ABaseCacheKeyServesAPrimedImage) {
