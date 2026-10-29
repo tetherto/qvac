@@ -6,7 +6,7 @@
 #
 # lerobot has SmolVLA-specific extras, hence the [smolvla] selector. The
 # eval pipeline (`lerobot.scripts.lerobot_eval`) lives in this package.
-lerobot[smolvla]==0.5.2
+lerobot[smolvla]==0.5.1
 
 # LIBERO benchmark + the sim stack it drives.
 libero==0.1.1
@@ -29,7 +29,7 @@ imageio==2.37.3
 imageio-ffmpeg==0.6.0
 opencv-python-headless==4.13.0.92
 
-# Pinned because lerobot 0.5.2 has an upper bound (<2.3) on numpy.
+# Pinned because lerobot 0.5.1 has an upper bound (<2.3) on numpy.
 numpy==2.2.6
 
 # CLI parsing used by lerobot's eval entry point.

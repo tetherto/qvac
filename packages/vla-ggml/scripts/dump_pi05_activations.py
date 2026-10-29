@@ -706,7 +706,30 @@ def main() -> int:
         help="If set, also write a fixtures pin JSON to this path (defaults to "
         "scripts/oracle_fixtures.json next to this script).",
     )
+    parser.add_argument(
+        "--mask-cameras",
+        type=int,
+        nargs="+",
+        default=[],
+        help="Camera indices to mask out of attention, as openpi does for an "
+        "empty camera slot. '--mask-cameras 2' gives the reference for "
+        "PI05_TEST_ACTIONS_2CAM: the native run drops that view instead. "
+        "Without --write-fixtures-json the pin JSON is left alone.",
+    )
+    parser.add_argument(
+        "--dtype",
+        choices=["bfloat16", "float32"],
+        default="bfloat16",
+        help="Policy dtype. bfloat16 matches the pinned main dump. Use float32 "
+        "for the --mask-cameras 2 reference: the two-camera trajectory "
+        "amplifies bf16 rounding, so a bf16 reference sits at cos 0.91 from "
+        "float32 there. Needs about 15 GB RAM. Without --write-fixtures-json "
+        "a float32 run leaves the pin JSON alone.",
+    )
     args = parser.parse_args()
+    for cam in args.mask_cameras:
+        if not 0 <= cam < NUM_CAMERAS:
+            parser.error(f"--mask-cameras {cam} is outside 0..{NUM_CAMERAS - 1}")
 
     out_dir = Path(args.out_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -715,11 +738,15 @@ def main() -> int:
     print(f"checkpoint: {args.checkpoint}")
     print(f"out_dir:    {out_dir}")
     print(f"seed:       {args.seed}")
+    print(f"masked:     {args.mask_cameras}")
+    print(f"dtype:      {args.dtype}")
 
     t0 = time.time()
 
     # --- 1. Build & write the deterministic fixture ------------------------
     fixture = build_fixture(args.seed)
+    for cam in args.mask_cameras:
+        fixture["fixture.img_masks"][cam] = False
     fixture_path = out_dir / "fixture.safetensors"
     st_save_file(fixture, str(fixture_path))
     print(f"[fixture] wrote {fixture_path} "
@@ -730,10 +757,11 @@ def main() -> int:
     from lerobot.policies.pi05.configuration_pi05 import PI05Config
     from lerobot.policies.pi05.modeling_pi05 import PI05Policy
 
-    # Load in bfloat16 (the model's native dtype) to halve memory from ~15 GB
-    # to ~7.7 GB. Activations are still saved as float32 via to_numpy().
+    # bfloat16 (the model's native dtype) halves memory from ~15 GB to
+    # ~7.7 GB. Activations are still saved as float32 via to_numpy().
+    torch_dtype = getattr(torch, args.dtype)
     cfg = PI05Config(
-        dtype="bfloat16",
+        dtype=args.dtype,
         compile_model=False,
         device="cpu",
     )
@@ -742,7 +770,13 @@ def main() -> int:
     policy.eval()
     inner = policy.model  # PI05Pytorch
 
-    inner.to(torch.bfloat16)
+    inner.to(torch_dtype)
+    # lerobot 0.5.1 casts the expert output to float32 right before
+    # action_out_proj (modeling_pi05 denoise_step), which fails against bf16
+    # weights. Cast it to the weight dtype so the projection runs like the rest.
+    inner.action_out_proj.register_forward_pre_hook(
+        lambda mod, args: (args[0].to(mod.weight.dtype), *args[1:])
+    )
     gc.collect()
 
     # --- 3. Run the deterministic forward pass with breakpoints ----------
@@ -777,6 +811,12 @@ def main() -> int:
     print(f"[verify] ode.actions_final shape = {reloaded['ode.actions_final'].shape}")
 
     # --- 7. Fixtures JSON ------------------------------------------------
+    # A masked-camera or float32 dump is a side reference, not the pinned fixture.
+    side_ref = args.mask_cameras or args.dtype != "bfloat16"
+    if side_ref and not args.write_fixtures_json:
+        print("[fixtures] side reference run, oracle_fixtures.json not written")
+        print(f"== done in {time.time() - t0:.1f} s ==")
+        return 0
     fixtures_json_path = (
         Path(args.write_fixtures_json).resolve()
         if args.write_fixtures_json

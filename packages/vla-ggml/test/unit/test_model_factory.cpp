@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "model-interface/model_factory.hpp"
+#include "utils/BackendSelection.hpp"
 
 using qvac_lib_infer_vla_ggml::createVlaModelFromGguf;
 using qvac_lib_infer_vla_ggml::sniffGgufArchitecture;
@@ -191,4 +192,158 @@ TEST(VlaModelFactory, RejectsUnknownArchitecture) {
     EXPECT_NE(what.find("not_a_real_arch"), std::string::npos) << what;
   }
   cleanupTempFile(path);
+}
+
+// ─── Backend override never lands on CPU ────────────────────────────────────
+
+// Backend selection runs before any of the three loaders reads the GGUF, so a
+// metadata-only file is enough to see which error comes first. An override
+// that matches no family falls back to the default GPU order, so only a host
+// with no usable GPU at all must refuse with "matched no usable GPU device"
+// instead of quietly taking the CPU path and failing later
+// on a missing tensor. On a host that does have a GPU, selection succeeds and
+// that message must be absent. pi05 then allocates device buffers before it
+// checks the tensor list, and ggml returns no buffer for a context with no
+// tensors on every backend, so pi05 must hit the strict "weight load failed"
+// refusal. groot stops earlier on its missing embodiment metadata and smolvla
+// on a missing tensor, so for them only the absence is asserted. Both
+// branches are asserted so the test means something on CPU-only CI runners
+// and on GPU dev boxes alike.
+namespace {
+
+constexpr const char* NO_DEVICE_MESSAGE = "matched no usable GPU device";
+constexpr const char* WEIGHT_LOAD_MESSAGE = "weight load failed on";
+
+void expectOverrideStrictness(const char* arch, bool gpuReachesWeightLoad) {
+  const std::vector<std::string> override{"cuda"};
+  // The loaders register dynamic backends on first load. Do it here too, or
+  // the probe sees no GPU when this test runs first (--gtest_filter, shuffle).
+  vla_backend_selection::loadBackendsOnce("");
+  const bool hostHasGpu =
+      vla_backend_selection::pickBestGpuDevice(override) != nullptr;
+  const std::string path = writeTempGguf(arch);
+  ASSERT_FALSE(path.empty());
+  try {
+    (void)createVlaModelFromGguf(
+        path, /*forceCpu=*/false, /*backendsDir=*/"", {}, override);
+    FAIL() << arch << ": load should have thrown (no tensors)";
+  } catch (const std::runtime_error& e) {
+    const std::string what = e.what();
+    const bool refusedForNoDevice =
+        what.find(NO_DEVICE_MESSAGE) != std::string::npos;
+    // "backend: " would make index.js report INVALID_CONFIG instead of
+    // FAILED_TO_LOAD_WEIGHTS.
+    EXPECT_EQ(what.find("backend: "), std::string::npos) << what;
+    if (hostHasGpu) {
+      EXPECT_FALSE(refusedForNoDevice)
+          << arch << ": a usable GPU exists, so the loader must not claim "
+          << "there is none: " << what;
+      if (gpuReachesWeightLoad) {
+        EXPECT_NE(what.find(WEIGHT_LOAD_MESSAGE), std::string::npos)
+            << arch << ": the device weight load must refuse the override "
+            << "rather than fall back to CPU: " << what;
+      }
+    } else {
+      EXPECT_TRUE(refusedForNoDevice)
+          << arch << ": no GPU for 'cuda', so the loader must refuse the "
+          << "override rather than fall back to CPU: " << what;
+      EXPECT_NE(what.find("not falling back to CPU"), std::string::npos)
+          << what;
+    }
+  }
+  cleanupTempFile(path);
+}
+
+} // namespace
+
+TEST(VlaModelFactory, Pi05BackendOverrideNeverFallsBackToCpu) {
+  expectOverrideStrictness("pi05", /*gpuReachesWeightLoad=*/true);
+}
+
+TEST(VlaModelFactory, GrootBackendOverrideNeverFallsBackToCpu) {
+  expectOverrideStrictness("groot", /*gpuReachesWeightLoad=*/false);
+}
+
+TEST(VlaModelFactory, SmolvlaBackendOverrideNeverFallsBackToCpu) {
+  expectOverrideStrictness("smolvla", /*gpuReachesWeightLoad=*/false);
+}
+
+TEST(VlaModelFactory, AutoBackendStillFallsBackToCpu) {
+  // 'auto' keeps the fallback: with no override the only error is the missing
+  // tensor, whatever the host has.
+  const std::string path = writeTempGguf("pi05");
+  ASSERT_FALSE(path.empty());
+  try {
+    (void)createVlaModelFromGguf(path, /*forceCpu=*/false, /*backendsDir=*/"");
+    FAIL() << "load should have thrown (no tensors)";
+  } catch (const std::runtime_error& e) {
+    const std::string what = e.what();
+    EXPECT_EQ(what.find("backend override"), std::string::npos) << what;
+  }
+  cleanupTempFile(path);
+}
+
+TEST(VlaModelFactory, DescribeOverrideJoinsFamiliesWithCommas) {
+  using vla_backend_selection::describeBackendOverride;
+  EXPECT_EQ(describeBackendOverride({}), "");
+  EXPECT_EQ(describeBackendOverride({"cuda"}), "cuda");
+  EXPECT_EQ(describeBackendOverride({"cuda", "vulkan"}), "cuda,vulkan");
+}
+
+TEST(VlaModelFactory, StrictGpuRefusalKeepsLoadErrorCode) {
+  using vla_backend_selection::StrictGpuFailure;
+  using vla_backend_selection::strictGpuRefusal;
+  const std::vector<std::string> override{"cuda", "vulkan"};
+  for (const StrictGpuFailure failure :
+       {StrictGpuFailure::NoDevice,
+        StrictGpuFailure::DeviceInitFailed,
+        StrictGpuFailure::WeightLoadFailed}) {
+    const std::string what = strictGpuRefusal(failure, override, "CUDA0");
+    // "backend: " would make index.js report INVALID_CONFIG instead of
+    // FAILED_TO_LOAD_WEIGHTS.
+    EXPECT_EQ(what.find("backend: "), std::string::npos) << what;
+    EXPECT_NE(what.find("'cuda,vulkan'"), std::string::npos) << what;
+    EXPECT_NE(what.find("not falling back to CPU"), std::string::npos) << what;
+  }
+  EXPECT_NE(
+      strictGpuRefusal(StrictGpuFailure::WeightLoadFailed, override, "CUDA0")
+          .find("weight load failed on CUDA0"),
+      std::string::npos);
+}
+
+TEST(VlaModelFactory, AutoInBackendListKeepsCpuFallback) {
+  // 'cuda,auto' asks for CUDA first and allows the default order after it,
+  // CPU included, so no loader may refuse it for lack of a GPU.
+  const std::vector<std::string> override =
+      vla_backend_selection::parseBackendRequest("cuda,auto");
+  for (const char* arch : {"pi05", "groot", "smolvla"}) {
+    const std::string path = writeTempGguf(arch);
+    ASSERT_FALSE(path.empty());
+    try {
+      (void)createVlaModelFromGguf(
+          path, /*forceCpu=*/false, /*backendsDir=*/"", {}, override);
+      FAIL() << arch << ": load should have thrown (no tensors)";
+    } catch (const std::runtime_error& e) {
+      const std::string what = e.what();
+      EXPECT_EQ(what.find("backend override"), std::string::npos)
+          << arch << ": " << what;
+    }
+    cleanupTempFile(path);
+  }
+}
+
+TEST(VlaModelFactory, ParseBackendRequestMarksAuto) {
+  using vla_backend_selection::backendOverrideIsStrict;
+  using vla_backend_selection::parseBackendRequest;
+  EXPECT_EQ(parseBackendRequest("cuda"), (std::vector<std::string>{"cuda"}));
+  EXPECT_EQ(
+      parseBackendRequest("auto,cuda"),
+      (std::vector<std::string>{"cuda", "auto"}));
+  EXPECT_EQ(
+      parseBackendRequest(" CUDA , Auto ,vulkan"),
+      (std::vector<std::string>{"cuda", "vulkan", "auto"}));
+  EXPECT_TRUE(parseBackendRequest("auto").empty());
+  EXPECT_TRUE(backendOverrideIsStrict(parseBackendRequest("cuda,vulkan")));
+  EXPECT_FALSE(backendOverrideIsStrict(parseBackendRequest("cuda,auto")));
+  EXPECT_FALSE(backendOverrideIsStrict({}));
 }
