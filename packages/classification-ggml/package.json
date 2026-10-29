@@ -59,7 +59,6 @@
     "test/fixtures",
     "!test/fixtures/*.gguf",
     "prebuilds",
-    "weights/mobilenetv3_3class_v3_fp16.gguf",
     "test/mobile",
     "test/integration",
     "test/images",
