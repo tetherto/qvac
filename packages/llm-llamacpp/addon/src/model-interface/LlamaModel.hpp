@@ -199,7 +199,8 @@ public:
   /// What `calcTokens` counts. `history` is a `Message[]` in `process`'s JSON
   /// shape, tool definitions allowed; `tools` holds tool definitions only. A
   /// tool name in both is a duplicate and throws. A request with none of the
-  /// three throws.
+  /// three, or with no message to render (`tools` alone, or an empty
+  /// `history` without `text`), throws.
   struct CalcTokensRequest {
     std::optional<std::string> text;
     std::optional<std::string> history;
@@ -211,9 +212,10 @@ public:
   /// `text` (even empty) appended as a user turn, is rendered by the chat
   /// template as the opening request of a fresh conversation, with BOS, and
   /// with the generation prompt when the last turn is a user or tool turn, as
-  /// `process` renders it. Tools the template leaves out are not
-  /// counted, and a `prefill` request, which renders without a user turn, can
-  /// differ. Media is not counted. Every invalid request, a media message
+  /// `process` renders it. `tools` alone has no message to render and throws,
+  /// as `process` does; pass an empty `text` to count a tool list with an
+  /// empty user turn. Tools the template leaves out are not counted, and a
+  /// `prefill` request, which renders without a user turn, can differ. Media is not counted. Every invalid request, a media message
   /// included, throws `InvalidArgument` prefixed `calcTokens:`; a chat template
   /// that cannot render the conversation fails as it would for `process`.
   /// Reads only load-time state and never enters the job scheduler, so it runs
