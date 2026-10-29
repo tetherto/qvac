@@ -77,6 +77,8 @@ extra.
 | `transcription_parakeet_transcribepsy.py`  | `asr/parakeet-transcribepsy-filesystem.ts`     | TranscribePsy on ggml or `--coreml`; `--window-sec` sets long-form window frames; `stats` read off the closing frame     |
 | `transcription_parakeet_indic_conformer.py` | `asr/parakeet-indic-conformer-filesystem.ts`  | Indic Conformer CTC with a required `language` in `model_config`, which masks the vocab to that language                 |
 | `transcription_parakeet_sortformer.py` | `asr/parakeet-sortformer.ts`                       | Sortformer diarization, then TDT `transcribe` per speaker segment; `wave` slices the PCM, same-speaker runs are merged   |
+| `bci_filesystem.py`                | `bci/bci-filesystem.ts`                                | `bci_transcribe` (`BciTranscribeRequest`) with a `filePath` neural chunk and `metadata: True` segments                   |
+| `bci_filesystem_streaming.py`      | `bci/bci-filesystem-streaming.ts`                      | `bci_transcribe_stream_session` with `emit="delta"`; the file is written in 64 KiB chunks while a task drains the session |
 | `voice_assistant.py`               | `voice-assistant/voice-assistant.ts`                   | mic → `transcribe_stream_session` (Whisper + Silero VAD) → `completion` → `text_to_speech`; ffmpeg/ffplay helpers inline |
 | `text_to_speech.py`                | `tts/supertonic.ts`                                    | `text_to_speech` (`TextToSpeechRequest`)                                                                                  |
 | `text_to_speech_parler.py`         | `tts/parler.ts`                                        | Parler-TTS Mini v1 with a `voice` + `seed` in `model_config` and a per-request `emotion`                                 |
