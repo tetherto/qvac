@@ -412,10 +412,15 @@ async function runNoCacheSeparator(t, addon, label) {
   })
 
   t.ok(result.text.length > 0, `${label}: no-cache separator generated output`)
-  t.is(
-    toNumber(result.stats.CacheTokens),
-    0,
-    `${label}: no-cache separator cleared in-memory cache`
+  // A request without a cacheKey keeps its state for the next one. This one
+  // shares nothing reusable with the cached chat, so the memory holds only its
+  // own prompt and answer.
+  const cacheTokens = toNumber(result.stats.CacheTokens)
+  const ownTokens = toNumber(result.stats.promptTokens) + toNumber(result.stats.generatedTokens)
+  t.ok(
+    Math.abs(cacheTokens - ownTokens) <= 1,
+    `${label}: no-cache separator holds only its own prompt and answer ` +
+      `(${cacheTokens} cache tokens, ${ownTokens} decoded)`
   )
 }
 
