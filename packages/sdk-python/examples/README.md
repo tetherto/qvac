@@ -118,6 +118,7 @@ extra.
 | `logging_streams.py`               | `logging-streaming.ts`                                 | `logging_stream`, `SDK_LOG_ID`                                                                                            |
 | `classify_image.py`                | `classification/classify-image.ts`                     | `classify` (`ClassifyRequest`) with a base64 image on the bundled MobileNetV3-Small model (`model_type` only)           |
 | `decisions.py`                     | `decisions.ts`                                         | `decide` (`DecideRequest`): choice, score and `noul` questions on one state; optional local GGUF argument               |
+| `rerank.py`                        | `rerank.ts`                                            | `rerank` (`RerankRequest`): one score per document, sorted; optional GGUF path or URL argument                          |
 | `vla.py`                           | `vla-smolvla.ts`                                       | `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state`                                                             |
 | `vla_pi05.py`                     | `vla-pi05.ts`                                          | π₀.₅: three camera frames, discrete state (empty `state`), required `noise`; per-stage timings                           |
 | `vla_groot.py`                    | `vla-groot.ts`                                         | GR00T patch inputs, padded continuous state, hand-laid prompt; optional `vla_set_embodiment` via `QVAC_GROOT_*` env vars |
