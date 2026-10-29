@@ -5,6 +5,7 @@ import { CLASSIFICATIONS_FIELD_CODES } from '@/serve/extensions/default/schemas/
 import { MODEL_FIT_FIELD_CODES } from '@/serve/extensions/default/schemas/model-fit'
 import { MUSIC_FIELD_CODES } from '@/serve/extensions/default/schemas/music'
 import { OCR_FIELD_CODES } from '@/serve/extensions/default/schemas/ocr'
+import { REGISTRY_FIELD_CODES } from '@/serve/extensions/default/schemas/registry'
 import { SYSTEM_FIELD_CODES } from '@/serve/extensions/default/schemas/system'
 import { TRANSLATE_FIELD_CODES } from '@/serve/extensions/default/schemas/translate'
 import { UPSCALE_FIELD_CODES } from '@/serve/extensions/default/schemas/upscale'
@@ -27,6 +28,7 @@ const defaultExtension: ServeExtension = {
     ...TRANSLATE_FIELD_CODES,
     ...OCR_FIELD_CODES,
     ...CLASSIFICATIONS_FIELD_CODES,
+    ...REGISTRY_FIELD_CODES,
     ...UPSCALE_FIELD_CODES,
     ...MUSIC_FIELD_CODES
   },
