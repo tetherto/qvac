@@ -1,22 +1,13 @@
 package io.tether.qvac.sdk
 
-import io.tether.qvac.sdk.rpc.BareRpcProtocolException
-import io.tether.qvac.sdk.rpc.BareRpcLimits
-import io.tether.qvac.sdk.rpc.JsonLinesDecoder
-import io.tether.qvac.sdk.rpc.JvmBareRpcSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -33,15 +24,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class JvmBareRpcTransport internal constructor(
-    private val session: JvmBareRpcSession,
+    private val socket: Socket,
     private val process: Process? = null,
     private val diagnostics: WorkerDiagnostics? = null,
-    private val rpcLimits: BareRpcLimits = BareRpcLimits(),
-    private val json: Json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = false
-    },
+    rpcLimits: RpcLimits = RpcLimits(),
 ) : QvacTransport {
+    private val rpc = WorkerRpc(read = ::read, send = ::send, limits = rpcLimits)
     private val closeMutex = Mutex()
     private var closed = false
     val isWorkerAlive: Boolean get() = process?.isAlive == true
@@ -51,18 +39,12 @@ class JvmBareRpcTransport internal constructor(
             Runtime.getRuntime().addShutdownHook(it)
         }
     }
-    override suspend fun call(payload: JsonObject): JsonObject {
-        val response = session.request(encode(payload))
-        return decode(response)
-    }
 
-    override fun stream(payload: JsonObject): Flow<JsonObject> {
-        return decodeLines(session.responseStream(encode(payload)))
-    }
+    override suspend fun call(payload: JsonObject): JsonObject = rpc.call(payload)
 
-    override fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> {
-        return decodeLines(session.duplex(encode(payload), input))
-    }
+    override fun stream(payload: JsonObject): Flow<JsonObject> = rpc.stream(payload)
+
+    override fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> = rpc.duplex(payload, input)
 
     override suspend fun close(): Unit = withContext(NonCancellable) {
         closeMutex.withLock {
@@ -71,11 +53,14 @@ class JvmBareRpcTransport internal constructor(
             try {
                 if (process != null && process.isAlive) {
                     withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) {
-                        runCatching { session.request("""{"type":"__shutdown__"}""".encodeToByteArray()) }
+                        runCatching { rpc.call(buildJsonObject { put("type", "__shutdown__") }) }
                     }
                 }
             } finally {
-                try { session.close() } finally {
+                try {
+                    rpc.close()
+                    withContext(Dispatchers.IO) { socket.close() }
+                } finally {
                     if (process != null && process.isAlive) {
                         withContext(Dispatchers.IO) {
                             process.destroy()
@@ -91,24 +76,15 @@ class JvmBareRpcTransport internal constructor(
         }
     }
 
-    private fun decodeLines(chunks: Flow<ByteArray>): Flow<JsonObject> = flow {
-        val decoder = JsonLinesDecoder(rpcLimits.maxJsonLineBytes)
-        chunks.collect { chunk ->
-            for (line in decoder.feed(chunk)) emit(decode(line.encodeToByteArray()))
-        }
-        for (line in decoder.finish()) emit(decode(line.encodeToByteArray()))
+    private suspend fun read(): ByteArray? = withContext(Dispatchers.IO) {
+        val buffer = ByteArray(READ_CHUNK_BYTES)
+        val count = socket.getInputStream().read(buffer)
+        if (count < 0) null else buffer.copyOf(count)
     }
 
-    private fun encode(payload: JsonObject): ByteArray {
-        return json.encodeToString(JsonObject.serializer(), payload).encodeToByteArray()
-    }
-
-    private fun decode(payload: ByteArray): JsonObject {
-        return try {
-            json.parseToJsonElement(payload.decodeToString()).jsonObject
-        } catch (error: Throwable) {
-            throw BareRpcProtocolException("worker returned invalid JSON: ${error.message}")
-        }
+    private suspend fun send(frame: ByteArray) = withContext(Dispatchers.IO) {
+        socket.getOutputStream().write(frame)
+        socket.getOutputStream().flush()
     }
 
     companion object {
@@ -125,7 +101,7 @@ class JvmBareRpcTransport internal constructor(
             config: JsonObject = JsonObject(emptyMap()),
             runtimeContext: JsonObject? = desktopRuntimeContext(),
             timeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
-            rpcLimits: BareRpcLimits = BareRpcLimits(),
+            rpcLimits: RpcLimits = RpcLimits(),
         ): JvmBareRpcTransport {
             val command = try {
                 JvmWorkerResolver.resolve(
@@ -161,7 +137,7 @@ class JvmBareRpcTransport internal constructor(
             config: JsonObject = JsonObject(emptyMap()),
             runtimeContext: JsonObject? = desktopRuntimeContext(),
             timeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
-            rpcLimits: BareRpcLimits = BareRpcLimits(),
+            rpcLimits: RpcLimits = RpcLimits(),
             authenticated: Boolean = true,
         ): JvmBareRpcTransport {
             return connect(
@@ -181,7 +157,7 @@ class JvmBareRpcTransport internal constructor(
             config: JsonObject = JsonObject(emptyMap()),
             runtimeContext: JsonObject? = desktopRuntimeContext(),
             timeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
-            rpcLimits: BareRpcLimits = BareRpcLimits(),
+            rpcLimits: RpcLimits = RpcLimits(),
             authenticated: Boolean = true,
         ): JvmBareRpcTransport {
             require(command.isNotEmpty()) { "worker command must not be empty" }
@@ -211,7 +187,7 @@ class JvmBareRpcTransport internal constructor(
                 }
                 // Authentication has a deadline; inference RPCs do not inherit it.
                 socket.soTimeout = 0
-                val connected = JvmBareRpcTransport(JvmBareRpcSession(socket, rpcLimits), process, diagnostics, rpcLimits)
+                val connected = JvmBareRpcTransport(socket, process, diagnostics, rpcLimits)
                 transport = connected
                 val effectiveRuntimeContext = runtimeContext ?: JsonObject(emptyMap())
                 if (config.isNotEmpty() || effectiveRuntimeContext.isNotEmpty()) {
@@ -353,6 +329,7 @@ class JvmBareRpcTransport internal constructor(
         private const val PROCESS_EXIT_TIMEOUT_SECONDS = 5L
         private const val MAX_AUTH_TOKEN_BYTES = 256
         private const val HANDSHAKE_TIMEOUT_MS = 10_000
+        private const val READ_CHUNK_BYTES = 64 * 1024
         private const val IPC_AUTH_TOKEN_ENV = "QVAC_IPC_AUTH_TOKEN"
     }
 }
