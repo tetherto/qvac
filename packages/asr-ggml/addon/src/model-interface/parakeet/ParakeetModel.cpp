@@ -409,6 +409,7 @@ void ParakeetModel::feedInSlices(
 void ParakeetModel::forwardStreamEvent(
     const pkt::StreamEvent& event, VadSource source) {
   if (event.type == pkt::StreamEventType::EndOfTurn) {
+    emitStreamingSegments(takePendingStreamingSegments());
     if (onEndOfTurn_)
       onEndOfTurn_(toEndOfTurnEvent(event));
     return;
@@ -706,6 +707,7 @@ void ParakeetModel::endOfStream() {
 
 void ParakeetModel::reset() {
   output_.clear();
+  streamingSegmentsDelivered_ = false;
   stream_ended_ = false;
   processed_time_ = 0.0f;
   jobEncoderCalls_ = 0;
@@ -1135,11 +1137,19 @@ std::vector<Transcript> ParakeetModel::takePendingStreamingSegments() {
 void ParakeetModel::emitStreamingSegments(
     const std::vector<Transcript>& segments) {
   for (const auto& seg : segments) {
-    output_.push_back(seg);
-    if (on_segment_)
-      on_segment_(seg);
-    ++totalTranscriptions_;
+    emitStreamingTranscript(seg);
   }
+}
+
+void ParakeetModel::emitStreamingTranscript(const Transcript& segment) {
+  output_.push_back(segment);
+  if (onStreamingSegment_) {
+    onStreamingSegment_(segment);
+    streamingSegmentsDelivered_ = true;
+  }
+  if (on_segment_)
+    on_segment_(segment);
+  ++totalTranscriptions_;
 }
 
 void ParakeetModel::closeStreamingSession() {
@@ -1238,15 +1248,15 @@ std::string ParakeetModel::runStreamingProcess(const Input& input) {
       static_cast<double>(input.size()) / static_cast<double>(sample_rate_);
 
   std::vector<Transcript> drained = takePendingStreamingSegments();
-  if (drained.empty()) {
+  emitStreamingSegments(drained);
+  if (output_.empty()) {
     return isDiarization() ? ERR_NO_SPEAKERS : ERR_NO_SPEECH;
   }
 
-  emitStreamingSegments(drained);
   // Diarization segments are pre-formatted ("Speaker N: ..."); join with
   // newlines so the JS parser keeps working. ASR joins with spaces.
   const char* separator = isDiarization() ? "\n" : " ";
-  std::string joined = joinTranscriptText(drained, separator);
+  std::string joined = joinTranscriptText(output_, separator);
 
   reopenStreamingSession();
   return joined;
@@ -1325,10 +1335,7 @@ void ParakeetModel::process(const Input& input) {
       transcript.start = startTime;
       transcript.end = startTime + duration;
       transcript.toAppend = true;
-      output_.push_back(transcript);
-      ++totalTranscriptions_;
-      if (on_segment_)
-        on_segment_(transcript);
+      emitStreamingTranscript(transcript);
     }
     return;
   }
@@ -1383,6 +1390,8 @@ std::any ParakeetModel::process(const std::any& input) {
 
   Output result = std::move(output_);
   output_.clear();
+  if (streamingSegmentsDelivered_)
+    return Output{};
   return result;
 }
 

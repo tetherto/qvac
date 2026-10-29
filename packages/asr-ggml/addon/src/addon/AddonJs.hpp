@@ -394,6 +394,12 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
   if (parakeetModel != nullptr) {
+    parakeetModel->setOnStreamingSegmentCallback(
+        [queue = addon->addonCpp->outputQueue](
+            const parakeet::Transcript& segment) {
+          queue->queueResult(
+              std::any(std::vector<parakeet::Transcript>{segment}));
+        });
     // Framework-path streaming (cfg.streaming) VAD transitions share the
     // job output queue; the duplex path queues its own.
     parakeetModel->setOnVadEventCallback([queue = addon->addonCpp->outputQueue](

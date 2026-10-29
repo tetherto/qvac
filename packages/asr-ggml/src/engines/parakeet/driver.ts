@@ -578,6 +578,7 @@ export class ParakeetDriver implements AsrDriver {
       return;
     }
     if (event === "Output") {
+      if (Array.isArray(data) && data.length === 0) return;
       // The segment payload passes through untouched; a typed endOfTurn
       // event is additionally synthesized when the (last) segment carries
       // the model's end-of-utterance flag (double-signal).

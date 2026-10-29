@@ -158,6 +158,7 @@ void ParakeetStreamingProcessor::onDiarSegment(
 void ParakeetStreamingProcessor::onStreamEvent(
     const pkt::StreamEvent& event, VadSource source) {
   if (event.type == pkt::StreamEventType::EndOfTurn) {
+    emitPending();
     output_queue_->queueResult(
         std::any(ParakeetModel::toEndOfTurnEvent(event)));
     return;

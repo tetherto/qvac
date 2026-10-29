@@ -435,7 +435,9 @@ call and forwards each chunk as it arrives — no batching, no per-chunk session
 recreation. Speaker IDs stay stable across appends, and an EOU model's `<EOU>`
 boundaries surface both as `segment.isEndOfTurn` and as a native
 `{ type: 'endOfTurn', source: 'model-eou', timestamp, chunkIndex, confidence }`
-event. Event timestamps retain the native double precision.
+event. Event timestamps retain the native double precision. Each boundary
+follows its transcript chunks, including text flushed during finalization,
+so consumers can submit and clear accumulated text on `endOfTurn`.
 
 ```javascript
 const model = new ASRGgml({

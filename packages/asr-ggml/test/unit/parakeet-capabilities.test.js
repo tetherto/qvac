@@ -78,6 +78,7 @@ class MetadataBinding extends MockedBinding {
 
   endStreaming(handle) {
     process.nextTick(() => super._callCallbacks('Output', [FINAL_SEGMENT], null))
+    process.nextTick(() => super._callCallbacks('Output', [], null))
     return super.endStreaming(handle)
   }
 }
@@ -207,17 +208,9 @@ test('native streaming metadata, empty final markers and precise event timing su
   stream.end()
   await done
   t.alike(
-    updates.filter((item) => typeof item.text === 'string'),
-    [STREAM_SEGMENT, FINAL_SEGMENT]
-  )
-  t.alike(
-    updates.filter((item) => item.type === 'endOfTurn'),
-    [END_OF_TURN],
-    'native event is not duplicated by the segment flag'
-  )
-  t.alike(
-    updates.filter((item) => item.type === 'vad'),
-    [VAD]
+    updates,
+    [STREAM_SEGMENT, END_OF_TURN, VAD, FINAL_SEGMENT],
+    'the complete mixed output sequence preserves text, boundary and final-marker ordering without duplicates'
   )
   await model.unload()
 })

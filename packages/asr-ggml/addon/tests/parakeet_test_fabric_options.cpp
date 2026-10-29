@@ -21,6 +21,7 @@
 
 #include <gtest/gtest.h>
 
+#include "model-interface/ParakeetStreamingProcessor.hpp"
 #include "model-interface/ParakeetTypes.hpp"
 #include "model-interface/parakeet/AttributedTranscription.hpp"
 #include "model-interface/parakeet/ParakeetConfig.hpp"
@@ -49,6 +50,54 @@ bool hasStat(
 std::string ggufTestPath() {
   const char* env = std::getenv("QVAC_TEST_GGUF");
   return env != nullptr ? env : "";
+}
+
+class PendingOutputCallback
+    : public qvac_lib_inference_addon_cpp::OutputCallBackInterface {
+public:
+  void initializeProcessingThread(
+      std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue>) override {}
+  void notify() override {}
+  void stop() override {}
+};
+
+using StreamUpdate = std::variant<Transcript, EndOfTurnEvent>;
+
+void checkTurnSequence(const std::vector<StreamUpdate>& updates) {
+  const Transcript* lastSegment = nullptr;
+  int turns = 0;
+  std::string text;
+  for (const auto& update : updates) {
+    if (const auto* segment = std::get_if<Transcript>(&update)) {
+      lastSegment = segment;
+      text += segment->text;
+      EXPECT_FALSE(segment->text.starts_with("[")) << segment->text;
+    } else {
+      const auto& boundary = std::get<EndOfTurnEvent>(update);
+      ASSERT_NE(lastSegment, nullptr);
+      EXPECT_EQ(lastSegment->chunkIndex, boundary.chunkIndex);
+      EXPECT_TRUE(lastSegment->isEndOfTurn);
+      EXPECT_FALSE(text.empty());
+      text.clear();
+      ++turns;
+    }
+  }
+  EXPECT_GT(turns, 0);
+}
+
+void appendStreamUpdates(
+    const std::vector<std::pair<qvac_lib_inference_addon_cpp::JobId, std::any>>&
+        output,
+    std::vector<StreamUpdate>& updates) {
+  for (const auto& entry : output) {
+    if (const auto* segments =
+            std::any_cast<std::vector<Transcript>>(&entry.second)) {
+      updates.insert(updates.end(), segments->begin(), segments->end());
+    } else if (
+        const auto* boundary = std::any_cast<EndOfTurnEvent>(&entry.second)) {
+      updates.emplace_back(*boundary);
+    }
+  }
 }
 
 // s16le mono 16 kHz PCM from the repo's example clips, as float samples.
@@ -84,6 +133,73 @@ TEST(ParakeetEngineOptions, DefaultsMatchSpeechCpp) {
   EXPECT_EQ(built.long_form_window_frames, fabric.long_form_window_frames);
   EXPECT_EQ(built.long_form_context_frames, fabric.long_form_context_frames);
   EXPECT_EQ(built.backend, fabric.backend);
+}
+
+TEST(
+    ParakeetStreamingOrdering,
+    FrameworkDeliversTranscriptBeforeBoundaryWithoutRepeatingOutput) {
+  const char* modelPath = std::getenv("QVAC_TEST_EOU_GGUF");
+  const char* audioPath = std::getenv("QVAC_TEST_AUDIO_PCM");
+  if (modelPath == nullptr || audioPath == nullptr) {
+    GTEST_SKIP() << "Set QVAC_TEST_EOU_GGUF and QVAC_TEST_AUDIO_PCM";
+  }
+  const auto audio = readRawPcm(audioPath);
+  ASSERT_FALSE(audio.empty());
+  for (const bool callbackDelivery : {false, true}) {
+    ParakeetConfig config;
+    config.modelPath = modelPath;
+    config.backend = "cpu";
+    config.streaming = true;
+    ParakeetModel model(config);
+    std::vector<StreamUpdate> updates;
+    const auto recordSegment = [&](const Transcript& segment) {
+      updates.emplace_back(segment);
+    };
+    if (callbackDelivery)
+      model.setOnStreamingSegmentCallback(recordSegment);
+    else
+      model.setOnSegmentCallback(recordSegment);
+    model.setOnEndOfTurnCallback(
+        [&](const EndOfTurnEvent& event) { updates.emplace_back(event); });
+    model.load();
+    const auto result =
+        std::any_cast<ParakeetModel::Output>(model.process(std::any(audio)));
+    EXPECT_EQ(result.empty(), callbackDelivery);
+    checkTurnSequence(updates);
+  }
+}
+
+TEST(
+    ParakeetStreamingOrdering,
+    DuplexQueuesTranscriptBeforeBoundaryAndTerminalStats) {
+  const char* modelPath = std::getenv("QVAC_TEST_EOU_GGUF");
+  const char* audioPath = std::getenv("QVAC_TEST_AUDIO_PCM");
+  if (modelPath == nullptr || audioPath == nullptr) {
+    GTEST_SKIP() << "Set QVAC_TEST_EOU_GGUF and QVAC_TEST_AUDIO_PCM";
+  }
+  auto audio = readRawPcm(audioPath);
+  ASSERT_FALSE(audio.empty());
+  ParakeetConfig config;
+  config.modelPath = modelPath;
+  config.backend = "cpu";
+  ParakeetModel model(config);
+  model.load();
+  PendingOutputCallback callback;
+  auto queue = std::make_shared<qvac_lib_inference_addon_cpp::OutputQueue>(
+      callback, model);
+  ParakeetStreamingProcessor::Config streaming;
+  ParakeetStreamingProcessor processor(model, queue, streaming);
+  processor.appendAudio(std::move(audio));
+  processor.end();
+  const auto output = queue->clear();
+  ASSERT_FALSE(output.empty());
+  EXPECT_NE(
+      std::any_cast<qvac_lib_inference_addon_cpp::RuntimeStats>(
+          &output.back().second),
+      nullptr);
+  std::vector<StreamUpdate> updates;
+  appendStreamUpdates(output, updates);
+  checkTurnSequence(updates);
 }
 
 TEST(ParakeetEngineOptions, ExplicitSelectorsAreIndependentOfGpuPreference) {

@@ -195,6 +195,9 @@ public:
   void setOnSegmentCallback(const OutputCallback& callback) {
     on_segment_ = callback;
   }
+  void setOnStreamingSegmentCallback(OutputCallback callback) {
+    onStreamingSegment_ = std::move(callback);
+  }
   // Receives the VAD transitions of the framework-path streaming session
   // (cfg_.streaming). Called from inside feed_pcm_f32 / finalize, i.e. on
   // the processing thread or the endOfStream() caller's.
@@ -426,6 +429,7 @@ private:
   void pushPendingSegment(Transcript segment);
   std::vector<Transcript> takePendingStreamingSegments();
   void emitStreamingSegments(const std::vector<Transcript>& segments);
+  void emitStreamingTranscript(const Transcript& segment);
   int64_t feedStreamingChunk(const Input& input);
   void reopenStreamingSession();
 
@@ -437,6 +441,8 @@ private:
 
   VadEventCallback onVadEvent_;
   EndOfTurnCallback onEndOfTurn_;
+  OutputCallback onStreamingSegment_;
+  bool streamingSegmentsDelivered_ = false;
   // Last state forwarded by the framework-path session; repeats are dropped.
   // Guarded by streaming_mutex_ (finalize() can run on another thread).
   std::optional<bool> lastVadSpeaking_;
