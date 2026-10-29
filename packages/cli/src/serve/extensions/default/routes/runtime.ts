@@ -84,8 +84,11 @@ export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyP
     // before reporting the failure and keep the request gate in step.
     async function transition(
       run: () => Promise<void>,
+      pending: 'suspending' | 'resuming',
       failure: { code: string; message: string }
     ): Promise<z.infer<typeof runtimeState>> {
+      // Gate new requests for as long as the SDK call runs.
+      qvac.runtime.state = pending
       try {
         await run()
       } catch (err) {
@@ -174,7 +177,7 @@ export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyP
         }
       },
       () =>
-        transition(ops.suspend, {
+        transition(ops.suspend, 'suspending', {
           code: 'runtime_suspend_failed',
           message:
             'Failed to pause every runtime resource. The runtime is suspended; POST /qvac/v1/runtime/resume to recover.'
@@ -201,7 +204,7 @@ export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyP
         }
       },
       () =>
-        transition(ops.resume, {
+        transition(ops.resume, 'resuming', {
           code: 'runtime_resume_failed',
           message:
             'Failed to restore every runtime resource. The runtime is still suspended; retry.'

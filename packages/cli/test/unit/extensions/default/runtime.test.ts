@@ -10,6 +10,7 @@ interface Fake {
   state: LifecycleState
   failSuspend: boolean
   failResume: boolean
+  suspendLatch?: Promise<void>
 }
 
 function fakeOperations(fake: Fake): RuntimeOperations {
@@ -17,6 +18,7 @@ function fakeOperations(fake: Fake): RuntimeOperations {
   return {
     state: async () => fake.state,
     suspend: async () => {
+      await fake.suspendLatch
       fake.state = 'suspended'
       if (fake.failSuspend) throw new Error('swarm refused')
     },
@@ -115,6 +117,25 @@ describe('runtime routes with --enable-admin', () => {
     const resumed = await app.inject({ method: 'POST', url: '/qvac/v1/runtime/resume' })
     assert.deepEqual(resumed.json(), { object: 'runtime.state', state: 'active' })
     assert.equal((await app.inject({ method: 'GET', url: '/probe' })).statusCode, 200)
+  })
+
+  it('gates requests while the suspend is still running', async () => {
+    let release = (): void => {}
+    fake.suspendLatch = new Promise((resolve) => {
+      release = resolve
+    })
+    try {
+      const suspending = app.inject({ method: 'POST', url: '/qvac/v1/runtime/suspend' })
+      await new Promise((resolve) => setImmediate(resolve))
+      const probe = await app.inject({ method: 'GET', url: '/probe' })
+      assert.equal(probe.statusCode, 503)
+      assert.match(probe.payload, /suspending/)
+      release()
+      assert.equal((await suspending).statusCode, 200)
+    } finally {
+      release()
+      delete fake.suspendLatch
+    }
   })
 
   it('reports a partial suspend as 500 and still gates requests', async () => {
