@@ -499,6 +499,15 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
                     MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
             ")");
   }
+  // Cells an eviction left in the sequence belong to no conversation until
+  // `cacheGuard` below takes the sequence over: a throw before then clears
+  // them, or the next request admitted there would decode on top of them.
+  ScopeGuard evictedCellsGuard(
+      [this, seqId, leftCells = evicted.has_value()]() noexcept {
+        if (leftCells) {
+          clearSeqKv(seqId);
+        }
+      });
   std::unique_ptr<SequenceDriver> driver = driverFactory_(
       tmpParams, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
   if (evicted.has_value() && !driver->sharesCacheAcrossKeys()) {
@@ -633,6 +642,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     }
     clearSeqKv(seqId);
   });
+  evictedCellsGuard.dismiss();
 
   // `json_schema` / `tool_choice` shape the chat-template render, not the
   // sampler, so they travel separately from the `tmpParams` overrides above.
