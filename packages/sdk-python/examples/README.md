@@ -117,6 +117,7 @@ extra.
 | `sharded_models.py`                | `llamacpp-sharded.ts`                                  | `load_model` with a sharded `model_src`; per-shard progress from `on_progress`'s `shard_info`                             |
 | `logging_streams.py`               | `logging-streaming.ts`                                 | `logging_stream`, `SDK_LOG_ID`                                                                                            |
 | `logging_global.py`                | `logging-global.ts`                                    | `subscribe_server_logs` fan-in; `config/logging/logging.config.json` passed as `Client(config=...)`                     |
+| `profiling_per_call.py`            | `profiling/per-call.ts`                                | `profiled_call` on `embed`, an unprofiled call, and an explicitly disabled `__profiling` meta; prints the `ProfilingReport` |
 | `classify_image.py`                | `classification/classify-image.ts`                     | `classify` (`ClassifyRequest`) with a base64 image on the bundled MobileNetV3-Small model (`model_type` only)           |
 | `decisions.py`                     | `decisions.ts`                                         | `decide` (`DecideRequest`): choice, score and `noul` questions on one state; optional local GGUF argument               |
 | `rerank.py`                        | `rerank.ts`                                            | `rerank` (`RerankRequest`): one score per document, sorted; optional GGUF path or URL argument                          |
