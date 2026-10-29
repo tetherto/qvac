@@ -165,8 +165,8 @@ the worker during long-running operations, and
 no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with Electron's
 packaged worker lock.
 
-`classification-` runs in Electron through the shared Node executor and bundled `@qvac/classification-ggml`
-weights; no registry model pre-download is required.
+`classification-` runs in Electron through the shared Node executor. `loadModel` omits
+`modelSrc`, and the engine downloads the registry MobileNetV3-Small on first load.
 
 ### Strict Snap e2e
 

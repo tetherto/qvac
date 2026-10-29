@@ -69,8 +69,7 @@ async function resolveTableAsset(kind: string, file: string): Promise<string> {
  * `require` while it bundles, so a template literal fails the whole build.
  */
 const PACKAGE_ASSETS: Record<string, number> = {
-  // @ts-ignore - Metro turns the bundled data file into an asset module.
-  '@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf': require('../../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf')
+  // Classification downloads its registry model, so no package file is bundled.
 }
 
 /** A data file inside an installed package, as a bundled-asset URI. */

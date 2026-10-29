@@ -225,12 +225,11 @@ async function resolveModelPathInner(
     )
   }
 
-  // Empty modelSrc is reserved for plugins that ship bundled weights
-  // (e.g. `@qvac/classification-ggml`). The handler skips this resolver
-  // for them when `skipPrimaryModelPathValidation` is set, but if it
-  // somehow gets called we return an empty path so the plugin's
-  // `params.modelPath` falls through to undefined instead of being set
-  // to the cache directory itself.
+  // Empty modelSrc is reserved for plugins that take their weights from
+  // config (audiogen, or classification with an explicit modelConfig.modelPath).
+  // Classification loads that omit modelSrc are rewritten to the registry
+  // default before this resolver runs. An empty path must not become the
+  // cache directory itself.
   if (srcString === '') {
     return { path: '', sourceType: 'filesystem' }
   }

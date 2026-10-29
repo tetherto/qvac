@@ -314,17 +314,7 @@
     }
   },
   "classification": {
-    "type": "ggml-classification",
-    "configOn": {
-      "mobile": {
-        "modelPath": {
-          "$packageAsset": {
-            "package": "@qvac/classification-ggml",
-            "file": "weights/mobilenetv3_3class_v3_fp16.gguf"
-          }
-        }
-      }
-    }
+    "type": "ggml-classification"
   },
   "echo": {
     "type": "echo",

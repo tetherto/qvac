@@ -259,8 +259,8 @@ async def load_model(
         if model_type is not None:
             payload["modelType"] = model_type
     else:
-        # An addon that ships its own weights is loaded by type alone -- `ggml-
-        # classification`, `audiogen-ggml`.
+        # Some model types load with an empty modelSrc: classification then
+        # downloads the registry default, and audiogen takes weights from config.
         payload["modelSrc"] = (
             model_src_to_wire(model_src) if model_src is not None else ""
         )

@@ -248,8 +248,8 @@ describe('resolveNestedModelSrcConstants', () => {
   })
 })
 
-describe('parseServeConfig bundled weights', () => {
-  it('loads the bundled classifier when a classification alias has no src', () => {
+describe('parseServeConfig default weights', () => {
+  it('loads the registry classifier when a classification alias has no src', () => {
     const cfg = parseServeConfig(
       { serve: { models: { cls: { type: 'ggml-classification' } } } },
       {}

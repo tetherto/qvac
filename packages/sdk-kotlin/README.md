@@ -75,7 +75,7 @@ are loaded one at a time and retained in the SDK cache after unload.
 | TTS | `TTS_MULTILINGUAL_SUPERTONIC3_Q4_0` | 85 MB | 24.9 s |
 | Embeddings | `EMBEDDINGGEMMA_300M_Q4_0` | 278 MB | 15.5 s |
 | Translation | `BERGAMOT_EN_FR` + vocabularies | 32 MB + companions | 1.8 s |
-| Classification | bundled MobileNetV3 | 3 MB | 1.3 s |
+| Classification | registry MobileNetV3 | 3 MB | 1.3 s |
 
 The cached matrix completed in 117.8 seconds. A clean first run additionally
 downloads roughly 1.4 GB and depends on network speed. AudioGen,

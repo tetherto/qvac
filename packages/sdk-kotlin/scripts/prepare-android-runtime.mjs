@@ -18,12 +18,8 @@ const generatedRoot = process.env.QVAC_KOTLIN_GENERATED_ROOT
   : path.join(projectRoot, 'android-barekit', 'build', 'generated', 'qvac', 'aio')
 const assetsDirectory = path.join(generatedRoot, 'assets', 'qvac')
 const addonsDirectory = path.join(generatedRoot, 'addons')
-const classificationAssetsDirectory = path.join(assetsDirectory, 'classification')
 const qvacConfig = JSON.parse(await fs.readFile(configPath, 'utf8'))
 const profileName = process.env.QVAC_KOTLIN_PROFILE ?? path.basename(configPath, '.json')
-const includesClassification = (qvacConfig.plugins ?? []).includes(
-  '@qvac/sdk/ggml-classification/plugin'
-)
 
 const pluginCapabilities = new Map([
   ['@qvac/sdk/llamacpp-completion/plugin', ['LLM']],
@@ -49,7 +45,6 @@ const capabilities = [
 await fs.rm(generatedRoot, { recursive: true, force: true })
 await fs.mkdir(assetsDirectory, { recursive: true })
 await fs.mkdir(addonsDirectory, { recursive: true })
-if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recursive: true })
 
 // Bundle the checkout's packages/sdk. The worker build owns compiling it.
 const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
@@ -61,8 +56,6 @@ const { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } = await i
     ? pathToFileURL(path.join(bundleSdkPath, 'dist', 'src', 'commands', 'index.js')).href
     : '@qvac/sdk/commands'
 )
-const classificationWeightsSource = classificationWeightsPath(modulesRoot)
-
 // Split addons ship their native code in per-platform packages, installed at
 // each meta's version before bundling.
 await ensureHostPrebuilds('android-arm64', modulesRoot)
@@ -114,19 +107,10 @@ if (typeof workerBundle !== 'string') {
   throw new Error('bare-pack mobile bundle did not export a string')
 }
 await fs.writeFile(path.join(assetsDirectory, 'worker.bundle'), workerBundle)
-const runtimeAssets = [
+await Promise.all([
   fs.copyFile(path.join(sdkRoot, 'LICENSE'), path.join(assetsDirectory, 'LICENSE')),
   fs.copyFile(path.join(sdkRoot, 'NOTICE'), path.join(assetsDirectory, 'NOTICE'))
-]
-if (includesClassification) {
-  runtimeAssets.push(
-    fs.copyFile(
-      classificationWeightsSource,
-      path.join(classificationAssetsDirectory, 'mobilenetv3_3class_v3_fp16.gguf')
-    )
-  )
-}
-await Promise.all(runtimeAssets)
+])
 
 const manifest = JSON.parse(await fs.readFile(bundle.manifestPath, 'utf8'))
 const sdkPackagePath = bundleSdkPath
@@ -185,14 +169,7 @@ await fs.writeFile(
       plugins: qvacConfig.plugins ?? [],
       workerSha256: createHash('sha256').update(workerBundle).digest('hex'),
       resolvedDependencies,
-      resources: includesClassification
-        ? [
-            {
-              name: 'classification/mobilenetv3_3class_v3_fp16.gguf',
-              sha256: await sha256(classificationWeightsSource)
-            }
-          ]
-        : [],
+      resources: [],
       addons: linkedAddons
     },
     null,
@@ -215,13 +192,6 @@ function ensureWorkspaceSdk(sdkDir) {
 
 function packageDir(modulesRoot, name) {
   return path.join(modulesRoot, 'node_modules', ...name.split('/'))
-}
-
-function classificationWeightsPath(modulesRoot) {
-  const weights = path.join('weights', 'mobilenetv3_3class_v3_fp16.gguf')
-  const bundled = path.join(packageDir(modulesRoot, '@qvac/classification-ggml'), weights)
-  if (fsSync.existsSync(bundled)) return bundled
-  return path.join(packageDir(projectRoot, '@qvac/classification-ggml'), weights)
 }
 
 async function readInstalledVersion(packageName, root = projectRoot) {

@@ -10,7 +10,7 @@ import { encodeBase64 } from '@/utils/encoding'
 /**
  * Classifies an image using a loaded classification model.
  *
- * The bundled MobileNetV3-Small model produces 3 labels: `"food"`, `"report"`, `"other"`.
+ * The default registry MobileNetV3-Small model produces 3 labels: `"food"`, `"report"`, `"other"`.
  * Custom models may emit different labels sourced from the GGUF metadata.
  *
  * @param params - The loaded model ID, image data, optional raw-image

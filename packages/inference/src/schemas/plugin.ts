@@ -430,7 +430,8 @@ export const PLUGIN_VLA = '@qvac/inference/ggml-vla/plugin' as const
 
 /**
  * Image classification plugin (GGML / MobileNetV3-Small).
- * Provides: image classification with bundled 3-class model (food / report / other).
+ * Provides: image classification. Omitting modelSrc downloads the registry
+ * 3-class model (food / report / other).
  */
 export const PLUGIN_CLASSIFICATION = '@qvac/inference/ggml-classification/plugin' as const
 

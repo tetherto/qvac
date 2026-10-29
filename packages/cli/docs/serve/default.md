@@ -530,7 +530,7 @@ The [binary input](#binary-inputs) errors apply to `image`, plus:
 }
 ```
 
-An alias without `src` loads the addon's bundled MobileNetV3-Small, whose labels are `food`,
+An alias without `src` downloads the registry MobileNetV3-Small, whose labels are `food`,
 `report` and `other`. Set `src` to the path of a GGUF classifier to use your own; its labels
 come from the GGUF metadata.
 

@@ -194,20 +194,9 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { backend: ['cpu'] }
   },
 
+  // No modelSrc: the engine downloads the registry MobileNetV3-Small.
   classification: {
-    type: 'ggml-classification',
-    // Bundled weights: the worker finds them itself on desktop, and cannot on mobile, where the
-    // Bare bundle does not expose package data files at `__dirname`.
-    configOn: {
-      mobile: {
-        modelPath: {
-          $packageAsset: {
-            package: '@qvac/classification-ggml',
-            file: 'weights/mobilenetv3_3class_v3_fp16.gguf'
-          }
-        }
-      }
-    }
+    type: 'ggml-classification'
   },
 
   echo: {

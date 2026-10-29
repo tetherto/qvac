@@ -19,6 +19,8 @@ export const classificationPlugin = definePlugin({
   displayName: 'Image Classification (GGML)',
   addonPackage: ADDON_CLASSIFICATION,
   loadConfigSchema: classificationConfigSchema,
+  // Omitted modelSrc is rewritten to the registry default before resolve.
+  // The flag stays so modelConfig.modelPath can load a local file with no modelSrc.
   skipPrimaryModelPathValidation: true,
 
   createModel(params: CreateModelParams): PluginModelResult {

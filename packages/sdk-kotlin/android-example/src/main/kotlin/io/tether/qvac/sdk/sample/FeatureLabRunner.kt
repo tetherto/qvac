@@ -19,7 +19,6 @@ import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelRequest
 import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequest
 import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlClassification
-import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlClassificationModelConfig
 import io.tether.qvac.sdk.embeddings
 import io.tether.qvac.sdk.loadModel
 import io.tether.qvac.sdk.models
@@ -193,11 +192,7 @@ class FeatureLabRunner(
         }
 
     private suspend fun runClassification(progress: (String) -> Unit): String {
-        progress("loading bundled MobileNetV3")
-        val weights = copyAssetToCache(
-            "qvac/classification/mobilenetv3_3class_v3_fp16.gguf",
-            "qvac-feature-lab-mobilenetv3.gguf",
-        )
+        progress("loading registry MobileNetV3")
         val image = createVisionImage()
         var modelId: String? = null
         return try {
@@ -205,9 +200,6 @@ class FeatureLabRunner(
                 LoadModelRequest.LoadModelSrcRequest(
                     LoadModelSrcRequest.GgmlClassification(
                         LoadModelSrcRequestGgmlClassification(
-                            modelConfig = LoadModelSrcRequestGgmlClassificationModelConfig(
-                                modelPath = weights.absolutePath,
-                            ),
                             modelSrc = "",
                             seed = false,
                             withProgress = false,
@@ -228,7 +220,6 @@ class FeatureLabRunner(
             "${best.label} · ${(best.confidence * 100).toInt()}%"
         } finally {
             image.delete()
-            weights.delete()
             modelId?.let { runCatching { client.models.unload(it, clearStorage = false) } }
         }
     }

@@ -225,10 +225,10 @@ test('resolveRegistryDownloadMetadata: catalog metadata wins over descriptor met
   t.is(metadata.checksum, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
 })
 
-test('loadModelSrcRequestSchema: accepts classification load with empty modelSrc (bundled weights)', (t) => {
-  // Classification ships bundled GGUF weights, so callers can omit modelSrc.
-  // The client-side transform produces modelSrc: "" in that case; the server
-  // schema must accept it without falling through to the custom-plugin arm.
+test('loadModelSrcRequestSchema: accepts classification load with empty modelSrc', (t) => {
+  // Callers can omit modelSrc. The client transform produces modelSrc: "".
+  // The load handler then downloads the registry default. The server schema
+  // must accept "" without falling through to the custom-plugin arm.
   const bundledLoad = {
     type: 'loadModel',
     modelType: ModelType.ggmlClassification,

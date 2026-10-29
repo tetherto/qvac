@@ -21728,7 +21728,7 @@ class LoadModelSrcRequestGgmlClassificationModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="modelPath",
-            description="Absolute path to the GGUF weights file. Defaults to the bundled model inside @qvac/classification-ggml.",
+            description="Absolute path to a GGUF weights file. When modelSrc is omitted and this is unset, the engine downloads the registry MobileNetV3-Small model.",
         ),
     ] = None
     top_k: Annotated[

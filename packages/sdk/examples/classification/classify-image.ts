@@ -2,10 +2,10 @@ import fs from 'fs'
 import { loadModel, classify, unloadModel } from '@qvac/sdk'
 
 /**
- * Classify an image using the bundled MobileNetV3-Small model.
+ * Classify an image using the registry MobileNetV3-Small model.
  *
- * The bundled model produces three classes: "food", "report", "other".
- * No modelSrc is needed — the model ships inside @qvac/classification-ggml.
+ * The default model produces three classes: "food", "report", "other".
+ * No modelSrc is needed — the engine downloads it from the registry.
  */
 async function main() {
   const modelId = await loadModel({

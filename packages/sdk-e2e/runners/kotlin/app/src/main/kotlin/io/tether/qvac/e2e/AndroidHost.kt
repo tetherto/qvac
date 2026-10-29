@@ -38,7 +38,7 @@ class AndroidHost(private val context: Context) : HostResolvers {
         return File(File(fixtureRoot, root), file).absolutePath
     }
 
-    /** Copied into the APK by packages/sdk-kotlin/scripts/prepare-android-runtime.mjs. */
+    /** APK assets named in PACKAGE_ASSETS. Classification downloads its registry model instead. */
     override fun packageAsset(pkg: String, file: String): String {
         val asset = PACKAGE_ASSETS["$pkg/$file"]
             ?: error("package asset not bundled on Android: $pkg/$file -- add it to AndroidHost.PACKAGE_ASSETS")
@@ -55,8 +55,6 @@ class AndroidHost(private val context: Context) : HostResolvers {
     }
 
     private companion object {
-        val PACKAGE_ASSETS = mapOf(
-            "@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf" to "qvac/classification/mobilenetv3_3class_v3_fp16.gguf",
-        )
+        val PACKAGE_ASSETS = emptyMap<String, String>()
     }
 }

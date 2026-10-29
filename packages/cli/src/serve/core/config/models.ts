@@ -141,8 +141,8 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
   }
 }
 
-// The classification addon ships its own weights; the SDK loads them for an empty src.
-const BUNDLED_WEIGHTS_CATEGORIES = new Set(['classification'])
+// Classification downloads its registry model when src is omitted.
+const DEFAULT_MODEL_CATEGORIES = new Set(['classification'])
 
 function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedModelEntry {
   if (!entry.type) {
@@ -152,7 +152,7 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
   const rawConfig = entry.config ?? {}
   const resolved = resolveForAlias(alias, entry.type, rawConfig)
 
-  if (!entry.src && !BUNDLED_WEIGHTS_CATEGORIES.has(resolved.endpointCategory)) {
+  if (!entry.src && !DEFAULT_MODEL_CATEGORIES.has(resolved.endpointCategory)) {
     throw new Error(`serve.models.${alias}: "src" is required`)
   }
   const src = entry.src ?? ''

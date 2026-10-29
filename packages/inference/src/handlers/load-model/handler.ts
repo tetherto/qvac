@@ -8,8 +8,10 @@ import {
   normalizeModelType,
   PROFILING_KEY,
   OPERATION_EVENT_KEY,
+  ModelType,
   type OperationEvent
 } from '@/schemas/index'
+import { classificationModelSrc } from '@/plugins/builtin/ggml-classification/default-model'
 import { loadModel } from '@/plugins/ops/load-model'
 import { createResolveSession } from '@/handlers/load-model/resolve-session'
 import { nowMs, generateProfileId } from '@/profiling/clock'
@@ -84,6 +86,13 @@ export async function handleLoadModel(
     }
     resolvedModelConfig = parseResult.data as Record<string, unknown>
 
+    // An omitted classification modelSrc downloads the registry default.
+    // An explicit modelConfig.modelPath stays a local file and is not downloaded.
+    const effectiveModelSrc =
+      canonicalModelType === ModelType.ggmlClassification
+        ? classificationModelSrc(modelSrc, resolvedModelConfig)
+        : (modelSrc ?? '')
+
     const totalLoadStart = profilingEnabled ? nowMs() : 0
 
     const session = createResolveSession({
@@ -99,7 +108,7 @@ export async function handleLoadModel(
       security: { requireHttpChecksum, requireSecureTransport }
     })
 
-    const primaryResolve = session.resolvePrimaryModelPath(modelSrc, fallbackSrc)
+    const primaryResolve = session.resolvePrimaryModelPath(effectiveModelSrc, fallbackSrc)
 
     let resolvedModelPath: string
     let pluginResolveResult:
@@ -110,7 +119,7 @@ export async function handleLoadModel(
         ? Promise.resolve().then(() =>
             plugin.resolveConfig!(
               resolvedModelConfig,
-              session.createResolveContext(modelSrc, canonicalModelType, modelName)
+              session.createResolveContext(effectiveModelSrc, canonicalModelType, modelName)
             )
           )
         : undefined
@@ -134,7 +143,7 @@ export async function handleLoadModel(
     }
 
     const configStr = canonicalConfigString(request.modelConfig)
-    const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`
+    const modelHashInput = `${request.modelType}:${effectiveModelSrc}:${configStr}`
     const modelId = generateShortHash(modelHashInput)
 
     let pluginArtifacts: Record<string, string> = {}
@@ -152,8 +161,8 @@ export async function handleLoadModel(
     }
 
     // An empty resolved path is legitimate when the plugin opts out of
-    // primary-model-path validation (bundled weights). For every other
-    // plugin, an empty path means resolution failed and we must abort.
+    // primary-model-path validation (weights come from config). For every
+    // other plugin, an empty path means resolution failed and we must abort.
     if (!resolvedModelPath && !plugin.skipPrimaryModelPathValidation) {
       throw new ModelLoadFailedError('modelPath resolution failed')
     }

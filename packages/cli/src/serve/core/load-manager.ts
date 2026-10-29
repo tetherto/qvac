@@ -147,7 +147,7 @@ export function createLoadManager(
 
       const displaySrc =
         typeof entry.modelSrc === 'string'
-          ? entry.modelSrc || 'bundled weights'
+          ? entry.modelSrc || 'registry default'
           : entry.modelSrc.src
       logger.info(`Loading model "${alias}" from ${displaySrc}...`)
       registry.setLoading(alias)

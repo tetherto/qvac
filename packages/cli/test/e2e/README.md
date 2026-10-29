@@ -72,7 +72,7 @@ test/e2e/
     tts.test.ts                   spawned config: TTS; encoded formats ffmpeg-gated
     translate.test.ts             in-process: Bergamot NMT translation
     ocr.test.ts                   in-process: EasyOCR text recognition
-    classifications.test.ts       in-process: bundled MobileNetV3-Small classifier
+    classifications.test.ts       in-process: registry MobileNetV3-Small classifier
     system-model-fit.test.ts      in-process: host resources and pre-load model fit
     chat-batch.test.ts            in-process: batch chat on a parallel:2 LLM
     registry.test.ts              in-process: live model registry browse and lookup

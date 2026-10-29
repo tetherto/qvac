@@ -5,7 +5,7 @@ export const classificationConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Absolute path to the GGUF weights file. Defaults to the bundled model inside @qvac/classification-ggml.'
+      'Absolute path to a GGUF weights file. When modelSrc is omitted and this is unset, the engine downloads the registry MobileNetV3-Small model.'
     ),
   topK: z
     .number()

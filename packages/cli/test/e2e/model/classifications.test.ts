@@ -7,7 +7,7 @@ import { assertStatusAndError, multipart } from '../helpers/http.js'
 const ALIAS = 'test-classifier'
 const ROUTE = '/qvac/v1/classifications'
 
-// No src: the addon's bundled MobileNetV3-Small, labels food / report / other.
+// No src: the registry MobileNetV3-Small, labels food / report / other.
 const CLASSIFICATION_CONFIG = {
   serve: {
     models: {

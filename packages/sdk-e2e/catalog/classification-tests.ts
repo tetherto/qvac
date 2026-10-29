@@ -1,6 +1,6 @@
 import type { Step, TestDefinition } from '@qvac/test-suite'
 
-/** One classification of the bundled sample image. */
+/** One classification of the sample image. */
 const classifySteps = (checks: Step[], topK?: string): Step[] => [
   { useModel: { deps: ['classification'], as: 'model' } },
   { asset: { kind: 'image', file: 'elephant.jpg', as: 'image' } },
@@ -15,10 +15,10 @@ const classifySteps = (checks: Step[], topK?: string): Step[] => [
   ...checks
 ]
 
-// The bundled MobileNetV3-Small classifier returns 3 classes
+// The registry MobileNetV3-Small classifier returns 3 classes
 // ("food", "report", "other") with softmax probabilities. These tests
 // exercise the SDK's `classify()` client function end-to-end against
-// the bundled weights. Numerical correctness lives in the addon's own
+// that model. Numerical correctness lives in the addon's own
 // integration suite — here we focus on the SDK shape contract.
 
 const createClassificationTest = (
@@ -45,7 +45,7 @@ const createClassificationTest = (
 })
 
 // Result shape: an array of `{label, confidence}` objects sorted by
-// descending confidence. With the bundled MobileNetV3-Small all three
+// descending confidence. With the registry MobileNetV3-Small all three
 // canonical labels must appear and every confidence must be in [0, 1].
 export const classificationResultsShape = createClassificationTest(
   'classification-results-shape',
