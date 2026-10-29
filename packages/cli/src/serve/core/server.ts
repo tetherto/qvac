@@ -155,6 +155,17 @@ export async function createCoreServer(
     )
   }
 
+  // A body-less POST is a CORS simple request: a browser sends it cross-site
+  // without a preflight, so admin routes check the Origin themselves.
+  const matchAdminOrigin = createCorsOriginMatcher(corsOrigins)
+  function adminOriginAllowed(origin: string | undefined): boolean {
+    let allowed = false
+    matchAdminOrigin(origin, (_error, ok) => {
+      allowed = ok === true
+    })
+    return allowed
+  }
+
   // After auth, so an unauthenticated caller learns nothing about the opt-in.
   // lunte-disable-next-line require-await
   app.addHook('onRequest', async (req) => {
@@ -164,6 +175,13 @@ export async function createCoreServer(
         403,
         'admin_disabled',
         'This endpoint is admin-only. Start the server with --enable-admin or serve.enableAdmin: true.'
+      )
+    }
+    if (config?.admin === true && !adminOriginAllowed(req.headers.origin)) {
+      throw new HttpError(
+        403,
+        'origin_not_allowed',
+        'Admin endpoints refuse browser requests from an origin outside --cors-origin or serve.cors.origins.'
       )
     }
     if (

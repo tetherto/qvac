@@ -38,14 +38,19 @@ function fakeOperations(fake: Fake): RuntimeOperations {
   /* lunte-enable require-await */
 }
 
-async function server(fake: Fake, enableAdmin: boolean): Promise<FastifyInstance> {
+async function server(
+  fake: Fake,
+  enableAdmin: boolean,
+  corsOrigins?: string[]
+): Promise<FastifyInstance> {
   const app = await buildServer({
     projectRoot: tmpdir(),
     port: 0,
     host: '127.0.0.1',
     quiet: true,
     extensions: [],
-    enableAdmin
+    enableAdmin,
+    corsOrigins
   })
   await app.register(runtimeRoutes(fakeOperations(fake)))
   // lunte-disable-next-line require-await
@@ -179,5 +184,50 @@ describe('runtime routes with --enable-admin', () => {
         }
       ]
     })
+  })
+})
+
+describe('runtime admin routes and the request Origin', () => {
+  const fake: Fake = { state: 'active', failSuspend: false, failResume: false }
+  let app: FastifyInstance
+  before(async () => {
+    app = await server(fake, true, ['https://app.example.com'])
+  })
+  after(async () => {
+    await app.close()
+  })
+  beforeEach(async () => {
+    await app.inject({ method: 'POST', url: '/qvac/v1/runtime/resume' })
+  })
+
+  it('refuses a browser request from an origin outside the CORS allowlist', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/qvac/v1/runtime/suspend',
+      headers: { origin: 'https://evil.example' }
+    })
+    assert.equal(res.statusCode, 403)
+    assert.equal(code(res), 'origin_not_allowed')
+    assert.equal(fake.state, 'active')
+  })
+
+  it('accepts an allowlisted origin and a request with no Origin', async () => {
+    const allowed = await app.inject({
+      method: 'POST',
+      url: '/qvac/v1/runtime/suspend',
+      headers: { origin: 'https://app.example.com' }
+    })
+    assert.equal(allowed.statusCode, 200, allowed.payload)
+    const plain = await app.inject({ method: 'POST', url: '/qvac/v1/runtime/resume' })
+    assert.equal(plain.statusCode, 200, plain.payload)
+  })
+
+  it('leaves the read-only routes open to any origin', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/qvac/v1/runtime/state',
+      headers: { origin: 'https://evil.example' }
+    })
+    assert.equal(res.statusCode, 200, res.payload)
   })
 })

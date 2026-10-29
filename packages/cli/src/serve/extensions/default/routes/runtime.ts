@@ -16,8 +16,9 @@ import {
   type RuntimeModel
 } from '@/serve/extensions/default/schemas/runtime'
 
-const ADMIN_DISABLED = {
-  admin_disabled: 'The server was started without `--enable-admin`'
+const ADMIN_REFUSED = {
+  admin_disabled: 'The server was started without `--enable-admin`',
+  origin_not_allowed: 'A browser request from an origin outside the CORS allowlist'
 }
 
 const SUSPENDED = {
@@ -164,7 +165,7 @@ export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyP
           response: {
             200: runtimeState,
             ...errorResponses({
-              403: ADMIN_DISABLED,
+              403: ADMIN_REFUSED,
               500: {
                 runtime_suspend_failed:
                   'A resource failed to pause; the runtime is suspended anyway'
@@ -192,7 +193,7 @@ export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyP
           response: {
             200: runtimeState,
             ...errorResponses({
-              403: ADMIN_DISABLED,
+              403: ADMIN_REFUSED,
               500: {
                 runtime_resume_failed: 'A resource failed to restore; the runtime stays suspended'
               }
