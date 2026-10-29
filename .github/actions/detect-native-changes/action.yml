@@ -2,8 +2,8 @@ name: 'Detect native changes'
 description: >
   Shared native-change detection for the addon prebuild-caching workflows.
   Computes native_changed (did THIS event's delta touch native files) and
-  native_hash (sha256 of the HEAD native tree, the addon's package.json and
-  global vcpkg overlays) for a given addon workdir.
+  native_hash (sha256 of the HEAD native tree, the addon's @qvac/fabric
+  dependency ranges and global vcpkg overlays) for a given addon workdir.
   Read-only: fetches the PR head by SHA/ref and uses git diff + ls-tree, never
   checks out or runs PR code. The repo (base branch) must already be checked
   out by the caller. Single source of truth — do NOT inline per workflow.
@@ -18,7 +18,7 @@ outputs:
     description: 'true if this event''s delta touched native files (or a safe-fallback trigger)'
     value: ${{ steps.detect.outputs.native_changed }}
   native_hash:
-    description: 'sha256 (first 16 hex) of the HEAD native tree, the addon''s package.json and global vcpkg overlays — the cache key component'
+    description: 'sha256 (first 16 hex) of the HEAD native tree, the addon''s @qvac/fabric dependency ranges and global vcpkg overlays — the cache key component'
     value: ${{ steps.detect.outputs.native_hash }}
 
 runs:
@@ -101,6 +101,21 @@ runs:
           git fetch origin "$DIFF_FROM" --depth=1 2>/dev/null || true
         fi
 
+        # The addon links against the @qvac/fabric prebuild that package.json
+        # pins, and a fabric minor can change struct layouts the binary relies
+        # on. Prints the declared @qvac/fabric* ranges at <sha>, empty when the
+        # package declares none; an unparsable package.json yields a unique
+        # value so it never matches a cache key.
+        fabric_deps() {
+          local json
+          json=$(git show "$1:${WORKDIR}/package.json" 2>/dev/null) || return 0
+          printf '%s' "$json" | jq -S -c '
+              [.dependencies, .devDependencies, .optionalDependencies, .peerDependencies]
+              | map(objects | to_entries[]) | map(select(.key | startswith("@qvac/fabric")))
+              | unique | if length == 0 then empty else . end' 2>/dev/null \
+            || echo "unparsable-$(date +%s%N)"
+        }
+
         CHANGED=false
         if [ -n "$DIFF_FROM" ] && [ -n "$HEAD_SHA" ]; then
           DIFF_FILES=$(git diff --name-only "$DIFF_FROM" "$HEAD_SHA" -- 2>&1) || {
@@ -121,9 +136,10 @@ runs:
                 # lines, exported symbols and build-time assertions, so an edit
                 # there changes the binary exactly as a CMakeLists.txt edit does.
                 cmake/qvac-addon/*) CHANGED=true; break ;;
-                # Pins the @qvac/fabric the addon is built and linked against;
-                # a fabric minor can change struct layouts the binary relies on.
-                ${WORKDIR}/package.json) CHANGED=true; break ;;
+                ${WORKDIR}/package.json)
+                  if [ "$(fabric_deps "$DIFF_FROM")" != "$(fabric_deps "$HEAD_SHA")" ]; then
+                    CHANGED=true; break
+                  fi ;;
               esac
             done <<< "$DIFF_FILES"
           fi
@@ -135,10 +151,14 @@ runs:
         # Hash the HEAD native tree. The file set MUST stay in lockstep with the
         # detection predicate above. git ls-tree reads the tree object without
         # checkout — secure and correct.
-        NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" "cmake/qvac-addon" 2>/dev/null \
-          | grep -E -e '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/' \
-                    -e "[[:space:]]${WORKDIR}/package\.json\$" \
-          | sha256sum | cut -d' ' -f1)
+        # Fabric deps are appended only when declared, so packages without
+        # them keep their existing key.
+        FABRIC_DEPS=$(fabric_deps "$HEAD_SHA")
+        NATIVE_HASH=$({
+          git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" "cmake/qvac-addon" 2>/dev/null \
+            | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/'
+          if [ -n "$FABRIC_DEPS" ]; then echo "fabric-deps $FABRIC_DEPS"; fi
+        } | sha256sum | cut -d' ' -f1)
         [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
 
         echo "Native changed: $CHANGED | Hash: ${NATIVE_HASH:0:16}"
