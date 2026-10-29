@@ -1411,12 +1411,14 @@ void TextLlmContext::restoreCacheStateTokens(
       decoded.ledger, llama_vocab_n_tokens(modelCtx_.vocab));
   residentLedger_ = decoded.ledger;
   nPast_ = decoded.nPast;
+  residentStateBorrowed_ = false;
   cacheCheckpoints_.clear();
   pendingHistoryCheckpoint_.reset();
 }
 
 void TextLlmContext::clearCacheReconciliationState() {
   residentLedger_.entries.clear();
+  residentStateBorrowed_ = false;
   pendingPromptLedger_.entries.clear();
   preRequestLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();
@@ -1553,6 +1555,7 @@ bool TextLlmContext::adoptDonorState(
     residentLedger_ = best->ledger;
     nPast_ = residentLedger_.positions();
   }
+  residentStateBorrowed_ = true;
   coldGuard.dismiss();
   ++donorAdoptions_;
   QLOG_IF(
@@ -1667,6 +1670,8 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
     }
   }
 
+  // What is left is a prefix of this request's own prompt.
+  residentStateBorrowed_ = false;
   rebuildSamplerFromLedger(residentLedger_);
   QLOG_IF(
       Priority::DEBUG,
@@ -2064,7 +2069,9 @@ void TextLlmContext::resetState(bool resetStats) {
 
 void TextLlmContext::resetStateKeepingMemory(bool resetStats) {
   // Between requests the memory, `nPast_`, the ledger and the checkpoints
-  // agree; only what a request leaves behind is dropped.
+  // agree; only what a request leaves behind is dropped. What stays is no
+  // longer any key's until a request reconciles it.
+  residentStateBorrowed_ = nPast_ > 0;
   discardPendingResidentToken();
   pendingPromptLedger_.entries.clear();
   preRequestLedger_.entries.clear();

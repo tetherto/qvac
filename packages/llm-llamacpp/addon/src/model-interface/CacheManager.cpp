@@ -377,6 +377,12 @@ void CacheManager::saveActiveCacheForTransition() {
     resetStateCallback_(true);
     return;
   }
+  // Another conversation's state that no request on this key used (its
+  // first request failed before it ran): not this key's to keep.
+  if (llmContext_->holdsBorrowedState()) {
+    setAsideInPlace();
+    return;
+  }
   // With the RAM tier on, the conversation moves there and its file is only
   // written when the tier has to let it go or the model is unloaded.
   if (copyActiveCacheToRamTier(
@@ -516,7 +522,7 @@ bool CacheManager::restoreFromRamTier(
 
 bool CacheManager::hasTurnsToFlush() {
   return hasActiveCache() && activeCacheDirty_ && !activeEphemeral_ &&
-         llmContext_->getNPast() != 0 &&
+         llmContext_->getNPast() != 0 && !llmContext_->holdsBorrowedState() &&
          !discardActiveCacheIfBackingStoreMissing();
 }
 
@@ -548,9 +554,10 @@ CacheManager::saveForCaller(const std::string& cacheKey) {
   if (!hasActiveCache() || sessionPath_ != cacheKey) {
     return SaveOutcome::NotHere;
   }
-  // Nothing committed (its only request rolled back, or a rollback landed
-  // cold): nothing to write, and the file still holds the last commit.
-  if (llmContext_->getNPast() == 0) {
+  // Nothing committed (its only request rolled back or failed before it ran,
+  // or a rollback landed cold): nothing to write, and the file still holds
+  // the last commit.
+  if (llmContext_->getNPast() == 0 || llmContext_->holdsBorrowedState()) {
     return SaveOutcome::NotHere;
   }
   if (!activeCacheDirty_ && activeCacheSavedToDisk_ &&

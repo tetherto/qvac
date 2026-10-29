@@ -4243,3 +4243,43 @@ TEST(CrossKeyPrefixTest, ARefusedPromptKeepsTheKeysOwnState) {
     fs::remove(key);
   }
 }
+
+// A new key whose first request fails before it runs never owned the
+// conversation set aside in place: switching away or unloading writes
+// nothing to its file, and the memory still serves the next key.
+TEST(CrossKeyPrefixTest, AFailedFirstRequestSavesNoOtherConversation) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_failed_first_b.bin", "cross_failed_first_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, fruitQuestion("apple"), "");
+
+  std::string tooLong = "Say one word: banana.";
+  for (int i = 0; i < 3000; ++i) {
+    tooLong += " filler";
+  }
+  EXPECT_ANY_THROW(runSingle(
+      *model,
+      chatInput({{"system", fruitStallRules()}, {"user", tooLong}}),
+      keys[0]));
+  EXPECT_ANY_THROW(model->saveCache(keys[0]))
+      << "saveCache wrote a conversation the key never ran";
+  EXPECT_FALSE(fs::exists(keys[0]));
+
+  const SingleTurn cherry = runSingle(*model, fruitQuestion("cherry"), keys[1]);
+  EXPECT_FALSE(fs::exists(keys[0]))
+      << "the switch wrote the conversation without a key to the failed key";
+  EXPECT_GT(cherry.reuse, K_SHARED_RULES_TOKENS)
+      << "the conversation set aside in place stopped serving";
+  model.reset();
+  EXPECT_FALSE(fs::exists(keys[0]));
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}

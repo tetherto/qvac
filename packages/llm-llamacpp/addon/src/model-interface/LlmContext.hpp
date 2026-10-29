@@ -328,6 +328,12 @@ public:
     resetState(resetStats);
   }
 
+  /// True while the memory holds another conversation's state that no
+  /// request has reconciled against its own prompt yet: a conversation set
+  /// aside in place or a donor just copied in. It belongs to no key, so it
+  /// must not be saved as the active key's.
+  [[nodiscard]] virtual bool holdsBorrowedState() const { return false; }
+
   /// Process-local checkpoint policy (count, byte budget, storage); see
   /// `cache::parseCheckpointPolicy`. Set once at model load.
   virtual void setCacheCheckpointPolicy(
