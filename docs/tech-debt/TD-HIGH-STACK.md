@@ -17,11 +17,6 @@ admission control, cancellation, and some host recovery behavior already exist.
 The remaining debt concerns safe sharing, public provider contracts, host
 coverage, and native packaging integration.
 
-High Stack remains a draft proposal backed by a separate PoC. This record covers
-the inference-side requirements for adopting it. Agent sandboxing, durable task
-execution, replicated state, and whole-stack orchestration belong to their
-respective layers and are outside this document.
-
 ## Architectural direction
 
 The engine owns inference and model resources; SDK hosts own client/worker
