@@ -872,7 +872,7 @@ importers:
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.31.0
-        version: link:../diffusion-cpp
+        version: 0.31.0
       '@qvac/embed-llamacpp':
         specifier: ^0.53.0
         version: link:../embed-llamacpp
@@ -1616,7 +1616,7 @@ importers:
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.31.0
-        version: link:../diffusion-cpp
+        version: 0.31.0
       '@qvac/embed-llamacpp':
         specifier: ^0.53.0
         version: link:../embed-llamacpp
@@ -4536,6 +4536,18 @@ packages:
 
   '@qvac/diagnostics@0.1.2':
     resolution: {integrity: sha512-rpNekTUH3uIHPFqRRWcWXEHzW2CZbJJodLfCecVSkzvVXCOm5SLnlP2sxGVTWL7Q/umD68jnTiHMr4h6tP+jUw==}
+
+  '@qvac/diffusion-cpp@0.31.0':
+    resolution: {integrity: sha512-vYY7nPnnSH1S5bvELG5rxs+R2/n5hI79V99Yw6x13FgS4dTrKxaFMQ52fwFLAEJLBSW2n1ZXseV1Ga7qCO7BDA==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/diffusion-cpp-android-arm64': 0.31.0
+      '@qvac/diffusion-cpp-ios': 0.31.0
+    peerDependenciesMeta:
+      '@qvac/diffusion-cpp-android-arm64':
+        optional: true
+      '@qvac/diffusion-cpp-ios':
+        optional: true
 
   '@qvac/embed-llamacpp@0.48.1':
     resolution: {integrity: sha512-szSjbiuUy/M/GRc7Ii8WqaGlIVkGAZtPunCFCdip/FWHwVAaREYRjHzfv7E4aUX9ho7MOhl0z4nco0G6qWVEdw==}
@@ -14293,6 +14305,12 @@ snapshots:
       bare-os: 3.9.3
       which-runtime: 1.4.0
     optional: true
+
+  '@qvac/diffusion-cpp@0.31.0':
+    dependencies:
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-path: 3.1.1
 
   '@qvac/embed-llamacpp@0.48.1(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:

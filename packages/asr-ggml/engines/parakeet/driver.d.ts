@@ -2,6 +2,8 @@ import type { QvacResponse } from "@qvac/infer-base";
 import { ParakeetInterface, type ParakeetConfigurationParams, type StreamingConfig } from "./parakeet";
 import type { ASRRunOutput, AudioInput, BackendInfo } from "../../lib/types";
 import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
+import { type ParakeetSpeakerAttributionConfig } from "./options";
+export type { ParakeetSpeakerAttributionConfig } from "./options";
 /**
  * Parakeet-specific configuration options. CTC, TDT, RNN-T, EOU, Nemotron,
  * and Sortformer are auto-detected from the loaded GGUF metadata.
@@ -11,6 +13,10 @@ export interface ParakeetConfig {
     maxThreads?: number;
     /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL). */
     useGPU?: boolean;
+    /** Native ggml backend name or exact device name; omitted preserves automatic selection. */
+    backend?: string;
+    /** Combine this ASR model with a separate diarization model in batch run(). */
+    speakerAttribution?: ParakeetSpeakerAttributionConfig;
     /** Audio sample rate in Hz (default: 16000; engine assumes 16 kHz). */
     sampleRate?: number;
     /** Number of audio channels (default: 1, must be mono). */
@@ -146,7 +152,7 @@ export declare class ParakeetDriver implements AsrDriver {
     private readonly ctx;
     private readonly _files;
     constructor(ctx: DriverContext, files: ASRGgmlFiles, config: ParakeetEngineConfig);
-    validateConfig(): void;
+    validateConfig(params?: ParakeetConfig): void;
     normalizeAudio(input: AudioInput): NormalizedAudioStream;
     load(): Promise<void>;
     unload(): Promise<void>;
