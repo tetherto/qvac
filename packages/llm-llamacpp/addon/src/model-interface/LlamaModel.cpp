@@ -443,7 +443,14 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   const bool fullState = utils::needsFullStateSnapshot(
       llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
   const int32_t nSwa = llama_model_n_swa(mdl);
-  const uint32_t nCtxSeq = llama_n_ctx_seq(ctx);
+  // Unified KV reports the whole pool as n_ctx_seq; a configured per-slot cap
+  // is the real worst case for one sequence's checkpoint.
+  const uint32_t nCtxSeq =
+      params.kv_unified && params.kv_unified_per_slot > 0
+          ? std::min(
+                llama_n_ctx_seq(ctx),
+                static_cast<uint32_t>(params.kv_unified_per_slot))
+          : llama_n_ctx_seq(ctx);
   const bool slidingWindow = !fullState && utils::takesSlidingWindowCheckpoints(
                                                nSwa, params.swa_full, nCtxSeq);
   if (!fullState && !slidingWindow) {
@@ -561,8 +568,8 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         string_format(
-            "[LlamaModel] parallel=%zu is too large for this context "
-            "(ctx_size=%u, batch_size=%d): %s",
+            "[LlamaModel] invalid parallel/context geometry "
+            "(parallel=%zu, ctx_size=%u, batch_size=%d): %s",
             batchSize,
             ctxTotalTokens,
             batchCapacity,
@@ -2093,13 +2100,24 @@ std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::unique_ptr<
         qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
         speculative) {
+  // The single-prompt path bypasses the batch scheduler, so carry the unified
+  // per-slot cap here as well. Without it, kv_unified_per_slot would only take
+  // effect once parallel >= 2.
+  const llama_pos ctxCeiling =
+      params.kv_unified && params.kv_unified_per_slot > 0
+          ? static_cast<llama_pos>(params.kv_unified_per_slot)
+          : -1;
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), maxImagePixels_, std::move(speculative));
+        params,
+        std::move(llamaInit),
+        maxImagePixels_,
+        std::move(speculative),
+        ctxCeiling);
   }
   return std::make_unique<TextLlmContext>(
-      params, std::move(llamaInit), std::move(speculative));
+      params, std::move(llamaInit), std::move(speculative), ctxCeiling);
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

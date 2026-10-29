@@ -93,19 +93,6 @@ bool persistedCacheBackingStoreMissing(const std::string& cacheKey) {
   return isParentDirectoryMissing(cacheKey) || isFileMissingOrEmpty(cacheKey);
 }
 
-/// Partition the whole-context KV pool uniformly across slots. Mirrors
-/// llama.cpp's `server` example which uses `n_ctx_slot = n_ctx /
-/// n_parallel` as the per-sequence hard ceiling.
-unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
-  bool valid = ctxTotalTokens > 0 && batchSize > 0;
-  if (!valid) {
-    throw std::invalid_argument(
-        "ContinuousBatchScheduler: ctxTotalTokens and batchSize must be "
-        ">= 1");
-  }
-  return ctxTotalTokens / static_cast<unsigned>(batchSize);
-}
-
 /// Terminal reason a driver should record for a scheduler-imposed stop.
 /// `ContextOverflow` survives `stopReasonAfterRequestRollback`, so a recurrent
 /// driver rolls back the current request.
@@ -119,6 +106,26 @@ GenerationStopReason toGenerationStopReason(StopReason reason) {
 }
 
 } // namespace
+
+unsigned perSeqCeiling(
+    unsigned ctxTotalTokens, size_t batchSize, bool kvUnified,
+    unsigned kvUnifiedPerSlot) {
+  if (ctxTotalTokens == 0 || batchSize == 0) {
+    throw std::invalid_argument(
+        "ContinuousBatchScheduler: ctxTotalTokens and batchSize must be "
+        ">= 1");
+  }
+  if (kvUnifiedPerSlot > 0) {
+    return std::min(ctxTotalTokens, kvUnifiedPerSlot);
+  }
+  if (kvUnified) {
+    // Unified KV is one shared buffer: a sequence is not confined to a
+    // partition of it. llama-server models this as n_ctx_slot = n_ctx.
+    return ctxTotalTokens;
+  }
+  // Non-unified KV: each sequence owns n_ctx / n_seq_max cells.
+  return ctxTotalTokens / static_cast<unsigned>(batchSize);
+}
 
 bool finalizeTerminalDriver(
     SequenceDriver& driver, StopReason reason, bool prefillOnly,
@@ -169,7 +176,9 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
     : shared_(shared), baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict), baseParams_(baseParams),
       driverFactory_(std::move(driverFactory)),
-      perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
+      perSeqMaxTokens_(perSeqCeiling(
+          ctxTotalTokens, batchSize, baseParams.kv_unified,
+          static_cast<unsigned>(std::max(0, baseParams.kv_unified_per_slot)))),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
       slots_(batchSize), decodeFunc_(llama_decode),
@@ -198,8 +207,8 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
   const bool perSeqRoom = perSeqMaxTokens_ > 0;
   if (!perSeqRoom) {
     throw std::invalid_argument(
-        "ContinuousBatchScheduler: ctxTotalTokens / batchSize underflowed "
-        "to 0; reduce batchSize or grow n_ctx");
+        "ContinuousBatchScheduler: per-sequence context ceiling underflowed "
+        "to 0; reduce parallel or grow ctx_size");
   }
   // Built at its final size: `resize` may relocate elements by copy where the
   // standard library's deque move can throw (MSVC), and checkpoints are
@@ -219,6 +228,14 @@ ContinuousBatchScheduler::~ContinuousBatchScheduler() {
   }
   std::scoped_lock lock(mutex_);
   clearLocked();
+}
+
+std::string ContinuousBatchScheduler::perSeqCapSource() const {
+  if (baseParams_.kv_unified) {
+    return baseParams_.kv_unified_per_slot > 0 ? "(--kv-unified-per-slot)"
+                                               : "(shared unified KV pool)";
+  }
+  return "(ctxTotalTokens / n_parallel)";
 }
 
 BatchResult ContinuousBatchScheduler::processBatch(
@@ -643,6 +660,34 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // M-RoPE sequence exceeds getNPast(); they coincide for text.
   const auto promptKvSize = static_cast<unsigned>(driver->getKvCellsUsed()) +
                             static_cast<unsigned>(plan.totalKvTokens());
+  // Unified KV is a single shared pool, so the per-sequence cap alone cannot
+  // stop two admitted requests from reserving the same cells. Count what is
+  // already resident (active and parked sequences) and reserve only the new
+  // cells this prompt will add.
+  if (baseParams_.kv_unified) {
+    llama_memory_t mem = llama_get_memory(shared_.lctx);
+    uint64_t resident = 0;
+    const uint32_t nSeq = llama_n_seq_max(shared_.lctx);
+    for (uint32_t s = 0; s < nSeq; ++s) {
+      resident +=
+          llama_memory_seq_token_count(mem, static_cast<llama_seq_id>(s));
+    }
+    const uint64_t incoming = plan.totalKvTokens();
+    const uint64_t total = llama_n_ctx(shared_.lctx);
+    if (resident + incoming > total) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          "ContinuousBatchScheduler::submit: unified KV pool would overflow: " +
+              std::to_string(resident) + " resident + " +
+              std::to_string(incoming) + " new > " + std::to_string(total) +
+              " (lower kv_unified_per_slot/parallel, reduce cache_ram_mib, "
+              "or raise ctx_size)");
+    }
+  }
+
+  const std::string capSource = perSeqCapSource();
   if (promptKvSize > perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -651,8 +696,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
         "ContinuousBatchScheduler::submit: prompt of " +
             std::to_string(promptKvSize) +
             " KV cells exceeds per-sequence cap " +
-            std::to_string(perSeqMaxTokens_) +
-            " (ctxTotalTokens / n_parallel)");
+            std::to_string(perSeqMaxTokens_) + " " + capSource);
   }
   if (!request.prefill && promptSize >= perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
@@ -663,8 +707,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             std::to_string(promptSize) +
             " tokens leaves no room under "
             "per-sequence cap " +
-            std::to_string(perSeqMaxTokens_) +
-            " (ctxTotalTokens / n_parallel)");
+            std::to_string(perSeqMaxTokens_) + " " + capSource);
   }
   if (request.prefill && promptSize > perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
@@ -673,8 +716,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             qvac_errors::general_error::InvalidArgument),
         "ContinuousBatchScheduler::submit: prefill prompt of " +
             std::to_string(promptSize) + " tokens exceeds per-sequence cap " +
-            std::to_string(perSeqMaxTokens_) +
-            " (ctxTotalTokens / n_parallel)");
+            std::to_string(perSeqMaxTokens_) + " " + capSource);
   }
   if (!request.prefill &&
       generationBudgetExceeded(
@@ -687,8 +729,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             std::to_string(tmpParams.n_predict) + " + prompt " +
             std::to_string(promptKvSize) +
             " KV cells exceeds per-sequence cap " +
-            std::to_string(perSeqMaxTokens_) +
-            " (ctxTotalTokens / n_parallel)");
+            std::to_string(perSeqMaxTokens_) + " " + capSource);
   }
 
   StreamCallbacks streamsLocal = std::move(request.streams);
@@ -1114,7 +1155,12 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
             speculativeFailed
                 ? std::string("failed to process speculative batch")
                 : "llama_decode returned non-zero: " +
-                      std::to_string(decodeRc)));
+                      std::to_string(decodeRc) +
+                      (baseParams_.kv_unified
+                           ? " (unified KV pool may be exhausted; lower "
+                             "kv_unified_per_slot/parallel, evict parked "
+                             "conversations, or raise ctx_size)"
+                           : "")));
 
     for (const auto& group : affectedGroups) {
       failGroupLocked(group, decodeError, SaveCachePolicy::KeepAdopted);

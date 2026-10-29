@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 
+#include <common/arg.h>
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "addon/LlmErrors.hpp"
@@ -110,6 +111,53 @@ handleImageMinTokens(common_params& params, const std::string& raw) {
   }
 }
 
+// `--kv-unified` is registered for llama.cpp's server/perplexity examples, not
+// LLAMA_EXAMPLE_COMMON, so the generic parser would reject it here. Consume the
+// key directly and write the same `common_params` field the flag would.
+static void handleKvUnified(common_params& params, const std::string& raw) {
+  if (common_arg_utils::is_truthy(raw)) {
+    params.kv_unified = true;
+  } else if (common_arg_utils::is_falsey(raw)) {
+    params.kv_unified = false;
+  } else {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "kv-unified must be on/off/true/false/1/0, got: %s", raw.c_str()));
+  }
+}
+
+static void handleNoKvUnified(common_params& params, const std::string& raw) {
+  (void)raw;
+  params.kv_unified = false;
+}
+
+static void
+handleKvUnifiedPerSlot(common_params& params, const std::string& raw) {
+  int value = 0;
+  try {
+    value = std::stoi(raw);
+  } catch (...) {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "kv-unified-per-slot must be an integer, got: %s", raw.c_str()));
+  }
+  if (value < 0) {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "kv-unified-per-slot must be >= 0, got: %s", raw.c_str()));
+  }
+  params.kv_unified_per_slot = value;
+}
+
 const LoadConfigHandlerList LOAD_CONFIG_HANDLERS = {
     {"reasoning-budget", handleReasoningBudget},
     {"reasoning_budget", handleReasoningBudget},
@@ -123,6 +171,12 @@ const LoadConfigHandlerList LOAD_CONFIG_HANDLERS = {
     {"image_no_upscale", handleImageNoUpscale},
     {"mmproj-no-audio", handleMmprojNoAudio},
     {"mmproj_no_audio", handleMmprojNoAudio},
+    {"kv-unified", handleKvUnified},
+    {"kv_unified", handleKvUnified},
+    {"no-kv-unified", handleNoKvUnified},
+    {"no_kv_unified", handleNoKvUnified},
+    {"kv-unified-per-slot", handleKvUnifiedPerSlot},
+    {"kv_unified_per_slot", handleKvUnifiedPerSlot},
 };
 
 void applyLoadConfigHandlers(

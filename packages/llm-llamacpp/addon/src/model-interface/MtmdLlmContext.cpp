@@ -74,9 +74,11 @@ MtmdLlmContext::MtmdLlmContext(
     uint64_t maxImagePixels,
     std::unique_ptr<
         qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
-        speculative)
+        speculative,
+    llama_pos ctxCeiling)
     : llamaInit_(std::move(llamaInit)), speculative_(std::move(speculative)),
-      params_(commonParams), maxImagePixels_(maxImagePixels) {
+      params_(commonParams), maxImagePixels_(maxImagePixels),
+      perSeqCtxCeiling_(ctxCeiling) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
   modelCtx_.speculative = speculative_.get();

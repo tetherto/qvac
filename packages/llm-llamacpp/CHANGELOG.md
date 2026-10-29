@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `kv-unified` load config shares one KV buffer across all `parallel` slots,
+  as llama-server's `--kv-unified`. `kv-unified-per-slot` caps each sequence
+  at a fixed number of KV cells; when `ctx_size` is unset the shared pool is
+  sized to `parallel * N`. Defaults to off, so existing loads keep the
+  partitioned cache. The scheduler rejects a request when its new cells would
+  exceed the shared pool, and the single-prompt path honours the same cap.
+
 ## [0.65.0] - 2026-10-27
 
 ### Changed

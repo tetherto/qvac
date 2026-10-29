@@ -37,7 +37,8 @@ public:
       common_params& commonParams, common_init_result_ptr llamaInit,
       std::unique_ptr<
           qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
-          speculative = nullptr);
+          speculative = nullptr,
+      llama_pos ctxCeiling = -1);
   TextLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
       llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);

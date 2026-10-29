@@ -53,6 +53,13 @@ namespace qvac_lib_inference_addon_llama::batching {
     SequenceDriver& driver, StopReason reason, bool prefillOnly,
     const std::function<void(const std::string&)>& outputCallback);
 
+/// Per-sequence hard ceiling in KV cells. Non-unified KV partitions the pool
+/// uniformly (`ctxTotalTokens / batchSize`); a unified pool is shared, so each
+/// sequence may use all of it unless `kvUnifiedPerSlot` caps it.
+[[nodiscard]] unsigned perSeqCeiling(
+    unsigned ctxTotalTokens, size_t batchSize, bool kvUnified,
+    unsigned kvUnifiedPerSlot);
+
 /// Whether prompt + generation budget overruns the per-sequence cap at
 /// admission. `promptSize` is the position span and `promptKvSize` the KV-cell
 /// span of the prompt; for M-RoPE media `promptKvSize >= promptSize`, so the
@@ -292,9 +299,11 @@ public:
   /// @param maxChunkSize       Tokens fed per slot per step (typically
   /// n_batch).
   /// @param ctxTotalTokens     Whole-pool KV-cache size (== llama_n_ctx).
-  ///                            Partitioned uniformly across `batchSize`
-  ///                            slots; per-seq ceiling is
-  ///                            `ctxTotalTokens / batchSize`.
+  ///                            With non-unified KV it is partitioned
+  ///                            uniformly across `batchSize` slots; with
+  ///                            unified KV the pool is shared and the
+  ///                            per-seq ceiling is the whole pool or
+  ///                            `kv_unified_per_slot`, whichever is smaller.
   /// @param batchSize          Concurrent slots (== llama_n_seq_max).
   /// @param batchCapacity      Underlying llama_batch token capacity.
   /// @param baseParams          Baseline llama/common params copied into each
@@ -754,6 +763,8 @@ private:
   getOutputCallback(SlotState& slot, uint32_t seqId);
   std::function<bool(const Request&)> hasValidDriverF() const;
   void accumulateSlotRuntimeStats(const SlotState& slot, const Request& req);
+  /// Human-readable origin of `perSeqMaxTokens_` for admission errors.
+  [[nodiscard]] std::string perSeqCapSource() const;
 
   LlmModelContext shared_;
 
@@ -764,8 +775,9 @@ private:
   common_params baseParams_;
   DriverFactory driverFactory_;
 
-  /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives prompt-size
-  /// admission and per-request `prompt + n_predict` validation.
+  /// Per-seq hard ceiling. Non-unified: ctxTotalTokens / batchSize.
+  /// Unified: ctxTotalTokens, or kv_unified_per_slot when that is smaller.
+  /// Drives prompt-size admission and `prompt + n_predict` validation.
   unsigned perSeqMaxTokens_;
   MultiRequestBatcher batcher_;
   LlamaBatch batch_;

@@ -1,10 +1,14 @@
+#include <stdexcept>
+
 #include <common/common.h>
 #include <gtest/gtest.h>
 #include <llama.h>
 
+#include "model-interface/ContinuousBatchScheduler.hpp"
 #include "utils/ParallelLimits.hpp"
 
 using qvac_lib_inference_addon_llama::K_MAX_PARALLEL_WORKERS;
+using qvac_lib_inference_addon_llama::batching::perSeqCeiling;
 
 /// `parallel` is validated against K_MAX_PARALLEL_WORKERS in createInstance and
 /// ends up as the context's `n_seq_max` (common_params.n_parallel ->
@@ -45,4 +49,28 @@ TEST(ParallelCeiling, DefaultParallelIsWithinTheCeiling) {
   common_params params;
   EXPECT_GE(params.n_parallel, 1);
   EXPECT_LE(static_cast<unsigned>(params.n_parallel), K_MAX_PARALLEL_WORKERS);
+}
+
+TEST(PerSeqCeiling, NonUnifiedPartitionsThePool) {
+  EXPECT_EQ(perSeqCeiling(8192, 4, false, 0), 2048U);
+}
+
+TEST(PerSeqCeiling, UnifiedUsesTheWholePool) {
+  EXPECT_EQ(perSeqCeiling(8192, 4, true, 0), 8192U);
+}
+
+TEST(PerSeqCeiling, UnifiedPerSlotCapBinds) {
+  EXPECT_EQ(perSeqCeiling(8192, 4, true, 4096), 4096U);
+}
+
+TEST(PerSeqCeiling, UnifiedPerSlotCapClampsToPool) {
+  EXPECT_EQ(perSeqCeiling(8192, 4, true, 16384), 8192U);
+}
+
+TEST(PerSeqCeiling, RejectsZeroGeometry) {
+  EXPECT_THROW(
+      static_cast<void>(perSeqCeiling(0, 4, true, 0)), std::invalid_argument);
+  EXPECT_THROW(
+      static_cast<void>(perSeqCeiling(8192, 0, true, 0)),
+      std::invalid_argument);
 }

@@ -57,9 +57,13 @@ const model = new LlmLlamacpp({
 })
 ```
 
-`parallel` maps to `n_seq_max` in llama.cpp. The KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window. Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
+`parallel` maps to `n_seq_max` in llama.cpp. By default the KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window. Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
 
-The accepted range is `1..256`. The ceiling is the engine's own sequence limit (`LLAMA_MAX_SEQ`), so anything above it is rejected when the instance is constructed — otherwise it would spawn the full thread pool and only then fail the model load, where llama.cpp swallows the real reason into a log line. `ctx_size / parallel` must also leave at least one token per slot, so a `parallel` too large for the context (or a `batch_size` smaller than `parallel`) is refused as an `InvalidArgument` naming the knobs involved.
+Set `kv_unified: 'true'` to share one KV buffer across all slots instead. `ctx_size` is then the total pool, and a single sequence may use all of it. Add `kv_unified_per_slot: N` to cap each sequence at `N` cells; without `ctx_size`, the pool is auto-sized to `parallel * N` (mirroring llama-server's `--kv-unified-per-slot`). With an explicit `ctx_size`, the pool stays at `ctx_size` and the cap is `min(N, ctx_size)`.
+
+Unified KV trades guaranteed admission for flexibility: concurrent sequences can oversubscribe the pool. The scheduler rejects a request at admission when its new cells would exceed the resident total, and a decode that still exhausts the pool fails with an explicit unified-KV hint. Parked `cacheKey` conversations keep their cells, so a large `cache_ram_mib` reduces the pool available to new requests.
+
+The accepted range is `1..256`. The ceiling is the engine's own sequence limit (`LLAMA_MAX_SEQ`), so anything above it is rejected when the instance is constructed — otherwise it would spawn the full thread pool and only then fail the model load, where llama.cpp swallows the real reason into a log line. With non-unified KV, `ctx_size / parallel` must leave at least one token per slot; with unified KV the constraint is just `batch_size >= parallel`. A `parallel` too large for the context (or a `batch_size` smaller than `parallel`) is refused as an `InvalidArgument` naming the knobs involved.
 
 `parallel` also sizes the native multi-job scheduler's worker pool one-to-one: that many OS threads are created eagerly at load and held for the model's lifetime, whether or not requests are in flight. This is deliberate — a serving deployment pays the whole cost upfront and is then ready to serve at full concurrency with no warm-up — but it makes a large `parallel` a real resource commitment (threads and stack address space, plus the smaller per-slot KV window) even while idle. Size it to the concurrency you actually intend to serve.
 
@@ -242,10 +246,14 @@ Completion is not the only terminal: `failGroupLocked` also settles a group, wit
 **Per-sequence context cap:**
 
 ```
-perSeqMaxTokens_ = ctxTotalTokens / batchSize
+perSeqMaxTokens_ = ctxTotalTokens / batchSize              # non-unified
+perSeqMaxTokens_ = ctxTotalTokens                          # unified, no cap
+perSeqMaxTokens_ = min(ctxTotalTokens, kv_unified_per_slot) # unified, capped
 ```
 
-This is enforced at admission — every check throws `InvalidArgument` before any state is mutated — and there are four of them, not one:
+With unified KV the scheduler also sums `llama_memory_seq_token_count` over
+every sequence (active and parked) before admitting a request, and rejects it
+when the new cells would exceed `llama_n_ctx`. This is enforced at admission — every check throws `InvalidArgument` before any state is mutated — and there are four of them, not one:
 
 - **KV cells** — `getKvCellsUsed() + plan.totalKvTokens()` must not exceed the cap. Cells, not positions: M-RoPE media occupies more KV cells than it advances positions, so a multimodal prompt can trip this while its token count still fits.
 - **A generating request** is refused at `promptSize >= cap`, where `promptSize` is `getNPast() + plan.totalPositions()` — exactly filling the window leaves no room for even one generated token.
@@ -303,7 +311,7 @@ Lifecycle methods in call order:
 
 On the batch path a driver records a sampled token in its ledger only once the next `syncPosition` shows the scheduler decoded it. A sample that is never fed (a terminal token, or a cancel before the next step) therefore never reaches the ledger, and a committed or saved cache always describes exactly the memory it holds.
 
-Each driver carries its own `perSeqCtxCeiling_` (set to `perSeqMaxTokens_` by the scheduler, or `-1` for single-sequence). Prefill and generation overflow checks use this ceiling rather than the full `llama_n_ctx()`.
+Each driver carries its own `perSeqCtxCeiling_` (set to `perSeqMaxTokens_` by the scheduler, to `kv_unified_per_slot` on the single-sequence path when unified KV caps it, or `-1` for the full context). Prefill and generation overflow checks use this ceiling rather than the full `llama_n_ctx()`.
 
 ---
 

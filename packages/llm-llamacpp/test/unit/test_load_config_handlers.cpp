@@ -139,6 +139,44 @@ TEST(LoadConfigHandlers_ImageTokens, RejectsNonInteger) {
   EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
 }
 
+TEST(LoadConfigHandlers_KvUnified, ParsesTruthyAndFalseyValues) {
+  EXPECT_TRUE(applyOne("kv-unified", "true").kv_unified);
+  EXPECT_TRUE(applyOne("kv-unified", "on").kv_unified);
+  EXPECT_TRUE(applyOne("kv-unified", "1").kv_unified);
+  EXPECT_FALSE(applyOne("kv-unified", "false").kv_unified);
+  EXPECT_FALSE(applyOne("kv-unified", "off").kv_unified);
+  EXPECT_FALSE(applyOne("kv-unified", "0").kv_unified);
+}
+
+TEST(LoadConfigHandlers_KvUnified, UnderscoreAliasParses) {
+  EXPECT_TRUE(applyOne("kv_unified", "true").kv_unified);
+}
+
+TEST(LoadConfigHandlers_KvUnified, RejectsUnknownValue) {
+  common_params params;
+  std::unordered_map<std::string, std::string> map{{"kv-unified", "maybe"}};
+  EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
+}
+
+TEST(LoadConfigHandlers_KvUnified, NegatedAliasDisablesUnified) {
+  EXPECT_FALSE(applyOne("no-kv-unified", "").kv_unified);
+  EXPECT_FALSE(applyOne("no_kv_unified", "").kv_unified);
+}
+
+TEST(LoadConfigHandlers_KvUnifiedPerSlot, ParsesInteger) {
+  EXPECT_EQ(applyOne("kv-unified-per-slot", "4096").kv_unified_per_slot, 4096);
+  EXPECT_EQ(applyOne("kv_unified_per_slot", "512").kv_unified_per_slot, 512);
+}
+
+TEST(LoadConfigHandlers_KvUnifiedPerSlot, RejectsNegativeAndNonInteger) {
+  for (const std::string& value : {"-1", "abc"}) {
+    common_params params;
+    std::unordered_map<std::string, std::string> map{
+        {"kv-unified-per-slot", value}};
+    EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError) << value;
+  }
+}
+
 // Non-breaking proof: keys the registry does not recognize (llama.cpp flags and
 // keys handled elsewhere, e.g. ctx-size in tuneConfigMap) are left untouched so
 // the generic pass-through still forwards them.

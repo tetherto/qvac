@@ -522,6 +522,85 @@ TEST_F(LoadFitNormalizationTest, AcceptsPollLevelBounds) {
   EXPECT_EQ(result.params.cpuparams_batch.poll, 0U);
 }
 
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotSizesPoolWhenCtxUnset) {
+  auto config = baseConfig();
+  config["parallel"] = "4";
+  config["kv_unified"] = "true";
+  config["kv_unified_per_slot"] = "4096";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_TRUE(result.params.kv_unified);
+  EXPECT_EQ(result.params.kv_unified_per_slot, 4096);
+  EXPECT_EQ(result.params.n_ctx, 16384);
+}
+
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotKeepsExplicitCtx) {
+  auto config = baseConfig();
+  config["parallel"] = "4";
+  config["ctx-size"] = "8192";
+  config["kv_unified"] = "true";
+  config["kv_unified_per_slot"] = "4096";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.n_ctx, 8192);
+  EXPECT_EQ(result.params.kv_unified_per_slot, 4096);
+}
+
+// `ctx_size: 0` is an explicit request for the model's full context; it stores
+// UINT32_MAX in fit_params_min_ctx and must suppress auto-sizing.
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotRespectsExplicitCtxZero) {
+  auto config = baseConfig();
+  config["parallel"] = "4";
+  config["ctx-size"] = "0";
+  config["kv_unified"] = "true";
+  config["kv_unified_per_slot"] = "4096";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.n_ctx, 0);
+}
+
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotRequiresUnified) {
+  auto config = baseConfig();
+  config["kv_unified_per_slot"] = "4096";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, KvUnifiedWithoutCapLeavesCtxUnset) {
+  auto config = baseConfig();
+  config["kv_unified"] = "true";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_TRUE(result.params.kv_unified);
+  EXPECT_EQ(result.params.n_ctx, 0);
+}
+
 TEST_F(LoadFitNormalizationTest, ThreadsBatchDoesNotOverrideGenerationThreads) {
   auto config = baseConfig();
   config["threads"] = "2";

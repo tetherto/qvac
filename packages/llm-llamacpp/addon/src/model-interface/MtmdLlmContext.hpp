@@ -46,7 +46,8 @@ public:
       uint64_t maxImagePixels,
       std::unique_ptr<
           qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
-          speculative = nullptr);
+          speculative = nullptr,
+      llama_pos ctxCeiling = -1);
 
   /// Per-slot driver constructor for the continuous-batching path. Does
   /// not own llama handles or the vision context; `sharedVision` must

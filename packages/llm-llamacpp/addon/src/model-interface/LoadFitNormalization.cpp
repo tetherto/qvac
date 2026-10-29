@@ -5,6 +5,7 @@
 #include <cinttypes>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -1228,6 +1229,83 @@ deprecatedLoadFlagMode(const std::string& flag, const std::string& value) {
                                          : LLAMA_LOAD_MODE_NONE;
 }
 
+// Validate the unified-KV knobs and, when the caller asked for a per-slot cap
+// without pinning -c, size the shared pool the way llama-server does:
+// n_ctx = n_parallel * kv_unified_per_slot. `-c 0` stores UINT32_MAX in the
+// signed fit_params_min_ctx field to mean "use the model's full context", so
+// that sentinel suppresses auto-sizing exactly as it does in the server.
+void normalizeKvUnifiedParams(common_params& params) {
+  if (params.kv_unified_per_slot < 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "kv-unified-per-slot must be >= 0, got: %d",
+            params.kv_unified_per_slot));
+  }
+  if (params.kv_unified_per_slot > 0 && !params.kv_unified) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "kv-unified-per-slot requires kv-unified=true");
+  }
+  if (!params.kv_unified) {
+    return;
+  }
+  if (params.n_parallel < 1) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "kv-unified requires parallel >= 1, got: %d", params.n_parallel));
+  }
+  if (params.kv_unified_per_slot == 0) {
+    return;
+  }
+
+  const bool autoSize =
+      params.n_ctx == 0 && static_cast<uint32_t>(params.fit_params_min_ctx) !=
+                               std::numeric_limits<uint32_t>::max();
+  if (!autoSize) {
+    if (params.n_ctx > 0 && params.kv_unified_per_slot > params.n_ctx) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[LlamaModel] kv-unified-per-slot (%d) exceeds ctx_size (%d); "
+              "the cap cannot bind, slots are limited to the shared pool\n",
+              params.kv_unified_per_slot,
+              params.n_ctx));
+    }
+    return;
+  }
+
+  const int64_t total =
+      static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot;
+  if (total > std::numeric_limits<int32_t>::max()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "parallel (%d) * kv-unified-per-slot (%d) overflows the context "
+            "size",
+            params.n_parallel,
+            params.kv_unified_per_slot));
+  }
+  params.n_ctx = static_cast<int32_t>(total);
+  QLOG_IF(
+      Priority::INFO,
+      string_format(
+          "[LlamaModel] kv-unified-per-slot: sizing KV pool to "
+          "parallel * per_slot = %d * %d = %d\n",
+          params.n_parallel,
+          params.kv_unified_per_slot,
+          params.n_ctx));
+}
+
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,
     const ModelMetaData& metadata,
@@ -2196,6 +2274,8 @@ NormalizedLoad normalizeLoadForFit(
             qvac_errors::general_error::InvalidArgument),
         errorMsg);
   }
+
+  normalizeKvUnifiedParams(params);
 
   constexpr int kMinNCtx = 8;
   if (params.n_ctx != 0 && params.n_ctx < kMinNCtx) {

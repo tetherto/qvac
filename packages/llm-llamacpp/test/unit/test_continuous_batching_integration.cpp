@@ -194,6 +194,99 @@ TEST_F(ContinuousBatchingIntegrationTest, SinglePromptReturnsExpectedAnswer) {
       << "expected 'Paris' in: " << outputs[0];
 }
 
+/// Unified KV must reach llama_context: with one shared pool, `n_ctx_seq` is
+/// the whole `ctx_size`, not `ctx_size / parallel`.
+TEST_F(ContinuousBatchingIntegrationTest, UnifiedKvSharesThePoolAcrossSlots) {
+  REQUIRE_MODEL(model_);
+  config_["ctx_size"] = "1024";
+  config_["parallel"] = "4";
+  config_["kv_unified"] = "true";
+  auto model = loadModel();
+
+  llama_context* ctx = model->getContext();
+  ASSERT_NE(ctx, nullptr);
+  EXPECT_EQ(llama_n_ctx(ctx), 1024U);
+  EXPECT_EQ(llama_n_ctx_seq(ctx), 1024U);
+}
+
+/// A per-slot cap must not resize the pool when `ctx_size` is explicit.
+TEST_F(ContinuousBatchingIntegrationTest, UnifiedKvPerSlotCapKeepsExplicitCtx) {
+  REQUIRE_MODEL(model_);
+  config_["ctx_size"] = "1024";
+  config_["parallel"] = "4";
+  config_["kv_unified"] = "true";
+  config_["kv_unified_per_slot"] = "512";
+  auto model = loadModel();
+
+  llama_context* ctx = model->getContext();
+  ASSERT_NE(ctx, nullptr);
+  EXPECT_EQ(llama_n_ctx(ctx), 1024U);
+  EXPECT_EQ(llama_n_ctx_seq(ctx), 1024U);
+}
+
+/// Without `ctx_size`, the cap sizes the shared pool to parallel * cap.
+TEST_F(ContinuousBatchingIntegrationTest, UnifiedKvPerSlotSizesPool) {
+  REQUIRE_MODEL(model_);
+  config_.erase("ctx_size");
+  config_["parallel"] = "4";
+  config_["kv_unified"] = "true";
+  config_["kv_unified_per_slot"] = "256";
+  auto model = loadModel();
+
+  llama_context* ctx = model->getContext();
+  ASSERT_NE(ctx, nullptr);
+  EXPECT_EQ(llama_n_ctx(ctx), 1024U);
+  EXPECT_EQ(llama_n_ctx_seq(ctx), 1024U);
+}
+
+/// A unified pool admits a prompt larger than the non-unified partition
+/// (1024 / 4 = 256) and still generates.
+TEST_F(ContinuousBatchingIntegrationTest, UnifiedKvAdmitsPromptOverPartition) {
+  REQUIRE_MODEL(model_);
+  config_["ctx_size"] = "1024";
+  config_["parallel"] = "4";
+  config_["n_predict"] = "1";
+  config_["kv_unified"] = "true";
+  auto model = loadModel();
+
+  std::string filler;
+  for (int i = 0; i < 80; ++i) {
+    filler += "The quick brown fox jumps over the lazy dog. ";
+  }
+  auto outputs =
+      model->processPromptBatch({makePrompt(filler + "Reply with OK.")});
+
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+}
+
+/// The per-slot cap still rejects a prompt that would overrun it.
+TEST_F(ContinuousBatchingIntegrationTest, UnifiedKvPerSlotCapRejectsOverflow) {
+  REQUIRE_MODEL(model_);
+  config_["ctx_size"] = "1024";
+  config_["parallel"] = "4";
+  config_["n_predict"] = "1";
+  config_["kv_unified"] = "true";
+  config_["kv_unified_per_slot"] = "256";
+  auto model = loadModel();
+
+  std::string filler;
+  for (int i = 0; i < 80; ++i) {
+    filler += "The quick brown fox jumps over the lazy dog. ";
+  }
+  try {
+    static_cast<void>(
+        model->processPromptBatch({makePrompt(filler + "Reply with OK.")}));
+    FAIL() << "expected the per-slot cap to reject the prompt";
+  } catch (const qvac_errors::StatusError& e) {
+    const std::string message = e.what();
+    EXPECT_TRUE(
+        message.find("per-sequence cap") != std::string::npos ||
+        message.find("context overflow") != std::string::npos)
+        << message;
+  }
+}
+
 /// Two prompts run together must each yield their concrete answers in
 /// input order without cross-talk between sequences.
 TEST_F(ContinuousBatchingIntegrationTest, TwoPromptsReturnExpectedAnswers) {
