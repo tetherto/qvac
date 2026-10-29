@@ -70,13 +70,17 @@ inline DonorState ramTierDonor(const batching::SlotStateCacheEntry& entry) {
 }
 
 // A cacheKey file: loaded into the requesting sequence, which must find the
-// ledger the index read from it.
+// ledger the index read from it. A file that fails to load is skipped until
+// it changes, rather than loaded again by every request.
 inline DonorState fileDonor(
-    const std::string& path, const std::vector<llama_token>& ledgerWords) {
+    CacheFileIndex& files, const std::string& path,
+    const std::vector<llama_token>& ledgerWords) {
   return DonorState{
       .copyInto =
-          [&path, &ledgerWords](llama_context* lctx, llama_seq_id seqId) {
+          [&files, &path, &ledgerWords](
+              llama_context* lctx, llama_seq_id seqId) {
             if (!CacheFileIndex::loadInto(lctx, seqId, path, ledgerWords)) {
+              files.markUnusable(path);
               return false;
             }
             // Cache files hold the target state only.
@@ -113,7 +117,8 @@ inline bool offerStoredState(
           })) {
     return true;
   }
-  return fileServes > minimum && adopt(fileDonor(inFile->path, inFile->words));
+  return fileServes > minimum &&
+         adopt(fileDonor(*files, inFile->path, inFile->words));
 }
 
 } // namespace qvac_lib_inference_addon_llama::cache

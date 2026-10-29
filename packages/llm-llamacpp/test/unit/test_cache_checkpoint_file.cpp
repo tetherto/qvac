@@ -448,6 +448,24 @@ TEST_F(CacheFileIndexTest, FollowsRewrittenAndDeletedFiles) {
   EXPECT_FALSE(index.longestPrefix(prompt, true, "").has_value());
 }
 
+// A file that failed to load is skipped until it is written again, instead of
+// being loaded by every request.
+TEST_F(CacheFileIndexTest, SkipsAFileThatFailedToLoadUntilItChanges) {
+  cache::CacheFileIndex index;
+  const std::string path = write("broken.bin", {1, 2, 3});
+  index.note(path);
+  const cache::Ledger prompt = cache::fromTokens({1, 2, 3, 4, 5});
+  ASSERT_TRUE(index.longestPrefix(prompt, true, "").has_value());
+
+  index.markUnusable(path);
+  EXPECT_FALSE(index.longestPrefix(prompt, true, "").has_value());
+
+  (void)write("broken.bin", {1, 2, 3, 4});
+  const auto match = index.longestPrefix(prompt, true, "");
+  ASSERT_TRUE(match.has_value()) << "the rewritten file stayed skipped";
+  EXPECT_EQ(match->reusable, 4u);
+}
+
 // Files in another format share nothing, and the index stays bounded.
 TEST_F(CacheFileIndexTest, IgnoresForeignFilesAndStaysBounded) {
   const std::string foreign = (dir_ / "foreign.bin").string();

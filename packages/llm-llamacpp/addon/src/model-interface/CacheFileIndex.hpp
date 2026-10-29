@@ -23,7 +23,7 @@ namespace qvac_lib_inference_addon_llama::cache {
 /// prompt. Only paths a request or `saveCache` named are known: the addon
 /// never scans directories. A file is read again when its size or
 /// modification time changes; one that is missing, empty or in another
-/// format is skipped until it is written.
+/// format, or that failed to load, is skipped until it is written.
 /// Thread-safe.
 class CacheFileIndex {
 public:
@@ -81,6 +81,14 @@ public:
     return best;
   }
 
+  /// Skips `path` until it changes: it failed to load as read.
+  void markUnusable(const std::string& path) {
+    std::scoped_lock lock(mutex_);
+    if (auto it = files_.find(path); it != files_.end()) {
+      it->second.unusable = true;
+    }
+  }
+
   /// Loads `path` into `seqId` and checks that its ledger is `expected`.
   /// False when the load failed or the file was rewritten since it was read;
   /// the caller then clears the sequence.
@@ -129,6 +137,8 @@ private:
   struct Known {
     uint64_t lastNoted = 0;
     bool read = false;
+    // The file as read failed to load (see `markUnusable`).
+    bool unusable = false;
     uintmax_t size = 0;
     std::filesystem::file_time_type mtime;
     std::vector<llama_token> words;
@@ -147,9 +157,10 @@ private:
       return false;
     }
     if (known.read && size == known.size && mtime == known.mtime) {
-      return true;
+      return !known.unusable;
     }
     known.read = false;
+    known.unusable = false;
     auto words = readLedgerWords(path);
     if (!words.has_value()) {
       return false;
