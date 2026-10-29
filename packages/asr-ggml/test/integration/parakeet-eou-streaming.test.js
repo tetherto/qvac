@@ -36,6 +36,7 @@
  */
 
 const test = require('brittle')
+const { checkStreamingMetadata } = require('./parakeet-metadata-assertions.js')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const {
@@ -112,7 +113,7 @@ async function streamEou(model, audioData) {
       .onUpdate((out) => {
         const items = Array.isArray(out) ? out : [out]
         for (const seg of items) {
-          if (seg && seg.text) segments.push(seg)
+          if (seg) segments.push(seg)
         }
       })
       .await()
@@ -170,6 +171,7 @@ test(
         )
 
         const segments = await streamEou(model, audio)
+        checkStreamingMetadata(t, segments)
 
         const eotSegments = segments.filter((s) => s.isEndOfTurn === true)
         const transcript = segments
