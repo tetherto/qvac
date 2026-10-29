@@ -227,6 +227,13 @@
         "cwd": "packages/fabric"
       }
     },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/fabric"
+      }
+    },
     "publish": {
       "executor": "nx:noop",
       "metadata": {
