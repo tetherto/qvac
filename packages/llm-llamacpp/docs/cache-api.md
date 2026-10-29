@@ -368,7 +368,8 @@ turns is written:
 1. **When switching to a different `cacheKey`**: the old conversation is
    saved, then the new one is loaded.
 2. **When a request omits `cacheKey`**: the active conversation is saved, then
-   cleared.
+   set aside: on text models its memory stays for the prefix the next request
+   shares with it; on multimodal models it is cleared.
 3. **When the model is reloaded** (finetuning does) **or unloaded.**
 
 Sending the same `cacheKey` again writes nothing. With the RAM tier on, cases
@@ -397,7 +398,10 @@ from admission to unload.
 **On both paths:**
 
 - An ephemeral conversation is never written automatically: each of the
-  writes above drops it instead, and its next request starts cold.
+  writes above drops it instead, and its key's next request finds no state of
+  its own. On text models that request still starts from whatever prefix it
+  shares with what the model holds, which may include the dropped
+  conversation's memory left in place; on multimodal models it starts cold.
 - A conversation with no unsaved turns, or with nothing committed (its only
   request rolled back), is not written.
 - A conversation whose loaded or saved file has been deleted (or its
@@ -443,7 +447,7 @@ same key without `ephemeral` makes it a normal conversation again.
 
 ## Switch between cache files
 
-On the single-prompt path, passing a different `cacheKey` saves the old conversation to its file if it has unsaved turns (moves it into the RAM tier when that is on, or does not write it when it is ephemeral), then loads the new one. A new key without a file starts from the prefix it shares with the old conversation.
+On the single-prompt path, passing a different `cacheKey` saves the old conversation to its file if it has unsaved turns (moves it into the RAM tier when that is on, or does not write it when it is ephemeral), then loads the new one. On text models a new key without a file starts from the prefix it shares with the old conversation; on multimodal models it starts cold.
 
 ```js
 await model.run([{ role: 'user', content: 'Topic A' }], { cacheKey: 'session1.bin' })
