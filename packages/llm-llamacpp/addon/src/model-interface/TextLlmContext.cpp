@@ -70,6 +70,14 @@ TextLlmContext::TextLlmContext(
   initializeCommonState();
 }
 
+TextLlmContext::~TextLlmContext() {
+  // A request can end on a decode nothing waited for, and `llamaInit_` frees
+  // the LoRA adapters that decode reads before the context waits for it.
+  if (llamaInit_ && modelCtx_.lctx != nullptr) {
+    llama_synchronize(modelCtx_.lctx);
+  }
+}
+
 llama_pos TextLlmContext::ctxCeiling() const {
   return perSeqCtxCeiling_ > 0
              ? perSeqCtxCeiling_
