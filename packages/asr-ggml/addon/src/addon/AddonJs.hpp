@@ -191,6 +191,15 @@ struct JsEndOfTurnHandler
 
 // ── Parakeet output handler + helpers ────────────────────────────────────
 
+inline js::Array
+tokenIdsToJsArray(js_env_t* env, const std::vector<int32_t>& tokenIds) {
+  auto tokens = js::Array::create(env);
+  for (size_t i = 0; i < tokenIds.size(); ++i) {
+    tokens.set(env, i, js::Number::create(env, tokenIds[i]));
+  }
+  return tokens;
+}
+
 inline js::Object
 transcriptToJsObject(js_env_t* env, const parakeet::Transcript& t) {
   auto obj = js::Object::create(env);
@@ -202,8 +211,20 @@ transcriptToJsObject(js_env_t* env, const parakeet::Transcript& t) {
       env, "id", js::Number::create(env, static_cast<uint64_t>(t.id)));
   obj.setProperty(env, "isEndOfTurn", js::Boolean::create(env, t.isEndOfTurn));
   obj.setProperty(env, "startsWord", js::Boolean::create(env, t.startsWord));
-  // Sortformer and MOSS-Transcribe-Diarize only; ASR segments keep their
-  // existing shape.
+  if (t.tokenIds) {
+    obj.setProperty(env, "tokenIds", tokenIdsToJsArray(env, *t.tokenIds));
+  }
+  if (t.isFinal) {
+    obj.setProperty(env, "isFinal", js::Boolean::create(env, *t.isFinal));
+  }
+  if (t.chunkIndex) {
+    obj.setProperty(env, "chunkIndex", js::Number::create(env, *t.chunkIndex));
+  }
+  if (t.eotConfidence) {
+    obj.setProperty(
+        env, "eotConfidence", js::Number::create(env, *t.eotConfidence));
+  }
+  // Diarization, speaker-attributed ASR and MOSS-Transcribe-Diarize.
   if (t.speakerId >= 0) {
     obj.setProperty(env, "speakerId", js::Number::create(env, t.speakerId));
   }
@@ -274,6 +295,10 @@ struct JsParakeetVadEventHandler
                   js::Number::create(this->env_, event.timestamp));
               obj.setProperty(
                   this->env_,
+                  "chunkIndex",
+                  js::Number::create(this->env_, event.chunkIndex));
+              obj.setProperty(
+                  this->env_,
                   "source",
                   js::String::create(
                       this->env_,
@@ -286,6 +311,38 @@ struct JsParakeetVadEventHandler
                     "speakerId",
                     js::Number::create(this->env_, event.speakerId));
               }
+              return obj;
+            }) {}
+};
+
+struct JsParakeetEndOfTurnHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          parakeet::EndOfTurnEvent> {
+  JsParakeetEndOfTurnHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            parakeet::EndOfTurnEvent>(
+            [this](const parakeet::EndOfTurnEvent& event) -> js_value_t* {
+              auto obj = js::Object::create(this->env_);
+              obj.setProperty(
+                  this->env_,
+                  "type",
+                  js::String::create(this->env_, "endOfTurn"));
+              obj.setProperty(
+                  this->env_,
+                  "source",
+                  js::String::create(this->env_, "model-eou"));
+              obj.setProperty(
+                  this->env_,
+                  "timestamp",
+                  js::Number::create(this->env_, event.timestamp));
+              obj.setProperty(
+                  this->env_,
+                  "chunkIndex",
+                  js::Number::create(this->env_, event.chunkIndex));
+              obj.setProperty(
+                  this->env_,
+                  "confidence",
+                  js::Number::create(this->env_, event.confidence));
               return obj;
             }) {}
 };
@@ -315,6 +372,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     model = std::move(ownedModel);
     outputHandlers.add(make_shared<JsParakeetTranscriptArrayHandler>());
     outputHandlers.add(make_shared<JsParakeetVadEventHandler>());
+    outputHandlers.add(make_shared<JsParakeetEndOfTurnHandler>());
   } else if (engineType == EngineType::MossTranscribe) {
     model = make_unique<moss::MossTranscribeModel>(
         adapter.buildMossTranscribeConfig(configurationParams, env));
@@ -336,12 +394,23 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
   if (parakeetModel != nullptr) {
+    parakeetModel->setOnStreamingSegmentCallback(
+        [queue = addon->addonCpp->outputQueue](
+            const parakeet::Transcript& segment) {
+          queue->queueResult(
+              std::any(std::vector<parakeet::Transcript>{segment}));
+        });
     // Framework-path streaming (cfg.streaming) VAD transitions share the
     // job output queue; the duplex path queues its own.
     parakeetModel->setOnVadEventCallback([queue = addon->addonCpp->outputQueue](
                                              const parakeet::VadEvent& event) {
       queue->queueResult(std::any(event));
     });
+    parakeetModel->setOnEndOfTurnCallback(
+        [queue = addon->addonCpp->outputQueue](
+            const parakeet::EndOfTurnEvent& event) {
+          queue->queueResult(std::any(event));
+        });
   }
   return JsInterface::createInstance(env, std::move(addon));
 }
@@ -600,6 +669,9 @@ inline ParakeetFitRequest parseParakeetFit(
     js_env_t* env, js::Object request, const std::string& modelPath) {
   ::parakeet::FitOptions options;
   options.model_gguf_path = modelPath;
+  if (auto backend = request.getOptionalProperty<js::String>(env, "backend")) {
+    options.backend = backend->as<std::string>(env);
+  }
 
   auto number = [&](const char* name) {
     return readFitCount(env, request, name);
@@ -840,7 +912,12 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
     result.setProperty(
         env,
         "backendDevice",
-        js::String::create(env, std::string(deviceClass == 1 ? "GPU" : "CPU")));
+        js::String::create(
+            env,
+            std::string(
+                deviceClass == 2   ? "NPU"
+                : deviceClass == 1 ? "GPU"
+                                   : "CPU")));
     result.setProperty(
         env,
         "backendId",
