@@ -22,7 +22,7 @@ export function options(argv) {
       'cuda-lib': { type: 'string', default: '' },
       'vulkan-smoke': { type: 'boolean', default: false },
       set: { type: 'string', multiple: true, default: [] },
-      config: { type: 'string' },
+      matrix: { type: 'string' },
       suite: { type: 'string', default: 'rtf' }
     },
     strict: true

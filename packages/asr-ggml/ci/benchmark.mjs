@@ -3,7 +3,7 @@
 // suite=accuracy (WER/CER, as main's asr accuracy workflow ran it), chosen in BENCHMARK_ARGS as key=value words; rtf when
 // none is given. Each configuration names the suite its host serves; a host that serves another does nothing.
 //
-//   node ci/benchmark.mjs --suite rtf --config <configuration> [--no-gpu] [--set NAME=value]...
+//   node ci/benchmark.mjs --suite rtf --matrix <set> [--no-gpu] [--set NAME=value]...
 //   node ci/benchmark.mjs --suite accuracy
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -51,11 +51,17 @@ function rtf(o) {
     run('node', ['scripts/stage-integration-models.mjs', '--coreml-only']) !== 0
   )
     process.exit(1)
-  const matrix = JSON.parse(
-    readFileSync(join(PKG, 'ci/benchmark-matrix', `${o.config}.json`), 'utf8')
-  )
+  const sets = JSON.parse(readFileSync(join(PKG, 'ci/benchmark-matrix.json'), 'utf8'))
+  const matrix = sets[o.matrix]
+  if (!matrix) throw new Error(`--matrix takes one of ${Object.keys(sets).join(', ')}`)
+  // Results carry the job's runner label, as main's matrix.runner did.
+  const label = process.env.CI_RUNNER_LABEL
   const status = run('node', ['scripts/run-rtf-benchmark-matrix.js'], {
     ...process.env,
+    ...(label && {
+      QVAC_ASR_GGML_BENCHMARK_DEVICE: label,
+      QVAC_ASR_GGML_BENCHMARK_RUNNER: label
+    }),
     ...o.set,
     ...libEnv(),
     NO_GPU: o['no-gpu'] ? 'true' : 'false',

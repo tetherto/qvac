@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// bci's RTF benchmark, as main's desktop test workflow ran it after the tests: ci/benchmark-matrix/<config>.json as
+// bci's RTF benchmark, as main's desktop test workflow ran it after the tests: a named set from ci/benchmark-matrix.json as
 // QVAC_BCI_BENCHMARK_MATRIX_JSON, then scripts/run-rtf-benchmark-matrix.js into benchmarks/results. It fails when the
 // matrix fails or writes no result file.
 //
-//   node ci/benchmark.mjs --config <configuration> [--set NAME=value]...
+//   node ci/benchmark.mjs --matrix <set> [--set NAME=value]...
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
@@ -16,14 +16,14 @@ import { copyVulkanLoader, fetchFixtures, run } from './integration.mjs'
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const { values } = parseArgs({
   options: {
-    config: { type: 'string' },
+    matrix: { type: 'string' },
     set: { type: 'string', multiple: true, default: [] }
   },
   strict: true
 })
-const matrix = JSON.parse(
-  readFileSync(join(PKG, 'ci/benchmark-matrix', `${values.config}.json`), 'utf8')
-)
+const sets = JSON.parse(readFileSync(join(PKG, 'ci/benchmark-matrix.json'), 'utf8'))
+const matrix = sets[values.matrix]
+if (!matrix) throw new Error(`--matrix takes one of ${Object.keys(sets).join(', ')}`)
 const env = {
   ...process.env,
   ...Object.fromEntries(

@@ -157,8 +157,8 @@ audiogen is on the package CI contract, so the benchmarks run through
 `benchmarks.yml`, dispatched with `-f packages=audiogen-ggml`.
 
 **Desktop** is the `benchmark` target, one job per configuration in
-`project.json`. `ci/benchmark.mjs` takes the configuration's matrix from
-`ci/benchmark-matrix/<configuration>.json`: every runner sweeps the three
+`project.json`. Each configuration names a set in `ci/benchmark-matrix.json`
+with `--matrix`: every runner sweeps the three
 variants on CPU, and GPU-capable runners sweep them again on the platform backend
 (Vulkan on linux/win32, Metal on darwin). Artifacts:
 `audiogen-ggml-benchmark-<configuration>`. A job fails when the matrix runner

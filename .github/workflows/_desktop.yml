@@ -141,6 +141,7 @@ jobs:
           PROJECT: ${{ matrix.row.project }}
           TARGET: ${{ matrix.row.target }}
           CONFIG: ${{ matrix.row.config }}
+          CI_RUNNER_LABEL: ${{ matrix.row.runner }}
           QASE: ${{ contains(matrix.row.meta.secrets, 'QASE_API_TOKEN') && secrets.QASE_API_TOKEN || '' }}
           BUCKET: ${{ contains(matrix.row.meta.secrets, 'MODEL_S3_BUCKET') && secrets.MODEL_S3_BUCKET || '' }}
           HF: ${{ contains(matrix.row.meta.secrets, 'HF_TOKEN') && secrets.HF_TOKEN || '' }}
