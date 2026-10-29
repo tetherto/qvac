@@ -14,54 +14,58 @@ JavaScript Dependencies
 
   @hyperswarm/secret-stream@6.9.2
     https://github.com/holepunchto/hyperswarm-secret-stream
-  @qvac/asr-ggml@0.5.3
+  @qvac/asr-ggml@0.10.0
     https://github.com/tetherto/qvac
-  @qvac/asr-ggml-darwin-arm64@0.5.3
+  @qvac/asr-ggml-darwin-arm64@0.10.0
     https://github.com/tetherto/qvac
-  @qvac/audiogen-ggml@0.4.1
+  @qvac/audiogen-ggml@0.8.0
     https://github.com/tetherto/qvac
-  @qvac/audiogen-ggml-darwin-arm64@0.4.1
+  @qvac/audiogen-ggml-darwin-arm64@0.8.0
     https://github.com/tetherto/qvac
-  @qvac/bci-whispercpp@0.9.1
+  @qvac/bci-whispercpp@0.12.0
     https://github.com/tetherto/qvac
-  @qvac/classification-ggml@0.26.3
+  @qvac/classification-ggml@0.31.1
     https://github.com/tetherto/qvac
-  @qvac/decoder-audio@0.6.0
+  @qvac/decoder-audio@0.8.1
     https://github.com/tetherto/qvac
-  @qvac/diffusion-cpp@0.24.0
+  @qvac/diffusion-cpp@0.30.0
     https://github.com/tetherto/qvac
-  @qvac/embed-llamacpp@0.41.3
+  @qvac/embed-llamacpp@0.48.2
     https://github.com/tetherto/qvac
   @qvac/error@0.1.1
-  @qvac/fabric@0.16.1
+  @qvac/fabric@0.22.0
     https://github.com/tetherto/qvac
-  @qvac/infer-base@0.6.2
+  @qvac/fabric-darwin-arm64@0.22.0
     https://github.com/tetherto/qvac
-  @qvac/inference@0.20.0
+  @qvac/ggml-rpc-server@0.5.1
+    https://github.com/tetherto/qvac
+  @qvac/infer-base@0.8.0
+    https://github.com/tetherto/qvac
+  @qvac/inference@0.22.0
     https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/llm-llamacpp@0.53.2
+  @qvac/llm-llamacpp@0.61.2
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.1
     https://github.com/tetherto/qvac
-  @qvac/ocr-ggml@0.24.3
+  @qvac/ocr-ggml@0.29.1
     https://github.com/tetherto/qvac
   @qvac/rag@0.8.1
     https://github.com/tetherto/qvac
-  @qvac/registry-client@0.6.1
+  @qvac/registry-client@0.7.0
     https://github.com/tetherto/qvac
-  @qvac/registry-schema@0.3.0
+  @qvac/registry-schema@0.4.0
     https://github.com/tetherto/qvac
-  @qvac/sdk@0.20.0
+  @qvac/sdk@0.22.0
     https://github.com/tetherto/qvac
-  @qvac/translation-nmtcpp@0.16.4
+  @qvac/translation-nmtcpp@0.21.1
     https://github.com/tetherto/qvac
-  @qvac/tts-ggml@0.9.2
+  @qvac/tts-ggml@0.13.0
     https://github.com/tetherto/qvac
-  @qvac/tts-ggml-darwin-arm64@0.9.2
+  @qvac/tts-ggml-darwin-arm64@0.13.0
     https://github.com/tetherto/qvac
-  @qvac/vla-ggml@0.27.3
+  @qvac/vla-ggml@0.32.2
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
@@ -71,11 +75,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-abort
   bare-abort-controller@1.1.2
     https://github.com/holepunchto/bare-abort-controller
-  bare-addon-resolve@1.10.1
+  bare-addon-resolve@1.11.0
     https://github.com/holepunchto/bare-addon-resolve
   bare-ansi-escapes@2.2.3
     https://github.com/holepunchto/bare-ansi-escapes
-  bare-assert@1.2.0
+  bare-assert@1.3.0
     https://github.com/holepunchto/bare-assert
   bare-buffer@3.7.1
     https://github.com/holepunchto/bare-buffer
@@ -87,27 +91,27 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-cov
   bare-cpu-info@0.1.1
     https://github.com/holepunchto/bare-cpu-info
-  bare-crypto@1.15.3
+  bare-crypto@1.15.4
     https://github.com/holepunchto/bare-crypto
   bare-debug-log@2.0.0
     https://github.com/holepunchto/bare-debug-log
-  bare-dns@2.2.1
+  bare-dns@2.3.0
     https://github.com/holepunchto/bare-dns
   bare-encoding@1.0.3
     https://github.com/holepunchto/bare-encoding
   bare-env@3.0.1
     https://github.com/holepunchto/bare-env
-  bare-events@2.9.2
+  bare-events@2.9.1
     https://github.com/holepunchto/bare-events
-  bare-fetch@3.4.0
+  bare-fetch@3.4.1
     https://github.com/holepunchto/bare-fetch
-  bare-ffmpeg@1.6.0
+  bare-ffmpeg@1.6.2
     https://github.com/holepunchto/bare-ffmpeg
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
   bare-format@1.0.2
     https://github.com/holepunchto/bare-format
-  bare-fs@4.8.1
+  bare-fs@4.8.4
     https://github.com/holepunchto/bare-fs
   bare-gpu-info@0.1.1
     https://github.com/holepunchto/bare-gpu-info
@@ -123,27 +127,31 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-inspect
   bare-inspector@6.1.0
     https://github.com/holepunchto/bare-inspector
+  bare-lief@0.2.10
+    https://github.com/holepunchto/bare-lief
+  bare-link@4.0.1
+    https://github.com/holepunchto/bare-link
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
   bare-module@6.4.0
     https://github.com/holepunchto/bare-module
-  bare-module-lexer@1.6.7
+  bare-module-lexer@1.6.6
     https://github.com/holepunchto/bare-module-lexer
-  bare-module-resolve@1.12.5
+  bare-module-resolve@1.12.6
     https://github.com/holepunchto/bare-module-resolve
-  bare-module-traverse@2.5.6
+  bare-module-traverse@2.7.2
     https://github.com/holepunchto/bare-module-traverse
   bare-net@2.3.3
     https://github.com/holepunchto/bare-net
   bare-os@3.9.3
     https://github.com/holepunchto/bare-os
-  bare-pack@2.2.2
+  bare-pack@2.2.5
     https://github.com/holepunchto/bare-pack
   bare-path@3.1.2
     https://github.com/holepunchto/bare-path
   bare-performance@2.1.1
     https://github.com/holepunchto/bare-performance
-  bare-pipe@4.3.1
+  bare-pipe@4.4.0
     https://github.com/holepunchto/bare-pipe
   bare-posix@1.0.1
     https://github.com/holepunchto/bare-posix
@@ -151,19 +159,17 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-process
   bare-rpc@1.3.8
     https://github.com/holepunchto/bare-rpc
-  bare-runtime@1.33.4
+  bare-runtime@1.36.0
     https://github.com/holepunchto/bare-runtime
-  bare-runtime-darwin-arm64@1.33.4
+  bare-runtime-darwin-arm64@1.36.0
     https://github.com/holepunchto/bare-runtime
   bare-semver@1.1.0
     https://github.com/holepunchto/bare-semver
-  bare-signals@4.2.0
-    https://github.com/holepunchto/bare-signals
   bare-signals@5.0.0
     https://github.com/holepunchto/bare-signals
   bare-stdio@1.0.3
     https://github.com/holepunchto/bare-stdio
-  bare-stream@2.13.4
+  bare-stream@2.13.3
     https://github.com/holepunchto/bare-stream
   bare-structured-clone@2.0.1
     https://github.com/holepunchto/bare-structured-clone
@@ -171,19 +177,19 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-stylize
   bare-subprocess@5.2.3
     https://github.com/holepunchto/bare-subprocess
-  bare-subprocess@6.2.0
+  bare-subprocess@6.2.2
     https://github.com/holepunchto/bare-subprocess
   bare-tcp@2.6.1
     https://github.com/holepunchto/bare-tcp
-  bare-tls@3.1.10
+  bare-tls@3.1.13
     https://github.com/holepunchto/bare-tls
   bare-tty@5.2.1
     https://github.com/holepunchto/bare-tty
   bare-type@1.4.0
     https://github.com/holepunchto/bare-type
-  bare-type-stripper@0.1.7
+  bare-type-stripper@0.1.6
     https://github.com/holepunchto/bare-type-stripper
-  bare-url@2.5.4
+  bare-url@2.5.5
     https://github.com/holepunchto/bare-url
   bare-utils@1.6.0
     https://github.com/holepunchto/bare-utils
@@ -197,7 +203,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/blind-relay
   brittle@3.19.1
     https://github.com/holepunchto/brittle
-  compact-encoding@3.5.0
+  compact-encoding@3.5.2
     https://github.com/holepunchto/compact-encoding
   compact-encoding-bitfield@1.1.0
     https://github.com/compact-encoding/compact-encoding-bitfield
@@ -209,11 +215,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/events-universal
   fd-lock@2.2.0
     https://github.com/holepunchto/fd-lock
-  fs-native-extensions@1.5.1
+  fs-native-extensions@1.5.2
     https://github.com/holepunchto/fs-native-extensions
   globbie@1.0.6
     https://github.com/holepunchto/globbie
-  hyperblobs@2.12.1
+  hyperblobs@2.13.0
     https://github.com/holepunchto/hyperblobs
   hypercore-errors@1.5.0
     https://github.com/holepunchto/hypercore-errors
@@ -221,13 +227,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-id-encoding
   hypercore-stats@2.5.1
     https://github.com/holepunchto/hypercore-stats
-  hypercore-storage@3.3.1
+  hypercore-storage@3.4.0
     https://github.com/holepunchto/hypercore-storage
-  hyperdb@6.9.0
+  hyperdb@6.11.0
     https://github.com/holepunchto/hyperdb
   hyperdht-address@1.1.1
     https://github.com/holepunchto/hyperdht-address
-  hyperdht-stats@1.11.0
+  hyperdht-stats@1.11.1
     https://github.com/holepunchto/hyperdht-stats
   hyperdispatch@1.6.0
     https://github.com/holepunchto/hyperdispatch
@@ -235,7 +241,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdrive
   hyperschema@1.26.2
     https://github.com/holepunchto/hyperschema
-  hyperswarm-stats@1.3.1
+  hyperswarm-stats@1.3.3
     https://github.com/holepunchto/hyperswarm-stats
   index-encoder@3.5.0
     https://github.com/holepunchto/index-encoder
@@ -243,11 +249,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/mirror-drive
   noise-handshake@4.2.0
     https://github.com/holepunchto/noise-handshake
-  paparam@1.13.0
+  paparam@1.14.0
     https://github.com/holepunchto/paparam
   passive-core-watcher@1.0.1
     https://github.com/holepunchto/passive-core-watcher
-  quickbit-native@2.4.8
+  quickbit-native@2.4.9
     https://github.com/holepunchto/quickbit-native
   rabin-native@2.0.0
     https://github.com/holepunchto/rabin-native
@@ -263,7 +269,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/require-asset
   resource-on-exit@1.0.0
     https://github.com/holepunchto/bare-teardown
-  rocksdb-native@3.18.1
+  rocksdb-native@3.19.1
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
@@ -273,7 +279,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/sub-encoder
   text-decoder@1.2.7
     https://github.com/holepunchto/text-decoder
-  udx-native@1.21.3
+  udx-native@1.22.0
     https://github.com/holepunchto/udx-native
   unslab@1.3.0
     https://github.com/holepunchto/unslab
@@ -295,13 +301,13 @@ JavaScript Dependencies
 
 --- bsd-3-clause (BSD 3-Clause License) ---
 
-  fast-uri@3.1.8
+  fast-uri@3.1.9
     https://github.com/fastify/fast-uri
-  fast-uri@4.2.1
+  fast-uri@4.2.3
     https://github.com/fastify/fast-uri
-  light-my-request@6.6.0
+  light-my-request@6.8.0
     https://github.com/fastify/light-my-request
-  secure-json-parse@4.1.0
+  secure-json-parse@4.1.1
     https://github.com/fastify/secure-json-parse
 
 --- isc (ISC License) ---
@@ -343,67 +349,67 @@ JavaScript Dependencies
 
   @esbuild/darwin-arm64@0.28.2
     https://github.com/evanw/esbuild
-  @fastify/accept-negotiator@2.1.0
+  @fastify/accept-negotiator@2.1.2
     https://github.com/fastify/accept-negotiator
-  @fastify/ajv-compiler@4.0.6
+  @fastify/ajv-compiler@4.0.7
     https://github.com/fastify/ajv-compiler
-  @fastify/busboy@3.2.2
+  @fastify/busboy@3.2.4
     https://github.com/fastify/busboy
-  @fastify/cors@11.3.0
+  @fastify/cors@11.3.1
     https://github.com/fastify/fastify-cors
-  @fastify/deepmerge@3.2.1
+  @fastify/deepmerge@3.2.4
     https://github.com/fastify/deepmerge
-  @fastify/error@4.2.0
+  @fastify/error@4.2.1
     https://github.com/fastify/fastify-error
-  @fastify/fast-json-stringify-compiler@5.1.0
+  @fastify/fast-json-stringify-compiler@5.1.1
     https://github.com/fastify/fast-json-stringify-compiler
-  @fastify/forwarded@3.0.2
+  @fastify/forwarded@3.1.2
     https://github.com/fastify/forwarded
-  @fastify/merge-json-schemas@0.2.1
+  @fastify/merge-json-schemas@0.2.2
     https://github.com/fastify/merge-json-schemas
   @fastify/multipart@9.4.0
     https://github.com/fastify/fastify-multipart
-  @fastify/proxy-addr@5.1.1
+  @fastify/proxy-addr@5.1.2
     https://github.com/fastify/proxy-addr
-  @fastify/send@4.1.1
+  @fastify/send@4.2.0
     https://github.com/fastify/send
-  @fastify/static@10.1.4
+  @fastify/static@10.1.7
     https://github.com/fastify/fastify-static
-  @fastify/swagger@9.9.0
+  @fastify/swagger@9.9.2
     https://github.com/fastify/fastify-swagger
-  @fastify/swagger-ui@6.1.1
+  @fastify/swagger-ui@6.1.2
     https://github.com/fastify/fastify-swagger-ui
-  @inquirer/ansi@2.0.8
+  @inquirer/ansi@2.0.9
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/checkbox@5.2.5
+  @inquirer/checkbox@5.2.7
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/confirm@6.3.2
+  @inquirer/confirm@6.3.4
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/core@12.0.3
+  @inquirer/core@12.0.5
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/editor@5.3.3
+  @inquirer/editor@5.3.5
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/expand@5.1.5
+  @inquirer/expand@5.1.7
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/external-editor@3.0.5
+  @inquirer/external-editor@3.0.6
     https://github.com/SBoudrias/Inquirer.js
   @inquirer/figures@2.0.9
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/input@5.1.6
+  @inquirer/input@5.1.8
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/number@4.2.3
+  @inquirer/number@4.2.5
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/password@5.2.2
+  @inquirer/password@5.2.4
     https://github.com/SBoudrias/Inquirer.js
   @inquirer/prompts@8.5.2
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/rawlist@5.3.5
+  @inquirer/rawlist@5.3.7
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/search@4.3.3
+  @inquirer/search@4.3.5
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/select@5.2.5
+  @inquirer/select@5.2.7
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/type@4.1.1
+  @inquirer/type@4.2.0
     https://github.com/SBoudrias/Inquirer.js
   @jridgewell/resolve-uri@3.1.2
     https://github.com/jridgewell/resolve-uri
@@ -417,7 +423,7 @@ JavaScript Dependencies
     https://github.com/pinojs/redact
   @types/istanbul-lib-coverage@2.0.6
     https://github.com/DefinitelyTyped/DefinitelyTyped
-  @types/node@25.9.8
+  @types/node@25.9.9
     https://github.com/DefinitelyTyped/DefinitelyTyped
   abstract-logging@2.0.1
     https://github.com/jsumners/abstract-logging
@@ -427,7 +433,7 @@ JavaScript Dependencies
     https://github.com/ajv-validator/ajv-formats
   atomic-sleep@1.0.0
     https://github.com/davidmarkclements/atomic-sleep
-  avvio@9.3.0
+  avvio@9.3.1
     https://github.com/fastify/avvio
   balanced-match@4.0.4
     https://github.com/juliangruber/balanced-match
@@ -451,9 +457,9 @@ JavaScript Dependencies
     https://github.com/jshttp/content-disposition
   convert-source-map@2.0.0
     https://github.com/thlorenz/convert-source-map
-  cookie@1.1.1
+  cookie@2.0.1
     https://github.com/jshttp/cookie
-  corestore@7.12.5
+  corestore@7.16.0
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
@@ -477,7 +483,7 @@ JavaScript Dependencies
     https://github.com/epoberezkin/fast-deep-equal
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
-  fast-json-stringify@7.0.1
+  fast-json-stringify@7.1.3
     https://github.com/fastify/fast-json-stringify
   fast-querystring@1.1.2
     https://github.com/anonrig/fast-querystring
@@ -489,15 +495,15 @@ JavaScript Dependencies
     https://github.com/fabiospampinato/fast-string-width
   fast-wrap-ansi@0.2.2
     https://github.com/43081j/fast-wrap-ansi
-  fastify@5.12.5
+  fastify@5.12.7
     https://github.com/fastify/fastify
   fastify-plugin@5.1.0
     https://github.com/fastify/fastify-plugin
-  fastify-plugin@6.0.0
+  fastify-plugin@6.0.1
     https://github.com/fastify/fastify-plugin
   fastify-type-provider-zod@5.1.0
     https://github.com/turkerdev/fastify-type-provider-zod
-  find-my-way@9.9.0
+  find-my-way@9.10.0
     https://github.com/delvedor/find-my-way
   flat-tree@1.13.0
     https://github.com/mafintosh/flat-tree
@@ -511,11 +517,11 @@ JavaScript Dependencies
     https://github.com/jshttp/http-errors
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.36.1
+  hypercore@11.39.0
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.34.0
+  hyperdht@6.34.1
     https://github.com/holepunchto/hyperdht
   hyperswarm@4.17.2
     https://github.com/holepunchto/hyperswarm
@@ -529,7 +535,7 @@ JavaScript Dependencies
     https://github.com/mikolalysenko/is-property
   js-yaml@4.3.2
     https://github.com/nodeca/js-yaml
-  json-schema-ref-resolver@3.0.0
+  json-schema-ref-resolver@3.0.1
     https://github.com/fastify/json-schema-ref-resolver
   json-schema-resolver@3.0.0
     https://github.com/Eomm/json-schema-resolver
@@ -553,21 +559,19 @@ JavaScript Dependencies
     https://github.com/kogosoftwarellc/open-api/tree/master/packages/openapi-types
   picomatch@4.0.7
     https://github.com/micromatch/picomatch
-  pino@10.3.1
+  pino@10.4.0
     https://github.com/pinojs/pino
   pino-abstract-transport@3.0.0
     https://github.com/pinojs/pino-abstract-transport
   pino-std-serializers@7.1.0
     https://github.com/pinojs/pino-std-serializers
-  process-warning@4.0.1
-    https://github.com/fastify/process-warning
-  process-warning@5.1.0
+  process-warning@5.1.1
     https://github.com/fastify/process-warning
   promaphore@1.0.0
     https://github.com/mafintosh/promaphore
   protocol-buffers-encodings@1.2.0
     https://github.com/mafintosh/protocol-buffers-encodings
-  protomux@3.12.0
+  protomux@3.13.0
     https://github.com/holepunchto/protomux
   queue-tick@1.0.1
     https://github.com/mafintosh/queue-tick
@@ -577,8 +581,6 @@ JavaScript Dependencies
     https://github.com/mafintosh/random-array-iterator
   ready-resource@1.2.0
     https://github.com/holepunchto/ready-resource
-  real-require@0.2.0
-    https://github.com/pinojs/real-require
   real-require@1.0.0
     https://github.com/pinojs/real-require
   record-cache@1.2.0
@@ -587,13 +589,13 @@ JavaScript Dependencies
     https://github.com/floatdrop/require-from-string
   resolve-reject-promise@1.1.0
     https://github.com/mafintosh/resolve-reject-promise
-  ret@0.5.0
+  ret@0.5.1
     https://github.com/fent/ret.js
   reusify@1.1.0
     https://github.com/mcollina/reusify
   rfdc@1.4.1
     https://github.com/davidmarkclements/rfdc
-  safe-regex2@5.1.1
+  safe-regex2@5.1.2
     https://github.com/fastify/safe-regex2
   safe-stable-stringify@2.5.0
     https://github.com/BridgeAR/safe-stable-stringify
@@ -605,7 +607,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/same-data
   same-object@1.0.2
     https://github.com/holepunchto/same-object
-  set-cookie-parser@2.7.2
+  set-cookie-parser@3.2.1
     https://github.com/nfriedly/set-cookie-parser
   shuffled-priority-queue@2.1.0
     https://github.com/mafintosh/shuffled-priority-queue
@@ -613,7 +615,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/signal-promise
   signed-varint@2.0.1
     https://github.com/dominictarr/signed-varint
-  sodium-native@5.1.0
+  sodium-native@5.2.0
     https://github.com/holepunchto/sodium-native
   sodium-secretstream@1.2.0
     https://github.com/mafintosh/sodium-secretstream
@@ -629,7 +631,7 @@ JavaScript Dependencies
     https://github.com/jshttp/statuses
   streamx@2.28.1
     https://github.com/mafintosh/streamx
-  tar-stream@3.2.1
+  tar-stream@3.2.2
     https://github.com/mafintosh/tar-stream
   teex@1.0.1
     https://github.com/mafintosh/teex
@@ -664,6 +666,8 @@ JavaScript Dependencies
   z32@1.1.0
     https://github.com/mafintosh/z32
   zod@4.6.5
+    https://github.com/colinhacks/zod
+  zod@4.6.7
     https://github.com/colinhacks/zod
 
 --- python-2.0 (Python Software Foundation License) ---

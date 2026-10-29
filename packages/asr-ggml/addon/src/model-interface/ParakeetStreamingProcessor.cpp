@@ -4,8 +4,6 @@
 #include <chrono>
 #include <cmath>
 #include <exception>
-#include <iomanip>
-#include <sstream>
 #include <utility>
 
 #include "inference-addon-cpp/Logger.hpp"
@@ -19,25 +17,6 @@ namespace qvac::asrggml::parakeet {
 namespace pkt = ::parakeet;
 
 namespace logger = qvac_lib_inference_addon_cpp::logger;
-
-namespace {
-// HH:MM:SS.fff -- mirrors ParakeetModel::formatSeconds so the JS-side
-// `dominantSpeaker` regex (and any consumer that parses speaker
-// segments) keeps working unchanged whether we reach it through the
-// offline `runSortformerProcess_` path or this duplex processor.
-std::string formatSeconds(float seconds) {
-  if (seconds < 0.0F)
-    seconds = 0.0F;
-  const int hours = static_cast<int>(seconds) / 3600;
-  const int mins = (static_cast<int>(seconds) / 60) % 60;
-  const float secs = seconds - (hours * 3600 + mins * 60);
-  std::ostringstream os;
-  os << std::setfill('0') << std::setw(2) << hours << ":" << std::setfill('0')
-     << std::setw(2) << mins << ":" << std::fixed << std::setprecision(3)
-     << std::setfill('0') << std::setw(6) << secs;
-  return os.str();
-}
-} // namespace
 
 ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     ParakeetModel& model,
@@ -87,11 +66,9 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     opts.energy_vad_window_ms = config_.energyVadWindowMs;
     opts.energy_vad_hangover_ms = config_.energyVadHangoverMs;
     // speech-cpp only runs the energy detector when on_event is set.
-    if (config_.emitEnergyVad) {
-      opts.on_event = [this](const pkt::StreamEvent& event) {
-        onStreamEvent(event, VadSource::Energy);
-      };
-    }
+    opts.on_event = [this](const pkt::StreamEvent& event) {
+      onStreamEvent(event, VadSource::Energy);
+    };
     feedSliceSamples_ = ParakeetModel::energyVadFeedSliceSamples(
         config_.emitEnergyVad, config_.energyVadWindowMs, config_.sampleRate);
 
@@ -166,37 +143,26 @@ void ParakeetStreamingProcessor::joinWorkerOnce() {
 
 void ParakeetStreamingProcessor::onAsrSegment(
     const pkt::StreamingSegment& seg) {
-  if (seg.text.empty() && !seg.is_eou_boundary)
+  if (seg.text.empty() && !seg.is_eou_boundary && !seg.is_final)
     return;
-  Transcript t;
-  t.text = seg.text;
-  t.start = static_cast<float>(seg.start_s);
-  t.end = static_cast<float>(seg.end_s);
-  t.toAppend = true;
-  t.isEndOfTurn = seg.is_eou_boundary;
-  t.startsWord = seg.starts_word;
-  seg_buffer_.push_back(std::move(t));
+  seg_buffer_.push_back(ParakeetModel::toStreamingTranscript(seg));
 }
 
 void ParakeetStreamingProcessor::onDiarSegment(
     const pkt::StreamingDiarizationSegment& seg) {
-  if (seg.speaker_id < 0)
+  if (seg.speaker_id < 0 && !seg.is_final)
     return;
-  Transcript t;
-  std::ostringstream os;
-  os << "Speaker " << seg.speaker_id << ": "
-     << formatSeconds(static_cast<float>(seg.start_s)) << " - "
-     << formatSeconds(static_cast<float>(seg.end_s));
-  t.text = os.str();
-  t.start = static_cast<float>(seg.start_s);
-  t.end = static_cast<float>(seg.end_s);
-  t.toAppend = true;
-  t.speakerId = seg.speaker_id;
-  seg_buffer_.push_back(std::move(t));
+  seg_buffer_.push_back(ParakeetModel::toStreamingDiarizationTranscript(seg));
 }
 
 void ParakeetStreamingProcessor::onStreamEvent(
     const pkt::StreamEvent& event, VadSource source) {
+  if (event.type == pkt::StreamEventType::EndOfTurn) {
+    emitPending();
+    output_queue_->queueResult(
+        std::any(ParakeetModel::toEndOfTurnEvent(event)));
+    return;
+  }
   auto vad = ParakeetModel::toVadEvent(event, source);
   if (!vad || lastVadSpeaking_ == vad->speaking)
     return;

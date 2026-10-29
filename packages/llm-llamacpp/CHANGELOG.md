@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Breaking
+
+- JSON nested deeper than 128 levels, which used to be accepted, is rejected:
+  a prompt, including `tool_calls` arguments, with `InvalidInputFormat`, and a
+  `generationParams.json_schema` with `InvalidArgument`
+  ([#5430](https://github.com/tetherto/qvac/pull/5430)).
+- A tool with an empty `name` is rejected with `InvalidInputFormat` instead of
+  `InvalidArgument` ([#5430](https://github.com/tetherto/qvac/pull/5430)).
+
 ### Added
 
 - Native `calcTokens` binding: counts the tokens a text takes on the loaded
@@ -11,17 +20,32 @@
 
 ### Fixed
 
-- A prompt nested deeper than 128 levels, including `tool_calls` arguments,
-  is rejected with `InvalidInputFormat`. It used to be accepted, and crashed
-  the process at much deeper nesting. A `generationParams.json_schema` nested
-  that deep is rejected with `InvalidArgument`
-  ([#5353](https://github.com/tetherto/qvac/pull/5353)).
+- Deeply nested JSON in a prompt, `tool_calls` arguments or
+  `generationParams.json_schema` no longer crashes the process with a stack
+  overflow ([#5430](https://github.com/tetherto/qvac/pull/5430)).
 - A tool with no top-level `name`, or a non-string `name` or `description`,
   and any entry with a non-string `role` or `type`, is rejected with
-  `InvalidInputFormat` instead of picojson's raw type-mismatch error. A tool
-  with an empty `name`, rejected before as `InvalidArgument`, is now rejected
-  as `InvalidInputFormat`
-  ([#5353](https://github.com/tetherto/qvac/pull/5353)).
+  `InvalidInputFormat` instead of picojson's raw type-mismatch error
+  ([#5430](https://github.com/tetherto/qvac/pull/5430)).
+
+## [0.65.1] - 2026-10-29
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.24.0` -> `^0.25.0`, which carries
+  `qvac-fabric` `11259.1.0` -> `11259.2.0`
+  ([#5435](https://github.com/tetherto/qvac/pull/5435)): a bound on the PNG
+  zlib decode, an RPC server graph-cache fix, DeepSeek V4.1 Flash and CUDA
+  top-k fixes. A caret on a `0.x` version locks the minor, so `^0.24.0` would
+  not have resolved `0.25.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.25.0` with it.
+- `@qvac/fabric` 0.25.0 changes the layout of `common_params` and
+  `common_chat_msg`, so every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.25.0` together.
+- Image inputs go through the bounded PNG decode, so a small PNG with a large
+  deflate stream no longer makes mtmd allocate gigabytes. No API change for
+  this package.
 
 ## [0.65.0] - 2026-10-27
 

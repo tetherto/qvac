@@ -851,6 +851,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   genParams.sample_params.sample_method = gen.sampleMethod;
   genParams.sample_params.scheduler = gen.scheduler;
   genParams.sample_params.sample_steps = gen.steps;
+  genParams.sample_params.custom_sigmas =
+      gen.customSigmas.empty() ? nullptr : gen.customSigmas.data();
+  genParams.sample_params.custom_sigmas_count =
+      static_cast<int>(gen.customSigmas.size());
   genParams.sample_params.guidance.txt_cfg = gen.cfgScale;
   genParams.sample_params.guidance.distilled_guidance = gen.guidance;
   genParams.sample_params.guidance.img_cfg =

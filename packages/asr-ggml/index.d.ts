@@ -5,7 +5,7 @@ import { assessFit as assessFitImpl, type AsrFitRequest, type AsrFitResult, type
 import { BackendId as BackendIdEnum, type ASRRunOutput, type ASRStreamOutput, type AudioChunk, type AudioInput, type BackendInfo, type EndOfTurnEvent, type InferenceClientState, type ParakeetRuntimeStats, type RuntimeStats, type RuntimeStatsCore, type TranscriptionSegment, type VadEvent, type WhisperRuntimeStats } from "./lib/types";
 import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrNativeInterface, EngineType } from "./engines/types";
 import { type VadParams, type WhisperConfig, type WhisperEngineConfig, type WhisperStreamingOptions } from "./engines/whisper/driver";
-import { type ParakeetConfig, type ParakeetEngineConfig, type ParakeetStreamingRunConfig } from "./engines/parakeet/driver";
+import { type ParakeetConfig, type ParakeetEngineConfig, type ParakeetStreamingRunConfig, type ParakeetSpeakerAttributionConfig as ParakeetSpeakerAttributionConfigShape } from "./engines/parakeet/driver";
 import { type MossTranscribeConfig, type MossTranscribeEngineConfig, type MossTranscribeRunOptions } from "./engines/moss/driver";
 type ASRGgmlConfig = WhisperEngineConfig | ParakeetEngineConfig | MossTranscribeEngineConfig;
 interface ASRGgmlOptions {
@@ -190,5 +190,6 @@ declare namespace ASRGgml {
     type WhisperFitRequest = WhisperFitRequestShape;
     export import BackendId = BackendIdEnum;
     const assessFit: typeof assessFitImpl;
+    type ParakeetSpeakerAttributionConfig = ParakeetSpeakerAttributionConfigShape;
 }
 export = ASRGgml;

@@ -13,14 +13,19 @@ const PACKAGE_DIR_OVERRIDES = Object.freeze({
 
 /**
  * Extra directories to scan for changelog PRs beyond a package's own dir.
- * The @qvac/inference engine ships out of the sdk package, so commits under
- * packages/inference belong in the SDK changelog even though they live in a
- * separate directory. This widens the PR scan only; version and changelog
- * output still key off the package's own dir.
+ * The @qvac/inference engine ships out of the sdk package, and the Python and
+ * Kotlin clients are generated from it, version-locked to it, and have no
+ * changelog of their own, so commits under those directories belong in the
+ * SDK changelog. This widens the PR scan only; version and changelog output
+ * still key off the package's own dir.
  * @type {Readonly<Record<string, ReadonlyArray<string>>>}
  */
 const CHANGELOG_EXTRA_SCAN_DIRS = Object.freeze({
-  sdk: Object.freeze(['packages/inference'])
+  sdk: Object.freeze([
+    'packages/inference',
+    'packages/sdk-python',
+    'packages/sdk-kotlin'
+  ])
 })
 
 function getPackageDir (packageName) {

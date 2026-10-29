@@ -477,8 +477,15 @@ class TTSGgml {
     this._sentenceStream.fail("Model was reloaded");
     const existingAddon = this._optionalAddon();
     if (existingAddon) await existingAddon.destroyInstance();
-    this.addon = this._spawnAddon(parameters);
-    await this._requireAddon().activate();
+    const addon = this._spawnAddon(parameters);
+    this.addon = addon;
+    try {
+      await addon.activate();
+    } catch (error) {
+      if (this.addon === addon) this.addon = null;
+      await addon.destroyInstance();
+      throw error;
+    }
   }
 
   static getModelKey(_params?: unknown): string {
@@ -522,6 +529,8 @@ namespace TTSGgml {
   export type TTSGgmlRuntimeConfig = PublicTypes.TTSGgmlRuntimeConfig;
   export type TTSGgmlOptions = PublicTypes.TTSGgmlOptions;
   export type LavaSREnhancerOptions = PublicTypes.LavaSREnhancerOptions;
+  export type LavaSRCoreMLComputeUnits = PublicTypes.LavaSRCoreMLComputeUnits;
+  export type LavaSRCoreMLOptions = PublicTypes.LavaSRCoreMLOptions;
   export type LavaSRDenoiserOptions = PublicTypes.LavaSRDenoiserOptions;
   export type RuntimeStats = PublicTypes.RuntimeStats;
   export type TTSOutputChunk = PublicTypes.TTSOutputChunk;
