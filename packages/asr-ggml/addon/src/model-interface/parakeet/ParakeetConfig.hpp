@@ -1,10 +1,19 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include "model-interface/ParakeetTypes.hpp"
 
 namespace qvac::asrggml::parakeet {
+
+struct SpeakerAttributionConfig {
+  std::string modelPath;
+  std::optional<bool> mergeSameSpeaker;
+  std::optional<int> minSegmentMs;
+  std::optional<int> padSegmentMs;
+  bool operator==(const SpeakerAttributionConfig&) const = default;
+};
 
 struct ParakeetConfig {
   static constexpr int DEFAULT_STREAMING_CHUNK_MS = 2000;
@@ -38,6 +47,8 @@ struct ParakeetConfig {
 
   int maxThreads = 4;
   bool useGPU = false;
+  std::string backend;
+  std::optional<SpeakerAttributionConfig> speakerAttribution;
   int sampleRate = 16000;
   int channels = 1;
   bool captionEnabled = false;
@@ -158,6 +169,8 @@ struct ParakeetConfig {
   bool operator==(const ParakeetConfig& other) const {
     return modelPath == other.modelPath && modelType == other.modelType &&
            maxThreads == other.maxThreads && useGPU == other.useGPU &&
+           backend == other.backend &&
+           speakerAttribution == other.speakerAttribution &&
            sampleRate == other.sampleRate && channels == other.channels &&
            captionEnabled == other.captionEnabled &&
            timestampsEnabled == other.timestampsEnabled && seed == other.seed &&
