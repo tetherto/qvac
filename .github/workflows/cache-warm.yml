@@ -142,7 +142,7 @@ jobs:
   # cpp:build writes the vcpkg caches on a trusted run; cpp:tests runs too, as the old warmer's dispatch did.
   vcpkg:
     needs: [select, build]
-    if: toJSON(fromJSON(needs.select.outputs.matrices)['cpp:tests']) != '[]'
+    if: always() && !cancelled() && needs.build.result == 'success' && toJSON(fromJSON(needs.select.outputs.matrices)['cpp:tests']) != '[]'
     permissions:
       contents: read
       actions: read

@@ -131,7 +131,7 @@ jobs:
 
   desktop:
     needs: [select, build]
-    if: inputs.run_desktop
+    if: always() && !cancelled() && needs.build.result == 'success' && inputs.run_desktop
     permissions:
       contents: read
       actions: read
@@ -147,6 +147,7 @@ jobs:
 
   mobile:
     needs: [select-mobile, merge]
+    if: always() && !cancelled() && needs.select-mobile.result == 'success' && needs.merge.result == 'success'
     permissions:
       contents: read
       actions: read
