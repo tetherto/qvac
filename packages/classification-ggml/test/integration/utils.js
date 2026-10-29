@@ -119,9 +119,10 @@ function _resolveMobileAsset(filename) {
 }
 
 /**
- * Desktop: returns `undefined` so the constructor uses its bundled
- * default. Mobile: throws synchronously when the asset is missing —
- * a rejected promise during load() aborts the bare worklet.
+ * Desktop: returns the repo weights file when it is present, otherwise
+ * `undefined` so `QVAC_CLASSIFICATION_MODEL_PATH` can supply one.
+ * Mobile: throws synchronously when the asset is missing — a rejected
+ * promise during load() aborts the bare worklet.
  */
 function resolveModelPath() {
   if (isMobile) {

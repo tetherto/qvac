@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The default MobileNetV3-Small weights are no longer published in this
+  package. `ImageClassifier` requires `modelPath` or
+  `QVAC_CLASSIFICATION_MODEL_PATH`. The GGUF under `weights/` stays in the
+  repository for addon tests
+  ([#5432](https://github.com/tetherto/qvac/pull/5432)).
+
+### Pull Requests
+
+- [#5432](https://github.com/tetherto/qvac/pull/5432) - stop publishing the default classifier weights.
+
 ## [0.34.0] - 2026-10-27
 
 ### Changed

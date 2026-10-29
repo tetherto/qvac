@@ -24,28 +24,26 @@ struct LoadedEnhancer {
   int backendId = kBackendIdNone;
 };
 
-// Shared LavaSR-enhancer load path for the model backends (every engine behaves
-// identically here, so the logic lives in one place to keep the loaders from
-// drifting).
-//
-//   ggufPath      empty => enhancer disabled (returns the kBackend*None codes).
-//   resolvedGpu   the engine's *resolved* device (backendDevice_ ==
-//                 kBackendDeviceGpu), so an engine CPU-fallback keeps the
-//                 enhancer on CPU too instead of forcing it onto the GPU.
-//   errorContext  prefix for the InitializationFailed message on load failure.
-//   vulkanDevice  Vulkan adapter preference (EnhancerOptions::vulkan_device:
-//                 0 = first, N = Nth, -1 = auto-pick); engines with their own
-//                 adapter knob pass it so both land on the same adapter.
 inline LoadedEnhancer loadEnhancer(
     const std::string& ggufPath, bool resolvedGpu,
-    const std::string& errorContext, int vulkanDevice = 0) {
+    const std::string& errorContext, int vulkanDevice = 0,
+    const tts_cpp::lavasr::CoreMLOptions& coreml = {}) {
   LoadedEnhancer out;
-  if (ggufPath.empty())
+  const bool coremlRequested =
+      !coreml.model_path.empty() || !coreml.compute_units.empty();
+  if (ggufPath.empty()) {
+    if (coremlRequested) {
+      throw qvac_errors::createTTSError(
+          qvac_errors::tts_error::InitializationFailed,
+          errorContext + "Core ML requires the enhancer GGUF path");
+    }
     return out;
+  }
 
   tts_cpp::lavasr::EnhancerOptions opts;
-  opts.use_gpu = resolvedGpu;
+  opts.use_gpu = !coremlRequested && resolvedGpu;
   opts.vulkan_device = vulkanDevice;
+  opts.coreml = coreml;
   try {
     out.enhancer = tts_cpp::lavasr::Enhancer::load(ggufPath, opts);
   } catch (const std::exception& e) {

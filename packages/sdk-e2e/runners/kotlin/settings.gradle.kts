@@ -13,6 +13,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // The included sdk-kotlin build resolves its holepunch dependencies through this
+        // build's repositories, and Holepunch publishes them only on JitPack.
+        exclusiveContent {
+            forRepository { maven("https://jitpack.io") }
+            filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
+        }
     }
 }
 
