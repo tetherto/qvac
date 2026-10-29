@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Explicit LavaSR Core ML models and compute policies in the enhancer and
+  denoiser options.
+
+### Changed
+
+- Update the shared `speech-cpp` native dependency to `2026-10-28`
+  ([#5420](https://github.com/tetherto/qvac/pull/5420)).
+
 ### Fixed
 
+- Preserve the active TTS instance when an older overlapping reload fails.
 - `runStream()` and `runStreaming()` stats keep `backendDevice`, `backendId`,
   `gpuUnsupported` and the LavaSR enhancer / denoiser backend fields from the
   last chunk that reported them, as they already did for `codecSidecarLoaded`
