@@ -1327,9 +1327,9 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
             qvac_errors::general_error::InvalidArgument),
         errorMsg);
   }
-  // The helper names the bitmap by the SHA-256 of its bytes, as llama-server
-  // does to keep one image's cells from serving another: the cache shares
-  // them across keys.
+  // The helper names the bitmap by the SHA-256 of its bytes. The ledger keeps
+  // a 64-bit hash of that name (`ledgerFromChunks`), which the cache compares
+  // across keys; llama-server compares the name itself.
   bitmaps_.entries.push_back(std::move(bmp));
 }
 
