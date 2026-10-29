@@ -2,8 +2,8 @@ name: 'Detect native changes'
 description: >
   Shared native-change detection for the addon prebuild-caching workflows.
   Computes native_changed (did THIS event's delta touch native files) and
-  native_hash (sha256 of the HEAD native tree plus global vcpkg overlays) for
-  a given addon workdir.
+  native_hash (sha256 of the HEAD native tree, the addon's package.json and
+  global vcpkg overlays) for a given addon workdir.
   Read-only: fetches the PR head by SHA/ref and uses git diff + ls-tree, never
   checks out or runs PR code. The repo (base branch) must already be checked
   out by the caller. Single source of truth — do NOT inline per workflow.
@@ -18,7 +18,7 @@ outputs:
     description: 'true if this event''s delta touched native files (or a safe-fallback trigger)'
     value: ${{ steps.detect.outputs.native_changed }}
   native_hash:
-    description: 'sha256 (first 16 hex) of the HEAD native tree plus global vcpkg overlays — the cache key component'
+    description: 'sha256 (first 16 hex) of the HEAD native tree, the addon''s package.json and global vcpkg overlays — the cache key component'
     value: ${{ steps.detect.outputs.native_hash }}
 
 runs:
@@ -121,6 +121,9 @@ runs:
                 # lines, exported symbols and build-time assertions, so an edit
                 # there changes the binary exactly as a CMakeLists.txt edit does.
                 cmake/qvac-addon/*) CHANGED=true; break ;;
+                # Pins the @qvac/fabric the addon is built and linked against;
+                # a fabric minor can change struct layouts the binary relies on.
+                ${WORKDIR}/package.json) CHANGED=true; break ;;
               esac
             done <<< "$DIFF_FILES"
           fi
@@ -133,7 +136,8 @@ runs:
         # detection predicate above. git ls-tree reads the tree object without
         # checkout — secure and correct.
         NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" "cmake/qvac-addon" 2>/dev/null \
-          | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/' \
+          | grep -E -e '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/' \
+                    -e "[[:space:]]${WORKDIR}/package\.json\$" \
           | sha256sum | cut -d' ' -f1)
         [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
 
