@@ -159,3 +159,18 @@ bare-make install
 - **Android cross-compilation fails with "Could NOT find Vulkan (missing: glslc)"**: Install Vulkan shader compiler tools with `brew install shaderc` on macOS.
 - **Build is targeting wrong platform**: If you're switching between platforms (e.g., from macOS to iOS, or between different architectures) and the build is still targeting the previous platform, clean the build directory first: `rm -rf build` before running `bare-make generate` again.
 - **macOS JS code silently crashes**: `bare-make` currently prefers the Homebrew LLVM toolchain when it is installed, which can produce corrupted `prebuilds` binaries that segfault early in JS usage. If you hit this, uninstall or temporarily move your Homebrew LLVM during the build.
+
+## Building the browser prebuild
+
+The browser build compiles the same engine sources with Emscripten into
+`prebuilds/web/llm-llamacpp.{mjs,wasm}`. Its sources (Fabric, Dawn's WebGPU
+port, picojson, concurrentqueue) and the Emscripten version are pinned in
+`web/source-lock.json`, and `web/patches` holds the Fabric patches it applies.
+
+```bash
+# With the pinned Emscripten active (emsdk_env.sh), plus cmake, ninja, tar,
+# unzip and patch on PATH:
+npm run build:web
+```
+
+See [docs/browser.md](docs/browser.md) for how the browser build is used.

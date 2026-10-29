@@ -28,7 +28,8 @@
         "cwd": "packages/llm-llamacpp",
         "ci": {
           "artifactNamePrefix": "llama-cpp-",
-          "includeVulkanSdk": true
+          "includeVulkanSdk": true,
+          "webBuildCommand": "node scripts/build-web.mjs"
         }
       },
       "inputs": [

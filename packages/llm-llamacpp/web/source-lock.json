@@ -1,0 +1,37 @@
+{
+  "fabric": {
+    "version": "11259.1.0",
+    "commit": "4b955f55faf235dfd9154a6a7f19a54ec9a0dcae",
+    "url": "https://codeload.github.com/tetherto/qvac-fabric-llm.cpp/tar.gz/4b955f55faf235dfd9154a6a7f19a54ec9a0dcae",
+    "sha256": "63e74cdf081e9e5e56a1f2ffd220a12f032d6c8aa12a279d5f9d17bf9b943e4c",
+    "patches": [
+      {
+        "path": "patches/0001-webgpu-compatible-adapter.patch",
+        "sha256": "961bf6e4bbdf3820cf5f175d6049a02adc3dd4d93b9712191e85a8739046e87d"
+      },
+      {
+        "path": "patches/0002-common-log-sync-without-pthreads.patch",
+        "sha256": "ef76e5fb6096a9bf472537a2842a24be77fe826e42690fd50f872c288675a73d"
+      }
+    ]
+  },
+  "picojson": {
+    "version": "1.3.0",
+    "url": "https://codeload.github.com/kazuho/picojson/tar.gz/refs/tags/v1.3.0",
+    "sha256": "056805ca2691798f5545935a14bb477f2e1d827c9fb862e6e449dbea22801c7d"
+  },
+  "concurrentqueue": {
+    "version": "1.0.4",
+    "url": "https://codeload.github.com/cameron314/concurrentqueue/tar.gz/refs/tags/v1.0.4",
+    "sha256": "87fbc9884d60d0d4bf3462c18f4c0ee0a9311d0519341cac7cbd361c885e5281"
+  },
+  "emscripten": {
+    "version": "4.0.23",
+    "emsdkCommit": "c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56"
+  },
+  "dawn": {
+    "version": "v20260908.214631",
+    "url": "https://github.com/google/dawn/releases/download/v20260908.214631/emdawnwebgpu_pkg-v20260908.214631.zip",
+    "sha256": "9c36eb46ada070b9cc0de2bdfd04c1fa1a1fd852cc1ebb371e96e68e1efe6c3c"
+  }
+}

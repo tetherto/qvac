@@ -224,6 +224,7 @@ bool isEligibleGpuDevice(
            std::string::npos;
   }
   return hasBackendFamily(deviceName, registryName, "vulkan") ||
+         hasBackendFamily(deviceName, registryName, "webgpu") ||
          hasMetalFamily(deviceName, registryName);
 }
 
@@ -403,8 +404,8 @@ namespace {
 // that simply has no device on this machine (falls through). Deliberately does
 // NOT include "cpu": the CPU path is `device`, and accepting two spellings for
 // it would make `device: 'gpu', backend: 'cpu'` ambiguous.
-constexpr std::array<std::string_view, 4> KNOWN_GPU_BACKEND_FAMILIES = {
-    "cuda", "vulkan", "metal", "opencl"};
+constexpr std::array<std::string_view, 5> KNOWN_GPU_BACKEND_FAMILIES = {
+    "cuda", "vulkan", "metal", "opencl", "webgpu"};
 
 // Trimmed from each family. \r matters: a value from a CRLF config file would
 // otherwise throw "unknown backend 'cuda\r'", which renders identically to the
@@ -460,7 +461,7 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
           qvac_errors::general_error::InvalidArgument,
           string_format(
               "backend: unknown backend '%s'. Expected a comma-separated list "
-              "of cuda/vulkan/metal/opencl or 'auto', for "
+              "of cuda/vulkan/metal/opencl/webgpu or 'auto', for "
               "example "
               "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
               family.c_str()));
@@ -487,7 +488,7 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
         qvac_errors::general_error::InvalidArgument,
         string_format(
             "backend: '%s' names no backend. Expected a comma-separated list "
-            "of cuda/vulkan/metal/opencl or 'auto', for example "
+            "of cuda/vulkan/metal/opencl/webgpu or 'auto', for example "
             "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
             backendStr.c_str()));
   }

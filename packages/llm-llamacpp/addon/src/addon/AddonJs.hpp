@@ -255,7 +255,21 @@ inline void parseGenerationParams(
   if (!configObj.has_value()) {
     return;
   }
-  applyGenerationParamHandlers(env, *configObj, prompt.generationParams);
+  js::Object& obj = *configObj;
+  const GenerationParamSource source{
+      .number =
+          [env, &obj](const char* key) {
+            return obj.getOptionalPropertyAs<js::Number, double>(env, key);
+          },
+      .string =
+          [env, &obj](const char* key) {
+            return obj.getOptionalPropertyAs<js::String, std::string>(env, key);
+          },
+      .boolean =
+          [env, &obj](const char* key) {
+            return obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
+          }};
+  applyGenerationParamHandlers(source, prompt.generationParams);
 }
 
 inline std::vector<std::pair<std::string, js::Object>>

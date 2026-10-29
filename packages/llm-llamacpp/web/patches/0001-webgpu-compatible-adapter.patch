@@ -1,0 +1,69 @@
+--- a/ggml/src/ggml-webgpu/ggml-webgpu.cpp
++++ b/ggml/src/ggml-webgpu/ggml-webgpu.cpp
+@@ -4129,21 +4129,43 @@
+     options.nextInChain                   = &adapterTogglesDesc;
+ #endif
+ 
+-    instance.WaitAny(
+-        instance.RequestAdapter(
+-            &options, wgpu::CallbackMode::AllowSpontaneous,
+-            [&adapter](wgpu::RequestAdapterStatus status, wgpu::Adapter _adapter, wgpu::StringView message) {
+-                if (status != wgpu::RequestAdapterStatus::Success) {
+-                    GGML_LOG_ERROR("ggml_webgpu: Failed to get an adapter: %s\n", std::string(message).c_str());
+-                    return;
+-                }
+-                adapter = std::move(_adapter);
+-            }),
+-        UINT64_MAX);
++    adapter = nullptr;
++    for (auto preference : { wgpu::PowerPreference::HighPerformance, wgpu::PowerPreference::LowPower }) {
++        options.powerPreference = preference;
++        wgpu::Adapter candidate;
++        instance.WaitAny(
++            instance.RequestAdapter(
++                &options, wgpu::CallbackMode::AllowSpontaneous,
++                [&candidate](wgpu::RequestAdapterStatus status, wgpu::Adapter requested, wgpu::StringView message) {
++                    if (status != wgpu::RequestAdapterStatus::Success) {
++                        GGML_LOG_ERROR("ggml_webgpu: Failed to get an adapter: %s\n", std::string(message).c_str());
++                        return;
++                    }
++                    candidate = std::move(requested);
++                }),
++            UINT64_MAX);
++        if (candidate == nullptr) {
++            continue;
++        }
++        if (!candidate.HasFeature(wgpu::FeatureName::ShaderF16)) {
++            GGML_LOG_WARN("ggml_webgpu: skipping adapter without shader-f16\n");
++            continue;
++        }
++#ifndef __EMSCRIPTEN__
++        if (!candidate.HasFeature(wgpu::FeatureName::ImplicitDeviceSynchronization)) {
++            GGML_LOG_WARN("ggml_webgpu: skipping adapter without implicit device synchronization\n");
++            continue;
++        }
++#endif
++        adapter = std::move(candidate);
++        return;
++    }
+ }
+ 
+ static void create_webgpu_device(ggml_backend_webgpu_reg_context * ctx) {
+-    ggml_backend_webgpu_request_adapter(ctx->webgpu_global_ctx->instance, ctx->webgpu_global_ctx->adapter);
++    if (ctx->webgpu_global_ctx->adapter == nullptr) {
++        ggml_backend_webgpu_request_adapter(ctx->webgpu_global_ctx->instance, ctx->webgpu_global_ctx->adapter);
++    }
+     GGML_ASSERT(ctx->webgpu_global_ctx->adapter != nullptr);
+ 
+     ctx->webgpu_global_ctx->adapter.GetLimits(&ctx->webgpu_global_ctx->capabilities.limits);
+@@ -4888,8 +4910,8 @@
+     ctx->webgpu_global_ctx           = webgpu_global_context(new webgpu_global_context_struct());
+     ctx->webgpu_global_ctx->instance = std::move(inst);
+ 
+-    // Probe for adapter support
+-    wgpu::Adapter adapter;
++    // Keep the selected adapter for device creation so both paths use the same GPU.
++    wgpu::Adapter & adapter = ctx->webgpu_global_ctx->adapter;
+     if (ctx->webgpu_global_ctx->instance != nullptr) {
+         ggml_backend_webgpu_request_adapter(ctx->webgpu_global_ctx->instance, adapter);
+     }

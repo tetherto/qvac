@@ -1,0 +1,61 @@
+diff --git a/common/log.cpp b/common/log.cpp
+index 236aa6f..7a1a76b 100644
+--- a/common/log.cpp
++++ b/common/log.cpp
+@@ -173,6 +173,12 @@ struct common_log_entry {
+     }
+ };
+ 
++// WebAssembly built without pthreads cannot start the worker thread, so
++// entries are printed synchronously by the thread that logs them.
++#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
++#define COMMON_LOG_SYNC 1
++#endif
++
+ struct common_log {
+     // default capacity
+     common_log(size_t capacity = 512) {
+@@ -309,7 +315,11 @@ public:
+         }
+ 
+         tail = (tail + 1) % queue.size();
++#ifdef COMMON_LOG_SYNC
++        flush_queue(head, tail, head, callback, callback_user_data);
++#else
+         cv_new.notify_one();
++#endif
+     }
+ 
+     void add_json(const char * type, const common_json & obj) {
+@@ -345,7 +355,11 @@ public:
+         entry.timestamp = 0;
+ 
+         tail = (tail + 1) % queue.size();
++#ifdef COMMON_LOG_SYNC
++        flush_queue(head, tail, head, callback, callback_user_data);
++#else
+         cv_new.notify_one();
++#endif
+     }
+ 
+     void resume() {
+@@ -357,6 +371,9 @@ public:
+ 
+         running = true;
+ 
++#ifdef COMMON_LOG_SYNC
++        return;
++#endif
+         thrd = std::thread([this]() {
+             while (true) {
+                 std::unique_lock<std::mutex> lock(mtx);
+@@ -394,6 +411,9 @@ public:
+ 
+             running = false;
+ 
++#ifdef COMMON_LOG_SYNC
++            return;
++#endif
+             // push an entry to signal the worker thread to stop
+             auto & entry = queue[tail];
+             entry.is_end = true;

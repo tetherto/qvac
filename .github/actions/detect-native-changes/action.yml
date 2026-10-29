@@ -113,7 +113,10 @@ runs:
             while IFS= read -r file; do
               case "$file" in
                 ${WORKDIR}/*.cpp|${WORKDIR}/*.hpp|${WORKDIR}/*.c|${WORKDIR}/*.h) CHANGED=true; break ;;
-                ${WORKDIR}/*CMakeLists.txt) CHANGED=true; break ;;
+                ${WORKDIR}/*CMakeLists.txt|${WORKDIR}/*.cmake) CHANGED=true; break ;;
+                # Browser (WebAssembly) build inputs: pinned sources, patches
+                # and the build script that produces prebuilds/web.
+                ${WORKDIR}/web/*|${WORKDIR}/scripts/build-web.mjs) CHANGED=true; break ;;
                 ${WORKDIR}/vcpkg.json|${WORKDIR}/vcpkg-configuration.json) CHANGED=true; break ;;
                 ${WORKDIR}/vcpkg/*) CHANGED=true; break ;;
                 vcpkg-overlays/*) CHANGED=true; break ;;
@@ -133,7 +136,7 @@ runs:
         # detection predicate above. git ls-tree reads the tree object without
         # checkout — secure and correct.
         NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" "cmake/qvac-addon" 2>/dev/null \
-          | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/' \
+          | grep -E '\.(cpp|hpp|c|h|cmake)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/|/web/|/scripts/build-web\.mjs$' \
           | sha256sum | cut -d' ' -f1)
         [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
 

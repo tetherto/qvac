@@ -52,10 +52,13 @@
     "fuzz:run": "npm run test:scripts && node scripts/run-cpp-fuzz.js",
     "test:scripts": "node --test scripts/__tests__/run-cpp-fuzz.test.js",
     "fuzz": "npm run fuzz:build && npm run fuzz:run",
-    "fuzz:continuous": "npm run fuzz:build:continuous && node scripts/run-cpp-fuzz.js --continuous"
+    "fuzz:continuous": "npm run fuzz:build:continuous && node scripts/run-cpp-fuzz.js --continuous",
+    "build:web": "node scripts/build-web.mjs"
   },
   "files": [
     "binding.js",
+    "binding.browser.js",
+    "browser",
     "index.js",
     "batchHandler.js",
     "addon.js",
@@ -142,7 +145,13 @@
     },
     "./addonLogging.js": "./addonLogging.js",
     "./addon.js": "./addon.js",
-    "./binding.js": "./binding.js"
+    "./binding.js": "./binding.js",
+    "./prebuilds/web/*": "./prebuilds/web/*"
+  },
+  "browser": {
+    "./binding.js": "./binding.browser.js",
+    "bare-fs": "./browser/fs.js",
+    "bare-path": "./browser/path.js"
   },
   "types": "index.d.ts"
 }

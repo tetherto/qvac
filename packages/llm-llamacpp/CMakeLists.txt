@@ -36,35 +36,10 @@ qvac_addon_use_fabric()
 if(NOT BUILD_FUZZING)
 add_bare_module(inference-addon-llama EXPORTS)
 
+include(${PROJECT_SOURCE_DIR}/cmake/engine-sources.cmake)
 set(ADDON_SOURCES
-  ${PROJECT_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/handlers/GenerationParamHandlers.cpp
+  ${LLM_ENGINE_SOURCES}
   ${PROJECT_SOURCE_DIR}/addon/src/handlers/FinetuneParamHandlers.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SpeculativeRuntime.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SpeculativeSequence.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
 )
 
 target_sources(

@@ -38,6 +38,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 | Linux | arm64, x64 | Ubuntu-22+ | Tier 1 | CUDA (NVIDIA), Vulkan |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
 | Windows | x64 | 10+ | Tier 1 | CUDA (NVIDIA), Vulkan |
+| Browser | wasm32 | Chrome 113+, Edge 113+ | Experimental | WebGPU — see [docs/browser.md](docs/browser.md) |
 
 
 **Note on CUDA (Linux and Windows, NVIDIA):**

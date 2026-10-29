@@ -436,7 +436,7 @@ TEST_F(BackendSelectionTest, CudaBackendIsEligible) {
 }
 
 TEST_F(BackendSelectionTest, ShippingFamiliesAreEligibleByRegistryIdentity) {
-  for (const char* registry : {"Vulkan", "MTL", "OpenCL"}) {
+  for (const char* registry : {"Vulkan", "MTL", "OpenCL", "WebGPU"}) {
     mockBackend.clearDevices();
     const std::string description =
         std::string(registry) == "OpenCL" ? ADRENO_DESC : "supported GPU";
