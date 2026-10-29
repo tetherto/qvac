@@ -117,5 +117,7 @@ extra.
 | `sharded_models.py`                | `llamacpp-sharded.ts`                                  | `load_model` with a sharded `model_src`; per-shard progress from `on_progress`'s `shard_info`                             |
 | `logging_streams.py`               | `logging-streaming.ts`                                 | `logging_stream`, `SDK_LOG_ID`                                                                                            |
 | `vla.py`                           | `vla-smolvla.ts`                                       | `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state`                                                             |
+| `vla_pi05.py`                     | `vla-pi05.ts`                                          | π₀.₅: three camera frames, discrete state (empty `state`), required `noise`; per-stage timings                           |
+| `vla_groot.py`                    | `vla-groot.ts`                                         | GR00T patch inputs, padded continuous state, hand-laid prompt; optional `vla_set_embodiment` via `QVAC_GROOT_*` env vars |
 | `plugins.py`                       | `plugins.ts`                                           | `invoke_plugin`, `invoke_plugin_stream`                                                                                   |
 | `notebook.ipynb` / `notebook.py`   | (Python-only)                                          | `notebook.SyncClient` — synchronous, numpy/pandas, live streaming (Jupyter notebook + script)                             |
