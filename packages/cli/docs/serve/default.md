@@ -256,6 +256,10 @@ started with `--enable-admin` (or `"enableAdmin": true` under `serve`).
 `--enable-admin` on a non-loopback `--host` needs `--api-key` or `--api-key-file`;
 `--allow-unauthenticated` does not lift that. The API key is the same one every route uses.
 
+Admin routes also refuse a request whose `Origin` header is outside `--cors-origin` /
+`serve.cors.origins` with `403 origin_not_allowed`, so a web page cannot suspend a local server.
+Clients that send no `Origin`, such as `curl` or an SDK, are unaffected.
+
 While the runtime is `suspending`, `suspended` or `resuming`, every route outside this group
 answers `503 runtime_suspended`. `/openapi.json`, `/docs` and `/qvac/identity` stay available.
 
@@ -313,6 +317,7 @@ curl -sS -X POST http://localhost:11434/qvac/v1/runtime/suspend \
 | HTTP | `error.code`             | When                                                                |
 | ---- | ------------------------ | ------------------------------------------------------------------- |
 | 403  | `admin_disabled`         | Suspend or resume on a server started without `--enable-admin`      |
+| 403  | `origin_not_allowed`     | Suspend or resume from a browser origin outside the CORS allowlist  |
 | 503  | `runtime_suspended`      | Any route outside this group while the runtime is not `active`      |
 | 500  | `runtime_state_failed`   | The SDK could not report the lifecycle state                        |
 | 500  | `runtime_query_failed`   | The SDK could not describe a loaded model                           |

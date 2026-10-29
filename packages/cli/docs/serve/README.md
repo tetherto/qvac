@@ -37,7 +37,7 @@ using the extension's usual termination sentinel.
 
 The default `127.0.0.1` bind is unauthenticated. A non-loopback `--host` refuses to start without `--api-key <key>` or `--api-key-file <path>`; `--allow-unauthenticated` downgrades that refusal to a warning for operators who accept the exposure.
 
-Admin-only routes, such as runtime suspend and resume, answer `403 admin_disabled` unless the server starts with `--enable-admin` or `"enableAdmin": true` under `serve`. On a non-loopback host `--enable-admin` needs a key even with `--allow-unauthenticated`. See [default.md](default.md#runtime-qvacv1runtime).
+Admin-only routes, such as runtime suspend and resume, answer `403 admin_disabled` unless the server starts with `--enable-admin` or `"enableAdmin": true` under `serve`. On a non-loopback host `--enable-admin` needs a key even with `--allow-unauthenticated`, and admin routes refuse browser requests from an origin outside the CORS allowlist. See [default.md](default.md#runtime-qvacv1runtime).
 
 Prefer `--api-key-file`: `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. The file must be a regular file, and the CLI warns when it is readable beyond its owner (`chmod 600`).
 
