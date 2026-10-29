@@ -3,6 +3,8 @@
 #include <optional>
 #include <string>
 
+#include <tts-cpp/lavasr/coreml.h>
+
 namespace qvac::ttsggml::chatterbox {
 
 // Native output sample rate (Hz) of Chatterbox's S3Gen/HiFT vocoder. The engine
@@ -235,6 +237,7 @@ struct ChatterboxConfig {
   // `outputSampleRate` is also set the enhanced signal is resampled to that
   // rate afterwards.
   std::string enhancerGgufPath;
+  tts_cpp::lavasr::CoreMLOptions enhancerCoreml;
 
   // LavaSR neural speech denoiser (UL-UNAS). A non-empty `denoiserGgufPath` is
   // the single switch: when set, the synthesized PCM is denoised BEFORE the
@@ -244,6 +247,7 @@ struct ChatterboxConfig {
   // Native chunk streaming (streamChunkTokens > 0) with a denoiser is rejected
   // up front (a stateful streaming denoiser is the follow-up) — batch only.
   std::string denoiserGgufPath;
+  tts_cpp::lavasr::CoreMLOptions denoiserCoreml;
 };
 
 } // namespace qvac::ttsggml::chatterbox

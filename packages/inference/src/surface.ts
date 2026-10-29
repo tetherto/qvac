@@ -192,6 +192,7 @@ export {
   RequestRejectedByPolicyError,
   RequestValidationFailedError,
   ModelNotLoadedError,
+  ModelRegistryModelNotFoundError,
   TranslationFailedError,
   PluginDefinitionInvalidError,
   PluginModelTypeReservedError,

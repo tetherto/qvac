@@ -362,6 +362,26 @@ export const parakeetRuntimeConfigSchema = z.object({
     .positive()
     .optional()
     .describe('AOSC: FIFO-overflow pop-out count. Default 144.'),
+
+  // === Long recordings (offline `transcribe`) ============================
+  // The offline encoder runs a long input as overlapping windows so memory
+  // stays flat however long the recording is, and `cancel()` also lands
+  // between windows. Both counts are encoder frames: 80 ms each, 12.5 per
+  // second of audio.
+  longFormWindowFrames: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      "Offline encoder window for long recordings, in 80 ms encoder frames. `0` takes the window the model recommends (TranscribePsy: 750 frames, 60 s, with 94 frames of context on each side; other models: the engine's balanced automatic windows); a negative value encodes the whole input in one pass. Default 0."
+    ),
+  longFormContextFrames: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      'Encoder frames of context shared with each neighbouring long-form window. `0` lets the engine choose; `-1` runs the windows without context.'
+    ),
   backendsDir: z
     .string()
     .optional()

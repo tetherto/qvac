@@ -4,15 +4,37 @@ We welcome contributions! Feel free to open a pull request, report bugs, or shar
 
 ## API Reference Docs
 
-The SDK's public API summary is generated from TypeScript source by a pipeline under `docs/website/scripts/`. It is written into the SDK's current documentation line, at `docs/website/content/docs/sdk/<current line>/reference/api.mdx`, resolved from the version manifest in `docs/website/src/lib/versions.ts`. To regenerate it locally:
+The SDK's public API summary is generated from TypeScript source by a pipeline under `docs/website/scripts/`. It is written into the SDK's development line, at `docs/website/content/_unpublished/sdk/next/reference/api.mdx` — the version being written, which the release cutoff publishes. To regenerate it locally:
 
 ```bash
 cd docs/website
 npm install
-npm run docs:generate-api -- 0.9.1 --latest  # writes the current line's reference/api.mdx
+npm run docs:generate-api -- 0.9.1 --latest  # writes the development line's reference/api.mdx
 ```
 
 Full workflow, CLI flags, determinism guarantees, and troubleshooting are documented in [docs/website/docs-workflow.md](docs/website/docs-workflow.md). `docs:generate-api` requires `bun` on PATH (listed as a devDependency of `docs/website`).
+
+## Documentation lines
+
+The SDK and the CLI are each documented one folder per minor release. Every folder under `docs/website/content/docs/sdk/` and `.../cli/` is a release that already shipped, and documents that release and nothing else. The one in parentheses — `sdk/(vX.Y)` — is the most recent, and answers the version-less URLs.
+
+**Your feature's documentation goes in the development line**, which is outside the site:
+
+```
+docs/website/content/_unpublished/sdk/next/
+docs/website/content/_unpublished/cli/next/
+```
+
+Nothing under `_unpublished/` is built or served, so your prose is invisible on the site until the release cutoff publishes that line, with the version it belongs to. Review it in the PR diff, or preview it locally with the symlink described in [docs/website/docs-workflow.md](docs/website/docs-workflow.md), "Previewing the development line".
+
+The path never changes. A cutoff copies the development line into the collection rather than renaming it, so a feature PR opened before a cutoff and merged after it needs no relocation: its edits land in the path they were written to, either way.
+
+**What a cutoff does change is which release that path belongs to.** Your feature's documentation ships with your feature only if it merges before the cutoff of that release. Write it in the same PR as the code, which is what makes the two move together. If it follows in a separate PR and a cutoff lands first, the prose stays in the development line and reaches users a release late: move it into the published line's folder — `content/docs/<collection>/<line>/` — and tell the documentation engineer, because production serves the line promoted at the release, not `main`.
+
+The `Documentation lines` job reads `content/docs/` only, so a PR that writes the development line and nothing else is never flagged. If you do edit `content/docs/`, it:
+
+- **warns**, always. Correcting a published release there is fine, and reaches production with the next promotion; the warning exists so a feature's documentation does not land there by mistake.
+- **fails** if a cutoff landed after your branch came off, because the cut renamed the folder you wrote against. Rebase to clear it — rebase, not *Update branch*, which lets git relocate the edits by similarity. The job is not required, so it asks rather than blocks; merging it red carries the misplacement in.
 
 ## PR Labels
 
