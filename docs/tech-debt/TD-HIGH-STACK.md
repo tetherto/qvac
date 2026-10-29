@@ -109,8 +109,9 @@ exercise.
 
 ## References
 
-- [QVAC architecture](../architecture/ARCHITECTURE.md)
-- [QVAC architectural principles](../architecture/PRINCIPLES.md)
-- [Bare inference engine](../../packages/inference/README.md)
-- Design basis: Composable QVAC Agent Stack QIP v2, Draft; PoC revision `6c51f97`.
+- **Primary design source:** Composable QVAC Agent Stack QIP v2 (Draft) and its
+  High Stack PoC, revision `6c51f97`.
+- **SDK implementation background:** [QVAC architecture](../architecture/ARCHITECTURE.md)
+  and [Bare inference engine](../../packages/inference/README.md).
+- **SDK design principles:** [QVAC architectural principles](../architecture/PRINCIPLES.md).
 - Implementation baseline: QVAC monorepo revision `df75dd2ca`.
