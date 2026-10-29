@@ -4485,9 +4485,18 @@ MtmdLlmContext& visionContext(LlamaModel& model) {
   return *mtmd;
 }
 
+// The media fixtures are checked in: a missing one fails the test.
 bool visionModelsFound(const std::string& model, const std::string& mmproj) {
-  return fs::exists(model) && fs::exists(mmproj) &&
-         !readMediaFixture("elephant.jpg").empty();
+  if (!fs::exists(model) || !fs::exists(mmproj)) {
+    return false;
+  }
+  for (const char* fixture : {"elephant.jpg", "news-paper.jpg"}) {
+    if (readMediaFixture(fixture).empty()) {
+      ADD_FAILURE() << fixture << " media fixture not found";
+      return false;
+    }
+  }
+  return true;
 }
 
 } // namespace
@@ -4496,7 +4505,7 @@ bool visionModelsFound(const std::string& model, const std::string& mmproj) {
 // does not encode the image again; another image is encoded.
 TEST(CrossKeyMultimodalTest, NewKeyReusesTheImageSetAside) {
   if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
-    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+    GTEST_SKIP() << "SmolVLM model or projection not found";
   }
   const std::vector<std::string> keys = {
       "cross_vision_a.bin", "cross_vision_b.bin"};
@@ -4534,7 +4543,7 @@ TEST(CrossKeyMultimodalTest, NewKeyReusesTheImageSetAside) {
 // conversation's image state is copied in, so the key keeps its own.
 TEST(CrossKeyMultimodalTest, ARefusedPromptKeepsTheKeysOwnState) {
   if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
-    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+    GTEST_SKIP() << "SmolVLM model or projection not found";
   }
   const std::vector<std::string> keys = {
       "cross_vision_refused_a.bin", "cross_vision_refused_b.bin"};
@@ -4574,7 +4583,7 @@ TEST(CrossKeyMultimodalTest, ARefusedPromptKeepsTheKeysOwnState) {
 // A request without a key leaves its image in memory for the next request.
 TEST(CrossKeyMultimodalTest, RequestsWithoutAKeyLeaveTheirImage) {
   if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
-    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+    GTEST_SKIP() << "SmolVLM model or projection not found";
   }
   const std::string key = "cross_vision_keyless.bin";
   fs::remove(key);
@@ -4599,7 +4608,7 @@ TEST(CrossKeyMultimodalTest, RequestsWithoutAKeyLeaveTheirImage) {
 // nothing to its file, and the memory still serves the next key.
 TEST(CrossKeyMultimodalTest, AFailedFirstRequestSavesNoOtherConversation) {
   if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
-    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+    GTEST_SKIP() << "SmolVLM model or projection not found";
   }
   const std::vector<std::string> keys = {
       "cross_vision_failed_first_b.bin", "cross_vision_failed_first_c.bin"};
@@ -4639,7 +4648,7 @@ TEST(CrossKeyMultimodalTest, AFailedFirstRequestSavesNoOtherConversation) {
 // it was.
 TEST(CrossKeyMultimodalTest, ABaseCacheKeyServesAPrimedImage) {
   if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
-    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+    GTEST_SKIP() << "SmolVLM model or projection not found";
   }
   const std::vector<std::string> keys = {
       "cross_vision_base_primed.bin", "cross_vision_base_d.bin"};
@@ -4672,13 +4681,25 @@ TEST(CrossKeyMultimodalTest, ABaseCacheKeyServesAPrimedImage) {
 }
 
 // On the batch path a new key copies the image from another parked
-// conversation, which keeps its own state.
+// conversation, which keeps its own state. The copy answers exactly as the
+// lending key's own state does.
 TEST(CrossKeyMultimodalTest, BatchCopiesAParkedImage) {
   if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
-    GTEST_SKIP() << "SmolVLM model, projection or media fixture not found";
+    GTEST_SKIP() << "SmolVLM model or projection not found";
   }
   const std::vector<std::string> keys = {
       "cross_vision_batch_a.bin", "cross_vision_batch_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  BatchedTurn reference;
+  {
+    auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath(), "2");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+    reference = harness.run(imageQuestion("elephant.jpg", K_COLOUR, keys[0]));
+  }
   for (const auto& key : keys) {
     fs::remove(key);
   }
@@ -4695,6 +4716,9 @@ TEST(CrossKeyMultimodalTest, BatchCopiesAParkedImage) {
   EXPECT_EQ(colour.visionEncodeTiles, 0)
       << "the new key encoded the image again";
   EXPECT_GT(colour.reuse, 0u);
+  EXPECT_EQ(colour.reuse, reference.reuse);
+  EXPECT_EQ(colour.output, reference.output)
+      << "the copied image state differs from the one it came from";
 
   const uint64_t residentBefore = harness.scheduler().residentHitsForTesting();
   harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
@@ -4714,7 +4738,7 @@ TEST(CrossKeyMultimodalTest, HybridStartsFromAnotherConversationsCheckpoint) {
   const test_common::TestModelPath modelPath = hybridModelPath();
   if (!modelPath.found() ||
       !visionModelsFound(modelPath.path, qwen35ProjectionPath())) {
-    GTEST_SKIP() << "Qwen3.5 model, projection or media fixture not found";
+    GTEST_SKIP() << "Qwen3.5 model or projection not found";
   }
   const std::vector<std::string> keys = {
       "cross_vision_hybrid_a.bin", "cross_vision_hybrid_b.bin"};
