@@ -9,10 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pocket GPU selection and metadata-only memory preflight with an optional byte budget.
+- Explicit native backend/device selection, opt-in WebGPU/Hexagon builds and stable accelerator stats.
+- Independent MOSS text/audio sampling and configurable context/generation budgets.
+- Parler decoder Core ML, compute-policy and strict/fallback controls.
+- Supertonic precision, environment, in-memory voice tensors and callable warm-up.
+- CosyVoice3 greedy decoding, forced token trajectories and owned speech-token output.
+
 - Explicit LavaSR Core ML models and compute policies in the enhancer and
   denoiser options.
 
 ### Changed
+
+- Align shared native dependencies to `ggml-speech` `2026-10-27#1` and
+  `speech-cpp` `2026-10-29#2`, adding opt-in Hexagon build support.
 
 - Update the shared `speech-cpp` native dependency to `2026-10-28`
   ([#5420](https://github.com/tetherto/qvac/pull/5420)).

@@ -18,6 +18,7 @@ import type {
 } from "./engineSetup";
 import { renderCosyvoiceInstruct } from "./engines/cosyvoice";
 import { mossVoiceSettings } from "./engines/moss";
+import { resolveFabricOptions, validateBackendOption } from "./fabricOptions";
 import {
   firstNonEmpty,
   normalizeGgmlFiles,
@@ -233,6 +234,7 @@ export function resolveEngineSetup(options: TTSGgmlOptions): EngineSetup {
   const config: TTSGgmlRuntimeConfig = { ...(options.config || {}) };
   const outputSampleRate = validateOutputSampleRate(config.outputSampleRate);
   const engineType = detectEngineType(options.engine, files);
+  validateBackendOption(engineType, config.backend);
   const mossVoice = mossVoiceSettings(options);
   const pocket =
     engineType === ENGINE_POCKET
@@ -245,6 +247,7 @@ export function resolveEngineSetup(options: TTSGgmlOptions): EngineSetup {
     dialogue: mossVoice.dialogueReferences !== undefined,
   });
   const settings = settingsFromOptions(options);
+  Object.assign(settings, resolveFabricOptions(engineType, options));
   const backend = resolveBackendPaths(files, options, config);
   const setup: EngineSetup = {
     engineType,

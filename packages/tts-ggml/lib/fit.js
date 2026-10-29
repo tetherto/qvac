@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
+const fabricOptions_1 = require("./fabricOptions");
 /**
  * Projects one voice against the memory free right now, reading GGUF metadata
  * and never weight data. The registry's weightless copy of each file answers
@@ -17,6 +18,7 @@ exports.assessFit = assessFit;
  * rejects. Fits run one at a time within this addon.
  */
 async function assessFit(request) {
+    (0, fabricOptions_1.validateBackendOption)(request.engineType, request.backend);
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
     const binding = require('../binding.js');
     return await binding.assessFit(request);

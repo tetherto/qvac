@@ -744,6 +744,13 @@ for export and compilation commands. A runnable addon example is
 
 ## Backends & GPU acceleration
 
+`config.backend` selects the native backend explicitly. Accepted selectors
+include `auto`, `cpu`, `opencl`, `webgpu`, `hexagon`, and exact registered
+device names such as `MTL0`, `CUDA0`, `Vulkan0` or `HTP0`. Exact device names
+depend on the host. Native selection reports an unavailable explicit backend
+as an error; omitting this option preserves the existing `useGPU` policy.
+The same selector is accepted as top-level `backend` by `assessFit()`.
+
 The addon delegates backend selection to `tts-cpp`'s registry-only
 init path.  At `load()` time the engine walks the ggml-backend registry
 once and picks the first available accelerator that matches the
@@ -762,6 +769,70 @@ On hosts where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
 (`cuda` | `vulkan` | `metal` | `opencl`) pins the cascade to one backend
 and fails loudly when that backend cannot be resolved; unset (or empty)
 keeps the automatic preference above.
+
+### Optional WebGPU and Hexagon builds
+
+Build with `bare-make generate -D TTS_WEBGPU=ON`, followed by
+`bare-make build` and `bare-make install`, to include the Dawn backend.
+WebGPU is exposed only for the native library's established model families:
+Supertonic **3**, Parler, CosyVoice3 and Audio8. Explicit WebGPU requests
+for other families, including Supertonic 1/2, fail before loading weights.
+The manifest pins the compatible Dawn version; default builds stay unchanged.
+
+Build with `bare-make generate -D TTS_HEXAGON=ON` and a compatible Qualcomm
+SDK/toolchain (`HEXAGON_SDK_ROOT`, `HEXAGON_TOOLS_ROOT`) to include Hexagon.
+The install stages every matching `libggml-htp-v*.so` DSP skeleton alongside
+the addon backends, retaining the ABI-specific filenames. A requested build
+fails if those assets are missing. Select `config.backend: 'hexagon'` or
+an exact `HTP` device on supported hardware. Building the backend does not
+establish that a given model works on that hardware; runtime validation is
+still required for each model/device combination.
+
+Stats preserve existing codes and add `backendId: 5` for WebGPU and `6` for
+Hexagon. `backendDevice: 3` identifies an NPU. LavaSR's existing
+`backendDevice: 2` continues to mean Core ML-managed placement.
+
+## Native engine controls
+
+These options are available at construction and through `reload()`. Leaving
+them unset retains the native engine defaults.
+
+| Engine | Options | Meaning |
+| --- | --- | --- |
+| MOSS / TTSD | `nCtx`, `maxNewTokens` | Context and generation budgets; positive integers. Duration validation uses the configured token budget, reserving the native 33 delay/EOS rows. |
+| MOSS / TTSD | `textTemperature`, `textTopP`, `textTopK` | Text-channel sampling. |
+| MOSS / TTSD | `audioTemperature`, `audioTopP`, `audioTopK`, `audioRepetitionPenalty` | Independent audio-channel sampling. |
+| Parler | `coremlDecoder` | Explicit decoder-LM Core ML opt-in. The separate DAC sidecar remains presence-driven. |
+| Parler | `coremlComputeUnits`, `coremlStrict` | Compute policy (`all`, `cpu_and_ane`, `cpu_and_gpu`, `cpu_only`) and optional strict/fallback selection. Omission preserves native/environment policy. |
+| Supertonic | `precision` | `auto`, `f32`, `f16`, `q8_0`. |
+| Supertonic | `f16Attn`, `f16Weights`, `kvAttnType` | Native attention/weight precision overrides; `-1` leaves automatic selection. |
+| Supertonic | `f16WeightsDenyList` | Tensor-name patterns retained at their original precision. |
+| Supertonic | `vulkanEnvOverrides` | String-valued Vulkan environment overrides passed to the engine. Explicit entries take precedence over the `vulkanCacheDir` convenience setting. |
+| Supertonic | `voiceStyleTtl`, `voiceStyleDp` | Paired flattened `number[]` or `Float32Array` voice tensors; the engine validates model-specific sizes. They take precedence over JSON and baked voices. |
+| CosyVoice3 | `greedy`, `forceSpeechTokens` | Greedy LM decoding or an explicit integer speech-token trajectory for replay. An empty trajectory restores generation. |
+
+After loading Supertonic, `await model.warmUp(text)` invokes the engine's
+warm-up directly, completes without returning PCM, and leaves the loaded
+instance available for normal synthesis. It shares the instance's exclusive
+execution queue. Other engines reject the method.
+
+CosyVoice3 responses expose owned `speechTokenIds` arrays. Batch output
+includes them with PCM; native streaming delivers them on a final
+`isLast: true` empty-PCM chunk. Retain those IDs and pass them to
+`reload({ forceSpeechTokens: ids })` to replay the trajectory. The existing
+numeric `response.stats.speechTokens` remains a count.
+
+[`examples/fabric-controls.js`](examples/fabric-controls.js) accepts a JSON
+constructor configuration through `QVAC_TTS_OPTIONS`, optional preflight
+through `QVAC_TTS_FIT`, and `QVAC_TTS_WARM_UP=1` for Supertonic. For example:
+
+```bash
+QVAC_TTS_OPTIONS='{"engine":"pocket","files":{"modelDir":"/models/pocket"},"config":{"useGPU":true}}' \
+  npm run example:fabric-controls -- "Speech runs on the selected backend." pocket.wav
+```
+
+The example saves a WAV and prints stats. For CosyVoice3 it also saves
+`<output>.tokens.json` containing the returned speech token IDs.
 
 ### Core ML sidecars on Apple
 
@@ -1410,7 +1481,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `pitch`, `expressivity`, `noise`, `reverb`, `quality` | string | — | Parler-only template fields (see [Parler descriptions](#parler-descriptions)); invalid values error listing the valid set |
 | `temperature` / `topK` / `topP` | number | engine defaults | Parler, Audio8 and Chatterbox sampling knobs (omit for the engine's own defaults — Parler temp 1.0 / top-k 50, Audio8 temp 0.7 / top-k 50 / top-p 0.9, Chatterbox temp 0.8 / top-k 1000 / top-p 0.95 where temp `0` is greedy and top-k `0` disables the cutoff; `topP` in `(0, 1]`) |
 | `maxFrames`               | number     | engine max | Parler + Audio8 generation cap in frames (Parler ~86/s of audio, Audio8 ~21.5/s); `0` = model default, Parler rejects 1–9 |
-| `greedy`                  | boolean    | `false`    | Audio8-only: take the argmax instead of sampling; ignores `temperature` / `topK` / `topP` |
+| `greedy`                  | boolean    | `false`    | Audio8 / CosyVoice3: take the argmax instead of sampling; Audio8 ignores `temperature` / `topK` / `topP` |
 | `minNewTokens`            | number     | GGUF default | Parler-only minimum tokens before EOS (`-1` = model default) |
 | `normalizeNumbers`        | boolean    | `true`     | Parler-only: expand digits before tokenization (English words; script-native digits on indic) — parler voices raw digits badly |
 | `instruct`                | object \| string | —    | CosyVoice3-only: instruction controls (`dialect` / `volume` / `style`, resolved by precedence in that order) or a raw instruction string; an unknown key or invalid value throws, and it counts toward the one-instruction rule (see [CosyVoice3 instruct](#cosyvoice3-instruct)). Also accepted per call, where it replaces the configured conditioning like a per-call `emotion` / `pace` |
@@ -1421,9 +1492,10 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English; MOSS takes it as a prompt hint (`en`, `zh`, ...) |
+| `config.backend` | string | unset | Native backend selector or exact registered device name; see [Backends](#backends--gpu-acceleration) |
 | `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / CUDA / Vulkan / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal, linux CUDA, and Android/ARM Mali Vulkan; CosyVoice3 and Audio8 offload on Apple/Metal, desktop linux CUDA/Vulkan, Windows Vulkan, and Android OpenCL/Adreno; MOSS, MOSS-SoundEffect and MOSS-Speech GPU offload is validated on Apple/Metal. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
 | `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic / Parler / Audio8 44.1 kHz, CosyVoice3 24 kHz, MOSS 24 kHz, MOSS-SoundEffect 48 kHz, MOSS-Speech 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active; MOSS, MOSS-SoundEffect and MOSS-Speech accept only their native rate |
-| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), `enhancerBackendDevice` / `enhancerBackendId` and `denoiserBackendDevice` / `denoiserBackendId` (`-1` when that LavaSR stage is off; device `2` and id `99` for Core ML-managed placement), and the engine's own stage stats: Chatterbox `t3Ms` / `s3genMs` / `t3Tokens`; CosyVoice3 per-stage ms (`lmPrefillMs` … `hiftDecodeMs`, `stageTotalMs`) and work counters (`speechTokens`, `decodeSteps`, …); Audio8 per-stage ms (`prefillMs`, `fastDecodeMs`, `codecSynthMs`, …, `stageTotalMs`) |
+| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU, 3=NPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 6=Hexagon, 99=other), `enhancerBackendDevice` / `enhancerBackendId` and `denoiserBackendDevice` / `denoiserBackendId` (`-1` when that LavaSR stage is off; device `2` and id `99` for Core ML-managed placement), and the engine's own stage stats: Chatterbox `t3Ms` / `s3genMs` / `t3Tokens`; CosyVoice3 per-stage ms (`lmPrefillMs` … `hiftDecodeMs`, `stageTotalMs`) and work counters (`speechTokens`, `decodeSteps`, …); Audio8 per-stage ms (`prefillMs`, `fastDecodeMs`, `codecSynthMs`, …, `stageTotalMs`) |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
 ### Methods
@@ -1436,6 +1508,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
   config (`language`, `useGPU`, `outputSampleRate`, …).
 - `await model.destroy()` — `unload()` + mark this instance dead.
 - `await model.cancel()` — best-effort cancel of any in-flight run.
+- `await model.warmUp(text)` — Supertonic-only native warm-up without a PCM response.
 - `TTSGgml.getVoiceControls()` — static: tts-cpp's emotion / pace vocabulary
   and each engine's supported subset (see [Emotion & pace](#emotion--pace-cross-engine)).
 - `model.run({ input, type: 'text' })` → `QvacResponse`.
@@ -1488,8 +1561,8 @@ response.stats.tokensPerSecond   // Audio8 and MOSS count codec frames, the othe
 response.stats.generatedFrames   // Audio8 and MOSS only: codec frames (Audio8 every 46 ms, MOSS every 80 ms)
 response.stats.codecSidecarLoaded // Audio8 only, macOS / iOS: 1 while the Apple Core ML codec sidecar is attached
 response.stats.codecOnCoreml     // Audio8 only: 1 when this synthesis ran the codec on that sidecar, 0 when on the ggml backend
-response.stats.backendDevice     // 0=CPU, 1=GPU
-response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other
+response.stats.backendDevice     // 0=CPU, 1=GPU, 3=NPU
+response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 6=Hexagon, 99=other
 // present when a LavaSR enhancer is active:
 response.stats.enhancerBackendDevice // -1 none, 0 CPU, 1 GPU
 response.stats.enhancerBackendId
@@ -1575,6 +1648,7 @@ fit.report
 | `chatterbox` | `t3ModelPath`, `s3genModelPath` | `textTokens`, `predictTokens` |
 | `audio8` | `audio8LmPath`, `audio8CodecDecoderPath`, `audio8CodecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
 | `cosyvoice3` | `cosyvoiceLlmModelPath`, `cosyvoiceFlowModelPath`, `cosyvoiceHiftModelPath`, `cosyvoiceVoiceModelPath` | `textTokens`, `speechTokens` |
+| `pocket` | `pocketFlowModelPath`, `pocketMimiModelPath`, `pocketFrontendPath`, optional `pocketVoicePath` / `referenceAudio` | Required `text`; optional `memoryBudgetBytes`, `marginBytes`, and native load controls |
 | `moss` | `mossBackbonePath`, `mossCodecDecoderPath`, optional `mossCodecEncoderPath` | Required `promptRows`, `referenceSamples`, `streaming`; load controls `durationTokens`, `streamChunkTokens`, `threads` |
 | `moss-sfx` | Required `mossSoundEffectPath` | Required `prompt`, `seconds`; optional `negativePrompt`, `steps`, `guidance`, `shift`, `threads` |
 
@@ -1834,9 +1908,10 @@ Apache-2.0.  See [LICENSE](./LICENSE).
 
 ## Pocket TTS
 
-The native `speech-cpp` dependency includes Pocket Metal, CUDA, Vulkan and
-OpenCL support in the native library. The JavaScript Pocket API continues
-to require `config.useGPU: false`; updating the native dependency does not
-remove that addon validation.
+Pocket supports CPU, Metal, CUDA, Vulkan and OpenCL through the addon.
+CPU remains the default. Set `config.useGPU: true`, `nGpuLayers`, or
+`config.backend` to select an accelerator; runtime stats identify the
+backend actually selected. Metadata-only `assessFit()` uses the same
+native configuration and accepts an optional application memory budget.
 
 See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.

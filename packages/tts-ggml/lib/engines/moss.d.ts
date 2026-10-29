@@ -12,7 +12,7 @@ export declare const MOSS_MAX_CHANNELS = 32;
 export declare const MOSS_TERMINATION_ROWS = 2;
 export declare const MOSS_MAX_DURATION_TOKENS: number;
 export declare const MOSS_INSTANCE_VOICE_KEYS: readonly ["referenceAudio", "dialogueReferences"];
-export declare function assertMossDurationTokens(value: number | null | undefined, where: string): void;
+export declare function assertMossDurationTokens(value: number | null | undefined, where: string, maxNewTokens?: number): void;
 export declare function resolveMossModelPaths(files: NormalizedFiles, dialogue: boolean): Pick<ModelPaths, "mossBackbonePath" | "mossCodecDecoderPath" | "mossCodecEncoderPath">;
 /** The MOSS voice and length options, read before model paths are resolved. */
 export declare function mossVoiceSettings(options: {

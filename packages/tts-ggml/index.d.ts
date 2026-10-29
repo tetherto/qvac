@@ -84,6 +84,7 @@ declare class TTSGgml {
     private _runInternal;
     private _addonOutputCallback;
     private _dispatchJob;
+    warmUp(text: string): Promise<void>;
     cancel(): Promise<void>;
     reload(newConfig?: Record<string, unknown>): Promise<void>;
     static getModelKey(_params?: unknown): string;
@@ -120,6 +121,7 @@ declare namespace TTSGgml {
     type VoiceControlsCatalog = PublicTypes.VoiceControlsCatalog;
     type TtsFitEngine = Fit.TtsFitEngine;
     type TtsFitRequest = Fit.TtsFitRequest;
+    type PocketFitRequest = Fit.PocketFitRequest;
     type TtsFitResult = Fit.TtsFitResult;
     type TtsFitStatus = Fit.TtsFitStatus;
     type SupertonicFitRequest = Fit.SupertonicFitRequest;

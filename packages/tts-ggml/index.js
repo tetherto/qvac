@@ -346,6 +346,17 @@ class TTSGgml {
         }
         return this._pocket ? this._pocket.runJob(addon, input) : addon.runJob(input);
     }
+    async warmUp(text) {
+        if (this._setup.engineType !== engineIds_1.ENGINE_SUPERTONIC) {
+            throw new Error("warmUp is supported by Supertonic only");
+        }
+        if (typeof text !== "string")
+            throw new Error("warmUp text must be a string");
+        await this._runExclusive(async () => {
+            const response = await this._runInternal({ input: text, type: "warmUp" });
+            await response.await();
+        });
+    }
     async cancel() {
         if (this._pocket)
             return this._pocket.cancel();

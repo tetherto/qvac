@@ -24,7 +24,6 @@ using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
 
-constexpr int CPU_BACKEND_ID = 0;
 
 void requireFile(const std::string& path, const char* what) {
   if (!std::filesystem::exists(path)) {
@@ -82,6 +81,12 @@ void validateVoice(const MossConfig& cfg) {
 }
 
 void validateCounts(const MossConfig& cfg) {
+  if ((cfg.nCtx && *cfg.nCtx < 1) ||
+      (cfg.maxNewTokens && *cfg.maxNewTokens < 1)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "nCtx and maxNewTokens must be positive");
+  }
   if (cfg.threads.has_value() && *cfg.threads < 0) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -92,13 +97,17 @@ void validateCounts(const MossConfig& cfg) {
         general_error::InvalidArgument,
         "streamChunkTokens must be >= 0 (0 = non-streaming)");
   }
+  const int maxDurationTokens =
+      cfg.maxNewTokens.value_or(tts_cpp::moss::EngineOptions{}.max_new_tokens) -
+      (MOSS_MAX_NEW_TOKENS - MOSS_MAX_DURATION_TOKENS);
   if (cfg.durationTokens.has_value() &&
       (*cfg.durationTokens < 0 ||
-       *cfg.durationTokens > MOSS_MAX_DURATION_TOKENS)) {
+       (*cfg.durationTokens > 0 && *cfg.durationTokens > maxDurationTokens))) {
     throw StatusError(
         general_error::InvalidArgument,
         "durationTokens must be 0.." +
-            std::to_string(MOSS_MAX_DURATION_TOKENS) + " (0 = free length)");
+            std::to_string(std::max(0, maxDurationTokens)) +
+            " (0 = free length)");
   }
 }
 
@@ -155,6 +164,7 @@ tts_cpp::moss::EngineOptions MossModel::toEngineOptions(const MossConfig& cfg) {
   opts.dialogue_reference_paths = cfg.dialogueReferences;
   if (cfg.durationTokens.value_or(0) > 0)
     opts.duration_tokens = *cfg.durationTokens;
+  opts.backend = cfg.backend;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   if (!cfg.language.empty())
     opts.language = cfg.language;
@@ -165,6 +175,24 @@ tts_cpp::moss::EngineOptions MossModel::toEngineOptions(const MossConfig& cfg) {
   if (cfg.streamChunkFrames.value_or(0) > 0)
     opts.stream_chunk_frames = *cfg.streamChunkFrames;
   opts.use_gpu = wantsGpu(cfg);
+  if (cfg.nCtx)
+    opts.context = *cfg.nCtx;
+  if (cfg.maxNewTokens)
+    opts.max_new_tokens = *cfg.maxNewTokens;
+  if (cfg.textTemperature)
+    opts.text_temperature = *cfg.textTemperature;
+  if (cfg.textTopP)
+    opts.text_top_p = *cfg.textTopP;
+  if (cfg.textTopK)
+    opts.text_top_k = *cfg.textTopK;
+  if (cfg.audioTemperature)
+    opts.audio_temperature = *cfg.audioTemperature;
+  if (cfg.audioTopP)
+    opts.audio_top_p = *cfg.audioTopP;
+  if (cfg.audioTopK)
+    opts.audio_top_k = *cfg.audioTopK;
+  if (cfg.audioRepetitionPenalty)
+    opts.audio_repetition_penalty = *cfg.audioRepetitionPenalty;
   return opts;
 }
 
@@ -211,8 +239,7 @@ void MossModel::loadLocked() {
   }
   backendName_ = engine_->backend_name();
   backendId_ = backendIdFromName(backendName_);
-  backendDevice_ =
-      backendId_ == CPU_BACKEND_ID ? kBackendDeviceCpu : kBackendDeviceGpu;
+  backendDevice_ = backendDeviceFromName(backendName_);
   gpuUnsupported_ = wantsGpu(cfg_) && backendDevice_ == kBackendDeviceCpu;
 }
 

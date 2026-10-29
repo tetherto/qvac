@@ -17,6 +17,7 @@ const engineDetection_1 = require("./engineDetection");
 const engineIds_1 = require("./engineIds");
 const cosyvoice_1 = require("./engines/cosyvoice");
 const moss_1 = require("./engines/moss");
+const fabricOptions_1 = require("./fabricOptions");
 const modelFiles_1 = require("./modelFiles");
 const optionValidation_1 = require("./optionValidation");
 const pocketConfig_1 = require("./pocketConfig");
@@ -169,6 +170,7 @@ function resolveEngineSetup(options) {
     const config = { ...(options.config || {}) };
     const outputSampleRate = validateOutputSampleRate(config.outputSampleRate);
     const engineType = (0, engineDetection_1.detectEngineType)(options.engine, files);
+    (0, fabricOptions_1.validateBackendOption)(engineType, config.backend);
     const mossVoice = (0, moss_1.mossVoiceSettings)(options);
     const pocket = engineType === engineIds_1.ENGINE_POCKET
         ? resolvePocketSetup(files, options, config)
@@ -180,6 +182,7 @@ function resolveEngineSetup(options) {
         dialogue: mossVoice.dialogueReferences !== undefined,
     });
     const settings = settingsFromOptions(options);
+    Object.assign(settings, (0, fabricOptions_1.resolveFabricOptions)(engineType, options));
     const backend = resolveBackendPaths(files, options, config);
     const setup = {
         engineType,

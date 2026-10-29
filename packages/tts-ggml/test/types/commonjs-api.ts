@@ -152,3 +152,31 @@ const { seconds, ...mossSfxWithoutSeconds } = mossSfxFitRequest
 // @ts-expect-error MOSS sound-effect fit requires seconds
 void TTSGgml.assessFit(mossSfxWithoutSeconds)
 void [mossSfxFitResult, prompt, seconds]
+
+const nativeControls: TTSGgml.TTSGgmlOptions[] = [
+  { engine: 'moss', nCtx: 8192, maxNewTokens: 4096, textTemperature: 0, audioTopK: 25 },
+  { engine: 'parler', coremlDecoder: true, coremlComputeUnits: 'cpu_and_ane', coremlStrict: false },
+  {
+    engine: 'supertonic',
+    config: { backend: 'WebGPU0' },
+    precision: 'f16',
+    f16Attn: -1,
+    voiceStyleTtl: new Float32Array(0),
+    voiceStyleDp: [],
+    vulkanEnvOverrides: { GGML_VK_DISABLE_GRAPH: '1' }
+  },
+  { engine: 'cosyvoice3', greedy: false, forceSpeechTokens: [0, 1] }
+]
+const warmUpCompletion: Promise<void> = model.warmUp('Speech is ready.')
+const ownedSpeechTokens: number[] | undefined = output.speechTokenIds
+const pocketFitRequest: TTSGgml.PocketFitRequest = {
+  engineType: 'pocket',
+  pocketFlowModelPath: '/models/pocket/flow-lm.gguf',
+  pocketMimiModelPath: '/models/pocket/mimi.gguf',
+  pocketFrontendPath: '/models/pocket/frontend.json',
+  text: 'Project this sentence.',
+  backend: 'MTL0',
+  memoryBudgetBytes: 1024
+}
+const pocketFitResult: Promise<TTSGgml.TtsFitResult> = TTSGgml.assessFit(pocketFitRequest)
+void [nativeControls, warmUpCompletion, ownedSpeechTokens, pocketFitResult]

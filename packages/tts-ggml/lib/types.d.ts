@@ -1,5 +1,6 @@
 import type { TTSConditioningFields } from "./conditioning";
 import type { EngineType } from "./engineIds";
+import type { FabricOptions } from "./fabricOptions";
 import type { TTSGgmlRuntimeConfig } from "./engineSetup";
 import type { Audio8VoiceFields } from "./engines/audio8";
 import type { CosyvoiceInstruct, CosyvoiceJobFields } from "./engines/cosyvoice";
@@ -36,7 +37,7 @@ export interface LavaSRDenoiserOptions extends LavaSRCoreMLOptions {
     /** Denoiser GGUF path (alternative to `files.lavasrDenoiser`). */
     denoiserPath?: string;
 }
-export interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTSConditioningFields {
+export interface TTSGgmlOptions extends FabricOptions, ParlerDescriptionFields, Audio8VoiceFields, TTSConditioningFields {
     /** Pocket: generation/context controls; native sampling uses a portable RNG. */
     maxTokens?: number;
     noiseClamp?: number;
@@ -73,6 +74,7 @@ export interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFiel
      * front at this length, so the cap directly bounds memory. Pass 0 to use
      * the GGUF's full context; negative values are rejected.
      * Pocket: FlowLM context capacity; accepts integers from 1 to 8192.
+     * MOSS / TTSD: context capacity; omission retains the native value.
      */
     nCtx?: number;
     /**
@@ -279,12 +281,13 @@ export interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFiel
      * ~86 frames/s, Audio8 ~21.5.
      */
     maxFrames?: number;
-    /** Audio8: take the argmax instead of sampling. */
+    /** Audio8 / CosyVoice3: take the argmax instead of sampling. */
     greedy?: boolean;
     /**
-     * MOSS: target length in codec frames (12.5 per second), from 0 to 2015
-     * (about 161 s); 0 or unset keeps the length free. Set at construction or
-     * with `reload()`, not per call.
+     * MOSS: target length in codec frames (12.5 per second), up to
+     * maxNewTokens minus 33 native delay/EOS rows. The native token budget is
+     * 2048 when omitted. Zero keeps the length free. Set at construction or
+     * with reload(), not per call.
      */
     durationTokens?: number;
     /**
@@ -309,6 +312,7 @@ export interface InferenceState {
     destroyed: boolean;
 }
 export interface TTSOutputChunk {
+    speechTokenIds?: number[];
     chunkIndex?: number;
     isLast?: boolean;
     /** Signed 16-bit mono PCM audio payload. */
@@ -323,6 +327,7 @@ export interface TTSOutputChunk {
     sampleRate?: number;
 }
 export interface NativeOutputChunk {
+    speechTokenIds?: number[];
     outputArray: Int16Array;
     text?: string;
     isLast?: boolean;
@@ -335,9 +340,9 @@ export interface RuntimeStats {
     realTimeFactor: number;
     audioDurationMs: number;
     totalSamples: number;
-    /** Active compute device after load-time backend selection. 0 = CPU, 1 = GPU. */
+    /** Active compute device: 0 = CPU, 1 = GPU, 3 = NPU, 99 = other. */
     backendDevice?: number;
-    /** Stable backend code: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other. */
+    /** Backend: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 6=Hexagon, 99=other. */
     backendId?: number;
     /** LavaSR enhancer device. -1 = off, 0 = CPU, 1 = GPU, 2 = Core ML-managed. */
     enhancerBackendDevice?: number;

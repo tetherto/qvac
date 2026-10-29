@@ -22,6 +22,7 @@
 #include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/PcmConversion.hpp"
+#include "model-interface/WebGpuPolicy.hpp"
 #include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml::supertonic {
@@ -30,8 +31,8 @@ void detail::applyVulkanPipelineCache(
     tts_cpp::supertonic::EngineOptions& opts, const SupertonicConfig& cfg) {
   if (opts.n_gpu_layers <= 0 || cfg.vulkanCacheDir.empty())
     return;
-  opts.vulkan_env_overrides[detail::VULKAN_PIPELINE_CACHE_DIR_ENV] =
-      cfg.vulkanCacheDir;
+  opts.vulkan_env_overrides.try_emplace(
+      detail::VULKAN_PIPELINE_CACHE_DIR_ENV, cfg.vulkanCacheDir);
   if (opts.prewarm_text.empty()) {
     opts.prewarm_text = detail::VULKAN_PREWARM_TEXT;
   }
@@ -56,11 +57,38 @@ using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
 
+tts_cpp::supertonic::Precision parsePrecision(const std::string& precision) {
+  using Precision = tts_cpp::supertonic::Precision;
+  if (precision.empty() || precision == "auto")
+    return Precision::Auto;
+  if (precision == "f32")
+    return Precision::F32;
+  if (precision == "f16")
+    return Precision::F16;
+  if (precision == "q8_0")
+    return Precision::Q8_0;
+  throw StatusError(
+      general_error::InvalidArgument,
+      "precision must be auto, f32, f16 or q8_0");
+}
+
 tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) {
   tts_cpp::supertonic::EngineOptions opts;
   opts.model_gguf_path = cfg.modelGgufPath;
   opts.voice           = cfg.voice;
   opts.voice_json_path = cfg.voiceJsonPath;
+  opts.voice_style_ttl = cfg.voiceStyleTtl;
+  opts.voice_style_dp = cfg.voiceStyleDp;
+  if (!cfg.precision.empty())
+    opts.precision = parsePrecision(cfg.precision);
+  if (cfg.f16Attn)
+    opts.f16_attn = *cfg.f16Attn;
+  if (cfg.f16Weights)
+    opts.f16_weights = *cfg.f16Weights;
+  opts.f16_weights_deny_list = cfg.f16WeightsDenyList;
+  if (cfg.kvAttnType)
+    opts.kv_attn_type = *cfg.kvAttnType;
+  opts.vulkan_env_overrides = cfg.vulkanEnvOverrides;
   if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.steps.has_value())   opts.steps = *cfg.steps;
   if (cfg.speed.has_value())   opts.speed = *cfg.speed;
@@ -97,6 +125,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
         enhancerActive ? 0 : cfg.outputSampleRate.value_or(0);
   }
 
+  opts.backend = cfg.backend;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   opts.opencl_cache_dir = cfg.openclCacheDir;
 
@@ -157,6 +186,7 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
     throw createTTSError(TTSErrorCode::ModelFileNotFound,
                          "supertonic model not found: " + cfg.modelGgufPath);
   }
+  requireSupertonicWebGpuSupport(cfg.backend, cfg.modelGgufPath);
   if (cfg.steps.has_value() && *cfg.steps < 0) {
     throw StatusError(general_error::InvalidArgument,
                       "steps must be >= 0");
@@ -250,7 +280,7 @@ void SupertonicModel::loadLocked() {
   }
 
   backendName_   = engine_->backend_name();
-  backendDevice_ = backendDeviceCode(engine_->backend_device());
+  backendDevice_ = backendDeviceCode(engine_->backend_device(), backendName_);
   backendId_     = backendIdFromName(backendName_);
   gpuUnsupported_ = engine_->gpu_unsupported();
 
@@ -429,6 +459,19 @@ std::any SupertonicModel::process(const std::any& input) {
   } guard{jobInProgress_};
 
   cancelRequested_.store(false, std::memory_order_relaxed);
+  if (anyInput->warmUp) {
+    std::shared_ptr<tts_cpp::supertonic::Engine> engine;
+    {
+      std::lock_guard lock(engineMu_);
+      engine = engine_;
+    }
+    if (!engine)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "Supertonic must be loaded before warmUp");
+    engine->warm_up(anyInput->text);
+    return std::any{};
+  }
   SynthesizeResult out = synthesize(anyInput->text, anyInput->chunkCallback);
   // Streaming already published its chunks via chunkCallback -> OutputQueue;
   // returning the concatenated PCM would duplicate them as a final

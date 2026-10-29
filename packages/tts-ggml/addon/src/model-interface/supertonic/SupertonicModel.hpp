@@ -38,6 +38,7 @@ public:
     /** Non-empty = native streaming when the config sets streamChunkTokens > 0;
      * empty = batch. */
     ChunkCallback chunkCallback;
+    bool warmUp = false;
   };
 
   explicit SupertonicModel(SupertonicConfig config);

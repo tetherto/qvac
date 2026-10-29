@@ -41,6 +41,7 @@ struct Audio8Config {
   /** GPU offload: nGpuLayers wins; otherwise useGpu maps true to all layers. */
   std::optional<int> nGpuLayers;
   std::optional<bool> useGpu;
+  std::string backend;
   std::string backendsDir;
 };
 

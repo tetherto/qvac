@@ -5,9 +5,11 @@
  * groups instead of the wrapper instance itself.
  */
 import type { EngineType } from "./engineIds";
+import type { FabricOptions } from "./fabricOptions";
 import type { NormalizedFiles } from "./modelFiles";
 import type { TTSConfigurationParams } from "../tts";
 export interface TTSGgmlRuntimeConfig {
+    backend?: string;
     /**
      * Language code; default "en". Chatterbox MTL accepts
      * es/fr/de/pt/it/zh/ja/ko/... CosyVoice3: reserved / not yet effective — the
@@ -73,7 +75,7 @@ export interface ModelPaths {
  * CosyVoice3 instruct rendered to its string. Reload rewrites the reloadable
  * subset in place and rolls the whole object back when a reload is rejected.
  */
-export interface SynthesisSettings {
+export interface SynthesisSettings extends FabricOptions {
     referenceAudio?: string;
     referenceText?: string;
     greedy?: boolean;

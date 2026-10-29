@@ -1,4 +1,5 @@
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
+#include "model-interface/cosyvoice/ForcedSpeechTokens.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -80,6 +81,10 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   if (cfg.streamLeftContextTokens.has_value())
     opts.stream_left_context_tokens = *cfg.streamLeftContextTokens;
 
+  opts.backend = cfg.backend;
+  if (cfg.greedy)
+    opts.greedy = *cfg.greedy;
+  opts.force_speech_tokens = cfg.forceSpeechTokens;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   // Forwarded as-is; only consumed on Android's OpenCL/Adreno GPU path
   // (n_gpu_layers > 0). Empty leaves ggml's default cache location.
@@ -444,8 +449,9 @@ void CosyvoiceModel::loadLocked() {
     return;
 
   try {
-    engine_ =
-        std::make_shared<tts_cpp::cosyvoice::Engine>(toEngineOptions(cfg_));
+    auto options = toEngineOptions(cfg_);
+    validateForcedSpeechTokens(options);
+    engine_ = std::make_shared<tts_cpp::cosyvoice::Engine>(options);
   } catch (const std::exception& e) {
     engine_.reset();
     throw createTTSError(
@@ -454,7 +460,7 @@ void CosyvoiceModel::loadLocked() {
   }
 
   backendName_ = engine_->backend_name();
-  backendDevice_ = backendDeviceCode(engine_->backend_device());
+  backendDevice_ = backendDeviceCode(engine_->backend_device(), backendName_);
   backendId_ = backendIdFromName(backendName_);
   gpuUnsupported_ = engine_->gpu_unsupported();
 
@@ -586,9 +592,12 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
       emitted.samples, emitted.sampleRate, result.duration_s, t0, t1);
 
   if (streaming) {
-    return {Output{}, true}; // chunks already emitted via onChunk
+    return {Output{}, true, std::move(result.speech_tokens)};
   }
-  return {pcmFloatToInt16(result.pcm.data(), result.pcm.size()), false};
+  return {
+      pcmFloatToInt16(result.pcm.data(), result.pcm.size()),
+      false,
+      std::move(result.speech_tokens)};
 }
 
 void CosyvoiceModel::recordSynthesisStats(
@@ -637,6 +646,10 @@ std::any CosyvoiceModel::process(const std::any& input) {
       anyInput->hasControls ? anyInput->controls : toVoiceControls(cfg_);
   SynthResult out =
       synthesize(anyInput->text, controls, anyInput->chunkCallback);
+  if (anyInput->returnSpeechTokens) {
+    return std::any(
+        CosyvoiceReply{std::move(out.pcm), std::move(out.speechTokenIds)});
+  }
   // Streaming already published its chunks via chunkCallback -> OutputQueue;
   // returning the concatenated PCM here would duplicate as a final outputArray
   // event (matches ParlerModel::process).

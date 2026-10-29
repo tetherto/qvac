@@ -64,11 +64,15 @@ struct ParlerConfig {
   std::optional<int> streamFirstChunkTokens;
   /** Digit expansion in the prompt (engine default: enabled). */
   std::optional<bool> normalizeNumbers;
+  std::optional<bool> coremlDecoder;
+  std::string coremlComputeUnits;
+  std::optional<bool> coremlStrict;
   // GPU offload (Metal on Apple; other backends fall back to CPU). nGpuLayers
   // wins; else useGpu true->99 / false->0. Conflicts rejected in
   // validateConfig.
   std::optional<int> nGpuLayers;
   std::optional<bool> useGpu;
+  std::string backend;
   std::string backendsDir;
 
   // LavaSR neural speech enhancement. A non-empty `enhancerGgufPath` is the

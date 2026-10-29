@@ -103,17 +103,50 @@
           "platform": "!(osx | ios)"
         }
       ]
+    },
+    "hexagon": {
+      "description": "Enable opt-in Qualcomm Hexagon NPU acceleration",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "default-features": false,
+          "features": [
+            "hexagon"
+          ]
+        }
+      ]
+    },
+    "webgpu": {
+      "description": "Enable opt-in WebGPU (Dawn) GPU acceleration",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "default-features": false,
+          "features": [
+            "webgpu"
+          ]
+        },
+        {
+          "name": "dawn",
+          "default-features": false
+        }
+      ]
     }
   },
   "overrides": [
     {
       "name": "ggml-speech",
-      "version": "2026-10-27"
+      "version": "2026-10-27",
+      "port-version": 1
     },
     {
       "name": "speech-cpp",
-      "version": "2026-10-28",
-      "port-version": 0
+      "version": "2026-10-29",
+      "port-version": 2
+    },
+    {
+      "name": "dawn",
+      "version": "20260410.140140"
     }
   ]
 }

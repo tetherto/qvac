@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildPocketParams = buildPocketParams;
 const bare_path_1 = __importDefault(require("bare-path"));
+const fabricOptions_1 = require("./fabricOptions");
 const DEFAULT_SAMPLING_STEPS = 1;
 const UNSUPPORTED_OPTIONS = [
     'voice',
@@ -69,14 +70,21 @@ function resolveModelFiles(files, options) {
     };
 }
 function validateEngineOptions(options, config) {
+    (0, fabricOptions_1.resolveFabricOptions)('pocket', options);
+    (0, fabricOptions_1.validateBackendOption)('pocket', config.backend);
+    if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean')
+        throw new Error('Pocket useGPU must be a boolean');
+    if (options.nGpuLayers !== undefined &&
+        (typeof options.nGpuLayers !== 'number' || !Number.isInteger(options.nGpuLayers) ||
+            options.nGpuLayers < -2147483648 || options.nGpuLayers > 2147483647))
+        throw new Error('Pocket nGpuLayers must be a 32-bit integer');
+    if (typeof config.useGPU === 'boolean' && typeof options.nGpuLayers === 'number' &&
+        config.useGPU !== (options.nGpuLayers !== 0))
+        throw new Error('Pocket useGPU conflicts with nGpuLayers');
     if (options.referenceAudio !== undefined && typeof options.referenceAudio !== 'string')
         throw new Error('Pocket referenceAudio must be a path string');
     if (config.language !== undefined && config.language !== 'en')
         throw new Error('Pocket currently supports English (en) only');
-    if (config.useGPU !== undefined && config.useGPU !== false)
-        throw new Error('Pocket currently supports CPU only (useGPU: false)');
-    if (options.nGpuLayers !== undefined && options.nGpuLayers !== 0)
-        throw new Error('Pocket requires nGpuLayers: 0');
     if (options.steps !== undefined &&
         options.numInferenceSteps !== undefined &&
         options.steps !== options.numInferenceSteps)
@@ -138,6 +146,18 @@ function buildPocketParams(files, optionInput, configInput) {
     validateEngineOptions(options, config);
     rejectUnsupportedOptions(options);
     const params = resolveModelFiles(files, options);
+    if (config.useGPU !== undefined)
+        params.useGPU = config.useGPU;
+    if (options.nGpuLayers !== undefined)
+        params.nGpuLayers = options.nGpuLayers;
+    if (options.nGpuLayers !== undefined && config.useGPU === undefined)
+        params.useGPU = options.nGpuLayers !== 0;
+    if (config.backendsDir !== undefined)
+        params.backendsDir = config.backendsDir;
+    if (options.backendsDir !== undefined)
+        params.backendsDir = options.backendsDir;
+    if (config.backend !== undefined)
+        params.backend = config.backend;
     applyNumericOptions(params, options, config);
     validateRequiredFiles(params);
     validateVoiceConditioning(params);

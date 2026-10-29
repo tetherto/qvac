@@ -73,6 +73,7 @@ tts_cpp::audio8::EngineOptions toEngineOptions(const Audio8Config& cfg) {
   } else if (cfg.useGpu.has_value()) {
     opts.n_gpu_layers = *cfg.useGpu ? kOffloadAllGpuLayers : 0;
   }
+  opts.backend = cfg.backend;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   return opts;
 }
@@ -253,7 +254,7 @@ void Audio8Model::loadLocked() {
 
   sampleRate_ = engine_->sample_rate();
   backendName_ = engine_->backend_name();
-  backendDevice_ = backendDeviceCode(engine_->backend_device());
+  backendDevice_ = backendDeviceCode(engine_->backend_device(), backendName_);
   backendId_ = backendIdFromName(backendName_);
   codecSidecarLoaded_ = engine_->codec_on_coreml();
   codecOnCoreml_ = false;

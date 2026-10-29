@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "js-interface/FabricOptionParse.hpp"
 #include "js-interface/NumberConversion.hpp"
 #include "js-interface/TtsConfigParse.hpp"
 #include "model-interface/supertonic/SupertonicEngineOptions.hpp"
@@ -362,6 +363,7 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   // conflicts, and toEngineOptions translates explicit-false into
   // n_gpu_layers=0 so CPU is actually forced.
   cfg.useGpu                  = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir    = readOptionalString(configurationParams, env, "backendsDir");
   cfg.openclCacheDir = readOptionalString(configurationParams, env, "openclCacheDir");
   cfg.mecabDictPath  = readOptionalString(configurationParams, env, "mecabDictPath");
@@ -437,12 +439,18 @@ JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.normalizeNumbers =
       readOptionalBool(configurationParams, env, "normalizeNumbers");
+  cfg.coremlDecoder =
+      readOptionalBool(configurationParams, env, "coremlDecoder");
+  cfg.coremlComputeUnits =
+      readOptionalString(configurationParams, env, "coremlComputeUnits");
+  cfg.coremlStrict = readOptionalBool(configurationParams, env, "coremlStrict");
   cfg.streamChunkTokens =
       readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.streamFirstChunkTokens =
       readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   cfg.enhancerGgufPath =
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
@@ -490,6 +498,7 @@ JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
       readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
@@ -510,12 +519,27 @@ JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
   cfg.language = readOptionalString(configurationParams, env, "language");
   cfg.durationTokens =
       readOptionalInt(configurationParams, env, "durationTokens");
+  cfg.nCtx = readOptionalInt(configurationParams, env, "nCtx");
+  cfg.maxNewTokens =
+      detail::readExactInt(configurationParams, env, "maxNewTokens");
+  cfg.textTemperature =
+      readOptionalFiniteFloat(configurationParams, env, "textTemperature");
+  cfg.textTopP = readOptionalFiniteFloat(configurationParams, env, "textTopP");
+  cfg.textTopK = detail::readExactInt(configurationParams, env, "textTopK");
+  cfg.audioTemperature =
+      readOptionalFiniteFloat(configurationParams, env, "audioTemperature");
+  cfg.audioTopP =
+      readOptionalFiniteFloat(configurationParams, env, "audioTopP");
+  cfg.audioTopK = detail::readExactInt(configurationParams, env, "audioTopK");
+  cfg.audioRepetitionPenalty = readOptionalFiniteFloat(
+      configurationParams, env, "audioRepetitionPenalty");
   cfg.seed = readOptionalInt(configurationParams, env, "seed");
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.streamChunkFrames =
       readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
@@ -529,6 +553,7 @@ moss::MossSoundEffectConfig JSAdapter::buildMossSoundEffectConfig(
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
@@ -555,6 +580,7 @@ moss::MossSpeechConfig JSAdapter::buildMossSpeechConfig(
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
@@ -582,6 +608,18 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   cfg.voice         = readOptionalString(configurationParams, env, "voice");
   cfg.voiceJsonPath =
       readOptionalString(configurationParams, env, "voiceJsonPath");
+  cfg.voiceStyleTtl =
+      detail::readOptionArray<float>(configurationParams, env, "voiceStyleTtl");
+  cfg.voiceStyleDp =
+      detail::readOptionArray<float>(configurationParams, env, "voiceStyleDp");
+  cfg.precision = readOptionalString(configurationParams, env, "precision");
+  cfg.f16Attn = detail::readExactInt(configurationParams, env, "f16Attn");
+  cfg.f16Weights = detail::readExactInt(configurationParams, env, "f16Weights");
+  cfg.f16WeightsDenyList =
+      readOptionalStringArray(configurationParams, env, "f16WeightsDenyList");
+  cfg.kvAttnType = detail::readExactInt(configurationParams, env, "kvAttnType");
+  cfg.vulkanEnvOverrides =
+      detail::readStringMap(configurationParams, env, "vulkanEnvOverrides");
   {
     auto lang = readOptionalString(configurationParams, env, "language");
     if (!lang.empty()) cfg.language = std::move(lang);
@@ -595,6 +633,7 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   cfg.outputSampleRate  = readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.useGpu            = readOptionalBool(configurationParams, env, "useGPU");
   cfg.noiseNpyPath      = readOptionalString(configurationParams, env, "noiseNpyPath");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir       = readOptionalString(configurationParams, env, "backendsDir");
   cfg.openclCacheDir    = readOptionalString(configurationParams, env, "openclCacheDir");
   cfg.vulkanCacheDir =
@@ -631,6 +670,9 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
 cosyvoice::CosyvoiceConfig
 JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
   cosyvoice::CosyvoiceConfig cfg;
+  cfg.greedy = readOptionalBool(configurationParams, env, "greedy");
+  cfg.forceSpeechTokens = detail::readOptionArray<int>(
+      configurationParams, env, "forceSpeechTokens");
   cfg.modelDir =
       readOptionalString(configurationParams, env, "cosyvoiceModelDir");
   cfg.llmModelPath =
@@ -677,6 +719,7 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.streamLeftContextTokens =
       readOptionalInt(configurationParams, env, "streamLeftContextTokens");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   cfg.openclCacheDir =
       readOptionalString(configurationParams, env, "openclCacheDir");
@@ -738,12 +781,20 @@ JSAdapter::buildPocketConfig(js::Object params, js_env_t* env) {
   o.eos_threshold = number(
       "eosThreshold", o.eos_threshold, -3.402823466e38, 3.402823466e38, false);
   const auto language = readOptionalString(params, env, "language");
-  if ((!language.empty() && language != "en") ||
-      readOptionalBool(params, env, "useGPU").value_or(false) ||
-      number("nGpuLayers", 0, 0, 0) != 0)
+  if (!language.empty() && language != "en")
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "Pocket currently supports English on CPU");
+        "Pocket currently supports English only");
+  const auto layers = detail::readExactInt(params, env, "nGpuLayers");
+  const auto useGpu = readOptionalBool(params, env, "useGPU");
+  if (layers && useGpu && (*useGpu != (*layers != 0))) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "Pocket useGPU conflicts with nGpuLayers");
+  }
+  o.use_gpu = layers ? *layers != 0 : useGpu.value_or(false);
+  o.backend = readOptionalString(params, env, "backend");
+  o.backends_dir = readOptionalString(params, env, "backendsDir");
   return cfg;
 }
 }

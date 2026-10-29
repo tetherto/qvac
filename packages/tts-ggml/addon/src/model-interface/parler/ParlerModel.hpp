@@ -16,6 +16,7 @@
 
 namespace tts_cpp::parler {
 class Engine;
+struct EngineOptions;
 }
 
 namespace tts_cpp::lavasr {
@@ -76,6 +77,8 @@ public:
   int sampleRate() const { return sampleRate_; }
 
   static void validateConfig(const ParlerConfig& cfg);
+  static tts_cpp::parler::EngineOptions
+  toEngineOptions(const ParlerConfig& cfg);
   // The description a config resolves to (explicit text, or the rendered
   // template; all-defaults renders the models' fallback caption). Throws
   // on invalid template values or same-level description conflicts.

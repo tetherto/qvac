@@ -56,7 +56,7 @@ tts_cpp::parler::DescriptionSpec toSpec(const ParlerDescriptionFields& d) {
   return spec;
 }
 
-tts_cpp::parler::EngineOptions toEngineOptions(const ParlerConfig& cfg) {
+tts_cpp::parler::EngineOptions toNativeOptions(const ParlerConfig& cfg) {
   tts_cpp::parler::EngineOptions opts;
   opts.model_gguf_path = cfg.modelGgufPath;
   opts.default_description = ParlerModel::resolveDescription(cfg.desc);
@@ -88,13 +88,19 @@ tts_cpp::parler::EngineOptions toEngineOptions(const ParlerConfig& cfg) {
   if (cfg.streamFirstChunkTokens.has_value())
     opts.stream_first_chunk_frames = *cfg.streamFirstChunkTokens;
 
+  opts.backend = cfg.backend;
+  if (cfg.coremlDecoder)
+    opts.coreml_decoder = *cfg.coremlDecoder;
+  opts.coreml_compute_units = cfg.coremlComputeUnits;
+  opts.coreml_strict = cfg.coremlStrict;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   return opts;
 }
 
 std::shared_ptr<tts_cpp::parler::Engine> makeEngine(const ParlerConfig& cfg) {
   try {
-    return std::make_shared<tts_cpp::parler::Engine>(toEngineOptions(cfg));
+    return std::make_shared<tts_cpp::parler::Engine>(
+        ParlerModel::toEngineOptions(cfg));
   } catch (const std::exception& e) {
     throw createTTSError(
         TTSErrorCode::InitializationFailed,
@@ -302,6 +308,11 @@ tts_cpp::parler::SynthesisResult runBatchSynthesis(
 }
 
 } // namespace
+
+tts_cpp::parler::EngineOptions
+ParlerModel::toEngineOptions(const ParlerConfig& cfg) {
+  return toNativeOptions(cfg);
+}
 
 ParlerModel::ParlerModel(ParlerConfig config) : cfg_(std::move(config)) {
   validateConfig(cfg_);

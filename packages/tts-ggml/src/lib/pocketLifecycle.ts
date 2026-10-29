@@ -166,6 +166,12 @@ export class PocketLifecycle {
     if (!pocket) throw new Error("Pocket engine is not configured");
     const options = { ...pocket.options, ...newConfig };
     const config = { ...setup.config, ...newConfig };
+    if (newConfig.nGpuLayers !== undefined && newConfig.useGPU === undefined) {
+      config.useGPU = undefined;
+    }
+    if (newConfig.useGPU !== undefined && newConfig.nGpuLayers === undefined) {
+      options.nGpuLayers = undefined;
+    }
     const params = buildPocketParams(pocket.files, options, config);
     this.inProgress = true;
     let replacement: TTSInterface | null = null;
@@ -177,7 +183,9 @@ export class PocketLifecycle {
       replacement = null;
       setup.pocket = { files: pocket.files, options, params };
       setup.config.language = "en";
-      setup.config.useGPU = false;
+      setup.config.useGPU = params.useGPU as boolean;
+      setup.config.backend = params.backend as string | undefined;
+      setup.settings.nGpuLayers = params.nGpuLayers as number | undefined;
       setup.outputSampleRate =
         typeof params.outputSampleRate === "number" ? params.outputSampleRate : null;
       setup.config.outputSampleRate = setup.outputSampleRate ?? undefined;
