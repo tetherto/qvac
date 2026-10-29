@@ -370,6 +370,8 @@ private:
       const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
   /// Asks `cacheSourceProvider_` for a state that serves more of `fullPrompt`
   /// than this sequence does, and starts the request from a copy of it.
+  /// `MtmdLlmContext` repeats this, `adoptDonorState` and
+  /// `resetStateKeepingMemory`: a change to one belongs in both.
   void adoptBestCacheSource(
       const qvac_lib_inference_addon_llama::cache::Ledger& fullPrompt,
       bool isPrefillOnlyRequest);
