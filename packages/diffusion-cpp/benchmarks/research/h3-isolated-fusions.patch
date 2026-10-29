@@ -1,9 +1,6 @@
---- pr2240/src/model/diffusion/minimax_h3.hpp
-+++ isolated-fusions/src/model/diffusion/minimax_h3.hpp
-@@ -374,6 +374,50 @@
-         return ggml_ext_chunk(ctx, selected, expand, 0);
-     }
- 
+--- a/src/model/diffusion/minimax_h3.hpp
++++ b/src/model/diffusion/minimax_h3.hpp
+@@ -376,0 +377,44 @@
 +    static ggml_tensor* modulate_segments(ggml_context* ctx,
 +                                          ggml_tensor* x,
 +                                          ggml_tensor* projection,
@@ -48,13 +45,7 @@
 +        return out;
 +    }
 +
-     struct TransformerBlock : public GGMLBlock {
-         Config config;
- 
-@@ -407,43 +451,38 @@
-             auto adaln = std::dynamic_pointer_cast<AdaLayerNormModulation>(blocks["adaln_proj"]);
-             auto mods  = adaln->forward(ctx, t_emb);
- 
+@@ -410,37 +454,32 @@
 -            std::vector<std::vector<ggml_tensor*>> rows;
 -            std::vector<ggml_tensor*> inputs;
 -            for (const auto& segment : segments) {
@@ -124,6 +115,3 @@
 +                                           segments,
 +                                           config.hidden_size,
 +                                           5);
-         }
-     };
- 

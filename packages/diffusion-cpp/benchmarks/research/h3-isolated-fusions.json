@@ -11,8 +11,8 @@
   },
   "cutlass": "ad7b2f5e84fcfa124cb02b91d5bd26d238c0459e",
   "patch": "h3-isolated-fusions.patch",
-  "apply": "git -c core.autocrlf=false apply -p1 h3-isolated-fusions.patch",
-  "patch_sha256": "9f914ef147230cff883a9960cf9deb0e079bf5d72d4157e7ac9d88cb2da346e4",
+  "apply": "git -c core.autocrlf=false apply --unidiff-zero -p1 h3-isolated-fusions.patch",
+  "patch_sha256": "6683ae6bcd1eb3d887ac3e8a4589d179e575f02ceebde94d09e6a80e67578d74",
   "result_header": "src/model/diffusion/minimax_h3.hpp",
   "result_header_sha256": "07660fad37f857b27f0e8d54a44b16f3d8f09ef2ad6d26dada4aec99784ccc45",
   "isolation": "Restore the control TransformerBlock and its segment modulation/residual helpers on the candidate revision. Retain candidate attention views, fused SwiGLU, partial RoPE, shared runner and ggml changes.",
@@ -30,5 +30,7 @@
     "GGML_LLAMAFILE": false,
     "GGML_BUILD_TESTS": true
   },
-  "acceptance": "Compare repeated outputs, video/audio metrics, latency and memory to the matched control. Passing this experiment does not validate all models, backends or a QVAC engine upgrade."
+  "acceptance": "Compare repeated outputs, video/audio metrics, latency and memory to the matched control. Passing this experiment does not validate all models, backends or a QVAC engine upgrade.",
+  "source_patch_sha256": "9f914ef147230cff883a9960cf9deb0e079bf5d72d4157e7ac9d88cb2da346e4",
+  "patch_format": "Zero context avoids whitespace-only context lines in the stored research artifact; resulting source is unchanged."
 }
