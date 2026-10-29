@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// inference-addon-cpp's C++ tests, as pr-test-inference-addon-cpp.yml ran them: the CMake preset with tests on
+// inference-addon-cpp's C++ tests, as main's C++ test workflow ran them: the CMake preset with tests on
 // (build), then ctest and the Debug build (test). Windows takes the CMake 3.31.6 main pinned there.
 //   node ci/cpp.mjs build|test [--platform=android]
 

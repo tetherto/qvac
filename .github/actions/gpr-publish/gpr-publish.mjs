@@ -57,7 +57,7 @@ export function linkBareAliases(dir, from, to) {
   return n
 }
 
-// rename-prefix, as on-merge-nx.yml ran it before the alias links: every qvac_* name under prebuilds, deepest first,
+// rename-prefix, as main's release pipeline ran it before the alias links: every qvac_* name under prebuilds, deepest first,
 // and binding.js's references become tetherto_.
 export function renamePrefix(dir) {
   const walk = (d) =>

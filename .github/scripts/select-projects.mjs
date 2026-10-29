@@ -61,6 +61,7 @@ const PUBLISH_KEYS = ['tagPrefix', 'platformPackages', 'nameTransform']
 const MOBILE_KEYS = [
   'devicefarmProject',
   'enablesPerf',
+  'jobTimeoutMinutes',
   'mochaTimeoutMs',
   'perTestTimeoutMinutes',
   'perfReport',

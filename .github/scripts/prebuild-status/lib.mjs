@@ -107,15 +107,16 @@ export function selectNewestBotStatus(statuses, context) {
   )
 }
 
-// on-pr-nx is the producer for every consolidated package.
+// The retired consolidated producer: every Merge Guard key has its own producer below, so none falls back to it.
 export const NX_PRODUCER = '.github/workflows/on-pr-nx.yml'
 
-// Carved out of on-pr-nx: fabric keeps its own orchestrator, and the packages on the CI contract are built by its
-// pr-build-test.yml. Per-package, not a flat allowlist: pr-build-test.yml must not be able to post for a package still
-// on on-pr-nx. Keys use the PREBUILD_KEYS or CPP_TEST_KEYS spelling, so `vla`.
+// The packages on the CI contract are built by its pr-build-test.yml. Per-package, not a flat allowlist: a key with no
+// entry falls back to NX_PRODUCER, which no longer runs, so it can never read as fresh. Keys use the PREBUILD_KEYS or
+// CPP_TEST_KEYS spelling, so `vla`.
 const CONTRACT = '.github/workflows/pr-build-test.yml'
 export const CARVED_OUT_PRODUCERS = {
-  fabric: '.github/workflows/on-pr-fabric.yml',
+  fabric: CONTRACT,
+  'diffusion-cpp': CONTRACT,
   vla: CONTRACT,
   'classification-ggml': CONTRACT,
   'embed-llamacpp': CONTRACT,

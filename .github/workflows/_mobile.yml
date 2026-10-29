@@ -248,7 +248,7 @@ jobs:
       - uses: ./.github/actions/mobile-build-test-app
         with:
           platform: ${{ inputs.platform }}
-          workdir: ${{ env.WORKDIR }}
+          workdir: ${{ steps.prepare.outputs.workdir || env.WORKDIR }}
           npm-name: ${{ matrix.row.npm }}
           app-dir: test-framework
           dependency-prebuilds: ${{ hashFiles('dep-prebuilds/**') != '' && format('{0}={1}/dep-prebuilds', matrix.row.provider, github.workspace) || '' }}
@@ -293,13 +293,14 @@ jobs:
         uses: ./.github/actions/devicefarm-write-specs
         with:
           platform: ${{ inputs.platform }}
-          workdir: ${{ env.WORKDIR }}
+          workdir: ${{ steps.prepare.outputs.workdir || env.WORKDIR }}
           tests: ${{ inputs.tests }}
           app-dir: test-framework
           enables-perf: ${{ matrix.row.meta.mobile.enablesPerf == true || steps.prepare.outputs.enables-perf == 'true' }}
           mocha-timeout-ms: ${{ steps.prepare.outputs.mocha-timeout-ms || matrix.row.meta.mobile.mochaTimeoutMs || '1800000' }}
           waitfor-timeout-ms: ${{ matrix.row.meta.mobile.waitforTimeoutMs || '120000' }}
           extra-pre-test-commands: ${{ steps.prepare.outputs.pre-test-commands }}
+          after-hook-pulls: ${{ steps.prepare.outputs.after-hook-pulls }}
           test-groups: ${{ steps.prepare.outputs.test-groups }}
           device-env: ${{ steps.prepare.outputs.device-env }}
           perf-runs: ${{ inputs.perf_runs }}
@@ -335,6 +336,7 @@ jobs:
           specs: ${{ steps.spec-uploads.outputs.uploads }}
           devices: ${{ env.DEVICES }}
           device-model-operator: ${{ inputs.device_model_operator }}
+          job-timeout-minutes: ${{ matrix.row.meta.mobile.jobTimeoutMinutes || '120' }}
       - uses: tetherto/qvac-actions/devicefarm-wait-runs@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
@@ -363,6 +365,7 @@ jobs:
             test-results.json
             logcat_full.txt
             crash-reports/QvacAddonTester*
+            ${{ steps.prepare.outputs.after-hook-pulls && format('{0}/*', join(fromJSON(steps.prepare.outputs.after-hook-pulls).*.artifact_name, '/* ')) || '' }}
           skip-extensions: ${{ inputs.platform == 'Android' && 'mp4' || '' }}
       - if: always() && steps.logs.outcome == 'success'
         uses: tetherto/qvac-actions/devicefarm-summarize-results@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges

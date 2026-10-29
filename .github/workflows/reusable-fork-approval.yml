@@ -2,7 +2,7 @@ name: Fork approval gate (reusable)
 
 # Gates external-fork pull_request_target runs on the fork-ci environment.
 # After approval, records qvac/fork-verified on the PR head SHA for unprivileged
-# pull_request consumers (e.g. pr-test-inference-addon-cpp*).
+# pull_request consumers.
 
 on:
   workflow_call:

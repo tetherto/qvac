@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// diffusion's test:integration, as integration-test-nx.yml ran it: main's model and perf env, then the configuration's
+// diffusion's test:integration, as main's desktop test workflow ran it: main's model and perf env, then the configuration's
 // --set pairs, then test:integration:generate and test:integration, both tee'd into test-output.log.
 //
 //   node ci/integration.mjs [--set NAME=value]...

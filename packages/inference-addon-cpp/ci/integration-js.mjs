@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// inference-addon-cpp's JS integration packages, as pr-test-inference-addon-cpp-js.yml ran them: each package under
+// inference-addon-cpp's JS integration packages, as main's JS test workflow ran them: each package under
 // tests/integration_js is linted, built for the host with Bare's tooling and tested; --asan builds and runs under ASan.
 //   node ci/integration-js.mjs [--asan]
 

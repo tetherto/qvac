@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// diffusion's C++ test run, with the environment cpp-tests-nx.yml gave it: the SD2 model from the manifest at its
+// diffusion's C++ test run, with the environment main's C++ test workflow gave it: the SD2 model from the manifest at its
 // absolute path, main's sanitizer options and bash as npm's script shell.
 
 import { spawnSync } from 'node:child_process'

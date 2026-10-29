@@ -112,10 +112,6 @@ const PENDING = [
   // non-draft PR gets; the cpp-tests and integration legs need the
   // run-cpp-addon-tests and run-desktop-addon-tests labels.
   ...[
-    ['.github/workflows/cpp-lint.yaml', 2],
-    ['.github/workflows/cpp-tests-nx.yml', 2],
-    ['.github/workflows/integration-mobile-test-inference-addon-cpp.yml', 3],
-    ['.github/workflows/reusable-prebuilds.yml', 2],
     ['.github/actions/cpp-lint/action.yaml', 1],
     // The CI contract's job templates, carrying over vla's old cpp-tests and integration sites unchanged.
   ].map(([file, count]) => ({
@@ -388,17 +384,5 @@ test('the scan sees the sites it is meant to police', () => {
         site.text.includes('"sdk-source:workspace"'),
     ),
     'detector no longer sees installs inside package.json scripts',
-  )
-
-  // Both arms of an expression-built `run:` must be separate sites, or one
-  // flagged arm hides an unflagged sibling.
-  const nxArms = sites.filter(
-    (site) => site.file === '.github/workflows/cpp-tests-nx.yml',
-  )
-  assert.equal(nxArms.length, 2, 'expected both expression arms in cpp-tests-nx.yml')
-  assert.equal(
-    nxArms.filter((site) => site.ignoresScripts).length,
-    1,
-    'expected exactly one flagged arm in cpp-tests-nx.yml',
   )
 })

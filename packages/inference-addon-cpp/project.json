@@ -1,7 +1,175 @@
 {
   "name": "inference-addon-cpp",
   "root": "packages/inference-addon-cpp",
-  "targets": {},
+  "tags": [
+    "ci:contract"
+  ],
+  "targets": {
+    "cpp:build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/inference-addon-cpp",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/cpp.mjs build",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        },
+        "ios-arm64-simulator": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      }
+    },
+    "cpp:tests": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "cpp:build"
+      ],
+      "options": {
+        "cwd": "packages/inference-addon-cpp",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/cpp.mjs test",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        },
+        "ios-arm64-simulator": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 360
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/inference-addon-cpp",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/integration-js.mjs",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64-asan": {
+          "args": "--asan",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "ci": {
+            "runner": "macos_15_large"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 360
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/inference-addon-cpp",
+        "command": "node ci/prepare-mobile.mjs"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "devicefarmProject": "LLAMACPP_EMBED",
+          "enablesPerf": false,
+          "jobTimeoutMinutes": 25
+        },
+        "timeoutMinutes": 120
+      }
+    }
+  },
   "implicitDependencies": [
     "lint-cpp"
   ]

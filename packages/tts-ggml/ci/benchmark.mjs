@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tts's RTF benchmark, as integration-test-nx.yml ran it after the tests: ci/benchmark-matrix/<config>.json as
+// tts's RTF benchmark, as main's desktop test workflow ran it after the tests: ci/benchmark-matrix/<config>.json as
 // QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON, in the tests' environment, then scripts/run-rtf-benchmark-matrix.js into
 // benchmarks/results. It fails when the matrix fails or writes no result file.
 //

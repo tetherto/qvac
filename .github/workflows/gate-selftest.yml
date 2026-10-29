@@ -104,19 +104,9 @@ jobs:
           echo "OK: gate hard-failed when the provider was indexed but the addon did not DT_NEEDED its soname."
 
   fleet-dryrun:
-    # De-risks the fleet-wide activation flagged in review: the gate runs inside
-    # reusable-prebuilds.yml, which all 14 prebuild-*.yml callers reference by
-    # LOCAL PATH (uses: ./.github/workflows/reusable-prebuilds.yml) -- resolved
-    # at the caller's ref, no pinned SHA. So the UND hard-fail goes live for
-    # every ggml/onnx addon on its next publish the moment this merges (not
-    # gradually). This job dry-runs the gate over EVERY currently-published
-    # addon's android-arm64 prebuild (the platform the UND check bites hardest)
-    # and reports each one's result as merge evidence. Informational only -- the
-    # enforcing gate is per-addon in reusable-prebuilds.yml; a hard-fail here is a
-    # real Android dlopen regression in THAT addon (the gate would correctly
-    # block its next publish until fixed), with the other addons unaffected.
-    # Public npm only -> no secrets, runs on fork PRs too. Packs `latest`, so it
-    # also keeps tracking the live fleet on every gate-touching PR.
+    # Dry-runs the gate over every published addon's android-arm64 prebuild, as merge evidence. Informational only:
+    # the enforcing gate runs in every contract build leg (_build.yml's prebuilds-check-exports), and a hard-fail here
+    # is a real Android dlopen regression in that addon. Public npm only, so it runs on fork PRs too.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -169,5 +159,5 @@ jobs:
           echo "=== $checked addon(s) checked on android-arm64, $failed hard-fail(s), $skipped skipped ==="
           {
             echo ""
-            echo "**$checked checked, $failed hard-fail(s), $skipped skipped.** Informational only: the enforcing gate runs per-addon in reusable-prebuilds.yml. A hard-fail here is a genuine Android dlopen regression in that *addon* (the gate would correctly block its next publish until fixed), not a problem with this PR -- and the other addons are unaffected (per-addon prebuild workflows)."
+            echo "**$checked checked, $failed hard-fail(s), $skipped skipped.** Informational only: the enforcing gate runs in every contract build leg (_build.yml). A hard-fail here is a genuine Android dlopen regression in that *addon* (the gate would correctly block its next build until fixed), not a problem with this PR -- and the other addons are unaffected."
           } >> "$GITHUB_STEP_SUMMARY"

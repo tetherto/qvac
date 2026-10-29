@@ -1,34 +1,187 @@
 {
   "name": "@qvac/diffusion-cpp",
   "root": "packages/diffusion-cpp",
+  "tags": [
+    "ci:contract"
+  ],
   "targets": {
-    "on-pr": {
+    "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "command": "pnpm run lint",
+        "cwd": "packages/diffusion-cpp"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run typecheck",
+        "cwd": "packages/diffusion-cpp"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/diffusion-cpp"
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run check:generated",
+        "cwd": "packages/diffusion-cpp"
+      }
+    },
+    "ci:system": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "^ci:system"
+      ],
+      "options": {
         "cwd": "packages/diffusion-cpp",
-        "ci": {
-          "hasCppLint": true,
-          "hasTsChecks": true,
-          "tsChecksMode": "dts",
-          "prebuildLinkingScript": "packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs",
-          "hasPerfReport": true,
-          "perfReportVariant": "composite",
-          "perfReportPattern": "perf-report-diffusion-cpp-*",
-          "perfReportTitle": "Diffusion Performance Report (All Platforms)"
+        "parallel": false,
+        "forwardAllArgs": false,
+        "commands": [
+          "echo no system packages"
+        ]
+      },
+      "configurations": {
+        "linux-arm64": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
+          ]
+        },
+        "linux-arm64-2404": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
+          ]
         }
       }
     },
     "build": {
       "executor": "nx:run-commands",
+      "dependsOn": [],
       "options": {
-        "command": "pnpm run build",
         "cwd": "packages/diffusion-cpp",
-        "ci": {
-          "artifactNamePrefix": "sd-cpp-",
-          "includeVulkanSdk": true,
-          "includeCuda": true,
-          "includeCudaArm64": true
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm run build:ts",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+            "forwardAllArgs": true
+          },
+          {
+            "command": "pnpm exec bare-make build",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make install",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--platform=linux --arch=x64",
+          "commands": [
+            {
+              "command": "pnpm run build:ts",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node scripts/verify-prebuild-linking.mjs prebuilds",
+              "forwardAllArgs": false
+            }
+          ],
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-arm64": {
+          "args": "--platform=linux --arch=arm64",
+          "commands": [
+            {
+              "command": "pnpm run build:ts",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node scripts/verify-prebuild-linking.mjs prebuilds",
+              "forwardAllArgs": false
+            }
+          ],
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "ios-arm64": {
+          "args": "--platform=ios --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-arm64-simulator": {
+          "args": "--platform=ios --arch=arm64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-x64-simulator": {
+          "args": "--platform=ios --arch=x64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--platform=darwin --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-x64": {
+          "args": "--platform=darwin --arch=x64",
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "args": "--platform=win32 --arch=x64",
+          "ci": {
+            "runner": "win_2025_x64"
+          }
         }
       },
       "inputs": [
@@ -39,115 +192,204 @@
         "{projectRoot}/prebuilds"
       ]
     },
-    "test:unit": {
+    "cpp:lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/diffusion-cpp"
+        "cwd": "packages/diffusion-cpp",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm exec bare-make generate -D ENABLE_VULKAN=OFF",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base}",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
+      }
+    },
+    "cpp:build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/diffusion-cpp",
+        "parallel": false,
+        "commands": [
+          "pnpm run test:cpp:build"
+        ]
+      },
+      "configurations": {
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      }
+    },
+    "cpp:tests": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "cpp:build"
+      ],
+      "options": {
+        "cwd": "packages/diffusion-cpp",
+        "parallel": false,
+        "commands": [
+          "node ci/cpp-tests.mjs"
+        ]
+      },
+      "configurations": {
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "linux-x64": {
+          "commands": [
+            "node ci/cpp-tests.mjs",
+            "pnpm run fuzz:build",
+            "pnpm run fuzz:run"
+          ],
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "pnpm run test:integration",
         "cwd": "packages/diffusion-cpp",
-        "ci": {
-          "timeoutMinutes": 360,
-          "useTeeLogging": true,
-          "hasGenerateStep": true,
-          "hasPinModelManifest": true,
-          "qvacPerfRuns": "3",
-          "qvacPerfWarmupRuns": "0",
-          "dualRegistry": true,
-          "linuxArmApt": ["mesa-vulkan-drivers"],
-          "modelEnv": {
-            "LTX_DOWNLOAD": "false",
-            "LTX_LLM_FILE": "gemma-3-12b-it-UD-Q2_K_XL.gguf"
-          },
-          "modelCache": [
-            { "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" },
-            { "group": "ideogram", "cacheKeySuffix": "ideogram", "cacheVersion": "v2" }
-          ],
-          "platforms": [
-            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
-            {
-              "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-24.04-arm", "noGpu": true,
-              "modelCache": [{ "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" }]
-            },
-            {
-              "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm", "noGpu": true,
-              "modelCache": [{ "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" }]
-            },
-            {
-              "os": "mac-mini-m4", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu",
-              "modelEnv": { "LTX_DOWNLOAD": "true", "LTX_LLM_FILE": "gemma-3-12b-it-UD-Q2_K_XL.gguf" },
-              "modelCache": [
-                { "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" },
-                { "group": "ideogram", "cacheKeySuffix": "ideogram", "cacheVersion": "v2" },
-                { "group": "ltx", "cacheKeySuffix": "ltx", "cacheVersion": "v2" }
-              ]
-            },
-            {
-              "os": "macos-15-large", "platform": "darwin", "arch": "x64", "runner": "macos-15-large", "noGpu": true,
-              "modelCache": [{ "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" }]
-            },
-            {
-              "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu", "timeoutMinutes": 1800,
-              "testEnv": { "WAN_DEBUG": "1", "WAN_VERBOSITY": "3" }
-            }
-          ]
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/integration.mjs",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64-gpu2204": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu"
+          }
+        },
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-arm64": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "linux-arm64-2404": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--set LTX_DOWNLOAD=true",
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "macos_15_large"
+          }
+        },
+        "win32-x64": {
+          "args": "--set WAN_DEBUG=1 --set WAN_VERBOSITY=3",
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 1800,
+        "perfReport": {
+          "title": "Diffusion Performance Report (All Platforms)"
         }
       }
     },
-    "benchmark": {
+    "test:mobile": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
         "cwd": "packages/diffusion-cpp",
-        "ci": {
-          "aggregateScript": "scripts/perf-report/aggregate-diffusion-cpp-rtf.js",
-          "manualDir": "packages/diffusion-cpp/benchmarks/manual-results"
+        "command": "node ci/prepare-mobile.mjs"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
         }
+      },
+      "metadata": {
+        "mobile": {
+          "devicefarmProject": "LLM",
+          "enablesPerf": true,
+          "perfReport": {
+            "title": "Mobile Performance: diffusion-cpp",
+            "merge": true
+          }
+        },
+        "timeoutMinutes": 120,
+        "secrets": [
+          "HF_TOKEN"
+        ]
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/diffusion-cpp"
-      }
+    "cache:models": {
+      "executor": "nx:noop"
     },
-    "test:cpp": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run test:cpp",
-        "cwd": "packages/diffusion-cpp",
-        "ci": {
-          "mode": "standard",
-          "windowsVsGenerator": true,
-          "needsSd2Model": true,
-          "testEnvVars": [{ "name": "SD_TEST_MODEL_PATH", "path": "test/model/stable-diffusion-v2-1-Q8_0.gguf" }],
-          "vulkan": { "os": "windows-2025", "shell": "powershell", "path": "C:\\VulkanSDK" },
-          "platforms": [
-            { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
-            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
-          ]
-        }
-      }
-    },
-    "on-merge": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
-        "cwd": "packages/diffusion-cpp",
-        "ci": {
-          "verifyGenerated": true,
-          "nameTransform": "scope-rewrite",
-          "repoName": "diffusion-cpp",
-          "testGateMode": "none",
-          "slicePlatformPackages": true
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "diffusion-cpp",
+          "platformPackages": true
         }
       }
     }

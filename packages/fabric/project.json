@@ -1,19 +1,10 @@
 {
   "name": "@qvac/fabric",
   "root": "packages/fabric",
+  "tags": [
+    "ci:contract"
+  ],
   "targets": {
-    "on-pr": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'carved out of on-pr-nx.yml; orchestrated by on-pr-fabric.yml (fabric overlay needs fabric built before its consumers, which one flat prebuild matrix cannot express)'",
-        "cwd": "packages/fabric",
-        "ci": {
-          "carveOut": true,
-          "sanityVariant": "inline",
-          "hasCppLint": true
-        }
-      }
-    },
     "ci:system": {
       "executor": "nx:run-commands",
       "dependsOn": [
@@ -69,42 +60,95 @@
             "command": "pnpm exec bare-make install",
             "forwardAllArgs": false
           }
-        ],
-        "ci": {
-          "artifactNamePrefix": "fabric-",
-          "includeVulkanSdk": true,
-          "includeRocm": true,
-          "includeCuda": true,
-          "includeCudaWin32": true,
-          "includeCudaArm64": true,
-          "includeCudaArm64Jetson": true,
-          "linuxExtraPackages": "libibverbs-dev"
-        }
+        ]
       },
       "configurations": {
         "linux-x64": {
-          "args": "--platform=linux --arch=x64"
+          "args": "--platform=linux --arch=x64",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          },
+          "commands": [
+            {
+              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ci/verify-cuda-modules.mjs linux-x64",
+              "forwardAllArgs": false
+            }
+          ]
         },
         "linux-arm64": {
-          "args": "--platform=linux --arch=arm64"
+          "args": "--platform=linux --arch=arm64",
+          "ci": {
+            "runner": "ubuntu_2204_arm",
+            "setup": [
+              "cuda-jetson"
+            ]
+          },
+          "commands": [
+            {
+              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ci/build-jetson.mjs",
+              "forwardAllArgs": true
+            }
+          ]
         },
         "android-arm64": {
-          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared"
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
         },
         "ios-arm64": {
-          "args": "--platform=ios --arch=arm64"
+          "args": "--platform=ios --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
         },
         "ios-arm64-simulator": {
-          "args": "--platform=ios --arch=arm64 --simulator"
+          "args": "--platform=ios --arch=arm64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
         },
         "ios-x64-simulator": {
-          "args": "--platform=ios --arch=x64 --simulator"
+          "args": "--platform=ios --arch=x64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
         },
         "darwin-arm64": {
-          "args": "--platform=darwin --arch=arm64"
+          "args": "--platform=darwin --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
         },
         "darwin-x64": {
-          "args": "--platform=darwin --arch=x64"
+          "args": "--platform=darwin --arch=x64",
+          "ci": {
+            "runner": "macos_15_intel"
+          }
         },
         "win32-x64": {
           "args": "--platform=win32 --arch=x64",
@@ -113,9 +157,22 @@
               "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make generate -D BUILD_TESTING=OFF",
               "forwardAllArgs": true
             },
-            { "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make build", "forwardAllArgs": false },
-            { "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make install", "forwardAllArgs": false }
-          ]
+            {
+              "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ci/verify-cuda-modules.mjs win32-x64",
+              "forwardAllArgs": false
+            }
+          ],
+          "ci": {
+            "runner": "win_2025_x64"
+          }
         }
       },
       "inputs": [
@@ -136,11 +193,31 @@
         "command": "pnpm run link:platform"
       }
     },
-    "test:integration": {
+    "cpp:lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:integration",
-        "cwd": "packages/fabric"
+        "cwd": "packages/fabric",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm exec bare-make generate -D ENABLE_VULKAN=OFF",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base}",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
       }
     },
     "lint": {
@@ -150,21 +227,17 @@
         "cwd": "packages/fabric"
       }
     },
-    "on-merge": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
-        "cwd": "packages/fabric",
-        "ci": {
-          "nameTransform": "none",
-          "repoName": "fabric",
-          "testGateMode": "none",
-          "prebuildExtraDirs": [
-            "include",
-            "share"
-          ],
-          "slicePlatformPackages": true
-        }
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "fabric",
+          "platformPackages": true
+        },
+        "prebuildExtraDirs": [
+          "include",
+          "share"
+        ]
       }
     }
   },

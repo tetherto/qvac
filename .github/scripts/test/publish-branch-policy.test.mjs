@@ -57,13 +57,6 @@ const LIBRARY_PUBLISHERS = new Set([
   'trigger-reusable-lib.yml',
 ])
 
-// Guards against discovery returning an empty set and passing vacuously.
-// Native addons still on on-merge-nx publish through it; the CI contract's publish-npm.yml publishes the rest.
-// Add a pipeline here when one appears.
-const KNOWN = [
-  'on-merge-nx.yml',
-]
-
 function read(name) {
   return readFileSync(join(WORKFLOW_DIR, name), 'utf8')
 }
@@ -151,18 +144,6 @@ function hasTrigger(source, name) {
   return onBlock(source).some((line) => new RegExp(`^ {2}${name}:`).test(line))
 }
 
-test('discovery finds every known addon publish pipeline', () => {
-  const found = publishWorkflows()
-  for (const name of KNOWN) {
-    assert.ok(
-      found.includes(name),
-      `${name} is no longer detected as a publish pipeline; fix the discovery, ` +
-        'do not drop the file from KNOWN',
-    )
-  }
-  assert.ok(found.length >= KNOWN.length)
-})
-
 test('every exemption names a file that exists', () => {
   for (const name of LIBRARY_PUBLISHERS) {
     assert.ok(
@@ -178,7 +159,6 @@ test('model-fit publishing is covered by the CI contract', () => {
   const project = JSON.parse(readFileSync(join(WORKFLOW_DIR, '../../packages/model-fit/project.json'), 'utf8'))
   assert.ok(project.tags.includes('ci:contract'))
   assert.ok(project.targets.publish, 'publish-npm.yml publishes packages with a publish target')
-  assert.doesNotMatch(read('on-merge-nx.yml'), /packages\/model-fit\//)
   assert.equal(existsSync(join(WORKFLOW_DIR, 'on-merge-model-fit.yml')), false)
 })
 
