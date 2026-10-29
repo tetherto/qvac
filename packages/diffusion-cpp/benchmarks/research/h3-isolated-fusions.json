@@ -1,0 +1,34 @@
+{
+  "status": "Experimental source reproduction only; not applied to the QVAC engine dependency.",
+  "source": "https://github.com/leejet/stable-diffusion.cpp/pull/2240",
+  "control": {
+    "engine": "77b72a2efed78f55de26892c7e909cee001e8b83",
+    "ggml": "643e8d970cd2d926a0074f5cb12a68b38078157a"
+  },
+  "candidate": {
+    "engine": "a15807dc90e439ef49f2667ade6c8e57f9b70b65",
+    "ggml": "d3ff6ea43749c4b41a8c5e30611c76ed61fdce33"
+  },
+  "cutlass": "ad7b2f5e84fcfa124cb02b91d5bd26d238c0459e",
+  "patch": "h3-isolated-fusions.patch",
+  "apply": "git -c core.autocrlf=false apply -p1 h3-isolated-fusions.patch",
+  "patch_sha256": "9f914ef147230cff883a9960cf9deb0e079bf5d72d4157e7ac9d88cb2da346e4",
+  "result_header": "src/model/diffusion/minimax_h3.hpp",
+  "result_header_sha256": "07660fad37f857b27f0e8d54a44b16f3d8f09ef2ad6d26dada4aec99784ccc45",
+  "isolation": "Restore the control TransformerBlock and its segment modulation/residual helpers on the candidate revision. Retain candidate attention views, fused SwiGLU, partial RoPE, shared runner and ggml changes.",
+  "integration_limit": "Not a patch against the pinned QVAC engine. Preserve QVAC-specific GGUF and audio behavior in any future backport, and validate shared-engine consumers before updating a package pin.",
+  "measurement_scope": "Fresh CLI processes; report generation time separately from process wall time and addon warm-request latency.",
+  "tested_architectures": [
+    "CUDA sm_120a",
+    "CUDA sm_121a"
+  ],
+  "build_options": {
+    "SD_CUDA": true,
+    "GGML_CUDA_GRAPHS": false,
+    "GGML_NATIVE": false,
+    "GGML_OPENMP": false,
+    "GGML_LLAMAFILE": false,
+    "GGML_BUILD_TESTS": true
+  },
+  "acceptance": "Compare repeated outputs, video/audio metrics, latency and memory to the matched control. Passing this experiment does not validate all models, backends or a QVAC engine upgrade."
+}

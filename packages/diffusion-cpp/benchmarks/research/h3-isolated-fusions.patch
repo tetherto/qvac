@@ -1,0 +1,129 @@
+--- pr2240/src/model/diffusion/minimax_h3.hpp
++++ isolated-fusions/src/model/diffusion/minimax_h3.hpp
+@@ -374,6 +374,50 @@
+         return ggml_ext_chunk(ctx, selected, expand, 0);
+     }
+ 
++    static ggml_tensor* modulate_segments(ggml_context* ctx,
++                                          ggml_tensor* x,
++                                          ggml_tensor* projection,
++                                          const std::vector<TokenModulationSpan>& segments,
++                                          int64_t hidden_size,
++                                          int expand,
++                                          int modalities,
++                                          int shift_index,
++                                          int scale_index) {
++        ggml_tensor* out = nullptr;
++        for (const auto& segment : segments) {
++            auto mods = modulation_row(ctx,
++                                       projection,
++                                       hidden_size,
++                                       expand,
++                                       modalities,
++                                       segment.modulation_row);
++            auto part = ggml_ext_slice(ctx, x, 1, segment.start, segment.end);
++            part      = ggml_add(ctx,
++                                 ggml_add(ctx, part, ggml_mul(ctx, part, mods[scale_index])),
++                                 mods[shift_index]);
++            out       = out == nullptr ? part : ggml_concat(ctx, out, part, 1);
++        }
++        return out;
++    }
++
++    static ggml_tensor* gated_residual_segments(ggml_context* ctx,
++                                                ggml_tensor* x,
++                                                ggml_tensor* update,
++                                                ggml_tensor* projection,
++                                                const std::vector<TokenModulationSpan>& segments,
++                                                int64_t hidden_size,
++                                                int gate_index) {
++        ggml_tensor* out = nullptr;
++        for (const auto& segment : segments) {
++            auto mods = modulation_row(ctx, projection, hidden_size, 6, 3, segment.modulation_row);
++            auto base = ggml_ext_slice(ctx, x, 1, segment.start, segment.end);
++            auto add  = ggml_ext_slice(ctx, update, 1, segment.start, segment.end);
++            auto part = ggml_add(ctx, base, ggml_mul(ctx, add, mods[gate_index]));
++            out       = out == nullptr ? part : ggml_concat(ctx, out, part, 1);
++        }
++        return out;
++    }
++
+     struct TransformerBlock : public GGMLBlock {
+         Config config;
+ 
+@@ -407,43 +451,38 @@
+             auto adaln = std::dynamic_pointer_cast<AdaLayerNormModulation>(blocks["adaln_proj"]);
+             auto mods  = adaln->forward(ctx, t_emb);
+ 
+-            std::vector<std::vector<ggml_tensor*>> rows;
+-            std::vector<ggml_tensor*> inputs;
+-            for (const auto& segment : segments) {
+-                rows.push_back(modulation_row(ctx->ggml_ctx, mods, config.hidden_size,
+-                                              6, 3, segment.modulation_row));
+-                inputs.push_back(ggml_ext_slice(ctx->ggml_ctx, x, 1, segment.start, segment.end, false));
+-            }
+-            auto modulate = [&](ggml_tensor* value, const std::vector<ggml_tensor*>& row, int shift, int scale) {
+-                return ggml_add(ctx->ggml_ctx,
+-                                ggml_add(ctx->ggml_ctx, value, ggml_mul(ctx->ggml_ctx, value, row[scale])),
+-                                row[shift]);
+-            };
+-            ggml_tensor* qkv = nullptr;
+-            for (size_t i = 0; i < segments.size(); ++i) {
+-                auto h = modulate(norm1->forward(ctx, inputs[i]), rows[i], 0, 1);
+-                h      = attn->project_qkv(ctx, h);
+-                if (qkv == nullptr) {
+-                    qkv = h;
+-                    continue;
+-                }
+-                qkv = ggml_concat(ctx->ggml_ctx, qkv, h, 1);
+-            }
+-            auto attended = attn->attend(ctx, qkv, pe);
+-            std::vector<ggml_tensor*> projections;
+-            for (const auto& segment : segments) {
+-                auto part = ggml_ext_slice(ctx->ggml_ctx, attended, 1, segment.start, segment.end, false);
+-                projections.push_back(attn->project_output(ctx, part));
+-            }
+-            ggml_tensor* output = nullptr;
+-            for (size_t i = 0; i < segments.size(); ++i) {
+-                auto residual = ggml_add(ctx->ggml_ctx, inputs[i],
+-                                         ggml_mul(ctx->ggml_ctx, projections[i], rows[i][2]));
+-                auto h        = modulate(norm2->forward(ctx, residual), rows[i], 3, 4);
+-                h             = ggml_add(ctx->ggml_ctx, residual, ggml_mul(ctx->ggml_ctx, mlp->forward(ctx, h), rows[i][5]));
+-                output        = output == nullptr ? h : ggml_concat(ctx->ggml_ctx, output, h, 1);
+-            }
+-            return output;
++            auto h = modulate_segments(ctx->ggml_ctx,
++                                       norm1->forward(ctx, x),
++                                       mods,
++                                       segments,
++                                       config.hidden_size,
++                                       6,
++                                       3,
++                                       0,
++                                       1);
++            x      = gated_residual_segments(ctx->ggml_ctx,
++                                             x,
++                                             attn->forward(ctx, h, pe),
++                                             mods,
++                                             segments,
++                                             config.hidden_size,
++                                             2);
++            h      = modulate_segments(ctx->ggml_ctx,
++                                       norm2->forward(ctx, x),
++                                       mods,
++                                       segments,
++                                       config.hidden_size,
++                                       6,
++                                       3,
++                                       3,
++                                       4);
++            return gated_residual_segments(ctx->ggml_ctx,
++                                           x,
++                                           mlp->forward(ctx, h),
++                                           mods,
++                                           segments,
++                                           config.hidden_size,
++                                           5);
+         }
+     };
+ 

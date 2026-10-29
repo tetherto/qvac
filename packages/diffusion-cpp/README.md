@@ -935,6 +935,12 @@ as well as latency and peak memory. Phase statistics and cumulative generation
 totals are not substitutes for per-request wall latency. The runner does not score
 image, video or audio quality.
 
+The [H3 research manifest](benchmarks/research/h3-isolated-fusions.json) records
+the exact upstream revisions and patch used to isolate the fusion experiment.
+The patch applies to that upstream candidate, not to the pinned QVAC engine, and
+is not included in addon builds. Compare its CLI generation timings separately
+from this runner's warm-request latency before considering an engine backport.
+
 ## Operational Notes
 
 - Native C++ logs are process-global. Configure them once with
