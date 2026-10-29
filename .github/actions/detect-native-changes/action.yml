@@ -76,8 +76,8 @@ runs:
         #     is set only for synchronize) → JS-only push reports false.
         #   • labeled / reopened on an UNCHANGED head → before empty → head..head
         #     (empty) → false, so adding a routing label does not rebuild.
-        # native_hash always uses the full HEAD tree, so a wrong "false" can
-        # never reuse a stale binary (the key would not match).
+        # native_hash always uses the full HEAD tree and fabric deps, so a wrong
+        # "false" can never reuse a stale binary (the key would not match).
         DIFF_FROM="$HEAD_SHA"
         if [ "$EVENT_ACTION" = "opened" ]; then
           DIFF_FROM="$BASE_SHA"
@@ -105,7 +105,9 @@ runs:
         # pins, and a fabric minor can change struct layouts the binary relies
         # on. Prints the declared @qvac/fabric* ranges at <sha>, empty when the
         # package declares none; an unparsable package.json yields a unique
-        # value so it never matches a cache key.
+        # value so it never matches a cache key. Keyed on the range, not the
+        # resolved version: a ^0.x range locks the minor, and patches within it
+        # must keep the ABI, as published consumers already rely on.
         fabric_deps() {
           local json
           json=$(git show "$1:${WORKDIR}/package.json" 2>/dev/null) || return 0
@@ -113,7 +115,7 @@ runs:
               [.dependencies, .devDependencies, .optionalDependencies, .peerDependencies]
               | map(objects | to_entries[]) | map(select(.key | startswith("@qvac/fabric")))
               | unique | if length == 0 then empty else . end' 2>/dev/null \
-            || echo "unparsable-$(date +%s%N)"
+            || echo "unparsable-$1-$(date +%s%N)"
         }
 
         CHANGED=false
@@ -148,15 +150,16 @@ runs:
           CHANGED=true
         fi
 
-        # Hash the HEAD native tree. The file set MUST stay in lockstep with the
-        # detection predicate above. git ls-tree reads the tree object without
-        # checkout — secure and correct.
-        # Fabric deps are appended only when declared, so packages without
-        # them keep their existing key.
+        # Hash the HEAD native tree and fabric deps. The file set and
+        # fabric_deps MUST stay in lockstep with the detection predicate above.
+        # git ls-tree reads the tree object without checkout — secure and
+        # correct. Fabric deps are appended only when declared, so packages
+        # without them keep their existing key.
+        NATIVE_TREE=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" "cmake/qvac-addon" 2>/dev/null \
+          | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/')
         FABRIC_DEPS=$(fabric_deps "$HEAD_SHA")
         NATIVE_HASH=$({
-          git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" "cmake/qvac-addon" 2>/dev/null \
-            | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/'
+          printf '%s\n' "$NATIVE_TREE"
           if [ -n "$FABRIC_DEPS" ]; then echo "fabric-deps $FABRIC_DEPS"; fi
         } | sha256sum | cut -d' ' -f1)
         [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
