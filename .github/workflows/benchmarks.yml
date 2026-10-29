@@ -74,8 +74,22 @@ jobs:
       packages: ${{ inputs.packages }}
       configs: ${{ inputs.platform == 'iOS' && 'ios-arm64' || 'android-arm64' }}
 
-  build:
+  # Providers build first, once per configuration the build rows use.
+  providers:
     needs: select
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['build:providers']) }}
+      reuse: true
+
+  build:
+    needs: [select, providers]
+    if: always() && !cancelled() && needs.select.result == 'success' && (needs.providers.result == 'success' || needs.providers.result == 'skipped')
     permissions:
       contents: read
       actions: read
@@ -88,7 +102,8 @@ jobs:
 
   # Folds a package's build jobs into prebuilds-<slug>, which the mobile run installs from this run.
   merge:
-    needs: [select, build]
+    needs: [select, providers, build]
+    if: always() && !cancelled() && needs.build.result == 'success' && (needs.providers.result == 'success' || needs.providers.result == 'skipped')
     name: merge ${{ matrix.project.slug }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

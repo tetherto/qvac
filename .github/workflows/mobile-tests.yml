@@ -47,7 +47,7 @@ on:
         type: string
         default: ""
       dependency_prebuild_run_id:
-        description: Run whose bundle of the package's native dependency replaces the published one on the device; empty keeps the published runtime
+        description: pr-build-test run whose prebuilds-<provider> bundle replaces the published provider on the device; empty takes it from prebuild_run_id's run when that run built it, else keeps the published runtime
         type: string
         default: ""
       packages:

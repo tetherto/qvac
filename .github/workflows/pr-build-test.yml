@@ -79,10 +79,27 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
+  # Providers build first, once per configuration: for the labelled build, the baseline build, or C++ lint alone.
+  providers:
+    needs: [select, route, trust]
+    if: needs.trust.outputs.allowed == 'true' && needs.route.result == 'success'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: >-
+        ${{ toJSON(needs.route.outputs.run_prebuilds == 'true' && fromJSON(needs.select.outputs.matrices)['build:providers']
+        || fromJSON(needs.select.outputs.matrices)['build:baseline'][0] != null && fromJSON(needs.select.outputs.matrices)['build:baseline:providers']
+        || needs.route.outputs.run_verified_checks == 'true' && fromJSON(needs.select.outputs.matrices)['cpp:lint:providers'] || fromJSON('[]')) }}
+      reuse: true
+
   # A cpp:tests baseline package builds and runs its C++ tests without the labels; the labels widen to every package.
   build:
-    needs: [select, route, trust]
-    if: needs.trust.outputs.allowed == 'true' && (needs.route.outputs.run_prebuilds == 'true' || fromJSON(needs.select.outputs.matrices)['build:baseline'][0] != null)
+    needs: [select, route, trust, providers]
+    if: always() && !cancelled() && needs.trust.outputs.allowed == 'true' && needs.route.result == 'success' && (needs.providers.result == 'success' || needs.providers.result == 'skipped') && (needs.route.outputs.run_prebuilds == 'true' || fromJSON(needs.select.outputs.matrices)['build:baseline'][0] != null)
     permissions:
       contents: read
       actions: read
@@ -95,7 +112,8 @@ jobs:
 
   # Folds a package's build jobs into prebuilds-<slug>, taking its own prebuilds from each job's artifact.
   merge:
-    needs: [select, route, build]
+    needs: [select, route, providers, build]
+    if: always() && !cancelled() && needs.build.result == 'success' && (needs.providers.result == 'success' || needs.providers.result == 'skipped')
     name: merge ${{ matrix.project.slug }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -126,8 +144,8 @@ jobs:
           path: prebuilds/${{ matrix.project.dir }}/prebuilds
 
   cpp-lint:
-    needs: [select, route, trust]
-    if: needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
+    needs: [select, route, trust, providers]
+    if: always() && !cancelled() && needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true' && (needs.providers.result == 'success' || needs.providers.result == 'skipped')
     permissions:
       contents: read
       actions: read
@@ -200,7 +218,7 @@ jobs:
 
   # The gate's qvac/prebuild-<key> and qvac/cpp-tests-<key>; a skip passes only when routing chose not to run.
   status:
-    needs: [select, route, build, merge, cpp-tests]
+    needs: [select, route, providers, build, merge, cpp-tests]
     if: always() && !cancelled() && startsWith(github.event_name, 'pull_request') && needs.select.outputs.any == 'true'
     name: status ${{ matrix.project.slug }}
     runs-on: ubuntu-latest
@@ -227,8 +245,9 @@ jobs:
       - if: matrix.project.prebuildStatus
         shell: bash
         env:
-          # A package the run did not build reads as a routing skip, even when a baseline package started the job.
-          PREBUILD_RESULT: ${{ (needs.route.outputs.run_prebuilds == 'true' || matrix.project.cppBaseline) && (needs.build.result == 'success' && needs.merge.result || needs.build.result) || 'skipped' }}
+          # A package the run did not build reads as a routing skip, even when a baseline package started the job; a
+          # failed provider fails every package, its consumers and itself included.
+          PREBUILD_RESULT: ${{ (needs.route.outputs.run_prebuilds == 'true' || matrix.project.cppBaseline) && (needs.providers.result == 'failure' && 'failure' || needs.build.result == 'success' && needs.merge.result || needs.build.result) || 'skipped' }}
           REUSE_HIT: ""
           RUN_PREBUILDS: ${{ (needs.route.outputs.run_prebuilds == 'true' || matrix.project.cppBaseline) && 'true' || needs.route.outputs.run_prebuilds }}
           CONTEXT: qvac/prebuild-${{ matrix.project.key }}
@@ -246,7 +265,7 @@ jobs:
   # Not named qvac-merge-guard: that is the required check's job, and a second one would share its context.
   # Reads this run's jobs, so the table shows each package, stage and failed job, not only the reusable callers.
   summary:
-    needs: [select, fork-approval, route, trust, build, merge, cpp-lint, cpp-tests, desktop, perf-report, status]
+    needs: [select, fork-approval, route, trust, providers, build, merge, cpp-lint, cpp-tests, desktop, perf-report, status]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

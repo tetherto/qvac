@@ -112,10 +112,24 @@ jobs:
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           target: ${{ matrix.target }}
 
-  # The prebuilds cpp:tests restores.
-  build:
+  # Providers first, once per configuration; a pull request's build legs may reuse these from main (Q1).
+  providers:
     needs: select
     if: toJSON(fromJSON(needs.select.outputs.matrices)['cpp:tests']) != '[]'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['build:providers']) }}
+      reuse: true
+
+  # The prebuilds cpp:tests restores.
+  build:
+    needs: [select, providers]
+    if: always() && !cancelled() && needs.select.result == 'success' && toJSON(fromJSON(needs.select.outputs.matrices)['cpp:tests']) != '[]' && (needs.providers.result == 'success' || needs.providers.result == 'skipped')
     permissions:
       contents: read
       actions: read
