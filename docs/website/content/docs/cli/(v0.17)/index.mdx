@@ -207,5 +207,13 @@ Run a preflight check of host system requirements.
 
 | Option | Description |
 | --- | --- |
+| `--deep` | Start the installed SDK worker and verify its heartbeat. |
 | `--json` | Emit a machine-readable `DoctorReport` JSON. |
 | `-q, --quiet` | Set the exit code only; suppress human-readable output. |
+| `-v, --verbose` | Include bounded worker stdout/stderr when a deep check fails. |
+| `--offline` | Skip GitHub and npm registry lookups in the `engines.bare` check. |
+
+Run `qvac doctor --deep` from a project where `@qvac/sdk` is installed to check
+worker startup without loading a model. The probe is bounded to 45 seconds and
+closes the worker afterwards. A missing SDK, failed heartbeat, or failed cleanup
+causes exit code `1`; use `--verbose` to inspect failure details.
