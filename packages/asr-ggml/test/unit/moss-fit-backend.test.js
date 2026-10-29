@@ -45,3 +45,31 @@ test('MOSS fit retains the default selector and rejects invalid selector types',
   }
   t.is(calls.length, 1)
 })
+
+test('Parakeet fit forwards backend selection and preserves native device errors', async (t) => {
+  const { assessFit, calls, result } = loadFit()
+  for (const engine of [undefined, 'parakeet']) {
+    for (const backend of [
+      undefined,
+      '',
+      'auto',
+      'cpu',
+      'metal',
+      'CUDA1',
+      'HTP0',
+      'unavailable-device'
+    ]) {
+      const request = { engine, backend, modelPath: '/models/asr.gguf', gpuLayers: 0 }
+      t.is(await assessFit(request), result)
+      t.alike(calls.at(-1), request)
+    }
+  }
+  const callCount = calls.length
+  for (const backend of [null, 1, true, {}, []]) {
+    await t.exception(
+      assessFit({ modelPath: '/models/asr.gguf', backend }),
+      /backend must be a string/
+    )
+  }
+  t.is(calls.length, callCount)
+})

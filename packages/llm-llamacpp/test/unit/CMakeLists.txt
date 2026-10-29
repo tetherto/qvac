@@ -65,6 +65,7 @@ add_executable(
   test_cancel_rollback.cpp
   test_job_cancel_registry.cpp
   test_parse_unsigned.cpp
+  test_json_depth.cpp
   test_parallel_ceiling.cpp
   test_finetune_cancel_action.cpp
   test_finetune_pending_pause.cpp

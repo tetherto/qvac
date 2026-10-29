@@ -56,6 +56,15 @@ export type AudioGenEngine = typeof ENGINE_ACESTEP | typeof ENGINE_MINIMAX
 export type AudiogenMinimaxDevice = 'cpu' | 'gpu' | 'auto'
 const MINIMAX_DEVICES: readonly string[] = ['cpu', 'gpu', 'auto']
 
+/** Allowed devices for Apple's full MiniMax Core ML runtime. */
+export type AudiogenMinimaxCoreMLComputeUnits = 'CPU_ONLY' | 'CPU_AND_GPU' | 'CPU_AND_NE' | 'ALL'
+const MINIMAX_COREML_COMPUTE_UNITS: readonly string[] = [
+  'CPU_ONLY',
+  'CPU_AND_GPU',
+  'CPU_AND_NE',
+  'ALL'
+]
+
 type RunExclusive = <T>(callback: () => Promise<T>) => Promise<T>
 
 /** Model file paths for ACE-Step or MiniMax-Music3. */
@@ -96,6 +105,10 @@ export interface AudioGenRuntimeConfig {
    * CPU, `'cpu'` never touches a GPU.
    */
   device?: AudiogenMinimaxDevice
+  /** MiniMax only: compiled full Core ML profile directory on the inference host (macOS 15+). */
+  coremlProfileDir?: string
+  /** MiniMax only: explicit Core ML device policy; requires coremlProfileDir. */
+  coremlComputeUnits?: AudiogenMinimaxCoreMLComputeUnits
   /** ACE-Step only: GPU layers to offload when `useGPU` is set (99 = all). */
   nGpuLayers?: number
   /** 0 = engine auto-picks. */
@@ -915,9 +928,31 @@ function validateAcestepOptions(files: AudioGenFiles, config: AudioGenRuntimeCon
   if (config.device !== undefined) {
     throw invalidInput('ACE-Step does not accept device (use useGPU and nGpuLayers)')
   }
+  if (config.coremlProfileDir !== undefined || config.coremlComputeUnits !== undefined) {
+    throw invalidInput('coremlProfileDir and coremlComputeUnits are MiniMax-only options')
+  }
+}
+
+function validateMinimaxCoreMLConfig(config: AudioGenRuntimeConfig): void {
+  if (config.coremlProfileDir === undefined && config.coremlComputeUnits === undefined) return
+  if (
+    typeof config.coremlProfileDir !== 'string' ||
+    config.coremlProfileDir.length === 0 ||
+    config.coremlProfileDir.includes('\0') ||
+    typeof config.coremlComputeUnits !== 'string' ||
+    !MINIMAX_COREML_COMPUTE_UNITS.includes(config.coremlComputeUnits)
+  ) {
+    throw invalidInput(
+      'MiniMax Core ML requires coremlProfileDir and coremlComputeUnits (CPU_ONLY, CPU_AND_GPU, CPU_AND_NE or ALL)'
+    )
+  }
+  if (os.platform() !== 'darwin') {
+    throw invalidInput('MiniMax Core ML requires macOS 15 or later')
+  }
 }
 
 function validateMinimaxConfig(config: AudioGenRuntimeConfig): void {
+  validateMinimaxCoreMLConfig(config)
   if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
     throw invalidInput('useGPU must be a boolean')
   }
@@ -1181,6 +1216,8 @@ export class AudioGen {
         threads,
         useGPU: config.useGPU ?? false,
         device: config.device,
+        coremlProfileDir: config.coremlProfileDir,
+        coremlComputeUnits: config.coremlComputeUnits,
         backendsDir
       }
     } else {
@@ -1491,7 +1528,9 @@ export class AudioGen {
         throw invalidInput('simpleMode cannot take pre-supplied audioCodes')
       }
       if (opts.lyrics !== undefined && opts.lyrics !== '' && opts.lyrics !== '[Instrumental]') {
-        throw invalidInput("simpleMode lyrics must be omitted (the LM writes them) or '[Instrumental]'")
+        throw invalidInput(
+          "simpleMode lyrics must be omitted (the LM writes them) or '[Instrumental]'"
+        )
       }
       if (opts.lmPhase1 === false) {
         throw invalidInput('simpleMode requires lmPhase1')
