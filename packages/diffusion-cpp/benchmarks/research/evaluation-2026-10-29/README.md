@@ -24,7 +24,7 @@ Native timings use the recorded 0.31.0 build; the refreshed feature branch
 contains 0.32.1 and must not inherit those performance claims without reruns.
 
 Raw output media and task logs are preserved separately in verified local
-archives. The JSON records retain numerical quality results and content
+archives or a manifest-indexed content store. The JSON records retain numerical quality results and content
 identities. Do not commit those private archives or deployment helpers.
 
 Next acceptance gate: same-checkpoint Metal measurements on Mac Studio,
