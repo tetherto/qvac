@@ -24,6 +24,9 @@ export interface ResolvedOptions {
   readonly shim: boolean
   // Path to the node/bun runtime that hosts the serve. Auto-detected when unset.
   readonly runtime: string | undefined
+  // Absolute path to the `qvac` executable for the serve. Unset uses the
+  // bundled `@qvac/cli`.
+  readonly serveBinPath: string | undefined
   // Budget for the serve to become healthy, including a cold model download.
   readonly readyTimeoutMs: number
   // Budget for the host proxy to begin listening and hand over its handshake
@@ -43,6 +46,7 @@ export const DEFAULT_OPTIONS: ResolvedOptions = {
   tools: true,
   shim: true,
   runtime: undefined,
+  serveBinPath: undefined,
   readyTimeoutMs: 1_800_000,
   listenTimeoutMs: 30_000,
   debug: false,
@@ -103,6 +107,10 @@ export function mergeOptions(...sources: readonly RawOptions[]): ResolvedOptions
       merged.runtime === undefined
         ? DEFAULT_OPTIONS.runtime
         : coerceString('runtime', merged.runtime),
+    serveBinPath:
+      merged.serveBinPath === undefined
+        ? DEFAULT_OPTIONS.serveBinPath
+        : coerceString('serveBinPath', merged.serveBinPath),
     readyTimeoutMs:
       merged.readyTimeoutMs === undefined
         ? DEFAULT_OPTIONS.readyTimeoutMs
@@ -130,6 +138,7 @@ export function optionsFromEnv(env: NodeJS.ProcessEnv): RawOptions {
   if (env['QVAC_TOOLS'] !== undefined) raw.tools = env['QVAC_TOOLS']
   if (env['QVAC_SHIM'] !== undefined) raw.shim = env['QVAC_SHIM']
   if (env['QVAC_RUNTIME'] !== undefined) raw.runtime = env['QVAC_RUNTIME']
+  if (env['QVAC_SERVE_BIN_PATH'] !== undefined) raw.serveBinPath = env['QVAC_SERVE_BIN_PATH']
   if (env['QVAC_READY_TIMEOUT_MS'] !== undefined) raw.readyTimeoutMs = env['QVAC_READY_TIMEOUT_MS']
   if (env['QVAC_LISTEN_TIMEOUT_MS'] !== undefined) {
     raw.listenTimeoutMs = env['QVAC_LISTEN_TIMEOUT_MS']
@@ -189,6 +198,7 @@ export function hostEnv(options: ResolvedOptions): Record<string, string> {
     QVAC_TOOLS: String(options.tools),
     QVAC_SHIM: String(options.shim),
     QVAC_READY_TIMEOUT_MS: String(options.readyTimeoutMs),
-    QVAC_DEBUG: String(options.debug)
+    QVAC_DEBUG: String(options.debug),
+    ...(options.serveBinPath !== undefined ? { QVAC_SERVE_BIN_PATH: options.serveBinPath } : {})
   }
 }
