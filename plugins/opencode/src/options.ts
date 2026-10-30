@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 
 import { InvalidOptionError } from './errors.js'
 
@@ -65,6 +65,20 @@ function coerceString(option: string, value: unknown): string {
   return value
 }
 
+// Empty means unset, so `QVAC_SERVE_BIN_PATH=` keeps the bundled CLI and its
+// shared serve.
+function coerceServeBinPath(value: unknown): string | undefined {
+  const path = coerceString('serveBinPath', value)
+  if (path === '') return undefined
+  if (!isAbsolute(path)) {
+    throw new InvalidOptionError(
+      'serveBinPath',
+      `expected an absolute path, got ${JSON.stringify(path)}`
+    )
+  }
+  return path
+}
+
 function coerceNumber(option: string, value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) {
@@ -110,7 +124,7 @@ export function mergeOptions(...sources: readonly RawOptions[]): ResolvedOptions
     serveBinPath:
       merged.serveBinPath === undefined
         ? DEFAULT_OPTIONS.serveBinPath
-        : coerceString('serveBinPath', merged.serveBinPath),
+        : coerceServeBinPath(merged.serveBinPath),
     readyTimeoutMs:
       merged.readyTimeoutMs === undefined
         ? DEFAULT_OPTIONS.readyTimeoutMs

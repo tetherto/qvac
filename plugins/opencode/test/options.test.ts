@@ -40,8 +40,15 @@ test('mergeOptions rejects a non-boolean boolean option', () => {
   assert.throws(() => mergeOptions({ tools: 'maybe' }), InvalidOptionError)
 })
 
-test('mergeOptions rejects a non-string serveBinPath', () => {
+test('mergeOptions rejects a non-string or relative serveBinPath', () => {
   assert.throws(() => mergeOptions({ serveBinPath: 42 }), InvalidOptionError)
+  assert.throws(() => mergeOptions({ serveBinPath: 'bin/qvac' }), InvalidOptionError)
+})
+
+test('an empty serveBinPath counts as unset', () => {
+  const out = mergeOptions({ serveBinPath: '/opt/qvac-wrapper.sh' }, { serveBinPath: '' })
+  assert.equal(out.serveBinPath, undefined)
+  assert.equal('QVAC_SERVE_BIN_PATH' in hostEnv(out), false)
 })
 
 test('optionsFromEnv maps only the set QVAC_* vars', () => {

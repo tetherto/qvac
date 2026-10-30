@@ -64,11 +64,17 @@ if [ "$prompt" != "Reply with only the word qvac-ok." ]; then exit 92; fi
 # Start the serve through serveBinPath, as the plugin does.
 serve_bin=$(node -p "require('./opencode.json').plugin[0][1].serveBinPath")
 "$serve_bin" serve > /dev/null 2>&1 || exit 93
-# tee is async; wait for it to flush.
+# tee is async; wait for both streams to flush.
+flushed=0
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  grep -q 'tools=12' "$ARTIFACT_DIR/qvac-serve.stdout" 2>/dev/null && break
+  if grep -q 'tools=12' "$ARTIFACT_DIR/qvac-serve.stdout" 2>/dev/null &&
+    grep -q 'serve stderr line' "$ARTIFACT_DIR/qvac-serve.stderr" 2>/dev/null; then
+    flushed=1
+    break
+  fi
   sleep 0.2
 done
+[ "$flushed" = 1 ] || exit 94
 cat "$OPENCODE_TEST_OUTPUT"
 exit "$OPENCODE_TEST_EXIT_CODE"
 `, { mode: 0o755 })

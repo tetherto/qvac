@@ -93,19 +93,19 @@ Set from any of these sources (lowest to highest precedence): built-in defaults,
 a `qvac.json` in the project dir, the `opencode.json` plugin-tuple options, and
 `QVAC_*` environment variables.
 
-| Option (`qvac.json` / plugin tuple) | Env                      | Default      | Meaning                                                                             |
-| ----------------------------------- | ------------------------ | ------------ | ----------------------------------------------------------------------------------- |
-| `model`                             | `QVAC_MODEL`             | `qwen3.5-9b` | friendly id or a raw QVAC constant                                                  |
-| `ctxSize`                           | `QVAC_CTX_SIZE`          | `32768`      | serve context window (an agent's prompt + tool schemas need ≥ 32768)                |
-| `reasoningBudget`                   | `QVAC_REASONING_BUDGET`  | `-1`         | `-1` = reasoning on, `0` = off                                                      |
-| `tools`                             | `QVAC_TOOLS`             | `true`       | enable the tool-calling chat template                                               |
-| `shim`                              | `QVAC_SHIM`              | `true`       | apply the OpenAI-compat transforms (see below)                                      |
-| `runtime`                           | `QVAC_RUNTIME`           | auto         | path to the node/bun runtime that hosts the serve                                   |
-| `serveBinPath`                      | `QVAC_SERVE_BIN_PATH`    | auto         | absolute path to the `qvac` executable for the serve (default: bundled `@qvac/cli`) |
-| `readyTimeoutMs`                    | `QVAC_READY_TIMEOUT_MS`  | `1800000`    | budget for the serve to become healthy, incl. a cold model download                 |
-| `listenTimeoutMs`                   | `QVAC_LISTEN_TIMEOUT_MS` | `30000`      | budget for the host proxy to listen and hand over its handshake                     |
-| `setDefaultModel`                   | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default + small model                           |
-| `debug`                             | `QVAC_DEBUG`             | `false`      | mirror host milestones + per-request traces to stderr                               |
+| Option (`qvac.json` / plugin tuple) | Env                      | Default      | Meaning                                                                                    |
+| ----------------------------------- | ------------------------ | ------------ | ------------------------------------------------------------------------------------------ |
+| `model`                             | `QVAC_MODEL`             | `qwen3.5-9b` | friendly id or a raw QVAC constant                                                         |
+| `ctxSize`                           | `QVAC_CTX_SIZE`          | `32768`      | serve context window (an agent's prompt + tool schemas need ≥ 32768)                       |
+| `reasoningBudget`                   | `QVAC_REASONING_BUDGET`  | `-1`         | `-1` = reasoning on, `0` = off                                                             |
+| `tools`                             | `QVAC_TOOLS`             | `true`       | enable the tool-calling chat template                                                      |
+| `shim`                              | `QVAC_SHIM`              | `true`       | apply the OpenAI-compat transforms (see below)                                             |
+| `runtime`                           | `QVAC_RUNTIME`           | auto         | path to the node/bun runtime that hosts the serve                                          |
+| `serveBinPath`                      | `QVAC_SERVE_BIN_PATH`    | auto         | absolute path to the `qvac` executable for the serve (unset or empty: bundled `@qvac/cli`) |
+| `readyTimeoutMs`                    | `QVAC_READY_TIMEOUT_MS`  | `1800000`    | budget for the serve to become healthy, incl. a cold model download                        |
+| `listenTimeoutMs`                   | `QVAC_LISTEN_TIMEOUT_MS` | `30000`      | budget for the host proxy to listen and hand over its handshake                            |
+| `setDefaultModel`                   | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default + small model                                  |
+| `debug`                             | `QVAC_DEBUG`             | `false`      | mirror host milestones + per-request traces to stderr                                      |
 
 Via the plugin tuple in `opencode.json`:
 
