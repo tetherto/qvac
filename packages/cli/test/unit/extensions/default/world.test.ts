@@ -48,6 +48,11 @@ describe('worldSceneBody', () => {
     )
   })
 
+  it('checks the area against the default for a side left out', () => {
+    assert.deepEqual(failedPaths(worldSceneBody.safeParse({ ...SCENE, height: 2560 })), ['height'])
+    assert.equal(worldSceneBody.safeParse({ ...SCENE, height: 1088 }).success, true)
+  })
+
   it('requires a prompt', () => {
     assert.deepEqual(failedPaths(worldSceneBody.safeParse({ ...SCENE, prompt: '' })), ['prompt'])
   })
@@ -60,10 +65,14 @@ describe('worldSceneBody', () => {
 })
 
 describe('worldStepBody', () => {
-  it('accepts no keys, an array, or the multipart JSON form', () => {
+  it('accepts no keys or an array', () => {
     assert.equal(worldStepBody.safeParse({}).success, true)
     assert.deepEqual(worldStepBody.parse({ keys: ['W', 'J'] }).keys, ['W', 'J'])
-    assert.deepEqual(worldStepBody.parse({ keys: '["S"]' }).keys, ['S'])
+  })
+
+  it('rejects keys or stream sent as strings', () => {
+    assert.deepEqual(failedPaths(worldStepBody.safeParse({ keys: '["S"]' })), ['keys'])
+    assert.deepEqual(failedPaths(worldStepBody.safeParse({ stream: 'true' })), ['stream'])
   })
 
   it('rejects an unknown key', () => {
