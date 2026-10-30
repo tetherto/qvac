@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: the GPU devices the
+  placement uses, then the host. `status` is `fits`, `does-not-fit` or
+  `unknown`; a placement the fitter had to change is `does-not-fit`. An
+  invalid request or a load the engine cannot measure rejects
+  ([#5477](https://github.com/tetherto/qvac/pull/5477)).
+
 ### Added
 
 - Linux ARM64 and x64 releases include a dynamically loaded CUDA backend
