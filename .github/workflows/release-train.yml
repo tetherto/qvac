@@ -20,7 +20,7 @@ on:
       - release-train-*
 
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - release-train-*
 
@@ -178,7 +178,7 @@ jobs:
           TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
         run: pnpm exec nx run-many -t prepublishOnly --projects="$TRAIN_PROJECTS"
 
-      # The publish job compares what npm stores against these tarballs. Packing
+      # The served job compares what npm stores against these tarballs. Packing
       # also fails on a package whose dist/ is empty.
       - name: Pack the train
         env:
@@ -310,9 +310,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # The gate both publish jobs wait for: the build passed, and so did every
-  # check the train lists. A check the train does not list is skipped. Each
-  # check kind is the id of its job.
+  # The gate both publish jobs wait for: the train resolved, the run is
+  # authorized, the build passed, and so did every check the train lists. A
+  # check the train does not list is skipped. Each check kind is the id of its
+  # job. It runs on every outcome, because a required check that is skipped
+  # counts as passed.
   checks-passed:
     name: Train checks passed
     needs:
@@ -322,11 +324,7 @@ jobs:
       - shared-runtime-libs
       - package-checks
       - sdk-python
-    if: >-
-      !cancelled() &&
-      needs.authorize.outputs.allowed == 'true' &&
-      needs.train.result == 'success' &&
-      needs.train.outputs.moved != '[]'
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -334,9 +332,24 @@ jobs:
         shell: bash
         env:
           NEEDS: ${{ toJSON(needs) }}
+          TRAIN_RESULT: ${{ needs.train.result }}
+          ALLOWED: ${{ needs.authorize.outputs.allowed }}
+          MOVED: ${{ needs.train.outputs.moved }}
           CHECKS: ${{ needs.train.outputs.checks }}
         run: |
           set -euo pipefail
+          if [ "$TRAIN_RESULT" != "success" ]; then
+            echo "::error::The train did not resolve: $TRAIN_RESULT"
+            exit 1
+          fi
+          if [ "$ALLOWED" != "true" ]; then
+            echo "::error::This run is not authorized; see the authorize job"
+            exit 1
+          fi
+          if [ "$MOVED" = "[]" ]; then
+            echo "No train package moved; nothing to check."
+            exit 0
+          fi
           FAILED=$(jq -r --argjson checks "$CHECKS" '
             . as $needs
             | (["build"] + $checks)[]
@@ -350,23 +363,24 @@ jobs:
 
   # checks-passed needs every check job, and a train skips the ones it does not
   # list. Without a status function GitHub skips any job below a skipped one,
-  # so each job from here to published-checks names the result it waits for.
+  # so each job from here on names the result it waits for.
   publish-npm:
     name: Publish the train to npm
     needs: [train, checks-passed]
     if: >-
       !cancelled() &&
       needs.checks-passed.result == 'success' &&
+      needs.train.outputs.moved != '[]' &&
       needs.train.outputs.dry_run != 'true' &&
       !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: npm
-    outputs:
-      published: ${{ steps.publish.outputs.published }}
     permissions:
       contents: read
       id-token: write
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -391,12 +405,6 @@ jobs:
         with:
           name: dist-${{ needs.train.outputs.name }}
 
-      - name: Download train tarballs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: tarballs-${{ needs.train.outputs.name }}
-          path: ${{ runner.temp }}/train-tarballs
-
       # pnpm 11 reads PNPM_CONFIG_* and ignores NPM_CONFIG_*. Lifecycle scripts
       # stay off so inference's `prepare` does not rebuild over the downloaded
       # dist.
@@ -406,7 +414,7 @@ jobs:
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           PNPM_CONFIG_PROVENANCE: "true"
           MOVED: ${{ needs.train.outputs.moved }}
-        run: node .github/scripts/release-train.mjs publish "$MOVED" --tarballs="$RUNNER_TEMP/train-tarballs"
+        run: node .github/scripts/release-train.mjs publish "$MOVED"
 
   # The same publish with --dry-run, as a release PR check or a dispatch with
   # dry_run. No environment and no id-token: it never needs to authenticate.
@@ -416,6 +424,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.checks-passed.result == 'success' &&
+      needs.train.outputs.moved != '[]' &&
       needs.train.outputs.dry_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -443,25 +452,22 @@ jobs:
         with:
           name: dist-${{ needs.train.outputs.name }}
 
-      - name: Download train tarballs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: tarballs-${{ needs.train.outputs.name }}
-          path: ${{ runner.temp }}/train-tarballs
-
       - name: Publish the train (dry run)
         env:
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           MOVED: ${{ needs.train.outputs.moved }}
-        run: node .github/scripts/release-train.mjs publish "$MOVED" --tarballs="$RUNNER_TEMP/train-tarballs" --dry-run
+        run: node .github/scripts/release-train.mjs publish "$MOVED" --dry-run
 
+  # From here on, each job also runs when publish-npm published nothing because
+  # npm already had every version from this commit: a re-run after a later job
+  # failed. Each job skips what already exists from this commit and fails on
+  # what exists from another.
   served:
     name: Wait until npm serves the train
     needs: [train, publish-npm]
     if: >-
       !cancelled() &&
-      needs.publish-npm.result == 'success' &&
-      needs.publish-npm.outputs.published == 'true'
+      needs.publish-npm.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -470,10 +476,21 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Wait
+      - name: Download train tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: tarballs-${{ needs.train.outputs.name }}
+          path: ${{ runner.temp }}/train-tarballs
+
+      # Compares only what this run published: re-running every job or a
+      # dispatch rebuilds the tarballs, and a rebuild can pack other bytes.
+      # Re-running failed jobs keeps publish-npm's output from the attempt that
+      # published.
+      - name: Wait and compare with the built tarballs
         env:
           MOVED: ${{ needs.train.outputs.moved }}
-        run: node .github/scripts/release-train.mjs wait "$MOVED"
+          PUBLISHED: ${{ needs.publish-npm.outputs.published }}
+        run: node .github/scripts/release-train.mjs wait "$MOVED" "$PUBLISHED" "$RUNNER_TEMP/train-tarballs"
 
   # The same checks against what npm now serves. Tags, the GitHub release,
   # PyPI and the wheels wait for them.
@@ -500,17 +517,17 @@ jobs:
       - authorize
       - train
       - sdk-python
-      - publish-npm
+      - served
       - published-checks
     if: >-
-      always() &&
+      !cancelled() &&
       github.repository == 'tetherto/qvac' &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.sdk-python.result == 'success' &&
       needs.train.outputs.release_version != '' &&
       (
         (
-          needs.publish-npm.outputs.published == 'true' &&
+          needs.served.result == 'success' &&
           (needs.published-checks.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks'))
         )
         ||
@@ -534,21 +551,27 @@ jobs:
           name: dist-sdk-python
           path: dist
 
+      # A PyPI file records no commit. tetherto-qvac-sdk has @qvac/sdk's version
+      # (sdk-python checks it), and once served passed, npm has that version
+      # from this commit, so a file PyPI already has comes from this commit.
+      # publish_pypi_only runs without served, so there an existing file fails.
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          skip-existing: ${{ needs.served.result == 'success' }}
 
-  # Tags go on the commit npm records as each version's gitHead. The GitHub
-  # release makes its own package's tag.
+  # Tags go on the commit npm records as each version's gitHead, the GitHub
+  # release's tag included.
   tag:
     name: Tag the published packages
     needs:
       - train
-      - publish-npm
+      - served
       - published-checks
     if: >-
-      always() &&
-      needs.publish-npm.result == 'success' &&
-      (needs.published-checks.result == 'success' || needs.publish-npm.outputs.published != 'true' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks'))
+      !cancelled() &&
+      needs.served.result == 'success' &&
+      (needs.published-checks.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -561,24 +584,23 @@ jobs:
 
       - name: Tag
         env:
-          TRAIN: ${{ needs.train.outputs.name }}
           MOVED: ${{ needs.train.outputs.moved }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          node .github/scripts/release-train.mjs tag "$TRAIN" "$MOVED" --push
+          node .github/scripts/release-train.mjs tag "$MOVED" --push
 
+  # Created on the tag the tag job checked against npm's gitHead. An existing
+  # release on that tag gets its notes updated.
   github-release:
     name: Create the GitHub release
     needs:
       - train
-      - publish-npm
-      - published-checks
+      - tag
     if: >-
-      always() &&
-      needs.publish-npm.outputs.published == 'true' &&
-      needs.train.outputs.release_version != '' &&
-      (needs.published-checks.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks'))
+      !cancelled() &&
+      needs.tag.result == 'success' &&
+      needs.train.outputs.release_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
@@ -594,7 +616,7 @@ jobs:
     needs:
       - train
       - github-release
-    if: always() && needs.github-release.result == 'success' && contains(fromJSON(needs.train.outputs.checks), 'sdk-python')
+    if: ${{ !cancelled() && needs.github-release.result == 'success' && contains(fromJSON(needs.train.outputs.checks), 'sdk-python') }}
     permissions:
       contents: write
     uses: ./.github/workflows/build-sdk-python-fat-wheels.yml

@@ -43,7 +43,7 @@ runs:
           }
 
           function artifactName(family, platform) {
-            return family === 'android' || family === 'ios'
+            return family === 'android' || family === 'kotlin-android' || family === 'ios'
               ? `results-${family}`
               : `results-${family}-${platform}`;
           }

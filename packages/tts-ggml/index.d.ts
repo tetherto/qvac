@@ -105,6 +105,8 @@ declare namespace TTSGgml {
     type TTSGgmlRuntimeConfig = PublicTypes.TTSGgmlRuntimeConfig;
     type TTSGgmlOptions = PublicTypes.TTSGgmlOptions;
     type LavaSREnhancerOptions = PublicTypes.LavaSREnhancerOptions;
+    type LavaSRCoreMLComputeUnits = PublicTypes.LavaSRCoreMLComputeUnits;
+    type LavaSRCoreMLOptions = PublicTypes.LavaSRCoreMLOptions;
     type LavaSRDenoiserOptions = PublicTypes.LavaSRDenoiserOptions;
     type RuntimeStats = PublicTypes.RuntimeStats;
     type TTSOutputChunk = PublicTypes.TTSOutputChunk;

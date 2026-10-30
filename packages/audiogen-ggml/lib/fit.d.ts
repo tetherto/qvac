@@ -26,6 +26,9 @@ export interface AudiogenFitRequest {
    * > 0 projects `auto` (a GPU when one is usable) and anything else `cpu`.
    */
   device?: 'cpu' | 'gpu' | 'auto'
+  /** MiniMax full Core ML profile. Projection returns coreml-memory-estimate-unavailable. */
+  coremlProfileDir?: string
+  coremlComputeUnits?: 'CPU_ONLY' | 'CPU_AND_GPU' | 'CPU_AND_NE' | 'ALL'
   threads?: number
   backendsDir?: string
 

@@ -46,6 +46,17 @@ The consumers' own transitive dependencies (`@qvac/infer-base`, `@qvac/logging`,
 `bare-*`) are still resolved normally. On CI (where the private `@qvac` registry
 token is configured) `npm install` pulls them automatically.
 
+## nx project graph
+
+nx attributes the imports in this directory to `@qvac/fabric`, so requiring a
+consumer here would make fabric depend on it. Every consumer already depends on
+fabric, and the resulting cycle makes any change to that consumer select every
+fabric consumer in PR CI. `packages/fabric/project.json` therefore negates each
+imported consumer under `implicitDependencies` (`"!@qvac/llm-llamacpp"`,
+`"!@qvac/embed-llamacpp"`). If you require another consumer here, add its
+negation too; `.github/scripts/test/nx-fabric-graph-policy.test.mjs` fails until
+you do.
+
 ## Running
 
 From the package root (`packages/fabric`):
