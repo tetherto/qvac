@@ -4,9 +4,10 @@ name: SDK checks
 # typecheck, unit, generated and dependency targets, plus the pod's PR rules and release guard. release-train.yml calls it
 # with a train, whose packages it checks against the train's tarballs or npm.
 on:
+  # TEMP rehearsal: the feat/package-ci-contract-* base until the stack merges, as pr-build-test.yml.
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
-    branches: [main, release-*, feature-*, tmp-*]
+    branches: [main, release-*, feature-*, tmp-*, feat/package-ci-contract-*]
   workflow_dispatch:
     inputs:
       packages:
