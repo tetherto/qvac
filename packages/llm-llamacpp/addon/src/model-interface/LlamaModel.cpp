@@ -797,9 +797,9 @@ bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
     return false;
   }
   // A prefill earns a lane exactly when its product survives the slot
-  // teardown: a keyed conversation stays in its sequence for the next request
-  // on that key. A keyless prefill's product is warm state in the shared
-  // single context, which a lane wipes.
+  // teardown as a conversation: a keyed one stays in its sequence for the
+  // next request on that key. A lane keeps a keyless request's state at most
+  // anonymously, first to be evicted, which no request can count on.
   return !prompt.prefill || !prompt.cacheKey.empty();
 }
 
@@ -1643,15 +1643,15 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
           "processPromptBatch: finetuning is not a batch processing operation");
     }
     // Same keyless prefill policy as the single-prompt path: batch items
-    // always run in scheduler lanes, and a lane wipes a keyless request's
-    // warmed KV at teardown, so it would produce nothing reachable.
+    // always run in scheduler lanes, and a lane keeps a keyless request's
+    // state at most anonymously, first to be evicted and never written.
     if (!isConcurrentEligible(prompt)) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: prefill without a cacheKey cannot run on a "
-          "parallel model: its warmed context is unreachable by concurrent "
-          "jobs; set a cacheKey or load with parallel=1");
+          "parallel model: its warmed state would belong to no conversation; "
+          "set a cacheKey or load with parallel=1");
     }
     ParsedPromptPayload parsed = formatPrompt(prompt.input);
     if (parsed.chatMsgs.empty()) {

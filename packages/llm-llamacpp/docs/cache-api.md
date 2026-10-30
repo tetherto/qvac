@@ -54,9 +54,9 @@ conversation](./cache-lifecycle.md#starting-from-another-conversation).
 
 ## Prefill on a parallel model (`parallel >= 2`)
 
-A prefill-only run warms context state without generating. On a model loaded with `parallel >= 2` that state lives in a scheduler slot, and concurrent jobs can only reach it through its `cacheKey`, so the prefill needs a `cacheKey`: the warmed conversation then stays in its slot for the next request on that key.
+A prefill-only run warms context state without generating. On a model loaded with `parallel >= 2` that state lives in a scheduler slot, and only its `cacheKey` keeps it for a later request (without one it is at most parked anonymously, first to be evicted and never written), so the prefill needs a `cacheKey`: the warmed conversation then stays in its slot for the next request on that key.
 
-A *keyless* prefill is therefore rejected with `InvalidArgument` on a parallel model, both as a single `run()` and per batch item, rather than silently producing nothing. Load with `parallel: 1` if you want keyless cache warming, where the warmed context is reused by the next run on that instance.
+A *keyless* prefill is therefore rejected with `InvalidArgument` on a parallel model, both as a single `run()` and per batch item, rather than producing state no request can count on. Load with `parallel: 1` if you want keyless cache warming, where the warmed context is reused by the next run on that instance.
 
 See [continuous-batching.md](continuous-batching.md#prefill-rules-keyed-vs-keyless) for the scheduler-side rules.
 

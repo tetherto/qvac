@@ -1522,10 +1522,9 @@ namespace LlmLlamacpp {
      * Run prefill only (cache warming): the prompt is evaluated but no tokens
      * are generated. On a model loaded with `parallel >= 2` a prefill needs a
      * `cacheKey` (the warmed conversation stays in its slot for the next
-     * request on that key) — a keyless prefill warms context state that no
-     * concurrent job could reach and is rejected with `InvalidArgument`; run
-     * keyless prefills on a `parallel: 1` model. The same rule applies per
-     * batch item.
+     * request on that key) — a keyless prefill warms state no later request
+     * can count on and is rejected with `InvalidArgument`; run keyless
+     * prefills on a `parallel: 1` model. The same rule applies per batch item.
      */
     prefill?: boolean;
     generationParams?: GenerationParams;

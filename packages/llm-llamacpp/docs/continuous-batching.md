@@ -136,7 +136,7 @@ The instance default follows `parallel` (`true` at `1`, `false` at `>= 2`); `opt
 
 ### Prefill rules (keyed vs keyless)
 
-A prefill-only item (`runOptions.prefill: true`) earns a scheduler lane exactly when its product survives the slot teardown: it has a `cacheKey`, so the warmed conversation stays parked in its sequence for the next request on that key (and can be written with `saveCache()`). A *keyless* prefill's product is warm state in a context that concurrent jobs can never reach, so on a parallel model it is rejected with `InvalidArgument` — both as a single `run()` and per batch item. Load with `parallel: 1` for keyless cache warming. See [cache-api.md](cache-api.md).
+A prefill-only item (`runOptions.prefill: true`) earns a scheduler lane exactly when its product survives the slot teardown: it has a `cacheKey`, so the warmed conversation stays parked in its sequence for the next request on that key (and can be written with `saveCache()`). A *keyless* prefill's product is at most an anonymous parked state, first to be evicted and never written, that no request can count on, so on a parallel model it is rejected with `InvalidArgument` — both as a single `run()` and per batch item. Load with `parallel: 1` for keyless cache warming. See [cache-api.md](cache-api.md).
 
 ### Stats
 
