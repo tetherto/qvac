@@ -176,8 +176,7 @@ runs:
             CURRENT_LATEST="${NPM_OUT:-0.0.0}"
           fi
 
-          # Two-part defence for prerelease versions (e.g. "0.16.0-rc.1",
-          # produced by .github/workflows/release-pr.yml when run with --preid):
+          # Two-part defence for prerelease versions (e.g. "0.16.0-rc.1"):
           #
           #  1. core() strips the "-rc.1" suffix before splitting on "." so
           #     numeric compare is well-defined. Without this, the third

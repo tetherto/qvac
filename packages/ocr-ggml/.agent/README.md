@@ -128,7 +128,7 @@ The orchestrator stops and reports at any failure point. The current status is r
 
 Native addon packages have full CI workflows. See the **CI Package Mapping** table in `.agent/knowledge/ci-validation.md` for the list of 8 packages with CI and their short names.
 
-SDK/TS packages get automatic PR checks via `pr-checks-sdk-pod`. All other packages (simple libraries, docs, config) have no CI triggers.
+SDK/TS packages get automatic PR checks via `pr-checks.yml`. All other packages (simple libraries, docs, config) have no CI triggers.
 
 ## Agents
 

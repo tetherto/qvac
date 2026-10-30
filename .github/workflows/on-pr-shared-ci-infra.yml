@@ -67,10 +67,9 @@ jobs:
       - name: Run prebuild symbols verifier selector unit tests
         run: node --test .github/actions/select-prebuild-symbols-verifier/test/*.test.mjs
 
-  # The per-addon benchmark aggregators are plain Node scripts shared by the
-  # benchmark and perf-report workflows, which only run on demand — so without
-  # this job a broken normalizer would not surface until someone triggered a
-  # sweep.
+  # The per-addon benchmark aggregators are plain Node scripts that benchmarks.yml
+  # runs only on dispatch and in its weekly perf report, so without this job a
+  # broken normalizer would not surface until someone triggered a sweep.
   perf-report-unit-tests:
     name: perf-report aggregator unit tests
     runs-on: ubuntu-latest

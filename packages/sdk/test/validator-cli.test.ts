@@ -3,7 +3,7 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
-const VALIDATOR_PATH = path.join(import.meta.dirname, '../../../scripts/sdk/validator.cjs')
+const VALIDATOR_PATH = path.join(import.meta.dirname, '../ci/validator.cjs')
 const MOCKS_DIR = path.join(import.meta.dirname, './mocks')
 
 function loadMock(filename: string): string {

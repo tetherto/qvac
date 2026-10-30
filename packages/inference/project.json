@@ -1,0 +1,61 @@
+{
+  "name": "@qvac/inference",
+  "root": "packages/inference",
+  "tags": ["ci:sdk"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/inference",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/inference",
+        "command": "pnpm run typecheck"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/inference",
+        "command": "pnpm run build"
+      },
+      "dependsOn": []
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/inference",
+        "command": "pnpm run test:bare"
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "setup": ["bare"],
+        "sources": ["npm"]
+      }
+    },
+    "verify:deps": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": false,
+        "commands": [
+          "node --test .github/scripts/test/shared-runtime-libs.test.mjs",
+          "node .github/scripts/check-shared-runtime-libs.mjs packages/inference"
+        ]
+      }
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "inference",
+          "releaseGuard": true
+        }
+      }
+    }
+  }
+}

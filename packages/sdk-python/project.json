@@ -1,4 +1,126 @@
 {
   "name": "@qvac/sdk-python",
-  "root": "packages/sdk-python"
+  "root": "packages/sdk-python",
+  "tags": ["ci:sdk"],
+  "implicitDependencies": ["@qvac/sdk", "sdk-e2e"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "parallel": false,
+        "commands": ["node ci/python.mjs format", "node ci/python.mjs lint"]
+      },
+      "metadata": {
+        "setup": ["python"]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "command": "node ci/python.mjs typecheck"
+      },
+      "metadata": {
+        "setup": ["python"]
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "command": "node ci/python.mjs unit"
+      },
+      "metadata": {
+        "setup": ["python"]
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "command": "node ci/python.mjs generated"
+      },
+      "metadata": {
+        "setup": ["python"]
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "commands": [
+          {
+            "command": "node ci/python.mjs e2e",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "ubuntu_latest",
+            "setup": ["python"],
+            "labels": {
+              "test-e2e-smoke": "fast"
+            }
+          }
+        },
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu",
+            "labels": {
+              "test-e2e-full": "full"
+            }
+          }
+        },
+        "darwin-arm64-gpu": {
+          "ci": {
+            "runner": "macos_arm64_gpu",
+            "labels": {
+              "test-e2e-full": "full"
+            }
+          }
+        },
+        "win32-x64-gpu": {
+          "ci": {
+            "runner": "win_2025_x64_gpu",
+            "labels": {
+              "test-e2e-full": "full"
+            }
+          }
+        },
+        "linux-x64-wheel": {
+          "args": "--platform manylinux_2_35_x86_64",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu",
+            "labels": {
+              "test-wheel-e2e": "wheel"
+            }
+          }
+        },
+        "darwin-arm64-wheel": {
+          "args": "--platform macosx_11_0_arm64",
+          "ci": {
+            "runner": "macos_arm64_gpu",
+            "labels": {
+              "test-wheel-e2e": "wheel"
+            }
+          }
+        },
+        "win32-x64-wheel": {
+          "args": "--platform win_amd64",
+          "ci": {
+            "runner": "win_2025_x64_gpu",
+            "labels": {
+              "test-wheel-e2e": "wheel"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 60
+      }
+    }
+  }
 }

@@ -305,5 +305,20 @@
     "tsc-alias": "^1.8.17",
     "typescript": "^5.9.3",
     "@qvac/ggml-rpc-server": "^0.7.0"
+  },
+  "nx": {
+    "includedScripts": [
+      "lint:fix",
+      "format",
+      "format:fix",
+      "compile",
+      "postcompile:aliases",
+      "prepare",
+      "build:test",
+      "test",
+      "test:bare",
+      "check-models",
+      "update-models"
+    ]
   }
 }

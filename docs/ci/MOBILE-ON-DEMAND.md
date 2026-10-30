@@ -9,6 +9,9 @@ All 16 mobile addons are on the CI contract and run through one workflow,
 `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`,
 `ggml-rpc-server`, `inference-addon-cpp`, `llm-llamacpp`, `model-fit`,
 `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml` and `vla-ggml`.
+The SDK runs there too, with its own consumer app: `@qvac/sdk` on Android and
+iOS, and `sdk-kotlin` (the Kotlin SDK's app) on Android. See
+[The SDK's e2e apps](#the-sdks-e2e-apps).
 
 ## How to run a mobile test
 
@@ -457,6 +460,28 @@ what pushes a shard-heavy addon over: `llm-llamacpp` iOS with 3 devices is
 `13 × 3 = 39`, and a fourth breaks the cap. If you exceed it, either **add a
 `tests` filter** (drops `specs` to 1) or **reduce devices**. Both caps fail fast
 and free.
+
+## The SDK's e2e apps
+
+`@qvac/sdk` and `sdk-kotlin` are producer packages, and they run from `sdk-e2e.yml`,
+not `mobile-tests.yml`: their `test:mobile` builds the SDK e2e consumer app from
+`packages/sdk-e2e`, and the run drives it over MQTT from the runner instead of a
+test package on the device. Dispatch `sdk-e2e.yml` with `platform`:
+
+- `pool` names one Device Farm pool from the `SDK_ANDROID_DEVICE_FARM_POOLS` or
+  `SDK_IOS_DEVICE_FARM_POOLS` repository variable. Leave it empty to take an
+  available private pool first, else a random public one.
+- `tests` takes comma-separated catalog categories or testId prefixes, not a
+  mocha `--grep`; empty runs the full catalog.
+- The app always builds this commit's `packages/sdk`, `packages/inference` and
+  `packages/test-suite`.
+- The job summary compares the results with the newest dispatch run's on the
+  base branch, and `<package>-results-<configuration>` holds the reports.
+
+```bash
+gh workflow run sdk-e2e.yml --ref <branch> -f platform=Android -f packages=@qvac/sdk
+gh workflow run sdk-e2e.yml --ref <branch> -f platform=Android -f packages=sdk-kotlin
+```
 
 ## PRs and Merge Guard
 

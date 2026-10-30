@@ -160,53 +160,47 @@ npx tsx benchmark.ts full --config "$BENCHMARK_CONFIG_PATH"
 ```
 
 CI: PR / CLI `test:unit` runs harness unit tests. Dispatch
-`.github/workflows/benchmark-cli-serve-openai-providers.yml` with `mode=smoke` or
-`mode=full` for live providers. See "CI dispatch" below for the immutable-SHA and
-`benchmark-live` requirements.
+`.github/workflows/benchmarks.yml` with `packages=cli`, `configs=darwin-arm64-live`
+and `args=smoke` or `args=full` for live providers. See "CI dispatch" below for the
+immutable-SHA and environment requirements.
 
 Smoke is a hard gate: all three providers must return streaming usage, non-empty content, and reasoning-off before `full`.
 
-## CI dispatch (`benchmark-live`)
+## CI dispatch (`release`)
 
-The live sweep runs on the self-hosted `qvac-macos26-arm64-gpu` runner and is
-protected end to end. Configure the following **before** dispatching, or the run
-will fail closed.
+The live sweep runs on the self-hosted `qvac-macos26-arm64-gpu` runner.
+Configure the following **before** dispatching, or the run will fail closed.
 
 ### Immutable target SHA
 
-The workflow's only ref input is `target_sha`, which must be a full
-40-character commit SHA (`^[0-9a-fA-F]{40}$`). Branch names, tags, and short
-SHAs are rejected. A GitHub-hosted `validate-target` job checks the format,
-resolves it to a commit, requires the resolved commit to equal the supplied SHA,
-checks out that exact commit, and runs the harness typecheck + tests before the
-self-hosted job is allowed to start. Resolve the SHA yourself, e.g.:
+A dispatch runs the commit its ref pointed at when it was dispatched
+(`github.sha`). Before installing anything, cli's `ci/benchmark.mjs live` checks
+that `github.sha` is a full 40-character commit SHA and that the checkout is
+exactly that commit. The harness typecheck and tests run in cli's `test:unit` on
+every PR that changes the CLI. To benchmark a reviewed commit, dispatch from a
+branch whose head is that commit, and check it, e.g.:
 
 ```bash
-git rev-parse HEAD        # or the reviewed commit you intend to benchmark
+git rev-parse HEAD        # the reviewed commit you intend to benchmark
 ```
 
-### `benchmark-live` environment (one-time setup)
+### `release` environment variables (one-time setup)
 
-Create a repository **environment** named `benchmark-live` (Settings →
-Environments) and configure:
+The live job runs in the repository's `release` environment, like every
+desktop configuration of the contract. Its deployment branch rule limits the
+branches a dispatch can run from; no reviewer approves the run. Set these
+**environment variables** (not secrets) on `release`:
 
-- **Required reviewers** — at least one trusted maintainer. The `live` job pauses
-  for manual approval before it checks out, installs, or runs anything on the
-  self-hosted runner. Approval attests to the selected target commit's benchmark
-  harness code and dependency install scripts, not only to the protected
-  external config. This replaces the former label gate.
-- **Deployment branch rule** — restrict the environment to the branches that are
-  allowed to dispatch it (e.g. `main`, `release-*`). Dispatches from other
-  branches cannot access the environment's variables and are blocked.
-- **Environment variables** (not secrets — plain environment variables):
+| Variable                     | Value                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| `BENCHMARK_CONFIG_PATH`      | Absolute path to the runner-local `benchmark.yaml` (filled model IDs + `gguf_path`) |
+| `BENCHMARK_ENVIRONMENT_PATH` | Absolute path to the runner-local, filled-in copy of this `environment.md`          |
 
-  | Variable                     | Value                                                                               |
-  | ---------------------------- | ----------------------------------------------------------------------------------- |
-  | `BENCHMARK_CONFIG_PATH`      | Absolute path to the runner-local `benchmark.yaml` (filled model IDs + `gguf_path`) |
-  | `BENCHMARK_ENVIRONMENT_PATH` | Absolute path to the runner-local, filled-in copy of this `environment.md`          |
+The job also reads the `AWS_OIDC_ROLE_ARN` and `MODEL_S3_BUCKET` secrets that
+every desktop configuration of the contract uses.
 
 Both paths must be **absolute** and must point **outside** `GITHUB_WORKSPACE`.
-The `live` job rejects unset, relative, workspace-contained, missing, or
+The live job rejects unset, relative, workspace-contained, missing, or
 unreadable paths. It resolves the workspace and both files to their canonical
 paths first, so symlinks into the workspace are also rejected. Resolution
 failures stop the job. Keeping the real config off the checked-out tree means

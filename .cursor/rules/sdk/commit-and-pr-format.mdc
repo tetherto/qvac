@@ -12,5 +12,5 @@ alwaysApply: false
 # Commit and pull-request format
 
 Follow `docs/gitflow.md` and the applicable pull-request template. Treat
-`scripts/sdk/validator.cjs`, commit hooks, and CI as authoritative for accepted
+`packages/sdk/ci/validator.cjs`, commit hooks, and CI as authoritative for accepted
 prefixes, tags, title syntax, and required body sections.

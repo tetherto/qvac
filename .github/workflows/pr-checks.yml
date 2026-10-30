@@ -1,7 +1,7 @@
 name: PR checks
 
-# Lint, typecheck, unit tests and generated files for the changed packages on the CI contract and their dependents,
-# run through Nx from the PR's own targets: no secrets here, so the PR's tree is safe to execute and forks get real results.
+# Lint, typecheck, unit tests, generated files and dependency checks for the changed contract packages and dependents,
+# through Nx from the PR's own targets with no secrets, so forks get real results. The SDK pod (ci:sdk) runs sdk-checks.yml.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -24,7 +24,7 @@ jobs:
   select:
     uses: ./.github/workflows/_select-projects.yml
     with:
-      targets: lint,typecheck,test:unit,verify:generated
+      targets: lint,typecheck,test:unit,verify:generated,verify:deps
       packages: ${{ inputs.packages }}
 
   # A range on a workspace package that excludes its workspace version makes pnpm install the npm copy instead, so a
@@ -43,6 +43,25 @@ jobs:
         with:
           node-version: lts/*
       - run: node scripts/ci/check-workspace-ranges.mjs
+
+  # No git URLs and no dev or tmp prerelease pins in a contract package's dependencies.
+  disallowed-deps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout pull request
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - run: |
+          pnpm install --frozen-lockfile --ignore-scripts --filter .
+          node scripts/ci/check-disallowed-deps.mjs
 
   checks:
     needs: select
@@ -101,3 +120,8 @@ jobs:
         env:
           PROJECT: ${{ matrix.project.name }}
         run: pnpm exec nx run-many -t verify:generated -p "$PROJECT" --outputStyle=stream
+      - name: verify:deps
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.project.name }}
+        run: pnpm exec nx run-many -t verify:deps -p "$PROJECT" --outputStyle=stream

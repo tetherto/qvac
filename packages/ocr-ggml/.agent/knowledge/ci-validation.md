@@ -35,10 +35,10 @@ Packages: `sdk`, `bare-sdk`, `inference`, `cli`, `rag`, `logging`, `error`, `ai-
 
 | Workflow | File | Purpose |
 |----------|------|---------|
-| PR validation | `pr-validation-sdk-pod.yml` | Validate PR title/body format |
-| PR checks | `pr-checks-sdk-pod.yml` | Lint, typecheck, build, unit tests (dynamic matrix of changed packages) |
-| Publish | `publish-sdk.yml` | Build + publish SDK to GPR/npm |
-| Desktop tests | `test-sdk.yml` | GPU integration tests (currently workflow_dispatch only) |
+| PR validation | `pr-checks.yml` (pod-rules job) | Validate PR title/body format |
+| PR checks | `pr-checks.yml` | Lint, typecheck, build, unit tests (one job per changed package on the CI contract) |
+| Publish | `publish-npm.yml`, `publish-gpr.yml` | Build + publish SDK to npm, or to GitHub Packages by dispatch |
+| Desktop tests | `pr-build-test.yml` (`test:integration`) | GPU e2e on the `test-e2e-smoke`, `test-e2e-full` and `test-e2e-python` labels |
 | Release notes | `release-notes-check-<pkg>.yml` | Verify CHANGELOG matches version bumps |
 | GitHub release | `create-github-release-<pkg>.yml` | Create GitHub release on npm publish |
 
@@ -301,10 +301,10 @@ Replace `<pkg>` with the package directory name (e.g., `llm-llamacpp`):
 
 | What | File |
 |------|------|
-| PR format validation | `pr-validation-sdk-pod.yml` |
-| PR checks (lint, build, test) | `pr-checks-sdk-pod.yml` |
-| Publish | `publish-sdk.yml` |
-| Desktop GPU tests | `test-sdk.yml` |
+| PR format validation | `pr-checks.yml` (pod-rules job) |
+| PR checks (lint, build, test) | `pr-checks.yml` |
+| Publish | `publish-npm.yml` (npm), `publish-gpr.yml` (GitHub Packages, dispatch), `publish-pypi.yml` (PyPI) |
+| Desktop GPU tests | `pr-build-test.yml` (`test:integration`) |
 
 ### Simple libraries
 

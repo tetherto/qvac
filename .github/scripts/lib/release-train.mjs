@@ -71,9 +71,6 @@ export function loadTrain (name, catalog, nxJson) {
   if (unknown.length) {
     throw new Error(`Train '${name}': unknown checks ${unknown.join(', ')}; known: ${CHECK_KINDS.join(', ')}`)
   }
-  if (checks.includes('package-checks') && !train.packageChecks) {
-    throw new Error(`Train '${name}': package-checks needs packageChecks, the per-package check config`)
-  }
   return {
     name,
     projects,
@@ -81,7 +78,6 @@ export function loadTrain (name, catalog, nxJson) {
     fromNpm,
     githubRelease: train.githubRelease ?? null,
     checks,
-    packageChecks: train.packageChecks ?? null,
   }
 }
 

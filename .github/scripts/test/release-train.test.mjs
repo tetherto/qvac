@@ -91,10 +91,6 @@ test('a train inside another, versioned by one project', () => {
     () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, checks: ['lint-everything'] } }, NX_JSON),
     /unknown checks lint-everything/,
   )
-  assert.throws(
-    () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, checks: ['package-checks'] } }, NX_JSON),
-    /package-checks needs packageChecks/,
-  )
 })
 
 test('reads the train and anchor version from the branch name', () => {

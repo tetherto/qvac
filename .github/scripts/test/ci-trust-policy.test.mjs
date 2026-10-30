@@ -324,24 +324,19 @@ test("authorize-pr: external fork with pod label requires label and SHA", () => 
   );
 });
 
-test("sdk-python full e2e: no stale-label synchronize run; checkout pinned to head SHA", () => {
-  const src = read(".github/workflows/on-pr-sdk-python-e2e-full.yml");
-  // Trigger is exactly `types: [labeled]` — no synchronize (a stale
-  // test-e2e-full label must not re-run a new, unreviewed SHA).
+// The SDK's label-routed e2e (sdk-python's test-e2e-full GPU legs among them) runs from pr-build-test.yml.
+test("label-routed e2e: no stale-label synchronize run; checkout pinned to head SHA", () => {
+  // A label routes only on the event that applied it, so a stale label never
+  // re-runs a new, unreviewed SHA on the self-hosted GPU runners.
   assert.match(
-    src,
-    /types:\s*\[labeled\]\s*$/m,
-    "pull_request trigger must be [labeled] only (no synchronize)",
-  );
-  assert.doesNotMatch(
-    src,
-    /action == 'synchronize'/,
-    "run gate must not authorise a synchronize with a stale test-e2e-full label",
+    read(".github/scripts/select-projects.mjs"),
+    /event\.action === 'labeled' && event\.label/,
+    "a PR label must route only on its own labeled event",
   );
   assert.match(
-    src,
-    /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
-    "checkout must pin to the approved head SHA",
+    read(".github/workflows/_desktop.yml"),
+    /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha \|\| github\.sha\s*\}\}/,
+    "checkout must pin to the PR's head SHA",
   );
 });
 
@@ -361,44 +356,6 @@ test("authorize-pr: drafts are denied before internal or fork trust checks", () 
     }).allowed,
     "false",
   );
-});
-
-// SDK e2e: internal same-repo PRs run via dedicated labels; external forks rely
-// on fork-approval (fork-ci) + authorize-pr with pod-specific label inputs.
-const sdkE2eWorkflows = [".github/workflows/on-pr-test-sdk.yml"];
-
-test("sdk e2e: run gate uses fork-approval + authorize-pr, never hardcoded verified", () => {
-  for (const path of sdkE2eWorkflows) {
-    const source = read(path);
-    assert.match(
-      source,
-      /\bfork-approval:/,
-      `${path} defines a fork-approval gate job`,
-    );
-    assert.match(
-      source,
-      /uses:\s*\.\/\.github\/actions\/authorize-pr/,
-      `${path} uses the shared authorize-pr composite`,
-    );
-    assert.match(
-      source,
-      /needs:[\s\S]*?\bfork-approval\b/,
-      `${path} gates privileged jobs on fork-approval`,
-    );
-    // qvac/fork-verified commit status is expected; the retired label gate is not.
-    const functionalVerified = source
-      .split("\n")
-      .filter((line) => !line.trimStart().startsWith("#"))
-      .some((line) => {
-        const withoutForkStatus = line.replace(/fork-verified/g, "");
-        return withoutForkStatus.includes("verified");
-      });
-    assert.equal(
-      functionalVerified,
-      false,
-      `${path} must not hardcode a 'verified' gate outside comments`,
-    );
-  }
 });
 
 test("sdk e2e: internal PR authorised without verified; external fork stays gated", () => {
@@ -539,17 +496,6 @@ test("check-approvals no longer depends on verified and skips drafts", () => {
   assert.match(source, /!github\.event\.pull_request\.draft/);
 });
 
-const AWS_OIDC_SECRET = "AWS_OIDC_ROLE_ARN";
-
-const MOBILE_SDK_WORKFLOWS = [
-  "./.github/workflows/test-android-sdk.yml",
-  "./.github/workflows/test-ios-sdk.yml",
-];
-
-const JOB_SECRETS_KEY_RE = /^ {4}secrets:/;
-const SECRETS_ENTRY_RE = /^ {5,}/;
-const SECRETS_INHERIT_RE = /^ {4}secrets:[ \t]*inherit[ \t]*$/m;
-
 function workflowPaths() {
   return readdirSync(join(root, ".github/workflows"))
     .filter((name) => /\.ya?ml$/.test(name))
@@ -574,158 +520,6 @@ function withoutComments(block) {
     .map((line) => line.replace(/(^|\s)#.*$/, ""))
     .join("\n");
 }
-
-function linesUntilDedent(lines) {
-  const end = lines.findIndex(
-    (line) => line.trim() !== "" && !SECRETS_ENTRY_RE.test(line),
-  );
-  return end === -1 ? lines : lines.slice(0, end);
-}
-
-function secretsMapping(jobText) {
-  const lines = jobText.split("\n");
-  const start = lines.findIndex((line) => JOB_SECRETS_KEY_RE.test(line));
-  if (start === -1) return "";
-  return withoutComments(
-    [lines[start], ...linesUntilDedent(lines.slice(start + 1))].join("\n"),
-  );
-}
-
-function forwardsSecret(jobText, secret) {
-  const mapping = secretsMapping(jobText);
-  return (
-    SECRETS_INHERIT_RE.test(mapping) ||
-    new RegExp(`^ {6,}${secret}:`, "m").test(mapping)
-  );
-}
-
-function workflowCallHeader(source) {
-  const jobsIdx = source.search(/^jobs:\s*$/m);
-  return withoutComments(jobsIdx === -1 ? source : source.slice(0, jobsIdx));
-}
-
-function callLineCount(source, reusable) {
-  return withoutComments(source)
-    .split("\n")
-    .filter((line) => line.trim() === `uses: ${reusable}`).length;
-}
-
-function rawCallCount(reusable) {
-  return workflowPaths().reduce(
-    (total, path) => total + callLineCount(read(path), reusable),
-    0,
-  );
-}
-
-function assertDeclaresAwsRole(reusable) {
-  assert.match(
-    workflowCallHeader(read(reusable.replace("./", ""))),
-    new RegExp(`^ {6}${AWS_OIDC_SECRET}:`, "m"),
-    `${reusable} declares ${AWS_OIDC_SECRET} in on.workflow_call.secrets`,
-  );
-}
-
-function assertEveryCallWasParsed(reusable, callers) {
-  assert.equal(
-    callers.length,
-    rawCallCount(reusable),
-    `every \`uses: ${reusable}\` line resolves to a parsed caller job`,
-  );
-}
-
-function assertForwardsAwsRole(reusable, { path, job }) {
-  assert.ok(
-    forwardsSecret(job.text, AWS_OIDC_SECRET),
-    `${path} job '${job.name}' forwards ${AWS_OIDC_SECRET} to ${reusable}`,
-  );
-}
-
-function assertCallersForwardAwsRole(reusable) {
-  const callers = callersOf(reusable);
-  assertDeclaresAwsRole(reusable);
-  assertEveryCallWasParsed(reusable, callers);
-  callers.forEach((caller) => assertForwardsAwsRole(reusable, caller));
-}
-
-test("mobile SDK callers forward the AWS OIDC role to Device Farm jobs", () => {
-  // test-android-sdk.yml and test-ios-sdk.yml authenticate to Device Farm with
-  // `role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}`. That is a repository
-  // secret, so the `environment: release` jobs cannot resolve it on their own:
-  // a caller that omits it renders an empty role and every Device Farm job dies
-  // on "Could not load credentials".
-  //
-  // Both workflows must declare the secret, otherwise GitHub rejects any caller
-  // that passes it explicitly and `secrets: inherit` becomes the only legal
-  // shape. Caller jobs come from eachJob, which only sees a bare `job-name:`
-  // line, so compare against the raw `uses:` count: a caller the parser cannot
-  // see must fail here rather than silently go unchecked.
-  MOBILE_SDK_WORKFLOWS.forEach(assertCallersForwardAwsRole);
-});
-
-// Any indent, so reindenting a workflow header cannot quietly move a caller
-// into the exempt branch below.
-const DECLARES_REPOSITORY_INPUT_RE = /^\s{2,}repository:/m;
-
-// The key alone is not enough: `repository: ''` and `repository: ${{
-// github.repository }}` both parse yet leave the callee falling back to this
-// repo, which is the bug. The value has to carry the caller's own repository,
-// either directly (`inputs.repository`) or via a context job that derives it.
-const FORWARDS_REPOSITORY_RE =
-  /^\s*repository:\s*\$\{\{[^}]*(?:inputs\.repository|outputs\.repository)[^}]*\}\}/m;
-
-function declaresRepositoryInput(path) {
-  return DECLARES_REPOSITORY_INPUT_RE.test(workflowCallHeader(read(path)));
-}
-
-function assertPinsRepositoryWithRef(reusable, { path, job }) {
-  const block = withoutComments(job.text);
-  if (!/^\s*test-version:/m.test(block)) return;
-  if (!declaresRepositoryInput(path)) return;
-  assert.match(
-    block,
-    FORWARDS_REPOSITORY_RE,
-    `${path} job "${job.name}" passes test-version to ${reusable} without forwarding its own repository, so a fork ref would resolve against this repo`,
-  );
-}
-
-test("mobile SDK callers that can target a fork forward the repository too", () => {
-  // These workflows check out `test-version` from `inputs.repository ||
-  // github.repository`. A caller that can be pointed at a fork but forwards
-  // only the ref makes them resolve that ref against THIS repo: a fork-only
-  // branch fails to fetch, and a branch name that also exists here silently
-  // builds the wrong code while still reporting on the caller's addon.
-  // Callers with no `repository` input of their own are same-repo by
-  // construction and stay exempt.
-  MOBILE_SDK_WORKFLOWS.forEach((reusable) => {
-    const callers = callersOf(reusable);
-    assertEveryCallWasParsed(reusable, callers);
-    callers.forEach((caller) => assertPinsRepositoryWithRef(reusable, caller));
-  });
-});
-
-test("npm integration uses a dedicated run label, not verified", () => {
-  const source = read(".github/workflows/public-reusable-npm.yml");
-  const integrationStep = source.slice(
-    source.indexOf("name: Run integration tests if labeled"),
-  );
-  assert.match(integrationStep, /run-desktop-addon-tests/);
-  assert.doesNotMatch(integrationStep.split("name: Check for")[0], /verified/);
-});
-
-test("npm reusable pins PR checkout and keeps user input out of run scripts", () => {
-  const source = read(".github/workflows/public-reusable-npm.yml");
-  assert.match(
-    source,
-    /ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/,
-  );
-  assert.match(source, /persist-credentials: false/);
-
-  const echoScript = extractRunBlock(
-    ".github/workflows/public-reusable-npm.yml",
-    "Echo Step",
-  );
-  assert.doesNotMatch(echoScript, /\$\{\{\s*(github\.event|inputs\.)/);
-});
 
 const FORK_CI_ENV_RE =
   /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/;
@@ -1310,32 +1104,17 @@ test("publish-prebuild-status stamps its run URL into target_url", () => {
   );
 });
 
-test("infer-base publish jobs are gated on generated-artifact validation", () => {
-  const source = read(".github/workflows/trigger-reusable-infer-base.yml");
+test("infer-base publishes only after its generated artifacts check", () => {
+  const { targets } = JSON.parse(read("packages/infer-base/project.json"));
+  assert.match(targets["publish:pre"].options.command, /npm run test:types/);
+  assert.equal(targets["publish:pre"].options.cwd, "packages/infer-base");
 
-  const validate = jobBlock(source, "validate-artifacts");
-  assert.match(validate, /working-directory: packages\/infer-base/);
-  assert.match(validate, /npm run test:types/);
-
-  for (const job of [
-    "publish-main-gpr-dev",
-    "publish-release-npm",
-    "publish-feature-gpr",
-    "publish-tmp-gpr",
-  ]) {
-    const block = jobBlock(source, job);
-    assert.match(
-      block,
-      /needs:[\s\S]*?- validate-artifacts/,
-      `'${job}' declares validate-artifacts as a dependency`,
-    );
-    // Asserted explicitly rather than relying on implicit needs-failure
-    // skipping, which an always() in the same condition would defeat.
-    assert.match(
-      block,
-      /needs\.validate-artifacts\.result == 'success'/,
-      `'${job}' if-gates on validate-artifacts success`,
-    );
+  for (const workflow of ["publish-npm.yml", "publish-gpr.yml"]) {
+    const source = read(`.github/workflows/${workflow}`);
+    assert.match(source, /combine: verify=[^\n]*publish:pre/, `${workflow} runs publish:pre in its verify job`);
+    const publish = jobBlock(source, "publish");
+    assert.match(publish, /needs:[^\n]*verify/, `${workflow}'s publish job needs verify`);
+    assert.match(publish, /needs\.verify\.result == 'success'/, `${workflow}'s publish job gates on verify`);
   }
 });
 
@@ -1440,11 +1219,6 @@ const FORK_CI_EXEMPT = new Map([
     ".github/workflows/on-pr-community-label.yml",
     "No checkout: actions/github-script applies a label via the API only.",
   ],
-  [
-    ".github/workflows/pr-validation-sdk-pod.yml",
-    "Checks out the base branch (no ref: on a pull_request_target checkout) and " +
-      "runs a base-branch validator over PR title/body passed via env. No secrets.",
-  ],
 ]);
 
 function forkCiTargets() {
@@ -1505,10 +1279,10 @@ test("fork-ci: every pull_request_target verified-surface workflow has the fork-
   // dropped from 20 when transcription-* merged into asr-ggml, then to 18 when
   // ocr-onnx CI was retired on main, and the floor dropped again when the
   // per-package pull_request_target on-pr-<pkg> workflows were consolidated into
-  // on-pr-nx.yml, and once more when the last orchestrators moved to the CI
-  // contract's pr-build-test.yml.
+  // on-pr-nx.yml, and once more when the last orchestrators, then the SDK
+  // e2e, moved to the CI contract's pr-build-test.yml.
   assert.ok(
-    targets.length >= 4,
+    targets.length >= 3,
     `found ${targets.length} fork-ci target workflows`,
   );
   for (const path of targets) {
@@ -2012,9 +1786,10 @@ test("Android mobile runs collect the device logcat without rewriting the verdic
 const GITHUB_RELEASE_REUSABLE = "./.github/workflows/create-github-release.yml";
 // release-train.yml cuts the same sdk-v<version> release. It takes the package
 // from .github/release-trains.json, so release-train.test.mjs holds that
-// catalog to @qvac/sdk.
+// catalog to @qvac/sdk. publish-npm.yml cuts it for a package whose publish
+// metadata sets githubRelease, which only @qvac/sdk does.
 const ALLOWED_RELEASE_CALLERS = [
-  ".github/workflows/publish-sdk.yml",
+  ".github/workflows/publish-npm.yml",
   ".github/workflows/release-train.yml",
 ];
 
@@ -2033,12 +1808,12 @@ test("release policy: only the SDK workflow calls create-github-release.yml", ()
 // Releases page stays SDK-only. Adding an entry is a deliberate policy decision.
 //  - create-github-release.yml: the reusable itself (softprops path); its sole
 //    caller is asserted above.
-//  - build-sdk-python-fat-wheels.yml: attaches the Python SDK fat wheels as
-//    assets to the SDK's own sdk-v<version> release, and (manual backfill only)
-//    drafts that sdk-v* tag if missing. Invoked by publish-sdk.yml.
+//  - publish-pypi.yml: attaches the Python SDK fat wheels as assets to the
+//    SDK's own sdk-v<version> release, and (manual backfill only) drafts that
+//    sdk-v* tag if missing.
 const RELEASE_WRITE_EXEMPT = new Set([
   ".github/workflows/create-github-release.yml",
-  ".github/workflows/build-sdk-python-fat-wheels.yml",
+  ".github/workflows/publish-pypi.yml",
 ]);
 
 test("release policy: no workflow cuts a GitHub Release outside the SDK surface", () => {

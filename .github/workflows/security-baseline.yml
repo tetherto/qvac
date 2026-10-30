@@ -97,7 +97,6 @@ jobs:
           .github/scripts/test/publish-branch-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
           .github/scripts/test/mobile-caller-permissions.test.mjs
-          .github/scripts/test/await-ts-checks.test.mjs
           .github/scripts/test/nx-lockfile-mode.test.mjs
           .github/scripts/test/nx-fabric-graph-policy.test.mjs
           .github/scripts/test/cache-models-branches.test.mjs
@@ -116,26 +115,8 @@ jobs:
           node --test
           .github/scripts/test/mobile-prebuild-registry.test.mjs
 
-      # on-pr-test-sdk.yml is pull_request_target, so it and its composite actions
-      # always load from the base branch — no run on this PR exercises an edit to
-      # the failed-test rerun chain. This suite extracts those scripts and runs
-      # them against fixtures, which is the only pre-merge check on them.
-      - name: Run SDK e2e rerun tests
-        run: >-
-          node --test
-          .github/scripts/test/sdk-e2e-rerun.test.mjs
-
-      # Snap runs from its own workflow and every runner-hosted family builds
-      # its job from the shared sdk-e2e-node-* actions. This pins that split:
-      # no Snap step back in the shared job, every local action checked out,
-      # and job names the runId lookup can find.
-      - name: Run SDK e2e workflow layout tests
-        run: >-
-          node --test
-          .github/scripts/test/sdk-e2e-node-workflows.test.mjs
-
-      # The prepare-inference action is checked out from the PR head in
-      # test-sdk.yml, but not every PR runs e2e. This suite pins the win32
+      # The sdk's e2e packs inference and test-suite with packages/sdk/ci's
+      # scripts, but not every PR runs e2e. This suite pins the win32
       # `file:C:/…` tarball spec without needing a Windows runner.
       - name: Run SDK e2e tarball-spec tests
         run: >-

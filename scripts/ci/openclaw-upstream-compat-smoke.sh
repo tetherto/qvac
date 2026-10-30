@@ -16,7 +16,7 @@ QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-180000}"
 # rather than a signal; the shell `timeout` below is only a backstop. Keep the
 # two different -- when both were 600s the shell won every time and deadlines
 # arrived as an opaque SIGTERM. The attempt budget multiplies this, and the
-# product has to fit the job timeout in openclaw-upstream-compat.yml.
+# product has to fit the openclaw-compat job timeout in sdk-scheduled-checks.yml.
 OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-240}"
 OPENCLAW_AGENT_BACKSTOP_SECONDS="$((OPENCLAW_AGENT_TIMEOUT_SECONDS + 60))"
 

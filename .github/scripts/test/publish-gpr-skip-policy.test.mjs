@@ -213,13 +213,13 @@ for (const relativePath of WORKFLOWS) {
 // The two addons this ticket was raised for, named explicitly so an edit that reintroduces the defect fails a test
 // that mentions them. They publish from the CI contract.
 for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
-  // On the CI contract the publish groups request only build, verify:generated and publish, so neither publish can
+  // On the CI contract the publish groups request only build, verify:generated, verify:deps, publish:pre and publish, so neither publish can
   // start integration tests, and publish-gpr is a dispatch that runs from any branch.
   if (JSON.parse(read(`packages/${slug}/project.json`)).tags?.includes('ci:addons')) {
     test(`${slug}: publishing on the CI contract never runs integration tests (QVAC-24365)`, () => {
       for (const workflow of ['publish-npm.yml', 'publish-gpr.yml']) {
         const source = read(`.github/workflows/${workflow}`)
-        assert.match(source, /^ {6}targets: build,verify:generated,publish$/m, workflow)
+        assert.match(source, /^ {6}targets: build,verify:generated,verify:deps,publish:pre,publish$/m, workflow)
         assert.doesNotMatch(source, /test:integration|_desktop\.yml/, workflow)
       }
     })

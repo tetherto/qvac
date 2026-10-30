@@ -13,7 +13,7 @@ by the QVAC_WHEEL_PLAT this script exports); models are never bundled. Only the
 current platform's native prebuilds are staged -- the addon npm packages ship
 every platform's `prebuilds/<platform>-<arch>/`, so the foreign ones are pruned
 here to keep each wheel to one platform's binaries. Publishing is release
-automation's job (per-OS runners; see build-sdk-python-fat-wheels.yml) -- this
+automation's job (per-OS runners; see publish-pypi.yml) -- this
 script only builds and verifies locally.
 """
 

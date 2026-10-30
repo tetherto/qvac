@@ -27,8 +27,6 @@ Must return **only** `pr-gate-merge.yml`. If any other file has a job id `qvac-m
 
 Read `.github/workflows/pr-gate-merge.yml`, specifically the final `qvac-merge-guard` job's `needs:` list and the three `with:` booleans it passes to `public-pr.yml`. Read `docs/ci/MERGE-GUARD.md` for the diagram and worked examples.
 
-Note: `sdk-pod-checks` reports as `sdk-pod-checks / SDK Pod Checks` on PRs into `main` and as `SDK Pod Checks` on PRs into `release-*`/`feature-*`/`tmp-*`. See the doc's "Gotcha" section.
-
 ## Step 2 — Ask the user which of the three patterns fits — do not silently infer it
 
 **Present these three options as an explicit question and let the human pick.** Even if the repo state (an existing half-built caller workflow, an existing similar job, etc.) suggests one pattern, don't silently commit to it — surface the choice and its tradeoffs, then proceed with whichever the human confirms:
@@ -45,7 +43,7 @@ Note: `sdk-pod-checks` reports as `sdk-pod-checks / SDK Pod Checks` on PRs into 
 
 ## Step 3 — Wire it, following the exact code shape in `docs/ci/MERGE-GUARD.md`
 
-Copy the relevant snippet from the doc verbatim, substituting names. Do not invent a different `needs:`/`if:` shape from what's already established. If your new job's checks also need to run on branches Merge Guard doesn't cover (`pr-gate-merge.yml` is `main`-only), consider the two-trigger shape used by `pr-checks-sdk-pod.yml`: `workflow_call` for `main`, plus its own `pull_request`/`pull_request_target` trigger limited to the other branches so `main` PRs do not run it twice. It reports under a different check-context string on each path; document both wherever the check is referenced by name.
+Copy the relevant snippet from the doc verbatim, substituting names. Do not invent a different `needs:`/`if:` shape from what's already established. If your new job's checks also need to run on branches Merge Guard doesn't cover (`pr-gate-merge.yml` is `main`-only), consider a two-trigger shape: `workflow_call` for `main`, plus its own `pull_request`/`pull_request_target` trigger limited to the other branches so `main` PRs do not run it twice. It reports under a different check-context string on each path; document both wherever the check is referenced by name.
 
 ## Step 4 — Validate
 
@@ -59,4 +57,4 @@ Because `pr-gate-merge.yml` is `pull_request_target`-triggered, it always runs t
 - [ ] No new top-level `pull_request_target` trigger with zero `needs:` link into `qvac-merge-guard` was created.
 - [ ] Checked for a spare unused `public-pr.yml` input (`integration-tests-status`, `build-with-model-status`) before adding a new one.
 - [ ] Validated post-merge (not pre-merge) that `qvac-merge-guard / validate-pr` reflects the new job — exactly one check name, no duplicate.
-- [ ] If the new job has its own independent trigger in addition to being wired into `qvac-merge-guard`, confirmed and documented both resulting check-name strings (see the `sdk-pod-checks` gotcha) — no check-name regex/match written against only one of them.
+- [ ] If the new job has its own independent trigger in addition to being wired into `qvac-merge-guard`, confirmed and documented both resulting check-name strings (a called workflow reports as `<caller-job> / <job name>`, its own trigger as `<job name>`), and wrote no check-name regex or match against only one of them.

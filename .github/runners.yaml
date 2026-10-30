@@ -1,7 +1,8 @@
 # Specialized GitHub Actions runner labels for QVAC addon CI.
 # Edit this file, then run: node .github/scripts/sync-runner-names.mjs
 #
-# ubuntu-latest is intentionally omitted; keep it hardcoded as GitHub's alias.
+# ubuntu-latest is GitHub's moving alias; hardcode it in workflows, and use ubuntu_latest only for a contract
+# configuration that ran on the alias on main.
 #
 # FORMAT CONTRACT: a flat `key: label # comment` list, one entry per line.
 # The parser (.github/scripts/lib/runner-names.mjs) is line-based, not YAML —
@@ -27,6 +28,7 @@ ubuntu_2204_arm: ubuntu-22.04-arm # Ubuntu 22.04 hosted arm64
 ubuntu_2404: ubuntu-24.04 # Ubuntu 24.04 hosted x64
 ubuntu_2404_arm: ubuntu-24.04-arm # Ubuntu 24.04 hosted arm64
 ubuntu_2604: ubuntu-26.04 # Ubuntu 26.04 hosted x64
+ubuntu_latest: ubuntu-latest # GitHub's alias, for contract configurations main ran on it
 
 # Self-hosted
 linux_ubuntu2204_x64: qvac-ubuntu2204-x64 # Self-hosted Ubuntu 22.04 x64 CPU
@@ -34,5 +36,6 @@ linux_ubuntu2204_x64_gpu: qvac-ubuntu2204-x64-gpu # Self-hosted Ubuntu 22.04 x64
 linux_ubuntu2404_x64: qvac-ubuntu2404-x64 # Self-hosted Ubuntu 24.04 x64 CPU
 linux_ubuntu2404_x64_gpu: qvac-ubuntu2404-x64-gpu # Self-hosted Ubuntu 24.04 x64 GPU
 macos_arm64_gpu: qvac-macos26-arm64-gpu # Self-hosted Apple Silicon GPU/Metal
+macos_arm64_gpu_gui: qvac-macos26-arm64-gpu-gui # Self-hosted Apple Silicon GPU with a GUI session (Electron)
 win_2025_x64: qvac-win25-x64 # Self-hosted Windows Server 2025 x64 CPU
 win_2025_x64_gpu: qvac-win25-x64-gpu # Self-hosted Windows Server 2025 x64 GPU

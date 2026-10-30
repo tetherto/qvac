@@ -201,7 +201,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # The checks publish-inference.yml and publish-sdk.yml run before npm. The
+  # The checks the inference and sdk verify:deps targets run before npm. The
   # engine is not on npm yet, so the sdk check uses the workspace copy.
   shared-runtime-libs:
     name: Shared runtime libs resolve once
@@ -235,7 +235,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/pr-checks-sdk-pod.yml
+    uses: ./.github/workflows/sdk-checks.yml
     with:
       train: ${{ needs.train.outputs.name }}
       source: train
@@ -504,7 +504,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/pr-checks-sdk-pod.yml
+    uses: ./.github/workflows/sdk-checks.yml
     with:
       train: ${{ needs.train.outputs.name }}
       source: published
@@ -617,8 +617,10 @@ jobs:
       - train
       - github-release
     if: ${{ !cancelled() && needs.github-release.result == 'success' && contains(fromJSON(needs.train.outputs.checks), 'sdk-python') }}
+    # publish-pypi.yml's PyPI job, skipped on this path, asks for id-token; a called workflow may not ask for more than this.
     permissions:
       contents: write
-    uses: ./.github/workflows/build-sdk-python-fat-wheels.yml
+      id-token: write
+    uses: ./.github/workflows/publish-pypi.yml
     with:
       version: ${{ needs.train.outputs.release_version }}

@@ -16,16 +16,17 @@ SDK's version.
 
 ## The engine is published first
 
-The SDK's committed range is installed from npm by `publish-sdk.yml` and by the
-`published` leg of `pr-checks-sdk-pod`, so a range naming an unpublished version
-fails both.
+The SDK's committed range is installed from npm when `publish-npm.yml` builds a
+release and by the `published` leg of the SDK's checks in `pr-checks.yml`, so a
+range naming an unpublished version fails both.
 
 Moving to a new major.minor is two releases:
 
-1. `release-inference-<x.y.z>` → `publish-inference.yml` publishes
+1. `release-inference-<x.y.z>` → `publish-npm.yml` publishes
    `@qvac/inference` and tags `inference-v<x.y.z>`.
 2. `release-sdk-<x.y.z>` → this skill points the SDK at that version, then
-   `publish-sdk.yml` publishes `@qvac/sdk` and `tetherto-qvac-sdk`.
+   `publish-npm.yml` publishes `@qvac/sdk` and `publish-pypi.yml`
+   `tetherto-qvac-sdk`.
 
 A patch on either side is one release on its own. An SDK patch leaves its range
 alone; an engine patch is picked up by the existing range with no SDK release at
@@ -51,15 +52,15 @@ plugins).
 
 ## What it does NOT do
 
-- Does not open release PRs or publish (see `publish-inference.yml`,
-  `publish-sdk.yml` + gitflow).
+- Does not open release PRs or publish (see `publish-npm.yml`,
+  `publish-pypi.yml` + gitflow).
 - Does not release `@qvac/inference`; it only points the SDK at a version that
   is already published.
 - Does not sync agent-stack packages (`/qv-agent-stack-sync`).
 - Does not auto-commit.
 - Does not run in CI. CI checks the shared major.minor on every PR through the
   SDK's `lint` (`enforce-inference-versions`) and installs the range for real on
-  the `published` leg of `pr-checks-sdk-pod`; this skill is the fix.
+  the `published` leg of the SDK's checks in `pr-checks.yml`; this skill is the fix.
 
 ## Workflow
 
@@ -121,8 +122,8 @@ python3 packages/sdk-kotlin/scripts/generate-contract.py --check
 `SDK_VERSION` is stamped from `packages/sdk/package.json` (Step 2 set it). The
 generator does not touch the test that asserts it: set the version literal in
 `packages/sdk-kotlin/src/commonTest/kotlin/io/tether/qvac/sdk/GeneratedContractTest.kt`
-by hand. `pr-checks-sdk-kotlin.yml` runs `checkVersionAlignment` and `jvmTest`
-on any PR that changes `packages/inference/package.json`, so the release PR and
+by hand. sdk-kotlin's checks in `pr-checks.yml` run the version alignment check and
+`jvmTest` on any PR that changes `packages/inference`, so the release PR and
 the backmerge both need these edits. Commit the `package.json` repin, the test
 literal, and any updates under
 `packages/sdk-kotlin/src/commonMain/kotlin/io/tether/qvac/sdk/generated/`.
@@ -181,6 +182,6 @@ range, the parent skill prompts to run this skill first. Opt out with
 - Python generator: `packages/sdk-python/scripts/generate.py`
 - Kotlin generator: `packages/sdk-kotlin/scripts/generate-contract.py`
 - Notice generator: `.agents/skills/qv-notice-generate/SKILL.md`
-- Publish: `.github/workflows/publish-inference.yml`,
-  `.github/workflows/publish-sdk.yml`
+- Publish: `.github/workflows/publish-npm.yml`,
+  `.github/workflows/publish-pypi.yml`
 - Changelog / PR skills: `qv-sdk-changelog`, `qv-sdk-pr-create`

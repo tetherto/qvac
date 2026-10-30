@@ -1,0 +1,73 @@
+{
+  "name": "sdk-kotlin",
+  "root": "packages/sdk-kotlin",
+  "tags": ["ci:sdk"],
+  "implicitDependencies": ["@qvac/sdk", "@qvac/inference", "sdk-e2e"],
+  "targets": {
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node ci/checks.mjs"
+      },
+      "metadata": {
+        "setup": ["python", "java", "android-ndk"],
+        "sources": ["npm"]
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node scripts/check-version-alignment.mjs"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node ci/conformance.mjs"
+      },
+      "configurations": {
+        "linux-x64-conformance": {
+          "ci": {
+            "runner": "ubuntu_latest",
+            "setup": ["python", "java", "android"],
+            "labels": {
+              "test-e2e-smoke": ""
+            }
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 90
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "node ci/mobile.mjs kotlin"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "mode": "producer",
+          "projectArnVar": "SDK_DEVICE_FARM_PROJECT_ARN",
+          "devicePoolsVar": {
+            "Android": "SDK_ANDROID_DEVICE_FARM_POOLS"
+          },
+          "jobTimeoutMinutes": 120
+        },
+        "secrets": ["GITHUB_TOKEN", "MQTT_HOST", "MQTT_USERNAME", "MQTT_PASSWORD"],
+        "timeoutMinutes": 280
+      }
+    }
+  }
+}

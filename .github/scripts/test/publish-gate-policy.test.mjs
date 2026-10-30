@@ -80,39 +80,7 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
-test('RAG release publishing requires a successful build, release authorization and an uncancelled run', () => {
-  const job = eachJob(read('.github/workflows/trigger-reusable-lib-rag.yml'))
-    .find((job) => job.name === 'publish-release-npm')
-  assert.ok(job)
-  const expression = ifExpression(job.text)
-  assert.ok(expression)
-  const evaluate = new Function(
-    'needs',
-    'cancelled',
-    `return ${expression.replace(/needs\.([\w-]+)/g, (_, name) => `needs[${JSON.stringify(name)}]`)}`,
-  )
-
-  for (const build of ['success', 'failure', 'cancelled', 'skipped']) {
-    for (const guard of ['success', 'failure', 'cancelled', 'skipped']) {
-      for (const release of ['true', 'false']) {
-        const needs = {
-          build: { result: build },
-          'release-merge-guard': { result: guard },
-          'publish-logic': { outputs: { publish_release: release } },
-        }
-        for (const runCancelled of [false, true]) {
-          assert.equal(
-            evaluate(needs, () => runCancelled),
-            !runCancelled && build === 'success' && ['success', 'skipped'].includes(guard) && release === 'true',
-            `cancelled=${runCancelled}, build=${build}, guard=${guard}, release=${release}`,
-          )
-        }
-      }
-    }
-  }
-})
-
-const isContract = (project) => Boolean(project?.tags?.includes('ci:addons'))
+const isContract = (project) => Boolean(project?.tags?.some((tag) => ['ci:addons', 'ci:sdk'].includes(tag)))
 
 // Packages requiring the gate: an on-merge or CI contract addon that has generated wrappers.
 //
@@ -148,7 +116,7 @@ test('every package with generated wrappers is covered by a pipeline', () => {
 
   // A package on the CI contract is covered when it declares verify:generated, which publish-npm.yml runs before it
   // publishes; any other gated package needs its own on-merge-<pkg>.yml calling the verify reusable.
-  const contractVerifies = /^ {6}targets: build,verify:generated,publish$/m.test(read('.github/workflows/publish-npm.yml'))
+  const contractVerifies = /^ {6}targets: build,verify:generated,verify:deps,publish:pre,publish$/m.test(read('.github/workflows/publish-npm.yml'))
   const offenders = gated.filter((pkg) => {
     const project = JSON.parse(read(`packages/${pkg}/project.json`))
     if (isContract(project)) return !(contractVerifies && project.targets['verify:generated'])
@@ -195,21 +163,6 @@ test('every wrapper publish job is gated on verify-generated', () => {
   }
 
   assert.deepEqual(offenders, [])
-})
-
-test('the verify job stays unprivileged and secretless', () => {
-  const source = withoutComments(read('.github/workflows/verify-generated-wrappers.yml'))
-
-  // Untrusted code (npm install of the package tree, then tsc) runs here. It
-  // must not gain publish privilege, or gating on it is pointless.
-  assert.match(source, /^permissions:\n {2}contents: read\n/m)
-  assert.doesNotMatch(source, /id-token:\s*write/)
-  assert.doesNotMatch(source, /contents:\s*write/)
-  assert.doesNotMatch(source, /PAT_TOKEN|NPM_TOKEN|secrets\./)
-  assert.match(source, /persist-credentials: false/)
-  // --if-present would let a renamed script silently pass the gate.
-  assert.match(source, /run: npm run check:generated\s*$/m)
-  assert.doesNotMatch(source, /check:generated --if-present/)
 })
 
 test('callers grant the verify job no more than contents: read', () => {

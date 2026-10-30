@@ -1,26 +1,250 @@
 {
   "name": "@qvac/sdk",
   "root": "packages/sdk",
+  "tags": ["ci:sdk"],
+  "implicitDependencies": ["sdk-e2e", "@qvac/registry-server"],
   "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/inference"],
+          "target": "build"
+        }
+      ]
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "pnpm run typecheck"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/inference"],
+          "target": "build"
+        }
+      ]
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run build",
-        "cwd": "packages/sdk"
-      }
+        "cwd": "packages/sdk",
+        "command": "pnpm run build"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/inference"],
+          "target": "build"
+        }
+      ]
     },
     "test:unit": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/sdk"
+        "cwd": "packages/sdk",
+        "parallel": false,
+        "commands": ["pnpm run test:unit", "node ci/consumer-install.mjs"]
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "setup": ["bare"],
+        "sources": ["workspace", "published"]
       }
     },
-    "lint": {
+    "verify:generated": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/sdk"
+        "cwd": "packages/sdk",
+        "parallel": false,
+        "commands": [
+          "pnpm run contract:check",
+          "pnpm run check:resource-collectors --host darwin-arm64 --host darwin-x64 --host linux-arm64 --host linux-x64 --host win32-arm64 --host win32-x64"
+        ]
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/inference"],
+          "target": "build"
+        }
+      ]
+    },
+    "verify:deps": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": false,
+        "commands": [
+          "node --test .github/scripts/test/shared-runtime-libs.test.mjs",
+          "node packages/sdk/ci/verify-deps.mjs"
+        ]
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "node ci/e2e.mjs"
+      },
+      "configurations": {
+        "linux-x64-gpu": {
+          "args": "desktop",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu",
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": ""
+            }
+          }
+        },
+        "darwin-arm64-gpu": {
+          "args": "desktop",
+          "ci": {
+            "runner": "macos_arm64_gpu",
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": ""
+            }
+          }
+        },
+        "win32-x64-gpu": {
+          "args": "desktop",
+          "ci": {
+            "runner": "win_2025_x64_gpu",
+            "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": ""
+            }
+          }
+        },
+        "linux-x64-python": {
+          "args": "python",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu",
+            "labels": {
+              "test-e2e-python": "smoke"
+            }
+          }
+        },
+        "darwin-arm64-python": {
+          "args": "python",
+          "ci": {
+            "runner": "macos_arm64_gpu",
+            "labels": {
+              "test-e2e-python": "smoke"
+            }
+          }
+        },
+        "win32-x64-python": {
+          "args": "python",
+          "ci": {
+            "runner": "win_2025_x64_gpu",
+            "labels": {
+              "test-e2e-python": "smoke"
+            }
+          }
+        },
+        "linux-x64-electron": {
+          "args": "electron",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu",
+            "labels": {
+              "dispatch:electron": ""
+            }
+          }
+        },
+        "darwin-arm64-electron": {
+          "args": "electron",
+          "ci": {
+            "runner": "macos_arm64_gpu_gui",
+            "labels": {
+              "dispatch:electron": ""
+            }
+          }
+        },
+        "win32-x64-electron": {
+          "args": "electron",
+          "ci": {
+            "runner": "win_2025_x64_gpu",
+            "labels": {
+              "dispatch:electron": ""
+            }
+          }
+        },
+        "linux-x64-snap": {
+          "args": "snap",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu",
+            "labels": {
+              "dispatch:snap": ""
+            }
+          }
+        }
+      },
+      "metadata": {
+        "secrets": [
+          "GITHUB_TOKEN",
+          "MQTT_HOST",
+          "MQTT_USERNAME",
+          "MQTT_PASSWORD",
+          "MQTT_CA_CERT",
+          "MQTT_CLIENT_CERT",
+          "MQTT_CLIENT_KEY"
+        ],
+        "timeoutMinutes": 360
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "node ci/mobile.mjs js"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "mode": "producer",
+          "projectArnVar": "SDK_DEVICE_FARM_PROJECT_ARN",
+          "devicePoolsVar": {
+            "Android": "SDK_ANDROID_DEVICE_FARM_POOLS",
+            "iOS": "SDK_IOS_DEVICE_FARM_POOLS"
+          },
+          "jobTimeoutMinutes": 120
+        },
+        "secrets": ["GITHUB_TOKEN", "MQTT_HOST", "MQTT_USERNAME", "MQTT_PASSWORD"],
+        "timeoutMinutes": 280
+      }
+    },
+    "publish": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "node ci/prepare-publish.mjs"
+      },
+      "metadata": {
+        "publish": {
+          "tagPrefix": "sdk",
+          "githubRelease": "QVAC SDK",
+          "releaseGuard": true
+        }
       }
     }
   }

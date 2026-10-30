@@ -15,14 +15,15 @@ Pick the task:
 
 ## 1. Change CI for a package
 
-1. Confirm the tag: `pnpm exec nx show projects --projects tag:ci:addons`. An untagged package is not on the contract; follow `.github/AGENTS.md` instead and stop here.
+1. Confirm the tag: `pnpm exec nx show projects --projects tag:ci:addons,tag:ci:sdk`. An untagged package is not on the contract; follow `.github/AGENTS.md` instead and stop here.
 2. Put the change in the package's own files:
    - a command: a target command in `project.json`, or a script in the package's `ci/` directory that a target runs;
    - platform flags: the platform configuration's `args`;
    - a step that differs on one platform: that configuration's `commands`;
    - a runner: the configuration's `ci.runner` key from `reusable-runner-names.yml`;
-   - a toolkit: the configuration's `ci.setup`;
-   - a timeout, mobile setting or release tag prefix: the target's `metadata`;
+   - a toolkit: the configuration's `ci.setup`, or a check target's `metadata.setup` for `sdk-checks.yml`;
+   - an SDK pod package (`ci:sdk` tag, checked by `sdk-checks.yml` and `sdk-e2e.yml`): a `test:integration` configuration that runs on its own PR labels or a release base takes `ci.labels`, and checks in npm's layout instead of the pnpm workspace take `test:unit`'s `metadata.sources`;
+   - a timeout, mobile setting, release tag prefix or release check: the target's `metadata`;
    - models: the package's model manifest.
 3. Leave the workflows and actions alone. A package name or directory never appears in a condition there. If the standard cannot express the change, that is a change to the standard: raise it before writing it.
 4. Run `node --test .github/scripts/test/ci-contract-standard.test.mjs .github/scripts/test/ci-trust-policy.test.mjs`, and run the target locally where the host allows: `pnpm exec nx run <project>:<target>:<configuration>`.
@@ -34,13 +35,13 @@ Done when both test files pass and the target runs locally, or the change is con
 One pull request adds the package. When it replaces a workflow of its own, before it merges only that workflow runs, after it merges only the contract does, and reverting it restores the workflow with no other edit. `main` is the source of truth: port its runners, flags, system packages, timeouts and dormant settings as they are.
 
 1. Tag the package `ci:addons` in its `project.json`.
-2. Map every step its CI runs to a standard target, with a configuration per platform on the runner the old job used.
+2. Map every step its CI runs to a standard target, with a configuration per platform on the runner the old job used. A JavaScript package's `build` has no configurations; give it explicit `dependsOn` on the workspace builds it links, since `nx.json`'s `^build` would reach native addons, and list its non-standard npm scripts in `nx.includedScripts` so Nx merges no inferred script into a standard target.
 3. Depend on each native dependency's `link:platform` by name. Give the dependency a `link:platform` target if it lacks one. A dependency on the contract builds first as a provider, so it needs a build configuration for every configuration the package builds or lints, and the package's ranges on it must include its workspace version.
 4. Move scripts the targets call into the package's `ci/` directory, and models into its manifest.
 5. For mobile, set `metadata.mobile` and map the Device Farm project in `DEVICEFARM_PROJECTS` (`select-projects.mjs`) and `PROJECT_ARN` (`_mobile.yml`).
-6. Wire Merge Guard as `docs/ci/MERGE-GUARD.md` says: a `packages/<dir>/**`-only filter entry, `ALL_PACKAGES`, the status keys, and the package's producer in `CARVED_OUT_PRODUCERS` set to `pr-build-test.yml`. The status contexts stay the same.
+6. For a package with a native build or C++ tests, wire Merge Guard as `docs/ci/MERGE-GUARD.md` says: a `packages/<dir>/**`-only filter entry (`plugins/<dir>/**` for a plugin), `ALL_PACKAGES`, the status keys, and the package's producer in `CARVED_OUT_PRODUCERS` set to `pr-build-test.yml`. The status contexts stay the same. A package with neither posts no status and needs no entry.
 7. Delete the package's own workflows, and limit edits to shared files to letting go of them.
-8. Point the package's npm trusted publisher at `publish-npm.yml`, so only one workflow can publish it.
+8. Ask someone with npm rights to point the package's trusted publishers at `publish-npm.yml` and `publish-gpr.yml`, so only those workflows can publish it.
 9. Rehearse on the branch: `pr-checks`, `pr-build-test` with the `prebuilds`, `run-cpp-addon-tests` and `run-desktop-addon-tests` labels, `cache-warm`, `mobile-tests` on one Android and one iOS device one after the other (dispatches on one branch cancel each other), `publish-npm` with `dry_run`, and `publish-gpr`. Compare each with the old path on the same commit, and compare the prebuilds binary by binary.
 10. Stop before anything leaves the machine. Show the full diff and wait for approval before a push, a dispatch or a pull request, and get a separate yes before creating the pull request.
 

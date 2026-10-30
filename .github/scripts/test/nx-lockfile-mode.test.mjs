@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -222,7 +222,8 @@ test('without a lockfile change nothing is corrected', () => {
 
 test('selected packages are only ones the matrix loop can read', () => {
   const { extra } = withLock({ fabricPath: '3.2.0' })
-  assert.ok(!extra.includes('inference'), 'inference has no project.json')
+  for (const name of extra)
+    assert.ok(existsSync(join(root, 'packages', name, 'project.json')), `${name} has no project.json`)
   assert.ok(!extra.some((name) => name.endsWith('-plugin')), 'plugins live outside packages/')
 })
 

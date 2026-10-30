@@ -11,6 +11,9 @@ import { pathToFileURL } from 'node:url'
 import { CPP_TEST_KEYS, PREBUILD_KEYS } from './prebuild-status/lib.mjs'
 
 export const TAG = 'ci:addons'
+// Every group of packages on the contract: ci:addons runs in the shared groups, ci:sdk (the SDK pod) in sdk-checks.yml and
+// sdk-e2e.yml; the publish, benchmark and cache groups serve both. ci:libs (JavaScript libraries) joins only the publish groups.
+export const TAGS = ['ci:addons', 'ci:sdk']
 
 // The standard target names. The groups run only these, and a package on the contract declares only these.
 export const TARGETS = [
@@ -18,6 +21,7 @@ export const TARGETS = [
   'typecheck',
   'test:unit',
   'verify:generated',
+  'verify:deps',
   'ci:setup',
   'ci:system',
   'build',
@@ -30,17 +34,22 @@ export const TARGETS = [
   'test:mobile',
   'cache:models',
   'benchmark',
+  'publish:pre',
   'publish'
 ]
 
 // A configuration is named <platform>-<arch>[-<variant>] and holds only args or commands and a ci
-// object with its runner and any extra host setup it needs.
+// object with its runner, any extra host setup and the labels that select it.
 export const CONFIG_NAME = /^(linux|android|ios|darwin|win32)-(x64|arm64)(-[a-z0-9]+)?$/
 const CONFIG_KEYS = ['args', 'commands', 'ci']
-const CI_KEYS = ['runner', 'setup']
+const CI_KEYS = ['runner', 'setup', 'labels']
+// A labels key is a PR label, base:<branch> with an optional trailing * for a PR into that branch, or dispatch:<name>
+// for a configuration that only a dispatch naming <name> runs.
+const LABEL_KEY = /^(base:[a-z0-9._-]+\*?|dispatch:[a-z0-9-]+|[a-z0-9-]+)$/
 // Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json. cuda-jetson puts
-// CUDA 12 for Jetson beside the host's CUDA 13 and exports only QVAC_CUDA_JETSON_PATH.
-const SETUP = ['cuda', 'cuda-jetson', 'rocm', 'python']
+// CUDA 12 for Jetson beside the host's CUDA 13 and exports only QVAC_CUDA_JETSON_PATH; java is JDK 17 and android the
+// Android SDK, for a desktop leg that builds Kotlin.
+const SETUP = ['cuda', 'cuda-jetson', 'rocm', 'python', 'java', 'android']
 
 // The metadata a target may carry, and on which targets. toolchain is nx.json's, merged into every build target.
 const METADATA = {
@@ -52,12 +61,40 @@ const METADATA = {
   prebuildExtraDirs: ['publish'],
   secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile'],
   baseline: ['cpp:tests'],
-  perfReport: ['test:integration']
+  perfReport: ['test:integration'],
+  // Toolkits a check target needs on pr-checks' runner, from CHECK_SETUP.
+  setup: ['lint', 'typecheck', 'test:unit', 'verify:generated', 'verify:deps'],
+  // How the checks install the package in place of the pnpm workspace: npm alone, as a consumer would, or its own
+  // sdk-source:workspace script; published also checks it against npm on its own release branch and on a dispatch.
+  sources: ['test:unit']
 }
+export const CHECK_SETUP = ['python', 'java', 'android-ndk', 'bare']
+const CHECK_TARGETS = METADATA.setup
+const SOURCES = ['npm', 'workspace', 'published']
 // Secrets a target may ask for by name; each is named once in _desktop.yml or _mobile.yml, never indexed.
-export const SECRETS = ['QASE_API_TOKEN', 'HF_TOKEN', 'MODEL_S3_BUCKET', 'GITHUB_TOKEN']
-// platformPackages publishes one npm package per platform before the meta; nameTransform renames the GPR build.
-const PUBLISH_KEYS = ['tagPrefix', 'platformPackages', 'nameTransform']
+export const SECRETS = [
+  'QASE_API_TOKEN',
+  'HF_TOKEN',
+  'MODEL_S3_BUCKET',
+  'GITHUB_TOKEN',
+  'MQTT_HOST',
+  'MQTT_USERNAME',
+  'MQTT_PASSWORD',
+  'MQTT_CA_CERT',
+  'MQTT_CLIENT_CERT',
+  'MQTT_CLIENT_KEY'
+]
+// platformPackages publishes one npm package per platform before the meta; nameTransform renames the GPR build;
+// githubRelease names the GitHub release created after the npm publish; releaseGuard checks the release PR
+// (pr-checks.yml); releaseNotes needs the version's CHANGELOG section before the npm publish.
+const PUBLISH_KEYS = [
+  'tagPrefix',
+  'platformPackages',
+  'nameTransform',
+  'githubRelease',
+  'releaseGuard',
+  'releaseNotes'
+]
 const MOBILE_KEYS = [
   'devicefarmProject',
   'enablesPerf',
@@ -65,8 +102,13 @@ const MOBILE_KEYS = [
   'mochaTimeoutMs',
   'perTestTimeoutMinutes',
   'perfReport',
-  'waitforTimeoutMs'
+  'waitforTimeoutMs',
+  'mode',
+  'devicePoolsVar',
+  'projectArnVar'
 ]
+// A producer row builds its own app and drives the device itself; its pools and project come from repository variables.
+const VAR_NAME = /^[A-Z][A-Z0-9_]*$/
 // Each needs its secret named in _mobile.yml's PROJECT_ARN.
 export const DEVICEFARM_PROJECTS = [
   'LLAMACPP_EMBED',
@@ -103,7 +145,23 @@ export function configurations(project, target) {
     const unknown = setup.filter((s) => !SETUP.includes(s))
     if (unknown.length)
       throw new Error(`${where}: ci.setup takes ${SETUP.join(', ')}, found ${unknown.join(', ')}`)
-    return { config, runnerKey: cfg.ci.runner, platform: m[1], arch: m[2], tags: m[3] ?? '', setup }
+    const labels = cfg.ci.labels ?? null
+    if (labels !== null && target !== 'test:integration')
+      throw new Error(`${where}: ci.labels routes test:integration configurations only`)
+    if (labels !== null) {
+      const bad = Object.entries(labels).filter(([k, v]) => !LABEL_KEY.test(k) || typeof v !== 'string')
+      if (!Object.keys(labels).length || bad.length)
+        throw new Error(`${where}: ci.labels maps each PR label or base:<branch> to the suite it passes`)
+    }
+    return {
+      config,
+      runnerKey: cfg.ci.runner,
+      platform: m[1],
+      arch: m[2],
+      tags: m[3] ?? '',
+      setup,
+      labels
+    }
   })
 }
 
@@ -122,11 +180,29 @@ export function checkMetadata(project, target) {
       throw new Error(
         `${project.name} ${target}: metadata.mobile takes ${MOBILE_KEYS.join(', ')}, found ${extra.join(', ')}`
       )
-    if (!DEVICEFARM_PROJECTS.includes(meta.mobile.devicefarmProject))
+    if (meta.mobile.mode === 'producer') {
+      const pools = Object.entries(meta.mobile.devicePoolsVar ?? {})
+      if (
+        !VAR_NAME.test(meta.mobile.projectArnVar ?? '') ||
+        !pools.length ||
+        pools.some(([p, v]) => !['Android', 'iOS'].includes(p) || !VAR_NAME.test(v))
+      )
+        throw new Error(
+          `${project.name} ${target}: a producer names projectArnVar and devicePoolsVar ({Android, iOS}) as variable names`
+        )
+    } else if (meta.mobile.mode !== undefined)
+      throw new Error(`${project.name} ${target}: metadata.mobile.mode takes producer only`)
+    else if (!DEVICEFARM_PROJECTS.includes(meta.mobile.devicefarmProject))
       throw new Error(
         `${project.name} ${target}: no Device Farm project secret is mapped for '${meta.mobile.devicefarmProject}'`
       )
   }
+  const badSetup = (meta.setup ?? []).filter((s) => !CHECK_SETUP.includes(s))
+  if (badSetup.length)
+    throw new Error(`${project.name} ${target}: metadata.setup takes ${CHECK_SETUP.join(', ')}, found ${badSetup.join(', ')}`)
+  const badSources = (meta.sources ?? []).filter((s) => !SOURCES.includes(s))
+  if (badSources.length)
+    throw new Error(`${project.name} ${target}: metadata.sources takes ${SOURCES.join(', ')}, found ${badSources.join(', ')}`)
   const unknownSecrets = (meta.secrets ?? []).filter((s) => !SECRETS.includes(s))
   if (unknownSecrets.length)
     throw new Error(
@@ -158,6 +234,7 @@ export function rows(project, target, labels) {
     arch: '',
     tags: '',
     setup: [],
+    labels: null,
     runner: ''
   }
   // Nx gives every target a configurations object, empty when it has none.
@@ -178,7 +255,8 @@ export function parseRunnerLabels(yaml) {
   )
 }
 
-// The gate's status key is the pr-gate-merge.yml filter key whose first path is the package; later paths are dependencies.
+// The gate's status key is the pr-gate-merge.yml filter key whose first path is the package (packages/<dir> or
+// plugins/<dir>); later paths are dependencies.
 export function gateKeys(gateYaml) {
   const keys = {}
   let key = null
@@ -190,42 +268,65 @@ export function gateKeys(gateYaml) {
     }
     const p = line.match(/^ {14}- "([^"]+)"/)
     if (!p || !key) continue
-    const dir = p[1].match(/^packages\/([^/]+)\/\*\*$/)
+    const dir = p[1].match(/^(?:packages|plugins)\/([^/]+)\/\*\*$/)
     if (dir) keys[dir[1]] ??= key
     key = null
   }
   return keys
 }
 
-// configs, when set, keeps only those configurations: a mobile dispatch runs its one platform.
-export function select({ graph, affected, targets, labels, gate, configs = [] }) {
-  const tagged = Object.values(graph.nodes).filter((n) => n.data.tags?.includes(TAG))
+// A build with configurations builds native prebuilds; one without is a JavaScript build, which gets no build row and
+// no prebuilds to restore, and which the publish groups run before packing.
+export const nativeBuild = (n) =>
+  Object.keys(n.data.targets.build?.configurations ?? {}).length > 0
+export const jsBuild = (n) => Boolean(n.data.targets.build) && !nativeBuild(n)
+
+// configs, when set, keeps only those configurations: a mobile dispatch runs its one platform. prLabels and baseRef
+// route the configurations that declare ci.labels; see routeLabelled.
+export function select({
+  graph,
+  affected,
+  targets,
+  labels,
+  gate,
+  configs = [],
+  prLabels = [],
+  baseRef = '',
+  dispatch = false,
+  tags = [TAG]
+}) {
+  // tags names the groups a workflow serves.
+  const tagged = Object.values(graph.nodes).filter((n) => n.data.tags?.some((t) => tags.includes(t)))
   const chosen = tagged.filter((n) => affected === null || affected.includes(n.name))
   const out = { matrices: {}, projects: [] }
   for (const t of targets) out.matrices[t] = []
   const common = (n) => {
     const dir = n.data.root.split('/').pop()
-    // Without a key no status is posted, and Merge Guard waits for one until its deadline.
-    if (!gate[dir])
+    const slug = slugOf(n)
+    // Without a key no status is posted, and Merge Guard waits for one until its deadline. Only builds and C++ tests
+    // post one, so a package with neither needs no key.
+    if (!gate[dir] && (nativeBuild(n) || n.data.targets['cpp:tests']))
       throw new Error(
-        `${n.name}: no pr-gate-merge.yml filter starts with "packages/${dir}/**", so it has no Merge Guard key`
+        `${n.name}: no pr-gate-merge.yml filter starts with "${n.data.root}/**", so it has no Merge Guard key`
       )
     const providers = providersOf(graph, n.name)
     return {
-      slug: dir,
+      slug,
       npm: npmName(n),
-      key: gate[dir],
+      key: gate[dir] ?? '',
       // The npm name whose platform packages provide the addon's symbols, and the slugs whose prebuilds it restores.
       provider: providers.length ? npmName(graph.nodes[providers[0]]) : '',
       providers: providers.map((p) => graph.nodes[p].data.root.split('/').pop()),
       targets: ['build'],
-      // A package without a build target has no prebuilds to restore.
-      hasBuild: Boolean(n.data.targets.build)
+      // A package without a native build has no prebuilds to restore.
+      hasBuild: nativeBuild(n),
+      jsBuild: jsBuild(n),
+      sources: n.data.targets['test:unit']?.metadata?.sources ?? []
     }
   }
   for (const n of chosen) {
     const project = { name: n.name, root: n.data.root, targets: n.data.targets }
-    const own = targets.filter((t) => n.data.targets[t])
+    const own = targets.filter((t) => n.data.targets[t] && (t !== 'build' || nativeBuild(n)))
     if (!own.length) continue
     const c = { ...common(n), targets: own }
     out.projects.push({
@@ -235,6 +336,10 @@ export function select({ graph, affected, targets, labels, gate, configs = [] })
       benchmarkReport: Boolean(n.data.targets.benchmark?.configurations?.[REPORT]),
       cppBaseline: Boolean(n.data.targets['cpp:tests']?.metadata?.baseline),
       perfReport: n.data.targets['test:integration']?.metadata?.perfReport ?? null,
+      checkSetup: [
+        ...new Set(CHECK_TARGETS.flatMap((t) => n.data.targets[t]?.metadata?.setup ?? []))
+      ],
+      releaseGuard: Boolean(n.data.targets.publish?.metadata?.publish?.releaseGuard),
       prebuildStatus: PREBUILD_KEYS.includes(c.key),
       cppStatus: CPP_TEST_KEYS.includes(c.key)
     })
@@ -244,6 +349,11 @@ export function select({ graph, affected, targets, labels, gate, configs = [] })
         out.matrices[t].push({ ...r, ...c })
       }
     }
+  }
+  if (out.matrices['test:integration']) {
+    const routed = routeLabelled(out.matrices['test:integration'], { prLabels, baseRef, dispatch })
+    out.matrices['test:integration'] = routed.plain
+    out.matrices['test:integration:labelled'] = routed.labelled
   }
   // A baseline package runs its C++ tests on every pull request, without the label, so new tests cannot land skipped
   // (QVAC-25289); these rows build and test it alone.
@@ -283,7 +393,37 @@ export function select({ graph, affected, targets, labels, gate, configs = [] })
   return out
 }
 
+// Rows whose configuration declares ci.labels run only when a label, the PR's base branch or a dispatch selects them,
+// never on the stage labels; the first matching key in declaration order gives the suite the command reads as CI_SUITE.
+export function routeLabelled(matrix, { prLabels = [], baseRef = '', dispatch = false }) {
+  const plain = []
+  const labelled = []
+  const matches = (key) =>
+    key.startsWith('base:')
+      ? key.endsWith('*')
+        ? baseRef.startsWith(key.slice(5, -1))
+        : baseRef === key.slice(5)
+      : key.startsWith('dispatch:')
+        ? dispatch && prLabels.includes(key.slice(9))
+        : prLabels.includes(key)
+  for (const row of matrix) {
+    if (!row.labels) {
+      plain.push(row)
+      continue
+    }
+    const hit = Object.keys(row.labels).find(matches)
+    if (hit !== undefined) labelled.push({ ...row, label: hit, suite: row.labels[hit] })
+  }
+  return { plain, labelled }
+}
+
 const npmName = (n) => n.data.metadata?.js?.packageName ?? n.name
+// The name in a package's release branches, tags and artifacts: its directory under packages/, else its unscoped npm
+// name, so plugins/opencode releases from release-opencode-plugin-<x.y.z>.
+export const slugOf = (n) =>
+  n.data.root.startsWith('packages/')
+    ? n.data.root.split('/').pop()
+    : npmName(n).replace(/^@[^/]+\//, '')
 
 // The contract packages whose link:platform one of this package's targets depends on, in declaration order. A
 // provider off the contract is still built inside each consumer job, through the target's own dependencies.
@@ -293,7 +433,7 @@ export function providersOf(graph, name) {
     for (const dep of target.dependsOn ?? [])
       if (dep?.target === 'link:platform')
         for (const p of dep.projects ?? [])
-          if (p !== name && graph.nodes[p]?.data.tags?.includes(TAG) && !out.includes(p)) out.push(p)
+          if (p !== name && graph.nodes[p]?.data.tags?.some((t) => TAGS.includes(t)) && !out.includes(p)) out.push(p)
   return out
 }
 
@@ -420,7 +560,9 @@ function main(env) {
     affected = Object.values(graph.nodes)
       .filter(
         (n) =>
-          range.explicit.includes(n.name) || range.explicit.includes(n.data.root.split('/').pop())
+          range.explicit.includes(n.name) ||
+          range.explicit.includes(n.data.root.split('/').pop()) ||
+          range.explicit.includes(slugOf(n))
       )
       .map((n) => n.name)
   } else if (!range.all) {
@@ -439,11 +581,23 @@ function main(env) {
   const labels = parseRunnerLabels(
     readFileSync('.github/workflows/reusable-runner-names.yml', 'utf8')
   )
+  // As main's label-triggered runs: a label routes when it is the one just applied, a base branch on a PR's opening or
+  // push; a dispatch names its labels.
+  const pr = event.pull_request
+  const prLabels = pr
+    ? event.action === 'labeled' && event.label
+      ? [event.label.name]
+      : []
+    : (env.LABELS || '').split(/[\s,]+/).filter(Boolean)
   const result = select({
     graph,
     affected,
     targets,
     labels,
+    prLabels,
+    baseRef: pr && ['opened', 'synchronize'].includes(event.action) ? pr.base.ref : '',
+    dispatch: !pr && env.GITHUB_EVENT_NAME === 'workflow_dispatch',
+    tags: (env.TAGS || TAG).split(/[\s,]+/).filter(Boolean),
     configs: (env.CONFIGS || '').split(/[\s,]+/).filter(Boolean),
     gate: gateKeys(readFileSync('.github/workflows/pr-gate-merge.yml', 'utf8'))
   })
