@@ -24,6 +24,7 @@ breaking changes the merge introduced.
   - [Whisper — batch `run()`](#whisper--batch-run)
   - [Whisper — VAD streaming `runStreaming()`](#whisper--vad-streaming-runstreaming)
   - [Parakeet — batch `run()`](#parakeet--batch-run)
+  - [Parakeet — text per speaker turn](#parakeet--text-per-speaker-turn)
   - [Parakeet — duplex streaming `runStreaming()`](#parakeet--duplex-streaming-runstreaming)
   - [MOSS-Transcribe-Diarize — batch `run()` with hotwords](#moss-transcribe-diarize--batch-run-with-hotwords)
 - [Engine Selection](#engine-selection)
@@ -362,13 +363,81 @@ await model.unload()
 > For longer captures use `runStreaming()`, which feeds the engine as audio
 > arrives, or split into sequential `run()` calls.
 
+### Parakeet — text per speaker turn
+
+Use an ASR GGUF as the primary model and a separate Sortformer or Nemotron 3
+Diarization GGUF in `speakerAttribution.modelPath`. One instance loads and
+retains both engines; repeated `run()` calls reuse them.
+
+```javascript
+const model = new ASRGgml({
+  files: { model: './models/parakeet-unified-en-0.6b.q8_0.gguf' },
+  config: {
+    engine: 'parakeet',
+    parakeetConfig: {
+      backend: 'cpu',
+      speakerAttribution: {
+        modelPath: './models/sortformer-4spk-v1.q8_0.gguf'
+      }
+    }
+  }
+})
+
+try {
+  await model.load()
+  const response = await model.run(audio16kMono)
+  await response.onUpdate((segments) => {
+    for (const { speakerId, start, end, text } of segments) {
+      console.log({ speakerId, start, end, text })
+    }
+  }).await()
+} finally {
+  await model.unload()
+}
+```
+
+The addon composes the native diarization and transcription APIs, transcribes
+each retained turn and merges adjacent turns from the same speaker when
+requested. `speakerId` is zero-based; `start` and `end` are seconds in the
+input recording. This offline mode uses `run()`; it does not support
+`runStreaming()` or `streaming: true`. Without `speakerAttribution`, the
+existing plain ASR and standalone diarization modes are unchanged.
+
+| `speakerAttribution` option | Native default | Meaning |
+| --- | --- | --- |
+| `modelPath` | required | Separate diarization GGUF. The primary model must support transcription. |
+| `mergeSameSpeaker` | `true` | Merge adjacent retained turns assigned to the same speaker. |
+| `minSegmentMs` | `200` | Minimum padded slice duration before sending it to ASR. `0` keeps short turns. |
+| `padSegmentMs` | `0` | Extend the ASR audio slice around each turn; returned timestamps still describe the diarized turn. |
+
+Omitted options use the native defaults. Durations must be non-negative
+integers representable by the native API. Cancellation is checked between
+diarization and each ASR turn. The existing `diarizationThreshold`
+and `diarizationMinSegmentMs` override the diarizer when explicitly set; if
+omitted in this mode, the native attributed API owns their defaults.
+`backend` applies to both loaded engines. A load fails if either model is
+unreadable or has the wrong model family.
+
+Runnable example:
+
+```sh
+bare examples/parakeet-diarized-transcribe.js \
+  --asr-model ./models/parakeet-unified-en-0.6b.q8_0.gguf \
+  --diar-model ./models/sortformer-4spk-v1.q8_0.gguf \
+  --audio ./examples/parakeet-samples/diarization-sample-16k.wav \
+  --backend cpu
+```
+
 ### Parakeet — duplex streaming `runStreaming()`
 
 `runStreaming()` opens one long-lived native session for the lifetime of the
 call and forwards each chunk as it arrives — no batching, no per-chunk session
 recreation. Speaker IDs stay stable across appends, and an EOU model's `<EOU>`
-boundaries surface both as `segment.isEndOfTurn` and as a synthesized
-`{ type: 'endOfTurn', source: 'model-eou' }` event.
+boundaries surface both as `segment.isEndOfTurn` and as a native
+`{ type: 'endOfTurn', source: 'model-eou', timestamp, chunkIndex, confidence }`
+event. Event timestamps retain the native double precision. Each boundary
+follows its transcript chunks, including text flushed during finalization,
+so consumers can submit and clear accumulated text on `endOfTurn`.
 
 ```javascript
 const model = new ASRGgml({
@@ -389,6 +458,22 @@ await response
 
 Only one streaming session may be open per instance; a concurrent `run()` or
 `runStreaming()` throws `STREAMING_SESSION_ACTIVE` (6020).
+
+ASR streaming segments also carry `tokenIds`, `isFinal`, `chunkIndex` and
+`eotConfidence`; diarization streaming segments carry `isFinal` and
+`chunkIndex`. Empty final markers are delivered, so use `isFinal` rather
+than non-empty text to detect native finality. VAD events include the native
+`chunkIndex` (`-1` when unavailable). Confidence is the native model value;
+it may be `0` when there is no EOU confidence for a segment. Plain batch ASR
+and Whisper do not gain these Parakeet streaming fields.
+
+To inspect every segment and event as JSON:
+
+```sh
+bare examples/parakeet-streaming-metadata.js \
+  ./models/parakeet-eou-120m-v1.q8_0.gguf \
+  ./examples/parakeet-samples/sample-16k.wav cpu
+```
 
 ### MOSS-Transcribe-Diarize — batch `run()` with hotwords
 
@@ -487,13 +572,15 @@ Constructor options:
 
 - bare `TranscriptionSegment[]` (or a single segment) for transcripts — there
   is no `{ type: 'segment' }` wrapper;
-- `{ type: 'vad', speaking, score, source, timestamp?, speakerId? }` for
+- `{ type: 'vad', speaking, score, source, timestamp?, chunkIndex?, speakerId? }` for
   voice-activity events, emitted on each speech/silence change. `source` is
   `'silero'` (Whisper streaming), `'energy'` (Parakeet ASR energy detector;
   `score` is the window RMS), or `'sortformer'` (Parakeet speaker activity;
   `speakerId` names the dominant speaker when speech starts). Parakeet events
   carry `timestamp`, in seconds from the start of the session;
-- `{ type: 'endOfTurn', source, silenceDurationMs? }` for turn boundaries.
+- `{ type: 'endOfTurn', source, silenceDurationMs?, timestamp?, chunkIndex?, confidence? }`
+  for turn boundaries. Parakeet forwards native timing and confidence;
+  Whisper retains its silence-duration payload.
 
 Engine-specific segment fields:
 
@@ -507,6 +594,8 @@ Engine-specific segment fields:
   same data in structured form: a streamed diarization segment carries
   `speakerId`, and the offline transcript carries
   `speakerSegments: [{ speakerId, start, end }]`, one entry per text line.
+- Parakeet with `speakerAttribution` returns transcription text with
+  `speakerId`, `start`, `end` and `isFinal: true` for each retained turn.
 - MOSS-Transcribe-Diarize segments carry `speaker` (the model's `"S01"`,
   `"S02"`, ... label) and `speakerId` (the same speaker, 0-based), with
   `start`/`end` in seconds.
@@ -546,6 +635,7 @@ fit.report
 | `modelPath` | **Required.** Absolute path to the model, or to the registry's weightless copy where one exists. |
 | `audioSeconds` | Longest single transcribe the projection must cover. Required for MOSS; defaults to 300 for whisper and parakeet. |
 | `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet and MOSS project on the CPU and whisper on the GPU, matching what each load does. |
+| `backend` | Parakeet and MOSS: native backend selector, matching the load configuration. Explicit selection overrides `gpuLayers`. The projection covers one model; assess both models separately for speaker-attributed transcription. |
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet and MOSS. |
 | `backendsDir` | Directory scanned as given for the ggml backends, the same path a load reads. Unset scans next to the loaded module. |
 | `vadModelPath` | Whisper: projected alongside the model; the VAD model or its weightless copy. Omitted means no VAD. |
@@ -678,13 +768,14 @@ key is documented inline there, and any key outside it throws
 
 | Group | Keys |
 | --- | --- |
-| Compute | `maxThreads`, `useGPU`, `seed` |
+| Compute | `maxThreads`, `useGPU`, `backend`, `seed` |
 | Audio | `sampleRate` (16000), `channels` (1) |
 | Output | `captionEnabled`, `timestampsEnabled` |
 | Language | `language` — multilingual CTC id (e.g. `"hi"`); required for Indic Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on monolingual CTC |
 | Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, `streamingEnergyVadHangoverMs`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
 | Streaming diarization | `streamingHistoryMs`, `streamingSpeakerVad`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
 | Diarization, offline and streaming | `diarizationThreshold`, `diarizationMinSegmentMs` (defaults: Sortformer 0.641 / 510 ms; Nemotron 3 0.5 / 200 ms) |
+| Speaker-attributed batch ASR | `speakerAttribution: { modelPath, mergeSameSpeaker?, minSegmentMs?, padSegmentMs? }`; see [text per speaker turn](#parakeet--text-per-speaker-turn) for its native defaults |
 | Engine | `prewarm`, `prewarmAudioSeconds`, `longFormWindowFrames`, `longFormContextFrames` |
 | Backends | `backendsDir`, `openclCacheDir` |
 
@@ -776,6 +867,17 @@ socket/pipe read sizes) is carried over into the next chunk; only a stream
 that ends mid-sample is rejected.
 
 ## Backends and GPU Acceleration
+
+For Parakeet, `parakeetConfig.backend` accepts the native selector unchanged:
+`auto`, `cpu`, `cuda`, `vulkan`, `opencl`, `webgpu`, `metal`, `hexagon`, or an
+exact ggml device name such as `CUDA1`, `MTL0` or `HTP0`. An explicit selector
+overrides `useGPU` and fails at load if unavailable; it does not silently
+retry on CPU. Omitted, empty and `auto` selectors preserve existing automatic
+selection and fallback. A selector requires the corresponding backend to be
+built and available on the host. `getBackendInfo()` reports the resolved
+device, including `NPU` for a native NPU backend. Use the same `backend` in
+the Parakeet `assessFit` request. Core ML sidecars retain their existing
+native routing; selecting a ggml device does not control Core ML placement.
 
 GPU backends are selected per platform via `vcpkg.json` features; no
 `bare-make generate` flag is needed:
@@ -1274,6 +1376,7 @@ Parakeet:
 - [`examples/parakeet-transcribepsy-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-transcribepsy-transcribe.js) — TranscribePsy transcription with the model-recommended or explicit `--window-sec` / `--overlap` long-form windows, reporting whether the encoder ran on Core ML
 - [`examples/parakeet-indic-conformer-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-indic-conformer-transcribe.js) — Indic Conformer transcription with the required `--language <id>` option
 - [`examples/parakeet-diarized-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
+- [`examples/parakeet-streaming-metadata.js`](examples/parakeet-streaming-metadata.js) — native streaming tokens, finality, chunk indices and end-of-turn events as JSON
 - [`examples/nemotron-diarization.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/nemotron-diarization.js) — Nemotron 3 offline 8-speaker diarization
 - [`examples/parakeet-live-mic.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic.js) — live mic via the duplex streaming session
 - [`examples/parakeet-live-mic-diarized.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
