@@ -2858,11 +2858,11 @@ test("asr-ggml functional mobile workflow opts into dual flagship per engine sha
   assert.equal(dispatchAndroid.include.length, 1);
   assert.equal(dispatchAndroid.include[0].platform, "Android");
   // Manual dispatch is serialized per (workflow, branch) and supersedes an
-  // in-flight manual run; workflow_call keys on the unique run_id and never
-  // cancels, so parallel automated callers cannot collide or cancel each other.
+  // in-flight manual run; workflow_call keys on run_id plus the package name and
+  // never cancels, so sibling calls from one caller cannot collide or cancel.
   assert.match(
     workflow,
-    /concurrency:\s*\n[\s\S]*?group:\s*\$\{\{ inputs\.platform != '' && format\('mobile-dispatch-\{0\}-\{1\}', github\.workflow, github\.ref\) \|\| format\('mobile-call-\{0\}', github\.run_id\) \}\}/,
+    /concurrency:\s*\n[\s\S]*?group:\s*\$\{\{ inputs\.platform != '' && format\('mobile-dispatch-\{0\}-\{1\}', github\.workflow, github\.ref\) \|\| format\('mobile-call-\{0\}-asr-ggml', github\.run_id\) \}\}/,
   );
   assert.match(
     workflow,

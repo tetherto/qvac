@@ -106,6 +106,11 @@ on:
         type: string
         required: false
         default: ""
+      prebuild_run_id:
+        description: "Run id whose prebuilds artifact to install. Takes precedence over this run's artifacts and the published release, and fails the run if that artifact is missing or expired. Mutually exclusive with addon_npm_version."
+        type: string
+        required: false
+        default: ""
     # Additive outputs (QVAC weekend job): surface the monitor verdict so a
     # caller can aggregate per-platform pass/fail for reporting. The job itself
     # also fails the run directly on any test failure (no continue-on-error).
@@ -213,8 +218,9 @@ concurrency:
   # because benchmark-vlm-model-comparison fans several parallel legs from ONE
   # run (all sharing run_id, since github.* resolves to the CALLER under
   # workflow_call); each leg passes a distinct artifact_suffix, so this keeps the
-  # legs in separate groups instead of serialising or cancelling them.
-  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-{1}', github.run_id, inputs.artifact_suffix) }}
+  # legs in separate groups instead of serialising or cancelling them. The literal
+  # package name keeps it apart from other mobile workflows called by the same run.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-llm-llamacpp-{1}', github.run_id, inputs.artifact_suffix) }}
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
@@ -426,8 +432,7 @@ jobs:
           # device. See docs/ci/MOBILE-ON-DEMAND.md. workflow_call keeps addon_npm_version/artifact-first.
           force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.addon_npm_version != '') && 'true' || 'false' }}
           package-version: ${{ inputs.platform != '' && inputs.package || inputs.addon_npm_version }}
-          # Dispatch-only: under workflow_call this input does not exist and
-          # resolves empty, leaving the artifact-first path untouched.
+          # Empty keeps the artifact-first path.
           prebuild-run-id: ${{ inputs.prebuild_run_id }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
 

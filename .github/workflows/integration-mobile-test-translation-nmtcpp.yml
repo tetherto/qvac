@@ -33,6 +33,11 @@ on:
         type: string
         required: false
         default: ""
+      prebuild_run_id:
+        description: "Run id whose prebuilds artifact to install. Takes precedence over this run's artifacts and the published release, and fails the run if that artifact is missing or expired."
+        type: string
+        required: false
+        default: ""
   # Manual on-demand path. A dispatched run targets ONE platform and the
   # device(s) chosen below — it never runs the full default pool. The
   # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
@@ -106,8 +111,9 @@ concurrency:
   # same addon can still be tested on 2-3 branches in parallel. workflow_call
   # (benchmarks / weekend / on-merge) is keyed per run and never cancels —
   # inputs.platform is only ever set on a manual dispatch, and under workflow_call
-  # github.* resolves to the CALLER, so run_id keeps each call self-contained.
-  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  # github.* resolves to the CALLER, so run_id plus a literal package name keeps
+  # each call apart from sibling mobile calls in the same caller run.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-translation-nmtcpp', github.run_id) }}
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
@@ -249,8 +255,7 @@ jobs:
           # device. See docs/ci/MOBILE-ON-DEMAND.md. workflow_call is untouched (artifact-first).
           package-version: ${{ inputs.platform != '' && inputs.package || '' }}
           force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
-          # Dispatch-only: under workflow_call this input does not exist and
-          # resolves empty, leaving the artifact-first path untouched.
+          # Empty keeps the artifact-first path.
           prebuild-run-id: ${{ inputs.prebuild_run_id }}
 
       - name: Build mobile app
