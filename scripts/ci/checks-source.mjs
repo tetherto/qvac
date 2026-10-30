@@ -66,7 +66,9 @@ function check([source, dir, project, targets, tarballs]) {
   let failed = 0
   for (const target of targets.split(',').filter(Boolean)) {
     try {
+      // The installs above rewrite manifests pnpm's lockfile does not know, so pnpm must not reinstall before nx.
       run('pnpm', [
+        '--config.verify-deps-before-run=false',
         'exec',
         'nx',
         'run-many',

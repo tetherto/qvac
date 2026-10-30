@@ -23,7 +23,14 @@ const profile =
     ? ''
     : 'aio'
 
-const sdkTgz = packFrom(join(packages, 'sdk'))
+// As main: build the SDK against the in-repo engine in npm's layout, which the mobile bundle needs, then restore the
+// published range so the tarball is self-contained. sdk-source:workspace also installs and builds packages/inference.
+const sdk = join(packages, 'sdk')
+run('npm', ['run', 'sdk-source:workspace'], sdk)
+run('npx', ['tsc', '--project', 'tsconfig.json'], sdk)
+run('npm', ['run', 'postcompile:aliases'], sdk)
+run('git', ['checkout', '--', 'package.json'], sdk)
+const sdkTgz = packFrom(sdk)
 const inferenceTgz = packFrom(join(packages, 'inference'))
 // The committed registry pin first, before it is swapped: the Kotlin runtime, its @qvac/sdk pin and the SDK share a version.
 run('node', ['scripts/check-version-alignment.mjs'], kotlin)

@@ -10,14 +10,9 @@
         "cwd": "packages/sdk-kotlin",
         "command": "node ci/checks.mjs"
       },
-      "dependsOn": [
-        {
-          "projects": ["@qvac/sdk"],
-          "target": "build"
-        }
-      ],
       "metadata": {
-        "setup": ["python", "java", "android-ndk"]
+        "setup": ["python", "java", "android-ndk"],
+        "sources": ["npm"]
       }
     },
     "verify:generated": {
