@@ -1,0 +1,29 @@
+{
+  "models": {
+    "bergamot-enit": {
+      "s3Prefix": "qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/",
+      "dest": "model/bergamot/enit"
+    },
+    "bergamot-esen": {
+      "s3Prefix": "qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/",
+      "dest": "model/bergamot/esen"
+    },
+    "bergamot-fren": {
+      "s3Prefix": "qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/",
+      "dest": "model/bergamot/fren"
+    },
+    "bergamot-enes": {
+      "s3Prefix": "qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/",
+      "dest": "model/bergamot/enes"
+    },
+    "indictrans2-200M-q4_0": {
+      "s3Path": "qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
+      "dest": "model/indictrans/ggml-indictrans2-en-indic-dist-200M-q4_0.bin"
+    },
+    "indictrans2-200M-q4_0-unit-test": {
+      "s3Path": "qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
+      "dest": "models/unit-test/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
+      "targets": ["cpp:tests"]
+    }
+  }
+}

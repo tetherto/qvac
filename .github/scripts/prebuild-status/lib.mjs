@@ -110,14 +110,21 @@ export function selectNewestBotStatus(statuses, context) {
 // on-pr-nx is the producer for every consolidated package.
 export const NX_PRODUCER = '.github/workflows/on-pr-nx.yml'
 
-// These three are carved out of on-pr-nx: two keep their own orchestrators, and
-// vla is built by the CI contract's pr-build-test.yml. Per-package, not a flat
-// allowlist: pr-build-test.yml must not be able to post for classification-ggml.
-// Keys use the PREBUILD_KEYS spelling, so `vla`.
+// Carved out of on-pr-nx: fabric keeps its own orchestrator, and the packages on the CI contract are built by its
+// pr-build-test.yml. Per-package, not a flat allowlist: pr-build-test.yml must not be able to post for a package still
+// on on-pr-nx. Keys use the PREBUILD_KEYS spelling, so `vla`.
+const CONTRACT = '.github/workflows/pr-build-test.yml'
 export const CARVED_OUT_PRODUCERS = {
   fabric: '.github/workflows/on-pr-fabric.yml',
-  'classification-ggml': '.github/workflows/on-pr-classification-ggml.yml',
-  vla: '.github/workflows/pr-build-test.yml',
+  vla: CONTRACT,
+  'classification-ggml': CONTRACT,
+  'embed-llamacpp': CONTRACT,
+  'ggml-rpc-server': CONTRACT,
+  'llm-llamacpp': CONTRACT,
+  'model-fit': CONTRACT,
+  'ocr-ggml': CONTRACT,
+  'translation-nmtcpp': CONTRACT,
+  'turbovec-ggml': CONTRACT,
 }
 
 // Trust only a fresh run of this package's own producer: rejects superseded

@@ -107,7 +107,15 @@
           "args": "--platform=darwin --arch=x64"
         },
         "win32-x64": {
-          "args": "--platform=win32 --arch=x64"
+          "args": "--platform=win32 --arch=x64",
+          "commands": [
+            {
+              "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            { "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make build", "forwardAllArgs": false },
+            { "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make install", "forwardAllArgs": false }
+          ]
         }
       },
       "inputs": [

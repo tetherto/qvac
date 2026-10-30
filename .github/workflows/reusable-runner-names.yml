@@ -19,6 +19,12 @@ on:
       macos_15_large:
         description: "macOS 15 large hosted (darwin x64 integration)"
         value: ${{ jobs.export.outputs.macos_15_large }}
+      macos_15_xlarge:
+        description: "macOS 15 xlarge hosted (darwin arm64 integration)"
+        value: ${{ jobs.export.outputs.macos_15_xlarge }}
+      ai_run_linux_gpu:
+        description: "Linux GPU box for the llm and embed quality benchmarks"
+        value: ${{ jobs.export.outputs.ai_run_linux_gpu }}
       ubuntu_2204:
         description: "Ubuntu 22.04 hosted x64"
         value: ${{ jobs.export.outputs.ubuntu_2204 }}
@@ -68,6 +74,8 @@ jobs:
       macos_15: ${{ steps.export.outputs.macos_15 }}
       macos_15_intel: ${{ steps.export.outputs.macos_15_intel }}
       macos_15_large: ${{ steps.export.outputs.macos_15_large }}
+      macos_15_xlarge: ${{ steps.export.outputs.macos_15_xlarge }}
+      ai_run_linux_gpu: ${{ steps.export.outputs.ai_run_linux_gpu }}
       ubuntu_2204: ${{ steps.export.outputs.ubuntu_2204 }}
       ubuntu_2204_arm: ${{ steps.export.outputs.ubuntu_2204_arm }}
       ubuntu_2404: ${{ steps.export.outputs.ubuntu_2404 }}
@@ -88,6 +96,8 @@ jobs:
           echo "macos_15=macos-15" >> "$GITHUB_OUTPUT"
           echo "macos_15_intel=macos-15-intel" >> "$GITHUB_OUTPUT"
           echo "macos_15_large=macos-15-large" >> "$GITHUB_OUTPUT"
+          echo "macos_15_xlarge=macos-15-xlarge" >> "$GITHUB_OUTPUT"
+          echo "ai_run_linux_gpu=ai-run-linux-gpu" >> "$GITHUB_OUTPUT"
           echo "ubuntu_2204=ubuntu-22.04" >> "$GITHUB_OUTPUT"
           echo "ubuntu_2204_arm=ubuntu-22.04-arm" >> "$GITHUB_OUTPUT"
           echo "ubuntu_2404=ubuntu-24.04" >> "$GITHUB_OUTPUT"

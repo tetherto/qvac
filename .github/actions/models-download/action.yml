@@ -1,5 +1,5 @@
 name: Download models
-description: Fetch the manifest's models a target needs that are not already present. The job holds the S3 credentials.
+description: Fetch the manifest's models a target needs that are not already present, from S3 objects, S3 directories or pinned URLs. S3 entries need the job to hold the credentials.
 
 inputs:
   workdir:
@@ -12,7 +12,7 @@ inputs:
     description: Only models whose targets include this one; empty means all
     default: ""
   manifest:
-    description: Manifest path inside workdir
+    description: Manifest path inside workdir; a missing one means no models
     default: test/integration/models.manifest.json
 
 runs:

@@ -28,7 +28,8 @@ const GATE = "needs.verify-generated.result == 'success'"
 const GATE_MATRIX =
   "needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled'"
 const CONSOLIDATED = '.github/workflows/on-merge-nx.yml'
-const NO_PUBLISH_TEST_PACKAGES = ['decoder-audio', 'asr-ggml', 'bci-whispercpp', 'tts-ggml', 'audiogen-ggml', 'ocr-ggml', 'translation-nmtcpp']
+// ocr-ggml and translation-nmtcpp publish from the CI contract now; publish-gpr-skip-policy covers them there.
+const NO_PUBLISH_TEST_PACKAGES = ['decoder-audio', 'asr-ggml', 'bci-whispercpp', 'tts-ggml', 'audiogen-ggml']
 
 function read(relativePath) {
   return readFileSync(join(root, relativePath), 'utf8')
@@ -129,7 +130,9 @@ function consolidatedPackages() {
   return [...read(CONSOLIDATED).matchAll(/^ {6}- "packages\/([^/]+)\/\*\*"$/gm)].map((m) => m[1])
 }
 
-// Packages requiring the gate: an on-merge addon that has generated wrappers.
+const isContract = (project) => Boolean(project?.tags?.includes('ci:addons'))
+
+// Packages requiring the gate: an on-merge or CI contract addon that has generated wrappers.
 //
 // Both halves are read from the packages themselves, never from the workflow
 // under test, or removing a package from that workflow would remove it from this
@@ -142,11 +145,11 @@ function gatedPackages() {
     const projectJson = join(packagesDir, name, 'project.json')
     const packageJson = join(packagesDir, name, 'package.json')
     if (!existsSync(projectJson) || !existsSync(packageJson)) return false
-    const onMerge = JSON.parse(readFileSync(projectJson, 'utf8'))?.targets?.['on-merge']
+    const project = JSON.parse(readFileSync(projectJson, 'utf8'))
     const hasGeneratedWrappers = Boolean(
       JSON.parse(readFileSync(packageJson, 'utf8'))?.scripts?.['check:generated'],
     )
-    return Boolean(onMerge) && hasGeneratedWrappers
+    return Boolean(project?.targets?.['on-merge'] || isContract(project)) && hasGeneratedWrappers
   })
 }
 
@@ -190,8 +193,13 @@ test('every package with generated wrappers is covered by a pipeline', () => {
   // actually publishes it; otherwise it needs its own on-merge-<pkg>.yml calling
   // the verify reusable. Checking membership rather than the bare `consolidated`
   // flag, so this cannot collapse to an empty filter.
+  // A package on the CI contract is covered when it declares verify:generated, which publish-npm.yml runs before it
+  // publishes.
+  const contractVerifies = /^ {6}targets: build,verify:generated,publish$/m.test(read('.github/workflows/publish-npm.yml'))
   const published = new Set(consolidatedPackages())
   const offenders = gated.filter((pkg) => {
+    const project = JSON.parse(read(`packages/${pkg}/project.json`))
+    if (isContract(project)) return !(contractVerifies && project.targets['verify:generated'])
     if (consolidated && published.has(pkg)) return false
     return !pipelines.includes(`.github/workflows/on-merge-${pkg}.yml`)
   })

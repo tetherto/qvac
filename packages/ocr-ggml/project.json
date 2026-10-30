@@ -1,33 +1,150 @@
 {
   "name": "@qvac/ocr-ggml",
   "root": "packages/ocr-ggml",
+  "tags": [
+    "ci:addons"
+  ],
   "targets": {
-    "on-pr": {
+    "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "command": "pnpm run lint",
+        "cwd": "packages/ocr-ggml"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:dts",
+        "cwd": "packages/ocr-ggml"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/ocr-ggml"
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run check:generated",
+        "cwd": "packages/ocr-ggml"
+      }
+    },
+    "ci:system": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "^ci:system"
+      ],
+      "options": {
         "cwd": "packages/ocr-ggml",
-        "ci": {
-          "hasCppLint": true,
-          "hasTsChecks": true,
-          "tsChecksMode": "dts",
-          "hasFabricLockstep": true,
-          "hasPerfReport": true,
-          "perfReportVariant": "composite",
-          "perfReportPattern": "perf-report-ocr-*",
-          "perfReportTitle": "OCR-GGML Performance Report (All Platforms)",
-          "perfReportExclude": "full-suite|canvasSize lab_results"
+        "parallel": false,
+        "forwardAllArgs": false,
+        "commands": [
+          "echo no system packages"
+        ]
+      },
+      "configurations": {
+        "linux-arm64": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
+          ]
+        },
+        "linux-arm64-2404": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers g++-13 >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers g++-13)"
+          ]
         }
       }
     },
     "build": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
-        "command": "pnpm run build",
         "cwd": "packages/ocr-ggml",
-        "ci": {
-          "artifactNamePrefix": "ggml-ocr-",
-          "includeVulkanSdk": true
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm run build:ts",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make generate",
+            "forwardAllArgs": true
+          },
+          {
+            "command": "pnpm exec bare-make build",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make install",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--platform=linux --arch=x64",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-arm64": {
+          "args": "--platform=linux --arch=arm64",
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "ios-arm64": {
+          "args": "--platform=ios --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-arm64-simulator": {
+          "args": "--platform=ios --arch=arm64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-x64-simulator": {
+          "args": "--platform=ios --arch=x64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--platform=darwin --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-x64": {
+          "args": "--platform=darwin --arch=x64",
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "args": "--platform=win32 --arch=x64",
+          "ci": {
+            "runner": "win_2025_x64"
+          }
         }
       },
       "inputs": [
@@ -38,80 +155,183 @@
         "{projectRoot}/prebuilds"
       ]
     },
-    "test:unit": {
+    "cpp:lint": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/ocr-ggml"
+        "cwd": "packages/ocr-ggml",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm exec bare-make generate -D ENABLE_VULKAN=OFF",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base}",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "pnpm run test:integration",
         "cwd": "packages/ocr-ggml",
-        "ci": {
-          "timeoutMinutes": 30,
-          "envVarName": "QASE_API_TOKEN",
-          "envSecretName": "QASE_API_TOKEN",
-          "windowsGitCreds": true,
-          "linuxArmApt": ["mesa-vulkan-drivers"],
-          "modelS3": [
-            { "src": "qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/", "dest": "models/", "recursive": true },
-            { "src": "qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/", "dest": "models/", "recursive": true }
-          ],
-          "modelEnv": {
-            "OCR_GGML_DETECTOR": "models/craft_mlt_25k.gguf",
-            "OCR_GGML_RECOGNIZER": "models/latin_g2.gguf",
-            "OCR_GGML_DOCTR_DETECTOR": "models/db_mobilenet_v3_large.gguf",
-            "OCR_GGML_DOCTR_RECOGNIZER": "models/crnn_mobilenet_v3_small.gguf"
-          },
-          "platforms": [
-            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" },
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
-            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-24.04-arm", "linuxArmApt": ["mesa-vulkan-drivers", "g++-13"] },
-            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm" },
-            { "os": "mac-mini-m4", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
-            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
-          ]
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ../../scripts/ci/run-integration.mjs --set OCR_GGML_DETECTOR=models/craft_mlt_25k.gguf --set OCR_GGML_RECOGNIZER=models/latin_g2.gguf --set OCR_GGML_DOCTR_DETECTOR=models/db_mobilenet_v3_large.gguf --set OCR_GGML_DOCTR_RECOGNIZER=models/crnn_mobilenet_v3_small.gguf",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-arm64": {
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "linux-arm64-2404": {
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 30,
+        "secrets": [
+          "QASE_API_TOKEN"
+        ]
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/ocr-ggml",
+        "command": "node ci/prepare-mobile.mjs"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "devicefarmProject": "OCR_FASTTEXT",
+          "enablesPerf": true,
+          "mochaTimeoutMs": 1800000,
+          "perfReport": {
+            "title": "OCR-GGML Mobile Performance Report",
+            "merge": true
+          }
         }
       }
     },
     "benchmark": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
         "cwd": "packages/ocr-ggml",
-        "ci": {
-          "aggregateScript": "scripts/perf-report/aggregate-ocr-ggml-rtf.js",
-          "manualDir": "packages/ocr-ggml/benchmarks/manual-results"
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/benchmark.mjs",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--devices cpu --reference",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "linux-x64-gpu": {
+          "args": "--devices vulkan",
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--devices cpu,metal",
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "win32-x64": {
+          "args": "--devices cpu,vulkan",
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        },
+        "report": {
+          "commands": [
+            "node ci/benchmark-report.mjs"
+          ]
         }
+      },
+      "metadata": {
+        "timeoutMinutes": 300
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/ocr-ggml"
-      }
+    "cache:models": {
+      "executor": "nx:noop"
     },
-    "test:cpp": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run test:cpp",
-        "cwd": "packages/ocr-ggml"
-      }
-    },
-    "on-merge": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
-        "cwd": "packages/ocr-ggml",
-        "ci": {
-          "verifyGenerated": true,
-          "nameTransform": "none",
-          "repoName": "ocr-ggml",
-          "testGateMode": "none"
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "ocr-ggml"
         }
       }
     }

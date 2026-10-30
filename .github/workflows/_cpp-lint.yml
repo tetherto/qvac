@@ -73,6 +73,8 @@ jobs:
         uses: ./.github/actions/setup-cuda
         with:
           cuda-version: ${{ matrix.row.toolchain.cuda }}
+          # Only fabric's CUDA build loads MSVC 14.44; the package builds with the runner's default toolset, as on main.
+          msvc-scope: file
       - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'rocm') || contains(matrix.row.setup, 'rocm')
         uses: ./.github/actions/setup-rocm
         with:

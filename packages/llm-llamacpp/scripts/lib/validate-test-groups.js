@@ -20,7 +20,7 @@ function platformFamily(key) {
   return key.replace(/Weekly$/, '')
 }
 
-// Benchmark shards run only through benchmark-perf-llm-llamacpp.yml's
+// Benchmark shards run only through the benchmarks.yml sweep, whose
 // test_groups override. The MoE finetune test is desktop opt-in only (see
 // test/integration/finetuning-moe.test.js), so neither belongs in this file.
 function isOverrideOnly(name) {

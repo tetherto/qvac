@@ -112,7 +112,7 @@ npm run test:cpp           # C++ unit tests (GoogleTest)
 npm run test:integration   # desktop integration tests against prebuilds/
 ```
 
-On a PR, `on-pr-nx.yml` runs the C++ tests with the `run-cpp-addon-tests` label
+On a PR, `pr-build-test.yml` runs the C++ tests with the `run-cpp-addon-tests` label
 and the desktop integration tests with the `run-desktop-addon-tests` label. Their
-platforms and runner setup live in the `test:cpp` and `test:integration`
-targets of `project.json`.
+platforms and runners live in the configurations of the `cpp:build`, `cpp:tests`
+and `test:integration` targets of `project.json`.

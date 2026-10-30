@@ -8,9 +8,8 @@ const {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
-  symlinkSync,
-  unlinkSync,
 } = require("node:fs");
 const { tmpdir } = require("node:os");
 const {
@@ -30,14 +29,75 @@ const manifest = JSON.parse(
 );
 const tempRoot = mkdtempSync(join(tmpdir(), "qvac-rpc-packaged-smoke-"));
 const packagedRoot = join(tempRoot, "package");
-const dependenciesLink = join(packagedRoot, "node_modules");
-let dependenciesLinked = false;
+const dependenciesRoot = join(packagedRoot, "node_modules");
 
 function copyIntoPackage(path) {
   const source = join(packageRoot, path);
   const destination = join(packagedRoot, path);
   mkdirSync(dirname(destination), { recursive: true });
   cpSync(source, destination, { recursive: true });
+}
+
+// The directory a package named `name` resolves to from `from`, following links to its real location.
+function findPackage(name, from) {
+  for (let dir = from; ; dir = dirname(dir)) {
+    const candidate = join(dir, "node_modules", ...name.split("/"));
+    if (existsSync(join(candidate, "package.json")))
+      return realpathSync(candidate);
+    if (dirname(dir) === dir) return null;
+  }
+}
+
+// Bare specifiers an imports map points at, such as fabric's #host-addon platform packages.
+function importTargets(map) {
+  if (typeof map === "string") return /^[^./#]/.test(map) ? [map] : [];
+  if (!map || typeof map !== "object") return [];
+  return Object.values(map).flatMap(importTargets);
+}
+
+// Installs the runtime dependency closure as real directories in npm's flat layout, so resolution never crosses the
+// links pnpm uses. Each dependency resolves from the real directory of the package that needs it.
+function installDependencies(manifestRoot, required) {
+  const pending = [{ from: manifestRoot, names: required }];
+  const installed = new Set();
+  while (pending.length) {
+    const { from, names } = pending.shift();
+    for (const name of names) {
+      if (installed.has(name)) continue;
+      const source = findPackage(name, from);
+      if (!source) continue;
+      installed.add(name);
+      const pkg = JSON.parse(
+        readFileSync(join(source, "package.json"), "utf8"),
+      );
+      const destination = join(dependenciesRoot, ...name.split("/"));
+      mkdirSync(destination, { recursive: true });
+      // A glob in files copies its top-level directory.
+      const entries = pkg.files
+        ? [
+            ...new Set([
+              "package.json",
+              ...pkg.files.map((f) => (/[*?[]/.test(f) ? f.split("/")[0] : f)),
+            ]),
+          ]
+        : readdirSync(source).filter((entry) => entry !== "node_modules");
+      for (const entry of entries) {
+        if (existsSync(join(source, entry)))
+          cpSync(join(source, entry), join(destination, entry), {
+            recursive: true,
+            dereference: true,
+          });
+      }
+      pending.push({
+        from: source,
+        names: [
+          ...Object.keys(pkg.dependencies || {}),
+          ...Object.keys(pkg.optionalDependencies || {}),
+          ...importTargets(pkg.imports),
+        ],
+      });
+    }
+  }
 }
 
 function isInside(path, root) {
@@ -124,14 +184,12 @@ async function main() {
       copyIntoPackage(path);
     }
 
-    // Reuse JS dependencies without making the original build tree, prebuilds,
-    // or package source part of the isolated package's search path.
-    symlinkSync(
-      join(packageRoot, "node_modules"),
-      dependenciesLink,
-      process.platform === "win32" ? "junction" : "dir",
-    );
-    dependenciesLinked = true;
+    // Copy the JS dependencies in, without making the original build tree, prebuilds, or package source part of the
+    // isolated package's search path.
+    installDependencies(packageRoot, [
+      ...Object.keys(manifest.dependencies || {}),
+      ...Object.keys(manifest.optionalDependencies || {}),
+    ]);
     if (existsSync(join(packagedRoot, "build"))) {
       throw new Error(
         "Isolated package unexpectedly contains a build directory",
@@ -150,8 +208,6 @@ async function main() {
       },
     );
   } finally {
-    // Remove the dependency junction before recursively removing the temp tree.
-    if (dependenciesLinked) unlinkSync(dependenciesLink);
     // Windows can hold a just-killed process's loaded addon open briefly.
     rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5 });
   }

@@ -143,7 +143,7 @@ Enforced by `.github/scripts/test/ci-trust-policy.test.mjs`.
 
 ## Carve-outs
 
-Packages with bespoke flows set `carveOut: true` on the relevant target. `nx-project-matrix` surfaces them in the `carveouts` output; the orchestrator routes them to their own reusable (`integration-test-asr-ggml.yml`, `integration-test-llm-llamacpp.yml`, `cpp-tests-llm.yml`, translation cpp) instead of the generic matrix. They still self-affect from their own `project.json`.
+Packages with bespoke flows set `carveOut: true` on the relevant target. `nx-project-matrix` surfaces them in the `carveouts` output; the orchestrator routes them to their own reusable (`integration-test-asr-ggml.yml`) instead of the generic matrix. They still self-affect from their own `project.json`.
 
 ## Merge guard
 

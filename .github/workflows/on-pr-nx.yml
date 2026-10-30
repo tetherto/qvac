@@ -172,15 +172,7 @@ jobs:
             # reusable so its check has no "/ ts-checks" suffix.
             echo "tschecks=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true) | {package, tsCheckName: (
               {
-                "classification-ggml": "classification-ggml-pr-head-ts-checks / ts-checks",
-                "diffusion-cpp":       "diffusion-pr-head-ts-checks",
-                "embed-llamacpp":      "embed-pr-head-ts-checks / ts-checks",
-                "ggml-rpc-server":     "ggml-rpc-server-pr-head-ts-checks / ts-checks",
-                "llm-llamacpp":        "llm-pr-head-ts-checks / ts-checks",
-                "model-fit":           "model-fit-pr-head-ts-checks / ts-checks",
-                "ocr-ggml":            "ocr-ggml-pr-head-ts-checks / ts-checks",
-                "translation-nmtcpp":  "translation-nmtcpp-pr-head-ts-checks / ts-checks",
-                "turbovec-ggml":       "turbovec-ggml-pr-head-ts-checks / ts-checks"
+                "diffusion-cpp":       "diffusion-pr-head-ts-checks"
               }[.package] // error("no ts check name mapped for \(.package)")
             )}] | unique_by(.package)')"
             echo "fabric=$(echo "$M" | jq -c '[.[] | select(.hasFabricLockstep == true)]')"
@@ -299,9 +291,8 @@ jobs:
           name: fabric-prebuilds
           path: fabric-prebuilds-staging
 
-  # Leaves get the on-pr package list explicitly so carved-out packages (fabric,
-  # classification-ggml, vla-ggml) are not built here as well as by their own
-  # orchestrators. The list is already transitive.
+  # Leaves get the on-pr package list explicitly so the carved-out fabric is not
+  # built here as well as by its own orchestrator. The list is already transitive.
   prebuild:
     needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, detect-fabric-stack, resolve-fabric-prebuilds]
     # A failed detection leaves needs_fabric_artifact empty, which satisfies

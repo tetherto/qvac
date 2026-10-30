@@ -68,65 +68,6 @@ jobs:
           echo "tspackages=$tspackages" >> "$GITHUB_OUTPUT"
           echo "TS-check packages: $tspackages"
 
-  # One static job per package. `uses:` cannot take an expression, so these
-  # cannot be a matrix. Job ids are load-bearing: the check run is named
-  # "<job id> / ts-checks", and on-pr-nx polls for those exact strings.
-  classification-ggml-pr-head-ts-checks:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'classification-ggml')
-    uses: ./.github/workflows/reusable-ts-checks.yml
-    with:
-      workdir: packages/classification-ggml
-
-  embed-pr-head-ts-checks:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'embed-llamacpp')
-    uses: ./.github/workflows/reusable-ts-checks.yml
-    with:
-      workdir: packages/embed-llamacpp
-
-  ggml-rpc-server-pr-head-ts-checks:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'ggml-rpc-server')
-    uses: ./.github/workflows/reusable-ts-checks.yml
-    with:
-      workdir: packages/ggml-rpc-server
-
-  llm-pr-head-ts-checks:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'llm-llamacpp')
-    uses: ./.github/workflows/reusable-ts-checks.yml
-    with:
-      workdir: packages/llm-llamacpp
-
-  model-fit-pr-head-ts-checks:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'model-fit')
-    uses: ./.github/workflows/reusable-ts-checks.yml
-    with:
-      workdir: packages/model-fit
-
-  ocr-ggml-pr-head-ts-checks:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'ocr-ggml')
-    uses: ./.github/workflows/reusable-ts-checks.yml
-    with:
-      workdir: packages/ocr-ggml
-
-  translation-nmtcpp-pr-head-ts-checks:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'translation-nmtcpp')
-    uses: ./.github/workflows/reusable-ts-checks.yml
-    with:
-      workdir: packages/translation-nmtcpp
-
-  turbovec-ggml-pr-head-ts-checks:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'turbovec-ggml')
-    uses: ./.github/workflows/reusable-ts-checks.yml
-    with:
-      workdir: packages/turbovec-ggml
-
   # diffusion predates reusable-ts-checks and runs its steps inline, so its
   # check run is "diffusion-pr-head-ts-checks" with no "/ ts-checks" suffix.
   # on-pr-nx's name map carries that exception; keep the shape until diffusion

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import { classifyConclusion, findCheck, pollForCheck } from '../await-ts-checks/lib.mjs'
 
-const NAME = 'llm-pr-head-ts-checks / ts-checks'
+const NAME = 'example-ts-checks / ts-checks'
 
 const done = (conclusion) => [{ name: NAME, status: 'completed', conclusion }]
 const running = () => [{ name: NAME, status: 'in_progress', conclusion: null }]
@@ -51,9 +51,9 @@ test('classifyConclusion: success and an intentional skip pass, real failures fa
 test('a skipped check returns success and says why', async () => {
   const logs = []
   const code = await pollForCheck({
-    checkName: 'ocr-ggml-pr-head-ts-checks',
+    checkName: 'diffusion-pr-head-ts-checks',
     fetchChecks: async () => [
-      { name: 'ocr-ggml-pr-head-ts-checks', status: 'completed', conclusion: 'skipped' },
+      { name: 'diffusion-pr-head-ts-checks', status: 'completed', conclusion: 'skipped' },
     ],
     now: () => 0,
     sleep: async () => {},
@@ -70,9 +70,9 @@ test('a skipped check returns success and says why', async () => {
 test('a real failure is still a failure', async () => {
   const logs = []
   const code = await pollForCheck({
-    checkName: 'ocr-ggml-pr-head-ts-checks',
+    checkName: 'diffusion-pr-head-ts-checks',
     fetchChecks: async () => [
-      { name: 'ocr-ggml-pr-head-ts-checks', status: 'completed', conclusion: 'failure' },
+      { name: 'diffusion-pr-head-ts-checks', status: 'completed', conclusion: 'failure' },
     ],
     now: () => 0,
     sleep: async () => {},
@@ -135,7 +135,7 @@ test('persistent API error to deadline -> 1', async () => {
 
 // A skipped CALLER job produces one check run under the bare caller-job name;
 // the nested "<caller> / <job>" run the callers poll for never exists.
-const CALLER = 'llm-pr-head-ts-checks'
+const CALLER = 'example-ts-checks'
 const bare = (status, conclusion) => [{ name: CALLER, status, conclusion }]
 
 test('findCheck: the exact job-level name wins whenever it is present', () => {
@@ -175,7 +175,7 @@ test('a skipped caller job (bare name only) passes instead of timing out', async
     log: (msg) => logs.push(msg),
   })
   assert.equal(code, 0)
-  assert.match(logs.join('\n'), /llm-pr-head-ts-checks was skipped/)
+  assert.match(logs.join('\n'), /example-ts-checks was skipped/)
 })
 
 test('a bare caller-job success alone does not pass; the nested run is required', async () => {

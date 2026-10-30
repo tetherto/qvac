@@ -17,11 +17,12 @@ A package without the tag stays on `on-pr-nx.yml`, which reads `options.ci` from
 | `pr-checks.yml` | every pull request; no secrets | `lint`, `typecheck`, `test:unit`, `verify:generated` |
 | `pr-build-test.yml` | every pull request, after fork approval and trust | `build`, `cpp:lint`, `cpp:build`, `cpp:tests`, `test:integration`, `test:backend` |
 | `mobile-tests.yml` | dispatch | `test:mobile` |
+| `benchmarks.yml` | dispatch | `build`, `benchmark`, `test:mobile` |
 | `cache-warm.yml` | push to `main` on cache inputs, schedule, dispatch | `cache:models`, `build`, `cpp:tests` |
 | `publish-npm.yml` | push to `release-<dir>-<x.y.z>`, dispatch (`dry_run`) | `build`, `verify:generated`, `publish` |
 | `publish-gpr.yml` | dispatch | `build`, `verify:generated`, `publish` |
 
-Each group calls `_select-projects.yml` for its rows, then the templates `_build.yml`, `_cpp-lint.yml`, `_cpp-tests.yml` and `_desktop.yml` run them. `.github/scripts/select-projects.mjs` is the only code that reads a package's CI settings.
+Each group calls `_select-projects.yml` for its rows, then the templates `_build.yml`, `_cpp-lint.yml`, `_cpp-tests.yml`, `_desktop.yml` and `_mobile.yml` run them. `.github/scripts/select-projects.mjs` is the only code that reads a package's CI settings.
 
 In `pr-build-test.yml`, stages beyond `cpp:lint` run on labels: `prebuilds` builds, `run-cpp-addon-tests` adds C++ tests, and `run-desktop-addon-tests` adds desktop tests. Both test labels build too. Mobile runs only by dispatch (`docs/ci/MOBILE-ON-DEMAND.md`).
 
@@ -43,6 +44,7 @@ A package on the contract declares only these targets:
 | `test:integration`, `test:backend` | Desktop tests | yes |
 | `test:mobile` | Prepares the Device Farm test package | yes |
 | `cache:models` | Marks the package for model cache warming; `nx:noop` | no |
+| `benchmark` | Runs the package's benchmarks; its `report` configuration then reads every configuration's results | yes, plus `report` |
 | `publish` | Marks the package as publishable; `nx:noop` | no |
 
 Every package command is a target command. A group's step runs `nx run-many`, never `bare-make`, a `ci/` script or a package script directly. Tooling stays in the groups' steps: checkout, toolchain setup, artifacts, Device Farm, and packing and publishing to a registry. `ci:setup` and `ci:system` set `options.forwardAllArgs: false`, so an argument meant for a later target never reaches their commands.
@@ -54,7 +56,9 @@ Each platform a target runs on is an Nx configuration of that target, named `<pl
 - `args`: appended to the target's commands that set `forwardAllArgs: true`. Put the platform flags here, so the commands stay written once.
 - `commands`: replaces the target's commands on this platform, when the step itself differs.
 - `ci.runner`: the runner key from `reusable-runner-names.yml`.
-- `ci.setup`: extra host toolkits, `cuda` or `rocm`.
+- `ci.setup`: extra host toolkits: `cuda` or `rocm`, or `python` for Python 3.10 on a desktop leg.
+
+`benchmark` may also define `report`, the one configuration not named for a platform. `benchmarks.yml` runs it once on Linux after every other configuration and the mobile runs finish, with their results downloaded under `<dir>/benchmarks/results/`. A benchmark command writes its own results there, and reads `BENCHMARK_ARGS`, `QVAC_PERF_RUNS` and `QVAC_PERF_WARMUP_RUNS` when the dispatch sets them.
 
 `nx run-many -c <configuration>` passes the configuration to the target's dependencies that define it, so `ci:system` and the build of a native dependency run with the same configuration.
 
@@ -66,6 +70,17 @@ Each platform a target runs on is an Nx configuration of that target, named `<pl
 | `toolchain` | `build` | toolchain pins; set once in `nx.json`'s build `targetDefaults` |
 | `mobile` | `test:mobile` | `devicefarmProject`, `enablesPerf`, `mochaTimeoutMs`, `perTestTimeoutMinutes`, `perfReport` |
 | `publish` | `publish` | `tagPrefix` for the release tag |
+| `secrets` | `test:integration`, `test:backend`, `benchmark`, `test:mobile` | secrets the command reads from its environment, from `SECRETS` in `select-projects.mjs` (`QASE_API_TOKEN`, `HF_TOKEN`, `MODEL_S3_BUCKET`) |
+
+### Models
+
+The jobs that run a target fetch its models first, from the package's one manifest, `test/integration/models.manifest.json`; a package without it has no models. Package tools that read the same file skip the entries that are not theirs. Each entry names one source:
+
+- `s3Path`: one object, into `dest`.
+- `s3Prefix`: a directory, synced into `dest`, skipping the `exclude` globs.
+- `urls`: pinned mirrors, into `dest`, by default `test/model/<name>`; `sha256` and `bytes` are checked when set.
+
+`targets` lists the targets that need the entry, by default `test:integration` only; `skip` lists `<platform>-<arch>` hosts that never need it; `warm: false` leaves it to the tests.
 
 `nx.json`'s `toolchain.hostSetup` names the toolkits each host installs for builds that compile native dependencies, and pins their versions.
 

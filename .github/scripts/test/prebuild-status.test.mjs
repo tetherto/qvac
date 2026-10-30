@@ -154,9 +154,10 @@ test('isRunFresh: each carved-out package trusts only its own orchestrator', () 
       `${pkg} accepted on-pr-nx, which no longer builds it`,
     )
 
-    // Cross-package forgery: another carved-out orchestrator must be rejected.
+    // Cross-package forgery: another orchestrator must be rejected. The packages on the CI contract share
+    // pr-build-test.yml, which posts only for the packages its own selection picked.
     for (const [otherPkg, otherPath] of Object.entries(CARVED_OUT_PRODUCERS)) {
-      if (otherPkg === pkg) continue
+      if (otherPkg === pkg || otherPath === path) continue
       assert.equal(
         isRunFresh({ path: otherPath, created_at: at }, pkg, threshold),
         false,
@@ -173,12 +174,12 @@ test('isRunFresh: each carved-out package trusts only its own orchestrator', () 
   }
 })
 
-test('isRunFresh: ggml-rpc-server trusts only on-pr-nx', () => {
+test('isRunFresh: ggml-rpc-server trusts pr-build-test.yml, not on-pr-nx', () => {
   const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
   const at = '2026-08-10T12:00:05Z'
 
-  assert.equal(CARVED_OUT_PRODUCERS['ggml-rpc-server'], undefined)
-  assert.equal(isRunFresh({ path: NX_PRODUCER, created_at: at }, 'ggml-rpc-server', threshold), true)
+  assert.equal(isRunFresh({ path: '.github/workflows/pr-build-test.yml', created_at: at }, 'ggml-rpc-server', threshold), true)
+  assert.equal(isRunFresh({ path: NX_PRODUCER, created_at: at }, 'ggml-rpc-server', threshold), false)
   assert.equal(
     isRunFresh({ path: '.github/workflows/on-pr-ggml-rpc-server.yml', created_at: at }, 'ggml-rpc-server', threshold),
     false,

@@ -180,14 +180,14 @@ test('fails closed when a call site stops being parsed', () => {
   try {
     edit(
       dir,
-      'on-merge-model-cache-llm.yml',
+      'on-merge-model-cache-asr.yml',
       /uses: \.\/\.github\/actions\/cache-models$/gm,
       'uses: ./.github/actions/cache-models # shared',
     )
     const r = run(dir)
     assert.equal(r.status, 1, r.stdout)
     assert.match(r.stderr, /parser has gone blind/)
-    assert.match(r.stderr, /on-merge-model-cache-llm\.yml/)
+    assert.match(r.stderr, /on-merge-model-cache-asr\.yml/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

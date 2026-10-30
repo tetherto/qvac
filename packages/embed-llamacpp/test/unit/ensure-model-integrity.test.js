@@ -339,8 +339,24 @@ test('integration manifest is well-formed and covers MODEL_CONFIGS', function (t
   t.is(new Set(names).size, names.length, 'no duplicate model keys')
 
   for (const [name, entry] of Object.entries(manifest.models)) {
+    // CI-only entries: an S3 object, or a pinned URL for another target, each with its dest.
+    const ciKeys = ['dest', 'skip', 'targets']
+    if (entry.s3Path) {
+      t.is(
+        Object.keys(entry)
+          .filter((k) => !ciKeys.includes(k))
+          .join(','),
+        's3Path',
+        `${name} is an S3 entry and nothing else`
+      )
+      t.ok(typeof entry.dest === 'string' && entry.dest, `${name} names its dest`)
+      continue
+    }
     t.is(
-      Object.keys(entry).sort().join(','),
+      Object.keys(entry)
+        .filter((k) => !(entry.targets && ciKeys.includes(k)))
+        .sort()
+        .join(','),
       'bytes,sha256,urls',
       `${name} contains only cache-key-bearing fields`
     )

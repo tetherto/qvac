@@ -35,6 +35,34 @@
       ],
       "sha256": "c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f",
       "bytes": 554821024
+    },
+    "laya-multilingual-Q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-Q8_0.gguf",
+      "dest": "models/laya/laya-multilingual-Q8_0.gguf"
+    },
+    "unit-test-model.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-Q8_0.gguf"
+      ],
+      "sha256": "a0f7b4e13c397a6e1b32c2de75b1f65a14c92ec524d5f674d94a4290a1c4969b",
+      "bytes": 328577056,
+      "dest": "models/unit-test/test-model.gguf",
+      "targets": ["cpp:tests"]
+    },
+    "unit-test-rerank.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf"
+      ],
+      "sha256": "ad9f450c1053a431e2e3746d1f9f7768fb9183cf0796e046983a3449dca093c2",
+      "bytes": 67504480,
+      "dest": "models/unit-test/rerank-test.gguf",
+      "targets": ["cpp:tests"]
+    },
+    "unit-test-laya.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-Q8_0.gguf",
+      "dest": "models/unit-test/laya-test.gguf",
+      "targets": ["cpp:tests"],
+      "skip": ["darwin-arm64", "darwin-x64", "win32-x64"]
     }
   }
 }

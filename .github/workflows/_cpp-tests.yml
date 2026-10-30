@@ -137,13 +137,13 @@ jobs:
         with:
           workdir: ${{ env.WORKDIR }}
           target: cpp:tests
-      - if: runner.environment != 'github-hosted' && env.TRUSTED == 'true'
+      - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted' && env.TRUSTED == 'true'
         uses: tetherto/qvac-actions/cache@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           key: ${{ steps.models.outputs.key }}
           path: ${{ steps.models.outputs.paths }}
           enable-cross-os-archive: "true"
-      - if: runner.environment != 'github-hosted' && env.TRUSTED != 'true'
+      - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted' && env.TRUSTED != 'true'
         uses: tetherto/qvac-actions/cache-restore@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           key: ${{ steps.models.outputs.key }}
@@ -170,3 +170,14 @@ jobs:
           path: ${{ env.WORKDIR }}/build/**/cpp-test-results.xml
           retention-days: "30"
           if-no-files-found: warn
+      # A configuration whose commands measure coverage leaves its report here.
+      - if: always()
+        uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: cpp-coverage-${{ matrix.row.slug }}-${{ matrix.row.config }}
+          path: |
+            ${{ env.WORKDIR }}/build/**/coverage-html/
+            ${{ env.WORKDIR }}/build/**/lcov.info
+            ${{ env.WORKDIR }}/build/**/coverage-summary.txt
+          retention-days: "30"
+          if-no-files-found: ignore

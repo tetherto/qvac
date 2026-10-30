@@ -99,7 +99,6 @@ jobs:
               - "packages/bci-whispercpp/**"
             classification-ggml:
               - "packages/classification-ggml/**"
-              - ".github/workflows/prebuilds-classification-ggml.yml"
             decoder-audio:
               - "packages/decoder-audio/**"
             diffusion-cpp:

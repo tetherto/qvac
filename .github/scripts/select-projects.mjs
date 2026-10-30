@@ -29,6 +29,7 @@ export const TARGETS = [
   'test:backend',
   'test:mobile',
   'cache:models',
+  'benchmark',
   'publish'
 ]
 
@@ -38,15 +39,20 @@ export const CONFIG_NAME = /^(linux|android|ios|darwin|win32)-(x64|arm64)(-[a-z0
 const CONFIG_KEYS = ['args', 'commands', 'ci']
 const CI_KEYS = ['runner', 'setup']
 // Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json.
-const SETUP = ['cuda', 'rocm']
+const SETUP = ['cuda', 'rocm', 'python']
 
 // The metadata a target may carry, and on which targets. toolchain is nx.json's, merged into every build target.
 const METADATA = {
   timeoutMinutes: null,
   toolchain: ['build'],
   mobile: ['test:mobile'],
-  publish: ['publish']
+  publish: ['publish'],
+  secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile'],
+  baseline: ['cpp:tests'],
+  perfReport: ['test:integration']
 }
+// Secrets a target may ask for by name; each is named once in _desktop.yml or _mobile.yml, never indexed.
+export const SECRETS = ['QASE_API_TOKEN', 'HF_TOKEN', 'MODEL_S3_BUCKET']
 const PUBLISH_KEYS = ['tagPrefix']
 const MOBILE_KEYS = [
   'devicefarmProject',
@@ -55,11 +61,16 @@ const MOBILE_KEYS = [
   'perTestTimeoutMinutes',
   'perfReport'
 ]
-// Each needs its secret named in mobile-tests.yml's PROJECT_ARN.
-export const DEVICEFARM_PROJECTS = ['LLAMACPP_EMBED']
+// Each needs its secret named in _mobile.yml's PROJECT_ARN.
+export const DEVICEFARM_PROJECTS = ['LLAMACPP_EMBED', 'LLM', 'OCR_FASTTEXT', 'NMTCPP']
+
+// benchmark's report configuration reads every other configuration's results, so it runs once, after them, never as a row.
+export const REPORT = 'report'
+const isReport = (target, config) => target === 'benchmark' && config === REPORT
 
 export function configurations(project, target) {
-  return Object.entries(project.targets[target].configurations ?? {}).map(([config, cfg]) => {
+  const entries = Object.entries(project.targets[target].configurations ?? {})
+  return entries.filter(([config]) => !isReport(target, config)).map(([config, cfg]) => {
     const where = `${project.name} ${target} configuration ${config}`
     const m = config.match(CONFIG_NAME)
     if (!m) throw new Error(`${where}: the name must be <platform>-<arch>[-<variant>]`)
@@ -100,6 +111,11 @@ export function checkMetadata(project, target) {
         `${project.name} ${target}: no Device Farm project secret is mapped for '${meta.mobile.devicefarmProject}'`
       )
   }
+  const unknownSecrets = (meta.secrets ?? []).filter((s) => !SECRETS.includes(s))
+  if (unknownSecrets.length)
+    throw new Error(
+      `${project.name} ${target}: metadata.secrets takes ${SECRETS.join(', ')}, found ${unknownSecrets.join(', ')}`
+    )
   if (meta.publish) {
     const extra = Object.keys(meta.publish).filter((k) => !PUBLISH_KEYS.includes(k))
     if (extra.length)
@@ -194,6 +210,9 @@ export function select({ graph, affected, targets, labels, gate, configs = [] })
       name: n.name,
       dir: n.data.root,
       ...common,
+      benchmarkReport: Boolean(n.data.targets.benchmark?.configurations?.[REPORT]),
+      cppBaseline: Boolean(n.data.targets['cpp:tests']?.metadata?.baseline),
+      perfReport: n.data.targets['test:integration']?.metadata?.perfReport ?? null,
       prebuildStatus: PREBUILD_KEYS.includes(gate[dir]),
       cppStatus: CPP_TEST_KEYS.includes(gate[dir])
     })
@@ -203,6 +222,17 @@ export function select({ graph, affected, targets, labels, gate, configs = [] })
         out.matrices[t].push({ ...r, ...common })
       }
     }
+  }
+  // A baseline package runs its C++ tests on every pull request, without the label, so new tests cannot land skipped
+  // (QVAC-25289); these rows build and test it alone.
+  const baseline = new Set(out.projects.filter((p) => p.cppBaseline).map((p) => p.name))
+  if (out.matrices['cpp:tests']) {
+    const tests = out.matrices['cpp:tests'].filter((r) => baseline.has(r.project))
+    out.matrices['cpp:tests:baseline'] = tests
+    // Only the builds those test hosts restore, not the package's every platform.
+    const hosts = new Set(tests.map((r) => `${r.project}@${r.platform}-${r.arch}`))
+    if (out.matrices.build)
+      out.matrices['build:baseline'] = out.matrices.build.filter((r) => hosts.has(`${r.project}@${r.config}`))
   }
   return out
 }

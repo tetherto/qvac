@@ -2,9 +2,10 @@ name: PR build and test
 
 # Native builds, C++ lint and tests, and desktop tests for packages on the CI contract, after trust and approval.
 on:
-  pull_request_target:
+  # TEMP rehearsal: pull_request until the stack merges, since pull_request_target runs main's copy, which does not exist yet.
+  pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
-    branches: [main, release-*, feature-*, tmp-*]
+    branches: [main, release-*, feature-*, tmp-*, feat/package-ci-contract-*]
   workflow_dispatch:
     inputs:
       packages:
@@ -78,9 +79,10 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
+  # A cpp:tests baseline package builds and runs its C++ tests without the labels; the labels widen to every package.
   build:
     needs: [select, route, trust]
-    if: needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_prebuilds == 'true'
+    if: needs.trust.outputs.allowed == 'true' && (needs.route.outputs.run_prebuilds == 'true' || fromJSON(needs.select.outputs.matrices)['build:baseline'][0] != null)
     permissions:
       contents: read
       actions: read
@@ -88,11 +90,12 @@ jobs:
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:
-      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).build) }}
+      rows: ${{ toJSON(needs.route.outputs.run_prebuilds == 'true' && fromJSON(needs.select.outputs.matrices).build || fromJSON(needs.select.outputs.matrices)['build:baseline']) }}
+      reuse: true
 
   # Folds a package's build jobs into prebuilds-<slug>, taking its own prebuilds from each job's artifact.
   merge:
-    needs: [select, build]
+    needs: [select, route, build]
     name: merge ${{ matrix.project.slug }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -103,7 +106,7 @@ jobs:
       matrix:
         project: ${{ fromJSON(needs.select.outputs.projects) }}
     env:
-      BUILT: ${{ contains(matrix.project.targets, 'build') }}
+      BUILT: ${{ contains(matrix.project.targets, 'build') && (needs.route.outputs.run_prebuilds == 'true' || matrix.project.cppBaseline) }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
@@ -137,7 +140,7 @@ jobs:
   # C++ and desktop tests run against the build's outputs.
   cpp-tests:
     needs: [select, route, trust, build]
-    if: needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_cpp_tests == 'true'
+    if: needs.trust.outputs.allowed == 'true' && (needs.route.outputs.run_cpp_tests == 'true' || fromJSON(needs.select.outputs.matrices)['cpp:tests:baseline'][0] != null)
     permissions:
       contents: read
       actions: read
@@ -146,7 +149,7 @@ jobs:
     uses: ./.github/workflows/_cpp-tests.yml
     secrets: inherit
     with:
-      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['cpp:tests']) }}
+      rows: ${{ toJSON(needs.route.outputs.run_cpp_tests == 'true' && fromJSON(needs.select.outputs.matrices)['cpp:tests'] || fromJSON(needs.select.outputs.matrices)['cpp:tests:baseline']) }}
 
   desktop:
     needs: [select, route, trust, build]
@@ -160,6 +163,40 @@ jobs:
     secrets: inherit
     with:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).desktop) }}
+
+  # One cross-platform report per package whose test:integration asks for it, from the desktop jobs' perf artifacts.
+  perf-report:
+    needs: [select, desktop]
+    if: always() && !cancelled() && needs.desktop.result != 'skipped'
+    name: perf-report ${{ matrix.project.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.select.outputs.projects) }}
+    steps:
+      - if: matrix.project.perfReport
+        name: Checkout actions and report scripts
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: |
+            .github/actions
+            scripts/perf-report
+          persist-credentials: false
+      - if: matrix.project.perfReport
+        uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - if: matrix.project.perfReport
+        uses: ./.github/actions/run-mobile-integration-tests/combine-perf-reports
+        with:
+          artifact-pattern: ${{ matrix.project.slug }}-perf-*
+          report-title: ${{ matrix.project.perfReport.title }}
+          exclude: ${{ matrix.project.perfReport.exclude }}
 
   # The gate's qvac/prebuild-<key> and qvac/cpp-tests-<key>; a skip passes only when routing chose not to run.
   status:
@@ -190,17 +227,18 @@ jobs:
       - if: matrix.project.prebuildStatus
         shell: bash
         env:
-          PREBUILD_RESULT: ${{ needs.build.result == 'success' && needs.merge.result || needs.build.result }}
+          # A package the run did not build reads as a routing skip, even when a baseline package started the job.
+          PREBUILD_RESULT: ${{ (needs.route.outputs.run_prebuilds == 'true' || matrix.project.cppBaseline) && (needs.build.result == 'success' && needs.merge.result || needs.build.result) || 'skipped' }}
           REUSE_HIT: ""
-          RUN_PREBUILDS: ${{ needs.route.outputs.run_prebuilds }}
+          RUN_PREBUILDS: ${{ (needs.route.outputs.run_prebuilds == 'true' || matrix.project.cppBaseline) && 'true' || needs.route.outputs.run_prebuilds }}
           CONTEXT: qvac/prebuild-${{ matrix.project.key }}
         run: node .github/scripts/prebuild-status/publish.mjs
       - if: matrix.project.cppStatus
         shell: bash
         env:
-          CPP_TEST_RESULT: ${{ needs.cpp-tests.result }}
+          CPP_TEST_RESULT: ${{ (needs.route.outputs.run_cpp_tests == 'true' || matrix.project.cppBaseline) && needs.cpp-tests.result || 'skipped' }}
           REUSE_HIT: ""
-          RUN_CPP_TESTS: ${{ needs.route.outputs.run_cpp_tests }}
+          RUN_CPP_TESTS: ${{ (needs.route.outputs.run_cpp_tests == 'true' || matrix.project.cppBaseline) && 'true' || needs.route.outputs.run_cpp_tests }}
           CONTEXT: qvac/cpp-tests-${{ matrix.project.key }}
           KIND: cpp-tests
         run: node .github/scripts/prebuild-status/publish.mjs
@@ -208,7 +246,7 @@ jobs:
   # Not named qvac-merge-guard: that is the required check's job, and a second one would share its context.
   # Reads this run's jobs, so the table shows each package, stage and failed job, not only the reusable callers.
   summary:
-    needs: [select, fork-approval, route, trust, build, merge, cpp-lint, cpp-tests, desktop, status]
+    needs: [select, fork-approval, route, trust, build, merge, cpp-lint, cpp-tests, desktop, perf-report, status]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

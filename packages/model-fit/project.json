@@ -1,28 +1,150 @@
 {
   "name": "@qvac/model-fit",
   "root": "packages/model-fit",
+  "tags": [
+    "ci:addons"
+  ],
   "targets": {
-    "on-pr": {
+    "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "command": "pnpm run lint",
+        "cwd": "packages/model-fit"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:dts",
+        "cwd": "packages/model-fit"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/model-fit"
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run check:generated",
+        "cwd": "packages/model-fit"
+      }
+    },
+    "ci:system": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "^ci:system"
+      ],
+      "options": {
         "cwd": "packages/model-fit",
-        "ci": {
-          "hasCppLint": true,
-          "hasTsChecks": true,
-          "tsChecksMode": "dts+lint",
-          "hasFabricLockstep": true
+        "parallel": false,
+        "forwardAllArgs": false,
+        "commands": [
+          "echo no system packages"
+        ]
+      },
+      "configurations": {
+        "linux-arm64": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
+          ]
+        },
+        "linux-arm64-2404": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
+          ]
         }
       }
     },
     "build": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
-        "command": "pnpm run build",
         "cwd": "packages/model-fit",
-        "ci": {
-          "artifactNamePrefix": "model-fit-",
-          "includeVulkanSdk": true
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm run build:ts",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make generate",
+            "forwardAllArgs": true
+          },
+          {
+            "command": "pnpm exec bare-make build",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make install",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--platform=linux --arch=x64",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-arm64": {
+          "args": "--platform=linux --arch=arm64",
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "ios-arm64": {
+          "args": "--platform=ios --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-arm64-simulator": {
+          "args": "--platform=ios --arch=arm64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-x64-simulator": {
+          "args": "--platform=ios --arch=x64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--platform=darwin --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-x64": {
+          "args": "--platform=darwin --arch=x64",
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "args": "--platform=win32 --arch=x64",
+          "ci": {
+            "runner": "win_2025_x64"
+          }
         }
       },
       "inputs": [
@@ -33,60 +155,209 @@
         "{projectRoot}/prebuilds"
       ]
     },
-    "test:unit": {
+    "cpp:lint": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/model-fit"
+        "cwd": "packages/model-fit",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm exec bare-make generate -D ENABLE_VULKAN=OFF",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base}",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
+      }
+    },
+    "cpp:build": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "options": {
+        "cwd": "packages/model-fit",
+        "parallel": false,
+        "commands": [
+          "pnpm run test:cpp:build"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      }
+    },
+    "cpp:tests": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "cpp:build"
+      ],
+      "options": {
+        "cwd": "packages/model-fit",
+        "parallel": false,
+        "commands": [
+          "pnpm run test:cpp:run"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "pnpm run test:integration",
         "cwd": "packages/model-fit",
-        "ci": {
-          "testCommandSuffix": true,
-          "linuxArmApt": ["mesa-vulkan-drivers"],
-          "modelCache": [{ "warm": "true" }],
-          "platforms": [
-            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
-            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm" },
-            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-24.04-arm" },
-            { "os": "macos-15-xlarge", "platform": "darwin", "arch": "arm64" },
-            { "os": "macos-15-large", "platform": "darwin", "arch": "x64" },
-            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
-          ]
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ../../scripts/ci/run-integration.mjs --suffix",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64-gpu2204": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu"
+          }
+        },
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-arm64": {
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "linux-arm64-2404": {
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_15_xlarge"
+          }
+        },
+        "darwin-x64": {
+          "ci": {
+            "runner": "macos_15_large"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
         }
+      },
+      "metadata": {
+        "timeoutMinutes": 540
       }
     },
-    "test:cpp": {
+    "test:mobile": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:cpp",
         "cwd": "packages/model-fit",
-        "ci": {
-          "carveOut": true
+        "command": "pnpm run test:mobile:validate || true"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
         }
+      },
+      "metadata": {
+        "mobile": {
+          "devicefarmProject": "LLM",
+          "enablesPerf": false
+        },
+        "timeoutMinutes": 120
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/model-fit"
-      }
+    "cache:models": {
+      "executor": "nx:noop"
     },
-    "on-merge": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
-        "cwd": "packages/model-fit",
-        "ci": {
-          "nameTransform": "none",
-          "repoName": "model-fit",
-          "testGateMode": "none"
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "model-fit"
         }
       }
     }

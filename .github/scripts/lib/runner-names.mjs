@@ -26,7 +26,6 @@ const ADDON_PREFIXES = [
 
 const ADDON_EXACT = new Set([
   'reusable-prebuilds.yml',
-  'reusable-cpp-tests-translation-nmtcpp.yml',
 ])
 
 const ENTRY_RE = /^([a-z][a-z0-9_]*):\s+(\S+)\s*(?:#\s*(.*\S))?\s*$/

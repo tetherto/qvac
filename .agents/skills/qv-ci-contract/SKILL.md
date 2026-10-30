@@ -37,7 +37,7 @@ One pull request switches the package: before it merges only the old path runs, 
 2. Map every step its current workflow runs (`options.ci` for `on-pr-nx.yml`, or its own `on-pr-<pkg>.yml` and `prebuilds-<pkg>.yml`) to a standard target, with a configuration per platform on the runner the old job used.
 3. Depend on each native dependency's `link:platform` by name. Give the dependency a `link:platform` target if it lacks one.
 4. Move scripts the targets call into the package's `ci/` directory, and models into its manifest.
-5. For mobile, set `metadata.mobile` and map the Device Farm project in `DEVICEFARM_PROJECTS` (`select-projects.mjs`) and `PROJECT_ARN` (`mobile-tests.yml`).
+5. For mobile, set `metadata.mobile` and map the Device Farm project in `DEVICEFARM_PROJECTS` (`select-projects.mjs`) and `PROJECT_ARN` (`_mobile.yml`).
 6. Wire Merge Guard as `docs/ci/MERGE-GUARD.md` says: a `packages/<dir>/**`-only filter entry, `ALL_PACKAGES`, the status keys, and the package's producer in `CARVED_OUT_PRODUCERS` set to `pr-build-test.yml`. The status contexts stay the same.
 7. Delete the package's own workflows, remove it from `on-pr-nx.yml` and `on-merge-nx.yml`, and limit edits to shared files to letting go of the package.
 8. Point the package's npm trusted publisher at `publish-npm.yml`, so only one workflow can publish it.

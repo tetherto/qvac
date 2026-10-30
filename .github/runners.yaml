@@ -20,6 +20,8 @@ macos_ios: macos-14 # iOS Device Farm build host
 macos_15: macos-15 # macOS 15 hosted (prebuilds ios/darwin arm)
 macos_15_intel: macos-15-intel # macOS 15 Intel hosted (darwin x64 prebuilds/cpp)
 macos_15_large: macos-15-large # macOS 15 large hosted (darwin x64 integration)
+macos_15_xlarge: macos-15-xlarge # macOS 15 xlarge hosted (darwin arm64 integration)
+ai_run_linux_gpu: ai-run-linux-gpu # Linux GPU box for the llm and embed quality benchmarks
 ubuntu_2204: ubuntu-22.04 # Ubuntu 22.04 hosted x64
 ubuntu_2204_arm: ubuntu-22.04-arm # Ubuntu 22.04 hosted arm64
 ubuntu_2404: ubuntu-24.04 # Ubuntu 24.04 hosted x64

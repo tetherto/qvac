@@ -9,13 +9,54 @@ on:
         description: JSON build rows from _select-projects, one per package and build configuration
         type: string
         required: true
+      reuse:
+        description: Take a leg from an earlier run on this branch when its native code and build inputs are unchanged
+        type: boolean
+        default: false
 
 permissions: {}
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      reused: ${{ steps.plan.outputs.reused }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: src
+          persist-credentials: "false"
+      - id: plan
+        shell: bash
+        env:
+          SLUGS: ${{ toJSON(fromJSON(inputs.rows).*.slug) }}
+          CONFIGS: ${{ toJSON(fromJSON(inputs.rows).*.config) }}
+          DIRS: ${{ toJSON(fromJSON(inputs.rows).*.dir) }}
+          RUNNERS: ${{ toJSON(fromJSON(inputs.rows).*.runner) }}
+          SRC: src
+          REUSE: ${{ inputs.reuse && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/prebuild-reuse.mjs
+
   build:
-    name: ${{ matrix.row.slug }} ${{ matrix.row.config }}
-    runs-on: ${{ matrix.row.runner }}
+    needs: plan
+    if: needs.plan.outputs.build != '[]'
+    name: ${{ fromJSON(inputs.rows)[matrix.leg.i].slug }} ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+    runs-on: ${{ fromJSON(inputs.rows)[matrix.leg.i].runner }}
     environment: release
     timeout-minutes: 180
     permissions:
@@ -25,9 +66,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        row: ${{ fromJSON(inputs.rows) }}
+        leg: ${{ fromJSON(needs.plan.outputs.build) }}
     env:
-      WORKDIR: src/${{ matrix.row.dir }}
+      WORKDIR: src/${{ fromJSON(inputs.rows)[matrix.leg.i].dir }}
       NX_DAEMON: "false"
       NX_NO_CLOUD: "true"
     steps:
@@ -48,22 +89,22 @@ jobs:
       - if: runner.environment == 'github-hosted'
         uses: tetherto/qvac-actions/runner-free-disk@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
-          keep-android: ${{ matrix.row.platform == 'android' }}
+          keep-android: ${{ fromJSON(inputs.rows)[matrix.leg.i].platform == 'android' }}
       # Toolchain versions are the workspace's, from nx.json; a package's own system packages come from its ci:system target.
-      - if: runner.environment == 'github-hosted' && matrix.row.platform == 'android'
+      - if: runner.environment == 'github-hosted' && fromJSON(inputs.rows)[matrix.leg.i].platform == 'android'
         uses: tetherto/qvac-actions/runner-apt-install@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
-          packages: ${{ matrix.row.meta.toolchain.android.aptPackages }}
-      - if: runner.environment == 'github-hosted' && matrix.row.platform == 'android'
+          packages: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.android.aptPackages }}
+      - if: runner.environment == 'github-hosted' && fromJSON(inputs.rows)[matrix.leg.i].platform == 'android'
         uses: tetherto/qvac-actions/setup-android-ndk@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
-          ndk-version: ${{ matrix.row.meta.toolchain.android.ndk }}
-          api-level: ${{ matrix.row.meta.toolchain.android.apiLevel }}
+          ndk-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.android.ndk }}
+          api-level: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.android.apiLevel }}
       - if: runner.environment == 'github-hosted'
         uses: tetherto/qvac-actions/setup-clang@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
-          version: ${{ matrix.row.meta.toolchain.llvm.linux }}
-          windows-version: ${{ matrix.row.meta.toolchain.llvm.windows }}
+          version: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.llvm.linux }}
+          windows-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].meta.toolchain.llvm.windows }}
       - uses: tetherto/qvac-actions/configure-aws-credentials@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -74,11 +115,11 @@ jobs:
         with:
           mode: s3
           cache-bucket: ${{ secrets.MODEL_S3_BUCKET }}
-          platform: ${{ matrix.row.platform }}
-          arch: ${{ matrix.row.arch }}
+          platform: ${{ fromJSON(inputs.rows)[matrix.leg.i].platform }}
+          arch: ${{ fromJSON(inputs.rows)[matrix.leg.i].arch }}
       - uses: ./.github/actions/setup-windows-host
         with:
-          arch: ${{ matrix.row.arch }}
+          arch: ${{ fromJSON(inputs.rows)[matrix.leg.i].arch }}
       - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           node-version: lts/*
@@ -99,43 +140,45 @@ jobs:
           BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: aws s3 cp "$ARCHIVE" "s3://$BUCKET/$KEY"
       # The build compiles its native dependencies here, so it takes the host's toolkits plus any the configuration asks for.
-      - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'cuda') || contains(matrix.row.setup, 'cuda')
+      - if: contains(fromJSON(inputs.rows)[matrix.leg.i].toolchain.hostSetup[format('{0}-{1}', fromJSON(inputs.rows)[matrix.leg.i].platform, fromJSON(inputs.rows)[matrix.leg.i].arch)], 'cuda') || contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'cuda')
         uses: ./.github/actions/setup-cuda
         with:
-          cuda-version: ${{ matrix.row.toolchain.cuda }}
-      - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'rocm') || contains(matrix.row.setup, 'rocm')
+          cuda-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.cuda }}
+          # Only fabric's CUDA build loads MSVC 14.44; the package builds with the runner's default toolset, as on main.
+          msvc-scope: file
+      - if: contains(fromJSON(inputs.rows)[matrix.leg.i].toolchain.hostSetup[format('{0}-{1}', fromJSON(inputs.rows)[matrix.leg.i].platform, fromJSON(inputs.rows)[matrix.leg.i].arch)], 'rocm') || contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'rocm')
         uses: ./.github/actions/setup-rocm
         with:
-          rocm-version: ${{ matrix.row.toolchain.rocm.version }}
-          gfx: ${{ matrix.row.toolchain.rocm.gfx }}
-          sha256: ${{ matrix.row.toolchain.rocm.sha256 }}
+          rocm-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.rocm.version }}
+          gfx: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.rocm.gfx }}
+          sha256: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.rocm.sha256 }}
       # The package and its workspace dependencies, so Nx builds a dependency the change touched from its sources.
       - name: Install
         shell: bash
         working-directory: src
         env:
-          NPM: ${{ matrix.row.npm }}
+          NPM: ${{ fromJSON(inputs.rows)[matrix.leg.i].npm }}
         run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
       - name: Build
         shell: bash
         working-directory: src
         env:
-          PROJECT: ${{ matrix.row.project }}
-          CONFIG: ${{ matrix.row.config }}
+          PROJECT: ${{ fromJSON(inputs.rows)[matrix.leg.i].project }}
+          CONFIG: ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
         run: pnpm exec nx run-many -t ci:system,build -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
       - if: failure()
         shell: bash
         run: for f in "$VCPKG_ROOT"/buildtrees/*/{config,install,build}-*.log; do [ -f "$f" ] && { echo "== $f"; tail -200 "$f"; }; done; true
       - uses: ./.github/actions/prebuilds-strip
         with:
-          platform: ${{ matrix.row.platform }}
+          platform: ${{ fromJSON(inputs.rows)[matrix.leg.i].platform }}
           workdir: ${{ env.WORKDIR }}
       - uses: ./.github/actions/prebuilds-check-exports
         with:
-          platform: ${{ matrix.row.platform }}
+          platform: ${{ fromJSON(inputs.rows)[matrix.leg.i].platform }}
           workdir: ${{ env.WORKDIR }}
-          provider: ${{ matrix.row.provider }}
-      - if: matrix.row.platform == 'win32'
+          provider: ${{ fromJSON(inputs.rows)[matrix.leg.i].provider }}
+      - if: fromJSON(inputs.rows)[matrix.leg.i].platform == 'win32'
         uses: ./.github/actions/prebuilds-check-windows-runtime
         with:
           workdir: ${{ env.WORKDIR }}
@@ -143,7 +186,45 @@ jobs:
       # that root when only one package built. Consumers take the <dir>/prebuilds they need.
       - uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
-          name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.config }}
+          name: prebuild-${{ fromJSON(inputs.rows)[matrix.leg.i].slug }}-${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
           path: |
             src/package.json
             src/packages/*/prebuilds
+      # The same files under the leg's key, for a later run on this branch to reuse.
+      - uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: ${{ matrix.leg.cacheName }}
+          retention-days: "14"
+          path: |
+            src/package.json
+            src/packages/*/prebuilds
+
+  # A leg an earlier run built from the same native code and inputs, under this run's name for the jobs downstream.
+  reuse:
+    needs: plan
+    if: needs.plan.outputs.reused != '[]'
+    name: reuse ${{ matrix.row.slug }} ${{ matrix.row.config }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.plan.outputs.reused) }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: ${{ matrix.row.name }}
+          run-id: ${{ matrix.row.runId }}
+          github-token: ${{ github.token }}
+          path: leg
+      - uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.config }}
+          path: leg/

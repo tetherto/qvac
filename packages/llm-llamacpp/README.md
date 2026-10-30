@@ -699,8 +699,8 @@ These tests validate the native implementation and help catch issues early in de
 ```bash
 npm run test:cpp:models      # every fixture referenced by test/unit (includes
                              # the optional 8-shard Llama set that CI skips)
-npm run test:cpp:models:ci   # exactly what .github/workflows/cpp-tests-llm.yml
-                             # downloads; matches what CI exercises
+npm run test:cpp:models:ci   # exactly what CI's cpp:tests target downloads
+                             # (project.json); matches what CI exercises
 ```
 
 First-run downloads pull several GB from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` (see `test/unit/test_common.hpp`).

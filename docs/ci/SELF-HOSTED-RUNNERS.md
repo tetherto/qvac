@@ -109,7 +109,7 @@ The inverse condition is also common:
 if: runner.environment == 'github-hosted'
 ```
 
-Example: [`.github/workflows/cpp-tests-classification.yml`](../../.github/workflows/cpp-tests-classification.yml) runs **Setup build host** only on GitHub-hosted runners.
+Example: [`.github/workflows/cpp-tests-nx.yml`](../../.github/workflows/cpp-tests-nx.yml) runs **Setup build host** only on GitHub-hosted runners.
 
 ## Checklist when adding or editing workflows
 

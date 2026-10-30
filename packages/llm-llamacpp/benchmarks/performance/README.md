@@ -66,13 +66,12 @@ npm run run:judge
 ## CI Workflow (GitHub Actions)
 
 Everything above runs locally. To run the benchmark on CI runners + AWS Device
-Farm (desktop **and** mobile), use the **Benchmark Performance — LLM Parameter
-Sweep** workflow (`.github/workflows/benchmark-perf-llm-llamacpp.yml`).
-
-Trigger it from the GitHub UI: **Actions → Benchmark Performance — LLM Parameter
-Sweep → Run workflow**. There is nothing to configure for a normal run — the
-matrix (models, quantizations, reasoning-budget, KV-cache types, repeats) is
-fixed in the scripts; edit those to change what runs.
+Farm (desktop **and** mobile), dispatch the **Benchmarks** workflow
+(`.github/workflows/benchmarks.yml`) with `-f packages=llm-llamacpp
+-f args="suite=sweep batch=<batch>"`: the `linux-x64-gpu2204` configuration runs
+the desktop sweep, and `run_mobile` with a `platform` and `devices` runs that
+mobile batch. The matrix (models, quantizations, reasoning-budget, KV-cache
+types, repeats) is fixed in the scripts; edit those to change what runs.
 
 The **mobile** sweep runs one Device Farm session per
 `(size, quant, KV-cache)` combination, plus a small additive batch group
@@ -81,8 +80,8 @@ without crossing it into the full matrix — batch is orthogonal to quant and
 KV-cache, so it is measured once rather than replicated across every cell. Those
 combinations live in a single source of truth,
 `test/integration/_benchmark-matrix.js`. The per-combination test files
-(`test/integration/benchmark-perf-*.test.js`) and the workflow's mobile
-`test_groups` are derived from it and the shard files are **not committed** —
+(`test/integration/benchmark-perf-*.test.js`) and the mobile batches
+(`workflowBatches()`, picked with `batch=`) are derived from it and the shard files are **not committed** —
 regenerate them with `npm run generate:benchmark-shards` (the CI mobile job does
 this automatically before the Device Farm bundle is built, and fails hard if any
 shard is missing). To change the mobile grid, edit `_benchmark-matrix.js`, run

@@ -29,6 +29,18 @@ inputs:
   bundle-id:
     description: App bundle id
     default: io.tether.test.qvac
+  test-groups:
+    description: JSON [{name, grep}] replacing the package's test-groups.json for this run; tests wins over it
+    default: ""
+  perf-runs:
+    description: QVAC_PERF_RUNS pushed to the device; empty keeps the test default
+    default: ""
+  perf-warmup-runs:
+    description: QVAC_PERF_WARMUP_RUNS pushed to the device; empty keeps the test default
+    default: ""
+  device-env:
+    description: Semicolon-separated KEY=VALUE pairs the on-device loader sets before the tests load
+    default: ""
 
 outputs:
   specs:
@@ -53,4 +65,8 @@ runs:
         WAITFOR_MS: ${{ inputs.waitfor-timeout-ms }}
         EXTRA_PRE_TEST: ${{ inputs.extra-pre-test-commands }}
         BUNDLE_ID: ${{ inputs.bundle-id }}
+        TEST_GROUPS: ${{ inputs.test-groups }}
+        PERF_RUNS: ${{ inputs.perf-runs }}
+        PERF_WARMUP_RUNS: ${{ inputs.perf-warmup-runs }}
+        DEVICE_ENV: ${{ inputs.device-env }}
       run: node "$GITHUB_ACTION_PATH/devicefarm-write-specs.mjs"

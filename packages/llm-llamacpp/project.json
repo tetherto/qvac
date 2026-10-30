@@ -1,34 +1,150 @@
 {
   "name": "@qvac/llm-llamacpp",
   "root": "packages/llm-llamacpp",
+  "tags": [
+    "ci:addons"
+  ],
   "targets": {
-    "on-pr": {
+    "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "command": "pnpm run lint",
+        "cwd": "packages/llm-llamacpp"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:dts",
+        "cwd": "packages/llm-llamacpp"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/llm-llamacpp"
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run check:generated",
+        "cwd": "packages/llm-llamacpp"
+      }
+    },
+    "ci:system": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "^ci:system"
+      ],
+      "options": {
         "cwd": "packages/llm-llamacpp",
-        "ci": {
-          "hasCppLint": true,
-          "hasTsChecks": true,
-          "tsChecksMode": "dts+lint",
-          "hasFabricLockstep": true,
-          "hasPerfReport": true,
-          "perfReportVariant": "composite",
-          "perfReportPattern": "perf-report-llamacpp-llm-*",
-          "perfReportTitle": "LLM Performance Report (All Platforms)",
-          "perfReportExtraArgs": "--addon-type vision --device-details",
-          "perfReportMediaDir": "packages/llm-llamacpp/media"
+        "parallel": false,
+        "forwardAllArgs": false,
+        "commands": [
+          "echo no system packages"
+        ]
+      },
+      "configurations": {
+        "linux-arm64": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
+          ]
+        },
+        "linux-arm64-2404": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
+          ]
         }
       }
     },
     "build": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
-        "command": "pnpm run build",
         "cwd": "packages/llm-llamacpp",
-        "ci": {
-          "artifactNamePrefix": "llama-cpp-",
-          "includeVulkanSdk": true
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm run build:ts",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make generate",
+            "forwardAllArgs": true
+          },
+          {
+            "command": "pnpm exec bare-make build",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make install",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--platform=linux --arch=x64",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-arm64": {
+          "args": "--platform=linux --arch=arm64",
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "ios-arm64": {
+          "args": "--platform=ios --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-arm64-simulator": {
+          "args": "--platform=ios --arch=arm64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-x64-simulator": {
+          "args": "--platform=ios --arch=x64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--platform=darwin --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-x64": {
+          "args": "--platform=darwin --arch=x64",
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "args": "--platform=win32 --arch=x64",
+          "ci": {
+            "runner": "win_2025_x64"
+          }
         }
       },
       "inputs": [
@@ -39,74 +155,305 @@
         "{projectRoot}/prebuilds"
       ]
     },
-    "test:unit": {
+    "cpp:lint": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/llm-llamacpp"
+        "cwd": "packages/llm-llamacpp",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm exec bare-make generate -D ENABLE_VULKAN=OFF",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base}",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
+      }
+    },
+    "cpp:build": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "options": {
+        "cwd": "packages/llm-llamacpp",
+        "parallel": false,
+        "commands": [
+          "pnpm run test:cpp:build"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "commands": [
+            "pnpm run coverage:cpp:build"
+          ],
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      }
+    },
+    "cpp:tests": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "cpp:build"
+      ],
+      "options": {
+        "cwd": "packages/llm-llamacpp",
+        "parallel": false,
+        "commands": [
+          "pnpm run test:cpp:models:ci",
+          "pnpm run test:cpp:run:ci"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "commands": [
+            "pnpm run test:cpp:models:ci",
+            "pnpm run coverage:cpp:run:ci",
+            "pnpm run coverage:cpp:report",
+            "pnpm run fuzz:build",
+            "pnpm run fuzz:run"
+          ],
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "pnpm run test:integration",
         "cwd": "packages/llm-llamacpp",
-        "ci": {
-          "carveOut": true
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ../../scripts/ci/run-integration.mjs",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64-gpu2204": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu"
+          }
+        },
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-x64-vulkan": {
+          "args": "--set CUDA_VISIBLE_DEVICES=-1",
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-arm64": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "linux-arm64-2404": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "commands": [
+            "pnpm run build:ts",
+            "pnpm exec brittle -r test/integration/all.js test/integration/api-behavior.test.js",
+            "pnpm exec bare test/integration/all.js --exit"
+          ],
+          "ci": {
+            "runner": "macos_15_large"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
         }
+      },
+      "metadata": {
+        "timeoutMinutes": 480,
+        "secrets": [
+          "QASE_API_TOKEN"
+        ],
+        "perfReport": {
+          "title": "LLM Performance Report (All Platforms)"
+        }
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/llm-llamacpp",
+        "command": "node ci/prepare-mobile.mjs"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "devicefarmProject": "LLM",
+          "enablesPerf": true,
+          "mochaTimeoutMs": 2100000,
+          "perTestTimeoutMinutes": {
+            "Android": 30
+          },
+          "perfReport": {
+            "title": "LLM Mobile Performance Report",
+            "merge": true
+          }
+        },
+        "timeoutMinutes": 150,
+        "secrets": [
+          "HF_TOKEN"
+        ]
       }
     },
     "benchmark": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
         "cwd": "packages/llm-llamacpp",
-        "ci": {
-          "aggregateScript": "scripts/perf-report/aggregate-llamacpp-llm-rtf.js",
-          "manualDir": "packages/llm-llamacpp/benchmarks/manual-results"
-        }
-      }
-    },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/llm-llamacpp"
-      }
-    },
-    "test:cpp": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run test:cpp",
-        "cwd": "packages/llm-llamacpp",
-        "ci": {
-          "carveOut": true,
-          "mode": "llm",
-          "vulkan": { "os": "windows-2025", "shell": "powershell", "path": "C:\\VulkanSDK" },
-          "vcpkgMode": "composite-local-cache",
-          "hasWindowsCmakeGenerator": true,
-          "hasAppleClangWorkaround": true,
-          "needsUnitTestModelCache": true,
-          "hasResultsCountValidation": true,
-          "coverageOn": "ubuntu-24.04",
-          "platforms": [
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
-            { "os": "macos-15-xlarge", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
-            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/benchmark.mjs",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--suites vlm --vlm-host linux --vlm-backends cpu",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-x64-gpu": {
+          "args": "--suites vlm --vlm-host linux --vlm-backends gpu",
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-x64-gpu2204": {
+          "args": "--suites sweep",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu"
+          }
+        },
+        "linux-x64-quality": {
+          "args": "--suites quality",
+          "ci": {
+            "runner": "ai_run_linux_gpu"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--suites vlm --vlm-host macos --vlm-backends cpu,gpu",
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "win32-x64": {
+          "args": "--suites vlm --vlm-host windows --vlm-backends cpu,gpu",
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        },
+        "report": {
+          "commands": [
+            "node ci/benchmark-report.mjs"
           ]
         }
+      },
+      "metadata": {
+        "timeoutMinutes": 420,
+        "secrets": [
+          "HF_TOKEN"
+        ]
       }
     },
-    "on-merge": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
-        "cwd": "packages/llm-llamacpp",
-        "ci": {
-          "verifyGenerated": true,
-          "nameTransform": "scope-rewrite",
-          "repoName": "llamacpp-llm",
-          "testGateMode": "none"
+    "cache:models": {
+      "executor": "nx:noop"
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "llamacpp-llm"
         }
       }
     }

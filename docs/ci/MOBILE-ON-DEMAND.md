@@ -5,15 +5,14 @@ To cut that cost, they **no longer run automatically on PRs**. Instead you start
 them by hand, choosing exactly one platform, the device(s) to run on, and,
 where supported, a subset of tests.
 
-This applies to all 16 mobile addons: `asr-ggml`, `audiogen-ggml`,
-`bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`,
-`embed-llamacpp`, `ggml-rpc-server`, `inference-addon-cpp`, `llm-llamacpp`,
-`model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml`,
-`vla`.
-
-Except for its dedicated section, the guidance below applies to the other 15
-addons. `ggml-rpc-server` has per-platform device dropdowns and no test filter
-or package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
+This applies to all 16 mobile addons. Nine are on the CI contract and run through
+one workflow, `mobile-tests.yml`: `classification-ggml`, `embed-llamacpp`,
+`ggml-rpc-server`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`,
+`turbovec-ggml` and `vla-ggml`; see
+[Packages on the CI contract](#packages-on-the-ci-contract). The other seven keep
+a workflow each, `integration-mobile-test-<addon>.yml`, and the rest of this page
+covers them: `asr-ggml`, `audiogen-ggml`, `bci-whispercpp`, `decoder-audio`,
+`diffusion-cpp`, `inference-addon-cpp` and `tts-ggml`.
 
 ## How to run a mobile test
 
@@ -25,46 +24,45 @@ or package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
 > `qv-mobile-test-dispatch` skill in `.agents/skills/` is the operating procedure
 > built on this page.
 
-### ggml-rpc-server dispatch
+### Packages on the CI contract
 
-This workflow accepts `platform`, `android_device` or `ios_device`,
-`devices_custom`, `device_model_operator`, `ref`, `workdir`, and
-`prebuild_run_id`. It does **not** accept `device`, `tests`, or `package`. A run
-exercises its complete managed RPC lifecycle probe on each selected device.
-`devices_custom` takes a comma-separated list and overrides the platform's
-dropdown, so one dispatch covers the
-[supported devices](#which-devices-to-run-on), one Device Farm run per device.
+Go to **Actions → `Mobile tests`** (`mobile-tests.yml`) and name the package
+directory in `packages`. It takes `platform`, `device` or `devices_custom` (at
+least one device), `device_model_operator`, `tests`, `ref`, and one prebuild
+source: `prebuild_run_id` (Route A), `package` (Route B), or neither for the
+published `@latest`. `dependency_prebuild_run_id` swaps in a run's
+`fabric-prebuilds` bundle. A second dispatch for the same package on the same
+branch cancels the first.
 
-To test prebuilds already produced for your PR, find the run id as described in
-the [quick start below](#quick-start--test-your-own-pr-on-a-device), then dispatch:
+**Route A, your PR.** The PR's `PR build and test` run (`pr-build-test.yml`)
+builds the prebuilds when the PR carries the `prebuilds` label, and uploads
+them as `prebuilds-<dir>`:
 
 ```bash
-PR=1234 # your PR number
-gh workflow run integration-mobile-test-ggml-rpc-server.yml --repo tetherto/qvac \
-  --ref main -f ref="refs/pull/$PR/head" \
+PKG=llm-llamacpp   # package directory, packages/<PKG>
+PR=1234
+SHA=$(gh pr view "$PR" --repo tetherto/qvac --json headRefOid --jq .headRefOid)
+RUN_ID=$(gh run list --repo tetherto/qvac --workflow pr-build-test.yml --commit "$SHA" \
+  --limit 1 --json databaseId --jq '.[0].databaseId')
+
+gh workflow run mobile-tests.yml --repo tetherto/qvac --ref main \
+  -f packages=$PKG -f ref="refs/pull/$PR/head" \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
+  -f devices_custom="Google Pixel 9 Pro" \
   -f device_model_operator=EQUALS \
+  -f tests=<runnerName> \
   -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
 ```
 
-The workflow runs from upstream `main`; its `ref` input checks out your PR's
-head from the upstream pull-request ref, so your branch need not exist upstream.
-For iOS, dispatch again after the Android run finishes, replacing the platform
-and device inputs with:
-
-```bash
-  -f platform=iOS \
-  -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
-```
-
-Without `prebuild_run_id`, a standalone dispatch builds prebuilds from the selected ref in the same run before packaging
-the device app. With a run id, it skips that build and installs the named run's
-artifact, failing if the artifact cannot be used.
+**Route B, a branch build or a release.** Dispatch `publish-gpr.yml` with
+`-f packages=<dir>` on the branch; it publishes
+`@tetherto/<name>-mono@<version>-tmp.runid-<run id>`, where `<name>` is the npm
+name without `@qvac/`. Pass that spec as `-f package=`, or a published
+`@qvac/<name>@<version>`.
 
 ### Quick start — test your own PR on a device
 
-For the other 15 addons, this is the common case end to end. A first run should
+For an addon with its own workflow, this is the common case end to end. A first run should
 cover every supported device and every test — see
 [Which devices to run on](#which-devices-to-run-on).
 The single-device, single-test form below is the follow-up shape: once you are
@@ -72,8 +70,8 @@ re-running a known failure or iterating on one test, narrow it, because Device
 Farm is billed per device minute.
 
 ```bash
-WF=llm-llamacpp             # workflow slug: integration-mobile-test-$WF.yml
-PKG=llm-llamacpp            # package dir: packages/$PKG (vla is the odd one: vla vs vla-ggml)
+WF=bci-whispercpp           # workflow slug: integration-mobile-test-$WF.yml
+PKG=bci-whispercpp          # package dir: packages/$PKG
 PR=1234
 BRANCH=$(git branch --show-current)
 
@@ -408,9 +406,8 @@ bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
 unreliable. Scope by your PR's head commit instead:
 
 ```bash
-PKG=llm-llamacpp   # the package directory name, i.e. packages/<PKG>
-WF=llm-llamacpp    # workflow slug: integration-mobile-test-<WF>.yml. vla has none:
-                   # it is on the CI contract, so see the vla note below.
+PKG=bci-whispercpp   # the package directory name, i.e. packages/<PKG>
+WF=bci-whispercpp    # workflow slug: integration-mobile-test-<WF>.yml
 PR=4519            # your PR number
 BRANCH=$(git branch --show-current)
 
@@ -446,7 +443,7 @@ gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRAN
 The build job's *Resolve prebuilds from a run id* step prints the provenance:
 
 ```
-Verified: prebuilds come from run 33179656677 — artifact 'prebuilds-llm-llamacpp',
+Verified: prebuilds come from run 33179656677 — artifact 'prebuilds-bci-whispercpp',
 workflow 'On PR Trigger (LLM)', head 1d2c3b4…,
 branch feat/backend-selection (tetherto/qvac), success
 ```
@@ -487,9 +484,6 @@ Three things to know:
   names the head repository and a run from a **different** repository than the
   one you expected raises a `::warning::`. Read it before trusting a green run.
 
-It also works for **`ocr-ggml` and `translation-nmtcpp`**, which Route B cannot
-serve at all (see the note at the end of that section).
-
 #### Route B — a build from another branch, or a published release
 
 Route A needs a run you can point at. When you need someone *else's* branch, an
@@ -503,10 +497,9 @@ the prebuilds and publishes
 
 ```bash
 BRANCH=tmp-QVAC-1234
-PKG=llm-llamacpp   # package directory name; `package` is a required input
+PKG=bci-whispercpp   # package directory name; `package` is a required input
 git push origin HEAD:refs/heads/$BRANCH
-# Native addons, including model-fit, publish from on-merge-nx.yml.
-# ggml-rpc-server likewise: on-merge-ggml-rpc-server.yml, no package input.
+# The addons with their own mobile workflow publish from on-merge-nx.yml.
 gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref $BRANCH -f package=$PKG
 ```
 
@@ -536,8 +529,8 @@ Two names are involved and for one addon they differ, so set them separately
 rather than deriving one from the other:
 
 ```bash
-WF=llm-llamacpp             # workflow slug: integration-mobile-test-$WF.yml
-GPR_NAME=llm-llamacpp-mono  # the npm package name (minus @qvac/) plus -mono
+WF=bci-whispercpp             # workflow slug: integration-mobile-test-$WF.yml
+GPR_NAME=bci-whispercpp-mono  # the npm package name (minus @qvac/) plus -mono
 
 RUN_ID=$(gh run list --repo tetherto/qvac \
   --workflow on-merge-nx.yml --branch $BRANCH \
@@ -546,19 +539,12 @@ RUN_ID=$(gh run list --repo tetherto/qvac \
 PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
   --jq ".[] | select(.name | endswith(\"runid-$RUN_ID\")) | \"@tetherto/$GPR_NAME@\" + .name")
 
-echo "$PKG"   # @tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677
+echo "$PKG"   # @tetherto/bci-whispercpp-mono@0.4.0-tmp.runid-33179656677
 ```
 
-The native addons, including `model-fit`, publish from `on-merge-nx.yml`, so the run is
-found by branch rather than by a per-addon workflow name.
-
-For every addon except one, `GPR_NAME` is just `$WF-mono`. **`vla` is the
-exception:** it is on the CI contract, so its GPR builds come from
-`publish-gpr.yml` and its mobile runs from dispatching `mobile-tests.yml` with
-`-f packages=vla-ggml`, which takes `prebuild_run_id` from a `pr-build-test.yml`
-run. The package is `@qvac/vla-ggml`, so `GPR_NAME=vla-ggml-mono`. If unsure,
-read `addon-npm-name` from the mobile workflow and append `-mono` to the part
-after the slash.
+These addons publish from `on-merge-nx.yml`, so the run is found by branch
+rather than by a per-addon workflow name. `GPR_NAME` is the npm name after the
+slash plus `-mono`; if unsure, read `addon-npm-name` from the mobile workflow.
 
 An empty `$PKG` means either that run published nothing — usually because you
 dispatched from a branch outside `tmp-*`/`feature-*`, since `workflow_dispatch`
@@ -610,7 +596,7 @@ the pin did not arrive and you are testing the published release.
 
 | input | addons |
 |---|---|
-| `-f package=` | `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `turbovec-ggml`, `vla` |
+| `-f package=` | `bci-whispercpp`, `decoder-audio`, `diffusion-cpp`, and `mobile-tests.yml` for the packages on the CI contract |
 | `-f package_spec=` | `asr-ggml`, `audiogen-ggml`, `tts-ggml` |
 | *(no such input)* | `inference-addon-cpp` |
 | `-f prebuild_run_id=` | every addon above **except** `decoder-audio` and `inference-addon-cpp` (see *Addons that need none of this*) |

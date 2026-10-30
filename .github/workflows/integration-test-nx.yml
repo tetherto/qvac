@@ -162,20 +162,6 @@ jobs:
       run_rtf_benchmarks: ${{ inputs.run_rtf_benchmarks }}
       run_integration_tests: ${{ inputs.run_integration_tests }}
 
-  run-integration-llm:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'llm-llamacpp')
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-    uses: ./.github/workflows/integration-test-llm-llamacpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), 'llm-llamacpp') && inputs.fabric-overlay-artifact || '' }}
-
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
     needs: [matrix, runner_names]

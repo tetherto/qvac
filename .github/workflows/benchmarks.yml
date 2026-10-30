@@ -1,0 +1,209 @@
+name: Benchmarks
+
+# On-demand benchmarks of packages on the CI contract: each package's benchmark target on desktop, its test:mobile with
+# perf reports on Device Farm, then the benchmark target's report configuration over every result.
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated package names or directories
+        type: string
+        required: true
+      configs:
+        description: Comma-separated desktop configurations to keep, e.g. linux-x64; empty keeps every configuration
+        type: string
+        default: ""
+      args:
+        description: BENCHMARK_ARGS, passed to each package's benchmark command
+        type: string
+        default: ""
+      perf_runs:
+        description: QVAC_PERF_RUNS, measured iterations per perf test; empty keeps the package default
+        type: string
+        default: ""
+      perf_warmup_runs:
+        description: QVAC_PERF_WARMUP_RUNS, warmup iterations before measuring; empty keeps the package default
+        type: string
+        default: ""
+      run_desktop:
+        description: Run the desktop benchmark configurations
+        type: boolean
+        default: true
+      run_mobile:
+        description: Run test:mobile on Device Farm, on the platform below
+        type: boolean
+        default: false
+      platform:
+        description: Mobile platform
+        type: choice
+        options: [Android, iOS]
+        default: Android
+      devices:
+        description: Comma-separated Device Farm models for the mobile run, e.g. Google Pixel 9
+        type: string
+        default: ""
+      tests:
+        description: Optional mocha --grep over the mobile test names; empty runs what the package's test:mobile selects
+        type: string
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: build,benchmark
+      packages: ${{ inputs.packages }}
+      configs: ${{ inputs.configs && format('{0}{1}', inputs.configs, inputs.run_mobile && (inputs.platform == 'iOS' && ',ios-arm64' || ',android-arm64') || '') || '' }}
+
+  # The mobile rows of the one platform asked for.
+  select-mobile:
+    if: inputs.run_mobile
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: test:mobile
+      packages: ${{ inputs.packages }}
+      configs: ${{ inputs.platform == 'iOS' && 'ios-arm64' || 'android-arm64' }}
+
+  build:
+    needs: select
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).build) }}
+      reuse: true
+
+  # Folds a package's build jobs into prebuilds-<slug>, which the mobile run installs from this run.
+  merge:
+    needs: [select, build]
+    name: merge ${{ matrix.project.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.select.outputs.projects) }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          pattern: prebuild-${{ matrix.project.slug }}-*
+          path: prebuilds
+          merge-multiple: "true"
+      - uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: prebuilds-${{ matrix.project.slug }}
+          path: prebuilds/${{ matrix.project.dir }}/prebuilds
+
+  desktop:
+    needs: [select, build]
+    if: inputs.run_desktop
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/_desktop.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).benchmark) }}
+      perf_runs: ${{ inputs.perf_runs }}
+      perf_warmup_runs: ${{ inputs.perf_warmup_runs }}
+      args: ${{ inputs.args }}
+
+  mobile:
+    needs: [select-mobile, merge]
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/_mobile.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select-mobile.outputs.matrices)['test:mobile']) }}
+      platform: ${{ inputs.platform }}
+      devices: ${{ inputs.devices }}
+      tests: ${{ inputs.tests }}
+      prebuild_run_id: ${{ github.run_id }}
+      args: ${{ inputs.args }}
+      perf_runs: ${{ inputs.perf_runs }}
+      perf_warmup_runs: ${{ inputs.perf_warmup_runs }}
+
+  # benchmark's report configuration, once per package, over every desktop and mobile result this run uploaded.
+  report:
+    needs: [select, desktop, mobile]
+    if: always() && !cancelled() && needs.select.result == 'success'
+    name: report ${{ matrix.project.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.select.outputs.projects) }}
+    env:
+      NX_DAEMON: "false"
+      NX_NO_CLOUD: "true"
+    steps:
+      - if: matrix.project.benchmarkReport
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          persist-credentials: false
+      - if: matrix.project.benchmarkReport
+        uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - if: matrix.project.benchmarkReport
+        uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - if: matrix.project.benchmarkReport
+        shell: bash
+        env:
+          NPM: ${{ matrix.project.npm }}
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM"
+      # One directory per artifact: <slug>-benchmark-<config>, <slug>-perf-<config>-<n>, <slug>-perf-mobile-<platform>-<n>.
+      - if: matrix.project.benchmarkReport
+        uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          pattern: ${{ matrix.project.slug }}-*
+          path: ${{ matrix.project.dir }}/benchmarks/results
+      # The mobile runs' device logs, which a report such as llm's VLM matrix reads.
+      - if: matrix.project.benchmarkReport
+        uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          pattern: console-logs-${{ matrix.project.slug }}-*
+          path: ${{ matrix.project.dir }}/benchmarks/results
+      - if: matrix.project.benchmarkReport
+        shell: bash
+        env:
+          PROJECT: ${{ matrix.project.name }}
+          BENCHMARK_ARGS: ${{ inputs.args }}
+        run: pnpm exec nx run-many -t benchmark -p "$PROJECT" -c report --exclude-task-dependencies --outputStyle=stream
+      - if: always() && matrix.project.benchmarkReport
+        uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: ${{ matrix.project.slug }}-benchmark-report
+          path: ${{ matrix.project.dir }}/benchmarks/report/
+          if-no-files-found: warn
+          retention-days: "30"

@@ -1,28 +1,150 @@
 {
   "name": "@qvac/translation-nmtcpp",
   "root": "packages/translation-nmtcpp",
+  "tags": [
+    "ci:addons"
+  ],
   "targets": {
-    "on-pr": {
+    "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "command": "pnpm run lint",
+        "cwd": "packages/translation-nmtcpp"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:dts",
+        "cwd": "packages/translation-nmtcpp"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/translation-nmtcpp"
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run check:generated",
+        "cwd": "packages/translation-nmtcpp"
+      }
+    },
+    "ci:system": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "^ci:system"
+      ],
+      "options": {
         "cwd": "packages/translation-nmtcpp",
-        "ci": {
-          "hasCppLint": true,
-          "hasTsChecks": true,
-          "tsChecksMode": "dts",
-          "hasFabricLockstep": true,
-          "cppTestsBaseline": true
+        "parallel": false,
+        "forwardAllArgs": false,
+        "commands": [
+          "echo no system packages"
+        ]
+      },
+      "configurations": {
+        "linux-arm64": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
+          ]
+        },
+        "linux-arm64-2404": {
+          "commands": [
+            "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
+          ]
         }
       }
     },
     "build": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
-        "command": "pnpm run build",
         "cwd": "packages/translation-nmtcpp",
-        "ci": {
-          "includeVulkanSdk": true
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm run build:ts",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make generate",
+            "forwardAllArgs": true
+          },
+          {
+            "command": "pnpm exec bare-make build",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make install",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--platform=linux --arch=x64",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-arm64": {
+          "args": "--platform=linux --arch=arm64",
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "ios-arm64": {
+          "args": "--platform=ios --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-arm64-simulator": {
+          "args": "--platform=ios --arch=arm64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-x64-simulator": {
+          "args": "--platform=ios --arch=x64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--platform=darwin --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-x64": {
+          "args": "--platform=darwin --arch=x64",
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "args": "--platform=win32 --arch=x64",
+          "ci": {
+            "runner": "win_2025_x64"
+          }
         }
       },
       "inputs": [
@@ -33,77 +155,226 @@
         "{projectRoot}/prebuilds"
       ]
     },
-    "test:unit": {
+    "cpp:lint": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/translation-nmtcpp"
+        "cwd": "packages/translation-nmtcpp",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm exec bare-make generate -D ENABLE_VULKAN=OFF",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base}",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
+      }
+    },
+    "cpp:build": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "options": {
+        "cwd": "packages/translation-nmtcpp",
+        "parallel": false,
+        "commands": [
+          "node ci/disable-bergamot.mjs",
+          "pnpm run coverage:cpp:build"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      }
+    },
+    "cpp:tests": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "cpp:build"
+      ],
+      "options": {
+        "cwd": "packages/translation-nmtcpp",
+        "parallel": false,
+        "commands": [
+          "pnpm run coverage:cpp:run",
+          "pnpm run coverage:cpp:report"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120,
+        "baseline": true
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "pnpm run test:integration",
         "cwd": "packages/translation-nmtcpp",
-        "ci": {
-          "timeoutMinutes": 60,
-          "testCommandSuffix": true,
-          "useTeeLogging": true,
-          "envVarName": "QASE_API_TOKEN",
-          "envSecretName": "QASE_API_TOKEN",
-          "linuxArmApt": ["mesa-vulkan-drivers"],
-          "modelCache": [
-            {
-              "paths": "packages/translation-nmtcpp/model",
-              "hashFilesGlob": "packages/translation-nmtcpp/project.json",
-              "warm": "false"
-            }
-          ],
-          "modelS3": [
-            { "src": "qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/", "dest": "model/bergamot/enit", "recursive": true, "skipOnCacheHit": true },
-            { "src": "qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/", "dest": "model/bergamot/esen", "recursive": true, "skipOnCacheHit": true },
-            { "src": "qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/", "dest": "model/bergamot/fren", "recursive": true, "skipOnCacheHit": true },
-            { "src": "qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/", "dest": "model/bergamot/enes", "recursive": true, "skipOnCacheHit": true },
-            { "src": "qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin", "dest": "model/indictrans/", "skipOnCacheHit": true }
-          ],
-          "platforms": [
-            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
-            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64" },
-            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64" },
-            { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
-            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ../../scripts/ci/run-integration.mjs --suffix --log",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64-gpu2204": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu"
+          }
+        },
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-arm64-2404": {
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "linux-arm64": {
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 60,
+        "secrets": [
+          "QASE_API_TOKEN"
+        ]
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/translation-nmtcpp",
+        "command": "node ci/prepare-mobile.mjs"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "devicefarmProject": "NMTCPP",
+          "enablesPerf": true,
+          "perfReport": {
+            "title": "Mobile Performance: nmtcpp"
+          }
+        }
+      }
+    },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
+      "options": {
+        "cwd": "packages/translation-nmtcpp",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "bash ci/benchmark.sh",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "ubuntu_2404", "setup": ["python"]
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        },
+        "report": {
+          "commands": [
+            "node ci/benchmark-report.mjs"
           ]
         }
+      },
+      "metadata": {
+        "timeoutMinutes": 360,
+        "secrets": [
+          "MODEL_S3_BUCKET"
+        ]
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/translation-nmtcpp"
-      }
+    "cache:models": {
+      "executor": "nx:noop"
     },
-    "test:cpp": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run test:cpp",
-        "cwd": "packages/translation-nmtcpp",
-        "ci": {
-          "carveOut": true
-        }
-      }
-    },
-    "on-merge": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
-        "cwd": "packages/translation-nmtcpp",
-        "ci": {
-          "verifyGenerated": true,
-          "nameTransform": "none",
-          "repoName": "translation-nmtcpp",
-          "testGateMode": "none"
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "translation-nmtcpp"
         }
       }
     }

@@ -75,7 +75,10 @@ export function generate({
   waitforMs,
   outDir,
   template,
-  writeSpec
+  writeSpec,
+  perfRuns = '',
+  perfWarmupRuns = '',
+  deviceEnv = ''
 }) {
   const p = platformValues(platform, bundleId)
   return groups.map((g) => {
@@ -90,9 +93,10 @@ export function generate({
       __RUN_BUTTON_PREDICATE__: p.button,
       __ENABLE_FLUSH_BARE_LOG__: 'true',
       __ENABLE_CRASH_MONITOR__: 'true',
-      __QVAC_PERF_RUNS__: '',
-      __QVAC_PERF_WARMUP_RUNS__: '',
-      __QVAC_EXTRA_ENV__: '',
+      __QVAC_PERF_RUNS__: perfRuns,
+      __QVAC_PERF_WARMUP_RUNS__: perfWarmupRuns,
+      // KEY=VALUE;KEY=VALUE becomes one line each, as main's spec generator wrote it.
+      __QVAC_EXTRA_ENV__: deviceEnv.replaceAll(';', '\\n'),
       __ENABLES_PERF__: String(perf),
       __AFTER_HOOK_EXTRA__: ''
     })
@@ -126,11 +130,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     platform: env.PLATFORM,
     bundleId: env.BUNDLE_ID,
     enablesPerf,
+    perfRuns: env.PERF_RUNS || '',
+    perfWarmupRuns: env.PERF_WARMUP_RUNS || '',
+    deviceEnv: env.DEVICE_ENV || '',
     mochaTimeoutMs: env.MOCHA_TIMEOUT_MS,
     waitforMs: env.WAITFOR_MS,
     outDir,
     groups: resolveGroups(
-      env.TESTS ? JSON.stringify([{ name: 'manual', grep: env.TESTS }]) : '',
+      env.TESTS ? JSON.stringify([{ name: 'manual', grep: env.TESTS }]) : env.TEST_GROUPS || '',
       join(env.WORKDIR, 'test/mobile/test-groups.json'),
       env.PLATFORM
     ),

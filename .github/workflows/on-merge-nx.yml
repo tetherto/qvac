@@ -16,17 +16,10 @@ on:
       - "packages/asr-ggml/**"
       - "packages/audiogen-ggml/**"
       - "packages/bci-whispercpp/**"
-      - "packages/classification-ggml/**"
       - "packages/decoder-audio/**"
       - "packages/diffusion-cpp/**"
-      - "packages/embed-llamacpp/**"
       - "packages/fabric/**"
-      - "packages/llm-llamacpp/**"
-      - "packages/model-fit/**"
-      - "packages/ocr-ggml/**"
-      - "packages/translation-nmtcpp/**"
       - "packages/tts-ggml/**"
-      - "packages/turbovec-ggml/**"
   workflow_dispatch:
     inputs:
       package:
@@ -37,17 +30,10 @@ on:
           - asr-ggml
           - audiogen-ggml
           - bci-whispercpp
-          - classification-ggml
           - decoder-audio
           - diffusion-cpp
-          - embed-llamacpp
           - fabric
-          - llm-llamacpp
-          - model-fit
-          - ocr-ggml
-          - translation-nmtcpp
           - tts-ggml
-          - turbovec-ggml
       npm_tag:
         description: "NPM dist-tag override (release publish only, default: latest)"
         required: false
@@ -101,17 +87,10 @@ jobs:
             asr-ggml: packages/asr-ggml/**
             audiogen-ggml: packages/audiogen-ggml/**
             bci-whispercpp: packages/bci-whispercpp/**
-            classification-ggml: packages/classification-ggml/**
             decoder-audio: packages/decoder-audio/**
             diffusion-cpp: packages/diffusion-cpp/**
-            embed-llamacpp: packages/embed-llamacpp/**
             fabric: packages/fabric/**
-            llm-llamacpp: packages/llm-llamacpp/**
-            model-fit: packages/model-fit/**
-            ocr-ggml: packages/ocr-ggml/**
-            translation-nmtcpp: packages/translation-nmtcpp/**
             tts-ggml: packages/tts-ggml/**
-            turbovec-ggml: packages/turbovec-ggml/**
 
       - name: Compute per-package config rows
         id: rows

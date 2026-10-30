@@ -14,7 +14,7 @@ on:
       - '.github/scripts/configure-cpp-build.mjs'
       - 'vcpkg-overlays/**'
   schedule:
-    # Every 2 days for the same reason as on-merge-vcpkg-cache-embed.yml: the
+    # Every 2 days for the same reason as the legacy vcpkg warmers: the
     # cache server prunes an entry after CACHE_CLEANUP_OLDER_THAN_DAYS=5 days
     # without an upload or download, and this keeps the longest gap at 4 days even
     # after one failed run. The hour follows the five legacy warmers' stagger.
@@ -735,20 +735,6 @@ jobs:
 
   # Carve-out packages have bespoke C++ test flows; routed to their own reusable
   # when nx flags them affected via options.ci carveOut:true.
-  cpp-tests-llm:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'llm-llamacpp')
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-    uses: ./.github/workflows/cpp-tests-llm.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), 'llm-llamacpp') && inputs.fabric-overlay-artifact || '' }}
-
   cpp-tests-audiogen:
     needs: matrix
     if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'audiogen-ggml')
@@ -760,36 +746,6 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
-
-  # Added on main in #3930; its only caller there is deleted by the cleanup PR.
-  cpp-tests-model-fit:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'model-fit')
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-    uses: ./.github/workflows/cpp-tests-model-fit.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), 'model-fit') && inputs.fabric-overlay-artifact || '' }}
-
-  cpp-tests-translation:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'translation-nmtcpp')
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-      pull-requests: write
-    uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), 'translation-nmtcpp') && inputs.fabric-overlay-artifact || '' }}
 
   coverage-report:
     permissions:

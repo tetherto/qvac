@@ -235,6 +235,18 @@ for (const relativePath of WORKFLOWS) {
 // per-package workflows are consolidated away, the same invariants are asserted
 // against on-merge-nx.yml, which publishes them from its matrix.
 for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
+  // On the CI contract the publish groups request only build, verify:generated and publish, so neither publish can
+  // start integration tests, and publish-gpr is a dispatch that runs from any branch.
+  if (JSON.parse(read(`packages/${slug}/project.json`)).tags?.includes('ci:addons')) {
+    test(`${slug}: publishing on the CI contract never runs integration tests (QVAC-24365)`, () => {
+      for (const workflow of ['publish-npm.yml', 'publish-gpr.yml']) {
+        const source = read(`.github/workflows/${workflow}`)
+        assert.match(source, /^ {6}targets: build,verify:generated,publish$/m, workflow)
+        assert.doesNotMatch(source, /test:integration|_desktop\.yml/, workflow)
+      }
+    })
+    continue
+  }
   const ownWorkflow = `.github/workflows/on-merge-${slug}.yml`
   const carrier = WORKFLOWS.includes(ownWorkflow) ? ownWorkflow : CONSOLIDATED
 

@@ -50,12 +50,10 @@ test('PR workflow filters cpp-lint with API paths and accepts a skipped job for 
   assert.match(workflow, /needs.cpp-lint.result == 'success' \|\| needs.cpp-lint.result == 'skipped'/)
 })
 
-test('classification lint excludes changes made only on an advancing base branch', () => {
+test('cpp-lint with use-merge-base excludes changes made only on an advancing base branch', () => {
   const workflow = readFileSync(new URL('../../workflows/cpp-lint.yaml', import.meta.url), 'utf8')
   const script = workflow.match(/name: Resolve common ancestor for C\+\+ checks\r?\n[\s\S]*?run: \|\r?\n((?:          [^\n]*\n)+)/)?.[1]
   assert.ok(script, 'the workflow resolves the common ancestor after checkout')
-  const caller = readFileSync(new URL('../../workflows/on-pr-classification-ggml.yml', import.meta.url), 'utf8')
-  assert.match(caller, /use-merge-base: true/)
   const directory = mkdtempSync(join(tmpdir(), 'qvac-lint-base-'))
   function git(...args) {
     const result = spawnSync('git', args, { cwd: directory, encoding: 'utf8' })

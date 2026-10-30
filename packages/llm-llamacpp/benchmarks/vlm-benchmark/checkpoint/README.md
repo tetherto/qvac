@@ -39,13 +39,11 @@ mobile reads the addon's `visionEncodeMs` stat for the encode time),
 ### 1. Trigger 3 runs from `main` (sequentially)
 
 ```bash
-gh workflow run benchmark-vlm-model-comparison.yml --repo tetherto/qvac --ref main \
-  -f matrix_mode=two-models \
-  -f matrix_models=qwen3.5-q8,gemma4-q4 \
-  -f matrix_preset=full \
-  -f matrix_desktop=linux-cpu,linux-gpu,macos-cpu,macos-gpu,windows-cpu,windows-gpu \
-  -f matrix_mobile=s26,iphone17pro,pixel9 \
-  -f mobile_timeout_min=60
+gh workflow run benchmarks.yml --repo tetherto/qvac --ref main \
+  -f packages=llm-llamacpp \
+  -f configs=linux-x64,linux-x64-gpu,darwin-arm64,win32-x64 \
+  -f args="suite=vlm mode=two-models models=qwen3.5-q8,gemma4-q4 preset=full mobile_timeout_min=60"
+# Mobile: one more dispatch per platform, with -f run_desktop=false -f run_mobile=true -f platform=<Android|iOS> -f devices=<model>
 ```
 
 Run this **three times, waiting for each to finish before starting the next**. Note the
