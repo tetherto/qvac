@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Run on the shared `@qvac/fabric` runtime: the module links the ggml that
+  `@qvac/fabric` ships instead of bundling its own, loads GPU backends from
+  the fabric platform package, and the native build takes ggml from the
+  `qvac-fabric` vcpkg port through `speech-cpp` `2026-10-29#2`.
 - Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).

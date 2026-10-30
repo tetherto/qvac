@@ -334,6 +334,30 @@ function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir ou
 endfunction()
 
 # ---------------------------------------------------------------------------
+# qvac_addon_engine_on_fabric(<imported target>...)
+#
+# An engine library installed by a vcpkg port (speech-cpp's whisper, parakeet,
+# tts-cpp, audiogen-cpp) was compiled against the qvac-fabric port's ggml and
+# exports ggml::* in its link interface, so a plain link would pull that port's
+# static archives into the module next to the shared runtime. Drop every ggml::
+# entry (plain or $<LINK_ONLY:...>) from the given imported targets and add the
+# fabric headers instead: the engine's ggml symbols then resolve from the
+# qvac__fabric-<host>.bare the module links, like the addon's own. Call it after
+# the engine's find_package() and before linking the engine; it needs
+# qvac_addon_use_fabric() to have run.
+function(qvac_addon_engine_on_fabric)
+  foreach(_engine_target IN LISTS ARGN)
+    get_target_property(_engine_links ${_engine_target} INTERFACE_LINK_LIBRARIES)
+    if(NOT _engine_links)
+      set(_engine_links "")
+    endif()
+    list(FILTER _engine_links EXCLUDE REGEX "ggml::")
+    list(APPEND _engine_links qvac-fabric::headers)
+    set_target_properties(${_engine_target} PROPERTIES
+      INTERFACE_LINK_LIBRARIES "${_engine_links}")
+  endforeach()
+endfunction()
+
 # qvac_addon_import_fabric_cxx_runtime(<target> <fabric_target>)
 #
 # Linux only: link <target> without a C++ standard library of its own, so it

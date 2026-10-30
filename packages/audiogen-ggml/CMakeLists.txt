@@ -1,43 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
 
-# Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
-# rather than qvac_addon_preproject() so overlay triplets and Android STL
-# stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
+# Shared addon build helpers. See docs/architecture/ADDON-CMAKE-TEMPLATE.md.
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
-
-option(BUILD_TESTING "Build tests" OFF)
-option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
-option(ENABLE_CUDA "Enable CUDA GPU acceleration (needs nvcc on the build host)" OFF)
-qvac_addon_fuzz_manifest()
-
-if(BUILD_TESTING)
-  list(APPEND VCPKG_MANIFEST_FEATURES "tests")
-endif()
-
-if(ENABLE_VULKAN)
-  list(APPEND VCPKG_MANIFEST_FEATURES "vulkan")
-endif()
-
-if(ENABLE_CUDA)
-  list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
-endif()
-
-find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
-find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
-
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
-include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
+qvac_addon_preproject()
 
 project(audiogen-ggml CXX C)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++)
-endif()
-
-find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
+qvac_addon_project_setup()
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
 
@@ -46,29 +15,22 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelIn
 # parse/transform drivers keep full ASan + LSan.
 qvac_addon_fuzz_only_return()
 
+# The ggml runtime is the shared @qvac/fabric prebuild (dynamically linked,
+# loaded once per process, its backends found and loaded by fabric itself);
+# sets qvac_fabric_target.
+qvac_addon_use_fabric()
+
 find_package(audiogen-cpp CONFIG REQUIRED)
-# Pull ggml in directly (in addition to the transitive find via
-# audiogen-cppConfig) so GGML_AVAILABLE_BACKENDS / ggml::<backend> IMPORTED
-# targets are visible for the dynamic-backend install plumbing below
-# (mirrors tts-ggml).
-find_package(ggml CONFIG REQUIRED)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-if(WIN32)
-  add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
-endif()
+# audiogen-cpp was compiled against the same ggml headers; its ggml symbols
+# come from the shared runtime, not from the qvac-fabric port's static archives.
+qvac_addon_engine_on_fabric(audiogen-cpp::audiogen-cpp)
 
 # The module is named after the platform package that ships it,
 # qvac__audiogen-ggml-<suffix> (every iOS host shares `ios`), so that package
 # is an ordinary addon: require.addon(), bare-pack and bare-link all find
-# prebuilds/<host>/qvac__audiogen-ggml-<suffix>.bare there. The dynamically
-# loadable ggml backends install to <host>/<module name>, where the addon looks
-# next to itself (see ModuleBackendsDir.hpp); bare-link flattens them next to
-# the module in a mobile app instead. Keep the suffix in sync with
-# "#host-addon" in package.json and SLICE_DEFINITIONS in
+# prebuilds/<host>/qvac__audiogen-ggml-<suffix>.bare there. Keep the suffix in
+# sync with "#host-addon" in package.json and SLICE_DEFINITIONS in
 # scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
 if(bare_target_value MATCHES "^ios-")
@@ -76,46 +38,8 @@ if(bare_target_value MATCHES "^ios-")
 else()
   set(module_name "qvac__audiogen-ggml-${bare_target_value}")
 endif()
-set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    if(TARGET ggml::${_backend})
-      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-    endif()
-  endforeach()
-endif()
-
-set(BACKEND_DL_LOOSE_SOS "")
-if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
-  if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
-    message(WARNING "audiogen-ggml: VCPKG_INSTALLED_PATH "
-      "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
-      "ggml backend module pickup -- the runtime may fail to find "
-      "Vulkan / OpenCL / CUDA backends.")
-  else()
-    file(GLOB BACKEND_DL_LOOSE_SOS
-      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so"
-      "${VCPKG_INSTALLED_PATH}/lib/qvac-speech-ggml-*.dll")
-    foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
-      message(STATUS "audiogen-ggml: will stage ggml backend ${_lib}")
-    endforeach()
-  endif()
-endif()
-
-add_bare_module(audiogen-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
-
-if(BACKEND_DL_LOOSE_SOS)
-  install(
-    FILES ${BACKEND_DL_LOOSE_SOS}
-    DESTINATION ${BACKENDS_SUBDIR_VALUE}
-  )
-endif()
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${audiogen-ggml}_module PRIVATE -Wl,--exclude-libs,ALL)
-endif()
+add_bare_module(audiogen-ggml NAME ${module_name} EXPORTS)
 
 target_sources(
   ${audiogen-ggml}
@@ -150,57 +74,8 @@ target_link_libraries(
 )
 
 target_compile_definitions(${audiogen-ggml} PUBLIC JS_LOGGER)
-target_compile_definitions(${audiogen-ggml} PRIVATE
-  QVAC_ADDON_MODULE_NAME="${module_name}")
 
-if(ANDROID)
-  target_link_options(
-    ${audiogen-ggml}_module
-    PRIVATE
-      -Wl,-z,max-page-size=16384
-      -Wl,-z,common-page-size=16384
-  )
-endif()
-
-if(APPLE)
-  target_link_options(
-    ${audiogen-ggml}_module
-    PRIVATE
-      -Wl,-exported_symbol,_bare_get_module_name_v0
-      -Wl,-exported_symbol,_bare_register_module_v0
-  )
-endif()
-
-# iOS: the bare module is linked with `-undefined dynamic_lookup`, which lets
-# ObjC/Metal/libc++ symbols resolve at load time against the OS dylibs. But the
-# clang compiler-rt builtin `___isPlatformVersionAtLeast` (emitted by ggml-metal's
-# `@available(iOS 16, *)` checks, since the deployment target is < 16) lives only
-# in the static libclang_rt archive, not in any dylib. Under dynamic_lookup it
-# stays unresolved -> its stub jumps to 0x0 -> the kernel kills the process with a
-# "CODESIGNING Invalid Page" fault the moment Metal initialises. Explicitly link
-# the compiler-rt builtins so that symbol (and any other builtin) is defined.
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-  # Resolve the clang resource dir via xcrun (CMAKE_C_COMPILER is a cross wrapper
-  # here and doesn't reliably answer -print-resource-dir).
-  execute_process(
-    COMMAND xcrun --find clang
-    OUTPUT_VARIABLE _xcrun_clang
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(
-    COMMAND ${_xcrun_clang} -print-resource-dir
-    OUTPUT_VARIABLE _clang_resource_dir
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
-    set(_clang_rt_builtins "${_clang_resource_dir}/lib/darwin/libclang_rt.iossim.a")
-  else()
-    set(_clang_rt_builtins "${_clang_resource_dir}/lib/darwin/libclang_rt.ios.a")
-  endif()
-  if(EXISTS "${_clang_rt_builtins}")
-    message(STATUS "audiogen-ggml: linking compiler-rt builtins: ${_clang_rt_builtins}")
-    target_link_libraries(${audiogen-ggml}_module PRIVATE "${_clang_rt_builtins}")
-  else()
-    message(WARNING "audiogen-ggml: compiler-rt builtins not found at ${_clang_rt_builtins}")
-  endif()
-endif()
+qvac_addon_link_fabric(${audiogen-ggml} ${qvac_fabric_target})
+qvac_addon_finalize(${audiogen-ggml})
 
 qvac_addon_add_fuzz_subdirectory()

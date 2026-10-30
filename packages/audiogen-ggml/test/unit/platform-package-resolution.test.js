@@ -35,9 +35,12 @@ function importsTargetForHost(host) {
   return target
 }
 
-test('binding.js is the one line the module lexer can follow', (t) => {
+test('binding.js pre-loads the fabric runtime, then resolves the host addon, with literal specifiers only', (t) => {
   const source = fs.readFileSync(path.join(PACKAGE_ROOT, 'binding.js'), 'utf8')
-  t.is(source, "module.exports = require('#host-addon')\n")
+  const statements = source
+    .split('\n')
+    .filter((line) => line.trim() !== '' && !line.trim().startsWith('//'))
+  t.alike(statements, ["require('@qvac/fabric')", "module.exports = require('#host-addon')"])
 })
 
 test('the meta package is not an addon: its platform packages are', (t) => {

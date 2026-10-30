@@ -92,27 +92,18 @@ dependency, pinned to the exact `@qvac/audiogen-ggml` version:
 }
 ```
 
-The published linux-x64 prebuild bundles the CUDA backend next to Vulkan; the
-linux-arm64 and Windows prebuilds ship Vulkan, and there CUDA is opt-in at
-build time via `npm run build:cuda` (or `bare-make generate -D ENABLE_CUDA=ON`;
-needs `nvcc` on the build host). When
-CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend mode: the
-CPU-variant, Vulkan, and CUDA backends ship as runtime-loaded modules (`.so` on
-Linux, `.dll` on Windows) beside the addon, and only the CUDA module depends on
-the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the CUDA 13 runtime
-libraries (cudart and cuBLAS) resolvable at load time; hosts that cannot resolve
-them skip the module and fall back to Vulkan or CPU. The engine prefers CUDA
-when both GPU backends are usable.
-
-On x64 a CUDA build's module targets **compute capability 7.5 and newer**, with
-native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6), Ada
-(8.9), Hopper (9.0), and Blackwell (12.0, 12.1). Anything newer JIT-compiles
-from the bundled 8.0 PTX on first use, a one-off compile the driver caches. On
-linux-arm64 the native set is Jetson Orin (8.7), Grace-Hopper (9.0), and
-GB10 / DGX Spark (12.1), with discrete Ampere+ cards and newer parts covered
-through the bundled 8.0 PTX. Volta and Pascal fall outside CUDA 13's support
-entirely, so they have no code path here: the backend skips such devices at
-registration and the addon falls back to Vulkan or CPU.
+The ggml runtime is the shared `@qvac/fabric` prebuild, a dependency of this
+package: the addon links it dynamically, ships no ggml of its own, and shares
+one runtime in memory with every other fabric addon in the process. The
+runtime ships Metal inside itself on macOS and iOS, and per-platform
+runtime-loaded modules elsewhere (CPU variants, Vulkan, CUDA on linux-x64,
+linux-arm64 and win32-x64, OpenCL on Android), so no backend is chosen at this
+package's build time. Engaging CUDA needs the NVIDIA driver plus the CUDA 13
+runtime libraries (cudart and cuBLAS) resolvable at load time; hosts that
+cannot resolve them skip the module and fall back to Vulkan or CPU. The engine
+prefers CUDA when both GPU backends are usable. The CUDA module's device
+coverage (compute capability 7.5 and newer, Volta and Pascal excluded) is the
+runtime's; see the `@qvac/fabric` README.
 
 To build the native addon from source in a repository checkout:
 
@@ -664,7 +655,7 @@ runnable end-to-end script (`npm run example`).
 | `cfgScale`                                | Default MiniMax flow guidance scale; `0` uses the model default.                                                                                                                                |
 | `nGpuLayers`                              | GPU layers to offload when `useGPU` is set (99 = all).                                                                                                                                          |
 | `threads`                                 | CPU thread count (0 / unset = hardware default).                                                                                                                                                |
-| `backendsDir`                             | Advanced; directory scanned, as given, for dlopen'd ggml backend modules. Unset scans the addon's own, next to its native module, which is where the platform package and `bare-link` put them. |
+| `backendsDir`                             | Advanced; directory scanned, as given, for dlopen'd ggml backend modules. Unset uses the directory the `@qvac/fabric` runtime loads its own backends from (its platform package, or next to the runtime in a `bare-link`ed app). |
 
 `logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
 wrapped by a level-gated `QvacLogger`.
@@ -867,13 +858,13 @@ dispatches to the corresponding `audiogen-cpp` engine.
 - `addon/src/model-interface/acestep/` — `AcestepModel`, wrapping the engine.
 - `addon/src/model-interface/minimax/` — desktop-only `MinimaxModel`.
 - Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on the
-  `speech-cpp[audiogen]` port.
-- Native dependency versions are pinned with vcpkg `overrides` in
-  [vcpkg.json](vcpkg.json), and `package.json` records the `ggml-speech`
-  build as `qvac["ggml-speech"]`. The speech addons ship their
-  ggml backends under the same file names, so an app that bundles several of
-  them keeps one copy of each: use releases that record the same
-  `ggml-speech`.
+  `speech-cpp[audiogen]` port, compiled against the ggml headers the
+  `@qvac/fabric` runtime was built from (`qvac-fabric` port, headers only).
+- The ggml runtime is the shared `@qvac/fabric` prebuild: the addon links it
+  dynamically (`DT_NEEDED qvac__fabric-<host>@0.bare`) and ships no ggml of
+  its own. `speech-cpp` is pinned with a vcpkg `override` in
+  [vcpkg.json](vcpkg.json). See
+  [`packages/fabric/INTEGRATION.md`](../fabric/INTEGRATION.md).
 
 ## Fuzzing
 

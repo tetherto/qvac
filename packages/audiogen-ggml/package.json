@@ -2,11 +2,8 @@
   "name": "@qvac/audiogen-ggml",
   "version": "0.9.1",
   "description": "Audio generation (music) addon for qvac",
-  "qvac": {
-    "ggml-speech": "2026-10-27"
-  },
   "engines": {
-    "bare": ">=1.19.0"
+    "bare": ">=1.24.0"
   },
   "imports": {
     "#host-addon": {
@@ -35,9 +32,7 @@
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
-    "build:native:cuda": "bare-make generate -D ENABLE_CUDA=ON -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
     "link:platform": "node ../../scripts/ci/slice-platform-packages.mjs --link-local --workdir .",
-    "build:cuda": "npm run build:ts && npm run build:native:cuda",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
@@ -143,10 +138,13 @@
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
-    "cmake-npm": "^1.1.0"
+    "cmake-npm": "^1.1.0",
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
+    "@qvac/fabric": "^0.25.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-ffmpeg": "^1.4.0",
@@ -160,10 +158,27 @@
     "@qvac/audiogen-ggml-linux-arm64": "0.6.0",
     "@qvac/audiogen-ggml-darwin-arm64": "0.6.0",
     "@qvac/audiogen-ggml-darwin-x64": "0.6.0",
-    "@qvac/audiogen-ggml-win32-x64": "0.6.0"
+    "@qvac/audiogen-ggml-win32-x64": "0.6.0",
+    "@qvac/fabric-linux-x64": "^0.25.0",
+    "@qvac/fabric-linux-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-x64": "^0.25.0",
+    "@qvac/fabric-win32-x64": "^0.25.0"
   },
   "overrides": {
     "bare-module-lexer": "1.6.3"
   },
-  "types": "index.d.ts"
+  "types": "index.d.ts",
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
+  }
 }
