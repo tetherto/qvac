@@ -1,6 +1,7 @@
 #include "SpeculativeRuntime.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -8,6 +9,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -514,6 +516,70 @@ void SpeculativeRuntime::resetSequence(llama_seq_id seqId) const {
   common_speculative_set_state(spec_.get(), seqId, {});
 }
 
+namespace {
+
+// common_speculative_process() takes only a common_batch, while the addon
+// decodes llama_batch. Same conversion and defaults as fabric's former
+// common_batch_from_llama_batch(): seq 0, positions continue from memory, last
+// token is output.
+common_batch toCommonBatch(llama_context* ctx, const llama_batch& batch) {
+  common_batch res(ctx);
+
+  const bool hasToken = batch.token != nullptr;
+  const bool hasEmbd = batch.embd != nullptr;
+  const auto nEmbd =
+      static_cast<size_t>(llama_model_n_embd_inp(llama_get_model(ctx)));
+
+  llama_memory_t mem = llama_get_memory(ctx);
+  std::vector<llama_pos> posNext(llama_n_seq_max(ctx));
+  for (size_t s = 0; s < posNext.size(); ++s) {
+    posNext[s] =
+        llama_memory_seq_pos_max(mem, static_cast<llama_seq_id>(s)) + 1;
+  }
+
+  for (int32_t i = 0; i < batch.n_tokens; ++i) {
+    const int32_t nSeqIds = batch.n_seq_id != nullptr ? batch.n_seq_id[i] : 1;
+    const llama_seq_id seqId = batch.seq_id != nullptr ? batch.seq_id[i][0] : 0;
+
+    std::array<llama_pos, GGML_MROPE_SECTIONS> pos{};
+    if (batch.pos == nullptr) {
+      pos[0] = posNext[seqId]++;
+    } else if (hasToken) {
+      pos[0] = batch.pos[i];
+    } else {
+      // Embedding batch: section-major layout pos[j * n_tokens + i].
+      for (int32_t j = 0; j < res.n_pos; ++j) {
+        pos[j] = batch.pos[j * batch.n_tokens + i];
+      }
+    }
+
+    const bool output = batch.logits != nullptr ? batch.logits[i] != 0
+                                                : i == batch.n_tokens - 1;
+    const llama_embd embd = {
+        hasEmbd ? batch.embd + static_cast<size_t>(i) * nEmbd : nullptr,
+        1,
+        nEmbd};
+
+    int32_t idx = 0;
+    if (hasToken) {
+      idx = res.add(batch.token[i], pos[0], seqId, output);
+      if (hasEmbd) {
+        res.set_embd(idx, embd);
+      }
+    } else {
+      idx = res.add_embd(embd, pos.data(), seqId, output);
+    }
+
+    for (int32_t s = 1; s < nSeqIds; ++s) {
+      res.add_seq(idx, batch.seq_id[i][s]);
+    }
+  }
+
+  return res;
+}
+
+} // namespace
+
 bool SpeculativeRuntime::process(const llama_batch& batch) const {
   // llama-server mirrors every target memory edit onto the draft context
   // (`common_memory`). The addon edits the target sequence in many places
@@ -544,7 +610,8 @@ bool SpeculativeRuntime::process(const llama_batch& batch) const {
       }
     }
   }
-  return common_speculative_process(spec_.get(), batch);
+  return common_speculative_process(
+      spec_.get(), toCommonBatch(ctxTgt_, batch));
 }
 
 DraftSequenceState captureDraftSequenceState(
