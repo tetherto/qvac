@@ -21,13 +21,16 @@
 #include <concurrentqueue/concurrentqueue.h>
 #include <llama.h>
 
-#include "CacheFileIndex.hpp"
 #include "CacheSourceSelection.hpp"
 #include "LlmContext.hpp"
 #include "MediaLoadOrder.hpp"
 #include "MultiRequestBatcher.hpp"
 #include "SequenceDriver.hpp"
 #include "SlotStateCache.hpp"
+
+namespace qvac_lib_inference_addon_llama::cache {
+class CacheFileIndex;
+} // namespace qvac_lib_inference_addon_llama::cache
 
 /// Defined in test/unit/test_internal_peers.hpp (tests only); befriended below
 /// so unit tests can inject decode/media-eval stubs. Never defined in

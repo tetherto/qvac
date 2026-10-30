@@ -1669,6 +1669,10 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     if (!state_->isTextLlm_) {
       preflightImagePixels(parsed, prompt.media, maxImagePixels_);
     }
+    // The base key's file is a source like any file this model has used.
+    if (state_->fileIndex_) {
+      state_->fileIndex_->note(prompt.baseCacheKey);
+    }
     batching::SubmitRequest sr;
     sr.chatMsgs = std::move(parsed.chatMsgs);
     sr.tools = std::move(parsed.tools);
@@ -1677,9 +1681,6 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     sr.prefill = prompt.prefill;
     sr.cacheKey = prompt.cacheKey;
     sr.ephemeral = prompt.ephemeral;
-    if (state_->fileIndex_) {
-      state_->fileIndex_->note(prompt.baseCacheKey);
-    }
     sr.overrides = prompt.generationParams;
     // `seen` fires the seq observer exactly once per slot: at admission
     // (onAdmitted), with onToken/onDone as a fallback latch. Only the
