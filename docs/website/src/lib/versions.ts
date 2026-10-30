@@ -88,7 +88,6 @@ export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] = [
       { version: 'v0.18', folder: '(v0.18)' },
       { version: 'v0.17', folder: 'v0.17' },
       { version: 'v0.16', folder: 'v0.16' },
-      { version: 'v0.15', folder: 'v0.15' },
     ],
   },
 ];
