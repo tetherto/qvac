@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Update the shared `speech-cpp` native dependency to `2026-10-29`
+  ([#5420](https://github.com/tetherto/qvac/pull/5420),
+  [#5447](https://github.com/tetherto/qvac/pull/5447)).
+- `assessFit` names the device and each stage's device by its ggml device name
+  (`CPU`, `CUDA0`, `MTL0`, `GPUOpenCL`), counts Android's OpenCL GPU as sharing
+  host memory, and gives a device that reports no memory of its own the
+  host's free and total figures
+  ([#5447](https://github.com/tetherto/qvac/pull/5447)).
+
 ## [0.9.1] - 2026-10-28
 
 ### Added
