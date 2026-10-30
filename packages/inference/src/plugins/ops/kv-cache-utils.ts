@@ -21,7 +21,8 @@ const logger = getEngineLogger()
 
 export function extractSystemPrompt(messages: CacheMessage[]): string | null {
   const systemMessage = messages.find((msg) => msg.role === 'system')
-  return systemMessage ? systemMessage.content : null
+  if (!systemMessage || typeof systemMessage.content !== 'string') return null
+  return systemMessage.content
 }
 
 // Names the cache file by system prompt only. Tools stay out on purpose: the

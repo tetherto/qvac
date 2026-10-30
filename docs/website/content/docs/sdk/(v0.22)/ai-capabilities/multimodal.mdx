@@ -11,7 +11,7 @@ schemaType: HowTo
 
 Compared to text-only completion inference, the key differences are:
 - You must load a multimodal-capable LLM **and** its matching `projectionModelSrc` via [`loadModel()`](/sdk/reference/api#loadmodel).
-- Your `history` messages can include `attachments: [{ path: "/path/to/image.jpg" }]` (the file must exist on disk).
+- Your `history` messages can include `attachments: [{ path: "/path/to/image.jpg" }]` (the file must exist on disk), or an ordered `content` array that interleaves text and media parts (see [Ordered text and media](#ordered-text-and-media)).
 - Images larger than 50 megapixels (width × height) are rejected before decoding. To accept larger images, raise the limit at load time with `modelConfig['image-max-megapixels']` (a positive integer, in millions of pixels).
 - Aside from attachments, you still call `completion({ modelId, history, stream })` the same way and consume the same streaming output.
 
@@ -49,6 +49,28 @@ VisionPsy Nano ships in two variants — base and Flash — as separate weights 
 Loading Flash weights with `image_no_upscale` unset — or base weights with `image_no_upscale: 'on'` — passes load validation (both mmprojs declare the same `preproc_image_size`), but silently uses the wrong preprocessing rule and degrades quality.
 
 `image_no_upscale` is read only by the idefics3-style preprocessor, and it takes effect only when the loaded `mmproj` declares `clip.vision.preproc_image_size`. In practice, that means the VisionPsy pairs above — on the other recommended pairs the flag either warns and is ignored (Qwen2.5-Omni / Qwen3-VL) or is accepted but inert (SmolVLM2, whose published `mmproj` declares no `preproc_image_size`). Treat `image_no_upscale` as a VisionPsy-only key.
+
+## Ordered text and media
+
+`attachments` sends every image before the message text. When the position of an image inside the text matters — multiple-choice options that are pictures, illustrated forms, steps — pass `content` as an ordered array of parts instead, on a `user` message:
+
+```js
+const history = [
+  {
+    role: 'user',
+    content: [
+      { type: 'text', text: 'Which image shows the same place as ' },
+      { type: 'media', path: '/images/place.jpg' },
+      { type: 'text', text: '?\nA. ' },
+      { type: 'media', path: '/images/a.jpg' },
+      { type: 'text', text: '\nB. ' },
+      { type: 'media', path: '/images/b.jpg' }
+    ]
+  }
+]
+```
+
+Each media part becomes a media marker at its own position in the rendered turn, so the model sees the text and each image in one turn, in order. A part is `{ type: 'text', text }` or `{ type: 'media', path }`; the file must exist on disk. Parts and `attachments` cannot be combined on the same message, and content parts are only valid on `user` messages.
 
 ## Example
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `completion()` accepts an ordered `content` array of `{ type: 'text', text }`
+  and `{ type: 'media', path }` parts on a `user` history message, so one turn
+  can interleave text and images. Use it when the position of an image inside
+  the text matters — options, captions or steps that are pictures — which
+  `attachments` cannot express because it sends every image before the text.
+
 ## [0.22.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.22.0

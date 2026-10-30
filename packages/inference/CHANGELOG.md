@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- A `completion()` history message may pass `content` as an ordered array of
+  `{ type: 'text', text }` and `{ type: 'media', path }` parts. One user turn
+  can then interleave text and images, so text that refers to a specific image
+  sits next to it; `attachments` always sends every image before the text.
+  Parts are user-only and cannot be combined with `attachments` on the same
+  message.
+
 ## [0.22.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.22.0

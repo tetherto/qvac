@@ -4,6 +4,7 @@ import type {
   CompletionParams,
   CompletionStats,
   GenerationParams,
+  HistoryContent,
   ResponseFormat,
   Tool,
   ToolCall,
@@ -63,9 +64,16 @@ interface ProcessModelResponseResult extends CompletionResult {
   producedTokens: boolean
 }
 
+/**
+ * One ordered content part as the addon receives it. The addon's media part
+ * carries its path in `content`, so a caller's `{ type: 'media', path }` is
+ * translated here.
+ */
+type ChatHistoryContentPart = { type: 'text'; text: string } | { type: 'media'; content: string }
+
 interface ChatHistory {
   role?: string
-  content?: string
+  content?: string | ChatHistoryContentPart[]
   type?: string
   name?: string
   description?: string
@@ -113,6 +121,21 @@ function transformMessage(message: HistoryMsg | Tool): ChatHistory[] {
   }
 
   const msg = message as HistoryMsg
+
+  // Ordered parts reach the addon as ONE message, so text and each image share
+  // a turn. Attachments cannot express that: they are all sent before the
+  // text, which leaves the model unable to tell which image is which option.
+  if (Array.isArray(msg.content)) {
+    const parts = msg.content.map((part) => {
+      if (part.type === 'text') return { type: 'text' as const, text: part.text }
+      if (!fs.existsSync(part.path)) {
+        throw new AttachmentNotFoundError(part.path)
+      }
+      return { type: 'media' as const, content: part.path }
+    })
+    transformed.push({ role: msg.role, content: parts })
+    return transformed
+  }
 
   if (msg.attachments && msg.attachments.length > 0) {
     for (const attachment of msg.attachments) {
@@ -177,7 +200,7 @@ function toCacheMessage(msg: HistoryMsg): CacheMessage {
  * none. `transform.ts` strips `system_prompt` from the config handed to the
  * addon, so the conversation is the only way it reaches the model.
  */
-export function seedConfiguredSystemPrompt<T extends { role: string; content: string }>(
+export function seedConfiguredSystemPrompt<T extends { role: string; content: HistoryContent }>(
   history: T[],
   modelConfig: unknown
 ): T[] {

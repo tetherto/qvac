@@ -1,3 +1,4 @@
+import type { HistoryContent } from '@/schemas/completion-stream'
 import type { Tool } from '@/schemas/tools'
 import { validateTools, type ToolInput } from '@/utils/tool-helpers'
 
@@ -17,7 +18,7 @@ const MAX_DEFINITION_BYTES = 8 * 1024
 
 export type HistoryMessage = {
   role: string
-  content: string
+  content: HistoryContent
 }
 
 /**
@@ -251,7 +252,7 @@ function readSearchResult(content: string): ToolSearchResult['tool_search'] | nu
 export function loadedToolNames(history: readonly HistoryMessage[]): Set<string> {
   const loaded = new Set<string>()
   for (const message of history) {
-    if (message.role !== 'tool') continue
+    if (message.role !== 'tool' || typeof message.content !== 'string') continue
     const envelope = readSearchResult(message.content)
     if (!envelope) continue
     for (const name of envelope.loaded) loaded.add(name)

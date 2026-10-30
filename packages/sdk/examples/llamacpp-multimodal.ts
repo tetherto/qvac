@@ -82,6 +82,34 @@ try {
 
   console.log('▸ --------------------------------')
 
+  // Ordered text and media: each image keeps its position in the turn, so the
+  // text can sit next to the picture it refers to. Attachments cannot do this
+  // — they are all sent before the text.
+  const history3 = [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Image A: ' },
+        { type: 'media', path: imageFilePath },
+        { type: 'text', text: '\nImage B: ' },
+        { type: 'media', path: imageFilePath2 },
+        { type: 'text', text: '\nWhich image is a newspaper?' }
+      ]
+    }
+  ]
+
+  const result3 = completion({ modelId, history: history3, stream: true })
+
+  for await (const token of result3.tokenStream) {
+    process.stdout.write(token)
+  }
+
+  const stats3 = await result3.stats
+
+  console.log('\n▸ Performance Stats:', stats3)
+
+  console.log('▸ --------------------------------')
+
   await unloadModel({ modelId, clearStorage: false })
 } catch (error) {
   console.error('✖', error)
