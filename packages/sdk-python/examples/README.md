@@ -33,6 +33,9 @@ Examples that read a local file take it as an argument:
 python examples/transcription.py path/to/audio-16khz.wav
 python examples/ocr.py path/to/image.png
 python examples/audiogen.py "lo-fi hip hop, mellow piano" audiogen-output.wav
+python examples/audiogen_cover.py path/to/song.wav "orchestral arrangement"
+python examples/audiogen_edit.py path/to/song.wav "original pop song" "guitar pop-rock"
+python examples/audiogen_understand.py path/to/song.wav
 python examples/plugins.py <model-src>
 python examples/vla.py [path-to-smolvla.gguf]
 ```
@@ -41,6 +44,9 @@ python examples/vla.py [path-to-smolvla.gguf]
 this folder, so swap in your own data by replacing those two files.
 
 Models download over P2P from the registry on first use and are cached locally.
+`audiogen_minimax.py` is the exception there: MiniMax-Music3 is not in the
+registry, so it reads its two GGUF paths from `AUDIOGEN_MINIMAX_LM_MODEL` and
+`AUDIOGEN_MINIMAX_SYNTH_MODEL`.
 
 A few examples reach for a third-party store rather than a built-in one. Each
 guards the lookup and names what to install; today that means `pip install
@@ -72,6 +78,10 @@ extra.
 | `transcription.py`                 | `transcription/whispercpp-filesystem.ts`               | `transcribe` (`TranscribeRequest`)                                                                                        |
 | `text_to_speech.py`                | `tts/supertonic.ts`                                    | `text_to_speech` (`TextToSpeechRequest`)                                                                                  |
 | `audiogen.py`                      | `audiogen/generate-music.ts`                           | `audio_gen_stream` (`AudioGenStreamRequest`), multi-model AudioGen loading                                                |
+| `audiogen_cover.py`                | `audiogen/generate-cover.ts`                           | `audio_gen_stream` with `taskType: "cover-nofsq"`: re-render a source recording, optional timbre `referenceAudio`         |
+| `audiogen_edit.py`                 | `audiogen/edit-music.ts`                               | `audio_edit_stream` (`AudioEditStreamRequest`) — an ordered Flow-Edit then Repaint pipeline over one source recording    |
+| `audiogen_understand.py`           | `audiogen/understand-music.ts`                         | `audio_understand` (`AudioUnderstandRequest`) — caption, musical metadata and recovered FSQ codes off a recording        |
+| `audiogen_minimax.py`              | `audiogen/generate-music-minimax.ts`                   | `audio_gen_stream` on the MiniMax-Music3 engine: a bring-your-own GGUF pair and the MiniMax-only sampling knobs           |
 | `diffusion_flux2_klein.py`         | `diffusion-flux2-klein.ts`                             | `diffusion_stream` (`DiffusionStreamRequest`) — split-layout FLUX.2 [klein]; progress, images and stats off one iterator  |
 | `diffusion_ideogram.py`            | `diffusion-ideogram.ts`                                | `diffusion_stream` with Ideogram 4's serialized structured caption; split layout with an extra unconditional model        |
 | `diffusion_simple.py`              | `diffusion-simple.ts`                                  | `diffusion_stream` at its smallest: one all-in-one SD 2.x GGUF, prompt only, image read off the stream                    |
@@ -89,8 +99,8 @@ extra.
 | `ocr.py`                           | `ocr-fasttext.ts`                                      | `ocr_stream` (`OcrStreamRequest`)                                                                                         |
 | `registry_query.py`                | `registry-query.ts`                                    | `model_registry_list` / `_search` / `_get_model`                                                                          |
 | `model_info.py`                    | `cache-management.ts`                                  | `get_model_info`, `download_asset_with_progress`                                                                          |
-| `assess_model_fit.py`              | `assess-model-fit.ts`                                  | `assess_model_fit` (`AssessModelFitRequest`) — memory verdicts before any download                                        |
-| `advisory_model_fit.py`            | `advisory-model-fit.ts`                                | `load_model` (`LoadModelRequest`) with `modelFitPolicy`, `logging_stream`, `SDK_LOG_ID`                                   |
+| `assess_model_fit.py`              | `assess-model-fit.ts`                                  | `assess_model_fit` — memory verdicts before any download                                                                  |
+| `advisory_model_fit.py`            | `advisory-model-fit.ts`                                | `load_model` with `model_fit_policy`, `logging_stream`, `SDK_LOG_ID`                                                      |
 | `sharded_models.py`                | `llamacpp-sharded.ts`                                  | `load_model` with a sharded `model_src`; per-shard progress from `on_progress`'s `shard_info`                             |
 | `logging_streams.py`               | `logging-streaming.ts`                                 | `logging_stream`, `SDK_LOG_ID`                                                                                            |
 | `vla.py`                           | `vla-smolvla.ts`                                       | `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state`                                                             |

@@ -1,5 +1,95 @@
 # Changelog
 
+## [0.25.0] - 2026-10-28
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11259.1.0` -> `11259.2.0`. The `common`
+  structs change layout, so native consumers must be rebuilt against this
+  release (no source changes needed):
+  - `common_params` gains `coreml_max_inflight` and `coreml_model` in the
+    embedding section.
+  - `common_chat_msg` gains `extra_json`.
+  - The ggml op list and the RPC protocol (112) are unchanged, so RPC peers on
+    0.24.0 stay compatible.
+
+### Fixed
+
+- The PNG decoder bounds its zlib output to the size the image header
+  declares, so a tiny image with a large deflate stream no longer makes mtmd
+  allocate gigabytes.
+- The RPC server drops its cached graphs when a buffer is freed, keeping its
+  graph cache in step with the client.
+- CUDA: bitonic argsort handles rows wider than one block, the CCCL version
+  guard no longer breaks on a major version rollover, and CUB `DeviceTopK` is
+  used only from CCCL 3.4.3, which fixes its race condition.
+
+### Added
+
+- DeepSeek V4.1 Flash support, including its chat template's extra message keys.
+- `llama_supports_coreml` and `llama_set_coreml_model` for an optional Core ML
+  EmbeddingGemma 2 sidecar. This package does not build Core ML support, so
+  `llama_supports_coreml` returns `false`.
+
+### Changed
+
+- CUDA `TOP_K` picks bitonic sort, radix select or `DeviceTopK` by row shape,
+  so many long rows no longer take one launch per row.
+
+## [0.24.0] - 2026-10-26
+
+### Breaking
+
+- The RPC protocol major goes 111 -> 112: two ops join the ggml op enum
+  (`GGML_OP_COUNT` 125 -> 127). A `ggml-rpc-server` and its RPC client must
+  both run this fabric; a 111 peer refuses the connection.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11259.0.1` -> `11259.1.0`. No `llama.h`,
+  `common/` or `mtmd` header changes; native consumers rebuild against the new
+  ggml op enum without source changes.
+
+### Added
+
+- Deferred gated delta net state commit for speculative decoding on Qwen3.5 and
+  Qwen3.5-MoE, opt-in with `LLAMA_GDN_DEFERRED=1`, with CPU, CUDA, Vulkan and
+  Metal kernels. The base state is replayed from the rows a draft kept instead
+  of a state snapshot per draft token. New ggml APIs
+  `ggml_gated_delta_net_deferred`, `ggml_gated_delta_net_rec_size` and
+  `ggml_gdn_conv_deferred`. Ignored on devices without the deferred ops, and
+  disabled on MUSA.
+- Hexagon speech kernels (convolution, layout, activation, matmul, attention and
+  `GET_ROWS` paths). This package does not build the Hexagon backend.
+
+## [0.23.1] - 2026-10-24
+
+### Fixed
+
+- Fit: a draft model that borrows tensors from the target is measured next to
+  it and sized at the target's context. A borrowed tensor of a different width
+  fails the fit and context creation with an error instead of a ggml assert.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11259.0.0` -> `11259.0.1`. No API removals;
+  native consumers do not need source changes.
+- Backend modules loaded under `GGML_BACKEND_DL` (CUDA, Vulkan, CPU variants)
+  forward their logs to the process logger, so `ggml_log_set` /
+  `llama_log_set` verbosity applies to them instead of every level going to
+  stderr.
+- Faster Metal decode: few-row MMA mat-mul for the remaining quant types, a
+  faster MXFP4 mat-vec, fused `RMS_NORM`+`MUL` and residual `ADD` into
+  single-row Q4_0/MXFP4 mat-vecs, fused per-head `RMS_NORM`+`MUL`+`ROPE`
+  (+ K-cache `SET_ROWS`), and full-threadgroup unary/binary/GLU launches.
+
+### Added
+
+- OpenCL kernels for the speech ops `GRU`, `ZERO_UPSAMPLE`, `CHANNEL_SHUFFLE`,
+  `AFFINE_PRELU` and `SNAKE`.
+- `common_get_extra_device_memory_data` in `common/fit.h`, reporting the device
+  memory of a fit's extra (draft) model.
+
 ## [0.23.0] - 2026-10-20
 
 ### Breaking

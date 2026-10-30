@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,10 @@ struct Transcript {
   // MOSS-Transcribe-Diarize only: the model's speaker label ("S01", "S02",
   // ...); speakerId carries the same speaker 0-based. Empty elsewhere.
   std::string speaker;
+  std::optional<std::vector<int32_t>> tokenIds;
+  std::optional<bool> isFinal;
+  std::optional<int> chunkIndex;
+  std::optional<float> eotConfidence;
 
   Transcript()
       : toAppend{false}, start(-1.0F), end(-1.0F), id{0}, isEndOfTurn{false},
@@ -94,9 +99,16 @@ struct VadEvent {
   float score = 0.0f;
   // Seconds from the start of the streaming session.
   double timestamp = 0.0;
+  int chunkIndex = -1;
   // Sortformer only: dominant speaker on entering speech; -1 otherwise.
   int speakerId = -1;
   VadSource source = VadSource::Energy;
+};
+
+struct EndOfTurnEvent {
+  double timestamp = 0.0;
+  int chunkIndex = -1;
+  float confidence = 0.0F;
 };
 
 /**

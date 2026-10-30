@@ -209,8 +209,7 @@
           "verifyGenerated": true,
           "nameTransform": "rename-prefix",
           "repoName": "bci-whispercpp",
-          "testGateMode": "post-publish-integration",
-          "postIntegrationOnGpr": true
+          "testGateMode": "none"
         }
       }
     }

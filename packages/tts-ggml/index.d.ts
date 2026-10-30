@@ -105,6 +105,8 @@ declare namespace TTSGgml {
     type TTSGgmlRuntimeConfig = PublicTypes.TTSGgmlRuntimeConfig;
     type TTSGgmlOptions = PublicTypes.TTSGgmlOptions;
     type LavaSREnhancerOptions = PublicTypes.LavaSREnhancerOptions;
+    type LavaSRCoreMLComputeUnits = PublicTypes.LavaSRCoreMLComputeUnits;
+    type LavaSRCoreMLOptions = PublicTypes.LavaSRCoreMLOptions;
     type LavaSRDenoiserOptions = PublicTypes.LavaSRDenoiserOptions;
     type RuntimeStats = PublicTypes.RuntimeStats;
     type TTSOutputChunk = PublicTypes.TTSOutputChunk;
@@ -120,6 +122,8 @@ declare namespace TTSGgml {
     type TtsFitRequest = Fit.TtsFitRequest;
     type TtsFitResult = Fit.TtsFitResult;
     type TtsFitStatus = Fit.TtsFitStatus;
+    type TtsFitDevice = Fit.TtsFitDevice;
+    type TtsFitStats = Fit.TtsFitStats;
     type SupertonicFitRequest = Fit.SupertonicFitRequest;
     type ParlerFitRequest = Fit.ParlerFitRequest;
     type ChatterboxFitRequest = Fit.ChatterboxFitRequest;

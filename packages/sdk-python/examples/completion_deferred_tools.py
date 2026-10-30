@@ -3,8 +3,8 @@ packages/sdk/examples/tools/llamacpp-deferred-tools.ts.
 
 A large tool set stays out of the prompt until the model asks for it. Only
 `get_weather` and the built-in `tool_search` (whose description carries a
-name-and-description catalog of the rest) are in the initial prompt; the
-deferred schemas arrive in the conversation when the model searches for them.
+name-and-description catalog of the rest) are in the initial prompt; a
+deferred schema is declared in the prompt once the model has searched for it.
 
 Runs through the worker-orchestrated loop rather than the client-side loop of
 completion_tools.py: executing `tool_search` from the client needs the

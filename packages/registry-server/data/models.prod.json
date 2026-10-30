@@ -763,6 +763,28 @@
     "notes": "tensors config"
   },
   {
+    "source": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf",
+    "engine": "llamacpp-embedding",
+    "description": "EmbeddingGemma 2 text embedding model with 768-dimensional output",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["embedding", "embed", "embeddinggemma-2", "multimodal"],
+    "notes": "Use the matching mmproj for image and audio inputs.",
+    "link": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
+    "engine": "llamacpp-embedding",
+    "description": "EmbeddingGemma 2 image and audio projector",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["embedding", "embed", "mmproj-embeddinggemma-2", "multimodal", "mmproj"],
+    "notes": "Projection model for embeddinggemma-2-Q8_0.gguf.",
+    "link": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300m-Q4_0.gguf",
     "engine": "@qvac/embed-llamacpp",
     "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
@@ -3003,6 +3025,116 @@
     "licenseId": "CC-BY-4.0",
     "tags": ["transcription", "parakeet", "eou", "ggml", "en"],
     "notes": "F16 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+    "engine": "parakeet-transcription",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet Mosaic 0.6B GGUF",
+    "quantization": "q4_0/q8_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "ggml", "multilingual"],
+    "notes": "Mixed-precision GGUF conversion of nvidia/parakeet-tdt-0.6b-v3. Use the matching parakeet-mosaic-encoder.mlmodelc for optional Core ML acceleration."
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/model.mil",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/weights/weight.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+    "engine": "parakeet-transcription",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet Mosaic Compact 0.6B GGUF",
+    "quantization": "q4_0/q8_0/q3_k/iq3_s",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "ggml", "multilingual"],
+    "notes": "Mixed-precision GGUF conversion of nvidia/parakeet-tdt-0.6b-v3. Use the matching parakeet-mosaic-compact-encoder.mlmodelc for optional Core ML acceleration."
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/model.mil",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/weights/weight.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.f16.gguf",
@@ -8780,6 +8912,116 @@
     "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-BF16.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 Turbo audio generation model (GGUF)",
+    "quantization": "bf16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "v1.5", "turbo", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-F16.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 Turbo audio generation model (GGUF)",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "v1.5", "turbo", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/model.mil",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: Data/com.apple.CoreML/model.mlmodel",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Core ML model package component; preserve the .mlpackage directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: Data/com.apple.CoreML/weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Core ML model package component; preserve the .mlpackage directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Manifest.json",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: Manifest.json",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Core ML model package component; preserve the .mlpackage directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/acestep/2026-07-22/vae-BF16.gguf",
     "engine": "@qvac/audiogen",
     "description": "ACE-Step variational autoencoder for audio generation (GGUF)",
@@ -9049,6 +9291,17 @@
     "engine": "@qvac/tts-ggml",
     "description": "Audio8 DualAR language model (GGUF, multilingual)",
     "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "lm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-10-28/audio8-lm-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 DualAR language model (GGUF, multilingual)",
+    "quantization": "q4_0",
     "params": "0.6B",
     "licenseId": "Apache-2.0",
     "tags": ["tts", "audio8", "lm", "multilingual", "gguf"],
@@ -9912,5 +10165,16 @@
     "tags": ["generation", "dflash2", "qwen3.8-flash-next", "draft"],
     "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen3.8 Flash Next entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
     "link": "https://huggingface.co/incoai/Qwen3.8-Flash-Next-DFlash2-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/mobilenetv3-3class/2026-10-28/mobilenetv3_3class_v3_fp16.gguf",
+    "engine": "ggml-classification",
+    "description": "MobileNetV3-Small 3-class image classifier (food / report / other), FP16 GGUF",
+    "quantization": "fp16",
+    "params": "2.5M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "mobilenetv3"],
+    "notes": "",
+    "link": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml"
   }
 ]

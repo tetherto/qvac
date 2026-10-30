@@ -20,6 +20,24 @@ const options: TTSGgmlOptions = {
   opts: new Date()
 }
 const namespaceOptions: TTSGgml.TTSGgmlOptions = options
+const coremlPolicy: TTSGgml.LavaSRCoreMLComputeUnits = 'CPU_AND_NE'
+const lavasrCoreml: TTSGgml.TTSGgmlOptions = {
+  enhancer: {
+    type: 'lavasr',
+    enhancerPath: '/enhancer.gguf',
+    coremlModelPath: '/enhancer.mlmodelc',
+    coremlComputeUnits: coremlPolicy
+  },
+  denoiser: {
+    type: 'lavasr',
+    denoiserPath: '/denoiser.gguf',
+    coremlModelPath: '/denoiser.mlmodelc',
+    coremlComputeUnits: 'CPU_AND_GPU'
+  }
+}
+// @ts-expect-error Apple does not expose a GPU_ONLY Core ML policy
+const invalidLavasrPolicy: TTSGgml.LavaSRCoreMLComputeUnits = 'GPU_ONLY'
+void [lavasrCoreml, invalidLavasrPolicy]
 const requireConstructor: typeof TTSGgml = TTSGgml
 const defaultConstructor: typeof TTSGgml = DefaultTTSGgml
 const model = new TTSGgml(namespaceOptions)
@@ -110,6 +128,15 @@ const mossFitSync: TTSGgml.TtsFitResult = TTSGgml.assessFit(mossFitRequest)
 // @ts-expect-error MOSS fit requires a decoder even without reference audio
 void TTSGgml.assessFit(mossFitWithoutDecoder)
 void [mossFitResult, mossFitSync]
+
+async function readFitRows(): Promise<void> {
+  const fit = await TTSGgml.assessFit(mossFitRequest)
+  const status: TTSGgml.TtsFitStatus = fit.status
+  const rows: TTSGgml.TtsFitDevice[] = fit.devices
+  const stats: TTSGgml.TtsFitStats = fit.stats
+  void [status, rows, stats]
+}
+void readFitRows
 
 const mossSfxWorkload = {
   engineType: 'moss-sfx' as const,

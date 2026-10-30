@@ -11,8 +11,10 @@ import {
 import { QvacErrorAddonASRGgml, ERR_CODES } from "./lib/error";
 import {
   assessFit as assessFitImpl,
+  type AsrFitDevice,
   type AsrFitRequest,
   type AsrFitResult,
+  type AsrFitStats,
   type AsrFitStatus,
   type MossTranscribeFitRequest,
   type ParakeetFitRequest,
@@ -57,6 +59,7 @@ import {
   type ParakeetConfig,
   type ParakeetEngineConfig,
   type ParakeetStreamingRunConfig,
+  type ParakeetSpeakerAttributionConfig as ParakeetSpeakerAttributionConfigShape,
 } from "./engines/parakeet/driver";
 import {
   ENGINE_MOSS_TRANSCRIBE,
@@ -588,8 +591,10 @@ type WhisperRuntimeStatsShape = WhisperRuntimeStats;
 type ParakeetRuntimeStatsShape = ParakeetRuntimeStats;
 type RuntimeStatsShape = RuntimeStats;
 type InferenceClientStateShape = InferenceClientState;
+type AsrFitDeviceShape = AsrFitDevice;
 type AsrFitRequestShape = AsrFitRequest;
 type AsrFitResultShape = AsrFitResult;
+type AsrFitStatsShape = AsrFitStats;
 type AsrFitStatusShape = AsrFitStatus;
 type MossTranscribeFitRequestShape = MossTranscribeFitRequest;
 type ParakeetFitRequestShape = ParakeetFitRequest;
@@ -629,8 +634,10 @@ namespace ASRGgml {
   export type ParakeetRuntimeStats = ParakeetRuntimeStatsShape;
   export type RuntimeStats = RuntimeStatsShape;
   export type InferenceClientState = InferenceClientStateShape;
+  export type AsrFitDevice = AsrFitDeviceShape;
   export type AsrFitRequest = AsrFitRequestShape;
   export type AsrFitResult = AsrFitResultShape;
+  export type AsrFitStats = AsrFitStatsShape;
   export type AsrFitStatus = AsrFitStatusShape;
   export type MossTranscribeFitRequest = MossTranscribeFitRequestShape;
   export type ParakeetFitRequest = ParakeetFitRequestShape;
@@ -639,6 +646,7 @@ namespace ASRGgml {
   export import BackendId = BackendIdEnum;
 
   export const assessFit = assessFitImpl;
+  export type ParakeetSpeakerAttributionConfig = ParakeetSpeakerAttributionConfigShape;
 }
 
 export = ASRGgml;

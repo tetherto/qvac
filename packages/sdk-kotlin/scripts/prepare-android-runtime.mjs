@@ -4,8 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
-import { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } from '@qvac/sdk/commands'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import link from 'bare-link'
 import { platformPackageForHost } from './platform-package.mjs'
 
@@ -30,6 +29,7 @@ const pluginCapabilities = new Map([
   ['@qvac/sdk/llamacpp-completion/plugin', ['LLM']],
   ['@qvac/sdk/llamacpp-embedding/plugin', ['EMBEDDINGS']],
   ['@qvac/sdk/llamacpp-decision/plugin', ['DECISION']],
+  ['@qvac/sdk/llamacpp-rerank/plugin', ['RERANK']],
   ['@qvac/sdk/whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/parakeet-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/moss-transcribe/plugin', ['TRANSCRIPTION']],
@@ -54,6 +54,13 @@ if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recu
 // Bundle the checkout's packages/sdk. The worker build owns compiling it.
 const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
 const modulesRoot = bundleSdkPath ?? projectRoot
+// The bundler of the SDK being bundled: the installed @qvac/sdk can predate the workspace
+// SDK's built-in plugins, and bundles one it does not know as a custom plugin.
+const { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } = await import(
+  bundleSdkPath
+    ? pathToFileURL(path.join(bundleSdkPath, 'dist', 'src', 'commands', 'index.js')).href
+    : '@qvac/sdk/commands'
+)
 const classificationWeightsSource = classificationWeightsPath(modulesRoot)
 
 // Split addons ship their native code in per-platform packages, installed at
@@ -65,14 +72,25 @@ await ensureHostPrebuilds('android-arm64', modulesRoot)
 // differ in the monorepo, where the worker comes from ../sdk but the Kotlin
 // runtime's own node_modules is a separate tree; for a standalone consumer they
 // are the same. ensureHostPrebuilds installs into this tree too.
-const bundle = await bundleSdk({
-  projectRoot: modulesRoot,
-  configPath,
-  ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
-  hosts: ['android-arm64'],
-  defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
-  quiet: true
-})
+//
+// Pack from modulesRoot: bare-pack keys files by their path from the cwd, and
+// from here the workspace SDK would be keyed `/../sdk/...`, outside the bundle
+// root, where the worklet cannot read it.
+const workingDirectory = process.cwd()
+process.chdir(modulesRoot)
+let bundle
+try {
+  bundle = await bundleSdk({
+    projectRoot: modulesRoot,
+    configPath,
+    ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
+    hosts: ['android-arm64'],
+    defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
+    quiet: true
+  })
+} finally {
+  process.chdir(workingDirectory)
+}
 
 const verification = await verifyBundle({
   projectRoot: modulesRoot,
@@ -96,9 +114,12 @@ if (typeof workerBundle !== 'string') {
   throw new Error('bare-pack mobile bundle did not export a string')
 }
 await fs.writeFile(path.join(assetsDirectory, 'worker.bundle'), workerBundle)
+// The SDK package the bundle came from: the workspace checkout, or the
+// installed @qvac/sdk when this package is checked out on its own.
+const sdkPackageRoot = bundleSdkPath ?? packageDir(projectRoot, '@qvac/sdk')
 const runtimeAssets = [
-  fs.copyFile(path.join(sdkRoot, 'LICENSE'), path.join(assetsDirectory, 'LICENSE')),
-  fs.copyFile(path.join(sdkRoot, 'NOTICE'), path.join(assetsDirectory, 'NOTICE'))
+  fs.copyFile(path.join(sdkPackageRoot, 'LICENSE'), path.join(assetsDirectory, 'LICENSE')),
+  fs.copyFile(path.join(sdkPackageRoot, 'NOTICE'), path.join(assetsDirectory, 'NOTICE'))
 ]
 if (includesClassification) {
   runtimeAssets.push(
@@ -111,10 +132,7 @@ if (includesClassification) {
 await Promise.all(runtimeAssets)
 
 const manifest = JSON.parse(await fs.readFile(bundle.manifestPath, 'utf8'))
-const sdkPackagePath = bundleSdkPath
-  ? path.join(bundleSdkPath, 'package.json')
-  : path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json')
-const sdkPackage = JSON.parse(await fs.readFile(sdkPackagePath, 'utf8'))
+const sdkPackage = JSON.parse(await fs.readFile(path.join(sdkPackageRoot, 'package.json'), 'utf8'))
 const addons = Array.isArray(manifest.addons) ? manifest.addons : []
 
 // bare-link 4 links the addons the worker entry's module graph loads on the

@@ -17,8 +17,8 @@ import type { CompanionSetMetadata, CompanionSetMetadataEntry, ProcessedModel } 
  *     Companions in same directory: lex, vocab/srcvocab+trgvocab, metadata
  *
  *   Apple Core ML bundles:
- *     Every file under a `<name>.mlmodelc/` directory is one component of a
- *     compiled bundle. No component is a model on its own.
+ *     Every file under a `<name>.mlmodelc/` or `<name>.mlpackage/` directory
+ *     is a bundle component. No component is a model on its own.
  */
 export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   const bySourcePath = new Map<string, ProcessedModel>()
@@ -41,9 +41,9 @@ export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   })
 }
 
-/** A file inside a compiled Core ML bundle, not a model a caller can load. */
+/** A file inside a Core ML bundle or source package, not a loadable model. */
 export function isCoremlBundleComponent(registryPath: string): boolean {
-  return /(?:^|\/)[^/]+\.mlmodelc\//.test(registryPath)
+  return /(?:^|\/)[^/]+\.(?:mlmodelc|mlpackage)\//.test(registryPath)
 }
 
 function markCoremlBundleComponents(models: ProcessedModel[], companionKeys: Set<string>): void {
