@@ -11,10 +11,6 @@ Text embeddings uses [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fa
 
 `embed()` returns a single embedding vector (`number[]`) for single text input, or an array of embedding vectors (`number[][]`) for batch input.
 
-<Callout type="info">
-For image and audio inputs with EmbeddingGemma 2, see [Multimodal embeddings](/sdk/ai-capabilities/multimodal-embeddings).
-</Callout>
-
 `modelConfig.pooling` accepts `"none"`, `"mean"`, `"cls"`, or `"last"`. Omit it to use the model default. `"rank"` fails validation, including in `deviceDefaults` in [`qvac.config.*`](/sdk/configuration): it produces reranker scores, not embeddings, and `embed()` does not support reranker models; use [reranking](/sdk/ai-capabilities/reranking) for those.
 
 ## Functions
