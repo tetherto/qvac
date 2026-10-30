@@ -105,19 +105,19 @@ export async function ensureReady(
 }
 
 function modelLoadFailureMessage(err: unknown): string {
-  const startup = err instanceof Error && err.cause instanceof WorkerStartupError ? err.cause : null
-  if (!startup) return err instanceof Error ? err.message : String(err)
+  if (!(err instanceof WorkerStartupError)) return err instanceof Error ? err.message : String(err)
 
-  // The outer SDK error can say "timeout" even when the worker exited early.
-  // Reconstruct only known diagnostics: startup.message includes raw stderr.
-  if (!startup.workerExited) return 'Worker did not establish IPC before the startup timeout'
+  // Report only known diagnostics: the cause carries the worker's own error text.
+  if (err.timedOut) return 'Worker did not signal ready before the startup timeout'
   const details = [
-    startup.exitCode !== null ? `code ${startup.exitCode}` : '',
-    startup.exitSignal !== null ? `signal ${startup.exitSignal}` : ''
+    err.exitCode !== null ? `code ${err.exitCode}` : '',
+    err.exitSignal !== null ? `signal ${err.exitSignal}` : ''
   ]
     .filter(Boolean)
     .join(', ')
-  return `Worker process exited${details ? ` (${details})` : ''} before IPC was established`
+  return details
+    ? `Worker process exited (${details}) before it was ready`
+    : 'Worker failed before it was ready'
 }
 
 // Aborts if the client disconnects before the load finishes: `reply.raw` closes

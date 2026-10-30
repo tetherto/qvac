@@ -98,7 +98,7 @@ function parseRequest<T extends Request>(request: T): Request {
 // bare-rpc's `_onerror`/`_onclose` reject a pending reply or destroy a
 // stream with its own generic `RPCError` (e.g. `CHANNEL_CLOSED`) as soon
 // as the channel dies, which can beat the SDK's own crash detection
-// (driven by the child process's `'exit'` event). Since `req.reply()` and
+// (driven by the worker IPC's `'close'` event). Since `req.reply()` and
 // response streams never reject with an application-level error — those
 // always arrive as a resolved payload handled by `checkAndThrowError` —
 // any rejection reaching these helpers other than our own `withTimeout`
@@ -109,7 +109,7 @@ function parseRequest<T extends Request>(request: T): Request {
 // When we win that race, the life signal hasn't aborted yet, so nothing
 // has invalidated the cached RPC connection — the next call would reuse
 // the same dead channel and fail again. `notifyChannelClosed()` tears it
-// down eagerly instead of waiting on the slow exit event; it's a no-op
+// down eagerly instead of waiting on the `'close'` event; it's a no-op
 // once the signal is already aborted, so this is safe to call every time.
 
 function lifeSignalAbortError(signal: AbortSignal): Error {

@@ -6,8 +6,9 @@ Bare runtime binary and the built SDK worker bundled under tetherto/qvac_sdk/_bu
 Usage:
   python3 scripts/build_wheel.py [--sdk-dir ../sdk] [--out-dir dist/] [--platform <tag>]
 
-Requires `npm run build` to have produced ../sdk/dist and the platform's
-bare-runtime package under ../sdk/node_modules. The wheel is tagged
+Requires `npm run build` to have produced ../sdk/dist, and ../sdk/node_modules
+installed; the Bare runtime is bare-sidecar's, which ships with the SDK's
+production dependencies. The wheel is tagged
 `py3-none-<platform>` for the current platform only (via hatch_build.py, driven
 by the QVAC_WHEEL_PLAT this script exports); models are never bundled. Only the
 current platform's native prebuilds are staged -- the addon npm packages ship
@@ -31,28 +32,24 @@ from pathlib import Path
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 BUNDLE_DIR = PACKAGE_ROOT / "src" / "tetherto" / "qvac_sdk" / "_bundle"
 
-_BARE_PACKAGE_BY_PLATFORM = {
-    ("Darwin", "arm64"): "bare-runtime-darwin-arm64",
-    ("Darwin", "x86_64"): "bare-runtime-darwin-x64",
-    ("Linux", "x86_64"): "bare-runtime-linux-x64",
-    ("Linux", "aarch64"): "bare-runtime-linux-arm64",
-    ("Windows", "AMD64"): "bare-runtime-win32-x64",
+_HOST_BY_PLATFORM = {
+    ("Darwin", "arm64"): "darwin-arm64",
+    ("Darwin", "x86_64"): "darwin-x64",
+    ("Linux", "x86_64"): "linux-x64",
+    ("Linux", "aarch64"): "linux-arm64",
+    ("Windows", "AMD64"): "win32-x64",
 }
-
-
-def bare_runtime_package() -> str:
-    key = (platform.system(), platform.machine())
-    package = _BARE_PACKAGE_BY_PLATFORM.get(key)
-    if package is None:
-        raise SystemExit(f"unsupported platform for a bundled wheel: {key}")
-    return package
 
 
 def _prebuild_host() -> str:
     """The `<platform>-<arch>` prebuild directory for this host (e.g.
-    `darwin-arm64`) -- the one Bare's `require.addon()` loads. Same suffix as the
-    bare-runtime package name."""
-    return bare_runtime_package().removeprefix("bare-runtime-")
+    `darwin-arm64`) -- the one Bare's `require.addon()` loads, and the one
+    bare-sidecar keeps its Bare runtime in."""
+    key = (platform.system(), platform.machine())
+    host = _HOST_BY_PLATFORM.get(key)
+    if host is None:
+        raise SystemExit(f"unsupported platform for a bundled wheel: {key}")
+    return host
 
 
 # Non-runtime dirs the addon npm packages over-publish. Dropped ONLY at a
@@ -119,35 +116,29 @@ def _stage_ignore(package_root: Path, prebuild_host: str):
 
 
 def stage_bundle(sdk_dir: Path) -> None:
-    """Copy the worker dist and the platform Bare runtime into the package
-    tree. The bundle is build-time-only staging: it's gitignored, and the
-    thin (unbundled) wheel simply builds without it present."""
+    """Copy the worker dist and its production dependencies, bare-sidecar's
+    Bare runtime among them, into the package tree. The bundle is
+    build-time-only staging: it's gitignored, and the thin (unbundled) wheel
+    simply builds without it present."""
     worker = sdk_dir / "dist"
-    if not (worker / "src" / "worker" / "index.js").exists():
+    if not (worker / "src" / "worker" / "tcp-shim.js").exists():
         raise SystemExit(
             f"no built worker at {worker} -- run `npm run build` in {sdk_dir}"
         )
-    bare_pkg = sdk_dir / "node_modules" / bare_runtime_package()
-    bare_bin = (
-        bare_pkg / "bin" / ("bare.exe" if platform.system() == "Windows" else "bare")
-    )
-    if not bare_bin.exists():
-        raise SystemExit(f"no Bare runtime binary at {bare_bin}")
 
     if BUNDLE_DIR.exists():
         shutil.rmtree(BUNDLE_DIR)
-    (BUNDLE_DIR / "runtime").mkdir(parents=True)
     shutil.copytree(worker, BUNDLE_DIR / "worker" / "dist")
     # The worker dist is ESM; without the package.json that declares
     # `"type": "module"` above it, Bare loads .js files as CJS and dies on
     # the first import statement.
     shutil.copy2(sdk_dir / "package.json", BUNDLE_DIR / "worker" / "package.json")
-    shutil.copy2(bare_bin, BUNDLE_DIR / "runtime" / bare_bin.name)
     # Runtime deps the worker resolves via Bare's node_modules walk-up, so
     # they must live at worker/node_modules exactly. Only the production
     # dependency closure ships (dev deps like electron would balloon the
-    # wheel by gigabytes); native prebuilds ride inside each package's
-    # prebuilds/ dir, pruned to this host by _stage_ignore.
+    # wheel by gigabytes); native prebuilds, bare-sidecar's runtime among
+    # them, ride inside each package's prebuilds/ dir, pruned to this host
+    # by _stage_ignore.
     # Resolve npm explicitly: on Windows it is `npm.cmd`, which subprocess can't
     # launch from the bare name "npm" (WinError 2) without shell resolution.
     npm = shutil.which("npm") or "npm"
@@ -163,10 +154,11 @@ def stage_bundle(sdk_dir: Path) -> None:
     dest_root = BUNDLE_DIR / "worker" / "node_modules"
     for line in sorted(set(listing.stdout.splitlines())):
         path = Path(line)
-        if node_modules not in path.parents:
-            continue
-        relative = path.relative_to(node_modules)
-        if relative.parts[0].startswith("bare-runtime-"):
+        if node_modules in path.parents:
+            relative = path.relative_to(node_modules)
+        elif "node_modules" in path.parts:
+            relative = Path(*path.parts[path.parts.index("node_modules") + 1 :])
+        else:
             continue
         destination = dest_root / relative
         if destination.exists():
@@ -179,6 +171,15 @@ def stage_bundle(sdk_dir: Path) -> None:
             ignore=_stage_ignore(path, host),
             symlinks=False,
         )
+    bare = (
+        dest_root
+        / "bare-sidecar"
+        / "prebuilds"
+        / host
+        / ("bare.exe" if platform.system() == "Windows" else "bare")
+    )
+    if not bare.exists():
+        raise SystemExit(f"no Bare runtime staged at {bare}")
     (BUNDLE_DIR / "__init__.py").write_text("")
 
 

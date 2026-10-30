@@ -9,12 +9,13 @@ import {
   readAddonPackageJson
 } from '@/commands/verify/addon-source'
 import { collectAddonsFromBundle, InvalidBundleSourceError } from '@/commands/verify/bundle-source'
+import { writeBundleFile } from './fixtures/bundle-file'
 import {
   collectAddonsFromNodeModules,
   InvalidNodeModulesSourceError
 } from '@/commands/verify/node-modules-source'
 import { checkPrebuilds, resolvePrebuildLocations } from '@/commands/verify/prebuilds'
-import { checkAbi, resolveBareRuntime, type BareRuntimeResolution } from '@/commands/verify/abi'
+import { checkAbi, type BareRuntimeResolution } from '@/commands/verify/abi'
 import {
   formatVerifyBundleResult,
   hasErrors,
@@ -50,6 +51,14 @@ function writePrebuild(packageRoot: string, host: string, filename = 'native.bar
   const dir = path.join(packageRoot, 'prebuilds', host)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, filename), '')
+}
+
+/** 0.14.5 embeds Bare 1.29.4 and 0.16.0 embeds Bare 1.33.4, per the built-in table. */
+function writeReactNativeBareKit(projectRoot: string, version: string): void {
+  writePackageJson(projectRoot, 'node_modules/react-native-bare-kit', {
+    name: 'react-native-bare-kit',
+    version
+  })
 }
 
 const BUNDLE_MAIN = '/app/entry.js'
@@ -132,6 +141,45 @@ function singleHostResolutions(options: { linked: boolean }): Record<string, unk
   }
 }
 
+/**
+ * `bare-posix` as bare-stow's `bare-sidecar` target emits it for one host: each
+ * addon resolves to its binary offloaded beside the bundle.
+ */
+function offloadedResolutions(options: { linked: boolean; host: string }): Record<string, unknown> {
+  const offloaded = (name: string) => ({
+    addon: `/../node_modules/${name}/prebuilds/${options.host}/${name}.bare`
+  })
+  const reached = options.linked
+    ? {
+        '/node_modules/bare-posix/index.js': {
+          '#package': BARE_POSIX_PKG,
+          './binding': '/node_modules/bare-posix/binding.js'
+        },
+        '/node_modules/bare-posix/binding.js': {
+          '#package': BARE_POSIX_PKG,
+          '.': offloaded('bare-posix')
+        }
+      }
+    : { '/node_modules/bare-posix/unsupported.js': { '#package': BARE_POSIX_PKG } }
+
+  return {
+    [BUNDLE_MAIN]: {
+      'bare-process': '/node_modules/bare-process/index.js',
+      'bare-os': '/node_modules/bare-os/index.js'
+    },
+    '/node_modules/bare-process/index.js': {
+      '#package': '/node_modules/bare-process/package.json',
+      'bare-posix': options.linked
+        ? '/node_modules/bare-posix/index.js'
+        : '/node_modules/bare-posix/unsupported.js'
+    },
+    ...reached,
+    [BARE_POSIX_PKG]: {},
+    '/node_modules/bare-os/index.js': { '#package': BARE_OS_PKG, '.': offloaded('bare-os') },
+    [BARE_OS_PKG]: {}
+  }
+}
+
 /** The addon packages the graph fixtures refer to. */
 function writeGraphPackages(projectRoot: string, options: { hosts?: string[] } = {}): void {
   writePackageJson(projectRoot, 'node_modules/bare-posix', {
@@ -147,30 +195,12 @@ function writeGraphPackages(projectRoot: string, options: { hosts?: string[] } =
   for (const host of options.hosts ?? []) writePrebuild(bareOs, host)
 }
 
-function escapeForJsString(s: string): string {
-  return s
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t')
-}
-
 function writeBareBundle(
   bundlePath: string,
   resolutions: Record<string, unknown>,
-  options: { id?: string; body?: string; main?: string; imports?: Record<string, unknown> } = {}
+  options: { id?: string; main?: string; imports?: Record<string, unknown> } = {}
 ): void {
-  const bundleId = options.id ?? 'test-bundle-id'
-  const header = JSON.stringify({
-    id: bundleId,
-    ...(options.main === undefined ? {} : { main: options.main }),
-    ...(options.imports === undefined ? {} : { imports: options.imports }),
-    resolutions
-  })
-  const packed = `${bundleId}\n${header}\n${options.body ?? ''}`
-  fs.mkdirSync(path.dirname(bundlePath), { recursive: true })
-  fs.writeFileSync(bundlePath, `module.exports = "${escapeForJsString(packed)}"`)
+  writeBundleFile(bundlePath, { ...options, resolutions })
 }
 
 describe('readAddonPackageJson', () => {
@@ -291,7 +321,7 @@ describe('collectAddonsFromBundle', () => {
 
   it('throws InvalidBundleSourceError when bundle is not a bare-pack output', async () => {
     await withTempDir(async (dir) => {
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       fs.writeFileSync(bundlePath, 'export const foo = 1')
       await assert.rejects(
         () => collectAddonsFromBundle({ bundlePath, projectRoot: dir }),
@@ -303,7 +333,7 @@ describe('collectAddonsFromBundle', () => {
   it('returns no addons when resolutions reference only non-addon packages', async () => {
     await withTempDir(async (dir) => {
       writePackageJson(dir, 'node_modules/foo', { name: 'foo', version: '1.0.0' })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, {
         '/node_modules/foo/index.js': true
       })
@@ -319,7 +349,7 @@ describe('collectAddonsFromBundle', () => {
         version: '3.9.0',
         addon: true
       })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, {
         '/node_modules/bare-os/index.js': true
       })
@@ -338,7 +368,7 @@ describe('collectAddonsFromBundle', () => {
         version: '3.9.0',
         addon: true
       })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, {
         '/node_modules/parent/node_modules/bare-os/index.js': true
       })
@@ -357,7 +387,7 @@ describe('collectAddonsFromBundle', () => {
         addon: true,
         engines: { bare: '>=1.14.0' }
       })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, { '/node_modules/bare-os/index.js': true })
       const addons = await collectAddonsFromBundle({ bundlePath, projectRoot: dir })
       assert.equal(addons[0]?.enginesBare, '>=1.14.0')
@@ -377,7 +407,7 @@ describe('collectAddonsFromBundle', () => {
         version: '3.9.0',
         addon: true
       })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, {
         '/node_modules/parent/node_modules/bare-os/index.js': true
       })
@@ -405,7 +435,7 @@ describe('collectAddonsFromBundle', () => {
         version: '4.0.0',
         addon: true
       })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, {
         '/node_modules/bare-os/index.js': true,
         '/node_modules/parent/node_modules/bare-os/index.js': true
@@ -432,7 +462,7 @@ describe('collectAddonsFromBundle', () => {
         version: '2.0.0',
         addon: true
       })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, {
         '/node_modules/foo/node_modules/bar/node_modules/foo/index.js': true
       })
@@ -452,7 +482,7 @@ describe('collectAddonsFromBundle', () => {
   it('reports only the hosts whose conditional resolution reaches the addon', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, multiHostResolutions(), { main: BUNDLE_MAIN })
       const addons = await collectAddonsFromBundle({
         bundlePath,
@@ -467,7 +497,7 @@ describe('collectAddonsFromBundle', () => {
   it('uses `default` only when no platform branch matched', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, multiHostResolutions(), { main: BUNDLE_MAIN })
       const addons = await collectAddonsFromBundle({
         bundlePath,
@@ -481,7 +511,7 @@ describe('collectAddonsFromBundle', () => {
   it('reports no linked host for an addon a single-host graph resolved away', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, singleHostResolutions({ linked: false }), { main: BUNDLE_MAIN })
       const addons = await collectAddonsFromBundle({
         bundlePath,
@@ -496,7 +526,7 @@ describe('collectAddonsFromBundle', () => {
   it('reports the host for an addon a single-host graph did link', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, singleHostResolutions({ linked: true }), { main: BUNDLE_MAIN })
       const addons = await collectAddonsFromBundle({
         bundlePath,
@@ -510,7 +540,7 @@ describe('collectAddonsFromBundle', () => {
   it('abstains when no hosts are supplied', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, multiHostResolutions(), { main: BUNDLE_MAIN })
       const addons = await collectAddonsFromBundle({ bundlePath, projectRoot: dir })
       assert.ok(addons.every((a) => a.linkedHosts === undefined))
@@ -520,7 +550,7 @@ describe('collectAddonsFromBundle', () => {
   it('abstains when the header carries no main', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, multiHostResolutions())
       const addons = await collectAddonsFromBundle({
         bundlePath,
@@ -534,7 +564,7 @@ describe('collectAddonsFromBundle', () => {
   it('abstains when main is absent from the graph', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, multiHostResolutions(), { main: '/app/missing.js' })
       const addons = await collectAddonsFromBundle({
         bundlePath,
@@ -548,7 +578,7 @@ describe('collectAddonsFromBundle', () => {
   it('abstains when the graph links no addon at all', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(
         bundlePath,
         {
@@ -570,7 +600,7 @@ describe('collectAddonsFromBundle', () => {
   it('abstains when the requested hosts are not the ones the bundle links', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(
         bundlePath,
         {
@@ -595,7 +625,7 @@ describe('collectAddonsFromBundle', () => {
   it('abstains when a linked module cannot be attributed to a package', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(
         bundlePath,
         {
@@ -617,7 +647,7 @@ describe('collectAddonsFromBundle', () => {
   it('abstains when the header carries an import map it cannot walk', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, multiHostResolutions(), {
         main: BUNDLE_MAIN,
         imports: { '#rpc': '/node_modules/somewhere/rpc.js' }
@@ -634,7 +664,7 @@ describe('collectAddonsFromBundle', () => {
   it('abstains when owner paths do not line up with the enumerated packages', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(
         bundlePath,
         {
@@ -660,7 +690,7 @@ describe('collectAddonsFromBundle', () => {
   it('keeps a host linked when an undecidable condition guards the addon', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir)
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(
         bundlePath,
         {
@@ -1127,16 +1157,19 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
       assert.ok(win32)
       assert.match(win32.message, /tts-ggml-win32-x64[\\/]prebuilds[\\/]win32-x64/)
       assert.doesNotMatch(win32.message, /"@qvac\/tts-ggml-win32-x64": "0\.9\.0"/)
+      assert.deepEqual(linux.platformPackage, {
+        name: '@qvac/tts-ggml-linux-x64',
+        version: '0.9.0'
+      })
       assert.equal(
-        linux.platformPackage,
+        win32.platformPackage,
         undefined,
-        'desktop platform packages install as optionalDependencies, never as declared pins'
+        'an installed package at the right version needs its prebuild, not another pin'
       )
-      assert.equal(win32.platformPackage, undefined)
     })
   })
 
-  it('pins only a mobile platform package that is installed without its prebuild', async () => {
+  it('pins only the platform package that is not installed', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
       writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-android-arm64', {
@@ -1313,91 +1346,6 @@ function symlinkDir(target: string, linkPath: string): void {
   fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
-describe('resolveBareRuntime', () => {
-  it('uses the explicit bareRuntimeVersion when provided', async () => {
-    await withTempDir(async (dir) => {
-      const result = await resolveBareRuntime({
-        projectRoot: dir,
-        explicitVersion: '1.15.2'
-      })
-      assert.equal(result.resolved, true)
-      if (result.resolved) {
-        assert.equal(result.runtime.version, '1.15.2')
-        assert.equal(result.runtime.source, 'flag')
-      }
-    })
-  })
-
-  it('reads from bare-runtime/version when present', async () => {
-    await withTempDir(async (dir) => {
-      writeJson(path.join(dir, 'node_modules', 'bare-runtime', 'package.json'), {
-        name: 'bare-runtime',
-        version: '1.16.0'
-      })
-      const result = await resolveBareRuntime({ projectRoot: dir })
-      assert.equal(result.resolved, true)
-      if (result.resolved) assert.equal(result.runtime.source, 'bare-runtime')
-    })
-  })
-
-  it('prefers bare-runtime over bare when both are installed', async () => {
-    await withTempDir(async (dir) => {
-      writeJson(path.join(dir, 'node_modules', 'bare-runtime', 'package.json'), {
-        name: 'bare-runtime',
-        version: '1.16.0'
-      })
-      writeJson(path.join(dir, 'node_modules', 'bare', 'package.json'), {
-        name: 'bare',
-        version: '1.15.0'
-      })
-      const result = await resolveBareRuntime({ projectRoot: dir })
-      assert.equal(result.resolved, true)
-      if (result.resolved) {
-        assert.equal(result.runtime.version, '1.16.0')
-        assert.equal(result.runtime.source, 'bare-runtime')
-      }
-    })
-  })
-
-  it('falls back to bare/version when bare-runtime is not installed', async () => {
-    await withTempDir(async (dir) => {
-      writeJson(path.join(dir, 'node_modules', 'bare', 'package.json'), {
-        name: 'bare',
-        version: '1.15.0'
-      })
-      const result = await resolveBareRuntime({ projectRoot: dir })
-      assert.equal(result.resolved, true)
-      if (result.resolved) {
-        assert.equal(result.runtime.version, '1.15.0')
-        assert.equal(result.runtime.source, 'bare')
-      }
-    })
-  })
-
-  it('returns an unresolved result with tried paths when nothing is installed', async () => {
-    await withTempDir(async (dir) => {
-      const result = await resolveBareRuntime({ projectRoot: dir })
-      assert.equal(result.resolved, false)
-      if (!result.resolved) {
-        assert.ok(result.error.triedPaths.length >= 2)
-      }
-    })
-  })
-
-  it('preserves pre-release tags so RC runtimes are not silently coerced to a release', async () => {
-    await withTempDir(async (dir) => {
-      const result = await resolveBareRuntime({
-        projectRoot: dir,
-        explicitVersion: '1.16.0-rc.1'
-      })
-      assert.equal(result.resolved, true)
-      if (result.resolved) {
-        assert.equal(result.runtime.version, '1.16.0-rc.1')
-      }
-    })
-  })
-})
-
 describe('checkAbi', () => {
   const addon = {
     name: 'bare-os',
@@ -1490,7 +1438,15 @@ describe('checkAbi', () => {
 })
 
 function resolution(version: string): BareRuntimeResolution {
-  return { resolved: true, runtime: { version, source: 'flag' } }
+  return {
+    resolved: true,
+    runtime: {
+      version,
+      source: 'react-native-bare-kit',
+      packageVersion: '0.16.0',
+      detail: `react-native-bare-kit@0.16.0 embeds Bare ${version}`
+    }
+  }
 }
 
 describe('verifyBundle orchestrator', () => {
@@ -1518,68 +1474,6 @@ describe('verifyBundle orchestrator', () => {
     })
   })
 
-  it('emits invalid-runtime-version error (not warning) when --bare-runtime-version is malformed', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64'],
-        bareRuntimeVersion: 'not-a-version'
-      })
-      assert.equal(hasErrors(result), true)
-      assert.equal(result.issues.length, 1)
-      assert.equal(result.issues[0]?.code, 'invalid-runtime-version')
-      assert.equal(
-        result.issues[0]?.code === 'invalid-runtime-version' && result.issues[0]?.providedValue,
-        'not-a-version'
-      )
-    })
-  })
-
-  it('emits invalid-runtime-version even when no addon declares engines.bare', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64'],
-        bareRuntimeVersion: 'garbage'
-      })
-      assert.equal(hasErrors(result), true)
-      assert.equal(result.issues[0]?.code, 'invalid-runtime-version')
-    })
-  })
-
-  it('accepts lenient explicit versions like "v1.15" via semver coercion', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true,
-        engines: { bare: '>=1.14.0' }
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64'],
-        bareRuntimeVersion: 'v1.15'
-      })
-      assert.equal(hasErrors(result), false)
-    })
-  })
-
   it('passes a happy-path bundle with prebuilds and a satisfying runtime', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
@@ -1590,14 +1484,14 @@ describe('verifyBundle orchestrator', () => {
       })
       writePrebuild(packageRoot, 'ios-arm64')
       writePrebuild(packageRoot, 'android-arm64')
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeReactNativeBareKit(dir, '0.16.0')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, { '/node_modules/bare-os/index.js': true })
 
       const result = await verifyBundle({
         projectRoot: dir,
         addonsSource: bundlePath,
-        hosts: ['ios-arm64', 'android-arm64'],
-        bareRuntimeVersion: '1.15.0'
+        hosts: ['ios-arm64', 'android-arm64']
       })
       assert.equal(hasErrors(result), false)
       assert.equal(hasWarnings(result), false)
@@ -1612,7 +1506,7 @@ describe('verifyBundle orchestrator', () => {
         version: '3.9.0',
         addon: true
       })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, { '/node_modules/bare-os/index.js': true })
       const result = await verifyBundle({
         projectRoot: dir,
@@ -1637,7 +1531,7 @@ describe('verifyBundle orchestrator', () => {
         name: '@qvac/tts-ggml-darwin-arm64',
         hosts: ['darwin-arm64']
       })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, {
         '/node_modules/@qvac/tts-ggml/index.js': true,
         '/node_modules/@qvac/tts-ggml-darwin-arm64/index.js': true
@@ -1646,8 +1540,7 @@ describe('verifyBundle orchestrator', () => {
       const result = await verifyBundle({
         projectRoot: dir,
         addonsSource: bundlePath,
-        hosts: ['darwin-arm64'],
-        bareRuntimeVersion: '1.30.3'
+        hosts: ['darwin-arm64']
       })
       assert.equal(hasErrors(result), false)
       assert.equal(hasWarnings(result), false)
@@ -1665,14 +1558,15 @@ describe('verifyBundle orchestrator', () => {
         name: 'bare-os',
         version: '3.9.0',
         addon: true,
-        engines: { bare: '>=1.14.0' }
+        engines: { bare: '>=1.30.0' }
       })
-      writePrebuild(packageRoot, 'darwin-arm64')
+      writePrebuild(packageRoot, 'android-arm64')
+      writeReactNativeBareKit(dir, '0.14.5')
       const result = await verifyBundle({
         projectRoot: dir,
         addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64'],
-        bareRuntimeVersion: '1.13.0'
+        hosts: ['android-arm64'],
+        network: false
       })
       assert.equal(hasErrors(result), true)
       assert.equal(
@@ -1682,7 +1576,7 @@ describe('verifyBundle orchestrator', () => {
     })
   })
 
-  it('warns (not fails) when runtime is unknown but addons declare engines.bare', async () => {
+  it('warns (not fails) when the mobile runtime is unknown but addons declare engines.bare', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
         name: 'bare-os',
@@ -1690,11 +1584,11 @@ describe('verifyBundle orchestrator', () => {
         addon: true,
         engines: { bare: '>=1.14.0' }
       })
-      writePrebuild(packageRoot, 'darwin-arm64')
+      writePrebuild(packageRoot, 'android-arm64')
       const result = await verifyBundle({
         projectRoot: dir,
         addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64']
+        hosts: ['android-arm64']
       })
       assert.equal(hasErrors(result), false)
       assert.equal(hasWarnings(result), true)
@@ -1705,36 +1599,9 @@ describe('verifyBundle orchestrator', () => {
     })
   })
 
-  it('invalid bareRuntimeVersion does not short-circuit prebuild checks', async () => {
-    await withTempDir(async (dir) => {
-      writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true
-      })
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64'],
-        bareRuntimeVersion: 'not-a-version'
-      })
-      assert.equal(hasErrors(result), true)
-      assert.equal(
-        result.issues.some((i) => i.code === 'invalid-runtime-version'),
-        true
-      )
-      assert.equal(
-        result.issues.some((i) => i.code === 'missing-prebuild'),
-        true,
-        'prebuild walk must still surface missing prebuilds when bareRuntimeVersion is malformed'
-      )
-      assert.equal(result.runtime, null)
-    })
-  })
-
   it('emits empty-bundle-resolutions warning when bundle source has no resolutions', async () => {
     await withTempDir(async (dir) => {
-      const bundlePath = path.join(dir, 'qvac', 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'qvac', 'worker', 'index.bundle')
       writeBareBundle(bundlePath, {})
       const result = await verifyBundle({
         projectRoot: dir,
@@ -1756,7 +1623,7 @@ describe('verifyBundle orchestrator', () => {
   it('passes on a single-host bundle that resolved the addon away', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir, { hosts: ['win32-x64'] })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, singleHostResolutions({ linked: false }), { main: BUNDLE_MAIN })
       const result = await verifyBundle({
         projectRoot: dir,
@@ -1774,7 +1641,7 @@ describe('verifyBundle orchestrator', () => {
   it('reports the missing prebuild on a host that does link the addon', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir, { hosts: ['linux-x64'] })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, singleHostResolutions({ linked: true }), { main: BUNDLE_MAIN })
       const result = await verifyBundle({
         projectRoot: dir,
@@ -1788,10 +1655,83 @@ describe('verifyBundle orchestrator', () => {
     })
   })
 
+  it('passes on an offloaded bundle that resolved the addon away', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['win32-x64'] })
+      const bundlePath = path.join(dir, 'qvac', 'worker', 'index.bundle')
+      writeBareBundle(bundlePath, offloadedResolutions({ linked: false, host: 'win32-x64' }), {
+        main: BUNDLE_MAIN
+      })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['win32-x64']
+      })
+      assert.equal(hasErrors(result), false)
+      assert.deepEqual(result.addons.map((addon) => [addon.name, addon.linkedHosts]).sort(), [
+        ['bare-os', ['win32-x64']],
+        ['bare-posix', []]
+      ])
+    })
+  })
+
+  it('reports the missing prebuild of an addon an offloaded bundle loads', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['linux-x64'] })
+      const bundlePath = path.join(dir, 'qvac', 'worker', 'index.bundle')
+      writeBareBundle(bundlePath, offloadedResolutions({ linked: true, host: 'linux-x64' }), {
+        main: BUNDLE_MAIN
+      })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['linux-x64']
+      })
+      const missing = result.issues.filter((i) => i.code === 'missing-prebuild')
+      assert.deepEqual(
+        missing.map((i) => (i.code === 'missing-prebuild' ? `${i.addon}/${i.host}` : '')),
+        ['bare-posix@1.0.1/linux-x64']
+      )
+    })
+  })
+
+  it('checks a split addon whose own addon an offloaded bundle defers', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['linux-x64'] })
+      writePackageJson(dir, 'node_modules/split-addon', {
+        name: 'split-addon',
+        version: '1.0.0',
+        addon: true
+      })
+      const resolutions = offloadedResolutions({ linked: false, host: 'linux-x64' })
+      resolutions[BUNDLE_MAIN] = {
+        ...(resolutions[BUNDLE_MAIN] as Record<string, unknown>),
+        'split-addon': '/node_modules/split-addon/binding.js'
+      }
+      resolutions['/node_modules/split-addon/binding.js'] = {
+        '#package': '/node_modules/split-addon/package.json',
+        '.': { addon: 'deferred:.' }
+      }
+      resolutions['/node_modules/split-addon/package.json'] = {}
+      const bundlePath = path.join(dir, 'qvac', 'worker', 'index.bundle')
+      writeBareBundle(bundlePath, resolutions, { main: BUNDLE_MAIN })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['linux-x64']
+      })
+      const missing = result.issues.filter((i) => i.code === 'missing-prebuild')
+      assert.deepEqual(
+        missing.map((i) => (i.code === 'missing-prebuild' ? `${i.addon}/${i.host}` : '')),
+        ['split-addon@1.0.0/linux-x64']
+      )
+    })
+  })
+
   it('splits the verdict per host on a multi-host bundle', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir, { hosts: ['win32-x64', 'linux-x64'] })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, multiHostResolutions(), { main: BUNDLE_MAIN })
       const result = await verifyBundle({
         projectRoot: dir,
@@ -1809,7 +1749,7 @@ describe('verifyBundle orchestrator', () => {
   it('keeps every host checked when the bundle header has no main to walk from', async () => {
     await withTempDir(async (dir) => {
       writeGraphPackages(dir, { hosts: ['win32-x64', 'linux-x64'] })
-      const bundlePath = path.join(dir, 'worker.bundle.js')
+      const bundlePath = path.join(dir, 'index.bundle')
       writeBareBundle(bundlePath, multiHostResolutions())
       const result = await verifyBundle({
         projectRoot: dir,
@@ -1822,211 +1762,6 @@ describe('verifyBundle orchestrator', () => {
           .map((i) => (i.code === 'missing-prebuild' ? `${i.addon}/${i.host}` : '')),
         ['bare-posix@1.0.1/win32-x64', 'bare-posix@1.0.1/linux-x64']
       )
-    })
-  })
-})
-
-describe('verifyBundle config source', () => {
-  it('reads bareRuntimeVersion from auto-detected qvac.config.json', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true,
-        engines: { bare: '>=1.14.0' }
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      writeJson(path.join(dir, 'qvac.config.json'), { bareRuntimeVersion: '1.15.0' })
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64']
-      })
-      assert.equal(hasErrors(result), false)
-      assert.equal(hasWarnings(result), false)
-      assert.equal(result.runtime?.resolved, true)
-      if (result.runtime?.resolved) {
-        assert.equal(result.runtime.runtime.source, 'config')
-        assert.equal(result.runtime.runtime.version, '1.15.0')
-      }
-    })
-  })
-
-  it('explicit bareRuntimeVersion overrides config bareRuntimeVersion', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true,
-        engines: { bare: '>=1.14.0' }
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      writeJson(path.join(dir, 'qvac.config.json'), { bareRuntimeVersion: '1.13.0' })
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64'],
-        bareRuntimeVersion: '1.15.0'
-      })
-      assert.equal(hasErrors(result), false)
-      if (result.runtime?.resolved) {
-        assert.equal(result.runtime.runtime.source, 'flag')
-        assert.equal(result.runtime.runtime.version, '1.15.0')
-      }
-    })
-  })
-
-  it('configPath option loads a non-default config location', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true,
-        engines: { bare: '>=1.14.0' }
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      const customConfigPath = path.join(dir, 'tools', 'qvac.config.json')
-      writeJson(customConfigPath, { bareRuntimeVersion: '1.15.0' })
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64'],
-        configPath: customConfigPath
-      })
-      assert.equal(hasErrors(result), false)
-      if (result.runtime?.resolved) {
-        assert.equal(result.runtime.runtime.source, 'config')
-      }
-    })
-  })
-
-  it('emits invalid-runtime-version (source: config) when config bareRuntimeVersion is malformed', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      writeJson(path.join(dir, 'qvac.config.json'), { bareRuntimeVersion: 'garbage' })
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64']
-      })
-      assert.equal(hasErrors(result), true)
-      assert.equal(result.issues.length, 1)
-      const issue = result.issues[0]
-      assert.equal(issue?.code, 'invalid-runtime-version')
-      if (issue?.code === 'invalid-runtime-version') {
-        assert.equal(issue.source, 'config')
-        assert.equal(issue.providedValue, 'garbage')
-        assert.match(issue.message, /qvac\.config\.json/)
-      }
-    })
-  })
-
-  it('includes the explicit configPath in invalid-runtime-version messages', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      const customConfigPath = path.join(dir, 'tools', 'custom.json')
-      writeJson(customConfigPath, { bareRuntimeVersion: 'garbage' })
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64'],
-        configPath: path.join('tools', 'custom.json')
-      })
-      assert.equal(hasErrors(result), true)
-      const issue = result.issues[0]
-      assert.equal(issue?.code, 'invalid-runtime-version')
-      if (issue?.code === 'invalid-runtime-version') {
-        assert.equal(issue.source, 'config')
-        assert.match(issue.message, /tools\/custom\.json/)
-      }
-    })
-  })
-
-  it('ignores non-string bareRuntimeVersion in config and falls through to auto-detect', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true,
-        engines: { bare: '>=1.14.0' }
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      writeJson(path.join(dir, 'qvac.config.json'), { bareRuntimeVersion: 12345 })
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64']
-      })
-      assert.equal(hasErrors(result), false)
-      assert.equal(hasWarnings(result), true)
-      assert.equal(
-        result.issues.some((i) => i.code === 'unknown-runtime-version'),
-        true
-      )
-    })
-  })
-
-  it('emits invalid-source when explicit --config path does not exist', async () => {
-    await withTempDir(async (dir) => {
-      writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true
-      })
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64'],
-        configPath: 'nope.config.json'
-      })
-      assert.equal(hasErrors(result), true)
-      assert.equal(result.issues[0]?.code, 'invalid-source')
-      assert.match(result.issues[0]?.message ?? '', /nope\.config\.json/)
-    })
-  })
-
-  it('emits config-load-failed (warning, not error) when an auto-detected config fails to load', async () => {
-    await withTempDir(async (dir) => {
-      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
-        name: 'bare-os',
-        version: '3.9.0',
-        addon: true,
-        engines: { bare: '>=1.14.0' }
-      })
-      writePrebuild(packageRoot, 'darwin-arm64')
-      writeJson(path.join(dir, 'node_modules', 'bare-runtime', 'package.json'), {
-        name: 'bare-runtime',
-        version: '1.15.0'
-      })
-      fs.writeFileSync(path.join(dir, 'qvac.config.json'), '{ "bareRuntimeVersion": ')
-      const result = await verifyBundle({
-        projectRoot: dir,
-        addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64']
-      })
-      assert.equal(hasErrors(result), false)
-      assert.equal(hasWarnings(result), true)
-      const warning = result.issues.find((i) => i.code === 'config-load-failed')
-      assert.ok(warning, 'expected config-load-failed warning')
-      if (warning?.code === 'config-load-failed') {
-        assert.equal(warning.level, 'warning')
-        assert.equal(warning.configPath, path.join(dir, 'qvac.config.json'))
-        assert.match(warning.message, /qvac\.config\.json/)
-      }
-      assert.equal(result.runtime?.resolved, true)
-      if (result.runtime?.resolved) {
-        assert.equal(result.runtime.runtime.source, 'bare-runtime')
-      }
     })
   })
 })
@@ -2057,20 +1792,21 @@ describe('formatVerifyBundleResult', () => {
         name: 'bare-os',
         version: '3.9.0',
         addon: true,
-        engines: { bare: '>=1.14.0' }
+        engines: { bare: '>=1.30.0' }
       })
+      writeReactNativeBareKit(dir, '0.14.5')
       const result = await verifyBundle({
         projectRoot: dir,
         addonsSource: path.join(dir, 'node_modules'),
         hosts: ['ios-arm64-simulator'],
-        bareRuntimeVersion: '1.13.0'
+        network: false
       })
       const out = formatVerifyBundleResult(result)
       assert.match(out, /Native addon verification failed/)
       assert.match(out, /Missing prebuild/)
       assert.match(out, /ABI mismatch/)
       assert.match(out, /bare-os@3\.9\.0 for ios-arm64-simulator/)
-      assert.match(out, /requires bare >=1\.14\.0, runtime is 1\.13\.0/)
+      assert.match(out, /requires bare >=1\.30\.0, runtime is 1\.29\.4/)
     })
   })
 
@@ -2080,8 +1816,7 @@ describe('formatVerifyBundleResult', () => {
       const result = await verifyBundle({
         projectRoot: dir,
         addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['android-arm64', 'ios-arm64'],
-        bareRuntimeVersion: '1.30.3'
+        hosts: ['android-arm64', 'ios-arm64']
       })
       const out = formatVerifyBundleResult(result)
       assert.match(
@@ -2105,8 +1840,7 @@ describe('formatVerifyBundleResult', () => {
       const result = await verifyBundle({
         projectRoot: dir,
         addonsSource: path.join(dir, 'node_modules'),
-        hosts: ['darwin-arm64', 'android-arm64'],
-        bareRuntimeVersion: '1.30.3'
+        hosts: ['darwin-arm64', 'android-arm64']
       })
       assert.deepEqual(
         result.issues.map((issue) => [issue.code, 'host' in issue ? issue.host : null]),

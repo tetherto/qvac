@@ -156,8 +156,12 @@ minimumReleaseAgeExclude:
   - bare-runtime-win32-arm64
   - bare-runtime-win32-x64
   - bare-semver
+  - bare-sidecar
   - bare-signals
   - bare-stdio
+  - bare-stow
+  - bare-stow-target-pear-runtime
+  - bare-stow-target-react-native
   - bare-stream
   - bare-structured-clone
   - bare-stylize

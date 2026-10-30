@@ -200,13 +200,17 @@ for a shared/mounted cache. As a shortcut, the `QVAC_CACHE_DIR` env var sets
 
 ## Worker resolution
 
-`Client()` locates a worker by trying, in order: explicit `worker_path` /
-`bare_path` (or `QVAC_WORKER_PATH` / `QVAC_BARE_PATH`); a self-contained
-**bundled wheel** (`tetherto/qvac_sdk/_bundle/`, zero config); `sdk_dir` / `QVAC_SDK_DIR`
-pointing at an installed `@qvac/sdk`; a worker fetched by **`python -m tetherto.qvac_sdk
-install-worker`** (into `~/.cache/qvac/worker/<version>`, overridable with
-`QVAC_WORKER_HOME`); then a global `npm install -g @qvac/sdk`. The fetched
-worker is version-locked to this package.
+`Client()` starts the worker as bare-sidecar's Bare runtime running the SDK's
+TCP shim (`dist/src/worker/tcp-shim.js`), which loads the worker entry and
+connects back to a loopback port the client listens on. `worker_path` /
+`bare_path` (or `QVAC_WORKER_PATH` / `QVAC_BARE_PATH`) override the entry and
+the runtime. The `@qvac/sdk` that provides the shim, the default entry and the
+runtime is, in order: a self-contained **bundled wheel**
+(`tetherto/qvac_sdk/_bundle/`, zero config); `sdk_dir` / `QVAC_SDK_DIR`; the one
+an explicit worker entry belongs to; a worker fetched by **`python -m
+tetherto.qvac_sdk install-worker`** (into `~/.cache/qvac/worker/<version>`,
+overridable with `QVAC_WORKER_HOME`); then a global `npm install -g @qvac/sdk`.
+The fetched worker is version-locked to this package.
 
 ## Staying in sync with `@qvac/sdk` (drift avoidance)
 

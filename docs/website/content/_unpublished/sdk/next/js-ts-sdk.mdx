@@ -18,7 +18,7 @@ QVAC capability through a unified, type-safe API.
 
 - Node.js `>= v22.17` (bundling for mobile needs `^22.21.0 || >=24.9.0`)
 - npm `>= v10.9`
-- [Bare](https://bare.pears.com) `>= v1.30.3` (if targeting Bare)
+- [Bare](https://bare.pears.com) `>= v1.32.0` (if targeting Bare)
 - [Expo](https://expo.dev) `>= v54` (if targeting mobile)
 
 For host-level requirements (OS versions, GPU drivers, Vulkan runtime), see [System requirements](/sdk/system-requirements).
@@ -213,7 +213,6 @@ module.exports = {
   httpConnectionTimeoutMs: 10000,
   registryDownloadMaxRetries: 3,
   registryStreamTimeoutMs: 60000,
-  rpcInitTimeoutMs: 30000,
   deviceDefaults: [
     {
       name: "Samsung Galaxy force CPU",
@@ -221,7 +220,6 @@ module.exports = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
-  bareRuntimeVersion: "<x.y.z>",
   serve: {
     models: {
       "<model_alias>": {
@@ -255,7 +253,6 @@ const config: QvacConfig = {
   httpConnectionTimeoutMs: 10000,
   registryDownloadMaxRetries: 3,
   registryStreamTimeoutMs: 60000,
-  rpcInitTimeoutMs: 30000,
   deviceDefaults: [
     {
       name: "Samsung Galaxy force CPU",
@@ -263,7 +260,6 @@ const config: QvacConfig = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
-  bareRuntimeVersion: "<x.y.z>",
   serve: {
     models: {
       "<model_alias>": {

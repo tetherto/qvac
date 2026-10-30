@@ -1,7 +1,15 @@
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 
 export const IOS_HOSTS = ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
+
+const ANDROID_LIBRARY = path.join(
+  path.dirname(createRequire(import.meta.url).resolve('bare-signals/package')),
+  'prebuilds',
+  'android-arm64',
+  'bare-signals.bare'
+)
 
 export interface FakePackageManager {
   binDir: string
@@ -65,8 +73,10 @@ for (const spec of args.filter((arg) => !arg.startsWith('-') && arg.includes('@'
   fs.writeFileSync(path.join(root, 'index.js'), 'module.exports = require.addon()\\n')
   for (const host of ios ? iosHosts : ['android-arm64']) {
     const hostDir = path.join(root, 'prebuilds', host)
+    const file = path.join(hostDir, name.replace('@', '').replace('/', '__') + '.bare')
     fs.mkdirSync(hostDir, { recursive: true })
-    fs.writeFileSync(path.join(hostDir, name.replace('@', '').replace('/', '__') + '.bare'), '')
+    if (ios) fs.writeFileSync(file, '')
+    else fs.copyFileSync(${JSON.stringify(ANDROID_LIBRARY)}, file)
   }
 }
 `

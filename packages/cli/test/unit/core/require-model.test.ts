@@ -14,8 +14,6 @@ import type { QvacContext } from '@/serve/core/context'
 import { HttpError } from '@/serve/lib/http-error'
 import { WorkerStartupError } from '@qvac/sdk'
 
-import { rpcTimeout } from '../../helpers/worker-startup.js'
-
 const logger = createLogger('silent')
 
 const CONFIG_ENTRY = {
@@ -84,51 +82,63 @@ describe('ensureReady worker startup diagnostics', () => {
     }
   }
 
+  function startupError(failure: {
+    exitCode?: number | null
+    exitSignal?: NodeJS.Signals | null
+    timedOut?: boolean
+  }) {
+    return new WorkerStartupError(
+      'Worker failed before signalling ready',
+      { exitCode: null, exitSignal: null, timedOut: false, ...failure },
+      new Error('/private/worker: private diagnostic marker')
+    )
+  }
+
   for (const exit of [
-    { code: null, signal: 'SIGABRT' as const },
-    { code: 134, signal: null },
-    { code: 0, signal: null }
+    { exitCode: null, exitSignal: 'SIGABRT' as const },
+    { exitCode: 134, exitSignal: null },
+    { exitCode: 0, exitSignal: null }
   ]) {
-    it(`reports an early exit (${exit.code}, ${exit.signal}) without claiming a timeout`, async () => {
-      const cause = new WorkerStartupError('/private/worker', exit, 'private diagnostic marker')
-      const result = await httpError(rpcTimeout(cause))
+    it(`reports an early exit (${exit.exitCode}, ${exit.exitSignal}) without claiming a timeout`, async () => {
+      const result = await httpError(startupError(exit))
 
       assert.equal(
         result.message,
-        `Model "m" failed to load: Worker process exited (${exit.signal ? `signal ${exit.signal}` : `code ${exit.code}`}) before IPC was established`
+        `Model "m" failed to load: Worker process exited (${exit.exitSignal ? `signal ${exit.exitSignal}` : `code ${exit.exitCode}`}) before it was ready`
       )
     })
   }
 
   it('reports a startup timeout without copying SDK diagnostics', async () => {
-    const cause = new WorkerStartupError('/private/worker', null, 'private stderr')
-    const result = await httpError(rpcTimeout(cause))
+    const result = await httpError(startupError({ timedOut: true }))
     assert.equal(
       result.message,
-      'Model "m" failed to load: Worker did not establish IPC before the startup timeout'
+      'Model "m" failed to load: Worker did not signal ready before the startup timeout'
     )
   })
 
-  it('preserves the original SDK error and diagnostics', async () => {
-    const stderr = '/private/worker/log'
-    const cause = new WorkerStartupError('worker failed', { code: 1, signal: null }, stderr)
-    const error = rpcTimeout(cause)
+  it("reports a worker's own startup error without copying it", async () => {
+    const result = await httpError(startupError({}))
+    assert.equal(result.message, 'Model "m" failed to load: Worker failed before it was ready')
+    assert.doesNotMatch(result.message, /private/)
+  })
+
+  it('preserves the original SDK error and its cause', async () => {
+    const error = startupError({ exitCode: 1 })
+    const cause = error.cause
     const originalMessage = error.message
-    const originalCauseMessage = cause.message
 
     await httpError(error)
 
     assert.equal(error.cause, cause)
     assert.equal(error.message, originalMessage)
-    assert.equal(cause.message, originalCauseMessage)
-    assert.equal(cause.stderrTail, stderr)
   })
 
-  it('leaves ordinary errors, non-errors and untyped lookalike causes unchanged', async () => {
+  it('leaves ordinary errors, non-errors and untyped lookalikes unchanged', async () => {
     const lookalike = new Error('ordinary error', {
-      cause: { workerExited: true, stderrTail: 'private stderr' }
+      cause: { timedOut: true, exitCode: 1 }
     })
-    for (const error of [lookalike, rpcTimeout(), 'plain failure']) {
+    for (const error of [lookalike, new Error('plain error'), 'plain failure']) {
       const result = await httpError(error)
       const message = error instanceof Error ? error.message : error
       assert.equal(result.message, `Model "m" failed to load: ${message}`)

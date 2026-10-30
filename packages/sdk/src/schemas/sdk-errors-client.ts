@@ -22,7 +22,6 @@ export const SDK_CLIENT_ERROR_CODES = {
   RPC_REQUEST_NOT_SENT: 50201,
   RPC_RESPONSE_STREAM_NOT_CREATED: 50202,
   RPC_CONNECTION_FAILED: 50203,
-  RPC_INIT_TIMEOUT: 50204,
   WORKER_CRASHED: 50205,
   WORKER_SHUTDOWN: 50206,
   WORKER_STARTUP_FAILED: 50207,
@@ -35,20 +34,18 @@ export const SDK_CLIENT_ERROR_CODES = {
   CONFIG_FILE_INVALID: 50603,
   CONFIG_FILE_PARSE_FAILED: 50604,
   CONFIG_VALIDATION_FAILED: 50605,
-  PEAR_WORKER_ENTRY_REQUIRED: 50606,
   MULTIPLE_SDK_INSTALLATIONS: 50607,
-  WORKER_PLUGINS_NOT_REGISTERED: 50608,
   BUNDLE_VERIFICATION_FAILED: 50609,
-  BARE_PACK_NOT_INSTALLED: 50610,
-  BARE_PACK_ERROR: 50611,
   INVALID_PLUGIN_SPECIFIER: 50612,
   BARE_IMPORTS_MAP_NOT_FOUND: 50613,
-  BARE_RUNTIME_BINARY_NOT_FOUND: 50614,
   HOST_PREBUILDS_INSTALL_REFUSED: 50615,
   HOST_PREBUILDS_INSTALL_FAILED: 50616,
   ADDON_LINK_FAILED: 50617,
   BARE_PACK_NODE_UNSUPPORTED: 50618,
   HOST_PREBUILDS_MISSING: 50619,
+  REACT_NATIVE_BARE_KIT_UNSUPPORTED: 50620,
+  BUNDLE_FAILED: 50621,
+  BUNDLE_TARGET_NOT_INSTALLED: 50622,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800
@@ -117,11 +114,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: 'RPC_CONNECTION_FAILED',
     message: (details: string) => `RPC connection failed: ${details}`
   },
-  [SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT]: {
-    name: 'RPC_INIT_TIMEOUT',
-    message: (timeoutMs: number) =>
-      `RPC initialization timed out after ${timeoutMs}ms — the worker process may have failed to start`
-  },
   [SDK_CLIENT_ERROR_CODES.WORKER_CRASHED]: {
     name: 'WORKER_CRASHED',
     message: (code: string, signal: string) =>
@@ -133,10 +125,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED]: {
     name: 'WORKER_STARTUP_FAILED',
-    // `details` is the full sentence; `stderrTail` is appended under a
-    // `Worker stderr:` header when non-empty.
-    message: (details: string, stderrTail: string) =>
-      stderrTail ? `${details}\n\nWorker stderr:\n${stderrTail}` : details
+    message: (details: string) => details
   },
 
   // Build/Bundle Errors (50,600-50,799)
@@ -174,35 +163,20 @@ const clientErrorDefinitions: ErrorCodesMap = {
     message: (packages: string) =>
       `Multiple QVAC SDK installations found: ${packages}. Remove all but one to avoid conflicts.`
   },
-  [SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED]: {
-    name: 'PEAR_WORKER_ENTRY_REQUIRED',
-    message: (workerEntry: string) =>
-      `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`
-  },
-  [SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED]: {
-    name: 'WORKER_PLUGINS_NOT_REGISTERED',
-    message: () =>
-      'No plugins registered in the worker. For in-process Bare use `@qvac/inference` and register plugins with `plugins([...])` (or `registerPlugin(...)`). See https://docs.qvac.tether.io/configuration/plugins#runtime-registration-on-bare'
-  },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
     name: 'BUNDLE_VERIFICATION_FAILED',
     message: (bundlePath: string) =>
-      `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`
+      `Native addon verification failed for ${bundlePath}. The cause lists the failing addons and hosts; resolve them before shipping.`
   },
-  [SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED]: {
-    name: 'BARE_PACK_NOT_INSTALLED',
-    message:
-      'bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack'
-  },
-  [SDK_CLIENT_ERROR_CODES.BARE_PACK_ERROR]: {
-    name: 'BARE_PACK_ERROR',
-    message: (exitCode: number, entryPath: string, outputPath: string) =>
-      `bare-pack exited with code ${exitCode}\n\n  Entry file: ${entryPath}\n  Output file: ${outputPath}\n\n  Run bare-pack manually for more details.`
+  [SDK_CLIENT_ERROR_CODES.BUNDLE_FAILED]: {
+    name: 'BUNDLE_FAILED',
+    message: (entryPath: string, reason: string) =>
+      `Bundling the worker failed\n\n  Entry file: ${entryPath}\n  Reason: ${reason}`
   },
   [SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED]: {
     name: 'BARE_PACK_NODE_UNSUPPORTED',
     message: (nodeVersion: string, requiredRange: string) =>
-      `bare-pack needs Node ${requiredRange}; found Node v${nodeVersion}. Upgrade Node and run the bundle again.`
+      `Bundling needs Node ${requiredRange}; found Node v${nodeVersion}. Upgrade Node and run the bundle again.`
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER]: {
     name: 'INVALID_PLUGIN_SPECIFIER',
@@ -213,11 +187,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: 'BARE_IMPORTS_MAP_NOT_FOUND',
     message: (sdkName: string, expectedPath: string) =>
       `bare-imports.json not found.\n\n  Expected at: ${expectedPath}\n\n  Make sure ${sdkName} is installed in your project.`
-  },
-  [SDK_CLIENT_ERROR_CODES.BARE_RUNTIME_BINARY_NOT_FOUND]: {
-    name: 'BARE_RUNTIME_BINARY_NOT_FOUND',
-    message: (platform: string, arch: string) =>
-      `Could not load the Bare runtime binary for ${platform}-${arch}. The platform package "bare-runtime-${platform}-${arch}" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \`pnpm add bare-runtime-${platform}-${arch}\`) or by installing with npm or bun. See https://github.com/tetherto/qvac/issues/1492`
   },
   [SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_INSTALL_REFUSED]: {
     name: 'HOST_PREBUILDS_INSTALL_REFUSED',
@@ -243,8 +212,19 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_MISSING]: {
     name: 'HOST_PREBUILDS_MISSING',
     message: (dependencies: string) =>
-      "Bundling failed: split addons resolve their native code through `#host-addon`, which needs each mobile host's platform package installed." +
-      `\n\n  Add them to the dependencies in package.json, pinned to these exact versions, and reinstall (or bundle with installMissingPrebuilds):\n${dependencies}`
+      "Bundling failed: split addons resolve their native code through `#host-addon`, which needs each host's platform package installed." +
+      `\n\n  Add them to the dependencies in package.json, pinned to these exact versions, and reinstall. installMissingPrebuilds does this for phone hosts; npm installs another desktop host's package only with --force:\n${dependencies}`
+  },
+  [SDK_CLIENT_ERROR_CODES.REACT_NATIVE_BARE_KIT_UNSUPPORTED]: {
+    name: 'REACT_NATIVE_BARE_KIT_UNSUPPORTED',
+    message: (installedVersion: string, requiredRange: string) =>
+      `The react-native worker bundle needs react-native-bare-kit ${requiredRange}; found ${installedVersion}. ` +
+      'Upgrade react-native-bare-kit and run the bundle again.'
+  },
+  [SDK_CLIENT_ERROR_CODES.BUNDLE_TARGET_NOT_INSTALLED]: {
+    name: 'BUNDLE_TARGET_NOT_INSTALLED',
+    message: (target: string, packageName: string) =>
+      `The ${target} target needs ${packageName}, which the project does not have. Install it and run the bundle again.`
   },
 
   // Profiler Errors (50,800-50,899)

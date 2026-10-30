@@ -131,15 +131,6 @@ export const qvacConfigSchema = z.object({
   loggerConsoleOutput: z.boolean().optional(),
 
   /**
-   * Timeout in milliseconds for the worker RPC handshake performed when the SDK
-   * initializes. Raise this on slow storage or embedded hardware where the first
-   * worker start (native addon load) legitimately exceeds the default.
-   * The `QVAC_RPC_INIT_TIMEOUT_MS` environment variable takes precedence.
-   * Defaults to 30000 (30 seconds).
-   */
-  rpcInitTimeoutMs: z.number().int().positive().optional(),
-
-  /**
    * Maximum number of concurrent HTTP downloads for sharded models.
    * Higher values may improve download speed but increase memory usage.
    * Defaults to 3.
@@ -267,13 +258,7 @@ export const qvacConfigSchema = z.object({
   includeAudioDecoder: z.boolean().optional(),
 
   /** Optional provider module selected at SDK bundle time. Direct Bare callers register in code. */
-  rpcServerProvider: z.string().min(1).optional(),
-
-  /**
-   * Inert: we have no bundling or ABI-verification step, so this field is
-   * unused. Carried over from the bundle-time config schema.
-   */
-  bareRuntimeVersion: z.string().optional()
+  rpcServerProvider: z.string().min(1).optional()
 })
 
 export type QvacConfig = z.infer<typeof qvacConfigSchema>

@@ -26,7 +26,6 @@ import {
   checkSdkRuntime,
   classifySdkRuntimeFailure,
   probeSdkRuntime,
-  resolveProbeTimeoutMs,
   type SdkRuntimeProbeResult
 } from '@/doctor/deep'
 import {
@@ -312,7 +311,7 @@ describe('deploy-target checks', () => {
     assert.ok(r.value && r.value.includes('darwin-arm64'))
   })
 
-  it('desktop targets still pass on non-desktop CLI hosts (bare-pack cross-bundles)', () => {
+  it('desktop targets still pass on non-desktop CLI hosts', () => {
     const r = checkDesktopTargets(makeCtx({ platform: 'freebsd' as NodeJS.Platform, arch: 'x64' }))
     assert.equal(r.status, 'pass')
     assert.ok(r.value && !r.value.includes('(native)'))
@@ -469,28 +468,6 @@ describe('deep SDK runtime probe', () => {
     }
   })
 
-  it('probe cap stays at 45s when the handshake budget is not raised', () => {
-    assert.equal(resolveProbeTimeoutMs({}), 45_000)
-    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '' }), 45_000)
-    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '30000' }), 45_000)
-    // Shortening the handshake must not shorten the probe: it also imports,
-    // spawns and tears down.
-    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '5000' }), 45_000)
-  })
-
-  it('probe cap follows a raised handshake budget, keeping the 15s margin', () => {
-    // Without this the probe would kill the worker at 45s and report a timeout
-    // for a budget the user had already raised to 120s.
-    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '120000' }), 135_000)
-    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '60000' }), 75_000)
-  })
-
-  it('probe cap ignores a malformed handshake budget', () => {
-    for (const value of ['abc', '0', '-5', '1.5', 'Infinity']) {
-      assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: value }), 45_000)
-    }
-  })
-
   it('terminates a hung heartbeat at the configured timeout', async () => {
     const fixture = createSdkFixture(`
       export async function heartbeat() {
@@ -604,8 +581,13 @@ describe('deep SDK runtime probe', () => {
       /unsupported by this CPU/i
     )
     assert.match(
-      classifySdkRuntimeFailure(failedProbe({ stderr: 'BareRuntimeBinaryNotFoundError' })).hint,
-      /Bare runtime binary appears to be missing/i
+      classifySdkRuntimeFailure(
+        failedProbe({
+          stderr:
+            "Cannot find asset '#bare' imported from 'file:///app/node_modules/bare-sidecar/lib/bare.js'"
+        })
+      ).hint,
+      /bare-sidecar has no Bare program for this host/i
     )
     assert.match(
       classifySdkRuntimeFailure(failedProbe({ stderr: 'VCRUNTIME140.dll was not found' })).hint,
@@ -636,7 +618,13 @@ describe('deep SDK runtime probe', () => {
       [failedProbe({ stderr: 'VCRUNTIME140.dll was not found' }), 'visual-cpp-runtime'],
       [failedProbe({ stderr: 'vkCreateInstance failed' }), 'vulkan'],
       [failedProbe({ stderr: 'libnative.so: cannot open shared object file' }), 'shared-library'],
-      [failedProbe({ stderr: 'BareRuntimeBinaryNotFoundError' }), 'bare-runtime'],
+      [
+        failedProbe({
+          stderr:
+            "Cannot find asset '#bare' imported from 'file:///app/node_modules/bare-sidecar/lib/bare.js'"
+        }),
+        'bare-sidecar-runtime'
+      ],
       [failedProbe({ outcome: 'timeout' }), 'worker-handshake-timeout'],
       [failedProbe({ outcome: 'spawn-error' }), 'spawn-error'],
       [failedProbe({ outcome: 'protocol-error' }), 'protocol-error'],
@@ -707,19 +695,14 @@ describe('deep SDK runtime probe', () => {
     )
   })
 
-  it('prioritizes a concrete SIGILL cause over an RPC timeout wrapper', () => {
+  it('prioritizes a concrete SIGILL cause over the startup failure that wraps it', () => {
+    const stderr =
+      'WORKER_STARTUP_FAILED: Worker failed before signalling ready\nCaused by: Error: Worker was killed by SIGILL'
     assert.match(
-      classifySdkRuntimeFailure(
-        failedProbe({ stderr: 'RPCInitTimeoutError: RPC initialization timed out\nsignal SIGILL' })
-      ).hint,
+      classifySdkRuntimeFailure(failedProbe({ stderr })).hint,
       /unsupported by this CPU/i
     )
-    assert.equal(
-      classifySdkRuntimeFailure(
-        failedProbe({ stderr: 'RPCInitTimeoutError: RPC initialization timed out\nsignal SIGILL' })
-      ).id,
-      'cpu-instruction'
-    )
+    assert.equal(classifySdkRuntimeFailure(failedProbe({ stderr })).id, 'cpu-instruction')
   })
 
   it('classifies a child-process spawn error', async () => {

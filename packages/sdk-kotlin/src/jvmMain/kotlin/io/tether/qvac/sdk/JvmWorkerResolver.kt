@@ -9,11 +9,17 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+/**
+ * The worker process: bare-sidecar's Bare runtime running the SDK's TCP shim,
+ * which loads [workerPath] and connects back to the port the transport appends.
+ */
 data class JvmWorkerCommand(
     val bareExecutable: String,
+    val shimPath: String,
     val workerPath: String,
-    val authenticated: Boolean = true,
-)
+) {
+    fun argv(): List<String> = listOf(bareExecutable, shimPath, workerPath)
+}
 
 /** Resolves a version-compatible desktop worker without requiring hard-coded paths. */
 object JvmWorkerResolver {
@@ -40,15 +46,33 @@ object JvmWorkerResolver {
     ): JvmWorkerCommand {
         val configuredWorker = workerPath ?: environment["QVAC_WORKER_PATH"]
         val configuredBare = bareExecutable ?: environment["QVAC_BARE_PATH"]
+        val configuredSdk = (sdkDirectory ?: environment["QVAC_SDK_DIR"])?.let(Path::of)
+
         if (configuredWorker != null) {
+            if (Files.isDirectory(Path.of(configuredWorker))) {
+                throw QvacWorkerStartException(
+                    "$configuredWorker is a folder; this client takes a worker entry file, " +
+                        "such as qvac/worker.entry.mjs",
+                )
+            }
             val worker = requireRegularFile(Path.of(configuredWorker), "QVAC worker")
-            val bare = resolveBare(configuredBare, emptyList(), environment)
-            requireExplicitWorkerAuthenticates(worker)
-            return JvmWorkerCommand(bare.toString(), worker.toString())
+            val root = configuredSdk ?: sdkRootNear(worker.parent)
+                ?: throw QvacWorkerStartException(
+                    "No @qvac/sdk was found for the worker at $worker. Set QVAC_SDK_DIR to " +
+                        "the @qvac/sdk installation that provides its worker shim.",
+                )
+            // An explicit worker is not version-checked, but the shim that sends the
+            // token comes from this SDK, so it must declare token-v1 IPC.
+            requireTokenIpc(readPackageMetadata(root), root)
+            return JvmWorkerCommand(
+                bareExecutable = resolveBare(configuredBare, root, environment).toString(),
+                shimPath = requireRegularFile(shimPath(root), "QVAC worker shim").toString(),
+                workerPath = worker.toString(),
+            )
         }
 
         val roots = linkedSetOf<Path>()
-        (sdkDirectory ?: environment["QVAC_SDK_DIR"])?.let { roots.add(Path.of(it)) }
+        configuredSdk?.let(roots::add)
         roots.addAll(discoverLocalSdkRoots(currentDirectory))
         managedSdkRoot(environment, userHome)?.let(roots::add)
 
@@ -74,10 +98,40 @@ object JvmWorkerResolver {
         configuredBare: String?,
         environment: Map<String, String>,
     ): JvmWorkerCommand? {
-        val worker = workerCandidates(root).firstOrNull(Files::isRegularFile) ?: return null
+        val worker = root.resolve("dist/src/worker/index.js")
+        val shim = shimPath(root)
+        if (!Files.isRegularFile(worker) || !Files.isRegularFile(shim)) return null
         requireCompatibleSdk(root)
-        val bare = resolveBare(configuredBare, bareCandidates(root), environment)
-        return JvmWorkerCommand(bare.toString(), worker.toString())
+        val bare = resolveBare(configuredBare, root, environment)
+        return JvmWorkerCommand(
+            bareExecutable = bare.toString(),
+            shimPath = shim.toAbsolutePath().normalize().toString(),
+            workerPath = worker.toAbsolutePath().normalize().toString(),
+        )
+    }
+
+    private fun shimPath(root: Path): Path = root.resolve("dist/src/worker/tcp-shim.js")
+
+    /**
+     * The `@qvac/sdk` a worker entry belongs to: the package it sits in, or the one
+     * its project installed.
+     */
+    private fun sdkRootNear(start: Path): Path? {
+        var directory: Path? = start.toAbsolutePath().normalize()
+        while (directory != null) {
+            if (isSdkRoot(directory)) return directory
+            val installed = directory.resolve("node_modules/@qvac/sdk")
+            if (isSdkRoot(installed)) return installed
+            directory = directory.parent
+        }
+        return null
+    }
+
+    private fun isSdkRoot(directory: Path): Boolean {
+        val metadata = runCatching {
+            Json.parseToJsonElement(Files.readString(directory.resolve("package.json"))).jsonObject
+        }.getOrNull()
+        return runCatching { metadata?.get("name")?.jsonPrimitive?.content }.getOrNull() == "@qvac/sdk"
     }
 
     private fun discoverLocalSdkRoots(start: Path): List<Path> {
@@ -116,20 +170,16 @@ object JvmWorkerResolver {
         }.getOrNull()
     }
 
-    private fun workerCandidates(root: Path): List<Path> = listOf(
-        root.resolve("dist/server/worker.js"),
-        root.resolve("dist/src/worker/index.js"),
-    )
-
-    private fun bareCandidates(root: Path): List<Path> {
-        val executable = if (System.getProperty("os.name").startsWith("Windows", true)) {
-            "bare.exe"
-        } else {
-            "bare"
-        }
+    /**
+     * bare-sidecar's Bare runtime for this host, in the SDK's node_modules or the
+     * nearest ancestor's, where an install hoisted it.
+     */
+    internal fun sidecarBareCandidates(root: Path): List<Path> {
+        val osName = System.getProperty("os.name")
+        val executable = if (osName.startsWith("Windows", true)) "bare.exe" else "bare"
         val platform = when {
-            System.getProperty("os.name").startsWith("Mac", true) -> "darwin"
-            System.getProperty("os.name").startsWith("Windows", true) -> "win32"
+            osName.startsWith("Mac", true) -> "darwin"
+            osName.startsWith("Windows", true) -> "win32"
             else -> "linux"
         }
         val architecture = when (System.getProperty("os.arch").lowercase()) {
@@ -137,19 +187,15 @@ object JvmWorkerResolver {
             "amd64", "x86_64" -> "x64"
             else -> System.getProperty("os.arch").lowercase()
         }
-        // Prefer the real runtime binary: supervising a Node launcher can leave
-        // its native child behind when the launcher is terminated.
-        return listOf(
-            root.resolve("node_modules/bare-runtime-$platform-$architecture/bin/$executable"),
-            root.parent?.parent?.resolve("bare-runtime-$platform-$architecture/bin/$executable"),
-            root.resolve("node_modules/bare-runtime/bin/$executable"),
-            root.parent?.parent?.resolve("bare-runtime/bin/$executable"),
-        ).filterNotNull()
+        val relative = "node_modules/bare-sidecar/prebuilds/$platform-$architecture/$executable"
+        return generateSequence(root.toAbsolutePath().normalize()) { it.parent }
+            .map { it.resolve(relative) }
+            .toList()
     }
 
     private fun resolveBare(
         configured: String?,
-        candidates: List<Path>,
+        root: Path,
         environment: Map<String, String>,
     ): Path {
         if (configured != null) {
@@ -162,11 +208,15 @@ object JvmWorkerResolver {
             findOnPath(configured, environment)?.let { return it }
             throw QvacWorkerStartException("Bare executable '$configured' was not found on PATH")
         }
-        candidates.firstOrNull { Files.isRegularFile(it) && Files.isExecutable(it) }?.let { return it.toAbsolutePath().normalize() }
-        findOnPath(defaultBareExecutable(), environment)?.let { return it }
-        throw QvacWorkerStartException(
-            "No Bare executable was found. Set QVAC_BARE_PATH or install bare-runtime.",
-        )
+        val bare = sidecarBareCandidates(root).firstOrNull(Files::isRegularFile)
+            ?: throw QvacWorkerStartException(
+                "No Bare executable was found for the @qvac/sdk at $root. Set QVAC_BARE_PATH, " +
+                    "or install @qvac/sdk with its dependencies, which include bare-sidecar.",
+            )
+        // npm and bun do not reliably keep the exec bit on bare-sidecar's runtime;
+        // bare-sidecar sets it when Node loads it, which never happens here.
+        if (!Files.isExecutable(bare)) bare.toFile().setExecutable(true)
+        return bare.toAbsolutePath().normalize()
     }
 
     private fun findOnPath(command: String, environment: Map<String, String>): Path? {
@@ -192,23 +242,6 @@ object JvmWorkerResolver {
         requireTokenIpc(metadata, root)
     }
 
-    /**
-     * An explicit worker path is not version-checked, but a worker inside an
-     * `@qvac/sdk` package must still declare token-v1 IPC. A worker with no such
-     * metadata is treated as current and must send the token.
-     */
-    internal fun requireExplicitWorkerAuthenticates(worker: Path) {
-        var directory = worker.toAbsolutePath().parent
-        while (directory != null) {
-            val metadata = readPackageMetadata(directory)
-            if (metadata?.get("name")?.jsonPrimitive?.content == "@qvac/sdk") {
-                requireTokenIpc(metadata, directory)
-                return
-            }
-            directory = directory.parent
-        }
-    }
-
     private fun readPackageMetadata(root: Path): JsonObject? {
         val packageJson = root.resolve("package.json")
         return runCatching { Json.parseToJsonElement(Files.readString(packageJson)).jsonObject }.getOrNull()
@@ -218,8 +251,7 @@ object JvmWorkerResolver {
         if (metadata?.get("qvacIpcAuthentication")?.jsonPrimitive?.content == "token-v1") return
         throw QvacWorkerStartException(
             "The @qvac/sdk worker at $root does not declare \"qvacIpcAuthentication\": \"token-v1\", " +
-                "so it cannot authenticate its IPC connection. Install @qvac/sdk@$SDK_VERSION, or pass " +
-                "authenticated = false to JvmBareRpcTransport.connect to accept an unauthenticated worker.",
+                "so it cannot authenticate its IPC connection. Install @qvac/sdk@$SDK_VERSION.",
         )
     }
 
@@ -228,9 +260,5 @@ object JvmWorkerResolver {
             throw QvacWorkerStartException("$label was not found at $path")
         }
         return path.toAbsolutePath().normalize()
-    }
-
-    private fun defaultBareExecutable(): String {
-        return if (System.getProperty("os.name").startsWith("Windows", true)) "bare.exe" else "bare"
     }
 }

@@ -16,8 +16,7 @@ export {
 export type {
   VerifyBundleOptions,
   VerifyBundleResult,
-  VerifyBundleIssue,
-  RuntimeGroup
+  VerifyBundleIssue
 } from '@/commands/verify/index'
 export {
   HostPrebuildsInstallFailedError,

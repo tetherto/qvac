@@ -11,12 +11,12 @@ import {
   type ResourceCollectorAcceptanceOptions
 } from '@/commands/verify/resource-collectors'
 import { listBarePrebuildFiles } from '@/commands/verify/prebuilds'
+import { writeBundleFile } from './fixtures/bundle-file'
 
 const COLLECTORS = ['bare-cpu-info', 'bare-gpu-info']
 
 interface FixtureOptions {
   bundleCollectors?: string[]
-  manifestCollectors?: string[]
   prebuilds?: Array<{ package: string; host: string; contents?: string; fileName?: string }>
   unrelatedAddon?: boolean
 }
@@ -39,25 +39,12 @@ function writeJson(filePath: string, value: object) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`)
 }
 
-function escapeForJsString(value: string) {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t')
-}
-
 function writeBareBundle(bundlePath: string, resolutions: Record<string, boolean>) {
-  const bundleId = 'resource-collector-fixture'
-  const header = JSON.stringify({ id: bundleId, resolutions })
-  const packed = `${bundleId}\n${header}\n`
-  fs.writeFileSync(bundlePath, `module.exports = "${escapeForJsString(packed)}"\n`)
+  writeBundleFile(bundlePath, { id: 'resource-collector-fixture', resolutions })
 }
 
 function createFixture(projectRoot: string, fixtureOptions: FixtureOptions = {}): Fixture {
   const bundleCollectors = fixtureOptions.bundleCollectors ?? COLLECTORS
-  const manifestCollectors = fixtureOptions.manifestCollectors ?? COLLECTORS
   const prebuilds =
     fixtureOptions.prebuilds ??
     COLLECTORS.map((packageName) => ({ package: packageName, host: 'linux-x64' }))
@@ -95,44 +82,19 @@ function createFixture(projectRoot: string, fixtureOptions: FixtureOptions = {})
     resolutions['/node_modules/unrelated-native-addon/index.js'] = true
   }
 
-  const bundlePath = path.join(projectRoot, 'worker.bundle.js')
+  const bundlePath = path.join(projectRoot, 'index.bundle')
   writeBareBundle(bundlePath, resolutions)
-  const manifestPath = path.join(projectRoot, 'addons.manifest.json')
-  writeJson(manifestPath, {
-    version: 1,
-    bundleId: 'resource-collector-fixture',
-    addons:
-      fixtureOptions.unrelatedAddon === true
-        ? [...manifestCollectors, 'unrelated-native-addon']
-        : manifestCollectors
-  })
 
   return {
     options: {
       projectRoot,
       bundlePath,
-      manifestPath,
       hosts: ['linux-x64']
     }
   }
 }
 
 describe('acceptResourceCollectorPackaging', () => {
-  it('reports a collector missing from the generated manifest', async () => {
-    await withTempDir(async (dir) => {
-      const fixture = createFixture(dir, { manifestCollectors: ['bare-cpu-info'] })
-
-      const result = await acceptResourceCollectorPackaging(fixture.options)
-
-      assert.deepEqual(
-        result.issues.map((issue) => issue.code),
-        ['missing-collector']
-      )
-      assert.equal(result.issues[0]?.location, 'manifest')
-      assert.equal(result.issues[0]?.package, 'bare-gpu-info')
-    })
-  })
-
   it('reports a collector missing from the linked bundle graph', async () => {
     await withTempDir(async (dir) => {
       const fixture = createFixture(dir, { bundleCollectors: ['bare-cpu-info'] })
@@ -140,40 +102,7 @@ describe('acceptResourceCollectorPackaging', () => {
       const result = await acceptResourceCollectorPackaging(fixture.options)
 
       assert.equal(result.issues[0]?.code, 'missing-collector')
-      assert.equal(result.issues[0]?.location, 'bundle')
       assert.equal(result.issues[0]?.package, 'bare-gpu-info')
-    })
-  })
-
-  it('reports malformed JSON as an invalid manifest without throwing', async () => {
-    await withTempDir(async (dir) => {
-      const fixture = createFixture(dir)
-      fs.writeFileSync(fixture.options.manifestPath, '{not json\n')
-
-      const result = await acceptResourceCollectorPackaging(fixture.options)
-
-      assert.deepEqual(
-        result.issues.map((issue) => issue.code),
-        ['invalid-manifest']
-      )
-    })
-  })
-
-  it('reports an invalid manifest shape without throwing', async () => {
-    await withTempDir(async (dir) => {
-      const fixture = createFixture(dir)
-      writeJson(fixture.options.manifestPath, {
-        version: 2,
-        bundleId: '',
-        addons: ['bare-cpu-info', 42]
-      })
-
-      const result = await acceptResourceCollectorPackaging(fixture.options)
-
-      assert.deepEqual(
-        result.issues.map((issue) => issue.code),
-        ['invalid-manifest']
-      )
     })
   })
 

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
+from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_COMMAND, WORKER_PATH
 
 from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
 from tetherto.qvac_sdk.methods import (
@@ -61,7 +61,7 @@ pytestmark = [
 
 @pytest_asyncio.fixture
 async def transport():
-    async with BareRpcTransport([BARE_BIN, WORKER_PATH]) as t:
+    async with BareRpcTransport(WORKER_COMMAND) as t:
         yield t
 
 
@@ -289,7 +289,7 @@ async def test_calls_fail_fast_when_the_worker_disconnects() -> None:
     instead of leaving them awaiting a reply that never comes. The read loop
     closes the RPC on EOF, and RPC.close() fails every pending future. Manages
     its own transport (not the fixture) because it kills the worker mid-life."""
-    t = await BareRpcTransport([BARE_BIN, WORKER_PATH]).connect()
+    t = await BareRpcTransport(WORKER_COMMAND).connect()
     try:
         alive = await heartbeat(t, HeartbeatRequest(type="heartbeat"))
         assert alive.type == "heartbeat"
@@ -317,7 +317,7 @@ async def test_config_cache_directory_redirects_model_storage(tmp_path) -> None:
     cache_dir = str(tmp_path / "cfg-cache")
     os.makedirs(cache_dir, exist_ok=True)
     async with BareRpcTransport(
-        [BARE_BIN, WORKER_PATH], config={"cacheDirectory": cache_dir}
+        WORKER_COMMAND, config={"cacheDirectory": cache_dir}
     ) as t:
         load_response = await load_model(
             t,
