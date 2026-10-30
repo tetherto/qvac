@@ -27,7 +27,7 @@ import { detectToolDialect, prependToolsToHistory } from '@/utils/tool-integrati
 import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
 import { parseToolCalls } from '@/utils/tools/index'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
-import { buildAutoCacheSaveHistory, type CacheMessage } from '@/utils/index'
+import { buildAutoCacheSaveHistory, normalizeCacheMessage, type CacheMessage } from '@/utils/index'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
 import { AttachmentNotFoundError } from '@/errors/index'
@@ -187,7 +187,7 @@ export function seedConfiguredSystemPrompt<T extends { role: string; content: st
   return [{ role: 'system', content: configured } as T, ...history]
 }
 
-type CacheRunOptions = Pick<RunOptions, 'cacheKey'>
+type CacheRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill'>
 
 type CacheOwningModel = AnyModel & {
   saveCache?(cacheKey: string): Promise<void>
@@ -251,6 +251,9 @@ async function* processModelResponse(
     ...(generationParams && { generationParams }),
     ...(cacheOptions?.cacheKey !== undefined && {
       cacheKey: cacheOptions.cacheKey
+    }),
+    ...(cacheOptions?.prefill !== undefined && {
+      prefill: cacheOptions.prefill
     })
   }
   const hasRunOptions = Object.keys(runOptions).length > 0
@@ -316,6 +319,7 @@ export async function* completion(
     history: requestHistory,
     modelId,
     kvCache,
+    prefill,
     tools,
     generationParams,
     responseFormat
@@ -438,7 +442,8 @@ export async function* completion(
     turn = await session.beginTurn({
       kind: 'auto',
       configHash,
-      history: cacheMessages,
+      history: prefill ? cacheMessages.map(normalizeCacheMessage) : cacheMessages,
+      ...(toolsActive && toolsToRender ? { tools: toolsToRender } : {}),
       signal
     })
   }
@@ -455,7 +460,7 @@ export async function* completion(
     prompt,
     toolsToRender,
     mergedGenerationParams,
-    { cacheKey: turn.cachePath },
+    { cacheKey: turn.cachePath, ...(prefill !== undefined && { prefill }) },
     dialect,
     setActiveResponse
   )
@@ -469,7 +474,23 @@ export async function* completion(
   }
 
   // Auto-cache path.
-  //
+  if (prefill && !signal.aborted && !result.stoppedAtContextBoundary) {
+    await saveCacheFile(model, turn.cachePath, requestLogger)
+    const cacheInfo = await getCurrentCacheInfo(
+      modelId,
+      configHash,
+      history.map(toCacheMessage).map(normalizeCacheMessage),
+      toolsActive ? toolsToRender : undefined
+    )
+    await session.commitTurn(
+      turn,
+      // Renaming to the held path would reacquire its non-reentrant write lock.
+      cacheInfo.cachePath === turn.cachePath
+        ? { kind: 'static' }
+        : { kind: 'autoRename', targetCachePath: cacheInfo.cachePath }
+    )
+    return result
+  }
   // Tool-call turns: the auto-cache key is derived from
   // `result.responseText`, which here is raw tool-call markup rather
   // than a clean assistant message. There's no safe post-response key
@@ -502,7 +523,12 @@ export async function* completion(
 
   await saveCacheFile(model, turn.cachePath, requestLogger)
   const savedHistory = buildAutoCacheSaveHistory(history.map(toCacheMessage), result.responseText)
-  const postResponseCacheInfo = await getCurrentCacheInfo(modelId, configHash, savedHistory)
+  const postResponseCacheInfo = await getCurrentCacheInfo(
+    modelId,
+    configHash,
+    savedHistory,
+    toolsActive ? toolsToRender : undefined
+  )
 
   await session.commitTurn(turn, {
     kind: 'autoRename',

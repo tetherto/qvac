@@ -35,9 +35,9 @@ export interface MossTranscribeConfig {
   /** Select the GPU automatically when backend is auto (default: false). */
   useGPU?: boolean;
   /**
-   * Native backend selector: auto (default), cpu, cuda, vulkan, or an exact
-   * ggml device name such as CUDA0. Explicit selection overrides useGPU and
-   * fails at load if unavailable.
+   * Native backend selector: auto (default), cpu, cuda, vulkan, metal, or an
+   * exact ggml device name such as CUDA0. Explicit selection overrides
+   * useGPU and fails at load if unavailable.
    */
   backend?: string;
   /**

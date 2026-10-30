@@ -743,6 +743,7 @@ async def _completion_stream(
         response_format=params.get("responseFormat"),
         tool_dialect=params.get("toolDialect"),
         kv_cache=params.get("kvCache"),
+        prefill=params.get("prefill"),
         capture_thinking=params.get("captureThinking"),
         emit_raw_deltas=params.get("emitRawDeltas"),
     )

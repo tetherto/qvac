@@ -10,6 +10,8 @@ export declare const MINIMAX_DEFAULT_MAX_FRAMES = 300;
 export type AudioGenEngine = typeof ENGINE_ACESTEP | typeof ENGINE_MINIMAX;
 /** MiniMax compute device, see `AudioGenRuntimeConfig.device`. */
 export type AudiogenMinimaxDevice = 'cpu' | 'gpu' | 'auto';
+/** Allowed devices for Apple's full MiniMax Core ML runtime. */
+export type AudiogenMinimaxCoreMLComputeUnits = 'CPU_ONLY' | 'CPU_AND_GPU' | 'CPU_AND_NE' | 'ALL';
 /** Model file paths for ACE-Step or MiniMax-Music3. */
 export interface AudioGenFiles {
     /** Directory holding the four ACE-Step GGUFs (engine auto-classifies them). */
@@ -47,6 +49,10 @@ export interface AudioGenRuntimeConfig {
      * CPU, `'cpu'` never touches a GPU.
      */
     device?: AudiogenMinimaxDevice;
+    /** MiniMax only: compiled full Core ML profile directory on the inference host (macOS 15+). */
+    coremlProfileDir?: string;
+    /** MiniMax only: explicit Core ML device policy; requires coremlProfileDir. */
+    coremlComputeUnits?: AudiogenMinimaxCoreMLComputeUnits;
     /** ACE-Step only: GPU layers to offload when `useGPU` is set (99 = all). */
     nGpuLayers?: number;
     /** 0 = engine auto-picks. */

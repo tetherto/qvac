@@ -229,6 +229,7 @@ def completion(
     stream: bool = True,
     generation_params: dict[str, Any] | None = None,
     kv_cache: Any = None,
+    prefill: bool | None = None,
     capture_thinking: bool | None = None,
     emit_raw_deltas: bool | None = None,
     tool_dialect: str | None = None,
@@ -256,6 +257,8 @@ def completion(
         payload["generationParams"] = generation_params
     if kv_cache is not None:
         payload["kvCache"] = kv_cache
+    if prefill is not None:
+        payload["prefill"] = prefill
     if capture_thinking is not None:
         payload["captureThinking"] = capture_thinking
     if emit_raw_deltas is not None:
@@ -324,6 +327,8 @@ def completion_orchestrate(
     max_tool_turns: int | None = None,
     stream: bool = True,
     generation_params: dict[str, Any] | None = None,
+    kv_cache: Any = None,
+    prefill: bool | None = None,
     capture_thinking: bool | None = None,
     tool_dialect: str | None = None,
     request_id: str | None = None,
@@ -365,6 +370,10 @@ def completion_orchestrate(
         payload["tools"] = wire_tools
     if max_tool_turns is not None:
         payload["maxToolTurns"] = max_tool_turns
+    if kv_cache is not None:
+        payload["kvCache"] = kv_cache
+    if prefill is not None:
+        payload["prefill"] = prefill
     if generation_params is not None:
         payload["generationParams"] = generation_params
     if capture_thinking is not None:
