@@ -15,7 +15,8 @@
 
 - `baseCacheKey` run option: a `cacheKey` file a request starts from when
   nothing in memory serves more of its prompt, such as a primed system prompt
-  shared by many conversations. The file is read, never written.
+  shared by many conversations. The file is read, never written
+  ([#5417](https://github.com/tetherto/qvac/pull/5417)).
 
 ### Changed
 
@@ -23,10 +24,11 @@
   conversation the model holds (in memory, in another batch slot, in the RAM
   tier, or in a `cacheKey` file used in this process), not only its own
   `cacheKey`'s. The other conversation is copied, never changed. Multimodal
-  models are unchanged.
+  models are unchanged ([#5417](https://github.com/tetherto/qvac/pull/5417)).
 - A text request without a `cacheKey` keeps its state in memory for the next
   request instead of resetting the context; it is never written to a file.
-  `CacheTokens` after such a request reports the tokens kept.
+  `CacheTokens` after such a request reports the tokens kept
+  ([#5417](https://github.com/tetherto/qvac/pull/5417)).
 
 ### Fixed
 
