@@ -331,15 +331,10 @@ runners for it, and `qvac-test.config.js`.
 CI orchestration is consumer-specific. This package provides the CLI and runtime pieces; the consumer owns
 its workflow definitions, cache strategy, secrets wiring, and platform rollout.
 
-In this monorepo that consumer is `.github/workflows/test-sdk.yml`, which builds the SDK e2e suite for
-desktop, Electron, Snap, Android, and iOS. Its `test-suite-source` input selects where this framework comes
-from for a given run:
-
-- `manifest` — whatever `packages/sdk-e2e/package.json` declares (the default)
-- `branch` — build and pack `packages/test-suite` from the checked-out ref, then install that tarball
-- `npm` — resolve a published version or dist-tag via `test-suite-version`
-
-Use `branch` to test an SDK change against an unreleased framework change without publishing.
+In this monorepo that consumer is the sdk's `test:integration` and `test:mobile` (`packages/sdk/ci/e2e.mjs`
+and `mobile.mjs`), which build the SDK e2e suite for desktop, Python, Electron, Snap, Android and iOS. Each
+run builds and packs `packages/test-suite` from the checked-out ref and installs that tarball, so an SDK
+change is tested against the framework in the same commit without publishing.
 
 ## License
 

@@ -39,8 +39,9 @@ export const TARGETS = [
 export const CONFIG_NAME = /^(linux|android|ios|darwin|win32)-(x64|arm64)(-[a-z0-9]+)?$/
 const CONFIG_KEYS = ['args', 'commands', 'ci']
 const CI_KEYS = ['runner', 'setup', 'environment', 'labels']
-// A labels key is a PR label, or base:<branch> with an optional trailing * for a PR into that branch.
-const LABEL_KEY = /^(base:[a-z0-9._-]+\*?|[a-z0-9-]+)$/
+// A labels key is a PR label, base:<branch> with an optional trailing * for a PR into that branch, or dispatch:<name>
+// for a configuration that only a dispatch naming <name> runs.
+const LABEL_KEY = /^(base:[a-z0-9._-]+\*?|dispatch:[a-z0-9-]+|[a-z0-9-]+)$/
 // Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json. cuda-jetson puts
 // CUDA 12 for Jetson beside the host's CUDA 13 and exports only QVAC_CUDA_JETSON_PATH; java is JDK 17 and android the
 // Android SDK, for a desktop leg that builds Kotlin.
@@ -97,8 +98,13 @@ const MOBILE_KEYS = [
   'mochaTimeoutMs',
   'perTestTimeoutMinutes',
   'perfReport',
-  'waitforTimeoutMs'
+  'waitforTimeoutMs',
+  'mode',
+  'devicePoolsVar',
+  'projectArnVar'
 ]
+// A producer row builds its own app and drives the device itself; its pools and project come from repository variables.
+const VAR_NAME = /^[A-Z][A-Z0-9_]*$/
 // Each needs its secret named in _mobile.yml's PROJECT_ARN.
 export const DEVICEFARM_PROJECTS = [
   'LLAMACPP_EMBED',
@@ -171,7 +177,19 @@ export function checkMetadata(project, target) {
       throw new Error(
         `${project.name} ${target}: metadata.mobile takes ${MOBILE_KEYS.join(', ')}, found ${extra.join(', ')}`
       )
-    if (!DEVICEFARM_PROJECTS.includes(meta.mobile.devicefarmProject))
+    if (meta.mobile.mode === 'producer') {
+      const pools = Object.entries(meta.mobile.devicePoolsVar ?? {})
+      if (
+        !VAR_NAME.test(meta.mobile.projectArnVar ?? '') ||
+        !pools.length ||
+        pools.some(([p, v]) => !['Android', 'iOS'].includes(p) || !VAR_NAME.test(v))
+      )
+        throw new Error(
+          `${project.name} ${target}: a producer names projectArnVar and devicePoolsVar ({Android, iOS}) as variable names`
+        )
+    } else if (meta.mobile.mode !== undefined)
+      throw new Error(`${project.name} ${target}: metadata.mobile.mode takes producer only`)
+    else if (!DEVICEFARM_PROJECTS.includes(meta.mobile.devicefarmProject))
       throw new Error(
         `${project.name} ${target}: no Device Farm project secret is mapped for '${meta.mobile.devicefarmProject}'`
       )
@@ -263,7 +281,17 @@ export const jsBuild = (n) => Boolean(n.data.targets.build) && !nativeBuild(n)
 
 // configs, when set, keeps only those configurations: a mobile dispatch runs its one platform. prLabels and baseRef
 // route the configurations that declare ci.labels; see routeLabelled.
-export function select({ graph, affected, targets, labels, gate, configs = [], prLabels = [], baseRef = '' }) {
+export function select({
+  graph,
+  affected,
+  targets,
+  labels,
+  gate,
+  configs = [],
+  prLabels = [],
+  baseRef = '',
+  dispatch = false
+}) {
   const tagged = Object.values(graph.nodes).filter((n) => n.data.tags?.includes(TAG))
   const chosen = tagged.filter((n) => affected === null || affected.includes(n.name))
   const out = { matrices: {}, projects: [] }
@@ -319,7 +347,7 @@ export function select({ graph, affected, targets, labels, gate, configs = [], p
     }
   }
   if (out.matrices['test:integration']) {
-    const routed = routeLabelled(out.matrices['test:integration'], { prLabels, baseRef })
+    const routed = routeLabelled(out.matrices['test:integration'], { prLabels, baseRef, dispatch })
     out.matrices['test:integration'] = routed.plain
     out.matrices['test:integration:labelled'] = routed.labelled
   }
@@ -361,9 +389,9 @@ export function select({ graph, affected, targets, labels, gate, configs = [], p
   return out
 }
 
-// Rows whose configuration declares ci.labels run only when a label, or the PR's base branch, selects them, never on
-// the stage labels; the first matching key in declaration order gives the suite the command reads as CI_SUITE.
-export function routeLabelled(matrix, { prLabels = [], baseRef = '' }) {
+// Rows whose configuration declares ci.labels run only when a label, the PR's base branch or a dispatch selects them,
+// never on the stage labels; the first matching key in declaration order gives the suite the command reads as CI_SUITE.
+export function routeLabelled(matrix, { prLabels = [], baseRef = '', dispatch = false }) {
   const plain = []
   const labelled = []
   const matches = (key) =>
@@ -371,7 +399,9 @@ export function routeLabelled(matrix, { prLabels = [], baseRef = '' }) {
       ? key.endsWith('*')
         ? baseRef.startsWith(key.slice(5, -1))
         : baseRef === key.slice(5)
-      : prLabels.includes(key)
+      : key.startsWith('dispatch:')
+        ? dispatch && prLabels.includes(key.slice(9))
+        : prLabels.includes(key)
   for (const row of matrix) {
     if (!row.labels) {
       plain.push(row)
@@ -562,6 +592,7 @@ function main(env) {
     labels,
     prLabels,
     baseRef: pr && ['opened', 'synchronize'].includes(event.action) ? pr.base.ref : '',
+    dispatch: !pr && env.GITHUB_EVENT_NAME === 'workflow_dispatch',
     configs: (env.CONFIGS || '').split(/[\s,]+/).filter(Boolean),
     gate: gateKeys(readFileSync('.github/workflows/pr-gate-merge.yml', 'utf8'))
   })

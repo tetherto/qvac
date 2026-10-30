@@ -358,44 +358,6 @@ test("authorize-pr: drafts are denied before internal or fork trust checks", () 
   );
 });
 
-// SDK e2e: internal same-repo PRs run via dedicated labels; external forks rely
-// on fork-approval (fork-ci) + authorize-pr with pod-specific label inputs.
-const sdkE2eWorkflows = [".github/workflows/on-pr-test-sdk.yml"];
-
-test("sdk e2e: run gate uses fork-approval + authorize-pr, never hardcoded verified", () => {
-  for (const path of sdkE2eWorkflows) {
-    const source = read(path);
-    assert.match(
-      source,
-      /\bfork-approval:/,
-      `${path} defines a fork-approval gate job`,
-    );
-    assert.match(
-      source,
-      /uses:\s*\.\/\.github\/actions\/authorize-pr/,
-      `${path} uses the shared authorize-pr composite`,
-    );
-    assert.match(
-      source,
-      /needs:[\s\S]*?\bfork-approval\b/,
-      `${path} gates privileged jobs on fork-approval`,
-    );
-    // qvac/fork-verified commit status is expected; the retired label gate is not.
-    const functionalVerified = source
-      .split("\n")
-      .filter((line) => !line.trimStart().startsWith("#"))
-      .some((line) => {
-        const withoutForkStatus = line.replace(/fork-verified/g, "");
-        return withoutForkStatus.includes("verified");
-      });
-    assert.equal(
-      functionalVerified,
-      false,
-      `${path} must not hardcode a 'verified' gate outside comments`,
-    );
-  }
-});
-
 test("sdk e2e: internal PR authorised without verified; external fork stays gated", () => {
   // Both e2e workflows invoke authorize-pr with the e2e-specific label input.
   const internal = authorizePr({
@@ -534,17 +496,6 @@ test("check-approvals no longer depends on verified and skips drafts", () => {
   assert.match(source, /!github\.event\.pull_request\.draft/);
 });
 
-const AWS_OIDC_SECRET = "AWS_OIDC_ROLE_ARN";
-
-const MOBILE_SDK_WORKFLOWS = [
-  "./.github/workflows/test-android-sdk.yml",
-  "./.github/workflows/test-ios-sdk.yml",
-];
-
-const JOB_SECRETS_KEY_RE = /^ {4}secrets:/;
-const SECRETS_ENTRY_RE = /^ {5,}/;
-const SECRETS_INHERIT_RE = /^ {4}secrets:[ \t]*inherit[ \t]*$/m;
-
 function workflowPaths() {
   return readdirSync(join(root, ".github/workflows"))
     .filter((name) => /\.ya?ml$/.test(name))
@@ -569,134 +520,6 @@ function withoutComments(block) {
     .map((line) => line.replace(/(^|\s)#.*$/, ""))
     .join("\n");
 }
-
-function linesUntilDedent(lines) {
-  const end = lines.findIndex(
-    (line) => line.trim() !== "" && !SECRETS_ENTRY_RE.test(line),
-  );
-  return end === -1 ? lines : lines.slice(0, end);
-}
-
-function secretsMapping(jobText) {
-  const lines = jobText.split("\n");
-  const start = lines.findIndex((line) => JOB_SECRETS_KEY_RE.test(line));
-  if (start === -1) return "";
-  return withoutComments(
-    [lines[start], ...linesUntilDedent(lines.slice(start + 1))].join("\n"),
-  );
-}
-
-function forwardsSecret(jobText, secret) {
-  const mapping = secretsMapping(jobText);
-  return (
-    SECRETS_INHERIT_RE.test(mapping) ||
-    new RegExp(`^ {6,}${secret}:`, "m").test(mapping)
-  );
-}
-
-function workflowCallHeader(source) {
-  const jobsIdx = source.search(/^jobs:\s*$/m);
-  return withoutComments(jobsIdx === -1 ? source : source.slice(0, jobsIdx));
-}
-
-function callLineCount(source, reusable) {
-  return withoutComments(source)
-    .split("\n")
-    .filter((line) => line.trim() === `uses: ${reusable}`).length;
-}
-
-function rawCallCount(reusable) {
-  return workflowPaths().reduce(
-    (total, path) => total + callLineCount(read(path), reusable),
-    0,
-  );
-}
-
-function assertDeclaresAwsRole(reusable) {
-  assert.match(
-    workflowCallHeader(read(reusable.replace("./", ""))),
-    new RegExp(`^ {6}${AWS_OIDC_SECRET}:`, "m"),
-    `${reusable} declares ${AWS_OIDC_SECRET} in on.workflow_call.secrets`,
-  );
-}
-
-function assertEveryCallWasParsed(reusable, callers) {
-  assert.equal(
-    callers.length,
-    rawCallCount(reusable),
-    `every \`uses: ${reusable}\` line resolves to a parsed caller job`,
-  );
-}
-
-function assertForwardsAwsRole(reusable, { path, job }) {
-  assert.ok(
-    forwardsSecret(job.text, AWS_OIDC_SECRET),
-    `${path} job '${job.name}' forwards ${AWS_OIDC_SECRET} to ${reusable}`,
-  );
-}
-
-function assertCallersForwardAwsRole(reusable) {
-  const callers = callersOf(reusable);
-  assertDeclaresAwsRole(reusable);
-  assertEveryCallWasParsed(reusable, callers);
-  callers.forEach((caller) => assertForwardsAwsRole(reusable, caller));
-}
-
-test("mobile SDK callers forward the AWS OIDC role to Device Farm jobs", () => {
-  // test-android-sdk.yml and test-ios-sdk.yml authenticate to Device Farm with
-  // `role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}`. That is a repository
-  // secret, so the `environment: release` jobs cannot resolve it on their own:
-  // a caller that omits it renders an empty role and every Device Farm job dies
-  // on "Could not load credentials".
-  //
-  // Both workflows must declare the secret, otherwise GitHub rejects any caller
-  // that passes it explicitly and `secrets: inherit` becomes the only legal
-  // shape. Caller jobs come from eachJob, which only sees a bare `job-name:`
-  // line, so compare against the raw `uses:` count: a caller the parser cannot
-  // see must fail here rather than silently go unchecked.
-  MOBILE_SDK_WORKFLOWS.forEach(assertCallersForwardAwsRole);
-});
-
-// Any indent, so reindenting a workflow header cannot quietly move a caller
-// into the exempt branch below.
-const DECLARES_REPOSITORY_INPUT_RE = /^\s{2,}repository:/m;
-
-// The key alone is not enough: `repository: ''` and `repository: ${{
-// github.repository }}` both parse yet leave the callee falling back to this
-// repo, which is the bug. The value has to carry the caller's own repository,
-// either directly (`inputs.repository`) or via a context job that derives it.
-const FORWARDS_REPOSITORY_RE =
-  /^\s*repository:\s*\$\{\{[^}]*(?:inputs\.repository|outputs\.repository)[^}]*\}\}/m;
-
-function declaresRepositoryInput(path) {
-  return DECLARES_REPOSITORY_INPUT_RE.test(workflowCallHeader(read(path)));
-}
-
-function assertPinsRepositoryWithRef(reusable, { path, job }) {
-  const block = withoutComments(job.text);
-  if (!/^\s*test-version:/m.test(block)) return;
-  if (!declaresRepositoryInput(path)) return;
-  assert.match(
-    block,
-    FORWARDS_REPOSITORY_RE,
-    `${path} job "${job.name}" passes test-version to ${reusable} without forwarding its own repository, so a fork ref would resolve against this repo`,
-  );
-}
-
-test("mobile SDK callers that can target a fork forward the repository too", () => {
-  // These workflows check out `test-version` from `inputs.repository ||
-  // github.repository`. A caller that can be pointed at a fork but forwards
-  // only the ref makes them resolve that ref against THIS repo: a fork-only
-  // branch fails to fetch, and a branch name that also exists here silently
-  // builds the wrong code while still reporting on the caller's addon.
-  // Callers with no `repository` input of their own are same-repo by
-  // construction and stay exempt.
-  MOBILE_SDK_WORKFLOWS.forEach((reusable) => {
-    const callers = callersOf(reusable);
-    assertEveryCallWasParsed(reusable, callers);
-    callers.forEach((caller) => assertPinsRepositoryWithRef(reusable, caller));
-  });
-});
 
 test("npm integration uses a dedicated run label, not verified", () => {
   const source = read(".github/workflows/public-reusable-npm.yml");
@@ -1495,10 +1318,10 @@ test("fork-ci: every pull_request_target verified-surface workflow has the fork-
   // dropped from 20 when transcription-* merged into asr-ggml, then to 18 when
   // ocr-onnx CI was retired on main, and the floor dropped again when the
   // per-package pull_request_target on-pr-<pkg> workflows were consolidated into
-  // on-pr-nx.yml, and once more when the last orchestrators moved to the CI
-  // contract's pr-build-test.yml.
+  // on-pr-nx.yml, and once more when the last orchestrators, then the SDK
+  // e2e, moved to the CI contract's pr-build-test.yml.
   assert.ok(
-    targets.length >= 4,
+    targets.length >= 3,
     `found ${targets.length} fork-ci target workflows`,
   );
   for (const path of targets) {

@@ -40,17 +40,6 @@ const ALLOWED = [
     reason:
       "Installs published opencode-ai to test it; its postinstall.mjs is what the smoke measures. Job runs contents:read with persist-credentials:false and no token in .npmrc.",
   },
-  ...[
-    ['.github/workflows/test-android-sdk.yml', 2],
-    ['.github/workflows/test-ios-sdk.yml', 2],
-    ['.github/actions/sdk-e2e-node-prepare/action.yml', 1],
-  ].map(([file, count]) => ({
-    file,
-    match: 'npm install --install-links',
-    count,
-    reason:
-      'packages/sdk-e2e consumer depends on electron and react-native, both of which install through postinstall.',
-  })),
   {
     file: '.github/actions/run-mobile-integration-tests/build-mobile-app/action.yml',
     match: 'npm install',
@@ -128,12 +117,6 @@ const PENDING = [
     count,
     reason: 'QVAC-25458 PR 3',
   })),
-  {
-    file: '.github/workflows/on-pr-test-sdk.yml',
-    match: 'npm install --no-save',
-    count: 1,
-    reason: 'QVAC-25458 PR 3',
-  },
 
   // PR 4 — dispatch-only benchmark lanes; each needs a manual run to verify.
   {
@@ -356,7 +339,7 @@ test('the scan sees the sites it is meant to police', () => {
   // pass by finding nothing at all.
   for (const expected of [
     '.github/workflows/sdk-scheduled-checks.yml',
-    '.github/workflows/test-android-sdk.yml',
+    '.github/workflows/fill-fit-blobs-registry-server.yml',
     'scripts/ci/openclaw-upstream-compat-smoke.sh',
     'packages/cli/package.json',
   ]) {

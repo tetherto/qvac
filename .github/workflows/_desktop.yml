@@ -199,6 +199,14 @@ jobs:
           path: ${{ env.WORKDIR }}/test/results/performance-report*.json
           if-no-files-found: ignore
           retention-days: "14"
+      # A package's e2e reports; a dispatch on main keeps them 90 days as the baseline later runs compare with.
+      - if: always() && !cancelled()
+        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: ${{ matrix.row.slug }}-results-${{ matrix.row.config }}
+          path: ${{ env.WORKDIR }}/test/results/e2e/
+          if-no-files-found: ignore
+          retention-days: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && '90' || '30' }}
       - if: always() && !cancelled() && matrix.row.target == 'benchmark'
         uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:

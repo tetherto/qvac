@@ -140,7 +140,7 @@ to:
 | `clean:all`          | All of the above                                                                                                                              |
 
 **`clean:cache` and `clean:all` discard downloaded models.** If `cacheDirectory` is configured to a local
-path (CI always does this; see `.github/workflows/test-node-sdk.yml`), that's where `run:bootstrap:*`
+path (CI always does this; see `packages/sdk/ci/e2e.mjs`), that's where `run:bootstrap:*`
 pre-downloads them — running a bootstrap step and then `clean:cache`/`clean:all`, or the reverse, throws
 that work away. Reach for `clean:build` alone for a routine "rebuild my scripts" reset.
 
@@ -244,114 +244,39 @@ other's bundle.
 
 ## Running in CI
 
-### Label-triggered on PRs
+The suite runs on the package CI contract (`docs/ci/workflow-standard.md`): the sdk's `test:integration`
+configurations in `pr-build-test.yml`, and its `test:mobile` and sdk-kotlin's in `mobile-tests.yml`. The
+steps live in `packages/sdk/ci/`: `e2e.mjs` runs one desktop leg, `mobile.mjs` builds a mobile consumer
+app and drives it.
 
-See [`.github/workflows/on-pr-test-sdk.yml`](../../.github/workflows/on-pr-test-sdk.yml).
+### Desktop legs, by label
 
-- `test-e2e-smoke` — runs the `smoke` suite **plus the tests this PR touched**, on desktop and
-  mobile consumers. The smoke suite is only a fraction of the catalog, so without this a green
-  smoke run says nothing about tests the PR added or changed. "Touched" means changed files under
-  `packages/sdk-e2e/{catalog,runners/js,fixtures,assets}`, plus an inference engine directory, an SDK
-  `client/api` file, and a handler module registered in `registry.ts`. Source with no declared link
-  to a test maps to nothing and leaves a plain smoke run.
-  A PR comment reports what was added, and anything
-  the impact mapper could not attribute. See
-  [Smoke runs cover the tests a PR touched](../../docs/ci/LABELS.md#smoke-runs-cover-the-tests-a-pr-touched).
-  To check locally what a smoke run would add for your branch — this is the same code CI runs, so
-  it answers "which tests will this PR pull in?" before you push:
+Each configuration names the labels that run it in `ci.labels`, and the suite each passes:
 
-  ```bash
-  node scripts/impacted-tests.mjs --base main --head HEAD
-  ```
+| Configurations                                                 | Runs on                                          | Started by                                                                                                             |
+| -------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `linux-x64-gpu`, `darwin-arm64-gpu`, `win32-x64-gpu` (desktop) | the three GPU hosts                              | `test-e2e-smoke` (smoke suite), `test-e2e-full` (full catalog), and every push to a PR into `release-*` (full catalog) |
+| `*-python` (the catalog on the Python client)                  | the same hosts                                   | `test-e2e-python` (smoke suite)                                                                                        |
+| `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `pr-build-test.yml` with `labels: electron` (full catalog)                                               |
+| `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `pr-build-test.yml` with `labels: snap` (full catalog)                                                   |
 
-  It reads the TypeScript sources while `run:producer` loads `dist/catalog`, so run `npm run build`
-  first if you want the two to agree locally. CI always builds before the producer.
+A dispatch of `pr-build-test.yml` with `packages: @qvac/sdk` and `labels: test-e2e-smoke` (or any label
+above) runs the same configurations on a branch. Every leg builds `packages/inference` and
+`packages/test-suite` from the checkout and tests them together with `packages/sdk`, downloads its models
+in the run, and uploads its reports as `sdk-results-<configuration>`. The job summary compares them with
+the newest dispatch run's on the base branch; a failed test fails the leg.
 
-- `test-e2e-full` — runs the full catalog on desktop and mobile consumers.
-- Both labels build `packages/inference` and test it together with `packages/sdk` from the authorized PR HEAD.
-- Release-branch PRs with SDK or inference changes auto-run the same desktop and mobile suite.
-- Success applies the `e2e-tested` label.
+`scripts/impacted-tests.mjs` lists the testIds a change touches
+(`node scripts/impacted-tests.mjs --base main --head HEAD`); CI does not add them to a run.
 
-These three are **base runs**: each records its per-platform failure set into a hidden state
-comment on the PR, which is what the rerun label below consumes.
+### Mobile, by dispatch
 
-### Re-running only the tests that failed
-
-- `test-e2e-rerun-failed` — re-runs just the tests that failed on the last base run, on the
-  platforms where they failed. A platform that was green is not started at all: one failure
-  on Windows and one on Linux means two tests on two runners, with macOS, Android, and iOS
-  skipped entirely.
-
-The label needs no new commit — the rerun always tests the current PR HEAD, so it verifies a
-pushed fix or, on an unchanged commit, checks for flakiness. It is removed automatically once
-the run picks it up, so the next attempt is a single click, and it never applies `e2e-tested`.
-
-Wait for the **QVAC E2E — base run recorded** comment before applying it. The base failure set
-is not known until every family finishes, so a rerun labelled while the base run is still going
-is rejected with a comment saying so (it cannot cancel the base run — reruns use their own
-concurrency group).
-
-The plan is anchored to the base run, not to the previous rerun: every attempt re-runs the
-same set until a new `test-e2e-smoke` / `test-e2e-full` run replaces the base.
-
-See [Re-running failed SDK e2e tests](../../docs/ci/LABELS.md#re-running-failed-sdk-e2e-tests)
-for the full behaviour table, including what happens when no base is recorded, the base is
-green, or a recorded test no longer exists.
-
-### Manual runs
-
-Open [Actions → QVAC Tests (sdk) → Run workflow](https://github.com/tetherto/qvac/actions/workflows/test-sdk.yml)
-and submit the form.
-
-Select any combination of the platform checkboxes. Desktop, Android, and iOS are selected by default.
-Electron, strict Snap, and Kotlin Android runs are manual-only and must be selected explicitly. Kotlin
-Android always builds against the checkout's `packages/inference`, whatever `inference-source` says. Both
-Android legs choose from the same Device Farm pools; to run them together, set `android-device-pool` to a
-public pool so they do not queue on one private device.
-
-Non-obvious inputs:
-
-- **"Use workflow from" (GitHub's own selector) vs `test-version`** — these are independent. The selector
-  picks the branch that supplies the _workflow YAML_; `test-version` is the git ref that gets checked out for
-  the _code under test_ (and the e2e package). Leave `test-version` blank to test the same branch the
-  workflow was loaded from. Set it to test workflow edits from one branch against SDK code on another.
-- `inference-source` controls the `@qvac/inference` package used by every selected platform:
-  - `branch` builds and packs `packages/inference` from `test-version`. The resulting tarball is produced once
-    and reused by desktop, Electron, Snap, Android, and iOS jobs, so SDK and inference changes from that ref are
-    tested together.
-  - `npm` resolves the public `@qvac/inference` package. Set `inference-version` to a version/range or dist-tag;
-    blank means `latest`.
-  - `manifest` preserves the dependency already declared in `packages/sdk/package.json`.
-- The npm selector is resolved to one immutable version before platform fan-out. The exact branch SHA/package
-  version is shown in the workflow summary and PR test comments.
-- `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
-- `desktop-platforms`, `electron-platforms`, and `snap-platforms` — advanced JSON runner overrides,
-  pre-filled with the workflow defaults. Narrow them to specific runners only when debugging.
-
-The remaining inputs (`filter`, `exclude-suite`, timeouts, device pools, and `cache-models`) are described
-in the form.
-
-### How the CI legs are laid out
-
-`test-sdk.yml` fans out one reusable workflow per family, and each family gets one job per runner:
-
-- `test-node-sdk.yml` runs desktop, Electron, and Python. Their job is the same apart from a few steps.
-- `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and the in-snap model cache are
-  its own steps, so none of them show up as skipped steps on the other families' jobs.
-- `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm. The Android
-  workflow runs either app (`app: js | kotlin`); the Kotlin one reports as its own family, `kotlin-android`.
-
-The runner-hosted families take their shared steps from the `sdk-e2e-node-*` composite actions in
-`.github/actions`: `leg` resolves the platform and rerun filter, `prepare` installs and builds, `run`
-drives the consumer and producer, and `results` uploads the `results-<family>-<platform>` artifacts. The
-report comments and failed-test reruns read those artifacts. Change a shared step in its action, and a
-family-specific step in that family's workflow. The jobs check these actions out from the commit the
-workflow was loaded from, not from `test-version`, so a PR branch or tag that predates them still runs.
-
-Desktop, Electron, and Python stay separate jobs on the same runner label. Merging them into one job per
-OS would run the three in sequence, end every other client's results when one fails, and change the
-`results-<family>-<platform>` contract that reports and reruns read. Electron would not share the desktop
-model cache either, because it bootstraps a different set of models.
+Dispatch `mobile-tests.yml` with `packages: @qvac/sdk` (Android or iOS) or `packages: sdk-kotlin` (the
+Kotlin app, Android only). The run builds the consumer APK or IPA with the run id and broker baked in,
+starts it on a Device Farm pool from `SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS`
+(the dispatch's `devices` names one pool; empty prefers an available private pool), drives the full catalog over MQTT once
+the device runs, and fails on any failed test. `tests` narrows it to comma-separated categories or testId
+prefixes. No pull request label starts a mobile run.
 
 ## Developing new tests
 
