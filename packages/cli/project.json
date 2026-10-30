@@ -62,7 +62,7 @@
           }
         },
         "report": {
-          "commands": ["node ci/benchmark.mjs report"]
+          "command": "node ci/benchmark.mjs report"
         }
       },
       "metadata": {
