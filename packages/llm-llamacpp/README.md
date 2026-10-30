@@ -384,6 +384,26 @@ const response = await model.run([
 ])
 ```
 
+#### Counting tokens
+
+`calcTokens` returns how many tokens an input takes on the loaded model, without running it:
+
+```javascript
+const raw = await model.calcTokens({ text: 'Hello, world!' })
+
+const prompt = await model.calcTokens({
+  history: [{ role: 'system', content: 'You are a helpful assistant.' }],
+  tools: [{ type: 'function', name: 'get_weather', parameters: { type: 'object', properties: { city: { type: 'string' } } } }],
+  text: 'Weather in Paris?'
+})
+```
+
+- `text` alone is counted raw, with no chat template and no BOS.
+- `history` takes the `Message[]` that `run()` takes, and `tools` takes tool definitions. Either one is rendered by the chat template as the opening request of a fresh conversation, with `text` (even empty) appended as the last user turn. The count includes BOS, and the generation prompt when the last turn is a user or tool turn, so it equals the `promptTokens` a fresh `run()` of the same conversation reports. Tools the template drops are not counted.
+- `tools` needs `text` or `history`, as `run()` can't render tools without a message.
+- It never queues behind `run()`, so it answers while requests are generating.
+- Invalid input rejects with `InvalidArgument`. That includes media, which can't be counted.
+
 ### 7. Release Resources
 
 Unload the model when finished:

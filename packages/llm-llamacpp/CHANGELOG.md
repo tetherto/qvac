@@ -13,9 +13,10 @@
 
 ### Added
 
-- Native `calcTokens` binding: counts the tokens a text takes on the loaded
-  model, or a conversation (`history`, `tools`) rendered by its chat template.
-  The JS API does not expose it yet
+- `LlmLlamacpp.calcTokens({ text?, history?, tools? })`: counts the tokens a
+  text takes on the loaded model, or a conversation rendered by its chat
+  template as a fresh `run()` would, without running it. It answers while
+  requests are generating
   ([#5353](https://github.com/tetherto/qvac/pull/5353)).
 
 ### Fixed

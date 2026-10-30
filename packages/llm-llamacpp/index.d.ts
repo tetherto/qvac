@@ -9,6 +9,7 @@ type InferQvacResponseOf<Output> = QvacResponse<Output>;
 /** Aliases so the class expression's body can name the namespace types below. */
 type BatchPrompt = LlmLlamacpp.BatchPrompt;
 type BatchResponse = LlmLlamacpp.BatchResponse;
+type CalcTokensInput = LlmLlamacpp.CalcTokensInput;
 type FinetuneHandle = LlmLlamacpp.FinetuneHandle;
 type FinetuneOptions = LlmLlamacpp.FinetuneOptions;
 type LlmLlamacppArgs = LlmLlamacpp.LlmLlamacppArgs;
@@ -70,6 +71,18 @@ interface LlmLlamacpp {
      * remove the conversation from disk.
      */
     discardCache(cacheKey: string): Promise<void>;
+    /**
+     * Tokens `input` takes on the loaded model, without running it. `text`
+     * alone is counted raw, with no chat template and no BOS. With `history` or
+     * `tools` the conversation, `text` (even empty) appended as the last user
+     * turn, is rendered by the chat template as the opening request of a fresh
+     * conversation, with BOS and the generation prompt, as `run()` renders it.
+     * Tools the template leaves out are not counted. `tools` alone has no
+     * message to render and rejects, as `run()` does. Never queues behind
+     * `run()`: it reads only load-time state. Rejects with `InvalidArgument` on
+     * invalid input, a media message included.
+     */
+    calcTokens(input: CalcTokensInput): Promise<number>;
     getState(): {
         configLoaded: boolean;
     };
@@ -467,6 +480,15 @@ declare namespace LlmLlamacpp {
         parameters?: Record<string, any>;
     }
     type Message = UserTextMessage | UserMediaMessage | ChatFunctionDefinition;
+    /** What `calcTokens` counts. At least one field is required; `tools` needs `text` or `history`. */
+    interface CalcTokensInput {
+        /** Counted raw on its own; with `history` or `tools`, the last user turn. */
+        text?: string;
+        /** A conversation in `run()`'s `Message[]` shape, tool definitions allowed. */
+        history?: Message[];
+        /** Tool definitions, as `run()` takes them. A name also in `history` rejects. */
+        tools?: ChatFunctionDefinition[];
+    }
     interface GenerationParams {
         temp?: number;
         top_p?: number;
