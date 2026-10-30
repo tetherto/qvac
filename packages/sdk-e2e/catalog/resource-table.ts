@@ -49,7 +49,7 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   'finetune-llm-qwen35': {
     on: ['desktop'],
-    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q8_0' },
     type: 'llamacpp-completion',
     config: { verbosity: 0, ctx_size: 2048 }
   },

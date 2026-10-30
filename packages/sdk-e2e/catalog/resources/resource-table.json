@@ -79,7 +79,7 @@
       "desktop"
     ],
     "constant": {
-      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q8_0"
     },
     "type": "llamacpp-completion",
     "config": {
