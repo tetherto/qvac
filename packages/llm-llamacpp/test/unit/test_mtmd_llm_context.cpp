@@ -248,6 +248,43 @@ TEST_F(MtmdLlmContextTest, ProcessAndGetRuntimeStats) {
   });
 }
 
+// A text conversation counts what a fresh request decodes; media is rejected,
+// not counted.
+TEST_F(MtmdLlmContextTest, CalcTokensMatchesPromptTokensOfAFreshRun) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const std::string input =
+      R"([{"role": "user", "content": "Hello, how are you?"}])";
+  const size_t count = model->calcTokens({.history = input});
+  EXPECT_EQ(
+      model->calcTokens({.text = "Hello, how are you?", .history = "[]"}),
+      count);
+
+  LlamaModel::Prompt prompt;
+  prompt.input = input;
+  (void)model->processPrompt(prompt);
+  EXPECT_EQ(
+      static_cast<double>(count),
+      getStatValue(model->runtimeStats(), "promptTokens"));
+
+  try {
+    (void)model->calcTokens(
+        {.history = R"([{"role": "user", "type": "media", "content": ""},)"
+                    R"( {"role": "user", "content": "Describe it."}])"});
+    ADD_FAILURE() << "calcTokens counted a media message";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(error.codeString().find("InvalidArgument"), std::string::npos)
+        << error.codeString() << " " << error.what();
+  }
+}
+
 TEST_F(MtmdLlmContextTest, LoadMediaBinary) {
   if (!hasValidModel()) {
     FAIL() << "Multimodal model or projection file not found";

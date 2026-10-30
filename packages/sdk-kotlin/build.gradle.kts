@@ -19,12 +19,24 @@ plugins {
 }
 
 group = "io.tether"
+// The Kotlin SDK carries the version of the @qvac/sdk it is generated from: the
+// sibling package in the monorepo, or the exact pin in this package's own
+// manifest for a checkout of packages/sdk-kotlin alone (checkVersionAlignment
+// keeps the two equal).
 val sdkPackageJson = projectDir.parentFile.resolve("sdk/package.json")
-val sdkVersion = Regex("\"version\"\\s*:\\s*\"([^\"]+)\"")
-    .find(sdkPackageJson.readText())
-    ?.groupValues
-    ?.get(1)
-    ?: error("Could not read @qvac/sdk version from $sdkPackageJson")
+val sdkVersion = if (sdkPackageJson.exists()) {
+    Regex("\"version\"\\s*:\\s*\"([^\"]+)\"")
+        .find(sdkPackageJson.readText())
+        ?.groupValues
+        ?.get(1)
+        ?: error("Could not read @qvac/sdk version from $sdkPackageJson")
+} else {
+    Regex("\"@qvac/sdk\"\\s*:\\s*\"([^\"]+)\"")
+        .find(projectDir.resolve("package.json").readText())
+        ?.groupValues
+        ?.get(1)
+        ?: error("Could not read the @qvac/sdk pin from ${projectDir.resolve("package.json")}")
+}
 version = sdkVersion
 
 // Keep the existing coordinates/publications; delegate Central's deployment
