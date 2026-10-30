@@ -32,14 +32,14 @@ jobs:
       BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           sparse-checkout: |
             .github/actions
             .github/config
           persist-credentials: false
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -47,11 +47,11 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       # vcpkg's S3 binary cache, which generate reads through the AWS CLI.
-      - uses: tetherto/qvac-actions/configure-aws-credentials@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/configure-aws-credentials@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
-      - uses: tetherto/qvac-actions/setup-aws-cli@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-aws-cli@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
       - uses: ./.github/actions/vcpkg-bootstrap
       - uses: ./.github/actions/vcpkg-cache-setup
         with:
@@ -59,10 +59,10 @@ jobs:
           cache-bucket: ${{ secrets.MODEL_S3_BUCKET }}
           platform: ${{ matrix.row.platform }}
           arch: ${{ matrix.row.arch }}
-      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           node-version: lts/*
-      - uses: tetherto/qvac-actions/setup-pnpm@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           package-json-file: src/package.json
       - uses: ./.github/actions/setup-vulkan
