@@ -1,3 +1,8 @@
+import fs from 'bare-fs'
+import type { AbortSignal } from 'bare-abort-controller'
+import Buffer from 'bare-buffer'
+import type { EmbedRunInput, EmbedMultimodalInput } from '@qvac/embed-llamacpp'
+import type { EmbedInput } from '@/schemas/embed'
 import { getModel } from '@/runtime/model-registry'
 import { type EmbedParams, type EmbedStats, embedParamsSchema } from '@/schemas/index'
 import { buildUnaryResult } from '@/profiling/model-execution'
@@ -25,7 +30,8 @@ export async function embed(
 export async function embed(params: EmbedParams, requestId?: string): Promise<EmbedResult>
 
 export async function embed(params: EmbedParams, requestId?: string): Promise<EmbedResult> {
-  const { modelId, text } = embedParamsSchema.parse(params)
+  const parsed = embedParamsSchema.parse(params)
+  const { modelId } = parsed
 
   // Open a request-scoped lifecycle. The registry routes
   // `cancel({ requestId })` and broad `cancel({ modelId, kind: "embeddings" })`
@@ -75,14 +81,22 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
     ctx.signal.removeEventListener('abort', onAbort)
   })
 
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+  const input =
+    parsed.inputs !== undefined
+      ? await prepareEmbedInputs(parsed.inputs, ctx.signal, ctx.requestId)
+      : parsed.text
   const modelStart = nowMs()
-  const response = (await model.run(text)) as unknown as EmbedResponse
-  if (ctx.signal.aborted) {
-    throw new InferenceCancelledError(ctx.requestId)
-  }
-  const rawEmbeddings = await response.await()
-  if (ctx.signal.aborted) {
-    throw new InferenceCancelledError(ctx.requestId)
+  let response: EmbedResponse
+  let rawEmbeddings: Awaited<ReturnType<EmbedResponse['await']>>
+  try {
+    response = (await model.run(input)) as unknown as EmbedResponse
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+    rawEmbeddings = await response.await()
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+  } catch (cause) {
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId, {}, cause)
+    throw cause
   }
   const modelExecutionMs = nowMs() - modelStart
 
@@ -100,7 +114,7 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
 
   const embeddingsArray = rawEmbeddings[0]
 
-  if (Array.isArray(text)) {
+  if (parsed.inputs !== undefined || Array.isArray(parsed.text)) {
     if (!embeddingsArray || embeddingsArray.length === 0) {
       throw new EmbedNoEmbeddingsError()
     }
@@ -156,4 +170,41 @@ export function normalizeVector(vector: Float32Array) {
     normalizedVector[i] = vector[i]! * inverseMagnitude
   }
   return normalizedVector as number[]
+}
+
+async function prepareEmbedInputs(
+  inputs: EmbedInput[],
+  signal: AbortSignal,
+  requestId: string
+): Promise<EmbedRunInput> {
+  const result: Array<string | EmbedMultimodalInput> = []
+  for (const input of inputs) {
+    if (signal.aborted) throw new InferenceCancelledError(requestId)
+    if (typeof input === 'string') {
+      result.push(input)
+      continue
+    }
+    const parts: EmbedMultimodalInput = []
+    for (const part of input) {
+      if (signal.aborted) throw new InferenceCancelledError(requestId)
+      if (typeof part === 'string') {
+        parts.push(part)
+      } else {
+        const { type, value } = part.media
+        try {
+          const media =
+            type === 'base64'
+              ? Buffer.from(value, 'base64')
+              : await fs.promises.readFile(value, 'buffer')
+          parts.push({ media })
+        } catch (cause) {
+          if (signal.aborted) throw new InferenceCancelledError(requestId, {}, cause)
+          throw new EmbedFailedError('Unable to read embedding media', cause)
+        }
+      }
+    }
+    result.push(parts)
+  }
+  if (signal.aborted) throw new InferenceCancelledError(requestId)
+  return { inputs: result }
 }

@@ -7327,40 +7327,140 @@
     },
     "embed.request": {
       "title": "EmbedRequest",
-      "type": "object",
-      "properties": {
-        "modelId": {
-          "type": "string",
-          "description": "The identifier of the embedding model to use"
-        },
-        "text": {
-          "anyOf": [
-            {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "modelId": {
+              "type": "string",
+              "description": "The identifier of the embedding model to use"
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              ],
+              "description": "Text to embed. A string returns one vector; an array returns one vector per string."
+            },
+            "inputs": {
+              "not": {}
+            },
+            "type": {
+              "type": "string",
+              "const": "embed"
+            },
+            "requestId": {
+              "description": "Caller-generated identifier for cancellation with cancel({ requestId }).",
               "type": "string",
               "minLength": 1
+            }
+          },
+          "required": ["modelId", "text", "type"],
+          "title": "EmbedTextRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "modelId": {
+              "type": "string",
+              "description": "The identifier of the embedding model to use"
             },
-            {
+            "inputs": {
               "minItems": 1,
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1
-              }
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "media": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "const": "base64"
+                                    },
+                                    "value": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "format": "base64",
+                                      "contentEncoding": "base64",
+                                      "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"
+                                    }
+                                  },
+                                  "required": ["type", "value"],
+                                  "title": "EmbedInputsRequestInputsItemItemMediaBase64"
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "const": "filePath"
+                                    },
+                                    "value": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": ["type", "value"],
+                                  "title": "EmbedInputsRequestInputsItemItemMediaFilePath"
+                                }
+                              ],
+                              "description": "Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+                            }
+                          },
+                          "required": ["media"],
+                          "title": "EmbedInputsRequestInputsItemItem"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "description": "One embedding per input. Each input is text or ordered text and media parts. Media requires projectionModelSrc at load time."
+            },
+            "text": {
+              "not": {}
+            },
+            "type": {
+              "type": "string",
+              "const": "embed"
+            },
+            "requestId": {
+              "description": "Caller-generated identifier for cancellation with cancel({ requestId }).",
+              "type": "string",
+              "minLength": 1
             }
-          ],
-          "description": "The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`."
-        },
-        "type": {
-          "type": "string",
-          "const": "embed"
-        },
-        "requestId": {
-          "description": "Stable identifier for this in-flight embed, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
-          "type": "string",
-          "minLength": 1
+          },
+          "required": ["modelId", "inputs", "type"],
+          "title": "EmbedInputsRequest"
         }
-      },
-      "required": ["modelId", "text", "type"]
+      ]
     },
     "embed.response": {
       "title": "EmbedResponse",
@@ -7375,7 +7475,7 @@
         },
         "embedding": {
           "default": [],
-          "description": "The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array.",
+          "description": "The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array or `inputs` is provided.",
           "anyOf": [
             {
               "type": "array",
@@ -13913,6 +14013,142 @@
                 "modelConfig": {
                   "type": "object",
                   "properties": {
+                    "ctxSize": {
+                      "description": "Runtime context size in tokens. Unset uses the model trained context size. Lower it to bound memory for long-context models.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "projectionModelSrc": {
+                      "description": "Projection model for image and audio embeddings, such as EmbeddingGemma 2 mmproj. Omit for text-only use.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                            },
+                            "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                              "type": "number"
+                            },
+                            "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
+                              "type": "string"
+                            },
+                            "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "llamacpp-decision",
+                                    "llamacpp-rerank",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "moss-transcribe",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc"
+                        }
+                      ]
+                    },
+                    "imageMaxTokens": {
+                      "description": "Maximum image token budget. Unset keeps the projector default. Each input must fit in batchSize.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "imageMinTokens": {
+                      "description": "Minimum image token budget. Must not exceed imageMaxTokens.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "mmprojNoAudio": {
+                      "description": "Skip the audio encoder. Defaults to false. Audio is rejected when enabled.",
+                      "type": "boolean"
+                    },
+                    "mmprojUseGpu": {
+                      "description": "Projector GPU override. Unset follows the addon device policy; ignored when the model runs on CPU.",
+                      "type": "boolean"
+                    },
+                    "imageMaxMegapixels": {
+                      "description": "Maximum image size before decoding. Defaults to 50 megapixels.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "audioMaxSeconds": {
+                      "description": "Maximum audio duration before decoding. Defaults to 600 seconds.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "poll": {
                       "description": "CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
                       "type": "integer",

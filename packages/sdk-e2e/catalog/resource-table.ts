@@ -71,6 +71,19 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'llamacpp-embedding'
   },
 
+  embeddinggemma2: {
+    modelSrc:
+      'registry://huggingface/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf',
+    type: 'llamacpp-embedding',
+    config: {
+      projectionModelSrc:
+        'registry://huggingface/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf',
+      ctxSize: 2048,
+      batchSize: 2048
+    },
+    configOn: { 'mobile-android': { flashAttention: 'off' } }
+  },
+
   // The reranker the addon's own tests use, pinned until a reranker is in the registry.
   rerank: {
     modelSrc:

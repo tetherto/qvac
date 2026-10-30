@@ -17,7 +17,8 @@ import io.tether.qvac.sdk.generated.schema.ClassifyRequest
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequest
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamResponse
 import io.tether.qvac.sdk.generated.schema.EmbedRequest
-import io.tether.qvac.sdk.generated.schema.EmbedRequestText
+import io.tether.qvac.sdk.generated.schema.EmbedTextRequest
+import io.tether.qvac.sdk.generated.schema.EmbedTextRequestText
 import io.tether.qvac.sdk.generated.schema.EmbedResponseEmbedding
 import io.tether.qvac.sdk.generated.schema.OcrStreamRequest
 import io.tether.qvac.sdk.generated.schema.OcrStreamRequestImage
@@ -424,10 +425,12 @@ private fun translateRequest(
 class QvacEmbeddings internal constructor(private val client: QvacClient) {
     suspend fun embed(modelId: String, text: String, requestId: String = qvacRequestId()): List<Double> {
         val response = client.embed(
-            EmbedRequest(
-                modelId = modelId,
-                requestId = requestId,
-                text = EmbedRequestText.Variant1(text),
+            EmbedRequest.EmbedTextRequest(
+                EmbedTextRequest(
+                    modelId = modelId,
+                    requestId = requestId,
+                    text = EmbedTextRequestText.Variant1(text),
+                ),
             ),
         )
         if (!response.success) throw QvacFeatureException(response.error ?: "Embedding failed")
@@ -440,10 +443,12 @@ class QvacEmbeddings internal constructor(private val client: QvacClient) {
 
     suspend fun embed(modelId: String, texts: List<String>, requestId: String = qvacRequestId()): List<List<Double>> {
         val response = client.embed(
-            EmbedRequest(
-                modelId = modelId,
-                requestId = requestId,
-                text = EmbedRequestText.Variant2(texts),
+            EmbedRequest.EmbedTextRequest(
+                EmbedTextRequest(
+                    modelId = modelId,
+                    requestId = requestId,
+                    text = EmbedTextRequestText.Variant2(texts),
+                ),
             ),
         )
         if (!response.success) throw QvacFeatureException(response.error ?: "Embedding failed")

@@ -1,3 +1,4 @@
+import { embeddingGemma2Tests } from './embeddinggemma2-tests.js'
 import { speakerAwareTests } from './speaker-aware-tests.js'
 import { decisionTests } from './decision-tests.js'
 import { rerankTests } from './rerank-tests.js'
@@ -570,6 +571,7 @@ const catalog: TestDefinition[] = [
 
   // Embedding tests
   ...embeddingTests,
+  ...embeddingGemma2Tests,
 
   // RAG tests
   ...ragTests,
