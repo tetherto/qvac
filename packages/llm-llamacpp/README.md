@@ -384,6 +384,30 @@ const response = await model.run([
 ])
 ```
 
+#### Counting tokens
+
+`calcTokens` returns how many tokens an input takes on the loaded model, without running it:
+
+```javascript
+const raw = await model.calcTokens({ text: 'Hello, world!' })
+
+const prompt = await model.calcTokens({
+  history: [{ role: 'system', content: 'You are a helpful assistant.' }],
+  tools: [{ type: 'function', name: 'get_weather', parameters: { type: 'object', properties: { city: { type: 'string' } } } }],
+  text: 'Weather in Paris?'
+})
+```
+
+- `text` alone is counted raw, with no chat template and no BOS.
+- `history` takes the `Message[]` that `run()` takes, and `tools` takes tool definitions. Either one is rendered by the chat template as the opening request of a fresh conversation, with `text` (even empty) appended as the last user turn. The count includes BOS, and the generation prompt when the last turn is a user or tool turn, so it equals the `promptTokens` a fresh `run()` of the same conversation reports. Tools the template drops are not counted. On an encoder-decoder model `run()` encodes the prompt separately, so its `promptTokens` differs from this count.
+- `tools` needs `text` or `history`, as `run()` can't render tools without a message.
+- It never queues behind `run()`, so it answers while requests are generating.
+- Errors:
+  - A wrong-typed argument rejects with a `TypeError`.
+  - Before `load()` or after `unload()` it rejects with `Model is not loaded`.
+  - Other invalid input, media included, rejects with an error whose `code` is `InvalidArgument` and whose message starts with `calcTokens:`.
+  - A conversation the chat template cannot render at all fails as it would in `run()`.
+
 ### 7. Release Resources
 
 Unload the model when finished:
@@ -398,7 +422,7 @@ try {
 
 ### API behavior by state
 
-The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs jobs running). The two cancel entry points have different scopes:
+The following table describes the expected behavior of `run`, `cancel` and `calcTokens` depending on the current state (idle vs jobs running). The two cancel entry points have different scopes:
 
 - `response.cancel()` — **targeted**: cancels only the job (or batch group) that `run()` call produced, leaving other concurrent jobs running.
 - `model.cancel()` — **global**: cancels every live job (in-flight and queued) at the moment of the call, plus any finetuning in progress.
@@ -411,6 +435,7 @@ The following table describes the expected behavior of `run` and `cancel` depend
 | busy, `parallel >= 2` (default `rejectWhenBusy: false`) | run | **Allowed** — the job is admitted concurrently (continuous batching) or queued until a slot frees; each call gets its own independent `QvacResponse` |
 | busy          | `response.cancel()` | **Allowed** — cancels only that response's job/group; Promise resolves when it has stopped |
 | busy          | `model.cancel()`    | **Allowed** — cancels all live jobs; Promise resolves when they have stopped |
+| idle or busy  | `calcTokens` | **Allowed** — counts without running and never queues behind a job; see [Counting tokens](#counting-tokens) |
 
 Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy`, overridable per call via `runOptions.rejectWhenBusy`). Its default follows `parallel`: `true` for `parallel: 1` (busy runs fail fast, preserving the historical single-job contract) and `false` for `parallel >= 2` (busy runs queue behind the pool and start as slots free). With `parallel >= 2`, separate top-level `run()` calls are batched together into the same decode loop — see [Continuous Batching](./docs/continuous-batching.md).
 

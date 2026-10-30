@@ -182,11 +182,17 @@ struct PromptRenderResult {
  * for models that don't support tools.
  *
  * On a tools-stripped retry `inputs.tools` is cleared so callers never see a
- * tool list the prompt does not carry.
+ * tool list the prompt does not carry. Dropped tools and the legacy fallback
+ * are logged at ERROR.
+ *
+ * With @p forRequest false the render only measures a prompt: those logs drop
+ * to DEBUG, and the second render that checks whether a successful render
+ * left the tools out is skipped, so `toolDefinitionsDropped` then reports
+ * only a template that rejected the tools or the legacy renderer.
  */
 PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs);
+    struct common_chat_templates_inputs& inputs, bool forRequest = true);
 
 /**
  * @brief The reasoning markers an earlier assistant turn carries, for cutting
@@ -328,6 +334,19 @@ ResolvedToolChoice resolveToolChoice(
 void requireToolChoiceHonoured(
     common_chat_tool_choice choice, bool toolDefinitionsDropped,
     bool toolGrammarApplied, const char* logTag);
+
+/**
+ * @brief Tokens @p messages and @p tools take as the opening request of a
+ * fresh conversation, rendered the way `tokenizeChat` renders one with no
+ * per-request overrides. @p tokenize must add BOS the way a fresh prompt does.
+ *
+ * The tools are validated like a request's (`resolveToolChoice`).
+ */
+[[nodiscard]] size_t countRenderedChatTokens(
+    const struct common_chat_templates* tmpls,
+    const std::vector<common_chat_msg>& messages,
+    const std::vector<common_chat_tool>& tools, bool useJinja,
+    bool enableThinking, const Tokenizer& tokenize);
 
 std::string getThinkingForcedOpenText(
     const std::string& generationPrompt, const std::string& thinkingStartTag);
