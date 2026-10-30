@@ -763,6 +763,28 @@
     "notes": "tensors config"
   },
   {
+    "source": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf",
+    "engine": "llamacpp-embedding",
+    "description": "EmbeddingGemma 2 text embedding model with 768-dimensional output",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["embedding", "embed", "embeddinggemma-2", "multimodal"],
+    "notes": "Use the matching mmproj for image and audio inputs.",
+    "link": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
+    "engine": "llamacpp-embedding",
+    "description": "EmbeddingGemma 2 image and audio projector",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["embedding", "embed", "mmproj-embeddinggemma-2", "multimodal", "mmproj"],
+    "notes": "Projection model for embeddinggemma-2-Q8_0.gguf.",
+    "link": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300m-Q4_0.gguf",
     "engine": "@qvac/embed-llamacpp",
     "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
@@ -8890,6 +8912,116 @@
     "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-BF16.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 Turbo audio generation model (GGUF)",
+    "quantization": "bf16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "v1.5", "turbo", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-F16.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 Turbo audio generation model (GGUF)",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "v1.5", "turbo", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/model.mil",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: Data/com.apple.CoreML/model.mlmodel",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Core ML model package component; preserve the .mlpackage directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: Data/com.apple.CoreML/weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Core ML model package component; preserve the .mlpackage directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Manifest.json",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: Manifest.json",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Core ML model package component; preserve the .mlpackage directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/acestep/2026-07-22/vae-BF16.gguf",
     "engine": "@qvac/audiogen",
     "description": "ACE-Step variational autoencoder for audio generation (GGUF)",
@@ -9159,6 +9291,17 @@
     "engine": "@qvac/tts-ggml",
     "description": "Audio8 DualAR language model (GGUF, multilingual)",
     "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "lm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-10-28/audio8-lm-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 DualAR language model (GGUF, multilingual)",
+    "quantization": "q4_0",
     "params": "0.6B",
     "licenseId": "Apache-2.0",
     "tags": ["tts", "audio8", "lm", "multilingual", "gguf"],
@@ -10099,5 +10242,16 @@
     "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct"],
     "notes": "Required for image input with every GLM-5.3 Flash quantization.",
     "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/mobilenetv3-3class/2026-10-28/mobilenetv3_3class_v3_fp16.gguf",
+    "engine": "ggml-classification",
+    "description": "MobileNetV3-Small 3-class image classifier (food / report / other), FP16 GGUF",
+    "quantization": "fp16",
+    "params": "2.5M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "mobilenetv3"],
+    "notes": "",
+    "link": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml"
   }
 ]

@@ -506,31 +506,25 @@ ocr_fit::OcrFitResult runFit(const FitRequest& request) {
 
 js_value_t* fitResultObject(js_env_t* env, const ocr_fit::OcrFitResult& fit) {
   using namespace qvac_lib_inference_addon_cpp;
+  auto bytes = [env](uint64_t value) {
+    return js::Number::create(env, static_cast<double>(value));
+  };
   auto out = js::Object::create(env);
   out.setProperty(env, "status", js::String::create(env, fit.status));
-  out.setProperty(env, "reason", js::String::create(env, fit.reason));
-  out.setProperty(env, "deviceName", js::String::create(env, fit.deviceName));
-  out.setProperty(env, "report", js::String::create(env, fit.report));
-  out.setProperty(
-      env,
-      "deviceBytes",
-      js::Number::create(env, static_cast<double>(fit.deviceBytes)));
-  out.setProperty(
-      env,
-      "hostBytes",
-      js::Number::create(env, static_cast<double>(fit.hostBytes)));
-  out.setProperty(
-      env,
-      "weightsBytes",
-      js::Number::create(env, static_cast<double>(fit.weightsBytes)));
-  out.setProperty(
-      env,
-      "deviceFreeBytes",
-      js::Number::create(env, static_cast<double>(fit.deviceFreeBytes)));
-  out.setProperty(
-      env,
-      "deviceTotalBytes",
-      js::Number::create(env, static_cast<double>(fit.deviceTotalBytes)));
+  auto devices = js::Array::create(env);
+  for (size_t i = 0; i < fit.devices.size(); ++i) {
+    const auto& row = fit.devices[i];
+    auto entry = js::Object::create(env);
+    entry.setProperty(env, "id", js::String::create(env, row.id));
+    entry.setProperty(env, "name", js::String::create(env, row.name));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", bytes(row.usedBytes));
+    entry.setProperty(env, "freeBytes", bytes(row.freeBytes));
+    entry.setProperty(env, "totalBytes", bytes(row.totalBytes));
+    devices.set(env, i, entry);
+  }
+  out.setProperty(env, "devices", devices);
+  out.setProperty(env, "stats", js::Object::create(env));
   return out;
 }
 

@@ -157,7 +157,8 @@ TEST(MossTranscribeEngineOptions, BackendDefaultsToAuto) {
 }
 
 TEST(MossTranscribeEngineOptions, ExplicitBackendPreservesGpuFlag) {
-  for (const auto* backend : {"cpu", "cuda", "vulkan", "CUDA1", "Vulkan0"}) {
+  for (const auto* backend :
+       {"cpu", "cuda", "vulkan", "metal", "CUDA1", "Vulkan0", "MTL0"}) {
     for (const bool useGpu : {false, true}) {
       auto cfg = stubConfig();
       cfg.backend = backend;

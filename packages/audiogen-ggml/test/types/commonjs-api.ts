@@ -8,17 +8,21 @@ import {
   assessFit,
   detectEngineType,
   type AudioGenEngine,
+  type AudiogenFitDevice,
   type AudiogenFitRequest,
   type AudiogenFitResult,
+  type AudiogenFitStats,
   type AudiogenFitStatus,
   type AudiogenGenerationMetadata,
   type AudiogenMinimaxDevice,
+  type AudiogenMinimaxCoreMLComputeUnits,
   type AudiogenOutputChunk,
   type AudiogenStats
 } from '../../index'
 
-type InvalidEngineIsAllowed =
-  'invalid-engine' extends Parameters<typeof detectEngineType>[1] ? true : false
+type InvalidEngineIsAllowed = 'invalid-engine' extends Parameters<typeof detectEngineType>[1]
+  ? true
+  : false
 
 const audioGen = new AudioGen()
 const errorCode: number = ERR_CODES.INVALID_INPUT
@@ -53,8 +57,7 @@ const editSession = audioGen
     end: 1,
     mode: RepaintMode.Balanced
   })
-const operationType: AudioEditOperationType =
-  AudioEditOperationType.FlowEdit
+const operationType: AudioEditOperationType = AudioEditOperationType.FlowEdit
 const editResponse = editSession.run({
   seed: 22883,
   referenceAudio: new Float32Array(2),
@@ -90,6 +93,12 @@ async function minimaxVerdict(): Promise<AudiogenFitStatus> {
 }
 // @ts-expect-error assessFit returns a Promise of the result.
 const unawaitedVerdict: AudiogenFitStatus = assessFit(minimaxFit).status
+async function minimaxRows(): Promise<AudiogenFitDevice[]> {
+  const fit = await assessFit(minimaxFit)
+  const stats: AudiogenFitStats = fit.stats
+  void stats
+  return fit.devices
+}
 function readMetadata(stats: AudiogenStats): number | undefined {
   const metadata: AudiogenGenerationMetadata | undefined = stats.metadata
   return metadata === undefined
@@ -109,6 +118,18 @@ void strictMinimax
 void perRunSchedule
 void pendingFit
 void minimaxVerdict
+void minimaxRows
 void unawaitedVerdict
 void readMetadata
 void operationType
+
+const coremlUnits: AudiogenMinimaxCoreMLComputeUnits = 'CPU_AND_NE'
+const coremlMinimax = new AudioGen({
+  engine: ENGINE_MINIMAX,
+  files: { modelDir: '/models/minimax' },
+  config: { coremlProfileDir: '/models/coreml', coremlComputeUnits: coremlUnits }
+})
+void coremlMinimax
+// @ts-expect-error Apple does not offer a GPU_ONLY Core ML policy
+const invalidCoreML: AudiogenMinimaxCoreMLComputeUnits = 'GPU_ONLY'
+void invalidCoreML

@@ -162,6 +162,22 @@ JSAdapter::buildMinimaxConfig(js::Object configurationParams, js_env_t* env) {
         general_error::InvalidArgument,
         "device must be 'cpu', 'gpu' or 'auto' (got '" + cfg.device + "')");
   }
+  cfg.coremlProfileDir =
+      readOptionalString(configurationParams, env, "coremlProfileDir");
+  cfg.coremlComputeUnits =
+      readOptionalString(configurationParams, env, "coremlComputeUnits");
+  const bool coremlRequested =
+      !cfg.coremlProfileDir.empty() || !cfg.coremlComputeUnits.empty();
+  if (coremlRequested && (cfg.coremlProfileDir.empty() ||
+                          (cfg.coremlComputeUnits != "CPU_ONLY" &&
+                           cfg.coremlComputeUnits != "CPU_AND_GPU" &&
+                           cfg.coremlComputeUnits != "CPU_AND_NE" &&
+                           cfg.coremlComputeUnits != "ALL"))) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "MiniMax Core ML requires coremlProfileDir and coremlComputeUnits "
+        "(CPU_ONLY, CPU_AND_GPU, CPU_AND_NE or ALL)");
+  }
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }

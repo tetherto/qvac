@@ -7,12 +7,11 @@
  * downloaded.
  *
  * `engine` defaults to `acestep`; `minimax` projects a MiniMax-Music3 pair on
- * desktop builds. An engine the build carries no fitter for comes back as
- * `status: "error"` with `reason: "unsupported-engine"`.
+ * desktop builds.
  *
- * A model set the engine cannot read comes back as `status: "error"` with its
- * own reason; a broken request, or a host with no native binding, rejects.
- * Fits run one at a time within the addon.
+ * An engine the build carries no fitter for, a model set the engine cannot
+ * read, a broken request, or a host with no native binding rejects. Fits run
+ * one at a time within the addon.
  */
 async function assessFit(request) {
   const binding = require('../binding.js')

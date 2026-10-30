@@ -7,7 +7,7 @@ import {
   TTS_S3GEN_EN_CHATTERBOX,
   TTS_ENHANCER_LAVASR_FP16
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // Chatterbox TTS (GGML) with the LavaSR enhancer: synthesized audio is neurally
 // bandwidth-extended to 48 kHz. Supplying the enhancer GGUF is what enables

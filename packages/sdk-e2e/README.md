@@ -3,7 +3,8 @@
 SDK dogfooding tests built on [`@qvac/test-suite`](../test-suite), the test-orchestration framework
 that lives in this monorepo at `packages/test-suite`.
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
-(packaged Electron main process), strict Snap, or mobile (Bare + React Native).
+(packaged Electron main process), strict Snap, mobile (Bare + React Native), the Python client, or the Kotlin
+client on Android.
 
 ## Layout
 
@@ -16,6 +17,7 @@ The package keeps what every SDK client must do apart from how each client does 
 | `catalog/conformance/`        | The API-level corpus the JS, Python and Kotlin clients each run                                    |
 | [`runners/js/`](./runners/js) | The JS client: desktop, Electron, Snap and mobile consumers, and their executors                   |
 | `runners/python/`             | The Python client: an interpreter for the declarative bodies, and hand-written bodies for the rest |
+| `runners/kotlin/`             | The Kotlin client: an Android app that interprets the declarative bodies through the Kotlin SDK    |
 | `assets/`, `fixtures/`        | Data the tests read                                                                                |
 | `scripts/`                    | Build helpers and the catalog gates                                                                |
 
@@ -40,6 +42,7 @@ npx qvac-test run:local:snap --filter snap-
 npx qvac-test run:local:android
 npx qvac-test run:local:ios
 npx qvac-test run:local:python
+npx qvac-test run:local:kotlin-android
 ```
 
 **MQTT broker.** `run:local:*` requires a broker serving WebSockets on port 8080 and MQTT/TCP on 1883.
@@ -71,6 +74,9 @@ full list.
   The leg runs the same worker bundle the desktop leg does, so
   `npm run bundle:sdk` (part of `install:build:full`) has to have run.
 
+- Kotlin Android: `adb` + a USB-debuggable arm64 device, JDK 17, Python 3, and an Android SDK with NDK
+  `29.0.14206865`. The `prepare` step builds the app from this checkout and installs it; `--skip-build`
+  reuses the installed one. See [`runners/kotlin/`](./runners/kotlin/README.md).
 - Electron: Node 22+, Electron Forge dependencies, and a desktop runner capable of launching packaged Electron
   apps. The config declares `macos`, `windows`, and `linux`; local runs package the current host target unless
   `--platform` / `--arch` are supplied.
@@ -298,7 +304,10 @@ Open [Actions → QVAC Tests (sdk) → Run workflow](https://github.com/tetherto
 and submit the form.
 
 Select any combination of the platform checkboxes. Desktop, Android, and iOS are selected by default.
-Electron and strict Snap runs are manual-only and must be selected explicitly.
+Electron, strict Snap, and Kotlin Android runs are manual-only and must be selected explicitly. Kotlin
+Android always builds against the checkout's `packages/inference`, whatever `inference-source` says. Both
+Android legs choose from the same Device Farm pools; to run them together, set `android-device-pool` to a
+public pool so they do not queue on one private device.
 
 Non-obvious inputs:
 
@@ -329,7 +338,8 @@ in the form.
 - `test-node-sdk.yml` runs desktop, Electron, and Python. Their job is the same apart from a few steps.
 - `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and the in-snap model cache are
   its own steps, so none of them show up as skipped steps on the other families' jobs.
-- `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm.
+- `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm. The Android
+  workflow runs either app (`app: js | kotlin`); the Kotlin one reports as its own family, `kotlin-android`.
 
 The runner-hosted families take their shared steps from the `sdk-e2e-node-*` composite actions in
 `.github/actions`: `leg` resolves the platform and rerun filter, `prepare` installs and builds, `run`

@@ -3,6 +3,8 @@
 #include <optional>
 #include <string>
 
+#include <tts-cpp/lavasr/coreml.h>
+
 namespace qvac::ttsggml::parler {
 
 // The parler engine's native output rate. Un-enhanced output is tagged with it
@@ -80,6 +82,7 @@ struct ParlerConfig {
   // streaming enhances per chunk through StreamingEnhancer, which adds ~0.34 s
   // of look-ahead latency.
   std::string enhancerGgufPath;
+  tts_cpp::lavasr::CoreMLOptions enhancerCoreml;
 
   // LavaSR neural speech denoiser (UL-UNAS). A non-empty `denoiserGgufPath` is
   // the single switch: when set, the model denoises the synthesized PCM BEFORE
@@ -87,6 +90,7 @@ struct ParlerConfig {
   // Batch-only: tts-cpp exposes a one-shot denoise(), so combining it with
   // native streaming is rejected in validateConfig.
   std::string denoiserGgufPath;
+  tts_cpp::lavasr::CoreMLOptions denoiserCoreml;
 };
 
 } // namespace qvac::ttsggml::parler

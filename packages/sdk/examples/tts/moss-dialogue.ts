@@ -5,7 +5,7 @@ import {
   TTS_CODEC_DECODER_MOSS_TTS_F16,
   TTS_CODEC_ENCODER_MOSS_TTS_F16
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // MOSS-TTSD (GGML): multi-speaker dialogue in one pass, each voice cloned from
 // a 24 kHz reference recording. The model continues the references, so the

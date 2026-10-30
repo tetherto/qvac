@@ -297,22 +297,25 @@ test('without a plan the run keeps every runner and the incoming filter', () => 
 
 test('every reusable target still resolves', () => {
   const cases = [
-    ['desktop + mobile', 'true,false,false,true,true'],
-    ['all', 'true,false,false,true,true'],
-    ['mobile', 'false,false,false,true,true'],
-    ['desktop', 'true,false,false,false,false'],
-    ['ios', 'false,false,false,false,true'],
+    ['desktop + mobile', 'true,false,false,true,false,true'],
+    // kotlin-android is never part of a preset.
+    ['all', 'true,false,false,true,false,true'],
+    ['mobile', 'false,false,false,true,false,true'],
+    ['desktop', 'true,false,false,false,false,false'],
+    ['ios', 'false,false,false,false,false,true'],
+    ['kotlin-android', 'false,false,false,false,true,false'],
     // Comma-separated family lists come from a rerun plan.
-    ['android,ios', 'false,false,false,true,true'],
-    ['desktop,android', 'true,false,false,true,false'],
-    ['desktop,electron,snap,android,ios', 'true,true,true,true,true'],
+    ['android,ios', 'false,false,false,true,false,true'],
+    ['desktop,android', 'true,false,false,true,false,false'],
+    ['android,kotlin-android', 'false,false,false,true,true,false'],
+    ['desktop,electron,snap,android,kotlin-android,ios', 'true,true,true,true,true,true'],
   ]
   for (const [targets, expected] of cases) {
     const result = resolveConfig(targets)
     assert.equal(result.status, 0, `"${targets}" should resolve: ${result.stdout}`)
     const flags = [
       result.outputs['run-desktop'], result.outputs['run-electron'], result.outputs['run-snap'],
-      result.outputs['run-android'], result.outputs['run-ios'],
+      result.outputs['run-android'], result.outputs['run-kotlin-android'], result.outputs['run-ios'],
     ].join(',')
     assert.equal(flags, expected, `"${targets}"`)
   }
@@ -542,6 +545,36 @@ test('each kind of run gets its own concurrency group', () => {
     groupFor({ action: 'labeled', label: 'verify' }),
     'two ignored labels must not cancel each other either',
   )
+})
+
+test('every device family is handled by the report and rerun actions', () => {
+  // Device Farm families name their results artifact after the family alone; the Android
+  // workflow's `app: kotlin` reports as `kotlin-android`.
+  const families = ['android', 'ios']
+  if (/^\s+app:\s*kotlin\s*$/m.test(readRepoFile('.github/workflows/test-sdk.yml'))) {
+    families.push('kotlin-android')
+  }
+  const finalize = readRepoFile('.github/actions/sdk-e2e-report-finalize/action.yml')
+  const baseState = /\^results-\(([a-z|-]+)\)\$/.exec(
+    readRepoFile('.github/actions/sdk-e2e-base-state/action.yml'),
+  )
+  assert.ok(baseState, 'base-state no longer parses device artifact names')
+  const ordered = /const FAMILY_ORDER = \[([^\]]+)\]/.exec(
+    readRepoFile('.github/actions/sdk-e2e-resolve-rerun/action.yml'),
+  )
+  const planned = new Set([...ordered[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]))
+  const verify = readRepoFile('.github/actions/sdk-e2e-verify-rerun/action.yml')
+
+  for (const family of families) {
+    assert.ok(
+      finalize.includes(`results-pattern=results-${family}"`),
+      `report-finalize has no artifact pattern for "${family}"`,
+    )
+    assert.ok(baseState[1].split('|').includes(family), `base-state does not parse "results-${family}"`)
+    assert.ok(planned.has(family), `resolve-rerun drops "${family}" from the rerun plan`)
+    assert.ok(verify.includes(`family === '${family}'`), `verify-rerun qualifies "${family}" by platform`)
+  }
+  assert.ok(families.includes('kotlin-android'), 'test-sdk.yml no longer dispatches the Kotlin app')
 })
 
 test('every consumer family test-sdk.yml dispatches is handled by the report actions', () => {
