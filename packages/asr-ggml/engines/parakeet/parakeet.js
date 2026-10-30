@@ -109,9 +109,14 @@ class ParakeetInterface {
         }
         if (isError || eventStr.includes("Error"))
             return "Error";
-        if (data !== null && typeof data === "object" &&
+        if (data !== null &&
+            typeof data === "object" &&
             data.type === "endOfTurn")
             return "EndOfTurn";
+        if (data !== null &&
+            typeof data === "object" &&
+            data.type === "progress")
+            return "Progress";
         if (this._looksLikeVadEvent(data))
             return "VadState";
         if (eventStr.includes("RuntimeStats"))
@@ -215,7 +220,11 @@ class ParakeetInterface {
         const previousState = this._state;
         let accepted = false;
         try {
-            accepted = this._binding.runJob(this._handle, { ...job, type: "audio", input });
+            accepted = this._binding.runJob(this._handle, {
+                ...job,
+                type: "audio",
+                input,
+            });
         }
         catch (error) {
             this._setState(previousState);

@@ -21,6 +21,8 @@
 
 #include <gtest/gtest.h>
 
+#include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendIdentity.hpp"
 #include "model-interface/ParakeetStreamingProcessor.hpp"
 #include "model-interface/ParakeetTypes.hpp"
 #include "model-interface/parakeet/AttributedTranscription.hpp"
@@ -910,4 +912,81 @@ TEST(ParakeetFabricModel, DiarizationMinSegmentLongerThanClipDropsAllTurns) {
   ASSERT_EQ(out.size(), 1U);
   EXPECT_EQ(out[0].text, "[No speakers detected]");
   EXPECT_TRUE(out[0].speakerSegments.empty());
+}
+
+TEST(AsrBackendIdentity, DistinguishesOptionalFamiliesAndDeviceClasses) {
+  using namespace qvac::asrggml;
+  EXPECT_EQ(backendFamily("BLAS"), 0);
+  EXPECT_EQ(backendDeviceClass(nullptr, 0), 0);
+  EXPECT_EQ(backendFamily("WebGPU0"), 5);
+  EXPECT_EQ(backendFamily("WEBGPU"), 5);
+  EXPECT_EQ(backendFamily("HTP0"), 6);
+  EXPECT_EQ(backendFamily("Hexagon"), 6);
+  EXPECT_EQ(backendDeviceClass(nullptr, 6), 2);
+  EXPECT_STREQ(backendDeviceLabel(2), "NPU");
+  EXPECT_EQ(backendDeviceClass(nullptr, 99), -1);
+  EXPECT_STREQ(backendDeviceLabel(-1), "Unknown");
+}
+
+TEST(ParakeetDetailedOutput, PreservesFractionalStreamingTimesAndEmptyFinals) {
+  ::parakeet::StreamingSegment native;
+  native.is_final = true;
+  native.encoder_ms = 0.125;
+  native.decode_ms = 0.0625;
+  const auto result = ParakeetModel::toStreamingTranscript(native);
+  ASSERT_TRUE(result.encoderMs);
+  ASSERT_TRUE(result.decoderMs);
+  EXPECT_DOUBLE_EQ(*result.encoderMs, native.encoder_ms);
+  EXPECT_DOUBLE_EQ(*result.decoderMs, native.decode_ms);
+  EXPECT_TRUE(*result.isFinal);
+  EXPECT_TRUE(result.text.empty());
+}
+
+TEST(ParakeetDetailedOutput, BatchTokensAndProbabilityOptInArePerRequest) {
+  const auto modelPath = ggufTestPath();
+  const char* diarizer = std::getenv("QVAC_TEST_DIARIZER_GGUF");
+  if (modelPath.empty() || !diarizer)
+    GTEST_SKIP();
+  ParakeetConfig config(modelPath);
+  config.backend = "cpu";
+  ParakeetModel model(config);
+  model.load();
+  ParakeetModel::AnyInput input;
+  input.input.assign(16000, 0.0F);
+  input.includeSpeakerProbabilities = true;
+  EXPECT_THROW(model.process(std::any(input)), qvac_errors::StatusError);
+  input.includeSpeakerProbabilities = false;
+  const auto output =
+      std::any_cast<ParakeetModel::Output>(model.process(std::any(input)));
+  ASSERT_FALSE(output.empty());
+  EXPECT_TRUE(output.front().tokenIds);
+  EXPECT_FALSE(output.front().speakerProbabilities);
+  model.unload();
+
+  ParakeetConfig diarConfig(diarizer);
+  diarConfig.backend = "cpu";
+  ParakeetModel diar(diarConfig);
+  diar.load();
+  input.includeSpeakerProbabilities = true;
+  auto withMatrix =
+      std::any_cast<ParakeetModel::Output>(diar.process(std::any(input)));
+  ASSERT_EQ(withMatrix.size(), 1);
+  ASSERT_TRUE(withMatrix[0].speakerProbabilities);
+  const auto& matrix = *withMatrix[0].speakerProbabilities;
+  EXPECT_GT(matrix.frames, 0);
+  EXPECT_GT(matrix.speakers, 0);
+  EXPECT_GT(matrix.frameStrideSeconds, 0);
+  EXPECT_EQ(
+      matrix.values.size(),
+      static_cast<size_t>(matrix.frames) * matrix.speakers);
+  for (const float value : matrix.values) {
+    EXPECT_TRUE(std::isfinite(value));
+    EXPECT_GE(value, 0.0F);
+    EXPECT_LE(value, 1.0F);
+  }
+  input.includeSpeakerProbabilities = false;
+  auto compact =
+      std::any_cast<ParakeetModel::Output>(diar.process(std::any(input)));
+  ASSERT_EQ(compact.size(), 1);
+  EXPECT_FALSE(compact[0].speakerProbabilities);
 }

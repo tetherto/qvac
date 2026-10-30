@@ -6,10 +6,7 @@ import {
   type ParakeetConfigurationParams,
   type StreamingConfig,
 } from "./parakeet";
-import {
-  ERR_CODES_PARAKEET,
-  QvacErrorAddonASRGgml,
-} from "../../lib/error";
+import { ERR_CODES_PARAKEET, QvacErrorAddonASRGgml } from "../../lib/error";
 import { END_OF_INPUT } from "../../lib/constants";
 import { normalizeAudioStream } from "../../lib/audio";
 import type {
@@ -233,7 +230,10 @@ const PARAKEET_STREAMING_OPT_KEYS: readonly string[] = [
 ];
 
 /** Rejects per-call `run()` options on an engine that takes none. */
-export function assertNoRunOptions(options: ASRRunOptions, engine: string): void {
+export function assertNoRunOptions(
+  options: ASRRunOptions,
+  engine: string,
+): void {
   const keys = Object.keys(options ?? {});
   if (keys.length === 0) return;
   throw new QvacErrorAddonASRGgml({
@@ -269,10 +269,7 @@ function lastSegmentOf(data: unknown): TranscriptionSegment | null {
  * against Float32Array views whose backing buffer is larger than the view.
  */
 function chunkBuffer(chunk: Float32Array): ArrayBuffer {
-  if (
-    chunk.byteOffset === 0 &&
-    chunk.byteLength === chunk.buffer.byteLength
-  ) {
+  if (chunk.byteOffset === 0 && chunk.byteLength === chunk.buffer.byteLength) {
     return chunk.buffer as ArrayBuffer;
   }
   return chunk.buffer.slice(
@@ -347,10 +344,7 @@ export class ParakeetDriver implements AsrDriver {
 
   async reload(newConfig: ASRGgmlReloadConfig = {}): Promise<void> {
     const overrides = newConfig as ParakeetReloadConfig;
-    this.ctx.logger.debug(
-      "Reloading addon with new configuration",
-      overrides,
-    );
+    this.ctx.logger.debug("Reloading addon with new configuration", overrides);
     const nextParams = { ...this.params, ...overrides.parakeetConfig };
     this.validateConfig(nextParams);
     this.params = nextParams;
@@ -392,11 +386,23 @@ export class ParakeetDriver implements AsrDriver {
     audio: NormalizedAudioStream,
     options: ASRRunOptions = {},
   ): Promise<QvacResponse<ASRRunOutput>> {
-    assertNoRunOptions(options, "parakeet");
+    const { includeSpeakerProbabilities, ...other } = options ?? {};
+    assertNoRunOptions(other, "parakeet");
+    if (
+      includeSpeakerProbabilities !== undefined &&
+      typeof includeSpeakerProbabilities !== "boolean"
+    ) {
+      throw new QvacErrorAddonASRGgml({
+        code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+        adds: "includeSpeakerProbabilities must be a boolean",
+      });
+    }
     const response = this.ctx.job.start() as QvacResponse<ASRRunOutput>;
-    void this._pumpBatchAudio(audio).catch((error: unknown) => {
-      this.ctx.job.fail(asError(error));
-    });
+    void this._pumpBatchAudio(audio, includeSpeakerProbabilities).catch(
+      (error: unknown) => {
+        this.ctx.job.fail(asError(error));
+      },
+    );
     return Promise.resolve(response);
   }
 
@@ -431,7 +437,7 @@ export class ParakeetDriver implements AsrDriver {
         const teardown = this.addon?.endStreaming().catch(() => {});
         this.ctx.job.fail(asError(error));
         await teardown;
-      }
+      },
     );
 
     const responseDone = response.await();
@@ -460,7 +466,10 @@ export class ParakeetDriver implements AsrDriver {
     return opts as ParakeetStreamingRunConfig;
   }
 
-  async _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void> {
+  async _pumpBatchAudio(
+    audio: NormalizedAudioStream,
+    includeSpeakerProbabilities?: boolean,
+  ): Promise<void> {
     const addon = this._requireAddon();
     this.ctx.logger.debug("Start handling audio stream");
     for await (const chunk of audio) {
@@ -478,7 +487,13 @@ export class ParakeetDriver implements AsrDriver {
     }
     if (!this.ctx.job.active) return;
     this.ctx.logger.debug("Sending end-of-input signal");
-    await addon.append({ type: END_OF_INPUT });
+    await addon.append({
+      type: END_OF_INPUT,
+      job:
+        includeSpeakerProbabilities === undefined
+          ? {}
+          : { includeSpeakerProbabilities },
+    });
   }
 
   async _pumpStreamingAudio(
@@ -486,9 +501,7 @@ export class ParakeetDriver implements AsrDriver {
     markClosing: () => void,
   ): Promise<void> {
     const addon = this._requireAddon();
-    this.ctx.logger.debug(
-      "Start pumping audio into duplex streaming session",
-    );
+    this.ctx.logger.debug("Start pumping audio into duplex streaming session");
     for await (const chunk of audio) {
       if (chunk.length === 0) continue;
       await addon.appendStreamingAudio(chunk);
@@ -519,25 +532,18 @@ export class ParakeetDriver implements AsrDriver {
       streamingHistoryMs: this.params.streamingHistoryMs ?? 30000,
       streamingEmitPartials: this.params.streamingEmitPartials !== false,
       streamingEnergyVad: this.params.streamingEnergyVad === true,
-      streamingEnergyVadThresholdDb:
-        this.params.streamingEnergyVadThresholdDb,
+      streamingEnergyVadThresholdDb: this.params.streamingEnergyVadThresholdDb,
       streamingEnergyVadWindowMs: this.params.streamingEnergyVadWindowMs,
-      streamingEnergyVadHangoverMs:
-        this.params.streamingEnergyVadHangoverMs,
+      streamingEnergyVadHangoverMs: this.params.streamingEnergyVadHangoverMs,
       streamingSpeakerVad: this.params.streamingSpeakerVad === true,
       streamingLeftContextMs: this.params.streamingLeftContextMs ?? -1,
-      streamingRightLookaheadMs:
-        this.params.streamingRightLookaheadMs ?? -1,
-      streamingSpkCacheEnable:
-        this.params.streamingSpkCacheEnable !== false,
+      streamingRightLookaheadMs: this.params.streamingRightLookaheadMs ?? -1,
+      streamingSpkCacheEnable: this.params.streamingSpkCacheEnable !== false,
       streamingSpkCacheLen: this.params.streamingSpkCacheLen,
       streamingFifoLen: this.params.streamingFifoLen,
-      streamingChunkLeftContextMs:
-        this.params.streamingChunkLeftContextMs,
-      streamingChunkRightContextMs:
-        this.params.streamingChunkRightContextMs,
-      streamingSpkCacheUpdatePeriod:
-        this.params.streamingSpkCacheUpdatePeriod,
+      streamingChunkLeftContextMs: this.params.streamingChunkLeftContextMs,
+      streamingChunkRightContextMs: this.params.streamingChunkRightContextMs,
+      streamingSpkCacheUpdatePeriod: this.params.streamingSpkCacheUpdatePeriod,
       diarizationThreshold: this.params.diarizationThreshold,
       diarizationMinSegmentMs: this.params.diarizationMinSegmentMs,
       prewarm: this.params.prewarm === true,
@@ -584,7 +590,10 @@ export class ParakeetDriver implements AsrDriver {
       // the model's end-of-utterance flag (double-signal).
       this.ctx.job.output(data);
       const segment = lastSegmentOf(data);
-      if (segment?.isEndOfTurn === true && segment.eotConfidence === undefined) {
+      if (
+        segment?.isEndOfTurn === true &&
+        segment.eotConfidence === undefined
+      ) {
         this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
       }
       return;

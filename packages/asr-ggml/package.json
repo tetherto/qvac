@@ -3,7 +3,7 @@
   "version": "0.11.2",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet + MOSS-Transcribe-Diarize) inference addon for qvac on the Bare runtime",
   "qvac": {
-    "ggml-speech": "2026-10-27"
+    "ggml-speech": "2026-10-27#1"
   },
   "engines": {
     "bare": ">=1.20.0"
@@ -130,7 +130,9 @@
     "example:parakeet:mic-diarize": "bare examples/parakeet-live-mic-diarized.js",
     "example:parakeet:mic-diarize-aosc": "bare examples/parakeet-live-mic-diarized-aosc.js",
     "example:parakeet:decode-audio": "bare examples/parakeet-decode-audio.js",
-    "prepare:husky": "husky"
+    "prepare:husky": "husky",
+    "example:parakeet:diarization-probabilities": "bare examples/parakeet-diarization-probabilities.js",
+    "example:moss-transcribe:progress": "bare examples/moss-transcribe-progress.js"
   },
   "files": [
     "addonLogging.js",

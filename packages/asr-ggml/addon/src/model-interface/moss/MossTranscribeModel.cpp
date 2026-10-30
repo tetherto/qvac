@@ -13,6 +13,7 @@
 
 #include "addon/AsrErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendIdentity.hpp"
 #include "model-interface/ModuleBackendsDir.hpp"
 
 namespace qvac::asrggml::moss {
@@ -24,37 +25,11 @@ namespace general_error = qvac_errors::general_error;
 using errors::parakeet::Code;
 using errors::parakeet::makeStatus;
 
-constexpr int BACKEND_CPU = 0;
-constexpr int BACKEND_METAL = 1;
-constexpr int BACKEND_CUDA = 2;
-constexpr int BACKEND_VULKAN = 3;
-constexpr int BACKEND_OPENCL = 4;
-constexpr int BACKEND_OTHER = 99;
-constexpr int DEVICE_CPU = 0;
-constexpr int DEVICE_GPU = 1;
 constexpr double MS_PER_SECOND = 1000.0;
 constexpr char SPEAKER_PREFIX = 'S';
 
 void throwInvalidConfig(const std::string& message) {
   throw qvac_errors::StatusError(general_error::InvalidArgument, message);
-}
-
-bool startsWith(const std::string& text, const char* prefix) {
-  return text.rfind(prefix, 0) == 0;
-}
-
-int backendIdFromName(const std::string& name) {
-  if (name == "CPU")
-    return BACKEND_CPU;
-  if (startsWith(name, "Metal") || startsWith(name, "MTL"))
-    return BACKEND_METAL;
-  if (startsWith(name, "CUDA"))
-    return BACKEND_CUDA;
-  if (startsWith(name, "Vulkan"))
-    return BACKEND_VULKAN;
-  if (startsWith(name, "OpenCL"))
-    return BACKEND_OPENCL;
-  return BACKEND_OTHER;
 }
 
 bool allDigits(const std::string& text) {
@@ -138,7 +113,9 @@ MossTranscribeModel::Output MossTranscribeModel::toTranscripts(
   Output transcripts;
   transcripts.reserve(result.segments.size());
   for (size_t i = 0; i < result.segments.size(); ++i) {
-    transcripts.push_back(transcriptOf(result.segments[i], i));
+    auto transcript = transcriptOf(result.segments[i], i);
+    transcript.encoderBackend = result.encoder_backend;
+    transcripts.push_back(std::move(transcript));
   }
   return transcripts;
 }
@@ -157,8 +134,14 @@ void MossTranscribeModel::load() {
         std::string("MossTranscribeModel::load: ") + e.what());
   }
   backendName_ = engine_->backend_name();
-  backendId_ = backendIdFromName(backendName_);
-  backendDevice_ = backendId_ == BACKEND_CPU ? DEVICE_CPU : DEVICE_GPU;
+  backendId_ = backendFamily(backendName_);
+  auto device = ggml_backend_dev_by_name(backendName_.c_str());
+  backendDevice_ = backendDeviceClass(device, backendId_);
+  const char* description =
+      device ? ggml_backend_dev_description(device) : nullptr;
+  backendDescription_ = description ? description : backendName_;
+  encoderOnCoreml_ = engine_->encoder_on_coreml();
+  encoderUsedCoreml_.reset();
 }
 
 void MossTranscribeModel::unload() {
@@ -202,7 +185,11 @@ void MossTranscribeModel::requireCompleted(
         input.samples.size(),
         MOSS_TRANSCRIBE_SAMPLE_RATE,
         toEngineRequest(input.request),
-        [this](int, int) {
+        [this, &input](int generatedTokens, int maxNewTokens) {
+          if (cancelRequested_.load(std::memory_order_relaxed))
+            return false;
+          if (input.request.emitProgress && onProgress_)
+            onProgress_({generatedTokens, maxNewTokens});
           return !cancelRequested_.load(std::memory_order_relaxed);
         });
   } catch (const std::exception& e) {
@@ -227,6 +214,7 @@ void MossTranscribeModel::recordStats(
   encodeMs_ = result.encode_ms;
   prefillMs_ = result.prefill_ms;
   decodeMs_ = result.decode_ms;
+  encoderUsedCoreml_ = result.encoder_backend.starts_with("coreml") ? 1 : 0;
 }
 
 MossTranscribeModel::Output
@@ -291,6 +279,9 @@ MossTranscribeModel::runtimeStats() const {
   stats.emplace_back("decodeMs", decodeMs_);
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId", static_cast<int64_t>(backendId_));
+  stats.emplace_back("encoderOnCoreml", static_cast<int64_t>(encoderOnCoreml_));
+  if (encoderUsedCoreml_)
+    stats.emplace_back("encoderUsedCoreml", *encoderUsedCoreml_);
   return stats;
 }
 

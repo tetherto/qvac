@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Align the shared native pins with ASR: `ggml-speech` `2026-10-27#1`
+  and `speech-cpp` `2026-10-30#1`.
 - Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).

@@ -90,7 +90,9 @@ function sniffEngine(modelPath) {
     }
 }
 function isKnownEngine(value) {
-    return value === "whisper" || value === "parakeet" || value === driver_3.ENGINE_MOSS_TRANSCRIBE;
+    return (value === "whisper" ||
+        value === "parakeet" ||
+        value === driver_3.ENGINE_MOSS_TRANSCRIBE);
 }
 /**
  * The model file the driver will actually open. Whisper's
@@ -195,7 +197,9 @@ class ASRGgml {
             enableStats: this.enableStats,
         };
         if (this._engineType === driver_3.ENGINE_MOSS_TRANSCRIBE) {
-            this._driver = new driver_3.MossTranscribeDriver(ctx, files, config || { engine: driver_3.ENGINE_MOSS_TRANSCRIBE });
+            this._driver = new driver_3.MossTranscribeDriver(ctx, files, config || {
+                engine: driver_3.ENGINE_MOSS_TRANSCRIBE,
+            });
         }
         else if (this._engineType === "parakeet") {
             this._driver = new driver_2.ParakeetDriver(ctx, files, config || { engine: "parakeet" });

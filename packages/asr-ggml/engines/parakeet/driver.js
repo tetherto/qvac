@@ -98,8 +98,7 @@ function lastSegmentOf(data) {
  * against Float32Array views whose backing buffer is larger than the view.
  */
 function chunkBuffer(chunk) {
-    if (chunk.byteOffset === 0 &&
-        chunk.byteLength === chunk.buffer.byteLength) {
+    if (chunk.byteOffset === 0 && chunk.byteLength === chunk.buffer.byteLength) {
         return chunk.buffer;
     }
     return chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
@@ -190,9 +189,17 @@ class ParakeetDriver {
         return this.addon?.getBackendInfo?.() ?? null;
     }
     run(audio, options = {}) {
-        assertNoRunOptions(options, "parakeet");
+        const { includeSpeakerProbabilities, ...other } = options ?? {};
+        assertNoRunOptions(other, "parakeet");
+        if (includeSpeakerProbabilities !== undefined &&
+            typeof includeSpeakerProbabilities !== "boolean") {
+            throw new error_1.QvacErrorAddonASRGgml({
+                code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+                adds: "includeSpeakerProbabilities must be a boolean",
+            });
+        }
         const response = this.ctx.job.start();
-        void this._pumpBatchAudio(audio).catch((error) => {
+        void this._pumpBatchAudio(audio, includeSpeakerProbabilities).catch((error) => {
             this.ctx.job.fail(asError(error));
         });
         return Promise.resolve(response);
@@ -245,7 +252,7 @@ class ParakeetDriver {
         }
         return opts;
     }
-    async _pumpBatchAudio(audio) {
+    async _pumpBatchAudio(audio, includeSpeakerProbabilities) {
         const addon = this._requireAddon();
         this.ctx.logger.debug("Start handling audio stream");
         for await (const chunk of audio) {
@@ -264,7 +271,12 @@ class ParakeetDriver {
         if (!this.ctx.job.active)
             return;
         this.ctx.logger.debug("Sending end-of-input signal");
-        await addon.append({ type: constants_1.END_OF_INPUT });
+        await addon.append({
+            type: constants_1.END_OF_INPUT,
+            job: includeSpeakerProbabilities === undefined
+                ? {}
+                : { includeSpeakerProbabilities },
+        });
     }
     async _pumpStreamingAudio(audio, markClosing) {
         const addon = this._requireAddon();
@@ -338,7 +350,8 @@ class ParakeetDriver {
             // the model's end-of-utterance flag (double-signal).
             this.ctx.job.output(data);
             const segment = lastSegmentOf(data);
-            if (segment?.isEndOfTurn === true && segment.eotConfidence === undefined) {
+            if (segment?.isEndOfTurn === true &&
+                segment.eotConfidence === undefined) {
                 this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
             }
             return;

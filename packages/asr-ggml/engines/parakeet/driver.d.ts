@@ -163,7 +163,7 @@ export declare class ParakeetDriver implements AsrDriver {
     run(audio: NormalizedAudioStream, options?: ASRRunOptions): Promise<QvacResponse<ASRRunOutput>>;
     createStreamingSession(audio: NormalizedAudioStream, opts?: ASRStreamingOptions): Promise<StreamingSession>;
     _validateStreamingOptions(opts: ASRStreamingOptions): ParakeetStreamingRunConfig;
-    _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;
+    _pumpBatchAudio(audio: NormalizedAudioStream, includeSpeakerProbabilities?: boolean): Promise<void>;
     _pumpStreamingAudio(audio: NormalizedAudioStream, markClosing: () => void): Promise<void>;
     _buildConfigurationParams(): ParakeetConfigurationParams;
     _createAddon(configurationParams: ParakeetConfigurationParams): ParakeetInterface;

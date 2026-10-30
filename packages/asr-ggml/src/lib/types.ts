@@ -9,6 +9,20 @@ export interface SpeakerSegment {
   end: number;
 }
 
+/** Offline diarization probabilities in native frame-major order. */
+export interface SpeakerProbabilities {
+  values: Float32Array;
+  frames: number;
+  speakers: number;
+  frameStrideSeconds: number;
+}
+
+/** MOSS generation progress; this is a token budget, not an audio percentage. */
+export interface MossTranscribeProgress {
+  generatedTokens: number;
+  maxNewTokens: number;
+}
+
 /** One decoded Whisper text token (special tokens are left out). */
 export interface TranscriptionToken {
   text: string;
@@ -38,6 +52,13 @@ export interface TranscriptionSegment {
   startsWord?: boolean;
   /** Parakeet streaming: native token IDs for this segment. */
   tokenIds?: number[];
+  /** Native Parakeet streaming stage times, in milliseconds. */
+  encoderMs?: number;
+  decoderMs?: number;
+  /** MOSS: actual encoder route for this transcription (including mixed fallback). */
+  encoderBackend?: string;
+  /** Standalone batch diarization, requested with includeSpeakerProbabilities. */
+  speakerProbabilities?: SpeakerProbabilities;
   /** Parakeet streaming: explicit native finality, including empty final markers. */
   isFinal?: boolean;
   /** Parakeet streaming: native chunk index. */
@@ -105,10 +126,7 @@ export interface EndOfTurnEvent {
 export type ASRRunOutput = TranscriptionSegment[] | TranscriptionSegment;
 
 export type ASRStreamOutput =
-  | TranscriptionSegment[]
-  | TranscriptionSegment
-  | VadEvent
-  | EndOfTurnEvent;
+  TranscriptionSegment[] | TranscriptionSegment | VadEvent | EndOfTurnEvent;
 
 /** Numeric code identifying the compute backend selected by the engine. */
 export enum BackendId {
@@ -117,6 +135,8 @@ export enum BackendId {
   CUDA = 2,
   Vulkan = 3,
   OpenCL = 4,
+  WebGPU = 5,
+  Hexagon = 6,
   Other = 99,
 }
 
@@ -178,11 +198,33 @@ export interface ParakeetRuntimeStats extends RuntimeStatsCore {
   gpuUnsupported: number;
   encoderOnCoreml: number;
   encoderUsedCoreml?: number;
+  segmentPlanMs?: number;
+  assembleMs?: number;
   /** Sortformer only: 1 when the v2.1 AOSC speaker cache was active. */
   aoscActive?: number;
 }
 
-export type RuntimeStats = WhisperRuntimeStats | ParakeetRuntimeStats;
+/** MOSS uses its native per-transcription counts and timings. */
+export interface MossTranscribeRuntimeStats {
+  backendId: number;
+  backendDevice: number;
+  /** Wall time in seconds. */
+  totalTime: number;
+  realTimeFactor: number;
+  audioDurationMs: number;
+  segments: number;
+  audioTokens: number;
+  promptTokens: number;
+  generatedTokens: number;
+  encodeMs: number;
+  prefillMs: number;
+  decodeMs: number;
+  encoderOnCoreml: number;
+  encoderUsedCoreml?: number;
+}
+
+export type RuntimeStats =
+  WhisperRuntimeStats | ParakeetRuntimeStats | MossTranscribeRuntimeStats;
 
 export interface InferenceClientState {
   configLoaded: boolean;

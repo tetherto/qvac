@@ -125,11 +125,12 @@ public:
 
   // Active backend identity captured by captureActiveBackendInfo() at load();
   // surfaced to JS via the addon's getBackendInfo() verb. getBackendId()
-  // codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 99=other (lock-stepped
-  // with parakeet's BackendId). getBackendDeviceClass(): 0=CPU 1=GPU.
-  // gpuMem*Mb are the device-memory snapshot at load(); -1 = "device does
-  // not report" (matching runtimeStats()). Report constructor defaults
-  // (CPU / 0 / "CPU" / "") before load.
+  // codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 5=WebGPU 6=Hexagon 99=other
+  // (lock-stepped with parakeet's BackendId). Device class: 0=CPU 1=GPU 2=NPU
+  // -1=unknown. gpuMem*Mb are the device-memory snapshot at load(); -1 =
+  // "device does not report" (matching runtimeStats()). Report constructor
+  // defaults (CPU / 0 / "CPU" / "") before load.
+  bool getEncoderOnCoreml() const;
   int64_t getBackendId() const { return backend_id_; }
   int64_t getBackendDeviceClass() const { return backend_device_; }
   const std::string& getBackendName() const { return backend_name_; }

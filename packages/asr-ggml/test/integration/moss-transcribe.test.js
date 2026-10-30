@@ -89,20 +89,64 @@ test(
       const info = model.getBackendInfo()
       t.ok(info, 'backend info is available')
       if (backend !== 'auto') {
-        const expectedId = { cpu: 0, metal: 1, cuda: 2, vulkan: 3 }[backend]
+        const expectedId = {
+          cpu: 0,
+          metal: 1,
+          cuda: 2,
+          vulkan: 3,
+          opencl: 4,
+          webgpu: 5,
+          hexagon: 6
+        }[backend]
         if (expectedId !== undefined) {
           t.is(info.backendId, expectedId, 'requested backend is active')
         } else {
           t.is(info.backendName, backend, 'requested device is active')
         }
       }
-      const plain = await collect(await model.run(audio, { maxNewTokens: MAX_NEW_TOKENS }))
+      t.is(typeof info.backendDescription, 'string', 'backend description is present')
+      t.is(typeof info.encoderBackend, 'string', 'encoder route is present')
+      t.is(typeof info.encoderOnCoreml, 'boolean', 'sidecar state is present')
+      if (backend === 'hexagon') t.is(info.backendDevice, 'NPU', 'Hexagon is reported as an NPU')
+      const progress = []
+      const plain = await collect(
+        await model.run(audio, {
+          maxNewTokens: MAX_NEW_TOKENS,
+          onProgress: (value) => progress.push(value)
+        })
+      )
+      t.ok(progress.length > 0, 'native token progress arrives during the job')
+      t.ok(
+        progress.every(
+          (value, index) => value.generatedTokens >= (progress[index - 1]?.generatedTokens || 0)
+        ),
+        'progress token counts are monotonic'
+      )
+      t.ok(
+        progress.every((value) => value.maxNewTokens === MAX_NEW_TOKENS),
+        'progress uses the requested native budget'
+      )
+      t.ok(
+        plain.segments.every((segment) => typeof segment.encoderBackend === 'string'),
+        'segments retain the actual encoder route'
+      )
+      t.is(
+        typeof plain.stats.encoderUsedCoreml,
+        'number',
+        'stats report actual per-call Core ML use'
+      )
+      const completedProgress = progress.length
       assertLabelledSegments(t, 'default prompt', plain.segments)
 
       const biased = await collect(
         await model.run(audio, { hotwords: HOTWORDS, maxNewTokens: MAX_NEW_TOKENS })
       )
       assertLabelledSegments(t, 'hotword prompt', biased.segments)
+      t.is(
+        progress.length,
+        completedProgress,
+        'the next call does not inherit the previous callback'
+      )
     } finally {
       await model.unload().catch(() => {})
       logger.releaseLogger()

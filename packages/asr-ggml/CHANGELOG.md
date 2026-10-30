@@ -25,6 +25,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- Opt-in WebGPU and Hexagon source builds with backend identities and bundled DSP skeletons.
+- Whisper Core ML encoder activation with missing-sidecar fallback and native state reporting.
+- Optional MOSS token progress callbacks, typed runtime statistics and per-transcription encoder routing.
+- Optional batch diarization probability matrices, batch ASR token IDs and native Parakeet stage timings.
+
 - Parakeet backend selection through `parakeetConfig.backend` and `assessFit`.
 - Native speaker-attributed batch transcription with a separate diarization
   model and merge, minimum-duration and padding options.

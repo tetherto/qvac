@@ -1,0 +1,7 @@
+function(asr_stage_hexagon_assets library_dir destination)
+  file(GLOB dsp_skeletons "${library_dir}/libggml-htp-v*.so")
+  if(NOT dsp_skeletons)
+    message(FATAL_ERROR "ASR_HEXAGON requires the matching installed DSP skeletons")
+  endif()
+  install(FILES ${dsp_skeletons} DESTINATION "${destination}")
+endfunction()

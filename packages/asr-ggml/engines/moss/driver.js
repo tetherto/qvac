@@ -8,8 +8,18 @@ const error_1 = require("../../lib/error");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
 exports.ENGINE_MOSS_TRANSCRIBE = "moss-transcribe";
-const MOSS_CONFIG_KEYS = ["maxThreads", "useGPU", "backend", "backendsDir"];
-const MOSS_RUN_OPTION_KEYS = ["hotwords", "prompt", "maxNewTokens"];
+const MOSS_CONFIG_KEYS = [
+    "maxThreads",
+    "useGPU",
+    "backend",
+    "backendsDir",
+];
+const MOSS_RUN_OPTION_KEYS = [
+    "hotwords",
+    "prompt",
+    "maxNewTokens",
+    "onProgress",
+];
 const MAX_HOTWORDS = 64;
 const MAX_HOTWORD_BYTES = 64;
 const ONE_BYTE_LIMIT = 0x80;
@@ -21,7 +31,10 @@ function asError(error) {
     return error instanceof Error ? error : new Error(String(error));
 }
 function invalidRunOption(adds) {
-    return new error_1.QvacErrorAddonASRGgml({ code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG, adds });
+    return new error_1.QvacErrorAddonASRGgml({
+        code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+        adds,
+    });
 }
 /** Preserve native selector names; availability is checked by the engine. */
 function mossTranscribeBackend(value) {
@@ -47,12 +60,16 @@ function utf8Length(text) {
     return bytes;
 }
 function isHotword(value) {
-    return typeof value === "string" && value.length > 0 && utf8Length(value) <= MAX_HOTWORD_BYTES;
+    return (typeof value === "string" &&
+        value.length > 0 &&
+        utf8Length(value) <= MAX_HOTWORD_BYTES);
 }
 function assertHotwords(hotwords) {
     if (hotwords === undefined)
         return;
-    if (!Array.isArray(hotwords) || hotwords.length > MAX_HOTWORDS || !hotwords.every(isHotword)) {
+    if (!Array.isArray(hotwords) ||
+        hotwords.length > MAX_HOTWORDS ||
+        !hotwords.every(isHotword)) {
         throw invalidRunOption(`hotwords must be an array of up to ${MAX_HOTWORDS} non-empty strings of at most ` +
             `${MAX_HOTWORD_BYTES} UTF-8 bytes`);
     }
@@ -70,7 +87,10 @@ function assertPrompt(prompt, hotwords) {
 function assertMaxNewTokens(value) {
     if (value === undefined)
         return;
-    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_NATIVE_INT) {
+    if (typeof value !== "number" ||
+        !Number.isInteger(value) ||
+        value < 0 ||
+        value > MAX_NATIVE_INT) {
         throw invalidRunOption(`maxNewTokens must be an integer in [0, ${MAX_NATIVE_INT}]`);
     }
 }
@@ -88,8 +108,15 @@ function mossTranscribeJobFields(options = {}) {
     assertHotwords(fields.hotwords);
     assertPrompt(fields.prompt, fields.hotwords);
     assertMaxNewTokens(fields.maxNewTokens);
-    const present = MOSS_RUN_OPTION_KEYS.filter((key) => fields[key] !== undefined);
-    return Object.fromEntries(present.map((key) => [key, fields[key]]));
+    if (fields.onProgress !== undefined &&
+        typeof fields.onProgress !== "function") {
+        throw invalidRunOption("onProgress must be a function");
+    }
+    const present = MOSS_RUN_OPTION_KEYS.filter((key) => key !== "onProgress" && fields[key] !== undefined);
+    const job = Object.fromEntries(present.map((key) => [key, fields[key]]));
+    if (fields.onProgress !== undefined)
+        job.emitProgress = true;
+    return job;
 }
 /**
  * Returns an ArrayBuffer covering exactly the chunk's samples. Guards
@@ -112,6 +139,8 @@ class MossTranscribeDriver {
     supportsReload = false;
     addon;
     params;
+    progressFailed = false;
+    onProgress;
     ctx;
     _files;
     constructor(ctx, files, config) {
@@ -144,9 +173,13 @@ class MossTranscribeDriver {
             await this.addon.destroyInstance();
     }
     reload() {
-        return Promise.reject(new error_1.QvacErrorAddonASRGgml({ code: error_1.ERR_CODES.NOT_SUPPORTED, adds: "reload (moss-transcribe)" }));
+        return Promise.reject(new error_1.QvacErrorAddonASRGgml({
+            code: error_1.ERR_CODES.NOT_SUPPORTED,
+            adds: "reload (moss-transcribe)",
+        }));
     }
     async cancelActive(jobId) {
+        this.onProgress = undefined;
         if (this.addon?.cancel)
             await this.addon.cancel(jobId);
         if (this.ctx.job.active) {
@@ -168,6 +201,8 @@ class MossTranscribeDriver {
     run(audio, options = {}) {
         const job = mossTranscribeJobFields(options);
         const response = this.ctx.job.start();
+        this.onProgress = options?.onProgress;
+        this.progressFailed = false;
         void this._pumpBatchAudio(audio, job).catch((error) => {
             this.ctx.job.fail(asError(error));
         });
@@ -206,19 +241,47 @@ class MossTranscribeDriver {
         return new parakeet_1.ParakeetInterface(binding, configurationParams, this._outputCallback.bind(this), this.ctx.logger.info.bind(this.ctx.logger));
     }
     _outputCallback(_addon, event, _jobId, data, error) {
+        if (event === "Progress") {
+            if (!this.ctx.job.active || !this.onProgress)
+                return;
+            try {
+                this.onProgress(data);
+            }
+            catch (callbackError) {
+                this.progressFailed = true;
+                this.onProgress = undefined;
+                void this._failProgress(callbackError);
+            }
+            return;
+        }
         if (event === "Error") {
+            this.onProgress = undefined;
             this.ctx.job.fail(asError(error));
             return;
         }
         if (event === "Output") {
+            if (this.progressFailed)
+                return;
             this.ctx.job.output(data);
             return;
         }
         if (event === "JobEnded") {
+            this.onProgress = undefined;
             if (this.ctx.enableStats)
                 this.ctx.job.end(data);
             else
                 this.ctx.job.end();
+        }
+    }
+    async _failProgress(error) {
+        try {
+            await this.addon?.cancel();
+        }
+        catch {
+            // Preserve the consumer's callback error if cancellation also fails.
+        }
+        finally {
+            this.ctx.job.fail(asError(error));
         }
     }
     _requireAddon() {

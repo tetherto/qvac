@@ -6,6 +6,7 @@ import type {
   ASRStreamOutput,
   AudioInput,
   BackendInfo,
+  MossTranscribeProgress,
 } from "../lib/types";
 import type {
   WhisperReloadConfig,
@@ -27,6 +28,10 @@ export interface ASRRunOptions {
   hotwords?: string[];
   prompt?: string;
   maxNewTokens?: number;
+  /** MOSS only: called on the JS thread as native tokens are generated. */
+  onProgress?: (progress: MossTranscribeProgress) => void;
+  /** Parakeet standalone batch diarization only; omitted keeps compact output. */
+  includeSpeakerProbabilities?: boolean;
 }
 
 /** Files handed to the client; the engine drivers receive them verbatim. */
@@ -39,8 +44,7 @@ export interface ASRGgmlFiles {
 
 /** Per-call `runStreaming` options, engine-scoped and driver-validated. */
 export type ASRStreamingOptions =
-  | WhisperStreamingOptions
-  | ParakeetStreamingRunConfig;
+  WhisperStreamingOptions | ParakeetStreamingRunConfig;
 
 /** Engine-scoped `reload()` configuration. */
 export type ASRGgmlReloadConfig = WhisperReloadConfig | ParakeetReloadConfig;
@@ -53,8 +57,7 @@ export interface DriverContext {
 }
 
 export type NormalizedAudioStream =
-  | AsyncIterable<Float32Array>
-  | Iterable<Float32Array>;
+  AsyncIterable<Float32Array> | Iterable<Float32Array>;
 
 export interface StreamingSession {
   response: QvacResponse<ASRStreamOutput>;

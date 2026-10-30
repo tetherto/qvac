@@ -3,8 +3,10 @@
 #include <any>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <streambuf>
 #include <string>
 #include <vector>
@@ -32,6 +34,14 @@ class MossTranscribeModel
       public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
 public:
   using Output = std::vector<parakeet::Transcript>;
+  struct Progress {
+    int generatedTokens;
+    int maxNewTokens;
+  };
+  using ProgressCallback = std::function<void(const Progress&)>;
+  void setOnProgressCallback(ProgressCallback callback) {
+    onProgress_ = std::move(callback);
+  }
 
   struct AnyInput {
     std::vector<float> samples;
@@ -63,6 +73,13 @@ public:
   int getBackendId() const { return backendId_; }
   int getBackendDeviceClass() const { return backendDevice_; }
   const std::string& getBackendName() const { return backendName_; }
+  const std::string& getBackendDescription() const {
+    return backendDescription_;
+  }
+  bool getEncoderOnCoreml() const { return encoderOnCoreml_; }
+  std::string getEncoderBackend() const {
+    return encoderOnCoreml_ ? "coreml" : backendName_;
+  }
 
   static void validateConfig(const MossTranscribeConfig& cfg);
   static ::parakeet::moss::TranscribeOptions
@@ -102,6 +119,10 @@ private:
   double encodeMs_ = 0.0;
   double prefillMs_ = 0.0;
   double decodeMs_ = 0.0;
+  std::optional<int64_t> encoderUsedCoreml_;
+  bool encoderOnCoreml_ = false;
+  std::string backendDescription_;
+  ProgressCallback onProgress_;
 
   int backendDevice_ = 0;
   int backendId_ = 0;

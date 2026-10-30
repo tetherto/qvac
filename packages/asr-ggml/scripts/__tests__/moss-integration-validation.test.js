@@ -36,13 +36,28 @@ async function runIntegration({ backend, model = true, audio = true, info } = {}
       return Promise.resolve()
     }
     getBackendInfo() {
-      return info || { backendId: 2, backendName: 'CUDA0' }
+      return {
+        backendDescription: 'Test device',
+        encoderBackend: 'ggml',
+        encoderOnCoreml: false,
+        backendDevice: info?.backendId === 6 ? 'NPU' : 'GPU',
+        ...(info || { backendId: 2, backendName: 'CUDA0' })
+      }
     }
-    run() {
+    run(_audio, options) {
+      options.onProgress?.({ generatedTokens: 1, maxNewTokens: options.maxNewTokens })
       calls.push('run')
       return {
+        stats: { encoderUsedCoreml: 0 },
         onUpdate(callback) {
-          callback({ text: 'speech', speaker: 'S1', speakerId: 0, start: 0, end: 1 })
+          callback({
+            text: 'speech',
+            speaker: 'S1',
+            speakerId: 0,
+            start: 0,
+            end: 1,
+            encoderBackend: 'ggml'
+          })
           return { await: () => Promise.resolve() }
         }
       }
@@ -111,6 +126,8 @@ test('MOSS integration checks the requested backend and runs both prompts', asyn
     ['cpu', 0, 'CPU'],
     ['cuda', 2, 'CUDA0'],
     ['vulkan', 3, 'Vulkan0'],
+    ['webgpu', 5, 'WEBGPU0'],
+    ['hexagon', 6, 'HTP0'],
     ['CUDA1', 2, 'CUDA1'],
     ['Vulkan0', 3, 'Vulkan0']
   ]) {

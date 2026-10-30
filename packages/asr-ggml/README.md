@@ -475,6 +475,34 @@ bare examples/parakeet-streaming-metadata.js \
   ./examples/parakeet-samples/sample-16k.wav cpu
 ```
 
+### Offline diarization probabilities
+
+Standalone Sortformer and Nemotron diarization can return the native
+frame-level speaker probabilities alongside the existing text and turns:
+
+```javascript
+const response = await model.run(audio, { includeSpeakerProbabilities: true })
+await response.onUpdate(([segment]) => {
+  const { values, frames, speakers, frameStrideSeconds } = segment.speakerProbabilities
+  // values is a Float32Array; values[frame * speakers + speaker] is the probability.
+  console.log({ frames, speakers, frameStrideSeconds, values })
+}).await()
+```
+
+This option applies to standalone batch diarization. Omitted or `false` keeps
+the compact output. Each call owns its matrix; later jobs and unloading the
+model do not invalidate it. The geometry comes from the native model.
+
+```sh
+bare examples/parakeet-diarization-probabilities.js \
+  ./models/sortformer-4spk-v1.q8_0.gguf \
+  ./examples/parakeet-samples/diarization-sample-16k.wav cpu
+```
+
+Parakeet batch ASR also retains `tokenIds`. Streaming ASR retains the native
+fractional `encoderMs` and `decoderMs` per segment. Its statistics expose
+`segmentPlanMs` and `assembleMs` for native long-form planning and assembly.
+
 ### MOSS-Transcribe-Diarize — batch `run()` with hotwords
 
 ```javascript
@@ -505,7 +533,19 @@ The whole recording is transcribed in one pass, so `runStreaming()` and
   the model's default instruction, so they come out spelled as given;
 - `prompt`: replaces the default instruction (not combined with `hotwords`);
 - `maxNewTokens`: bounds the generated tokens (unset or 0 keeps the model
-  default).
+  default);
+- `onProgress`: optional callback receiving `{ generatedTokens, maxNewTokens }`
+  on the JS thread. It reports native token generation, not an audio percentage.
+  A throwing callback cancels the job and rejects its response with that error.
+
+```sh
+bare examples/moss-transcribe-progress.js ./models/moss-transcribe-diarize-q8_0.gguf ./speech-16k.wav metal
+```
+
+MOSS segments include `encoderBackend`, the native route for that transcription
+(`ggml`, a `coreml` label, or `mixed` when a run used both paths).
+`MossTranscribeRuntimeStats` describes its token counts and `encodeMs`,
+`prefillMs`, `decodeMs`, `encoderOnCoreml` and `encoderUsedCoreml` statistics.
 
 ## Engine Selection
 
@@ -941,17 +981,39 @@ new selector spelling, or supplying both new spellings, is rejected.
 
 This selector currently applies to the Whisper engine.
 
-`getBackendInfo()` reports what actually ran — `backendName`, `backendId`
+`getBackendInfo()` reports the initialized backend — `backendName`, `backendId`
 (see the `BackendId` enum), string `backendDevice`, `backendDescription`,
-`encoderBackend`, `encoderOnCoreml` (Apple: whether a Parakeet Core ML
-encoder sidecar loaded; see
+`encoderBackend`, `encoderOnCoreml` (Apple: whether the engine loaded a Core ML
+encoder sidecar; see
 [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)), and
 `modelType` (`'whisper'`, or the Parakeet family detected from the GGUF:
 `'ctc'`, `'tdt'`, `'rnnt'`, `'eou'`, `'nemotron'`, `'sortformer'`,
-`'nemotron-diarization'`). Whisper
+`'nemotron-diarization'`, or `'moss-transcribe'`). Whisper
 additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
+
+Optional source builds accept `-D ASR_WEBGPU=ON` or `-D ASR_HEXAGON=ON`
+with `bare-make generate`. Both are off by default. WebGPU builds Dawn from
+the official vcpkg registry with its platform Metal/Vulkan feature, without
+Dawn's default X11/GL dependencies. Hexagon requires a compatible Qualcomm
+SDK and Tools installation: pass `HEXAGON_SDK_ROOT` and `HEXAGON_TOOLS_ROOT`
+through the build triplet's tracked `VCPKG_ENV_PASSTHROUGH` settings. The port
+builds the host backend and every matching `libggml-htp-v*.so` DSP skeleton
+from the same pinned ggml source; the addon stages them together. On Android,
+its backend directory is prepended to `DSP_LIBRARY_PATH` before discovery,
+preserving existing DSP paths, legacy ADSP paths and vendor defaults.
+
+`BackendId.WebGPU` is `5`; `BackendId.Hexagon` is `6`. Hexagon reports `NPU`
+(device class `2`), including ggml versions that register HTP as a GPU.
+An unavailable explicit Parakeet/MOSS backend fails instead of silently
+falling back. Validate these builds on compatible hardware; successful CPU
+fallback is not evidence of accelerator execution.
+
+The Apple `coreml` feature also enables Whisper's encoder, retaining native
+fallback when a matching sidecar is absent. `encoderOnCoreml` comes from the
+loaded native state; it does not assert that Apple selected the ANE for every
+operation. MOSS reports both loaded-sidecar state and per-call routing.
 
 Two paths matter on Android and Linux:
 
