@@ -3,6 +3,7 @@ import { icons } from "lucide-react";
 import {
   SiElectron,
   SiExpo,
+  SiKotlin,
   SiPython,
   SiTypescript,
 } from "@icons-pack/react-simple-icons";
@@ -15,7 +16,7 @@ import {
  *
  * Sized here because a Lucide glyph carries its own default and these do not.
  */
-const brandIcons = { SiElectron, SiExpo, SiPython, SiTypescript };
+const brandIcons = { SiElectron, SiExpo, SiKotlin, SiPython, SiTypescript };
 
 /**
  * The one place a string becomes an icon element. Both declaration sites reach

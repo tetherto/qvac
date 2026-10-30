@@ -2,7 +2,7 @@
 
 #include <any>
 #include <cmath>
-#include <filesystem>
+#include <cstring>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -10,10 +10,17 @@
 #include <optional>
 #include <span>
 #include <string>
-#include <system_error>
 #include <utility>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#include <os/proc.h>
+#endif
+#endif
+
+#include <ggml-backend.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -31,6 +38,7 @@
 #include <tts-cpp/parler/fit.h>
 #include <tts-cpp/supertonic/fit.h>
 
+#include "addon/AppMemoryBudget.hpp"
 #include "addon/GgmlLogForwarding.hpp"
 #include "addon/VoiceControlsCatalog.hpp"
 #include "js-interface/JSAdapter.hpp"
@@ -447,8 +455,9 @@ fitBackendsDir(const std::string& configured, const std::string& requested) {
 // files and workload. Returns a Promise of the result.
 //
 // Takes no instance and loads nothing: every fitter reads GGUF metadata only.
-// A model one cannot read is an "error" status carrying its own reason, never
-// a rejection.
+// Resolves to "fits" or "does-not-fit" with the memory the load takes on each
+// device, or "unknown" for a load the fitter cannot size. A model the fitter
+// cannot read, or an invalid request, rejects.
 //
 // The request is read into plain C++ values on the JS thread, the fitter runs
 // on a worker thread with no JS access, and the result object is built back
@@ -456,66 +465,160 @@ fitBackendsDir(const std::string& configured, const std::string& requested) {
 // tts-cpp's process-wide backend registry, which is loaded once and never
 // released, so a fit cannot race a model's unload or the addon's teardown.
 
-/// Everything a fit reports, owned by the worker until the JS thread reads it.
-struct FitOutcome {
-  tts_cpp::FitResult fit;
-  uint64_t lavasrFileBytes = 0;
+/// One engine's fit, bound to values copied out of the request, and the margin
+/// it holds back.
+struct FitWork {
+  std::function<tts_cpp::FitResult()> run;
+  uint64_t marginBytes;
 };
 
-/// One engine's fit, bound to values copied out of the request.
-using FitWork = std::function<FitOutcome()>;
+struct FitDevice {
+  std::string id;
+  std::string name;
+  bool unified;
+  double usedBytes;
+  double freeBytes;
+  double totalBytes;
+};
 
-inline js_value_t* fitResultToJs(js_env_t* env, const FitOutcome& outcome) {
-  const tts_cpp::FitResult& fit = outcome.fit;
-  const char* status = "error";
-  if (fit.status == tts_cpp::FitStatus::Success) {
-    status = "fits";
-  } else if (fit.status == tts_cpp::FitStatus::Failure) {
-    status = "does-not-fit";
+struct FitResult {
+  std::string status;
+  std::vector<FitDevice> devices;
+};
+
+// The PCI bus ID when the backend reports one, so the same GPU matches across
+// addons built on different backends; the device name otherwise.
+//
+// Unified marks memory the host owns: the CPU, an integrated GPU, a GPU that
+// shares host memory, Android's OpenCL GPU, and a device that reports no
+// memory of its own. A unified device that reports none takes the CPU's
+// figures.
+inline FitDevice fitDevice(
+    ggml_backend_dev_t device, const std::string& name, bool sharesHostMemory,
+    double usedBytes, double freeBytes, double totalBytes) {
+  std::string id = name;
+  std::string deviceName = name;
+  const bool reportsNoMemory = totalBytes == 0;
+  bool unified = sharesHostMemory || reportsNoMemory;
+  if (device != nullptr) {
+    ggml_backend_dev_props props{};
+    ggml_backend_dev_get_props(device, &props);
+    id = props.device_id != nullptr ? props.device_id : props.name;
+    deviceName = props.name;
+    unified = unified || props.memory_unified ||
+              props.type == GGML_BACKEND_DEVICE_TYPE_IGPU ||
+              props.type == GGML_BACKEND_DEVICE_TYPE_CPU;
+#if defined(__ANDROID__)
+    const char* registry =
+        ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+    unified = unified ||
+              (registry != nullptr && std::strcmp(registry, "OpenCL") == 0);
+#endif
+  }
+  if (unified && reportsNoMemory) {
+    if (ggml_backend_dev_t host =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      size_t hostFree = 0;
+      size_t hostTotal = 0;
+      ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+      freeBytes = static_cast<double>(hostFree);
+      totalBytes = static_cast<double>(hostTotal);
+    }
+  }
+  return {id, deviceName, unified, usedBytes, freeBytes, totalBytes};
+}
+
+// A load the fitter could not measure would still start, so it is unknown:
+// Supertonic's compute paths outside the fused graph it models, a Core ML
+// stage with no memory estimate, and a failed measurement. A request or model
+// file the fitter refuses rejects as an invalid argument, and any other
+// failure as an internal one.
+inline FitResult unsizedOrThrow(const std::string& reason) {
+  if (reason == "compute-path-not-supported" ||
+      reason == "coreml-memory-estimate-unavailable" ||
+      reason == "measurement-failed") {
+    return FitResult{"unknown", {}};
+  }
+  const bool invalid = reason == "invalid-arguments" ||
+                       reason == "workload-too-large" ||
+                       reason == "model-unreadable";
+  throw qvac_errors::StatusError(
+      invalid ? qvac_errors::general_error::InvalidArgument
+              : qvac_errors::general_error::InternalError,
+      "assessFit: " + reason);
+}
+
+// One row for the device the load resolved to, then the host CPU, which holds
+// the host-side buffers. A load on the CPU is one row holding both.
+inline FitResult toFitResult(const tts_cpp::FitResult& fit) {
+  if (fit.status == tts_cpp::FitStatus::Error) {
+    return unsizedOrThrow(fit.reason);
+  }
+  FitResult result;
+  result.status =
+      fit.status == tts_cpp::FitStatus::Success ? "fits" : "does-not-fit";
+
+  ggml_backend_dev_t host =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (fit.device_is_cpu) {
+    result.devices.push_back(fitDevice(
+        host,
+        fit.device_name,
+        true,
+        static_cast<double>(fit.device.total_bytes + fit.host_bytes),
+        static_cast<double>(fit.device_free_bytes),
+        static_cast<double>(fit.device_total_bytes)));
+    return result;
   }
 
-  auto result = js::Object::create(env);
-  auto text = [&](const char* name, const std::string& value) {
-    result.setProperty(env, name, js::String::create(env, value));
-  };
-  auto bytes = [&](const char* name, uint64_t value) {
-    result.setProperty(
-        env, name, js::Number::create(env, static_cast<double>(value)));
-  };
+  result.devices.push_back(fitDevice(
+      ggml_backend_dev_by_name(fit.device_name.c_str()),
+      fit.device_name,
+      fit.device_shares_host_memory,
+      static_cast<double>(fit.device.total_bytes),
+      static_cast<double>(fit.device_free_bytes),
+      static_cast<double>(fit.device_total_bytes)));
 
-  text("status", status);
-  text("reason", fit.reason);
-  text("modelVariant", fit.model_variant);
-  text("deviceName", fit.device_name);
-  text("report", fit.report);
-  result.setProperty(
-      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
-  result.setProperty(
-      env,
-      "deviceSharesHostMemory",
-      js::Boolean::create(env, fit.device_shares_host_memory));
-  bytes("deviceFreeBytes", fit.device_free_bytes);
-  bytes("deviceTotalBytes", fit.device_total_bytes);
-  bytes("deviceBytes", fit.device.total_bytes);
-  bytes("weightsBytes", fit.device.weights_bytes);
-  bytes("stateBytes", fit.device.state_bytes);
-  bytes("lmComputeBytes", fit.device.lm_compute_bytes);
-  bytes("codecComputeBytes", fit.device.codec_compute_bytes);
-  bytes("hostBytes", fit.host_bytes);
-  bytes("lavasrFileBytes", outcome.lavasrFileBytes);
+  size_t hostFree = 0;
+  size_t hostTotal = 0;
+  if (host != nullptr) {
+    ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+  }
+  result.devices.push_back(fitDevice(
+      host,
+      "CPU",
+      true,
+      static_cast<double>(fit.host_bytes),
+      static_cast<double>(hostFree),
+      static_cast<double>(hostTotal)));
   return result;
 }
 
-/// A voice the addon loads but speech-cpp cannot project. The shape matches a
-/// fit so a caller reads the verdict the same way for every engine.
-inline FitWork unsupportedEngineFit(const char* engine) {
-  return [variant = std::string(engine)]() {
-    FitOutcome outcome;
-    outcome.fit.status = tts_cpp::FitStatus::Error;
-    outcome.fit.reason = "unsupported-engine";
-    outcome.fit.model_variant = variant;
-    return outcome;
-  };
+inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
+  auto result = js::Object::create(env);
+  result.setProperty(env, "status", js::String::create(env, fit.status));
+  auto devices = js::Array::create(env);
+  for (size_t i = 0; i < fit.devices.size(); ++i) {
+    const auto& row = fit.devices[i];
+    auto entry = js::Object::create(env);
+    entry.setProperty(env, "id", js::String::create(env, row.id));
+    entry.setProperty(env, "name", js::String::create(env, row.name));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", js::Number::create(env, row.usedBytes));
+    entry.setProperty(env, "freeBytes", js::Number::create(env, row.freeBytes));
+    entry.setProperty(
+        env, "totalBytes", js::Number::create(env, row.totalBytes));
+    devices.set(env, i, entry);
+  }
+  result.setProperty(env, "devices", devices);
+  result.setProperty(env, "stats", js::Object::create(env));
+  return result;
+}
+
+[[noreturn]] inline void throwUnsupportedEngine(const char* engine) {
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      std::string("assessFit: ") + engine + " has no fitter");
 }
 
 /// The load's offload intent: an explicit layer count wins, otherwise the
@@ -528,38 +631,6 @@ template <typename Config> int resolveFitGpuLayers(const Config& cfg) {
     return *cfg.useGpu ? kOffloadAllGpuLayers : 0;
   }
   return 0;
-}
-
-/// LavaSR's enhancer and denoiser have no fitter. They are sized on disk and
-/// reported beside the projection, outside every measured figure.
-inline uint64_t lavasrFileBytes(
-    const std::string& enhancerPath, const std::string& denoiserPath) {
-  uint64_t total = 0;
-  for (const std::string& path : {enhancerPath, denoiserPath}) {
-    if (path.empty()) {
-      continue;
-    }
-    std::error_code ec;
-    const auto size = std::filesystem::file_size(path, ec);
-    if (!ec) {
-      total += static_cast<uint64_t>(size);
-    }
-  }
-  return total;
-}
-
-/// Pairs a fitter's result with the on-disk size of the LavaSR stages, which
-/// the worker reads beside the projection.
-template <typename Fit>
-FitWork lavasrFit(Fit fit, std::string enhancerPath, std::string denoiserPath) {
-  return [fit = std::move(fit),
-          enhancerPath = std::move(enhancerPath),
-          denoiserPath = std::move(denoiserPath)]() {
-    FitOutcome outcome;
-    outcome.fit = fit();
-    outcome.lavasrFileBytes = lavasrFileBytes(enhancerPath, denoiserPath);
-    return outcome;
-  };
 }
 
 inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
@@ -634,10 +705,9 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
     if (auto seconds = number("audioSeconds")) {
       options.audio_seconds = static_cast<float>(*seconds);
     }
-    return lavasrFit(
+    return {
         [options]() { return tts_cpp::supertonic::fit_params(options); },
-        cfg.enhancerGgufPath,
-        cfg.denoiserGgufPath);
+        options.margin_bytes};
   }
   case EngineType::Parler: {
     const auto cfg = adapter.buildParlerConfig(request, env);
@@ -649,10 +719,9 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
     integer("promptTokens", options.prompt_tokens);
     integer("maxFrames", options.max_frames);
     margin(options.margin_bytes);
-    return lavasrFit(
+    return {
         [options]() { return tts_cpp::parler::fit_params(options); },
-        cfg.enhancerGgufPath,
-        cfg.denoiserGgufPath);
+        options.margin_bytes};
   }
   case EngineType::Chatterbox: {
     const auto cfg = adapter.buildChatterboxConfig(request, env);
@@ -670,10 +739,9 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
     integer("textTokens", options.text_tokens);
     integer("predictTokens", options.n_predict);
     margin(options.margin_bytes);
-    return lavasrFit(
+    return {
         [options]() { return tts_cpp::chatterbox::fit_params(options); },
-        cfg.enhancerGgufPath,
-        cfg.denoiserGgufPath);
+        options.margin_bytes};
   }
   case EngineType::Audio8: {
     const auto cfg = adapter.buildAudio8Config(request, env);
@@ -689,10 +757,9 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
       options.reference_seconds = static_cast<float>(*seconds);
     }
     margin(options.margin_bytes);
-    // Audio8 takes no LavaSR stage.
-    return [options]() {
-      return FitOutcome{tts_cpp::audio8::fit_params(options)};
-    };
+    return {
+        [options]() { return tts_cpp::audio8::fit_params(options); },
+        options.margin_bytes};
   }
   case EngineType::Cosyvoice: {
     const auto cfg = adapter.buildCosyvoiceConfig(request, env);
@@ -709,10 +776,9 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
     integer("textTokens", options.text_tokens);
     integer("speechTokens", options.speech_tokens);
     margin(options.margin_bytes);
-    return lavasrFit(
+    return {
         [options]() { return tts_cpp::cosyvoice::fit_params(options); },
-        cfg.enhancerGgufPath,
-        cfg.denoiserGgufPath);
+        options.margin_bytes};
   }
   case EngineType::Moss: {
     const auto cfg = adapter.buildMossConfig(request, env);
@@ -745,18 +811,20 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
     const int promptRows = requiredCount("promptRows");
     const int referenceSamples = requiredCount("referenceSamples");
     const bool streams = streaming->as<bool>(env);
-    return [cfg,
-            backendsDir = fitBackendsDir(cfg.backendsDir, requestBackendsDir),
-            promptRows,
-            referenceSamples,
-            streams,
-            marginBytes]() {
-      auto options = MossModel::toEngineOptions(cfg);
-      options.backends_dir = backendsDir;
-      const tts_cpp::moss::FitWorkload workload(
-          promptRows, referenceSamples, streams, marginBytes);
-      return FitOutcome{tts_cpp::moss::fit_params(options, workload)};
-    };
+    return {
+        [cfg,
+         backendsDir = fitBackendsDir(cfg.backendsDir, requestBackendsDir),
+         promptRows,
+         referenceSamples,
+         streams,
+         marginBytes]() {
+          auto options = MossModel::toEngineOptions(cfg);
+          options.backends_dir = backendsDir;
+          const tts_cpp::moss::FitWorkload workload(
+              promptRows, referenceSamples, streams, marginBytes);
+          return tts_cpp::moss::fit_params(options, workload);
+        },
+        marginBytes};
   }
   case EngineType::MossSoundEffect: {
     const auto cfg = adapter.buildMossSoundEffectConfig(request, env);
@@ -777,35 +845,52 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
               ? std::numeric_limits<uint64_t>::max()
               : static_cast<uint64_t>(*value);
     }
-    return [cfg,
-            backendsDir = fitBackendsDir(cfg.backendsDir, requestBackendsDir),
-            input = std::move(input),
-            marginBytes]() {
-      auto options = MossSoundEffectModel::toEngineOptions(cfg);
-      options.backends_dir = backendsDir;
-      return FitOutcome{tts_cpp::moss::fit_params(
-          options, MossSoundEffectModel::toRequest(cfg, input), marginBytes)};
-    };
+    return {
+        [cfg,
+         backendsDir = fitBackendsDir(cfg.backendsDir, requestBackendsDir),
+         input = std::move(input),
+         marginBytes]() {
+          auto options = MossSoundEffectModel::toEngineOptions(cfg);
+          options.backends_dir = backendsDir;
+          return tts_cpp::moss::fit_params(
+              options,
+              MossSoundEffectModel::toRequest(cfg, input),
+              marginBytes);
+        },
+        marginBytes};
   }
   case EngineType::MossSpeech:
-    return unsupportedEngineFit("moss-speech");
+    throwUnsupportedEngine("moss-speech");
   }
 
-  return unsupportedEngineFit("unknown");
+  throwUnsupportedEngine("this engine");
 }
 
 /// Serialised: every fitter points tts-cpp's process-wide backend directory
-/// at its request before probing the devices.
-inline FitOutcome runFit(const FitWork& work) {
+/// at its request before probing the devices, and the rows read the devices
+/// that directory registered.
+inline FitResult runFit(const FitWork& work) {
   static std::mutex fitMutex;
   const std::lock_guard<std::mutex> lock(fitMutex);
-  return work();
+  FitResult result = toFitResult(work.run());
+#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+  // The margin the fitter held back on the device is held back from the app's
+  // limit too.
+  result.status = applyAppMemoryBudget(
+      result.status,
+      result.devices,
+      static_cast<double>(os_proc_available_memory()),
+      static_cast<double>(work.marginBytes));
+#endif
+  return result;
 }
 
 inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   FitWork work = parseFitRequest(env, info);
   return js::JsAsyncTask::run(
-      env, [work = std::move(work)]() { return runFit(work); }, fitResultToJs);
+      env,
+      [work = std::move(work)]() { return runFit(work); },
+      fitResultObject);
 }
 JSCATCH
 

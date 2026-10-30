@@ -86,6 +86,10 @@ async def main() -> int:
 
             request_id = generate_client_request_id()
             request = AudioGenStreamRequest(
+                # The stub serializes with `exclude_unset=True`, so a `type`
+                # left to its default is dropped and the worker never routes
+                # the call as a stream. Set it explicitly.
+                type="audioGenStream",
                 model_id=model_id,
                 request_id=request_id,
                 caption=args.caption,

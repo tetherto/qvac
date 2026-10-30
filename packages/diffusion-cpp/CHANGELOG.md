@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: the GPU devices the
+  placement uses, then the host. `status` is `fits`, `does-not-fit` or
+  `unknown`; a placement the fitter had to change is `does-not-fit`. An
+  invalid request or a load the engine cannot measure rejects
+  ([#5477](https://github.com/tetherto/qvac/pull/5477)).
+
 ## [0.32.1] - 2026-10-29
 
 This patch moves the addon to stable-diffusion-cpp `2026-08-11#8`. It retains

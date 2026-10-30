@@ -826,15 +826,12 @@ const fit = await assessFit({
   workload: { prompt: 'a lighthouse at dusk', width: 1024, height: 1024 }
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // 'fits' | 'does-not-fit' | 'model-unreadable' | 'unsupported-config'
-fit.changed // the engine placed the load only by altering the backend assignment
-fit.backend
-fit.paramsBackend
-fit.vaeTiling
-fit.streamLayers
-fit.report // per-device, per-module memory table, suitable for logging
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
 ```
+
+`devices` lists the GPU devices the placement uses, then the host. `id` is the device's PCI bus ID when the backend reports one, and its name otherwise. `unified` marks memory the host owns: the CPU, an integrated GPU, the Metal device on Apple silicon, Android's OpenCL GPU, and a device that reports no memory of its own, which carries the host's figures. A unified row's free memory is capped at the host's, which on iOS is the app's own limit. `usedBytes` is the engine's measured projection for that device, and `freeBytes` and `totalBytes` are read while planning. A shared-memory GPU's use is in its own row and is not repeated in the host row. A load on the CPU is one host row, and `unknown` has no rows.
 
 `files` and `config` are what `createInstance` takes, plus `files.clipVision`, `files.audioVae` and `files.embeddingsConnectors`. Paths must be absolute. `workload` describes the generation the projection is sized for, and its defaults are the generation defaults:
 
@@ -848,9 +845,9 @@ fit.report // per-device, per-module memory table, suitable for logging
 | `vaeTileOverlap` | 0.5 | Fraction of a tile used as the overlap seam. |
 | `upscaleRepeats` | 1 | ESRGAN passes, each applying the checkpoint's scale factor. |
 
-Every number must be finite, whole and in range; anything else is `status: "error"` with `reason: "unsupported-config"`.
+Every number must be finite, whole and in range; anything else rejects.
 
-The engine chooses the placement, so it has to be given an unpinned configuration. A `config.mainGpu`, a `config.device` of `cpu`, or a `paramsBackend` naming individual modules is `reason: "unsupported-config"`.
+The engine chooses the placement, so it has to be given an unpinned configuration. A `config.mainGpu`, a `config.device` of `cpu`, a `paramsBackend` naming individual modules, or an OpenCL preference that does not name the first GPU is `status: "unknown"`.
 
 For standalone ESRGAN, use `mode: 'upscale'`, `files: { esrgan }` and the same config as `EsrganUpscaler`. This mode supports `device: 'cpu'`. `workload.width` and `height` describe the input image. The estimate includes weights, the tiled graph and full-image RAM buffers; smaller tiles do not remove full-image allocations.
 
@@ -865,9 +862,9 @@ decoder and retained latent history. It does not change generation settings
 or limit the walk. Scene creation with umT5 and the Wan VAE is outside this
 session estimate.
 
-A `changed` of `true` comes with `status: "does-not-fit"` — the configuration as given does not fit, and the engine reached a placement only by moving modules between backends. A `paramsBackend` of `*=cpu` is the exception: the engine replans every module for it, so the plan is compared against the placement that load already uses, and an equal one is `fits`.
+A load the engine can place only by moving modules between backends is `status: "does-not-fit"`, since the configuration as given does not fit, and its rows describe the placement the engine found. A `paramsBackend` of `*=cpu` is the exception: the engine replans every module for it, so the plan is compared against the placement that load already uses, and an equal one is `fits`.
 
-A model the engine cannot read resolves to `status: "error"` with `reason: "model-unreadable"`; only a broken request rejects.
+A malformed request, a model the engine cannot read, or an ESRGAN output above the pixel limit rejects. A world placement naming a device the fitter cannot plan for is `status: "unknown"`.
 
 `assessFit` returns a Promise. Concurrent calls run one at a time within the addon.
 

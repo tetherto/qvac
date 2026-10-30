@@ -223,6 +223,9 @@ public:
   historyReasoningTags() const override {
     return historyReasoningTags_;
   }
+  [[nodiscard]] size_t countChatTokens(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools) const override;
 
   SequenceStepResult onLogitsReady(
       int logitIdx, unsigned generatedAfterAccept,
@@ -437,6 +440,11 @@ private:
   // load; see `historyReasoningTags`.
   std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>
       historyReasoningTags_;
+  // `params_.use_jinja` and `params_.reasoning_budget != 0` at load, for
+  // `countChatTokens`: a request rewrites `params_.reasoning_budget` while it
+  // runs.
+  bool loadUseJinja_ = false;
+  bool loadEnableThinking_ = false;
 
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;

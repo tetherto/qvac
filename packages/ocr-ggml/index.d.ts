@@ -2,7 +2,7 @@ import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { OcrGgmlInterface, type BackendInfo, type OcrGgmlRunOptions } from "./ocr-ggml";
 import { QvacErrorAddonOcrGgml, ERR_CODES } from "./lib/error";
-export type { OcrFitRequest, OcrFitResult } from "./fit";
+export type { OcrFitRequest, OcrFitResult, OcrFitStatus, OcrFitDevice, OcrFitStats, } from "./fit";
 export { assessFit } from "./fit";
 /**
  * OCR pipeline backing the addon.

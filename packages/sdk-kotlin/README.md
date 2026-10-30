@@ -89,9 +89,11 @@ QVAC_DEVICE_TEST_SCOPE=feature-lab ./scripts/run-android-device-tests.sh
 
 ### Consume a published artifact
 
-Release automation publishes the KMP client and the self-contained Android AAR
-to the configured Maven repository. For GitHub Packages, configure the QVAC
-repository and use a package-read token:
+Each `sdk-v<version>` GitHub Release, from `sdk-v0.23.0` on, carries one Maven
+repository ZIP per Android runtime profile and one for the desktop JVM client.
+Download the profile the app needs, for example
+`qvac-sdk-android-llm-<version>-maven.zip`, extract it, and point a Gradle
+Maven repository at the extracted directory:
 
 ```kotlin
 // settings.gradle.kts
@@ -103,15 +105,7 @@ dependencyResolutionManagement {
             forRepository { maven("https://jitpack.io") } // bare-rpc-kotlin
             filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
         }
-        maven {
-            url = uri("https://maven.pkg.github.com/tetherto/qvac")
-            credentials {
-                username = providers.gradleProperty("gpr.user").orNull
-                    ?: System.getenv("GITHUB_ACTOR")
-                password = providers.gradleProperty("gpr.key").orNull
-                    ?: System.getenv("GITHUB_TOKEN")
-            }
-        }
+        maven { url = uri("/absolute/path/to/extracted-qvac-repository") }
     }
 }
 ```
@@ -119,13 +113,16 @@ dependencyResolutionManagement {
 ```kotlin
 // app/build.gradle.kts
 dependencies {
-    implementation("io.tether:qvac-sdk-android:0.20.1")
+    implementation("io.tether:qvac-sdk-android-llm:<version>")
 }
 ```
 
-Replace `qvac-sdk-android` with `qvac-sdk-android-assistant`, `-llm`, `-speech`,
-`-vision`, `-media`, or `-robotics` when the app only needs that profile. The
-Kotlin API and import namespace remain identical across all artifacts.
+Replace `qvac-sdk-android-llm` with `qvac-sdk-android` (every capability),
+`-assistant`, `-speech`, `-vision`, `-media`, or `-robotics` to match the
+downloaded ZIP. The Kotlin API and import namespace remain identical across all
+artifacts. The archive includes the selected runtime and the Kotlin client
+modules it depends on, but not the Holepunch libraries from JitPack. Verify
+downloads against the release's `qvac-sdk-kotlin-<version>-SHA256SUMS` asset.
 
 The artifacts depend on `bare-rpc-kotlin`, which is compiled with Kotlin 2.4,
 so the consuming project needs a Kotlin 2.3 or newer compiler. AGP 9's built-in
@@ -141,35 +138,29 @@ plugins {
 }
 ```
 
-Each `sdk-v<version>` GitHub Release also contains token-free Maven repository
-ZIPs for the seven Android profiles and the desktop JVM client. For example,
-download `qvac-sdk-android-llm-<version>-maven.zip`, extract it, and point a
-normal Gradle Maven repository at the extracted directory:
+To consume a checkout's artifacts the same way, publish locally with
+`./gradlew publishSdkToBuildRepository` and add
+`packages/sdk-kotlin/build/maven-repository` as the Maven repository.
 
-```kotlin
-dependencyResolutionManagement {
-    repositories {
-        google()
-        mavenCentral()
-        exclusiveContent {
-            forRepository { maven("https://jitpack.io") } // bare-rpc-kotlin
-            filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
-        }
-        maven { url = uri("/absolute/path/to/extracted-qvac-repository") }
-    }
-}
+### Build from a standalone checkout
+
+`scripts/install-local.sh` makes a sparse clone of `packages/sdk-kotlin` at a
+release tag or branch, builds every Android runtime profile against the
+`@qvac/sdk` version the checkout pins, and prints the local Maven repository
+path with the Gradle snippet that consumes it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tetherto/qvac/sdk-v<version>/packages/sdk-kotlin/scripts/install-local.sh -o install-local.sh
+bash install-local.sh sdk-v<version>
 ```
 
-The archive includes the selected runtime and the Kotlin client modules it
-depends on, but not the Holepunch libraries from JitPack, so the dependency declaration remains
-`implementation("io.tether:qvac-sdk-android-llm:<version>")`. Verify downloads
-against the release's `SHA256SUMS` asset. GitHub Packages or the configured
-public Maven repository remains the recommended path for normal dependency
-resolution and upgrades.
-
-To consume the artifacts without a remote repository, publish locally with
-`./gradlew publishSdkToBuildRepository` and add
-`packages/sdk-kotlin/build/maven-repository` as a Maven repository.
+Releases before `sdk-v0.23.0` do not build from a standalone checkout. The
+script checks for git, JDK 17, Node.js 22 and an Android SDK with NDK
+29.0.14206865 at `ANDROID_HOME` before cloning, names what is missing, and
+refuses a target directory that already exists. Without `packages/sdk` beside
+it the build skips the workspace worker build and bundles the installed
+`@qvac/sdk`, so the result matches the release assets built from the full
+monorepo.
 
 ### Consume the source checkout
 
@@ -212,9 +203,11 @@ Set `MAVEN_SIGNING_KEY` and `MAVEN_SIGNING_PASSWORD` to sign every publication
 with an in-memory PGP key. `./gradlew verifyMavenPublications` checks every current
 coordinate's documentation, sources, artifact presence and checksums.
 
-CI defaults to GitHub Packages; `KOTLIN_MAVEN_REPOSITORY_URL` and the matching
-`KOTLIN_MAVEN_*` secrets support other generic Maven repositories. Maven Central
-uses its dedicated deployment workflow, not a generic Maven URL:
+The SDK release (`publish-sdk.yml`) calls `publish-sdk-kotlin.yml` with the
+`release-assets` destination, which packages the Maven repository into the
+per-profile ZIPs and attaches them to the `sdk-v<version>` release. No Maven
+registry is published by default. Maven Central uses its dedicated deployment
+workflow, not a generic Maven URL:
 
 ```bash
 # Set Central user-token credentials (not account login credentials) securely:
@@ -231,10 +224,9 @@ deployments and Dokka generates the API documentation.
 
 For CI, configure the protected `release` environment with
 `KOTLIN_CENTRAL_USERNAME`, `KOTLIN_CENTRAL_PASSWORD`, `KOTLIN_MAVEN_SIGNING_KEY`
-and `KOTLIN_MAVEN_SIGNING_PASSWORD`. Select `central` in the manual workflow;
-it only stages unless `release_central` is explicitly enabled. For tag/lockstep
-release automation, set `KOTLIN_MAVEN_DESTINATION=central`; those release events
-publish publicly and wait for Central's `PUBLISHED` state. Namespace ownership
+and `KOTLIN_MAVEN_SIGNING_PASSWORD`. Select `central` as the destination when
+dispatching `publish-sdk-kotlin.yml` by hand; it only stages unless
+`release_central` is explicitly enabled. Namespace ownership
 and a discoverable production signing public key must be configured beforehand.
 Never run both staging and automatic publication for the same release blindly;
 finish or drop an existing deployment in the Portal before retrying.

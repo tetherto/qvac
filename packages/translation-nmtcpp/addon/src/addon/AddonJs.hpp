@@ -3,15 +3,22 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <limits>
 #include <mutex>
 #include <optional>
-#include <sstream>
 #include <utility>
 #include <vector>
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#include <os/proc.h>
+#endif
+#endif
 
 #include <ggml-backend.h>
 #include <ggml-cpp.h>
@@ -23,6 +30,7 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "addon/FitVerdict.hpp"
 #include "model-interface/PivotTranslationModel.hpp"
 #include "model-interface/TranslationModel.hpp"
 
@@ -125,14 +133,63 @@ struct FitRequest {
 };
 
 struct FitResult {
-  std::string status = "error";
-  std::string reason = "model-unreadable";
-  std::string backend;
-  std::string report;
-  uint64_t modelBytes = 0;
-  uint64_t requiredBytes = 0;
-  uint64_t freeBytes = 0;
+  // "fits", "does-not-fit", or "unknown" when no reliable verdict exists.
+  std::string status = "unknown";
+  std::vector<FitDevice> devices;
 };
+
+constexpr uint64_t K_MAX_SAFE_INTEGER = 9007199254740991ULL;
+
+[[noreturn]] inline void throwFitError(
+    qvac_errors::general_error::GeneralErrorCode code,
+    const std::string& message) {
+  throw qvac_errors::StatusError(code, "assessFit: " + message);
+}
+
+// The PCI bus ID when the backend reports one, so the same GPU matches across
+// addons built on different backends; the device name otherwise. Device
+// handles are borrowed from the backend, so their strings are copied here.
+//
+// Unified marks memory the host owns: the CPU, an integrated GPU, a GPU that
+// says it shares host memory, Android's OpenCL GPU, and a device that reports
+// no memory of its own. A unified device that reports none takes the CPU's
+// figures.
+inline FitDevice fitDevice(ggml_backend_dev_t device, uint64_t usedBytes) {
+  ggml_backend_dev_props props{};
+  ggml_backend_dev_get_props(device, &props);
+  uint64_t freeBytes = static_cast<uint64_t>(props.memory_free);
+  uint64_t totalBytes = static_cast<uint64_t>(props.memory_total);
+  const bool reportsNoMemory = totalBytes == 0;
+#if defined(__ANDROID__)
+  const char* registry =
+      ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+  const bool androidOpenCl =
+      registry != nullptr && std::strcmp(registry, "OpenCL") == 0;
+#else
+  const bool androidOpenCl = false;
+#endif
+  const bool unified = props.memory_unified ||
+                       props.type == GGML_BACKEND_DEVICE_TYPE_IGPU ||
+                       props.type == GGML_BACKEND_DEVICE_TYPE_CPU ||
+                       androidOpenCl || reportsNoMemory;
+  if (unified && reportsNoMemory) {
+    if (ggml_backend_dev_t host =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      size_t hostFree = 0;
+      size_t hostTotal = 0;
+      ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+      freeBytes = static_cast<uint64_t>(hostFree);
+      totalBytes = static_cast<uint64_t>(hostTotal);
+    }
+  }
+  return {
+      props.device_id != nullptr ? props.device_id : props.name,
+      props.name,
+      unified,
+      usedBytes,
+      freeBytes,
+      totalBytes};
+}
 
 inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
@@ -223,74 +280,70 @@ inline FitResult runFit(const FitRequest& request) {
   static std::mutex fitMutex;
   const std::lock_guard<std::mutex> lock(fitMutex);
 
-  FitResult result;
+  using qvac_errors::general_error::InternalError;
+  using qvac_errors::general_error::InvalidArgument;
   const std::string& path = request.modelPath;
   const std::string& modelType = request.modelType;
-  std::string& report = result.report;
-  std::string& reason = result.reason;
-  uint64_t& modelBytes = result.modelBytes;
-  const double margin = request.marginBytes;
+  const auto margin = static_cast<uint64_t>(request.marginBytes);
 
   namespace fs = std::filesystem;
   // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
   const fs::path modelPath = fs::u8path(path);
   std::error_code ec;
+  uint64_t modelBytes = 0;
   if (fs::is_regular_file(modelPath, ec)) {
     modelBytes = fs::file_size(modelPath, ec);
   }
-  if (ec || modelBytes < 64 || modelBytes > 9007199254740991ULL) {
-    report = "Translation model file is missing, incomplete, or unreadable";
-  } else if (modelType == "IndicTrans") {
+  if (ec || modelBytes < 64 || modelBytes > K_MAX_SAFE_INTEGER) {
+    throwFitError(InvalidArgument, "cannot read the translation model " + path);
+  }
+  if (modelType == "IndicTrans") {
     std::ifstream stream(modelPath, std::ios::binary);
     uint32_t magic = 0;
     stream.read(reinterpret_cast<char*>(&magic), sizeof(magic));
     if (!stream || magic != GGML_FILE_MAGIC) {
-      report = "Translation model header is invalid";
+      throwFitError(
+          InvalidArgument, "the translation model header is invalid: " + path);
     }
   } else if (modelType != "Bergamot") {
-    reason = "unsupported-config";
-    report = "Unknown translation model type";
+    throwFitError(
+        InvalidArgument, "unknown translation model type " + modelType);
   }
 
-  if (report.empty()) {
-    const std::string pivot = request.pivotModel.value_or("");
-    if (!pivot.empty()) {
-      // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
-      const fs::path pivotPath = fs::u8path(pivot);
-      if (modelType != "Bergamot" || !fs::is_regular_file(pivotPath, ec)) {
-        reason = "unsupported-config";
-        report = "Pivot fit requires two readable Bergamot model files";
-      } else {
-        const uint64_t pivotBytes = fs::file_size(pivotPath, ec);
-        if (ec || pivotBytes > 9007199254740991ULL - modelBytes) {
-          report = "Pivot model file is unreadable";
-        } else {
-          modelBytes += pivotBytes;
-        }
-      }
+  const std::string pivot = request.pivotModel.value_or("");
+  if (!pivot.empty()) {
+    if (modelType != "Bergamot") {
+      throwFitError(InvalidArgument, "a pivot model needs a Bergamot model");
     }
+    // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
+    const fs::path pivotPath = fs::u8path(pivot);
+    const uint64_t pivotBytes =
+        fs::is_regular_file(pivotPath, ec) ? fs::file_size(pivotPath, ec) : 0;
+    if (ec || pivotBytes == 0 || pivotBytes > K_MAX_SAFE_INTEGER - modelBytes) {
+      throwFitError(InvalidArgument, "cannot read the pivot model " + pivot);
+    }
+    modelBytes += pivotBytes;
   }
 
-  if (report.empty() && modelType == "Bergamot" &&
-      path.find(".intgemm") == std::string::npos) {
-    reason = "model-unreadable";
-    report = "Bergamot model path has no .intgemm signature";
-  }
-  if (report.empty() && modelType == "Bergamot") {
+  if (modelType == "Bergamot") {
+    if (path.find(".intgemm") == std::string::npos) {
+      throwFitError(
+          InvalidArgument,
+          "a Bergamot model path carries no .intgemm signature: " + path);
+    }
     auto addVocab = [&](const char* key, const std::string& vocab) {
-      if (!report.empty()) {
-        return;
-      }
       // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
       const fs::path vocabPath = fs::u8path(vocab);
       if (vocab.empty() || !fs::is_regular_file(vocabPath, ec)) {
-        report = std::string("Bergamot vocabulary is missing: ") + key;
-        return;
+        throwFitError(
+            InvalidArgument,
+            std::string("the Bergamot vocabulary is missing: ") + key);
       }
       const uint64_t bytes = fs::file_size(vocabPath, ec);
-      if (ec || bytes > 9007199254740991ULL - modelBytes) {
-        report = std::string("Bergamot vocabulary is unreadable: ") + key;
-        return;
+      if (ec || bytes > K_MAX_SAFE_INTEGER - modelBytes) {
+        throwFitError(
+            InvalidArgument,
+            std::string("cannot read the Bergamot vocabulary: ") + key);
       }
       modelBytes += bytes;
     };
@@ -302,119 +355,100 @@ inline FitResult runFit(const FitRequest& request) {
     }
   }
 
-  if (report.empty()) {
-    const bool useGpu = request.useGpu;
-    NmtBackendsHandle backends(request.backendsDir, request.openclCacheDir);
-    ggml_backend_dev_t device = nullptr;
-    if (useGpu) {
-      const auto ordinal = request.gpuDevice.value_or(0);
-      if (!std::isfinite(ordinal) || std::trunc(ordinal) != ordinal ||
-          ordinal < 0 || ordinal > std::numeric_limits<int>::max()) {
-        reason = "unsupported-config";
-        report = "Invalid GPU device ordinal";
-      } else if (request.hasMainGpu) {
-        reason = "unsupported-config";
-        report = "Fit with main-gpu selection is unavailable";
-      } else {
-        device = nmtSelectGpuDevice(
-            true,
-            request.gpuBackend,
-            static_cast<int>(ordinal),
-            "assessFit",
-            {},
-            !request.gpuBackend.empty() || request.gpuDevice.has_value());
-      }
-    } else {
-      device = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  FitResult result;
+  const bool useGpu = request.useGpu;
+  NmtBackendsHandle backends(request.backendsDir, request.openclCacheDir);
+  ggml_backend_dev_t device = nullptr;
+  if (useGpu) {
+    const auto ordinal = request.gpuDevice.value_or(0);
+    if (!std::isfinite(ordinal) || std::trunc(ordinal) != ordinal ||
+        ordinal < 0 || ordinal > std::numeric_limits<int>::max()) {
+      throwFitError(InvalidArgument, "invalid GPU device ordinal");
     }
-    if (report.empty() && device == nullptr) {
-      reason = "device-unavailable";
-      report = "Requested compute device is unavailable";
+    // The fitter cannot follow a main-gpu selection.
+    if (request.hasMainGpu) {
+      return result;
     }
-    if (report.empty()) {
-      // Device handles are borrowed from the backend; the name is copied
-      // while `backends` still holds its reference.
-      result.backend = ggml_backend_dev_name(device);
-      size_t free = 0;
-      size_t total = 0;
-      ggml_backend_dev_memory(device, &free, &total);
-      result.freeBytes = free;
-      const uint64_t freeBytes = result.freeBytes;
-      if (freeBytes == 0 || freeBytes > 9007199254740991ULL) {
-        reason = "device-memory-unavailable";
-        report = "Compute device did not report usable free memory";
-      } else {
-        // A weight-load allowance. Graph and tokenizer usage is
-        // model-dependent; a negative verdict is only issued when even the
-        // source bytes exceed free memory.
-        constexpr uint64_t overhead = 512ULL * 1024ULL * 1024ULL;
-        if (modelBytes <= (9007199254740991ULL - overhead) / 4) {
-          result.requiredBytes = modelBytes * 4 + overhead;
-          const uint64_t requiredBytes = result.requiredBytes;
-          const uint64_t budget =
-              static_cast<uint64_t>(margin) < freeBytes
-                  ? freeBytes - static_cast<uint64_t>(margin)
-                  : 0;
-          size_t hostFree = free;
-          if (useGpu) {
-            auto* cpu = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-            size_t hostTotal = 0;
-            hostFree = 0;
-            if (cpu != nullptr) {
-              ggml_backend_dev_memory(cpu, &hostFree, &hostTotal);
-            }
-          }
-          if (useGpu && hostFree == 0) {
-            reason = "host-memory-unavailable";
-          } else if (
-              requiredBytes <= budget &&
-              static_cast<uint64_t>(margin) < hostFree &&
-              requiredBytes <= hostFree - static_cast<uint64_t>(margin)) {
-            result.status = "fits";
-            reason = "fits";
-          } else if (modelBytes > budget && !useGpu) {
-            result.status = "does-not-fit";
-            reason = "does-not-fit";
-          } else {
-            reason = "insufficient-evidence";
-          }
-          std::ostringstream stream;
-          stream << "Translation load estimate: source=" << modelBytes
-                 << " bytes, estimated allowance=" << requiredBytes
-                 << " bytes, device free=" << freeBytes
-                 << " bytes, host free=" << hostFree
-                 << " bytes, margin=" << static_cast<uint64_t>(margin)
-                 << " bytes; runtime graph use varies by model";
-          report = stream.str();
-        } else {
-          reason = "footprint-overflow";
-          report = "Model is too large to estimate safely";
-        }
-      }
+    device = nmtSelectGpuDevice(
+        true,
+        request.gpuBackend,
+        static_cast<int>(ordinal),
+        "assessFit",
+        {},
+        !request.gpuBackend.empty() || request.gpuDevice.has_value());
+  } else {
+    device = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  }
+  if (device == nullptr) {
+    throwFitError(
+        useGpu ? InvalidArgument : InternalError,
+        "the requested compute device is unavailable");
+  }
+
+  // A weight-load allowance. Graph and tokenizer usage is model-dependent; a
+  // negative verdict is only issued when even the source bytes exceed free
+  // memory, and between the two ends the answer stays unknown.
+  constexpr uint64_t overhead = 512ULL * 1024ULL * 1024ULL;
+  if (modelBytes > (K_MAX_SAFE_INTEGER - overhead) / 4) {
+    throwFitError(InvalidArgument, "the model is too large to estimate safely");
+  }
+  const uint64_t requiredBytes = modelBytes * 4 + overhead;
+
+  // The allowance is charged to the selected device, then the host CPU row. A
+  // discrete GPU's host stages the source bytes while the weights load; on a
+  // device that shares host memory the staging is the same memory, so its host
+  // row carries nothing more. A load on the CPU is one row. A verdict always
+  // carries the host row, so a registry without a CPU device to name it by
+  // leaves the load unsized.
+  const bool cpu =
+      ggml_backend_dev_type(device) == GGML_BACKEND_DEVICE_TYPE_CPU;
+  std::vector<FitDevice> rows{fitDevice(device, requiredBytes)};
+  if (!cpu) {
+    ggml_backend_dev_t host =
+        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    if (host == nullptr) {
+      return result;
     }
+    rows.push_back(fitDevice(host, rows.front().unified ? 0 : modelBytes));
+  }
+  for (const FitDevice& row : rows) {
+    if (row.freeBytes == 0 || row.freeBytes > K_MAX_SAFE_INTEGER) {
+      return result;
+    }
+  }
+
+#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+  capToAppLimit(rows, static_cast<uint64_t>(os_proc_available_memory()));
+#endif
+
+  result.status = fitVerdict(rows, modelBytes, margin, cpu);
+  if (result.status != "unknown") {
+    result.devices = std::move(rows);
   }
   return result;
 }
 
 inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
   using namespace qvac_lib_inference_addon_cpp;
+  auto bytes = [env](uint64_t value) {
+    return js::Number::create(env, static_cast<double>(value));
+  };
   auto result = js::Object::create(env);
   result.setProperty(env, "status", js::String::create(env, fit.status));
-  result.setProperty(env, "reason", js::String::create(env, fit.reason));
-  result.setProperty(env, "backend", js::String::create(env, fit.backend));
-  result.setProperty(env, "report", js::String::create(env, fit.report));
-  result.setProperty(
-      env,
-      "modelBytes",
-      js::Number::create(env, static_cast<double>(fit.modelBytes)));
-  result.setProperty(
-      env,
-      "requiredBytes",
-      js::Number::create(env, static_cast<double>(fit.requiredBytes)));
-  result.setProperty(
-      env,
-      "freeBytes",
-      js::Number::create(env, static_cast<double>(fit.freeBytes)));
+  auto devices = js::Array::create(env);
+  for (size_t i = 0; i < fit.devices.size(); ++i) {
+    const auto& row = fit.devices[i];
+    auto entry = js::Object::create(env);
+    entry.setProperty(env, "id", js::String::create(env, row.id));
+    entry.setProperty(env, "name", js::String::create(env, row.name));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", bytes(row.usedBytes));
+    entry.setProperty(env, "freeBytes", bytes(row.freeBytes));
+    entry.setProperty(env, "totalBytes", bytes(row.totalBytes));
+    devices.set(env, i, entry);
+  }
+  result.setProperty(env, "devices", devices);
+  result.setProperty(env, "stats", js::Object::create(env));
   return result;
 }
 

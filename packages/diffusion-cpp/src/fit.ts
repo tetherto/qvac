@@ -40,24 +40,36 @@ export interface WorldFitRequest {
   workload?: { walkSteps?: number }
 }
 
-export type DiffusionFitStatus = 'fits' | 'does-not-fit' | 'error'
+/**
+ * `does-not-fit` includes a load the engine could place only by changing its
+ * backend assignment. `unknown` is a placement the engine cannot plan from: a
+ * `mainGpu` pin, a `device` of cpu, a module-specific `paramsBackend`, or an
+ * OpenCL preference that does not name the first GPU.
+ */
+export type DiffusionFitStatus = 'fits' | 'does-not-fit' | 'unknown'
 
-export type DiffusionFitReason = 'fits' | 'does-not-fit' | 'model-unreadable' | 'unsupported-config'
+export interface DiffusionFitDevice {
+  /** The PCI bus ID when the backend reports one, the device name otherwise. */
+  id: string
+  name: string
+  /** Memory the host owns: the CPU, an integrated GPU, and Apple's Metal device. */
+  unified: boolean
+  /** The engine's measured projection for this device. */
+  usedBytes: number
+  freeBytes: number
+  totalBytes: number
+}
+
+export type DiffusionFitStats = Record<string, never>
 
 export interface DiffusionFitResult {
   status: DiffusionFitStatus
-  reason: DiffusionFitReason
   /**
-   * The engine placed the load only by altering the backend assignment. The
-   * configuration as given does not fit, so `status` is already `does-not-fit`.
+   * The GPU devices the placement uses, then the host. A shared-memory GPU's
+   * use is in its own row, not repeated in the host row. Empty for `unknown`.
    */
-  changed: boolean
-  vaeTiling: boolean
-  streamLayers: boolean
-  backend: string
-  paramsBackend: string
-  /** Per-device, per-module memory table, suitable for logging. */
-  report: string
+  devices: DiffusionFitDevice[]
+  stats: DiffusionFitStats
 }
 
 interface FitBinding {
@@ -72,8 +84,8 @@ interface FitBinding {
  *
  * Concurrent calls run one at a time within this addon.
  *
- * A model the engine cannot read resolves to `status: "error"`; only a broken
- * request rejects.
+ * A malformed request, a model the engine cannot read, or an ESRGAN output
+ * above the pixel limit rejects.
  */
 export async function assessFit(
   request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest
