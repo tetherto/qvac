@@ -53,6 +53,14 @@ export interface AudioGenRuntimeConfig {
     coremlProfileDir?: string;
     /** MiniMax only: explicit Core ML device policy; requires coremlProfileDir. */
     coremlComputeUnits?: AudiogenMinimaxCoreMLComputeUnits;
+    /** MiniMax only: compiled conditioner .mlmodelc; the remaining stages use device/useGPU. */
+    coremlConditionerPath?: string;
+    /** ACE-Step primary backend name or device name; empty/auto preserves native selection. */
+    backend?: string;
+    /** ACE-Step LM backend, selected independently from the primary backend. */
+    lmBackend?: string;
+    /** ACE-Step diagnostics: existing directory receiving native intermediate tensor dumps. */
+    dumpStagesDir?: string;
     /** ACE-Step only: GPU layers to offload when `useGPU` is set (99 = all). */
     nGpuLayers?: number;
     /** 0 = engine auto-picks. */
@@ -445,7 +453,7 @@ export interface UnderstandOptions {
     lmTopK?: number;
 }
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
-export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'other';
+export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'webgpu' | 'other';
 /** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
 export declare const AUDIOGEN_BACKEND_NAMES: Readonly<Record<number, AudiogenBackendName>>;
 /** `undefined` for an unset or unrecognised id, never a guessed name. */

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ACE-Step `backend`, `lmBackend`, and `dumpStagesDir` controls, with matching
+  backend selection in `assessFit()` and opt-in WebGPU source builds.
+- Apple Core ML VAE/conditioner support and MiniMax `coremlConditionerPath`
+  for generation and preflight; MiniMax Core ML memory projections remain `unknown`.
+
+### Fixed
+
+- Include independent LM device pools in `assessFit()` when the primary
+  pipeline runs on CPU, counting the host peak once.
+
 ### Breaking
 
 - `assessFit` returns `{ status, devices, stats }`: each device the pipeline

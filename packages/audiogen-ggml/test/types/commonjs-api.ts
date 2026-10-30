@@ -133,3 +133,26 @@ void coremlMinimax
 // @ts-expect-error Apple does not offer a GPU_ONLY Core ML policy
 const invalidCoreML: AudiogenMinimaxCoreMLComputeUnits = 'GPU_ONLY'
 void invalidCoreML
+
+const selectedAcestep = new AudioGen({
+  files: { modelDir: '/models/acestep' },
+  config: { backend: 'CPU', lmBackend: 'WebGPU', dumpStagesDir: '/existing/dumps' }
+})
+const selectedFit: Promise<AudiogenFitResult> = assessFit({
+  modelsDir: '/models/acestep',
+  backend: 'CPU',
+  lmBackend: 'WebGPU'
+})
+const conditionerMinimax = new AudioGen({
+  engine: ENGINE_MINIMAX,
+  files: { modelDir: '/models/minimax' },
+  config: { coremlConditionerPath: '/models/conditioner.mlmodelc', device: 'gpu' }
+})
+const conditionerFit: Promise<AudiogenFitResult> = assessFit({
+  engine: ENGINE_MINIMAX,
+  coremlConditionerPath: '/models/conditioner.mlmodelc'
+})
+void selectedAcestep
+void selectedFit
+void conditionerMinimax
+void conditionerFit

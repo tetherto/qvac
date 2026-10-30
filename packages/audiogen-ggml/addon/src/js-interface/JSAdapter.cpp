@@ -5,6 +5,7 @@
 
 #include "inference-addon-cpp/Errors.hpp"
 #include "js-interface/AudiogenConfigParse.hpp"
+#include "js-interface/RuntimeOptions.hpp"
 
 namespace qvac::audiogenggml {
 
@@ -122,6 +123,10 @@ JSAdapter::buildAcestepConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "ditModelPath");
   cfg.vaeModelPath =
       readOptionalString(configurationParams, env, "vaeModelPath");
+  cfg.backend = readRuntimeString(configurationParams, env, "backend");
+  cfg.lmBackend = readRuntimeString(configurationParams, env, "lmBackend");
+  cfg.dumpStagesDir =
+      readRuntimeString(configurationParams, env, "dumpStagesDir");
   cfg.inferenceSteps =
       readRequiredInt(configurationParams, env, "inferenceSteps");
   if (cfg.inferenceSteps < 0 ||
@@ -162,6 +167,8 @@ JSAdapter::buildMinimaxConfig(js::Object configurationParams, js_env_t* env) {
         general_error::InvalidArgument,
         "device must be 'cpu', 'gpu' or 'auto' (got '" + cfg.device + "')");
   }
+  cfg.coremlConditionerPath =
+      readRuntimeString(configurationParams, env, "coremlConditionerPath");
   cfg.coremlProfileDir =
       readOptionalString(configurationParams, env, "coremlProfileDir");
   cfg.coremlComputeUnits =

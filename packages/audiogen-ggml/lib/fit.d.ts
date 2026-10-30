@@ -19,6 +19,10 @@ export interface AudiogenFitRequest {
   /** MiniMax synthesis GGUF; pairs with `lmPath`. */
   synthPath?: string
 
+  /** ACE-Step primary backend name/device; empty/auto preserves native selection. */
+  backend?: string
+  /** ACE-Step LM backend, independent of the primary backend. */
+  lmBackend?: string
   /** > 0 requests the GPU stack, with the fallbacks a real load applies. */
   gpuLayers?: number
   /**
@@ -26,7 +30,9 @@ export interface AudiogenFitRequest {
    * > 0 projects `auto` (a GPU when one is usable) and anything else `cpu`.
    */
   device?: 'cpu' | 'gpu' | 'auto'
-  /** MiniMax full Core ML profile. Projection returns coreml-memory-estimate-unavailable. */
+  /** MiniMax compiled conditioner. Core ML projection returns status unknown with no device rows. */
+  coremlConditionerPath?: string
+  /** MiniMax full Core ML profile. Projection returns status unknown with no device rows. */
   coremlProfileDir?: string
   coremlComputeUnits?: 'CPU_ONLY' | 'CPU_AND_GPU' | 'CPU_AND_NE' | 'ALL'
   threads?: number
