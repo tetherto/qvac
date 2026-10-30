@@ -1,7 +1,6 @@
 {
   "name": "qvac-fabric",
   "version": "11259.2.0",
-  "port-version": 2,
   "description": "LLM inference in C/C++",
   "homepage": "https://github.com/tetherto/qvac-fabric-llm.cpp",
   "license": "MIT",
@@ -19,7 +18,10 @@
       "host": true
     }
   ],
-  "default-features": ["gpu-backends", "llama"],
+  "default-features": [
+    "gpu-backends",
+    "llama"
+  ],
   "features": {
     "cuda-backend": {
       "description": "Build the NVIDIA CUDA GPU backend as a runtime-loaded module alongside Vulkan. Supports Linux x64 and arm64, and Windows x64. Requires a CUDA toolkit at build time. On Windows the CUDA 13 runtime is loaded from the user's CUDA install, %CUDA_PATH%\\bin\\x64. An absent or unloadable CUDA module is skipped so selection falls through to Vulkan and then CPU.",
@@ -28,7 +30,9 @@
         {
           "name": "qvac-fabric",
           "default-features": false,
-          "features": ["gpu-backends"]
+          "features": [
+            "gpu-backends"
+          ]
         }
       ]
     },
@@ -39,7 +43,9 @@
         {
           "name": "qvac-fabric",
           "default-features": false,
-          "features": ["cuda-backend"]
+          "features": [
+            "cuda-backend"
+          ]
         }
       ]
     },
@@ -84,31 +90,14 @@
         {
           "name": "qvac-fabric",
           "default-features": false,
-          "features": ["llama"]
+          "features": [
+            "llama"
+          ]
         }
       ]
     },
     "vector-index": {
       "description": "Build and install the ggml vector index library."
-    },
-    "webgpu": {
-      "description": "Build ggml's WebGPU backend (ggml-webgpu on Google Dawn, driven natively through webgpu.h; no browser involved). Opt-in on every platform and orthogonal to gpu-backends: Dawn targets Vulkan on Linux/Windows/Android and Metal on Apple. Dawn comes from microsoft/vcpkg's dawn port, which the consumer pins: route dawn, vulkan-headers, vulkan-utility-libraries and vcpkg-get-python-packages to microsoft/vcpkg in vcpkg-configuration.json, override dawn to 20260410.140140 (the version the fabric ggml-webgpu compiles against), and list dawn as a top-level dependency with default-features false so its Linux x11/gl/gles defaults stay off. Needed by the speech stack (speech-cpp[webgpu]).",
-      "dependencies": [
-        {
-          "name": "dawn",
-          "default-features": false,
-          "features": [
-            {
-              "name": "metal",
-              "platform": "osx | ios"
-            },
-            {
-              "name": "vulkan",
-              "platform": "(windows & !uwp) | linux | android"
-            }
-          ]
-        }
-      ]
     }
   }
 }
