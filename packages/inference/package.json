@@ -173,6 +173,7 @@
     "prepare": "npm run build",
     "build:test": "tsc -p test/tsconfig.build.json && tsc-alias -p test/tsconfig.alias.json",
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
+    "test:rpc:lan": "npm run build:test && brittle-bare test/dist/test/rpc-lan.integration.js",
     "test:bare": "npm run test",
     "check-models": "bare ./dist/models/update-models/index.js --check",
     "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts"
@@ -189,6 +190,7 @@
     "bare-buffer": "^3.6.2",
     "bare-cpu-info": "0.1.1",
     "bare-crypto": "^1.15.3",
+    "bare-dgram": "1.1.1",
     "bare-env": "^3.0.1",
     "bare-fs": "^4.7.4",
     "bare-gpu-info": "0.1.1",

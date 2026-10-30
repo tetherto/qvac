@@ -1,86 +1,75 @@
-import Hyperswarm, { type Connection } from 'hyperswarm'
 import { Buffer } from 'bare-buffer'
+import { randomBytes } from 'bare-crypto'
+import AbortController from 'bare-abort-controller'
 import type { RequestContext } from '@/runtime/request-context'
 import { createDisposableScope } from '@/runtime/disposable-scope'
-import { registerSwarm, unregisterSwarm } from '@/runtime/runtime-lifecycle'
 import { getEngineLogger } from '@/logging/index'
 import { delay, privateEndpoint, rpcTopic, throwIfAborted } from './network'
 import { queryRpcInventory, type RpcInventory } from './inventory'
+import { ANNOUNCEMENT_BYTES, createLanDiscovery } from './lan'
 import type { RpcServerCandidate } from '@/schemas/rpc-server'
 
-const FRAME_LIMIT = 1024
 const LEASE_MS = 3000
 const MAX_CANDIDATES = 64
+const PROBE_MS = 500
+const MAGIC = 'QVRP'
 
-export function createDiscoverySwarm() {
-  const swarm = new Hyperswarm({ maxPeers: 32 })
-  swarm.on('error', (error) => getEngineLogger().warn('RPC discovery swarm:', error))
-  registerSwarm(swarm, { label: 'rpc-discovery', createdAt: Date.now() })
-  return swarm
-}
-
-export async function destroyDiscoverySwarm(swarm: Hyperswarm) {
-  await swarm.destroy()
-  unregisterSwarm(swarm)
-}
-
-export function parseAnnouncement(line: string): string | undefined {
-  if (line.length > FRAME_LIMIT) return
-  try {
-    const value: unknown = JSON.parse(line)
-    if (!value || typeof value !== 'object') return
-    const frame = value as Record<string, unknown>
-    if (frame['version'] !== 1 || typeof frame['url'] !== 'string') return
-    return privateEndpoint(frame['url']) ? frame['url'] : undefined
-  } catch {
+export function parseAnnouncement(frame: Buffer, topic: Buffer) {
+  if (
+    frame.length !== ANNOUNCEMENT_BYTES ||
+    frame.toString('ascii', 0, 4) !== MAGIC ||
+    frame[4] !== 1
+  ) {
     return
   }
+  if (!Buffer.from(frame.subarray(5, 37)).equals(topic)) return
+  const port = frame.readUInt16BE(53)
+  if (!port) return
+  return { port, instance: Buffer.from(frame.subarray(37, 53)).toString('hex') }
 }
 
 export async function advertiseRpcServer(
   topic: string,
   url: string,
-  createSwarm = createDiscoverySwarm
+  ctx?: RequestContext,
+  createTransport = createLanDiscovery
 ): Promise<() => Promise<void>> {
-  if (!privateEndpoint(url)) {
-    throw new Error('RPC advertising requires a concrete private IPv4 endpoint')
-  }
-  const swarm = createSwarm()
-  let withdrawn = false
-  const connections = new Set<Connection>()
-  const frame = JSON.stringify({ version: 1, url }) + '\n'
-  const announce = () => {
-    if (swarm.suspended) return
-    for (const connection of connections) {
-      if (!connection.destroyed && !connection.write(frame)) connection.destroy()
+  const endpoint = privateEndpoint(url)
+  if (!endpoint) throw new Error('RPC advertising requires a concrete private IPv4 endpoint')
+  const frame = Buffer.alloc(ANNOUNCEMENT_BYTES)
+  frame.write(MAGIC, 0, 'ascii')
+  frame[4] = 1
+  rpcTopic(topic).copy(frame, 5)
+  randomBytes(16).copy(frame, 37)
+  frame.writeUInt16BE(endpoint.port, 53)
+  const scope = createDisposableScope()
+  const transport = createTransport({
+    host: endpoint.host,
+    onstop(error) {
+      if (error) getEngineLogger().warn('RPC LAN advertising stopped:', error)
     }
-  }
-  swarm.on('connection', (connection) => {
-    if (withdrawn || swarm.suspended) {
-      connection.destroy()
-      return
-    }
-    connection.on('error', () => {})
-    connection.once('close', () => connections.delete(connection))
-    // This protocol is one-way; clients never send requests to advertisers.
-    connection.on('data', () => connection.destroy())
-    connections.add(connection)
-    if (!connection.write(frame)) connection.destroy()
   })
-  const timer = setInterval(announce, 1000)
-  async function withdraw() {
-    withdrawn = true
-    clearInterval(timer)
-    for (const connection of connections) connection.destroy()
-    await destroyDiscoverySwarm(swarm)
+  scope.defer(() => transport.close())
+  const abort = () => {
+    void transport.suspend()
   }
+  ctx?.signal.addEventListener('abort', abort, { once: true })
   try {
-    swarm.join(rpcTopic(topic), { server: true, client: false })
+    await transport.start(ctx?.signal)
+    if (ctx) throwIfAborted(ctx.signal)
+    await transport.send(frame)
+    const timer = setInterval(() => {
+      void transport.send(frame).catch(() => {})
+    }, 1000)
+    scope.defer(() => clearInterval(timer))
   } catch (error) {
-    await withdraw()
+    await scope[Symbol.asyncDispose]()
+    if (ctx) throwIfAborted(ctx.signal)
     throw error
+  } finally {
+    ctx?.signal.removeEventListener('abort', abort)
   }
-  return withdraw
+  return () => scope[Symbol.asyncDispose]()
 }
 
 export async function discoverRpcEndpoints(
@@ -88,88 +77,141 @@ export async function discoverRpcEndpoints(
   timeoutMs: number,
   ctx: RequestContext,
   deps: {
-    createSwarm?: typeof createDiscoverySwarm
+    createTransport?: typeof createLanDiscovery
     probe?: typeof queryRpcInventory
   } = {}
 ): Promise<RpcServerCandidate[]> {
+  throwIfAborted(ctx.signal)
   await using scope = createDisposableScope()
-  const swarm = (deps.createSwarm ?? createDiscoverySwarm)()
-  scope.defer(() => destroyDiscoverySwarm(swarm))
-  const candidates = new Map<Connection, { url: string; seen: number }>()
-  const inventories = new Map<string, RpcInventory>()
-  const probes = new Map<string, Promise<void>>()
+  const hash = rpcTopic(topic)
   const deadline = Date.now() + timeoutMs
-  const connections = new Set<Connection>()
-  scope.defer(() => {
-    for (const connection of connections) connection.destroy()
+  interface Candidate {
+    instance: string
+    seen: number
+    attempts: number
+    tried: number
+    probing: boolean
+    inventory?: RpcInventory
+  }
+  const candidates = new Map<string, Candidate>()
+  const admitted = new Set<string>()
+  const attempts = new Map<string, number>()
+  const pending = new Set<Promise<void>>()
+  let session = new AbortController()
+  const wait = new AbortController()
+  let active = 0
+  let failure: Error | undefined
+  let rejectFailure: (error: Error) => void = () => {}
+  const failed = new Promise<never>((_, reject) => {
+    rejectFailure = reject
   })
-  swarm.on('connection', (connection) => {
-    if (connections.size >= MAX_CANDIDATES) {
-      connection.destroy()
+  // A bind error may arrive before the wait starts.
+  void failed.catch(() => {})
+  const abort = () => {
+    session.abort(undefined)
+    wait.abort(undefined)
+  }
+  ctx.signal.addEventListener('abort', abort, { once: true })
+  scope.defer(async () => {
+    ctx.signal.removeEventListener('abort', abort)
+    abort()
+    await Promise.allSettled(pending)
+  })
+
+  function pump() {
+    if (transport.suspended || scope.disposed || ctx.signal.aborted || Date.now() >= deadline) {
       return
     }
-    connections.add(connection)
-    let pending = Buffer.alloc(0)
-    let frames = 0
-    connection.on('error', () => {})
-    connection.once('close', () => {
-      candidates.delete(connection)
-      connections.delete(connection)
-    })
-    connection.on('data', (chunk) => {
-      if (Date.now() >= deadline || ctx.signal.aborted || swarm.suspended) return
-      if (pending.length + chunk.length > FRAME_LIMIT) {
-        connection.destroy()
-        return
+    for (const [url, candidate] of candidates) {
+      if (active >= 4) break
+      if (
+        candidate.inventory ||
+        candidate.probing ||
+        candidate.attempts >= 2 ||
+        Date.now() - candidate.seen >= LEASE_MS ||
+        Date.now() - candidate.tried < PROBE_MS
+      ) {
+        continue
       }
-      pending = Buffer.concat([pending, chunk])
-      let newline: number
-      while ((newline = pending.indexOf('\n')) !== -1) {
-        // Bound work from a peer that ignores the one-second announcement interval.
-        if (++frames > Math.ceil(timeoutMs / 1000) + 4) {
-          connection.destroy()
-          return
+      const endpoint = privateEndpoint(url)!
+      candidate.probing = true
+      candidate.attempts++
+      attempts.set(url, candidate.attempts)
+      candidate.tried = Date.now()
+      active++
+      const signal = session.signal
+      const task = (async () => {
+        await using probeScope = createDisposableScope()
+        try {
+          const inventory = await (deps.probe ?? queryRpcInventory)(
+            endpoint.host,
+            endpoint.port,
+            Math.max(1, Math.min(PROBE_MS, deadline - Date.now())),
+            signal,
+            probeScope
+          )
+          if (!signal.aborted && candidates.get(url) === candidate && inventory?.devices.length) {
+            candidate.inventory = inventory
+          }
+        } catch {
+          /* Failed probes exclude this endpoint. Cancellation also closes the TCP socket. */
+        } finally {
+          active--
+          candidate.probing = false
+          pump()
         }
-        const url = parseAnnouncement(pending.subarray(0, newline).toString())
-        pending = Buffer.from(pending.subarray(newline + 1))
-        if (!url) {
-          connection.destroy()
-          return
-        }
-        const previous = candidates.get(connection)
-        if (previous && previous.url !== url) {
-          connection.destroy()
-          return
-        }
-        candidates.set(connection, { url, seen: Date.now() })
-        if (probes.has(url) || probes.size >= MAX_CANDIDATES) continue
-        const endpoint = privateEndpoint(url)!
-        const probe = (deps.probe ?? queryRpcInventory)(
-          endpoint.host,
-          endpoint.port,
-          Math.max(1, Math.min(500, deadline - Date.now())),
-          ctx.signal,
-          scope
-        )
-          .then((inventory) => {
-            if (inventory?.devices.length) inventories.set(url, inventory)
-          })
-          .catch(() => {})
-        probes.set(url, probe)
+      })()
+      pending.add(task)
+      void task.finally(() => pending.delete(task))
+    }
+  }
+
+  const transport = (deps.createTransport ?? createLanDiscovery)({
+    onmessage(frame, host) {
+      if (Date.now() >= deadline || ctx.signal.aborted || transport.suspended) return
+      const announcement = parseAnnouncement(frame, hash)
+      if (!announcement) return
+      if (session.signal.aborted) session = new AbortController()
+      const url = `${host}:${announcement.port}`
+      if (!privateEndpoint(url)) return
+      if (!admitted.has(url)) {
+        if (admitted.size >= MAX_CANDIDATES) return
+        admitted.add(url)
       }
-    })
+      let candidate = candidates.get(url)
+      if (!candidate || candidate.instance !== announcement.instance) {
+        // One endpoint gets at most two probes per lookup, including restarts.
+        if ((attempts.get(url) ?? 0) >= 2) return
+        candidate = {
+          instance: announcement.instance,
+          seen: Date.now(),
+          attempts: attempts.get(url) ?? 0,
+          tried: 0,
+          probing: false
+        }
+        candidates.set(url, candidate)
+      }
+      candidate.seen = Date.now()
+      pump()
+    },
+    onstop(error) {
+      candidates.clear()
+      session.abort(undefined)
+      if (error) {
+        failure = error
+        rejectFailure(error)
+      }
+    }
   })
-  swarm.join(rpcTopic(topic), { server: false, client: true })
-  await delay(timeoutMs, ctx.signal)
+  scope.defer(() => transport.close())
+  await transport.start(ctx.signal)
+  await Promise.race([delay(Math.max(0, deadline - Date.now()), wait.signal), failed])
   throwIfAborted(ctx.signal)
-  // No cache survives the lookup. Closed peers and expired leases are excluded.
-  if (swarm.suspended) return []
-  const now = Date.now()
-  return [
-    ...new Set(
-      [...candidates.values()]
-        .filter(({ url, seen }) => now - seen < LEASE_MS && inventories.has(url))
-        .map(({ url }) => url)
-    )
-  ].map((url) => ({ url, ...inventories.get(url)! }))
+  if (failure) throw failure
+  if (transport.suspended) return []
+  return [...candidates].flatMap(([url, candidate]) =>
+    Date.now() - candidate.seen < LEASE_MS && candidate.inventory
+      ? [{ url, ...candidate.inventory }]
+      : []
+  )
 }

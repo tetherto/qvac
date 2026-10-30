@@ -3,12 +3,14 @@ import { generateRandomRequestId } from '@/runtime/request-id'
 import { createDisposableScope } from '@/runtime/disposable-scope'
 import type { StartRpcServerOptions, RpcServerInfo, RpcServerHandle } from '@/schemas/rpc-server'
 import { privateEndpoint, throwIfAborted } from './network'
+import { selectLanInterfaces } from './lan'
 
 export type ManagedRpcServer = RpcServerHandle
 export interface RpcServerDependencies {
   start(options: StartRpcServerOptions): Promise<ManagedRpcServer>
   ready(server: ManagedRpcServer, ctx: RequestContext): Promise<void>
-  advertise(topic: string, url: string): Promise<() => Promise<void>>
+  advertise(topic: string, url: string, ctx: RequestContext): Promise<() => Promise<void>>
+  lanInterfaces?: typeof selectLanInterfaces
 }
 interface OwnedServer {
   handle: ManagedRpcServer
@@ -65,11 +67,26 @@ export function createRpcServerManager(deps: RpcServerDependencies) {
     throwIfAborted(ctx.signal)
     if (
       options.discoveryTopic &&
-      (!options.allowNonLoopbackHost || !privateEndpoint(`${options.host}:1`))
+      (!options.allowNonLoopbackHost ||
+        (options.host !== undefined && !privateEndpoint(`${options.host}:1`)))
     ) {
       throw new Error(
-        'RPC advertising requires a concrete private IPv4 host and allowNonLoopbackHost: true'
+        'RPC advertising requires allowNonLoopbackHost: true; an explicit host must be a private IPv4 address'
       )
+    }
+    if (options.discoveryTopic && options.host === undefined) {
+      const interfaces = (deps.lanInterfaces ?? selectLanInterfaces)()
+      if (!interfaces.length) {
+        throw new Error(
+          'RPC advertising requires an eligible private IPv4 Wi-Fi or Ethernet address'
+        )
+      }
+      if (interfaces.length > 1) {
+        throw new Error(
+          `Multiple eligible RPC LAN addresses; specify host explicitly: ${interfaces.map(({ name, address }) => `${name}=${address}`).join(', ')}`
+        )
+      }
+      options = { ...options, host: interfaces[0]!.address }
     }
     await using scope = createDisposableScope()
     const handle = await deps.start(options)
@@ -85,7 +102,7 @@ export function createRpcServerManager(deps: RpcServerDependencies) {
     throwIfAborted(ctx.signal)
     if (closing) throw new Error('RPC server manager is closing')
     if (options.discoveryTopic) {
-      entry.withdraw = await deps.advertise(options.discoveryTopic, handle.url)
+      entry.withdraw = await deps.advertise(options.discoveryTopic, handle.url, ctx)
     }
     throwIfAborted(ctx.signal)
     if (closing) throw new Error('RPC server manager is closing')

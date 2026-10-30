@@ -12,6 +12,7 @@ import { generateClientRequestId } from '@/client/api/client-request-id'
 
 /**
  * Start a worker-owned native RPC server. Non-loopback binding and advertising require explicit opt-in.
+ * With discoveryTopic, an omitted host selects the only eligible LAN address.
  * Cancel a pending start with its promise.requestId.
  */
 export function startRpcServer(

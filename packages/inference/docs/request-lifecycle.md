@@ -44,3 +44,25 @@ Keep event-stream termination and aggregate-promise outcomes compatible, includi
 partial results. Update the plugin declaration, handler, schemas, public surface,
 and focused registry/cancellation tests together. Current source and tests are
 authoritative for supported request kinds and admission lanes.
+
+## RPC LAN discovery resources
+
+RPC advertising and lookup use the small UDP transport in `src/rpc/lan.ts`.
+It implements the existing suspendable-resource interface and registers with the
+runtime lifecycle under `rpc-lan-discovery`. Discovery does not create a
+Hyperswarm. Model-download swarms retain their existing lifecycle behavior.
+
+Request scopes close lookup sockets and cancel inventory probes on completion,
+error and cancellation. The RPC server manager owns advertiser cleanup and
+withdraws before stopping its native handle. When advertising is explicitly
+enabled and `host` is omitted, it resolves the sole eligible LAN address before
+starting a native server. Missing or ambiguous addresses fail before startup;
+ordinary non-advertising starts keep the native loopback default. A stopped advertisement expires
+at receivers after three seconds. Suspend closes sockets and invalidates lookup
+inventories. Resume selects current eligible interfaces and reopens sockets.
+Detected interface changes stop the transport until restart or runtime resume.
+
+The fixed-size protocol and UDP implementation stay behind `LanDiscovery` so a
+later transport can replace them without changing public RPC methods or native
+inventory validation. See the website's RPC servers page for supported links,
+mobile prerequisites and physical-device validation.
