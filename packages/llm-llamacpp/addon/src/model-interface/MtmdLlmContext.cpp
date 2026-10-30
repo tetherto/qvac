@@ -99,6 +99,13 @@ MtmdLlmContext::MtmdLlmContext(
   initializeCommonState();
 }
 
+MtmdLlmContext::~MtmdLlmContext() {
+  // See ~TextLlmContext.
+  if (llamaInit_ && modelCtx_.lctx != nullptr) {
+    llama_synchronize(modelCtx_.lctx);
+  }
+}
+
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void MtmdLlmContext::initializeCommonState() {
   if (modelCtx_.model == nullptr) {
@@ -644,7 +651,8 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     const cache::Ledger fullLedger = ledgerFromChunks(chunks);
     // Reconciliation trims or replaces the cached conversation, so a prompt
     // that cannot fit is refused before it, against the prefix it shares
-    // with the cache.
+    // with the cache, and before another conversation's state is copied in
+    // (see TextLlmContext::preparePrefill).
     const size_t shared = cache::commonPrefix(residentLedger_, fullLedger);
     const llama_pos sharedPositions = fullLedger.positions(shared);
     const llama_pos sharedTokens = fullLedger.cacheTokens(shared);
@@ -653,6 +661,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
         sharedTokens,
         fullLedger.positions() - sharedPositions,
         fullLedger.cacheTokens() - sharedTokens);
+    if (cacheSourceProvider_ && sharesCacheAcrossKeys()) {
+      adoptBestCacheSource(fullLedger, prefill);
+    }
     beginCacheRequest();
     reconciledPlan = reconcilePrompt(std::move(fullPlan), fullLedger, prefill);
   }
@@ -1323,9 +1334,9 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
             qvac_errors::general_error::InvalidArgument),
         errorMsg);
   }
-  const std::string mediaId =
-      std::to_string(cache::hashBytes(bmp.data(), bmp.n_bytes()));
-  bmp.set_id(mediaId.c_str());
+  // The helper names the bitmap by the SHA-256 of its bytes. The ledger keeps
+  // a 64-bit hash of that name (`ledgerFromChunks`), which the cache compares
+  // across keys; llama-server compares the name itself.
   bitmaps_.entries.push_back(std::move(bmp));
 }
 
@@ -1369,9 +1380,26 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
 }
 
 void MtmdLlmContext::resetState(bool resetStats) {
-
+  // Also finishes queued backend work before the memory is cleared.
+  resetStateKeepingMemory(resetStats);
   current_ = {};
   clearCacheReconciliationState();
+  clearSequenceMemory(modelCtx_.lctx);
+}
+
+void MtmdLlmContext::resetStateKeepingMemory(bool resetStats) {
+  // Between requests the memory, `current_`, the ledger and the checkpoints
+  // agree; only what a request leaves behind is dropped. What stays is no
+  // longer any key's until a request reconciles it.
+  residentStateBorrowed_ = current_.pos > 0;
+  discardPendingResidentToken();
+  pendingPromptLedger_.entries.clear();
+  preRequestLedger_.entries.clear();
+  preRequestCacheSnapshot_.clear();
+  pendingHistoryCheckpoint_.reset();
+  historyCheckpointEntries_ = 0;
+  cacheRequestActive_ = false;
+  cacheRequestRolledBack_ = false;
 
   // On partial reset (resetStats=false), preserve vision-encode accumulators
   // so `runtimeStats()` can read the per-inference values.
@@ -1381,22 +1409,13 @@ void MtmdLlmContext::resetState(bool resetStats) {
   }
 
   requestRollback_.clear();
-
-  // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
-
-  // Finish queued backend work before mutating KV/recurrent memory.
   llama_synchronize(modelCtx_.lctx);
-  clearSequenceMemory(modelCtx_.lctx);
-
-  // Reset the performance metrics
   if (resetStats) {
     llama_perf_context_reset(modelCtx_.lctx);
   }
-
-  // Reset sampler if available
   common_sampler_reset(smpl_.get());
 }
 
@@ -1517,6 +1536,96 @@ void MtmdLlmContext::rebuildSamplerFromLedger(const cache::Ledger& ledger) {
   }
 }
 
+void MtmdLlmContext::adoptBestCacheSource(
+    const cache::Ledger& fullPrompt, bool isPrefillOnlyRequest) {
+  // See TextLlmContext::adoptBestCacheSource.
+  const cache::Ledger prompt =
+      needsFullStateSnapshot_
+          ? cache::servablePrompt(fullPrompt, isPrefillOnlyRequest)
+          : fullPrompt;
+  const size_t shared = cache::commonPrefix(residentLedger_, prompt);
+  const bool trimmable =
+      !needsFullStateSnapshot_ &&
+      canTrimSequenceTo(modelCtx_.lctx, residentLedger_.positions(shared));
+  const size_t own = cache::reusablePrefix(
+      residentLedger_, &cacheCheckpoints_, prompt, trimmable);
+  const bool donorTrimmable =
+      !needsFullStateSnapshot_ && !slidingWindowCheckpoints_;
+  (void)cacheSourceProvider_(
+      prompt,
+      std::max(fullPrompt.positions(), fullPrompt.cacheTokens()),
+      donorTrimmable,
+      own,
+      [this, &prompt](const cache::DonorState& donor) {
+        return adoptDonorState(donor, prompt);
+      });
+}
+
+bool MtmdLlmContext::adoptDonorState(
+    const cache::DonorState& donor, const cache::Ledger& prompt) {
+  // See TextLlmContext::adoptDonorState.
+  ScopeGuard coldGuard([this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[MtmdLlm] failed to clear sequence after rejecting a donor state\n");
+    }
+    current_ = {};
+    clearCacheReconciliationState();
+  });
+  llama_synchronize(modelCtx_.lctx);
+  clearSequenceMemory(modelCtx_.lctx);
+  current_ = {};
+  clearCacheReconciliationState();
+  try {
+    if (!donor.copyInto(modelCtx_.lctx, seqId_)) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[MtmdLlm] could not copy the state of %s\n",
+              donor.source.c_str()));
+      return false;
+    }
+    acceptRestoredState(*donor.ledgerWords, donor.source);
+  } catch (const std::exception& ex) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[MtmdLlm] rejected the state of %s: %s\n",
+            donor.source.c_str(),
+            ex.what()));
+    return false;
+  }
+  const size_t shared = cache::commonPrefix(residentLedger_, prompt);
+  if (shared < residentLedger_.entries.size() &&
+      (needsFullStateSnapshot_ ||
+       !canTrimSequenceTo(modelCtx_.lctx, residentLedger_.positions(shared)))) {
+    const CacheCheckpoint* best =
+        cache::longestCheckpointWithin(donor.checkpoints, prompt, shared);
+    if (best == nullptr ||
+        !restoreSequenceState(modelCtx_.lctx, seqId_, best->state)) {
+      return false;
+    }
+    residentLedger_ = best->ledger;
+    current_ = {
+        .pos = residentLedger_.positions(), .cacheTokens = best->cacheTokens};
+  }
+  residentStateBorrowed_ = true;
+  coldGuard.dismiss();
+  ++donorAdoptions_;
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "[MtmdLlm] starting from %s: %zu of %zu servable prompt entries "
+          "resident\n",
+          donor.source.c_str(),
+          cache::commonPrefix(residentLedger_, prompt),
+          prompt.entries.size()));
+  return true;
+}
+
 PrefillPlan MtmdLlmContext::reconcilePrompt(
     PrefillPlan fullPlan, const cache::Ledger& fullLedger,
     bool isPrefillOnlyRequest) {
@@ -1625,6 +1734,8 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
     historyCheckpointEntries_ =
         fullLedger.entries.size() - generationPromptTokens_;
   }
+  // What is left is a prefix of this request's own prompt.
+  residentStateBorrowed_ = false;
   rebuildSamplerFromLedger(residentLedger_);
 
   PrefillPlan suffix;
@@ -1863,8 +1974,12 @@ PrefillPlan MtmdLlmContext::preparePrefill(
   if (cacheReconciliationEnabled_) {
     const cache::Ledger fullLedger = ledgerFromChunks(chunks);
     // Reconciliation trims or replaces the cached conversation, so a prompt
-    // that cannot fit even with its shared prefix reused is refused before it.
+    // that cannot fit even with its shared prefix reused is refused before it,
+    // and before another conversation's state is copied in.
     throwIfOverflows(fullLedger.positions(), fullLedger.cacheTokens());
+    if (cacheSourceProvider_ && sharesCacheAcrossKeys()) {
+      adoptBestCacheSource(fullLedger, isPrefillOnlyRequest);
+    }
     beginCacheRequest();
     plan = reconcilePrompt(std::move(plan), fullLedger, isPrefillOnlyRequest);
     if (historyCheckpointEntries_ > 0) {
@@ -2419,12 +2534,14 @@ void MtmdLlmContext::restoreCacheStateTokens(
       decoded.ledger, llama_vocab_n_tokens(modelCtx_.vocab));
   residentLedger_ = decoded.ledger;
   current_ = {.pos = decoded.nPast, .cacheTokens = decoded.cacheTokens};
+  residentStateBorrowed_ = false;
   cacheCheckpoints_.clear();
   pendingHistoryCheckpoint_.reset();
 }
 
 void MtmdLlmContext::clearCacheReconciliationState() {
   residentLedger_.entries.clear();
+  residentStateBorrowed_ = false;
   pendingPromptLedger_.entries.clear();
   preRequestLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();

@@ -1616,10 +1616,10 @@ namespace LlmLlamacpp {
      * otherwise be lost with turns the file lacks: when it is set aside for
      * another key, evicted from its batch slot or from the RAM tier, or the
      * model is reloaded or unloaded. With `ephemeral: true` each of those
-     * drops it instead, so its next request finds no state of its own (on
-     * text models it still reuses any prefix it shares with what the model
-     * holds). It still loads an existing file, and an explicit
-     * `saveCache(cacheKey)` still writes it.
+     * drops it instead, so its next request finds no state of its own (it
+     * still reuses any prefix it shares with what the model holds, except on
+     * encoder-decoder models). It still loads an existing file, and an
+     * explicit `saveCache(cacheKey)` still writes it.
      * The flag belongs to the conversation's latest request.
      */
     ephemeral?: boolean;
@@ -1632,7 +1632,7 @@ namespace LlmLlamacpp {
      * this model, as any `cacheKey` file it used does, until files named
      * or picked as a prompt's closest match more recently push it out (the
      * model keeps the 256 most recent, as far as 64 MiB of memory holds
-     * their prompt records). Text models only.
+     * their prompt records).
      */
     baseCacheKey?: string;
     /**

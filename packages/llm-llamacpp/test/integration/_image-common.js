@@ -216,11 +216,17 @@ async function setupMultimodalInference(
   return { inference, modelName: modelName.replace(/\.gguf$/i, '') }
 }
 
+// A request without a cacheKey keeps its state for the next one, which would
+// then reuse the image of an identical prompt. A distinct system message per
+// call keeps every timed run's image encode and prefill cold.
+let describeRuns = 0
+
 async function describeImage(inference, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
   const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
+  describeRuns++
   const messages = [
-    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'system', content: `Run ${describeRuns}. You are a helpful assistant.` },
     { role: 'user', type: 'media', content: imageBytes },
     { role: 'user', content: prompt }
   ]

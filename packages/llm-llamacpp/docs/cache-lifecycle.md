@@ -119,9 +119,9 @@ stateDiagram-v2
     }
 ```
 
-The rule is the same with or without `cacheKey`. On text models a request
-without one is reconciled like a keyed one, and its state stays in memory for
-the prefix the next request shares with it (see [Starting from another
+The rule is the same with or without `cacheKey`. A request without one is
+reconciled like a keyed one, and its state stays in memory for the prefix the
+next request shares with it (see [Starting from another
 conversation](#starting-from-another-conversation)); it is never written to a
 file.
 
@@ -189,9 +189,10 @@ prompt are deleted.
 
 ## Starting from another conversation
 
-On text models a request is not limited to its own `cacheKey`'s state. After
-its prompt is tokenized and before it is reconciled, it starts from whichever
-state serves the longest prefix of it, cheapest first on a tie:
+A request is not limited to its own `cacheKey`'s state (encoder-decoder
+models excepted: they encode each prompt afresh). After its prompt is
+tokenized and before it is reconciled, it starts from whichever state serves
+the longest prefix of it, cheapest first on a tie:
 
 1. its own sequence: its key's conversation, or what the previous occupant
    left there (a conversation set aside by a key switch or evicted from the
@@ -223,10 +224,13 @@ The source is copied and never changes: a parked slot through host memory
 (`llama_memory_seq_cp` between KV streams only queues the copy for the next
 decode), a RAM-tier entry from its bytes, a file by loading it. The copy
 then belongs to the request, which reconciles it as above and writes it only
-to its own key's file. This is llama-server's `--slot-prompt-similarity` and `--cache-ram`,
-with any shared prefix taken. A request without a key keeps its state in
-memory the same way, never written to a file. Multimodal models keep a key's
-state to that key for now.
+to its own key's file. This is llama-server's `--slot-prompt-similarity` and
+`--cache-ram`, with any shared prefix taken. A request without a key keeps its
+state in memory the same way, never written to a file. On multimodal models an
+image is one ledger entry identified by a 64-bit hash of the SHA-256 of its
+encoded bytes (llama-server compares media chunks by that SHA-256): a shared
+image is part of the shared prefix and is not encoded again. The same picture
+encoded differently, or with other metadata, is another image.
 
 **Cost.** Decoding is paid once per token, because the shared prefix is
 reused. Rendering and tokenizing are not: every cached turn renders and
@@ -536,10 +540,9 @@ One conversation is active at a time, in the context's sequence 0.
    with, based on the request's `cacheKey`:
    - **same key**: nothing is written; the conversation continues in memory;
    - **another key**, or **no key**: the conversation is set aside before the
-     request is served. Its memory stays in sequence 0 on text models, so a
-     request whose key has no state of its own, or that has no key, starts
-     from the prefix it shares with it. Setting aside goes through these
-     checks in order:
+     request is served. Its memory stays in sequence 0, so a request whose
+     key has no state of its own, or that has no key, starts from the prefix
+     it shares with it. Setting aside goes through these checks in order:
      1. it was loaded from, or written to, its file and that file (or its
         directory) is now missing or empty: the caller deleted it, so it is
         dropped and nothing is written;
@@ -563,10 +566,11 @@ Each of the `parallel` sequences ("slots") holds at most one conversation.
 1. **A request finishes.** Nothing is written. A committed request with a
    `cacheKey` leaves its state in the slot ("resident") for the next request
    on that key, marked as having turns its file does not hold, with the
-   time it was last used and the request's `ephemeral` flag. A text request
-   without a `cacheKey` parks its state anonymously: kept for the prefix later
-   requests share with it, ephemeral, never written. Requests that rolled back
-   leave nothing: their slot is cleared.
+   time it was last used and the request's `ephemeral` flag. A request
+   without a `cacheKey` (encoder-decoder models excepted) parks its state
+   anonymously: kept for the prefix later requests share with it, ephemeral,
+   never written. Requests that rolled back leave nothing: their slot is
+   cleared.
 2. **A request picks a slot**: the free slot already holding its key's
    conversation (nothing is read); otherwise an empty slot, filled from the RAM
    tier, else from the file, else cold; otherwise the free slot whose resident
@@ -583,10 +587,10 @@ Each of the `parallel` sequences ("slots") holds at most one conversation.
    3. it has unsaved turns and is not ephemeral: its file is written;
       otherwise it is dropped.
 
-   Then the slot is cleared, except when it was taken for a new request on a
-   text model: its cells then stay for the prefix that request shares with
-   them. If it did not go to RAM, its checkpoints are kept in memory per
-   `cacheKey` for its next load.
+   Then the slot is cleared, except when it was taken for a new request: its
+   cells then stay for the prefix that request shares with them. If it did not
+   go to RAM, its checkpoints are kept in memory per `cacheKey` for its next
+   load.
 4. **The RAM tier is full.** To fit a new entry, the oldest entries are
    removed; each one with unsaved turns that is not ephemeral is written to
    its file first.

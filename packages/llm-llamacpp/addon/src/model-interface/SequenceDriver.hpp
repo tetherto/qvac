@@ -230,8 +230,8 @@ public:
 
   /// Whether this driver reconciles every request against its sequence and
   /// may start one from another conversation's state (`cache::DonorState`),
-  /// with or without a `cacheKey`. Text drivers do; multimodal drivers keep
-  /// a key's state to that key.
+  /// with or without a `cacheKey`. Every decoder-only driver does;
+  /// encoder-decoder models encode each prompt afresh.
   [[nodiscard]] virtual bool sharesCacheAcrossKeys() const { return false; }
 
   /// See `LlmContext::holdsBorrowedState`.
