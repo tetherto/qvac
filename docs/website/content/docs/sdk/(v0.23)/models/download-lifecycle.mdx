@@ -151,12 +151,20 @@ The following script shows an example of pausing and resuming a download using `
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/ModelInfo.kt title="ModelInfo.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="info">
-The Python example above (`model_info.py`) covers related model-info and download-progress operations (`get_model_info`, `download_asset_with_progress`). For the exact pause/resume flow shown in the JavaScript/TypeScript tabs, use `cancel(request_id=...)` from the Python SDK — the surface is identical to `cancel()` in JS/TS.
+The Python and Kotlin examples above (`model_info.py`, `ModelInfo.kt`) cover related model-info and download-progress operations (`get_model_info` / `client.models.info()`, `download_asset_with_progress` / `client.models.downloadWithProgress()`). For the exact pause/resume flow shown in the JavaScript/TypeScript tabs, use `cancel(request_id=...)` from the Python SDK or the generated `client.cancel()` from the Kotlin SDK — the surface is identical to `cancel()` in JS/TS.
 </Callout>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>

@@ -85,6 +85,14 @@ The following script shows how to ingest documents into a built-in RAG workspace
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagManaged.kt title="RagManaged.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="info">
@@ -116,6 +124,14 @@ The following script keeps the documents in a plain `Map`, embeds them with `emb
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/rag_turbovec.py title="rag_turbovec.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagTurbovec.kt title="RagTurbovec.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -165,7 +181,17 @@ The following script stores each document in MongoDB alongside its vector, build
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagMongodb.kt title="RagMongodb.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
+
+In Kotlin, the [examples build](/sdk/kotlin-sdk#quickstart) adds the coroutine driver, `org.mongodb:mongodb-driver-kotlin-coroutine:5.13.0`, to this example only, so there is nothing to install.
 
 #### SQLite
 
@@ -207,9 +233,23 @@ The following script shows the same workflow using `embed()` plus a SQLite vecto
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagSqlite.kt title="RagSqlite.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
+In Kotlin, the [examples build](/sdk/kotlin-sdk#quickstart) adds the SQLite JDBC driver, `org.xerial:sqlite-jdbc:3.53.4.0`, to this example only. The driver always supports loadable extensions, but the vector extension itself is a prebuilt binary: download the one for your platform from the [sqlite-vector releases](https://github.com/sqliteai/sqlite-vector/releases) and point `SQLITE_VECTOR_EXTENSION` at it:
+
+```bash
+SQLITE_VECTOR_EXTENSION=/path/to/vector ./gradlew run -Pexample=RagSqlite
+```
+
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>
 
