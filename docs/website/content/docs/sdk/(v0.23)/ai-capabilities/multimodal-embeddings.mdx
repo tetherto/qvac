@@ -27,7 +27,7 @@ For how to use each function, see [SDK API reference](/sdk/reference/api/).
 
 ## Models
 
-EmbeddingGemma 2 requires a model GGUF for text and a matching mmproj GGUF for images and audio. Load it with `modelType: "llamacpp-embedding"` and the projector through `modelConfig.projectionModelSrc`. Model and projector sources accept local paths, HTTP(S) URLs, and registry URIs through the usual model download lifecycle.
+Use `EMBEDDINGGEMMA_2_Q8_0` for the model and `MMPROJ_EMBEDDINGGEMMA_2_Q8_0` for its matching image and audio projector. Import both constants from `@qvac/sdk`, load the model with `modelType: "llamacpp-embedding"`, and pass the projector through `modelConfig.projectionModelSrc`. Model and projector sources also accept local paths, HTTP(S) URLs, and registry URIs through the usual model download lifecycle.
 
 For models available as constants, see [SDK Models](/sdk#models).
 

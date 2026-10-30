@@ -72,12 +72,10 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   embeddinggemma2: {
-    modelSrc:
-      'registry://huggingface/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf',
+    constant: { $const: 'EMBEDDINGGEMMA_2_Q8_0' },
     type: 'llamacpp-embedding',
     config: {
-      projectionModelSrc:
-        'registry://huggingface/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf',
+      projectionModelSrc: { $const: 'MMPROJ_EMBEDDINGGEMMA_2_Q8_0' },
       ctxSize: 2048,
       batchSize: 2048
     },
