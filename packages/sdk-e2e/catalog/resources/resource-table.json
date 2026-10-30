@@ -79,7 +79,7 @@
       "desktop"
     ],
     "constant": {
-      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q8_0"
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
     },
     "type": "llamacpp-completion",
     "config": {
@@ -191,7 +191,8 @@
   },
   "tools-gemma4": {
     "on": [
-      "desktop"
+      "desktop-linux",
+      "desktop-python"
     ],
     "constant": {
       "$const": "GEMMA4_2B_MULTIMODAL_Q4_K_M"
@@ -290,7 +291,7 @@
       "desktop"
     ],
     "constant": {
-      "$const": "GROOT_Q5_VF16"
+      "$const": "GROOT_MULTI_Q5_VF16"
     },
     "type": "ggml-vla",
     "config": {
@@ -782,7 +783,8 @@
   },
   "world": {
     "on": [
-      "desktop"
+      "desktop-linux",
+      "desktop-python"
     ],
     "constant": {
       "$const": "ABOT_WORLD_0_5B_Q8_0"
@@ -876,14 +878,19 @@
       "desktop"
     ],
     "constant": {
-      "$const": "SD_V2_1_1B_Q8_0"
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
     },
     "type": "sdcpp-generation",
     "config": {
       "device": "gpu",
       "threads": 4,
-      "prediction": "v",
-      "params_backend": "vae=cpu",
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
       "upscaler": {
         "type": "esrgan",
         "model_src": {
@@ -898,13 +905,19 @@
       "desktop"
     ],
     "constant": {
-      "$const": "SD_V2_1_1B_Q8_0"
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
     },
     "type": "sdcpp-generation",
     "config": {
       "device": "gpu",
       "threads": 4,
-      "prediction": "v",
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
       "upscaler": {
         "type": "esrgan",
         "model_src": {

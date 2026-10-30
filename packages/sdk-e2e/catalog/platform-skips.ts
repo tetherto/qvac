@@ -143,7 +143,7 @@ const RULES: Rule[] = [
   {
     match: /^(diffusion-|addon-logging-diffusion$)/,
     skip: {
-      reason: 'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)',
+      reason: 'Diffusion cold-load is too heavy for Device Farm devices (OOM, 3+GB)',
       platforms: ['mobile']
     }
   },
@@ -378,6 +378,24 @@ const RULES: Rule[] = [
       reason:
         'The echo plugin is a JS module the JS consumers register in their worker config; the Kotlin app runs the runtime profile the Kotlin SDK ships, which bundles only the built-in plugins',
       platforms: ['kotlin-android']
+    }
+  },
+
+  // ── one desktop OS only ──────────────────────────────────────────────────
+  {
+    match: /^world-/,
+    skip: {
+      reason:
+        'ABot-World runs on the Linux GPU leg only: its 12.7 GiB model set is not worth pulling on every desktop OS',
+      platforms: ['desktop-macos', 'desktop-windows']
+    }
+  },
+  {
+    match: ['tools-simple-function-gemma4'],
+    skip: {
+      reason:
+        'The Gemma4 tool dialect is checked on the Linux leg only: the parse does not depend on the OS, and its model is 3.22 GiB',
+      platforms: ['desktop-macos', 'desktop-windows']
     }
   },
 

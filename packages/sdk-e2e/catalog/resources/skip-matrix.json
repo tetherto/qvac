@@ -1,7 +1,16 @@
 {
   "desktop-macos": [
     "parakeet-unified-coreml-ios",
-    "snap-storage-common-root"
+    "snap-storage-common-root",
+    "tools-simple-function-gemma4",
+    "world-cancel-then-reload",
+    "world-concurrent-step-rejected",
+    "world-create-scene-returns-pack",
+    "world-first-block-frames",
+    "world-invalid-dimensions-rejected",
+    "world-invalid-key-rejected",
+    "world-second-block-frames",
+    "world-step-before-scene-fails"
   ],
   "desktop-linux": [
     "parakeet-transcribepsy-coreml-wav",
@@ -13,7 +22,16 @@
     "parakeet-transcribepsy-coreml-wav",
     "parakeet-unified-coreml-ios",
     "snap-storage-common-root",
-    "tts-audio8-coreml"
+    "tools-simple-function-gemma4",
+    "tts-audio8-coreml",
+    "world-cancel-then-reload",
+    "world-concurrent-step-rejected",
+    "world-create-scene-returns-pack",
+    "world-first-block-frames",
+    "world-invalid-dimensions-rejected",
+    "world-invalid-key-rejected",
+    "world-second-block-frames",
+    "world-step-before-scene-fails"
   ],
   "electron-macos": [
     "addon-logging-diffusion",
