@@ -1,7 +1,7 @@
 {
   "name": "@qvac/opencode-plugin",
   "root": "plugins/opencode",
-  "tags": ["ci:addons", "ci:sdk"],
+  "tags": ["ci:sdk"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

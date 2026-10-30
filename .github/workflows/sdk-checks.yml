@@ -108,7 +108,7 @@ jobs:
     with:
       targets: lint,typecheck,test:unit,verify:generated,verify:deps
       packages: ${{ needs.train.outputs.projects || inputs.packages }}
-      tag: ci:sdk
+      tags: ci:sdk
 
   # A release PR fails here on what its release push would fail on later: the train's versions, or, when the package's
   # publish metadata sets releaseGuard, its release branch, version bump and CHANGELOG section.

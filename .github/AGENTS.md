@@ -18,7 +18,7 @@ Read the relevant references before changing CI:
   the CI contract.
 
 Before changing a package's CI, check whether its `project.json` carries the
-`ci:addons` tag (`pnpm exec nx show projects --projects tag:ci:addons`):
+`ci:addons` or `ci:sdk` tag (`pnpm exec nx show projects --projects tag:ci:addons,tag:ci:sdk`):
 
 - Tagged: change the package's own `project.json`, `ci/` directory or model manifest.
   Change a shared workflow or action only when most packages on the contract need it,

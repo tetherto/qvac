@@ -1,7 +1,7 @@
 {
   "name": "@qvac/sdk",
   "root": "packages/sdk",
-  "tags": ["ci:addons", "ci:sdk"],
+  "tags": ["ci:sdk"],
   "implicitDependencies": ["sdk-e2e", "@qvac/registry-server"],
   "targets": {
     "lint": {

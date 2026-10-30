@@ -11,6 +11,9 @@ import { pathToFileURL } from 'node:url'
 import { CPP_TEST_KEYS, PREBUILD_KEYS } from './prebuild-status/lib.mjs'
 
 export const TAG = 'ci:addons'
+// Every group of packages on the contract: ci:addons runs in the shared groups, ci:sdk (the SDK pod) in sdk-checks.yml and
+// sdk-e2e.yml; the publish, benchmark and cache groups serve both.
+export const TAGS = ['ci:addons', 'ci:sdk']
 
 // The standard target names. The groups run only these, and a package on the contract declares only these.
 export const TARGETS = [
@@ -289,13 +292,10 @@ export function select({
   prLabels = [],
   baseRef = '',
   dispatch = false,
-  tag = TAG,
-  excludeTag = ''
+  tags = [TAG]
 }) {
-  // tag picks the packages a workflow serves; excludeTag leaves out a group that runs in its own workflows.
-  const tagged = Object.values(graph.nodes).filter(
-    (n) => n.data.tags?.includes(tag) && !(excludeTag && n.data.tags.includes(excludeTag))
-  )
+  // tags names the groups a workflow serves.
+  const tagged = Object.values(graph.nodes).filter((n) => n.data.tags?.some((t) => tags.includes(t)))
   const chosen = tagged.filter((n) => affected === null || affected.includes(n.name))
   const out = { matrices: {}, projects: [] }
   for (const t of targets) out.matrices[t] = []
@@ -432,7 +432,7 @@ export function providersOf(graph, name) {
     for (const dep of target.dependsOn ?? [])
       if (dep?.target === 'link:platform')
         for (const p of dep.projects ?? [])
-          if (p !== name && graph.nodes[p]?.data.tags?.includes(TAG) && !out.includes(p)) out.push(p)
+          if (p !== name && graph.nodes[p]?.data.tags?.some((t) => TAGS.includes(t)) && !out.includes(p)) out.push(p)
   return out
 }
 
@@ -596,8 +596,7 @@ function main(env) {
     prLabels,
     baseRef: pr && ['opened', 'synchronize'].includes(event.action) ? pr.base.ref : '',
     dispatch: !pr && env.GITHUB_EVENT_NAME === 'workflow_dispatch',
-    tag: env.TAG || TAG,
-    excludeTag: env.EXCLUDE_TAG || '',
+    tags: (env.TAGS || TAG).split(/[\s,]+/).filter(Boolean),
     configs: (env.CONFIGS || '').split(/[\s,]+/).filter(Boolean),
     gate: gateKeys(readFileSync('.github/workflows/pr-gate-merge.yml', 'utf8'))
   })

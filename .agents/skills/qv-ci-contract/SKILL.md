@@ -15,14 +15,14 @@ Pick the task:
 
 ## 1. Change CI for a package
 
-1. Confirm the tag: `pnpm exec nx show projects --projects tag:ci:addons`. An untagged package is not on the contract; follow `.github/AGENTS.md` instead and stop here.
+1. Confirm the tag: `pnpm exec nx show projects --projects tag:ci:addons,tag:ci:sdk`. An untagged package is not on the contract; follow `.github/AGENTS.md` instead and stop here.
 2. Put the change in the package's own files:
    - a command: a target command in `project.json`, or a script in the package's `ci/` directory that a target runs;
    - platform flags: the platform configuration's `args`;
    - a step that differs on one platform: that configuration's `commands`;
    - a runner: the configuration's `ci.runner` key from `reusable-runner-names.yml`;
    - a toolkit: the configuration's `ci.setup`, or a check target's `metadata.setup` for `sdk-checks.yml`;
-   - an SDK pod package (`ci:sdk` tag, run by `sdk-checks.yml` and `sdk-e2e.yml`): a `test:integration` configuration that runs on its own PR labels or a release base takes `ci.labels`, and checks in npm's layout instead of the pnpm workspace take `test:unit`'s `metadata.sources`;
+   - an SDK pod package (`ci:sdk` tag, checked by `sdk-checks.yml` and `sdk-e2e.yml`): a `test:integration` configuration that runs on its own PR labels or a release base takes `ci.labels`, and checks in npm's layout instead of the pnpm workspace take `test:unit`'s `metadata.sources`;
    - a timeout, mobile setting, release tag prefix or release check: the target's `metadata`;
    - models: the package's model manifest.
 3. Leave the workflows and actions alone. A package name or directory never appears in a condition there. If the standard cannot express the change, that is a change to the standard: raise it before writing it.

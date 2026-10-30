@@ -177,7 +177,7 @@ jobs:
         with:
           sparse-checkout: scripts/ci
           persist-credentials: false
-      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      - uses: tetherto/qvac-actions/github-script@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         env:
           NEEDS: ${{ toJSON(needs) }}
         with:

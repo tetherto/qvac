@@ -1,11 +1,11 @@
 # Package CI contract
 
-Packages tagged `ci:addons` in their `project.json` share one set of workflows, the groups. A group never knows a package by name: it asks Nx which packages changed, reads their targets and configurations, and runs `nx run-many` on each configuration's runner. How a package builds, tests and publishes lives in that package's `project.json`, its `ci/` directory and its model manifest.
+Packages on the contract carry one group tag in their `project.json`: `ci:addons` for the addons, or `ci:sdk` for the SDK pod. The packages of a group share one set of workflows, the groups. A group never knows a package by name: it asks Nx which packages changed, reads their targets and configurations, and runs `nx run-many` on each configuration's runner. How a package builds, tests and publishes lives in that package's `project.json`, its `ci/` directory and its model manifest.
 
 List the packages on the contract:
 
 ```bash
-pnpm exec nx show projects --projects tag:ci:addons
+pnpm exec nx show projects --projects tag:ci:addons,tag:ci:sdk
 ```
 
 A package without the tag runs the workflows it names itself, such as the registry server's `publish-registry-server.yml`. Change CI on the side the package is on.
@@ -22,7 +22,7 @@ A package without the tag runs the workflows it names itself, such as the regist
 | `publish-npm.yml` | push to `release-<slug>-<x.y.z>`, dispatch (`dry_run`) | `build`, `verify:generated`, `verify:deps`, `publish` |
 | `publish-gpr.yml` | dispatch | `build`, `verify:generated`, `verify:deps`, `publish` |
 
-The SDK pod's packages carry a second tag, `ci:sdk`. `pr-checks.yml`, `pr-build-test.yml` and `mobile-tests.yml` leave them out (`_select-projects.yml`'s `exclude-tag`), and two workflows of their own select them (`tag: ci:sdk`): `sdk-checks.yml` runs their check targets in each package's own install, with the pod's release guard and PR rules, and `release-train.yml` calls it for a train; `sdk-e2e.yml` runs their labelled `test:integration` configurations through `_desktop.yml`, and their Device Farm runs by dispatch. The publish, benchmark and cache groups serve them as any contract package.
+Each group names the tags it serves in `_select-projects.yml`'s `tags`. `pr-checks.yml`, `pr-build-test.yml` and `mobile-tests.yml` serve `ci:addons`; the SDK pod's two workflows serve `ci:sdk`: `sdk-checks.yml` runs their check targets in each package's own install, with the pod's release guard and PR rules, and `release-train.yml` calls it for a train; `sdk-e2e.yml` runs their labelled `test:integration` configurations through `_desktop.yml`, and their Device Farm runs by dispatch. The publish, benchmark and cache groups serve both tags.
 
 Two registries have one workflow each outside the groups: `publish-pypi.yml` releases `tetherto-qvac-sdk` from `release-sdk-<x.y.z>` once npm serves `@qvac/sdk` at that version, then attaches the fat wheels to the `sdk-v<version>` release; `publish-kotlin.yml` publishes the Kotlin SDK's Maven artifacts from an `sdk-kotlin-v<version>` tag. `sdk-scheduled-checks.yml` holds the daily checks of what users install from npm.
 

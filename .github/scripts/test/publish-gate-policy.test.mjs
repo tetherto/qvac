@@ -80,7 +80,7 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
-const isContract = (project) => Boolean(project?.tags?.includes('ci:addons'))
+const isContract = (project) => Boolean(project?.tags?.some((tag) => ['ci:addons', 'ci:sdk'].includes(tag)))
 
 // Packages requiring the gate: an on-merge or CI contract addon that has generated wrappers.
 //

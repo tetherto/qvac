@@ -28,7 +28,6 @@ jobs:
       targets: ci:setup,build,cpp:lint,cpp:build,cpp:tests,test:integration,test:backend
       combine: desktop=test:integration+test:backend
       packages: ${{ inputs.packages }}
-      exclude-tag: ci:sdk
 
   fork-approval:
     needs: select

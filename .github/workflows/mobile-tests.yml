@@ -72,7 +72,6 @@ jobs:
       targets: test:mobile
       packages: ${{ inputs.packages }}
       configs: ${{ inputs.platform == 'iOS' && 'ios-arm64' || 'android-arm64' }}
-      exclude-tag: ci:sdk
 
   mobile:
     needs: select

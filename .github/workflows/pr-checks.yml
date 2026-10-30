@@ -26,7 +26,6 @@ jobs:
     with:
       targets: lint,typecheck,test:unit,verify:generated,verify:deps
       packages: ${{ inputs.packages }}
-      exclude-tag: ci:sdk
 
   # A range on a workspace package that excludes its workspace version makes pnpm install the npm copy instead, so a
   # bump updates its dependents' ranges in the same pull request.

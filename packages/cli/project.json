@@ -1,7 +1,7 @@
 {
   "name": "@qvac/cli",
   "root": "packages/cli",
-  "tags": ["ci:addons", "ci:sdk"],
+  "tags": ["ci:sdk"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

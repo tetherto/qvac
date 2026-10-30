@@ -160,7 +160,7 @@ jobs:
           name: dist-sdk-python
           path: dist
       - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        uses: tetherto/qvac-actions/pypi-publish@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
 
   # The self-contained wheels: the thin client, the Bare runtime, the built worker and pruned native prebuilds.
   wheels:

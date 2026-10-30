@@ -1,7 +1,7 @@
 {
   "name": "@qvac/inference",
   "root": "packages/inference",
-  "tags": ["ci:addons", "ci:sdk"],
+  "tags": ["ci:sdk"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

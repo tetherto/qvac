@@ -47,7 +47,7 @@ jobs:
       packages: ${{ inputs.packages }}
       labels: ${{ inputs.labels }}
       configs: ${{ inputs.platform == 'iOS' && 'ios-arm64' || inputs.platform == 'Android' && 'android-arm64' || '' }}
-      tag: ci:sdk
+      tags: ci:sdk
 
   fork-approval:
     needs: select

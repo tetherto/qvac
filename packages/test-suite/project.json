@@ -1,7 +1,7 @@
 {
   "name": "@qvac/test-suite",
   "root": "packages/test-suite",
-  "tags": ["ci:addons", "ci:sdk"],
+  "tags": ["ci:sdk"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

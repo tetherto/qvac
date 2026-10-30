@@ -54,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_select-projects.yml
     with:
       targets: cache:models,build,cpp:tests
+      tags: ci:addons,ci:sdk
       packages: ${{ inputs.packages }}
 
   # One entry per package and target that restores models; a hit is still downloaded, which resets the prune clock.

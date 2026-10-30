@@ -27,6 +27,7 @@ jobs:
     uses: ./.github/workflows/_select-projects.yml
     with:
       targets: build,verify:generated,verify:deps,publish
+      tags: ci:addons,ci:sdk
       combine: verify=verify:generated+verify:deps
       packages: ${{ inputs.packages }}
 

@@ -1,4 +1,4 @@
-// Every package tagged ci:addons follows the package standard (docs/ci/workflow-standard.md), checked with the
+// Every package tagged ci:addons or ci:sdk follows the package standard (docs/ci/workflow-standard.md), checked with the
 // same rules select-projects.mjs applies when it builds job rows, so a mistake fails here rather than mid-run.
 
 import { test } from 'node:test'
@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
-  TAG,
+  TAGS,
   TARGETS,
   CONFIG_NAME,
   configurations,
@@ -24,7 +24,7 @@ const contract = ['packages', 'plugins']
   .flatMap((parent) => readdirSync(join(root, parent)).map((dir) => join(parent, dir, 'project.json')))
   .filter((path) => existsSync(join(root, path)))
   .map((path) => ({ path, ...JSON.parse(read(path)) }))
-  .filter((project) => project.tags?.includes(TAG))
+  .filter((project) => project.tags?.some((tag) => TAGS.includes(tag)))
 
 // Targets whose jobs restore the build job's prebuild-<slug>-<platform>-<arch> artifact.
 const RESTORE_BUILD = ['cpp:build', 'cpp:tests', 'test:integration', 'test:backend', 'benchmark']
@@ -32,7 +32,7 @@ const RESTORE_BUILD = ['cpp:build', 'cpp:tests', 'test:integration', 'test:backe
 const HOST_TARGETS = ['ci:setup', 'ci:system']
 
 test('at least one package is on the contract', () => {
-  assert.ok(contract.length > 0, `no packages/*/project.json carries the ${TAG} tag`)
+  assert.ok(contract.length > 0, `no packages/*/project.json carries a ${TAGS.join(" or ")} tag`)
 })
 
 for (const project of contract) {

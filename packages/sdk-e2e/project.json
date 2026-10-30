@@ -1,7 +1,7 @@
 {
   "name": "sdk-e2e",
   "root": "packages/sdk-e2e",
-  "tags": ["ci:addons", "ci:sdk"],
+  "tags": ["ci:sdk"],
   "implicitDependencies": ["@qvac/sdk"],
   "targets": {
     "lint": {
