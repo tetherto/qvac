@@ -14,6 +14,7 @@ export async function modelSetup(resources: ResourceManager, context: unknown) {
   // device memory budget on mobile.
   const deps = !dep || dep === 'none' ? [] : dep.includes('+') ? dep.split('+') : [dep]
 
+  await resources.forgetLostModels()
   await resources.evictExcept(deps)
 
   for (const d of deps) {
@@ -23,4 +24,5 @@ export async function modelSetup(resources: ResourceManager, context: unknown) {
 
 export async function modelTeardown(resources: ResourceManager) {
   await resources.evictStale(5)
+  await resources.evictSingleUse()
 }

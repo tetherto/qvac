@@ -37,6 +37,8 @@ class Resources(
     private val log: (String) -> Unit,
     /** Pause after an unload before the next load (`unloadSettleMs` in catalog/platform-policy.ts). */
     private val unloadSettleMs: Long,
+    /** Keys never kept loaded between tests (`singleUseResources` in catalog/platform-policy.ts). */
+    private val singleUseResources: List<String>,
 ) {
     private val platformSegments = platform.split("-")
     private val definitions: Map<String, Map<String, Any?>> =
@@ -148,6 +150,11 @@ class Resources(
         for (dep in loaded.keys.filter { it !in keep }) {
             unload(dep, loaded.remove(dep)!!)
         }
+    }
+
+    /** Unloads the keys this platform never keeps between tests. */
+    suspend fun evictSingleUse() {
+        for (dep in singleUseResources) evict(dep)
     }
 
     suspend fun close() = evictAllExcept(emptySet())

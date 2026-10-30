@@ -1,22 +1,29 @@
 {
   "desktop": {
     "downloadTarget": "desktop",
-    "unloadSettleMs": 0
+    "unloadSettleMs": 0,
+    "singleUseResources": []
   },
   "electron": {
     "downloadTarget": "desktop",
-    "unloadSettleMs": 0
+    "unloadSettleMs": 0,
+    "singleUseResources": []
   },
   "snap": {
     "downloadTarget": "desktop",
-    "unloadSettleMs": 0
+    "unloadSettleMs": 0,
+    "singleUseResources": []
   },
   "mobile": {
     "downloadTarget": "mobile",
-    "unloadSettleMs": 200
+    "unloadSettleMs": 200,
+    "singleUseResources": [
+      "ocr"
+    ]
   },
   "python": {
     "downloadTarget": "desktop",
-    "unloadSettleMs": 0
+    "unloadSettleMs": 0,
+    "singleUseResources": []
   }
 }
