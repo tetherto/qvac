@@ -19,7 +19,7 @@
     "#crypto": {
       "types": "./src/shims/crypto.ts",
       "bare": "bare-crypto",
-      "node": "node:crypto",
+      "node": "crypto",
       "react-native": "./dist/shims/crypto.js",
       "default": "./dist/shims/crypto.js"
     },
@@ -33,14 +33,14 @@
     "#fs": {
       "types": "./src/shims/fs.ts",
       "bare": "bare-fs",
-      "node": "node:fs",
+      "node": "fs",
       "react-native": "./dist/shims/fs.js",
       "default": "./dist/shims/fs.js"
     },
     "#path": {
       "types": "./src/shims/path.ts",
       "bare": "bare-path",
-      "node": "node:path",
+      "node": "path",
       "react-native": "./dist/shims/path.js",
       "default": "./dist/shims/path.js"
     }
