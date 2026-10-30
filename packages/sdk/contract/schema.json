@@ -3259,6 +3259,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "BciTranscribeResponseSegmentTokensItem"
+              }
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -3590,6 +3633,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "BciTranscribeStreamResponseSegmentTokensItem"
+              }
             },
             "windowStartTimestep": {
               "description": "Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
@@ -13047,6 +13133,10 @@
                       "description": "Initial prompt (context) prepended to the transcription.",
                       "type": "string"
                     },
+                    "carry_initial_prompt": {
+                      "description": "Prepend `initial_prompt` to every decode window instead of only the first. Default false.",
+                      "type": "boolean"
+                    },
                     "language": {
                       "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                       "type": "string"
@@ -13165,8 +13255,34 @@
                           "type": "boolean"
                         },
                         "gpu_device": {
-                          "description": "GPU device index to use.",
+                          "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.",
                           "type": "number"
+                        },
+                        "main-gpu": {
+                          "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "main_gpu": {
+                          "description": "Alias of `main-gpu`; supply only one spelling.",
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams"
@@ -21412,6 +21528,10 @@
                   "description": "Initial prompt (context) prepended to the transcription.",
                   "type": "string"
                 },
+                "carry_initial_prompt": {
+                  "description": "Prepend `initial_prompt` to every decode window instead of only the first. Default false.",
+                  "type": "boolean"
+                },
                 "language": {
                   "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                   "type": "string"
@@ -21530,8 +21650,34 @@
                       "type": "boolean"
                     },
                     "gpu_device": {
-                      "description": "GPU device index to use.",
+                      "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.",
                       "type": "number"
+                    },
+                    "main-gpu": {
+                      "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "main_gpu": {
+                      "description": "Alias of `main-gpu`; supply only one spelling.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigContextParams"
@@ -24223,6 +24369,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "TranscribeResponseSegmentTokensItem"
+              }
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -24675,6 +24864,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "TranscribeStreamResponseSegmentTokensItem"
+              }
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
