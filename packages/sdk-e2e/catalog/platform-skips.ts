@@ -386,7 +386,7 @@ const RULES: Rule[] = [
     match: /^world-/,
     skip: {
       reason:
-        'ABot-World runs on the Linux GPU leg only: its 12.7 GiB model set is not worth pulling on every desktop OS',
+        'ABot-World runs on the Linux JS leg and the Python leg only: its 12.7 GiB model set is not worth pulling on every JS desktop OS',
       platforms: ['desktop-macos', 'desktop-windows']
     }
   },
@@ -394,7 +394,7 @@ const RULES: Rule[] = [
     match: ['tools-simple-function-gemma4'],
     skip: {
       reason:
-        'The Gemma4 tool dialect is checked on the Linux leg only: the parse does not depend on the OS, and its model is 3.22 GiB',
+        'The Gemma4 tool dialect is checked on the Linux JS leg and the Python leg only: the parse does not depend on the OS, and its model is 3.22 GiB',
       platforms: ['desktop-macos', 'desktop-windows']
     }
   },
