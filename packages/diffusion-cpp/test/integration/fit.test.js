@@ -327,41 +327,57 @@ safeTest(
       vae: await ensureModelPath({ modelName: 'wan_2.1_vae.safetensors' }),
       t5Xxl: await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
     }
-    // This compares model measurements, so both calls need the same memory
-    // inputs. Live free VRAM can cross the fit threshold between calls on a
-    // shared runner, changing placement even though ESRGAN is ignored.
-    const previousDevices = proc.env.SD_FIT_DEBUG_DEVICES
-    const previousHostMemory = proc.env.SD_FIT_DEBUG_HOST_MEMORY_GIB
-    try {
-      proc.env.SD_FIT_DEBUG_HOST_MEMORY_GIB = '64'
-      for (const freeGiB of [32, 8]) {
-        proc.env.SD_FIT_DEBUG_DEVICES = `GPU0:${freeGiB}`
-        for (const videoFrames of [1, 5]) {
-          const request = {
-            files,
-            workload: { width: 256, height: 256, videoFrames, vaeTiling: true }
-          }
-          const base = await assessFit(request)
-          t.ok(base.status === 'fits' || base.status === 'does-not-fit', 'valid video projection')
-          t.ok(base.report.includes('simulated device'), 'planner uses fixed memory inputs')
-          const unused = await assessFit({
-            ...request,
-            files: { ...files, esrgan: '/missing/unused-esrgan.safetensors' }
-          })
-          t.is(unused.status, base.status)
-          t.is(unused.reason, base.reason)
-          t.is(unused.report, base.report, 'unused image upscaler does not affect measured memory')
-          t.absent(
-            unused.report.includes('upscaler'),
-            'video does not measure a separate image upscaler'
-          )
+    // Native Windows runtimes can keep their own getenv snapshot. Supply the
+    // fixed budgets at process creation, before the addon is loaded, rather
+    // than changing the parent process environment between assessments.
+    const { spawn } = require('bare-subprocess')
+    for (const freeGiB of [32, 8]) {
+      const outputPath = tempFile(t, 'fit-results.json', '')
+      const child = spawn(
+        proc.execPath,
+        [path.join(__dirname, '_fit-upscaler-worker.js'), JSON.stringify(files), outputPath],
+        {
+          env: {
+            ...proc.env,
+            SD_FIT_DEBUG_DEVICES: `GPU0:${freeGiB}`,
+            SD_FIT_DEBUG_HOST_MEMORY_GIB: '64'
+          },
+          stdio: ['ignore', 'inherit', 'pipe']
         }
+      )
+      let finished = false
+      let stderr = ''
+      t.teardown(() => {
+        if (!finished) child.kill()
+      })
+      child.stderr.on('data', (data) => {
+        stderr = (stderr + data.toString()).slice(-16384)
+      })
+      await new Promise((resolve, reject) => {
+        child.once('error', reject)
+        child.once('close', (code, signal) => {
+          finished = true
+          if (code === 0) resolve()
+          else reject(new Error(`Fit worker failed (${signal || code}): ${stderr}`))
+        })
+      })
+      const results = JSON.parse(fs.readFileSync(outputPath, 'utf8'))
+      t.alike(
+        results.map(({ videoFrames }) => videoFrames),
+        [1, 5],
+        'both video workloads ran'
+      )
+      for (const { base, unused } of results) {
+        t.ok(base.status === 'fits' || base.status === 'does-not-fit', 'valid video projection')
+        t.ok(base.report.includes('simulated device'), 'planner uses fixed memory inputs')
+        t.is(unused.status, base.status)
+        t.is(unused.reason, base.reason)
+        t.is(unused.report, base.report, 'unused image upscaler does not affect measured memory')
+        t.absent(
+          unused.report.includes('upscaler'),
+          'video does not measure a separate image upscaler'
+        )
       }
-    } finally {
-      if (previousDevices === undefined) os.unsetEnv('SD_FIT_DEBUG_DEVICES')
-      else proc.env.SD_FIT_DEBUG_DEVICES = previousDevices
-      if (previousHostMemory === undefined) os.unsetEnv('SD_FIT_DEBUG_HOST_MEMORY_GIB')
-      else proc.env.SD_FIT_DEBUG_HOST_MEMORY_GIB = previousHostMemory
     }
   }
 )
