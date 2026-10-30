@@ -1,0 +1,237 @@
+name: Diagnose diffusion native CUDA tensors
+
+on:
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: Capture mode (intrusive probes run separately from baseline)
+        type: choice
+        default: baseline
+        options:
+          [
+            baseline,
+            sync,
+            no-graphs,
+            no-fusion,
+            memcheck,
+            initcheck,
+            mmq-initcheck,
+            mmq-isolate,
+            nsys,
+            node,
+            repeat,
+            trace-repeat
+          ]
+      node_filter:
+        description: Node probe substring, or optional exact activation name to dump in trace-repeat
+        type: string
+        default: ''
+      runner_os:
+        description: Runner pool for the diagnostic (use one pool when another is unavailable)
+        type: choice
+        default: both
+        options: [both, ubuntu-24.04, ubuntu-22.04]
+  # Registered by the bootstrap push. Dispatch probes explicitly so diagnostic
+  # code updates do not add GPU workloads alongside the full-suite reproduction.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diffusion-native-cuda-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  native:
+    needs: runner_names
+    if: github.repository == 'tetherto/qvac'
+    name: Native tensor capture (${{ matrix.os }})
+    runs-on: ${{ matrix.os == 'ubuntu-24.04' && needs.runner_names.outputs.linux_ubuntu2404_x64_gpu || needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+    # Ten operation traces take ~130 minutes, plus setup and GPU admission.
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        os: ${{ fromJSON(inputs.runner_os == 'ubuntu-24.04' && '["ubuntu-24.04"]' || inputs.runner_os == 'ubuntu-22.04' && '["ubuntu-22.04"]' || '["ubuntu-24.04","ubuntu-22.04"]') }}
+    env:
+      CUDA_VISIBLE_DEVICES: '0'
+      ENGINE_SHA: 4ec33ca21eec64b9778b6fd16d58e88cd501936d
+      GGML_SHA: 9f94f330ac196e0a2e3176e798b36226b22091a5
+      SOURCE_SHA: 01a15d577893d5dbb95050e5ed0569ededf26359
+      CUDA_MODULE_SHA256: bf9f638190a9739021829c4b116aa9550eba55faa15d05322316d1ca5ab3313a
+      PROBE: ${{ inputs.probe || 'baseline' }}
+      NODE_FILTER: ${{ inputs.node_filter || '' }}
+    steps:
+      - name: Manual Workspace Cleanup
+        if: runner.environment != 'github-hosted'
+        working-directory: .
+        shell: bash
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+
+      - name: Checkout diagnostic tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - name: Checkout original addon source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          path: diagnostic-source
+          persist-credentials: false
+      - name: Checkout pinned native engine
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: tetherto/qvac-ext-stable-diffusion.cpp
+          ref: ${{ env.ENGINE_SHA }}
+          path: diagnostic-engine
+          persist-credentials: false
+      - name: Checkout matching ggml source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: tetherto/qvac-ext-ggml
+          ref: ${{ env.GGML_SHA }}
+          path: diagnostic-engine/ggml
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: '22'
+      - name: Download original CUDA artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuild-diffusion-cpp-linux-x64
+          run-id: '39463888415'
+          github-token: ${{ github.token }}
+          path: diagnostic-source/packages/diffusion-cpp/prebuilds
+      - name: Verify source and binary provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-results
+          test "$(git -C diagnostic-engine rev-parse HEAD)" = "$ENGINE_SHA"
+          test "$(git -C diagnostic-engine/ggml rev-parse HEAD)" = "$GGML_SHA"
+          module="$GITHUB_WORKSPACE/diagnostic-source/packages/diffusion-cpp/prebuilds/linux-x64/qvac__diffusion-cpp-linux-x64/libqvac-diffusion-ggml-cuda.so"
+          printf '%s  %s\n' "$CUDA_MODULE_SHA256" "$module" | sha256sum --check
+          echo "CUDA_MODULE=$module" >> "$GITHUB_ENV"
+          python3 .github/scripts/collect-cuda-runtime-info.py "$module" > native-results/environment-before.json
+          python3 -m unittest discover -s .github/scripts/abot-native -p 'test_*.py'
+          node --test .github/scripts/abot-native/probe-command.test.mjs
+      - name: Install isolated package tools
+        if: env.PROBE != 'mmq-isolate'
+        working-directory: diagnostic-source/packages/diffusion-cpp
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts
+          npm install --prefix "$GITHUB_WORKSPACE/diagnostic-runtime" --ignore-scripts bare-runtime@1.35.0
+          npm run link:platform
+      - name: Run original addon parity and provision the shared scene
+        if: env.PROBE != 'mmq-isolate'
+        id: original
+        continue-on-error: true
+        shell: bash
+        run: |
+          node .github/scripts/abot-native/prepare.mjs \
+            diagnostic-source/packages/diffusion-cpp \
+            "$GITHUB_WORKSPACE/diagnostic-runtime/node_modules/bare-runtime/bin/bare" \
+            native-results
+      - name: Build the opt-in native diagnostic executable
+        if: env.PROBE != 'mmq-isolate'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f native-results/inputs.json
+          python3 .github/scripts/abot-native/instrument.py diagnostic-engine
+          python3 -m pip install --target "$RUNNER_TEMP/abot-cmake" cmake==3.31.6
+          export PYTHONPATH="$RUNNER_TEMP/abot-cmake${PYTHONPATH:+:$PYTHONPATH}"
+          cmake="$RUNNER_TEMP/abot-cmake/bin/cmake"
+          "$cmake" -S diagnostic-engine -B diagnostic-build \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSD_ABOT_DIAGNOSTICS=ON \
+            -DSD_BUILD_EXAMPLES=ON -DSD_BUILD_TESTS=OFF \
+            -DSD_WEBP=OFF -DSD_WEBM=OFF -DSD_CUDA=OFF -DSD_VULKAN=OFF \
+            -DSD_BUILD_SHARED_GGML_LIB=ON -DBUILD_SHARED_LIBS=ON \
+            -DGGML_BACKEND_DL=ON -DGGML_CUDA=OFF -DGGML_VULKAN=OFF -DGGML_NATIVE=OFF
+          "$cmake" --build diagnostic-build --target sd-abot-session ggml-cpu --parallel 2
+          cp diagnostic-build/CMakeCache.txt native-results/
+          cp diagnostic-build/compile_commands.json native-results/
+      - name: Capture intermediate tensors and disk memory events
+        # Guard the native repetitions against observed competing compute clients.
+        # This is polling, not a reservation shared by other runner workers.
+        if: env.PROBE != 'mmq-isolate'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/cuda/bin:$PATH"
+          repeats=1
+          contention_retries=0
+          if [ "$PROBE" = baseline ]; then repeats=2; fi
+          if [ "$PROBE" = repeat ]; then repeats=10; contention_retries=3; fi
+          if [ "$PROBE" = trace-repeat ]; then repeats=10; contention_retries=3; fi
+          python3 .github/scripts/abot-native/run.py \
+            --cli "$GITHUB_WORKSPACE/diagnostic-build/bin/sd-abot-session" \
+            --inputs native-results/inputs.json --cuda-module "$CUDA_MODULE" \
+            --cpu-module "$GITHUB_WORKSPACE/diagnostic-build/bin/libqvac-diffusion-ggml-cpu.so" \
+            --guards "$GITHUB_WORKSPACE/diagnostic-source/packages/diffusion-cpp/test/integration/abot-guards.js" \
+            --output "$GITHUB_WORKSPACE/native-results/capture" \
+            --probe "$PROBE" --node-filter "$NODE_FILTER" --repeats "$repeats" --gpu-guard \
+            --gpu-contention-retries "$contention_retries"
+      - name: Build isolated MMQ padding experiment
+        if: env.PROBE == 'mmq-isolate'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/cuda/bin:$PATH"
+          nvcc --version | tee native-results/nvcc.txt
+          nvidia-smi --query-gpu=name,compute_cap --format=csv > native-results/build-gpu.csv
+          test "$(nvidia-smi -i 0 --query-gpu=compute_cap --format=csv,noheader)" = 8.9
+          python3 .github/scripts/abot-native/instrument_mmq.py diagnostic-engine/ggml
+          git -C diagnostic-engine/ggml diff > native-results/mmq-instrumentation.patch
+          python3 -m pip install --target "$RUNNER_TEMP/abot-cmake" cmake==3.31.6
+          export PYTHONPATH="$RUNNER_TEMP/abot-cmake${PYTHONPATH:+:$PYTHONPATH}"
+          cmake="$RUNNER_TEMP/abot-cmake/bin/cmake"
+          "$cmake" -S .github/scripts/abot-native/mmq-isolate -B mmq-build \
+            -DGGML_SOURCE="$GITHUB_WORKSPACE/diagnostic-engine/ggml" \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CUDA_ARCHITECTURES=89-real \
+            -DCMAKE_CUDA_FLAGS=-lineinfo -DGGML_MAX_NAME=128 \
+            -DBUILD_SHARED_LIBS=ON -DGGML_BACKEND_DL=ON -DGGML_NATIVE=OFF \
+            -DGGML_CUDA=ON -DGGML_CUDA_GRAPHS=ON -DGGML_CUDA_FA=OFF \
+            -DGGML_CPU=OFF -DGGML_BLAS=OFF -DGGML_VULKAN=OFF \
+            -DGGML_BUILD_TESTS=OFF -DGGML_BUILD_EXAMPLES=OFF
+          "$cmake" --build mmq-build --target mmq-isolate ggml-cuda --parallel 2
+          cp mmq-build/CMakeCache.txt native-results/mmq-CMakeCache.txt
+      - name: Compare original and rebuilt MMQ with controlled padding
+        if: env.PROBE == 'mmq-isolate'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/cuda/bin:$PATH"
+          python3 .github/scripts/abot-native/run_mmq_isolate.py \
+            --cli "$GITHUB_WORKSPACE/mmq-build/bin/mmq-isolate" \
+            --original "$CUDA_MODULE" \
+            --rebuilt "$GITHUB_WORKSPACE/mmq-build/bin/libqvac-diffusion-ggml-cuda.so" \
+            --output "$GITHUB_WORKSPACE/native-results/mmq-isolate"
+      - name: Capture final environment
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: python3 .github/scripts/collect-cuda-runtime-info.py > native-results/environment-after.json
+      - name: Upload native diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: diffusion-native-cuda-${{ matrix.os }}-${{ env.PROBE }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: native-results
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Preserve original addon test failure
+        if: always() && steps.original.outcome == 'failure'
+        run: exit 1

@@ -1,0 +1,237 @@
+name: Diagnose diffusion KV-cache parity
+
+on:
+  workflow_dispatch:
+    inputs:
+      history_only:
+        description: Run the preceding-test lifecycle comparison without the full suite
+        type: boolean
+        default: false
+  # Bootstrap this diagnostic before it exists on the default branch.
+  push:
+    branches: [feature-diffusion-kv-cache-diagnostics]
+    paths:
+      - .github/workflows/diagnose-diffusion-kv-cache.yml
+      - .github/scripts/diffusion-kv-diagnostic.mjs
+      - .github/scripts/collect-cuda-runtime-info.py
+      - .github/scripts/capture-diffusion-ci-diagnostics.mjs
+      - .github/scripts/test/capture-diffusion-ci-diagnostics.test.mjs
+      - .github/scripts/diffusion-history-diagnostic.mjs
+      - .github/scripts/test/diffusion-history-diagnostic.test.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diffusion-kv-cache-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  artifact-smoke:
+    name: Verify diagnostic upload after a simulated failure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: '22'
+      - name: Test failure capture
+        run: node --test .github/scripts/test/capture-diffusion-ci-diagnostics.test.mjs .github/scripts/test/diffusion-history-diagnostic.test.mjs
+      - name: Capture initial environment
+        run: node .github/scripts/capture-diffusion-ci-diagnostics.mjs diagnostic-fixture before
+      - name: Simulate a failing suite
+        id: simulated-suite
+        continue-on-error: true
+        shell: bash
+        run: |
+          printf 'not ok 1 - simulated diagnostic-upload fixture\n' > diagnostic-fixture/test-output.log
+          exit 1
+      - name: Capture diagnostics after failure
+        if: always()
+        run: node .github/scripts/capture-diffusion-ci-diagnostics.mjs diagnostic-fixture after
+      - name: Upload failure diagnostic fixture
+        if: always()
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: diffusion-nvidia-failure-upload-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: diagnostic-fixture/test/results/nvidia-diagnostics
+          if-no-files-found: error
+          retention-days: 7
+      - name: Verify expected failure and saved log
+        if: always()
+        shell: bash
+        env:
+          SUITE_OUTCOME: ${{ steps.simulated-suite.outcome }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        run: |
+          test "$SUITE_OUTCOME" = failure
+          test -n "$ARTIFACT_ID"
+          cmp diagnostic-fixture/test-output.log diagnostic-fixture/test/results/nvidia-diagnostics/integration-test-output.log
+
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  diagnose:
+    needs: runner_names
+    # Run the branch workflow directly before it is available on main.
+    if: github.repository == 'tetherto/qvac'
+    name: Full suite and KV-cache diagnostics (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      # Serialize the runner and backend comparisons to avoid adding GPU contention.
+      max-parallel: 1
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
+          - os: ubuntu-22.04
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+    env:
+      SOURCE_SHA: 01a15d577893d5dbb95050e5ed0569ededf26359
+      SOURCE_RUN: '39463888415'
+      CUDA_MODULE_SHA256: bf9f638190a9739021829c4b116aa9550eba55faa15d05322316d1ca5ab3313a
+    steps:
+      - name: Manual Workspace Cleanup
+        if: runner.environment != 'github-hosted'
+        working-directory: .
+        shell: bash
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+
+      - name: Checkout diagnostic tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Checkout failing source revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          path: diagnostic-source
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: '22'
+
+      - name: Download original Linux x64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuild-diffusion-cpp-linux-x64
+          run-id: ${{ env.SOURCE_RUN }}
+          github-token: ${{ github.token }}
+          path: diagnostic-source/packages/diffusion-cpp/prebuilds
+
+      - name: Verify binary and capture original runner environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic-results
+          module="$GITHUB_WORKSPACE/diagnostic-source/packages/diffusion-cpp/prebuilds/linux-x64/qvac__diffusion-cpp-linux-x64/libqvac-diffusion-ggml-cuda.so"
+          printf '%s  %s\n' "$CUDA_MODULE_SHA256" "$module" | sha256sum --check
+          python3 .github/scripts/collect-cuda-runtime-info.py "$module" > diagnostic-results/environment.json
+          git -C diagnostic-source rev-parse HEAD > diagnostic-results/source-sha.txt
+
+      - name: Install package dependencies and isolated Bare runtime
+        id: dependencies
+        working-directory: diagnostic-source/packages/diffusion-cpp
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts
+          npm install --prefix "$GITHUB_WORKSPACE/diagnostic-runtime" --ignore-scripts bare-runtime@1.35.0
+          npm run link:platform
+          npm ls --json > "$GITHUB_WORKSPACE/diagnostic-results/dependencies.json" || true
+          node --version > "$GITHUB_WORKSPACE/diagnostic-results/node-version.txt"
+          "$GITHUB_WORKSPACE/diagnostic-runtime/node_modules/bare-runtime/bin/bare" --version > "$GITHUB_WORKSPACE/diagnostic-results/bare-version.txt"
+
+      - name: Capture NVIDIA environment before the full suite
+        continue-on-error: true
+        shell: bash
+        run: |
+          export PATH="$GITHUB_WORKSPACE/diagnostic-runtime/node_modules/bare-runtime/bin:$PATH"
+          node .github/scripts/capture-diffusion-ci-diagnostics.mjs diagnostic-source/packages/diffusion-cpp before
+
+      - name: Run original full integration suite
+        id: full-suite
+        if: inputs.history_only != true
+        continue-on-error: true
+        working-directory: diagnostic-source/packages/diffusion-cpp
+        shell: bash
+        env:
+          LTX_DOWNLOAD: 'false'
+          LTX_LLM_FILE: gemma-3-12b-it-UD-Q2_K_XL.gguf
+          QVAC_PERF_RUNS: '3'
+          QVAC_PERF_WARMUP_RUNS: '0'
+        run: |
+          set -euo pipefail
+          export PATH="$GITHUB_WORKSPACE/diagnostic-runtime/node_modules/bare-runtime/bin:$PATH"
+          npm run test:integration 2>&1 | tee test-output.log
+
+      - name: Build generated JavaScript for a history-only dispatch
+        if: inputs.history_only == true
+        working-directory: diagnostic-source/packages/diffusion-cpp
+        run: npm run build:ts
+
+      - name: Capture NVIDIA environment after the full suite
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          export PATH="$GITHUB_WORKSPACE/diagnostic-runtime/node_modules/bare-runtime/bin:$PATH"
+          node .github/scripts/capture-diffusion-ci-diagnostics.mjs diagnostic-source/packages/diffusion-cpp after
+
+      - name: Upload full-suite diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: diffusion-cpp-nvidia-full-suite-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            diagnostic-source/packages/diffusion-cpp/test/results/nvidia-diagnostics
+            diagnostic-source/packages/diffusion-cpp/test-output.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Repeat parity with original GPU selection, CUDA and Vulkan
+        if: inputs.history_only != true && steps.full-suite.outcome == 'success'
+        shell: bash
+        run: |
+          node .github/scripts/diffusion-kv-diagnostic.mjs \
+            --workdir "$GITHUB_WORKSPACE/diagnostic-source/packages/diffusion-cpp" \
+            --output "$GITHUB_WORKSPACE/diagnostic-results" \
+            --bare "$GITHUB_WORKSPACE/diagnostic-runtime/node_modules/bare-runtime/bin/bare"
+
+      - name: Compare parity with and without preceding ABot sessions
+        if: always() && !cancelled() && steps.dependencies.outcome == 'success'
+        shell: bash
+        run: |
+          node .github/scripts/diffusion-history-diagnostic.mjs \
+            "$GITHUB_WORKSPACE/diagnostic-source/packages/diffusion-cpp" \
+            "$GITHUB_WORKSPACE/diagnostic-runtime/node_modules/bare-runtime/bin/bare" \
+            "$GITHUB_WORKSPACE/diagnostic-results/history"
+
+      - name: Upload diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: diffusion-kv-diagnostic-${{ matrix.os }}-${{ github.run_id }}
+          path: diagnostic-results
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Preserve original full-suite failure
+        if: always() && steps.full-suite.outcome == 'failure'
+        run: exit 1
