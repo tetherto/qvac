@@ -4691,6 +4691,42 @@ PARAKEET_INDIC_CONFORMER_600M_Q8_0 = ModelConstant(
     params="600M",
 )
 
+PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S = ModelConstant(
+    name="PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2026488,
+    blob_block_length=5182,
+    blob_byte_offset=132778538615,
+    model_id="parakeet-mosaic-compact.gguf",
+    expected_size=339564832,
+    sha256_checksum="8229311ec51911e7f305413f8d9430b1e0d357101ffb3b75d32feed6b8520780",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q4_0/q8_0/q3_k/iq3_s",
+    params="0.6B",
+)
+
+PARAKEET_MOSAIC_Q4_0_Q8_0 = ModelConstant(
+    name="PARAKEET_MOSAIC_Q4_0_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1999840,
+    blob_block_length=7427,
+    blob_byte_offset=131032418925,
+    model_id="parakeet-mosaic.gguf",
+    expected_size=486693152,
+    sha256_checksum="9e17114b5773d1b1ed9b6a4fafb0f46427a3bb9a80b77e645c24576bda9188ef",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q4_0/q8_0",
+    params="0.6B",
+)
+
 PARAKEET_NEMOTRON_0_6B_F16 = ModelConstant(
     name="PARAKEET_NEMOTRON_0_6B_F16",
     src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
@@ -4779,42 +4815,6 @@ PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0 = ModelConstant(
     engine="parakeet-transcription",
     quantization="q8_0",
     params="99.2M",
-)
-
-PARAKEET_Q4_0_Q8_0 = ModelConstant(
-    name="PARAKEET_Q4_0_Q8_0",
-    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
-    registry_path="qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
-    registry_source="s3",
-    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
-    blob_block_offset=1999840,
-    blob_block_length=7427,
-    blob_byte_offset=131032418925,
-    model_id="parakeet-mosaic.gguf",
-    expected_size=486693152,
-    sha256_checksum="9e17114b5773d1b1ed9b6a4fafb0f46427a3bb9a80b77e645c24576bda9188ef",
-    addon="parakeet",
-    engine="parakeet-transcription",
-    quantization="q4_0/q8_0",
-    params="0.6B",
-)
-
-PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S = ModelConstant(
-    name="PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S",
-    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
-    registry_path="qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
-    registry_source="s3",
-    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
-    blob_block_offset=2026488,
-    blob_block_length=5182,
-    blob_byte_offset=132778538615,
-    model_id="parakeet-mosaic-compact.gguf",
-    expected_size=339564832,
-    sha256_checksum="8229311ec51911e7f305413f8d9430b1e0d357101ffb3b75d32feed6b8520780",
-    addon="parakeet",
-    engine="parakeet-transcription",
-    quantization="q4_0/q8_0/q3_k/iq3_s",
-    params="0.6B",
 )
 
 PARAKEET_SORTFORMER_4SPK_V1_F16 = ModelConstant(
@@ -8732,13 +8732,13 @@ __all__ = [
     "PARAKEET_INDIC_CONFORMER_600M_F16",
     "PARAKEET_INDIC_CONFORMER_600M_Q4_0",
     "PARAKEET_INDIC_CONFORMER_600M_Q8_0",
+    "PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S",
+    "PARAKEET_MOSAIC_Q4_0_Q8_0",
     "PARAKEET_NEMOTRON_0_6B_F16",
     "PARAKEET_NEMOTRON_0_6B_Q4_0",
     "PARAKEET_NEMOTRON_0_6B_Q8_0",
     "PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K",
     "PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0",
-    "PARAKEET_Q4_0_Q8_0",
-    "PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S",
     "PARAKEET_SORTFORMER_4SPK_V1_F16",
     "PARAKEET_SORTFORMER_4SPK_V1_Q4_0",
     "PARAKEET_SORTFORMER_4SPK_V1_Q8_0",

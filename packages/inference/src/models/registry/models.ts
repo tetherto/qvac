@@ -18025,7 +18025,7 @@ export const models = [
     params: '0.6B'
   },
   {
-    name: 'PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S',
+    name: 'PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S',
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf',
     registrySource: 's3',
     blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
@@ -18109,7 +18109,7 @@ export const models = [
     params: '0.6B'
   },
   {
-    name: 'PARAKEET_Q4_0_Q8_0',
+    name: 'PARAKEET_MOSAIC_Q4_0_Q8_0',
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf',
     registrySource: 's3',
     blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
@@ -26820,8 +26820,8 @@ export const PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K = {
   params: models[695].params
 } as const
 
-export const PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S = {
-  name: 'PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S',
+export const PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S = {
+  name: 'PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S',
   src: `registry://${models[700].registrySource}/${models[700].registryPath}`,
   registryPath: models[700].registryPath,
   registrySource: models[700].registrySource,
@@ -26838,8 +26838,8 @@ export const PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S = {
   params: models[700].params
 } as const
 
-export const PARAKEET_Q4_0_Q8_0 = {
-  name: 'PARAKEET_Q4_0_Q8_0',
+export const PARAKEET_MOSAIC_Q4_0_Q8_0 = {
+  name: 'PARAKEET_MOSAIC_Q4_0_Q8_0',
   src: `registry://${models[705].registrySource}/${models[705].registryPath}`,
   registryPath: models[705].registryPath,
   registrySource: models[705].registrySource,

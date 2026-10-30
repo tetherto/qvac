@@ -4682,6 +4682,42 @@ object Models {
         params = "600M",
     )
 
+    val PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S = ModelConstant(
+        name = "PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S",
+        src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+        registryPath = "qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 2026488,
+        blobBlockLength = 5182,
+        blobByteOffset = 132778538615,
+        modelId = "parakeet-mosaic-compact.gguf",
+        expectedSize = 339564832,
+        sha256Checksum = "8229311ec51911e7f305413f8d9430b1e0d357101ffb3b75d32feed6b8520780",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q4_0/q8_0/q3_k/iq3_s",
+        params = "0.6B",
+    )
+
+    val PARAKEET_MOSAIC_Q4_0_Q8_0 = ModelConstant(
+        name = "PARAKEET_MOSAIC_Q4_0_Q8_0",
+        src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+        registryPath = "qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1999840,
+        blobBlockLength = 7427,
+        blobByteOffset = 131032418925,
+        modelId = "parakeet-mosaic.gguf",
+        expectedSize = 486693152,
+        sha256Checksum = "9e17114b5773d1b1ed9b6a4fafb0f46427a3bb9a80b77e645c24576bda9188ef",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q4_0/q8_0",
+        params = "0.6B",
+    )
+
     val PARAKEET_NEMOTRON_0_6B_F16 = ModelConstant(
         name = "PARAKEET_NEMOTRON_0_6B_F16",
         src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
@@ -4770,42 +4806,6 @@ object Models {
         engine = "parakeet-transcription",
         quantization = "q8_0",
         params = "99.2M",
-    )
-
-    val PARAKEET_Q4_0_Q8_0 = ModelConstant(
-        name = "PARAKEET_Q4_0_Q8_0",
-        src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
-        registryPath = "qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
-        registrySource = "s3",
-        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
-        blobBlockOffset = 1999840,
-        blobBlockLength = 7427,
-        blobByteOffset = 131032418925,
-        modelId = "parakeet-mosaic.gguf",
-        expectedSize = 486693152,
-        sha256Checksum = "9e17114b5773d1b1ed9b6a4fafb0f46427a3bb9a80b77e645c24576bda9188ef",
-        addon = "parakeet",
-        engine = "parakeet-transcription",
-        quantization = "q4_0/q8_0",
-        params = "0.6B",
-    )
-
-    val PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S = ModelConstant(
-        name = "PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S",
-        src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
-        registryPath = "qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
-        registrySource = "s3",
-        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
-        blobBlockOffset = 2026488,
-        blobBlockLength = 5182,
-        blobByteOffset = 132778538615,
-        modelId = "parakeet-mosaic-compact.gguf",
-        expectedSize = 339564832,
-        sha256Checksum = "8229311ec51911e7f305413f8d9430b1e0d357101ffb3b75d32feed6b8520780",
-        addon = "parakeet",
-        engine = "parakeet-transcription",
-        quantization = "q4_0/q8_0/q3_k/iq3_s",
-        params = "0.6B",
     )
 
     val PARAKEET_SORTFORMER_4SPK_V1_F16 = ModelConstant(
@@ -8722,13 +8722,13 @@ object Models {
         PARAKEET_INDIC_CONFORMER_600M_F16,
         PARAKEET_INDIC_CONFORMER_600M_Q4_0,
         PARAKEET_INDIC_CONFORMER_600M_Q8_0,
+        PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S,
+        PARAKEET_MOSAIC_Q4_0_Q8_0,
         PARAKEET_NEMOTRON_0_6B_F16,
         PARAKEET_NEMOTRON_0_6B_Q4_0,
         PARAKEET_NEMOTRON_0_6B_Q8_0,
         PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K,
         PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0,
-        PARAKEET_Q4_0_Q8_0,
-        PARAKEET_Q4_0_Q8_0_Q3_K_IQ3_S,
         PARAKEET_SORTFORMER_4SPK_V1_F16,
         PARAKEET_SORTFORMER_4SPK_V1_Q4_0,
         PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
