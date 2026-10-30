@@ -52,9 +52,9 @@ For example, the LLM profile:
 
 ```bash
 curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/qvac-sdk-android-llm-0.23.0-maven.zip
-curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/SHA256SUMS
-sha256sum --check --ignore-missing SHA256SUMS
-# macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
+curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/qvac-sdk-kotlin-0.23.0-SHA256SUMS
+sha256sum --check --ignore-missing qvac-sdk-kotlin-0.23.0-SHA256SUMS
+# macOS: shasum -a 256 --check --ignore-missing qvac-sdk-kotlin-0.23.0-SHA256SUMS
 ```
 </Step>
 
@@ -119,6 +119,82 @@ contain throws `UnsupportedCapabilityException`. Inspect it with
 
 To build the artifacts yourself instead, see the
 [package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-kotlin/README.md).
+
+## Quickstart
+
+Run your first example using the desktop JVM client. Every example in this documentation is a desktop JVM program; to run the same code on Android, connect with `AndroidServiceTransport` as shown in [Connect](#connect).
+
+You need JDK 17 or newer, [Gradle](https://gradle.org/install/), and Node.js with npm: on first use the client installs the `@qvac/sdk` worker it is pinned to.
+
+<Steps>
+
+<Step>
+Download the desktop JVM archive and the release's checksums, and extract the archive:
+
+```bash
+curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/qvac-sdk-kotlin-jvm-0.23.0-maven.zip
+curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/qvac-sdk-kotlin-0.23.0-SHA256SUMS
+sha256sum --check --ignore-missing qvac-sdk-kotlin-0.23.0-SHA256SUMS
+unzip qvac-sdk-kotlin-jvm-0.23.0-maven.zip -d qvac-maven-repository
+```
+</Step>
+
+<Step>
+Create the examples workspace and point it at the extracted repository:
+
+```bash
+mkdir -p qvac-examples-kt/src
+echo "qvacMavenRepository=$(pwd)/qvac-maven-repository" > qvac-examples-kt/gradle.properties
+cd qvac-examples-kt
+```
+</Step>
+
+<Step>
+Create the Gradle settings and build files. The build compiles each file in `src/` as its own program:
+
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/settings.gradle.kts title="settings.gradle.kts" lineNumbers
+```
+</WrapCode>
+
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/build.gradle.kts title="build.gradle.kts" lineNumbers
+```
+</WrapCode>
+</Step>
+
+<Step>
+Create the quickstart script as `src/Quickstart.kt`:
+
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/Quickstart.kt title="Quickstart.kt" lineNumbers
+```
+</WrapCode>
+</Step>
+
+<Step>
+Generate the Gradle wrapper and run the quickstart script:
+
+```bash
+gradle wrapper
+./gradlew run -Pexample=Quickstart
+```
+</Step>
+
+</Steps>
+
+## Running examples
+
+Follow these instructions to run any example in this documentation:
+- All examples are self-contained, runnable Kotlin programs. Save each one in the `src/` directory of the `qvac-examples-kt` workspace created in this quickstart, and run it by file name: `./gradlew run -Pexample=<FileName>`.
+- Each file compiles on its own, so the workspace can hold every example at once. `./gradlew compileExamples` compiles them all.
+- Pass arguments with `--args`, for example `./gradlew run -Pexample=Transcription --args="path/to/audio.wav"`. Each example's header comment shows how to run it.
+- The JS/TS examples read worker settings from a `qvac.config.*` file. The Kotlin examples pass them inline instead, as the `config` argument of `JvmBareRpcTransport.connectResolved()`.
+- More examples can be found in the [Kotlin SDK examples directory](https://github.com/tetherto/qvac/tree/main/packages/sdk-kotlin/examples).
+- Some examples need companion files — sample audio, an image, or a dataset — that aren't part of the embedded code. These can be found in the examples directories of the [JS/TS](https://github.com/tetherto/qvac/tree/main/packages/sdk/examples) and [Kotlin](https://github.com/tetherto/qvac/tree/main/packages/sdk-kotlin/examples) SDKs.
 
 ## Connect
 

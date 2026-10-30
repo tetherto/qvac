@@ -91,6 +91,14 @@ The following script shows an example of streaming logs from loaded models:
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/LoggingStreams.kt title="LoggingStreams.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 To capture logs from every source (SDK server, all models, RAG) with a single subscription, use `subscribeServerLogs`:
@@ -119,6 +127,14 @@ To capture logs from every source (SDK server, all models, RAG) with a single su
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/LoggingGlobal.kt title="LoggingGlobal.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 The script reads its config from `config/logging/logging.config.json`, relative to the script. The config disables the default console output, so only the subscribed logs are printed:
@@ -126,7 +142,11 @@ The script reads its config from `config/logging/logging.config.json`, relative 
 ```json file=<rootDir>/packages/sdk/examples/config/logging/logging.config.json title="config/logging/logging.config.json"
 ```
 
+The Kotlin examples pass the same setting inline, as the `config` argument of `JvmBareRpcTransport.connectResolved()`.
+
+`getLogger` is not available in the Kotlin client — use your application's logging framework. The log streams are: `client.serverLogs()` returns a cold `Flow`, and `client.subscribeServerLogs(scope, handler)` returns a `Job` that you cancel to unsubscribe.
+
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>
 

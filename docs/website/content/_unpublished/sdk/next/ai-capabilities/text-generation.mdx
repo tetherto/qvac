@@ -80,6 +80,14 @@ The canonical way to consume `completion()` is the `events` async iterable plus 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/CompletionEvents.kt title="CompletionEvents.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="info">
@@ -119,6 +127,14 @@ The following script loads a `parallel: 4` model, fires four completions at once
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/multi_job_completion.py title="multi_job_completion.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/MultiJobCompletion.kt title="MultiJobCompletion.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -172,11 +188,19 @@ The following script shows how to provide tool definitions to `completion()`, co
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/CompletionTools.kt title="CompletionTools.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Worker-orchestrated tool loop
 
-Python also exposes an advanced worker-orchestrated path, where the worker runs
+Python and Kotlin also expose an advanced worker-orchestrated path, where the worker runs
 the whole multi-turn tool loop and calls back into your local handlers. Use this
 only when you need the worker to own the tool loop rather than managing each
 turn in application code:
@@ -186,6 +210,14 @@ turn in application code:
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/completion_orchestrate.py title="completion_orchestrate.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/CompletionOrchestrate.kt title="CompletionOrchestrate.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -225,9 +257,17 @@ The JavaScript and TypeScript examples below import the same `shared` module sho
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/CompletionDeferredTools.kt title="CompletionDeferredTools.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
-The Python example takes the [worker-orchestrated loop](#worker-orchestrated-tool-loop) while the others take the client-side one. Deferring a tool works the same in both languages — the worker builds the catalog and reads back what the conversation has loaded — but running `tool_search` from client code needs the `executeToolSearch` helper, which only the JS SDK exports. On the orchestrated path the worker runs the search itself.
+The Python and Kotlin examples take the [worker-orchestrated loop](#worker-orchestrated-tool-loop) while the others take the client-side one. Deferring a tool works the same in both languages — the worker builds the catalog and reads back what the conversation has loaded — but running `tool_search` from client code needs the `executeToolSearch` helper, which only the JS SDK exports. On the orchestrated path the worker runs the search itself.
 
 The model calls `tool_search({ query })` with a capability or an exact tool
 name; the SDK searches the registered tools outside inference and returns a
@@ -283,7 +323,7 @@ You create and manage the MCP client, connect it to one or more MCP servers, and
 </Tabs>
 
 <Callout type="warn">
-MCP is available in the JS/TS client only. The integration lives in the client, not in the worker, so the Python client cannot reach it.
+MCP is available in the JS/TS client only. The integration lives in the client, not in the worker, so the Python and Kotlin clients cannot reach it.
 </Callout>
 
 ### KV cache
@@ -366,6 +406,14 @@ The following script enables `kvCache: true` to speed up follow-up turns, and th
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/KvCache.kt title="KvCache.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Speculative decoding
@@ -392,5 +440,5 @@ const modelId = await loadModel({
 ```
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>
