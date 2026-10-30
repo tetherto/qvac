@@ -8,7 +8,7 @@ import {
   destroyResourceCollector
 } from '@/resources/instance'
 import { registerPlugin } from '@/plugins'
-import { cleanupForTerminate } from '@/runtime/lifecycle'
+import { close, cleanupForTerminate } from '@/runtime/lifecycle'
 import type { QvacPlugin } from '@/schemas/plugin'
 import { getSystemResourcesResponseSchema } from '@/schemas/system-resources'
 import { handleGetSystemResources } from '@/handlers/get-system-resources'
@@ -62,6 +62,7 @@ test('serves system resources through the local handler in Bare', (t) => {
 })
 
 test('releases native contexts during cleanup', async (t) => {
+  t.teardown(close)
   destroyResourceCollector()
   const collector = initializeResourceCollector(nativeResourceCollectorDependencies)
   registerPlugin({
