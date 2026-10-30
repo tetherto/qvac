@@ -302,13 +302,13 @@ jobs:
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer == 'electron' && 'electron' || format('{0}-{1}', inputs.consumer, steps.leg.outputs.platform) }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer == 'desktop' && format('desktop-{0}', steps.leg.outputs.platform) || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
-      # Desktop and Python bootstrap as the platform the leg runs as, and cache
-      # per OS, so a model the table keeps to one OS or to Python is cached
-      # only where it runs. Python resolves the same table, so the desktop
-      # bootstrap fetches its models as `desktop-python`.
+      # Each leg bootstraps as the platform it runs as. Desktop caches per OS,
+      # so a model the table keeps to one OS is cached only there. Python
+      # resolves the same table as `desktop-python` on every OS, so it keeps
+      # one shared cache, fetched through the desktop bootstrap.
       - name: Bootstrap (download models)
         if: steps.models-cache.outputs.cache-hit != 'true'
         working-directory: ${{ inputs.working-directory }}
@@ -323,7 +323,7 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer == 'electron' && 'electron' || format('{0}-{1}', inputs.consumer, steps.leg.outputs.platform) }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer == 'desktop' && format('desktop-{0}', steps.leg.outputs.platform) || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
       - name: Build Electron package
