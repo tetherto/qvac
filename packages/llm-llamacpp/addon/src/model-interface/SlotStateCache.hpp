@@ -4,6 +4,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <list>
 #include <mutex>
 #include <optional>
@@ -18,6 +19,7 @@
 #include "CacheCheckpointFile.hpp"
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
+#include "CacheSourceSelection.hpp"
 #include "SpeculativeRuntime.hpp"
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -78,7 +80,10 @@ public:
 
   /// Keeps `entry` under `key` and returns true. When it does not fit the
   /// budget even alone, `entry` is left untouched and false is returned: the
-  /// caller saves it the way it would without the tier.
+  /// caller saves it the way it would without the tier. An entry without a
+  /// key (a request that named none) only serves a prefix others may share:
+  /// it never pushes out a keyed conversation, and is false when it does not
+  /// fit beside them; a keyed entry that needs the room drops it first.
   bool insert(const std::string& key, SlotStateCacheEntry&& entry) {
     std::scoped_lock lock(mutex_);
     const uint64_t size = entry.bytes();
@@ -86,6 +91,12 @@ public:
       return false;
     }
     eraseLocked(key);
+    if (totalBytesLocked() + size > budget_) {
+      if (key.empty()) {
+        return false;
+      }
+      eraseLocked("");
+    }
     while (!entries_.empty() && totalBytesLocked() + size > budget_) {
       dropOldestLocked();
     }
@@ -105,6 +116,40 @@ public:
       }
     }
     return std::nullopt;
+  }
+
+  /// Hands `use` the entry with the longest `cache::reusablePrefix` of
+  /// `prompt` when it exceeds `minimum`, under the lock; the newest wins a
+  /// tie. The entry stays in place: a request that starts from another
+  /// conversation copies it. An entry whose file its caller deleted is
+  /// skipped: that conversation was dropped. Returns what `use` returned, or
+  /// false when no entry qualified.
+  bool useLongestPrefix(
+      const cache::Ledger& prompt, bool trimmable, size_t minimum,
+      const std::function<bool(const SlotStateCacheEntry&)>& use) {
+    std::scoped_lock lock(mutex_);
+    const SlotStateCacheEntry* best = nullptr;
+    size_t bestReusable = minimum;
+    for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
+      const SlotStateCacheEntry& entry = it->second;
+      if (entry.activeCacheSavedToDisk &&
+          CacheManager::persistedBackingStoreMissing(it->first)) {
+        continue;
+      }
+      try {
+        const cache::DecodedLedger decoded = cache::deserialize(
+            entry.ledgerWords.data(), entry.ledgerWords.size());
+        const size_t reusable = cache::reusablePrefix(
+            decoded.ledger, &entry.checkpoints, prompt, trimmable);
+        if (reusable > bestReusable) {
+          best = &entry;
+          bestReusable = reusable;
+        }
+      } catch (const std::exception&) {
+        // A ledger that does not decode shares nothing.
+      }
+    }
+    return best != nullptr && use(*best);
   }
 
   /// Writes every dirty, non-ephemeral entry to its `cacheKey` file and marks

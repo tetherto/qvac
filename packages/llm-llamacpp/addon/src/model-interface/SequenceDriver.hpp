@@ -13,6 +13,7 @@
 #include <llama.h>
 
 #include "CacheLedger.hpp"
+#include "CacheSourceSelection.hpp"
 #include "MediaLoadOrder.hpp"
 #include "RenderOverrides.hpp"
 #include "SpeculativeSequence.hpp"
@@ -226,6 +227,24 @@ public:
   }
 
   virtual void setCacheReconciliationEnabled(bool enabled) { (void)enabled; }
+
+  /// Whether this driver reconciles every request against its sequence and
+  /// may start one from another conversation's state (`cache::DonorState`),
+  /// with or without a `cacheKey`. Text drivers do; multimodal drivers keep
+  /// a key's state to that key.
+  [[nodiscard]] virtual bool sharesCacheAcrossKeys() const { return false; }
+
+  /// See `LlmContext::holdsBorrowedState`.
+  [[nodiscard]] virtual bool holdsBorrowedState() const { return false; }
+
+  /// Where `preparePrefill` looks, after tokenizing the prompt, for a state
+  /// kept outside this sequence that serves more of it than the sequence
+  /// does. None (the default) keeps to the sequence's own state.
+  virtual void setCacheSourceProvider(
+      qvac_lib_inference_addon_llama::cache::CacheSourceProvider provider) {
+    (void)provider;
+  }
+
   /// See `LlmContext::setCacheCheckpointPolicy`; the scheduler applies the
   /// model-wide policy to every driver it creates.
   virtual void setCacheCheckpointPolicy(

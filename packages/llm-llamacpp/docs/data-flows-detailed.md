@@ -32,7 +32,7 @@ This document contains detailed diagrams showing how data moves through the `@qv
 
 **Session Cache:**
 - Optional KV cache persistence to disk via `CacheManager`
-- Controlled via `runOptions` fields (`cacheKey`, `ephemeral`) and `saveCache(cacheKey)`
+- Controlled via `runOptions` fields (`cacheKey`, `ephemeral`, `baseCacheKey`) and `saveCache(cacheKey)`
 - Context overflow only affects RAM; disk cache preserved until explicit save
 
 </details>
@@ -451,12 +451,12 @@ Images can be provided in two ways:
 
 ## Session Cache Flow
 
-`CacheManager` persists KV cache state between inference calls for multi-turn conversations. Cache is controlled via `runOptions` fields (`cacheKey`, `ephemeral`) and the `saveCache(cacheKey)` method.
+`CacheManager` persists KV cache state between inference calls for multi-turn conversations. Cache is controlled via `runOptions` fields (`cacheKey`, `ephemeral`, `baseCacheKey`) and the `saveCache(cacheKey)` method.
 
 ```mermaid
 flowchart TD
     Start([New inference]) --> CheckKey{cacheKey<br/>provided?}
-    CheckKey -->|No| ClearRAM[Save active cache if unsaved<br/>unless ephemeral, then clear]
+    CheckKey -->|No| ClearRAM[Save active cache if unsaved<br/>unless ephemeral, then set aside<br/>text: memory kept; multimodal: cleared]
     ClearRAM --> NormalInference[Process without cache]
     CheckKey -->|Yes| SameKey{Same as<br/>active key?}
     SameKey -->|Yes| Reuse[Reuse in-memory cache]

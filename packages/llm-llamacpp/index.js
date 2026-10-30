@@ -16,6 +16,7 @@ function normalizeRunOptions(runOptions) {
             generationParams: undefined,
             cacheKey: undefined,
             ephemeral: false,
+            baseCacheKey: undefined,
             rejectWhenBusy: undefined,
         };
     }
@@ -43,6 +44,9 @@ function normalizeRunOptions(runOptions) {
     if (options.ephemeral !== undefined && typeof options.ephemeral !== "boolean") {
         throw new TypeError("ephemeral must be a boolean when provided");
     }
+    if (options.baseCacheKey !== undefined && typeof options.baseCacheKey !== "string") {
+        throw new TypeError("baseCacheKey must be a string when provided");
+    }
     if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
         throw new TypeError("rejectWhenBusy must be a boolean when provided");
     }
@@ -51,6 +55,7 @@ function normalizeRunOptions(runOptions) {
         generationParams: normalizeGenerationParams(options.generationParams),
         cacheKey: options.cacheKey,
         ephemeral: options.ephemeral === true,
+        baseCacheKey: options.baseCacheKey,
         // Left undefined when unset so admission falls back to the instance default.
         rejectWhenBusy: options.rejectWhenBusy,
     };
@@ -59,7 +64,7 @@ function promptToAddonMessages(prompt, runOptions) {
     if (!Array.isArray(prompt)) {
         throw new TypeError("Prompt input must be Message[]");
     }
-    const { prefill, generationParams, cacheKey, ephemeral } = normalizeRunOptions(runOptions);
+    const { prefill, generationParams, cacheKey, ephemeral, baseCacheKey } = normalizeRunOptions(runOptions);
     const textMessages = [];
     const mediaItems = [];
     for (const message of prompt) {
@@ -83,6 +88,7 @@ function promptToAddonMessages(prompt, runOptions) {
         generationParams,
         cacheKey,
         ephemeral,
+        baseCacheKey,
     });
     return promptMessages;
 }

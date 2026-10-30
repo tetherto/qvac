@@ -1,11 +1,17 @@
 #include <deque>
+#include <filesystem>
+#include <fstream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "model-interface/CacheLedger.hpp"
+#include "model-interface/CacheSourceSelection.hpp"
+#include "model-interface/SlotStateCache.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
 
 namespace cache = qvac_lib_inference_addon_llama::cache;
@@ -310,4 +316,180 @@ TEST(ModelMemoryPolicy, SlidingWindowCheckpointsAreBoundedByTheWindow) {
   EXPECT_EQ(utils::slidingWindowCheckpointCells(512), 512u);
   EXPECT_EQ(utils::slidingWindowCheckpointCells(0), 0u);
   EXPECT_EQ(utils::slidingWindowCheckpointCells(-1), 0u);
+}
+
+namespace {
+cache::Checkpoint checkpointOver(std::vector<llama_token> tokens) {
+  cache::Checkpoint checkpoint;
+  checkpoint.ledger = cache::fromTokens(tokens);
+  return checkpoint;
+}
+
+qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry
+ramEntryOver(std::vector<llama_token> tokens) {
+  qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry entry;
+  entry.state.assign(16, 0);
+  const auto count = static_cast<llama_pos>(tokens.size());
+  entry.ledgerWords = cache::serialize(cache::fromTokens(tokens), count, count);
+  return entry;
+}
+} // namespace
+
+// Trimmable memory serves the whole shared prefix, wherever it diverges.
+TEST(CacheSourceSelection, TrimmableMemoryServesTheSharedPrefix) {
+  const cache::Ledger state = cache::fromTokens({1, 2, 3, 4, 5});
+  const cache::Ledger prompt = cache::fromTokens({1, 2, 3, 9});
+  EXPECT_EQ(cache::reusablePrefix(state, nullptr, prompt, true), 3u);
+  EXPECT_EQ(
+      cache::reusablePrefix(state, nullptr, cache::fromTokens({7}), true), 0u);
+}
+
+// Memory that cannot be trimmed serves a state that is a prefix of the
+// prompt whole, and a shorter shared prefix only through a checkpoint in it.
+TEST(CacheSourceSelection, UntrimmableMemoryNeedsAPrefixOrACheckpoint) {
+  const cache::Ledger state = cache::fromTokens({1, 2, 3, 4, 5});
+  EXPECT_EQ(
+      cache::reusablePrefix(
+          state, nullptr, cache::fromTokens({1, 2, 3, 4, 5, 6}), false),
+      5u);
+
+  const cache::Ledger diverging = cache::fromTokens({1, 2, 3, 9});
+  EXPECT_EQ(cache::reusablePrefix(state, nullptr, diverging, false), 0u);
+
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(checkpointOver({1}));
+  checkpoints.push_back(checkpointOver({1, 2}));
+  // Longer than the shared prefix: unusable.
+  checkpoints.push_back(checkpointOver({1, 2, 3, 4}));
+  // Not a prefix of the prompt: unusable.
+  checkpoints.push_back(checkpointOver({1, 5}));
+  EXPECT_EQ(cache::reusablePrefix(state, &checkpoints, diverging, false), 2u);
+}
+
+// A generating request decodes its last prompt token again, so a full-state
+// cached state serves it only up to that token, and media after that token
+// goes with it; a prefill-only request is served whole.
+TEST(CacheSourceSelection, GenerationIsServedUpToItsLastPromptToken) {
+  const cache::Ledger text = cache::fromTokens({1, 2, 3});
+  EXPECT_EQ(cache::servablePrompt(text, true).entries, text.entries);
+  EXPECT_EQ(
+      cache::servablePrompt(text, false).entries,
+      cache::fromTokens({1, 2}).entries);
+  EXPECT_TRUE(
+      cache::servablePrompt(cache::fromTokens({1}), false).entries.empty());
+
+  cache::Ledger endsWithMedia = text;
+  endsWithMedia.entries.push_back(
+      {.kind = cache::EntryKind::Media,
+       .identity = 7,
+       .positions = 4,
+       .cacheTokens = 16});
+  EXPECT_EQ(
+      cache::servablePrompt(endsWithMedia, false).entries,
+      cache::fromTokens({1, 2}).entries);
+
+  // Exactly the prompt, on memory that cannot be trimmed: only a checkpoint
+  // before the last token serves it.
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(checkpointOver({1}));
+  const cache::Ledger servable = cache::servablePrompt(text, false);
+  EXPECT_EQ(cache::reusablePrefix(text, nullptr, servable, false), 0u);
+  EXPECT_EQ(cache::reusablePrefix(text, &checkpoints, servable, false), 1u);
+}
+
+// Another request starts from a copy of a RAM-tier entry: the lookup finds the
+// one that serves the most of its prompt, and every entry stays in the tier.
+TEST(CacheSourceSelection, RamTierLendsItsLongestPrefixWithoutGivingItUp) {
+  using qvac_lib_inference_addon_llama::batching::SlotStateCache;
+  using qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry;
+  SlotStateCache tier(1 << 20);
+  ASSERT_TRUE(tier.insert("short", ramEntryOver({1, 2})));
+  ASSERT_TRUE(tier.insert("long", ramEntryOver({1, 2, 3, 4, 8})));
+  ASSERT_TRUE(tier.insert("other", ramEntryOver({5, 6, 7})));
+  SlotStateCacheEntry broken = ramEntryOver({1, 2, 3});
+  broken.ledgerWords.back() ^= 1;
+  ASSERT_TRUE(tier.insert("broken", std::move(broken)));
+
+  // Entries of the entry `useLongestPrefix` lends; 0 when it lends none.
+  const auto lent =
+      [&tier](const cache::Ledger& prompt, bool trimmable, size_t minimum) {
+        size_t entries = 0;
+        (void)tier.useLongestPrefix(
+            prompt, trimmable, minimum, [&](const SlotStateCacheEntry& entry) {
+              entries = cache::deserialize(
+                            entry.ledgerWords.data(), entry.ledgerWords.size())
+                            .ledger.entries.size();
+              return true;
+            });
+        return entries;
+      };
+  const cache::Ledger prompt = cache::fromTokens({1, 2, 3, 4, 9});
+  EXPECT_EQ(lent(prompt, true, 0), 5u);
+  EXPECT_EQ(lent(prompt, true, 3), 5u);
+  // Without trimming only a state that is a prefix of the prompt serves.
+  EXPECT_EQ(lent(prompt, false, 0), 2u);
+  EXPECT_EQ(lent(prompt, true, 4), 0u) << "nothing serves more than 4";
+  EXPECT_EQ(lent(cache::fromTokens({9}), true, 0), 0u);
+  EXPECT_EQ(tier.size(), 4u);
+}
+
+// A conversation whose file its caller deleted was dropped: its RAM-tier entry
+// lends nothing, while one whose file is still there does.
+TEST(CacheSourceSelection, RamTierLendsNothingWhoseFileWasDeleted) {
+  namespace fs = std::filesystem;
+  using qvac_lib_inference_addon_llama::batching::SlotStateCache;
+  using qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry;
+  const fs::path dir = fs::temp_directory_path() / "ram_tier_deleted_file";
+  fs::create_directories(dir);
+  const std::string kept = (dir / "kept.bin").string();
+  const std::string deleted = (dir / "deleted.bin").string();
+  for (const auto& path : {kept, deleted}) {
+    std::ofstream(path, std::ios::binary) << "state";
+  }
+  SlotStateCache tier(1 << 20);
+  SlotStateCacheEntry shorter = ramEntryOver({1, 2});
+  shorter.activeCacheSavedToDisk = true;
+  SlotStateCacheEntry longer = ramEntryOver({1, 2, 3, 4});
+  longer.activeCacheSavedToDisk = true;
+  ASSERT_TRUE(tier.insert(kept, std::move(shorter)));
+  ASSERT_TRUE(tier.insert(deleted, std::move(longer)));
+  fs::remove(deleted);
+
+  size_t lent = 0;
+  EXPECT_TRUE(tier.useLongestPrefix(
+      cache::fromTokens({1, 2, 3, 4, 5}),
+      true,
+      0,
+      [&lent](const SlotStateCacheEntry& entry) {
+        lent = cache::deserialize(
+                   entry.ledgerWords.data(), entry.ledgerWords.size())
+                   .ledger.entries.size();
+        return true;
+      }));
+  EXPECT_EQ(lent, 2u) << "the entry whose file was deleted was lent";
+  fs::remove_all(dir);
+}
+
+// A state without a key never pushes a keyed conversation out of the RAM
+// tier, and is the first to go when a keyed one needs the room.
+TEST(CacheSourceSelection, RamTierStateWithoutAKeyYieldsToKeyedOnes) {
+  using qvac_lib_inference_addon_llama::batching::SlotStateCache;
+  const uint64_t entryBytes = ramEntryOver({1, 2}).bytes();
+  const uint64_t twoEntries = entryBytes * 2 + entryBytes / 2;
+
+  SlotStateCache full(twoEntries);
+  ASSERT_TRUE(full.insert("a", ramEntryOver({1, 2})));
+  ASSERT_TRUE(full.insert("b", ramEntryOver({3, 4})));
+  EXPECT_FALSE(full.insert("", ramEntryOver({5, 6})));
+  EXPECT_TRUE(full.take("a").has_value());
+  EXPECT_TRUE(full.take("b").has_value());
+
+  SlotStateCache tier(twoEntries);
+  ASSERT_TRUE(tier.insert("a", ramEntryOver({1, 2})));
+  ASSERT_TRUE(tier.insert("", ramEntryOver({5, 6})));
+  ASSERT_TRUE(tier.insert("b", ramEntryOver({3, 4})));
+  EXPECT_FALSE(tier.take("").has_value());
+  EXPECT_TRUE(tier.take("a").has_value())
+      << "a keyed conversation went before the state without a key";
+  EXPECT_TRUE(tier.take("b").has_value());
 }

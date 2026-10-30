@@ -33,6 +33,7 @@
 #include <picojson/picojson.h>
 
 #include "BatchEntryGuard.hpp"
+#include "CacheFileIndex.hpp"
 #include "ImagePixelLimit.hpp"
 #include "MediaLoadOrder.hpp"
 #include "MtmdLlmContext.hpp"
@@ -418,6 +419,9 @@ void LlamaModel::init(bool acquireLock) {
     snap->ramTier_ =
         std::make_shared<batching::SlotStateCache>(snap->cacheRamBytes_);
     snap->cacheManager_->setRamTier(snap->ramTier_);
+    snap->fileIndex_ = std::make_shared<
+        qvac_lib_inference_addon_llama::cache::CacheFileIndex>();
+    snap->cacheManager_->setFileIndex(snap->fileIndex_);
   }
 
   if (isMultiBatchActivated(*snap)) {
@@ -560,6 +564,7 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
             state.cacheCheckpointPolicy_,
             maxImagePixels_));
     scheduler->setRamTier(state.ramTier_);
+    scheduler->setFileIndex(state.fileIndex_);
     return scheduler;
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
@@ -795,9 +800,9 @@ bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
     return false;
   }
   // A prefill earns a lane exactly when its product survives the slot
-  // teardown: a keyed conversation stays in its sequence for the next request
-  // on that key. A keyless prefill's product is warm state in the shared
-  // single context, which a lane wipes.
+  // teardown as a conversation: a keyed one stays in its sequence for the
+  // next request on that key. A lane keeps a keyless request's state at most
+  // anonymously, first to be evicted, which no request can count on.
   return !prompt.prefill || !prompt.cacheKey.empty();
 }
 
@@ -1237,6 +1242,10 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
         }
       };
   if (state_->cacheManager_.has_value()) {
+    // The base key's file is a source like any file this model has used.
+    if (state_->fileIndex_) {
+      state_->fileIndex_->note(prompt.baseCacheKey);
+    }
     ParsedPromptPayload parsedPrompt;
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
         parsedPrompt,
@@ -1247,9 +1256,12 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
     validateAndLoadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
+    // A context that shares its cache across keys keeps a request's state
+    // without a key too, for the prefix the next request may share with it.
     resolved.shouldResetAfterInference =
-        state_->cacheManager_->isCacheDisabled() ||
-        !state_->cacheManager_->wasCacheUsedInLastPrompt();
+        !state_->llmContext_->sharesCacheAcrossKeys() &&
+        (state_->cacheManager_->isCacheDisabled() ||
+         !state_->cacheManager_->wasCacheUsedInLastPrompt());
   } else {
     ParsedPromptPayload parsedPrompt = parseAndPreflight(prompt.input);
     validateAndLoadPlannedMedia(parsedPrompt);
@@ -1291,7 +1303,8 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   ResolvedPrompt resolved = resolveChatAndTools(prompt);
   state_->llmContext_->setCacheReconciliationEnabled(
       state_->cacheManager_.has_value() &&
-      state_->cacheManager_->wasCacheUsedInLastPrompt());
+      (state_->cacheManager_->wasCacheUsedInLastPrompt() ||
+       state_->llmContext_->sharesCacheAcrossKeys()));
 
   // Media staged above is consumed by `tokenizeChat`, which drains `bitmaps_`
   // on both its success and its `mtmd_tokenize`-failure paths — but only if it
@@ -1450,6 +1463,9 @@ void LlamaModel::saveCache(const std::string& cacheKey) {
         toString(qvac_errors::general_error::InvalidArgument),
         "saveCache: the model is not loaded");
   }
+  if (state_->fileIndex_) {
+    state_->fileIndex_->note(cacheKey);
+  }
   using Outcome = batching::SlotStateCache::SaveOutcome;
   Outcome outcome = Outcome::NotHere;
   if (state_->batchScheduler_) {
@@ -1575,6 +1591,14 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
       if (state_->cacheManager_.has_value()) {
         state_->cacheManager_->invalidate();
       }
+      // The memory below is wiped, so the single-prompt context must not
+      // keep describing it: the next single prompt would reuse cells that
+      // are gone. Its sequence may hold a parked batch conversation, which
+      // the wipe keeps, so only the bookkeeping is reset here: positions and
+      // KV cells, which differ on multimodal contexts.
+      state_->llmContext_->clearCacheReconciliationState();
+      state_->llmContext_->setNPast(0);
+      state_->llmContext_->setCacheTokens(0);
       // Conversations the scheduler parked for their next request on the same
       // cacheKey are its own state, not single-prompt leftovers. No batch job
       // is in flight, but the worker can still run a save or discard job, so
@@ -1622,15 +1646,15 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
           "processPromptBatch: finetuning is not a batch processing operation");
     }
     // Same keyless prefill policy as the single-prompt path: batch items
-    // always run in scheduler lanes, and a lane wipes a keyless request's
-    // warmed KV at teardown, so it would produce nothing reachable.
+    // always run in scheduler lanes, and a lane keeps a keyless request's
+    // state at most anonymously, first to be evicted and never written.
     if (!isConcurrentEligible(prompt)) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: prefill without a cacheKey cannot run on a "
-          "parallel model: its warmed context is unreachable by concurrent "
-          "jobs; set a cacheKey or load with parallel=1");
+          "parallel model: its warmed state would belong to no conversation; "
+          "set a cacheKey or load with parallel=1");
     }
     ParsedPromptPayload parsed = formatPrompt(prompt.input);
     if (parsed.chatMsgs.empty()) {
@@ -1647,6 +1671,10 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     }
     if (!state_->isTextLlm_) {
       preflightImagePixels(parsed, prompt.media, maxImagePixels_);
+    }
+    // The base key's file is a source like any file this model has used.
+    if (state_->fileIndex_) {
+      state_->fileIndex_->note(prompt.baseCacheKey);
     }
     batching::SubmitRequest sr;
     sr.chatMsgs = std::move(parsed.chatMsgs);

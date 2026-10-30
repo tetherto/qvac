@@ -86,7 +86,7 @@ run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>
 interface BatchPrompt {
   id?: string         // caller-supplied; the scheduler assigns one if omitted
   prompt: Message[]
-  runOptions?: RunOptions  // per-item generationParams, cacheKey, ephemeral
+  runOptions?: RunOptions  // per-item generationParams, cacheKey, ephemeral, baseCacheKey
 }
 ```
 
@@ -136,7 +136,7 @@ The instance default follows `parallel` (`true` at `1`, `false` at `>= 2`); `opt
 
 ### Prefill rules (keyed vs keyless)
 
-A prefill-only item (`runOptions.prefill: true`) earns a scheduler lane exactly when its product survives the slot teardown: it has a `cacheKey`, so the warmed conversation stays parked in its sequence for the next request on that key (and can be written with `saveCache()`). A *keyless* prefill's product is warm state in a context that concurrent jobs can never reach, so on a parallel model it is rejected with `InvalidArgument` — both as a single `run()` and per batch item. Load with `parallel: 1` for keyless cache warming. See [cache-api.md](cache-api.md).
+A prefill-only item (`runOptions.prefill: true`) earns a scheduler lane exactly when its product survives the slot teardown: it has a `cacheKey`, so the warmed conversation stays parked in its sequence for the next request on that key (and can be written with `saveCache()`). A *keyless* prefill's product is at most an anonymous parked state, first to be evicted and never written, that no request can count on, so on a parallel model it is rejected with `InvalidArgument` — both as a single `run()` and per batch item. Load with `parallel: 1` for keyless cache warming. See [cache-api.md](cache-api.md).
 
 ### Stats
 
@@ -388,7 +388,7 @@ Streaming works as follows:
 
 ## Cache per slot
 
-Each `BatchPrompt` may carry its own `cacheKey` and `ephemeral`. The scheduler creates one driver per slot, so KV caches are isolated by slot index.
+Each `BatchPrompt` may carry its own `cacheKey`, `ephemeral` and `baseCacheKey`. The scheduler creates one driver per slot, so no slot changes another's KV; a request may start from a copy of another slot's conversation (see **Shared prefixes** under [KV reuse](#kv-reuse-single-prompt-vs-batch)).
 
 **Same-key prompts are serialized.** Multiple prompts, in one batch or in concurrent `run()` calls, may use the same `cacheKey`, but only one runs at a time: a request whose key is held by a running slot waits in `keyDeferred_` until that slot is freed, then continues from its committed state. Prompts on other keys are not held up. Since no request writes the file, there is no write sharing to guard against.
 
@@ -416,6 +416,8 @@ At admission the driver takes the state from the first source that has it: the p
 - The batch entry wipe of single-prompt leftovers skips parked sequences (`parkedSeqIds()`).
 - A direct call to the model's single-prompt context (`LlamaModel::processPrompt()`, used by C++ callers and tests; `run()` on a parallel model always goes through the scheduler) first calls `evictParked(0)`, since that context is fixed to sequence 0.
 - `clear()` drops parked and RAM-tier state without writing it.
+
+**Shared prefixes.** A text driver (`sharesCacheAcrossKeys()`) reconciles every request, keyed or not, and a finished request without a key parks anonymously (empty `cacheKey`, ephemeral, never written). A parked conversation evicted for a new request leaves its cells in the sequence (`evictParkedLocked(seqId, keepCells)`), and the driver adopts them if its key has no state of its own. During `preparePrefill`, between tokenizing and reconciling, the driver's `cache::CacheSourceProvider` (`offerDonorLocked`, under the scheduler lock) offers a state that serves more of the prompt: another free parked sequence (copied through host memory with `llama_state_seq_get_data_ext` / `llama_state_seq_set_data_ext`: `llama_memory_seq_cp` between KV streams only queues the copy for the next decode), then a RAM-tier entry or a `cacheKey` file (`cache::offerStoredState`). A request the budget check would refuse is offered nothing, so its refusal rolls back to the key's own state. The source never changes. See [Starting from another conversation](cache-lifecycle.md#starting-from-another-conversation).
 
 On hybrid, recurrent and sliding-window models the checkpoints go with the parked state; a key with no resident or RAM-tier state keeps them in `checkpointStore_` for the next load of its file. Each checkpoint only describes a prefix, and the driver checks it against the ledger it just loaded before restoring it. A follow-up turn on the same `cacheKey` whose state was evicted to its file therefore restores the previous turn's end-of-history checkpoint instead of re-prefilling the conversation. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
 

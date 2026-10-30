@@ -119,9 +119,11 @@ stateDiagram-v2
     }
 ```
 
-The rule is the same with or without `cacheKey`. Without one nothing reuses
-the state, so the only visible effect is `CacheTokens`, which reports the
-tokens actually decoded.
+The rule is the same with or without `cacheKey`. On text models a request
+without one is reconciled like a keyed one, and its state stays in memory for
+the prefix the next request shares with it (see [Starting from another
+conversation](#starting-from-another-conversation)); it is never written to a
+file.
 
 ## Reconciling the new prompt with the resident ledger
 
@@ -185,6 +187,47 @@ single-prompt and batch paths alike.
 After every divergence, checkpoints that are no longer a prefix of the new
 prompt are deleted.
 
+## Starting from another conversation
+
+On text models a request is not limited to its own `cacheKey`'s state. After
+its prompt is tokenized and before it is reconciled, it starts from whichever
+state serves the longest prefix of it, cheapest first on a tie:
+
+1. its own sequence: its key's conversation, or what the previous occupant
+   left there (a conversation set aside by a key switch or evicted from the
+   slot, or a request without a key);
+2. on the batch path, the conversation parked in another free slot;
+3. the RAM tier (`cache_ram_mib`);
+4. the `cacheKey` files a request (as `cacheKey` or `baseCacheKey`) or
+   `saveCache()` named in this process, the 256 named or picked as a
+   prompt's closest match most recently, as far as 64 MiB of memory holds
+   their ledgers (no directory is
+   scanned; a changed file is read again, a deleted one skipped). A request
+   its own sequence, or on the batch path another parked one, already serves
+   whole reads none of them.
+
+Any prefix longer than what its own sequence serves is used; there is no
+threshold. Memory that cannot be trimmed (full-state models, and another
+conversation's sliding window) serves only a state that is a prefix of the
+prompt, or its longest checkpoint within the shared prefix; in practice, a
+system prompt and tools primed with `prefill` serve every conversation that
+starts with them. A generating request decodes its last prompt token again
+for its logits, which full-state memory reaches only through a checkpoint, so
+on full-state models a state is ranked and cut back only up to that token: a
+state holding exactly the prompt serves it through its checkpoint, and a
+`cacheKey` file, which carries none, does not. A prompt too long for the
+context, or on the batch path one whose `n_predict` does not fit, is refused
+before any state is copied in.
+
+The source is copied and never changes: a parked slot through host memory
+(`llama_memory_seq_cp` between KV streams only queues the copy for the next
+decode), a RAM-tier entry from its bytes, a file by loading it. The copy
+then belongs to the request, which reconciles it as above and writes it only
+to its own key's file. This is llama-server's `--slot-prompt-similarity` and `--cache-ram`,
+with any shared prefix taken. A request without a key keeps its state in
+memory the same way, never written to a file. Multimodal models keep a key's
+state to that key for now.
+
 **Cost.** Decoding is paid once per token, because the shared prefix is
 reused. Rendering and tokenizing are not: every cached turn renders and
 tokenizes the whole history, so that part grows with the conversation, and
@@ -194,6 +237,13 @@ a rough figure, on Qwen3-0.6B (Apple Silicon, prefill-only turns of about 27
 tokens) a turn took about 70 ms with 500 tokens of history and 180–260 ms
 with 3,200; the opt-in `KvCacheExtended.RenderCostPerTurn` test reproduces
 the measurement.
+
+**Trust.** Any conversation the model holds can seed another, and a request's
+stats (`CacheTokens`, the prompt tokens it decoded) show how much of its
+prompt was already held. Conversations that must not learn about each other,
+such as different clients of one server, need separate model instances. A
+`cacheKey` or `baseCacheKey` file's state is loaded as written once its ledger
+matches the prompt, so the files must come from a trusted source.
 
 ## Checkpoint lifecycle (full-state and sliding-window models)
 
@@ -486,14 +536,16 @@ One conversation is active at a time, in the context's sequence 0.
    with, based on the request's `cacheKey`:
    - **same key**: nothing is written; the conversation continues in memory;
    - **another key**, or **no key**: the conversation is set aside before the
-     request is served (with no key, it is then cleared). Setting aside goes
-     through these checks in order:
+     request is served. Its memory stays in sequence 0 on text models, so a
+     request whose key has no state of its own, or that has no key, starts
+     from the prefix it shares with it. Setting aside goes through these
+     checks in order:
      1. it was loaded from, or written to, its file and that file (or its
         directory) is now missing or empty: the caller deleted it, so it is
         dropped and nothing is written;
      2. nothing is committed in it (its only request rolled back): dropped;
      3. the RAM tier is on: it moves to RAM, and nothing is written yet;
-     4. it is ephemeral: dropped;
+     4. it is ephemeral: not written;
      5. no request ran on it since its file was last written or loaded, and
         the file is still there: the file is current, so nothing is written;
      6. otherwise its file is written.
@@ -511,9 +563,10 @@ Each of the `parallel` sequences ("slots") holds at most one conversation.
 1. **A request finishes.** Nothing is written. A committed request with a
    `cacheKey` leaves its state in the slot ("resident") for the next request
    on that key, marked as having turns its file does not hold, with the
-   time it was last used and the request's `ephemeral` flag. Requests without
-   a `cacheKey`, and requests that rolled back, leave nothing: their slot is
-   cleared.
+   time it was last used and the request's `ephemeral` flag. A text request
+   without a `cacheKey` parks its state anonymously: kept for the prefix later
+   requests share with it, ephemeral, never written. Requests that rolled back
+   leave nothing: their slot is cleared.
 2. **A request picks a slot**: the free slot already holding its key's
    conversation (nothing is read); otherwise an empty slot, filled from the RAM
    tier, else from the file, else cold; otherwise the free slot whose resident
@@ -524,12 +577,16 @@ Each of the `parallel` sequences ("slots") holds at most one conversation.
    2. the RAM tier is on: its state is copied to RAM with its ledger,
       checkpoints, unsaved-turns mark and `ephemeral` flag, and nothing is
       written yet (unless the copy is larger than the whole RAM budget, which
-      falls through to the next check);
+      falls through to the next check). A state without a key goes in only
+      where it fits beside the keyed ones, and is the first to leave when a
+      keyed one needs the room;
    3. it has unsaved turns and is not ephemeral: its file is written;
       otherwise it is dropped.
 
-   Then the slot is cleared. If it did not go to RAM, its checkpoints are kept
-   in memory per `cacheKey` for its next load.
+   Then the slot is cleared, except when it was taken for a new request on a
+   text model: its cells then stay for the prefix that request shares with
+   them. If it did not go to RAM, its checkpoints are kept in memory per
+   `cacheKey` for its next load.
 4. **The RAM tier is full.** To fit a new entry, the oldest entries are
    removed; each one with unsaved turns that is not ephemeral is written to
    its file first.
@@ -603,6 +660,10 @@ stateDiagram-v2
 - Every source is validated like a file load before it is used: the ledger
   must match the memory it describes, or the state is dropped and the next
   source is tried.
+- A request whose key has no state, or no key, may start from a copy of
+  another slot's parked conversation (see [Starting from another
+  conversation](#starting-from-another-conversation)); the parked one stays
+  as it is.
 - The batch entry wipe of stale single-prompt state skips resident
   conversations. A direct C++ call to the internal single-prompt context
   (not reachable from `run()` on a parallel model) first evicts whatever is

@@ -1414,8 +1414,15 @@ TEST_F(ToolGrammarModelTest, CancelWithLiveToolGrammarLeavesNextRequestClean) {
       << "generation never reached the cancel point, so no sampler state was "
          "advanced and this test proves nothing";
 
-  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, preRequestNPast)
-      << "the cancel must roll the cursor back to where the request started";
+  // A cancel after prefill keeps what the caller received, with or without a
+  // cacheKey (see `SequenceDriver::onCancel`): the memory and the context's
+  // cursor must agree on it.
+  EXPECT_GT(llama_memory_seq_pos_max(mem, 0) + 1, preRequestNPast)
+      << "the cancel dropped what the caller received";
+  EXPECT_EQ(
+      llama_memory_seq_pos_max(mem, 0) + 1,
+      LlamaModelTestPeer::llmContext(*model)->getNPast())
+      << "the cancel left memory the context does not describe";
 
   // The part that would break if the cancelled request's sampler state
   // survived: a following request carrying no tools must be unconstrained.

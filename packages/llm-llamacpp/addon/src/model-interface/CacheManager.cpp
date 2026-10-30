@@ -7,6 +7,8 @@
 #include <llama.h>
 
 #include "addon/LlmErrors.hpp"
+#include "model-interface/CacheDonors.hpp"
+#include "model-interface/CacheFileIndex.hpp"
 #include "model-interface/CacheLedger.hpp"
 #include "model-interface/SequenceDriver.hpp"
 #include "model-interface/SlotStateCache.hpp"
@@ -25,7 +27,32 @@ namespace cache = qvac_lib_inference_addon_llama::cache;
 CacheManager::CacheManager(
     LlmContext* llmContext, std::function<void(bool)> resetStateCallback)
     : llmContext_(llmContext),
-      resetStateCallback_(std::move(resetStateCallback)) {}
+      resetStateCallback_(std::move(resetStateCallback)) {
+  if (llmContext_ != nullptr) {
+    // The active key's own file was loaded already, or there is none.
+    llmContext_->setCacheSourceProvider([this](
+                                            const cache::Ledger& prompt,
+                                            llama_pos /*promptCells*/,
+                                            bool trimmable,
+                                            size_t minimum,
+                                            const cache::DonorAdopter& adopt) {
+      return cache::offerStoredState(
+          ramTier_.get(),
+          fileIndex_.get(),
+          sessionPath_,
+          prompt,
+          trimmable,
+          minimum,
+          adopt);
+    });
+  }
+}
+
+CacheManager::~CacheManager() {
+  if (llmContext_ != nullptr) {
+    llmContext_->setCacheSourceProvider({});
+  }
+}
 
 bool CacheManager::isFileInitialized(const std::filesystem::path& path) {
   std::error_code errorCode;
@@ -84,6 +111,10 @@ bool CacheManager::handleCache(
     return false;
   }
 
+  if (fileIndex_) {
+    fileIndex_->note(cacheKey);
+  }
+
   if (!cacheDisabled_ && sessionPath_ == cacheKey) {
     if (discardActiveCacheIfBackingStoreMissing()) {
       cacheUsedInLastPrompt_ = false;
@@ -119,6 +150,16 @@ bool CacheManager::handleCache(
       }
       throw;
     }
+  } else if (llmContext_->sharesCacheAcrossKeys()) {
+    // A request without a key left its conversation in place. It stays there
+    // for the prefix the incoming one may share with it, and goes to the RAM
+    // tier too, never to be written, in case the incoming key's own state
+    // replaces it.
+    if (llmContext_->getNPast() > 0) {
+      (void)copyActiveCacheToRamTier(
+          "", /*dirty=*/false, /*savedToDisk=*/false, /*ephemeral=*/true);
+    }
+    setAsideInPlace();
   } else {
     resetStateCallback_(true);
   }
@@ -140,7 +181,9 @@ bool CacheManager::handleCache(
       loaded = loadCache();
       activeCacheSavedToDisk_ = loaded;
     }
-    if (!loaded) {
+    // Without a state of its own the key starts from the conversation set
+    // aside in place, reconciled down to the prefix they share.
+    if (!loaded && !llmContext_->sharesCacheAcrossKeys()) {
       resetStateCallback_(true);
     }
     cacheUsedInLastPrompt_ = true;
@@ -335,15 +378,26 @@ void CacheManager::saveActiveCacheForTransition() {
     resetStateCallback_(true);
     return;
   }
-  // With the RAM tier on, the conversation moves there and its file is only
-  // written when the tier has to let it go or the model is unloaded.
-  if (moveActiveCacheToRamTier()) {
-    resetStateCallback_(true);
+  // Another conversation's state that no request on this key used (its
+  // first request failed before it ran): not this key's to keep.
+  if (llmContext_->holdsBorrowedState()) {
+    setAsideInPlace();
     return;
   }
-  // Never written automatically: dropped.
+  // With the RAM tier on, the conversation moves there and its file is only
+  // written when the tier has to let it go or the model is unloaded.
+  if (copyActiveCacheToRamTier(
+          sessionPath_,
+          activeCacheDirty_,
+          activeCacheSavedToDisk_,
+          activeEphemeral_)) {
+    setAsideInPlace();
+    return;
+  }
+  // Never written automatically: dropped, but for the memory left in place,
+  // which the next request may share a prefix with.
   if (activeEphemeral_) {
-    resetStateCallback_(true);
+    setAsideInPlace();
     return;
   }
   // Nothing ran since the file was last written or loaded, and it is still
@@ -351,13 +405,13 @@ void CacheManager::saveActiveCacheForTransition() {
   // so its failure is reported instead of the conversation being dropped.
   if (!activeCacheDirty_ && activeCacheSavedToDisk_ &&
       isFileInitialized(sessionPath_)) {
-    resetStateCallback_(true);
+    setAsideInPlace();
     return;
   }
 
   try {
     saveCache();
-    resetStateCallback_(true);
+    setAsideInPlace();
   } catch (...) {
     if (discardActiveCacheIfBackingStoreMissing()) {
       return;
@@ -368,7 +422,16 @@ void CacheManager::saveActiveCacheForTransition() {
   }
 }
 
-bool CacheManager::moveActiveCacheToRamTier() {
+void CacheManager::setAsideInPlace() {
+  if (llmContext_->sharesCacheAcrossKeys()) {
+    llmContext_->resetStateKeepingMemory(true);
+  } else {
+    resetStateCallback_(true);
+  }
+}
+
+bool CacheManager::copyActiveCacheToRamTier(
+    const std::string& key, bool dirty, bool savedToDisk, bool ephemeral) {
   if (!ramTier_ || !ramTier_->enabled()) {
     return false;
   }
@@ -377,7 +440,9 @@ bool CacheManager::moveActiveCacheToRamTier() {
     const llama_seq_id seq = llmContext_->getSeqId();
     qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry entry;
     const size_t size = llama_state_seq_get_size_ext(ctx, seq, 0);
-    if (size == 0) {
+    // A state larger than the whole budget is refused by `insert`; skip the
+    // copy.
+    if (size == 0 || size > ramTier_->budget()) {
       return false;
     }
     entry.state.resize(size);
@@ -389,14 +454,14 @@ bool CacheManager::moveActiveCacheToRamTier() {
         qvac_lib_inference_addon_llama::speculative::captureDraftSequenceState(
             ctx, seq, 0);
     entry.ledgerWords = llmContext_->cacheStateTokens();
-    entry.dirty = activeCacheDirty_;
-    entry.activeCacheSavedToDisk = activeCacheSavedToDisk_;
-    entry.ephemeral = activeEphemeral_;
+    entry.dirty = dirty;
+    entry.activeCacheSavedToDisk = savedToDisk;
+    entry.ephemeral = ephemeral;
     auto* driver = dynamic_cast<SequenceDriver*>(llmContext_);
     if (driver != nullptr) {
       entry.checkpoints = driver->releaseCheckpoints();
     }
-    if (ramTier_->insert(sessionPath_, std::move(entry))) {
+    if (ramTier_->insert(key, std::move(entry))) {
       return true;
     }
     // Too large for the tier: give the checkpoints back and save normally.
@@ -460,7 +525,7 @@ bool CacheManager::restoreFromRamTier(
 
 bool CacheManager::hasTurnsToFlush() {
   return hasActiveCache() && activeCacheDirty_ && !activeEphemeral_ &&
-         llmContext_->getNPast() != 0 &&
+         llmContext_->getNPast() != 0 && !llmContext_->holdsBorrowedState() &&
          !discardActiveCacheIfBackingStoreMissing();
 }
 
@@ -492,9 +557,10 @@ CacheManager::saveForCaller(const std::string& cacheKey) {
   if (!hasActiveCache() || sessionPath_ != cacheKey) {
     return SaveOutcome::NotHere;
   }
-  // Nothing committed (its only request rolled back, or a rollback landed
-  // cold): nothing to write, and the file still holds the last commit.
-  if (llmContext_->getNPast() == 0) {
+  // Nothing committed (its only request rolled back or failed before it ran,
+  // or a rollback landed cold): nothing to write, and the file still holds
+  // the last commit.
+  if (llmContext_->getNPast() == 0 || llmContext_->holdsBorrowedState()) {
     return SaveOutcome::NotHere;
   }
   if (!activeCacheDirty_ && activeCacheSavedToDisk_ &&
@@ -513,6 +579,11 @@ void CacheManager::discard(const std::string& cacheKey) {
   if (ramTier_) {
     (void)ramTier_->take(cacheKey);
   }
+}
+
+void CacheManager::setFileIndex(
+    std::shared_ptr<cache::CacheFileIndex> fileIndex) {
+  fileIndex_ = std::move(fileIndex);
 }
 
 void CacheManager::setRamTier(

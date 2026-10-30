@@ -70,6 +70,14 @@ TextLlmContext::TextLlmContext(
   initializeCommonState();
 }
 
+TextLlmContext::~TextLlmContext() {
+  // A request can end on a decode nothing waited for, and `llamaInit_` frees
+  // the LoRA adapters that decode reads before the context waits for it.
+  if (llamaInit_ && modelCtx_.lctx != nullptr) {
+    llama_synchronize(modelCtx_.lctx);
+  }
+}
+
 llama_pos TextLlmContext::ctxCeiling() const {
   return perSeqCtxCeiling_ > 0
              ? perSeqCtxCeiling_
@@ -735,10 +743,16 @@ PrefillPlan TextLlmContext::preparePrefill(
     const size_t fullSize = inputTokens.size();
     // Reconciliation trims or replaces the cached conversation, so a prompt
     // that cannot fit is refused before it, against the prefix it shares
-    // with the cache. A text ledger has one position per entry.
+    // with the cache. A text ledger has one position per entry. Whatever
+    // the cache shares, the prompt fits or not as a whole, so a refused
+    // prompt is refused before another conversation's state is copied in.
     const size_t shared =
         cache::commonPrefix(residentLedger_, cache::fromTokens(inputTokens));
     throwIfOverflows(static_cast<llama_pos>(shared), fullSize - shared);
+    if (cacheSourceProvider_ && sharesCacheAcrossKeys()) {
+      adoptBestCacheSource(
+          cache::fromTokens(inputTokens), isPrefillOnlyRequest);
+    }
     beginCacheRequest();
     inputTokens = reconcilePrompt(inputTokens, isPrefillOnlyRequest);
     // Only the generation prompt follows the history, so the history ends
@@ -1422,12 +1436,14 @@ void TextLlmContext::restoreCacheStateTokens(
       decoded.ledger, llama_vocab_n_tokens(modelCtx_.vocab));
   residentLedger_ = decoded.ledger;
   nPast_ = decoded.nPast;
+  residentStateBorrowed_ = false;
   cacheCheckpoints_.clear();
   pendingHistoryCheckpoint_.reset();
 }
 
 void TextLlmContext::clearCacheReconciliationState() {
   residentLedger_.entries.clear();
+  residentStateBorrowed_ = false;
   pendingPromptLedger_.entries.clear();
   preRequestLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();
@@ -1487,6 +1503,104 @@ void TextLlmContext::rebuildSamplerFromLedger(const cache::Ledger& ledger) {
           smpl_.get(), static_cast<llama_token>(entry.identity), false);
     }
   }
+}
+
+void TextLlmContext::adoptBestCacheSource(
+    const cache::Ledger& fullPrompt, bool isPrefillOnlyRequest) {
+  // Generation decodes the last prompt token again. Full-state memory backs
+  // up to it only through a checkpoint, so its states are ranked and cut back
+  // up to that token; other memory trims back to it from any state.
+  const cache::Ledger prompt =
+      needsFullStateSnapshot_
+          ? cache::servablePrompt(fullPrompt, isPrefillOnlyRequest)
+          : fullPrompt;
+  // What this sequence already serves, measured the way `reconcilePrompt`
+  // will reuse it.
+  const size_t shared = cache::commonPrefix(residentLedger_, prompt);
+  const bool trimmable =
+      !needsFullStateSnapshot_ &&
+      canTrimSequenceTo(modelCtx_.lctx, residentLedger_.positions(shared));
+  const size_t own = cache::reusablePrefix(
+      residentLedger_, &cacheCheckpoints_, prompt, trimmable);
+  // Another state's sliding window cannot be checked before it is copied, so
+  // it is ranked as untrimmable: by its checkpoints, or whole.
+  const bool donorTrimmable =
+      !needsFullStateSnapshot_ && !slidingWindowCheckpoints_;
+  (void)cacheSourceProvider_(
+      prompt,
+      std::max(fullPrompt.positions(), fullPrompt.cacheTokens()),
+      donorTrimmable,
+      own,
+      [this, &prompt](const cache::DonorState& donor) {
+        return adoptDonorState(donor, prompt);
+      });
+}
+
+bool TextLlmContext::adoptDonorState(
+    const cache::DonorState& donor, const cache::Ledger& prompt) {
+  // Every exit but the accepted one leaves the sequence empty: the request
+  // then starts cold, and whatever the sequence held before is gone.
+  ScopeGuard coldGuard([this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[TextLlm] failed to clear sequence after rejecting a donor state\n");
+    }
+    nPast_ = 0;
+    clearCacheReconciliationState();
+  });
+  llama_synchronize(modelCtx_.lctx);
+  clearSequenceMemory(modelCtx_.lctx);
+  nPast_ = 0;
+  clearCacheReconciliationState();
+  try {
+    if (!donor.copyInto(modelCtx_.lctx, seqId_)) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[TextLlm] could not copy the state of %s\n",
+              donor.source.c_str()));
+      return false;
+    }
+    acceptRestoredState(*donor.ledgerWords, donor.source);
+  } catch (const std::exception& ex) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[TextLlm] rejected the state of %s: %s\n",
+            donor.source.c_str(),
+            ex.what()));
+    return false;
+  }
+  // Memory that cannot be trimmed back to the shared prefix is cut back to
+  // the donor's longest checkpoint within it instead.
+  const size_t shared = cache::commonPrefix(residentLedger_, prompt);
+  if (shared < residentLedger_.entries.size() &&
+      (needsFullStateSnapshot_ ||
+       !canTrimSequenceTo(modelCtx_.lctx, residentLedger_.positions(shared)))) {
+    const CacheCheckpoint* best =
+        cache::longestCheckpointWithin(donor.checkpoints, prompt, shared);
+    if (best == nullptr ||
+        !restoreSequenceState(modelCtx_.lctx, seqId_, best->state)) {
+      return false;
+    }
+    residentLedger_ = best->ledger;
+    nPast_ = residentLedger_.positions();
+  }
+  residentStateBorrowed_ = true;
+  coldGuard.dismiss();
+  ++donorAdoptions_;
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "[TextLlm] starting from %s: %zu of %zu servable prompt entries "
+          "resident\n",
+          donor.source.c_str(),
+          cache::commonPrefix(residentLedger_, prompt),
+          prompt.entries.size()));
+  return true;
 }
 
 std::vector<llama_token> TextLlmContext::reconcilePrompt(
@@ -1591,6 +1705,8 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
     }
   }
 
+  // What is left is a prefix of this request's own prompt.
+  residentStateBorrowed_ = false;
   rebuildSamplerFromLedger(residentLedger_);
   QLOG_IF(
       Priority::DEBUG,
@@ -1979,25 +2095,34 @@ void TextLlmContext::stop() { stopGeneration_.store(true); }
 void TextLlmContext::resetStopFlag() { stopGeneration_.store(false); }
 
 void TextLlmContext::resetState(bool resetStats) {
-  // Reset the n_past
+  // Also finishes queued backend work before the memory is cleared.
+  resetStateKeepingMemory(resetStats);
   nPast_ = 0;
   clearCacheReconciliationState();
+  clearSequenceMemory(modelCtx_.lctx);
+}
 
-  // Clear UTF-8 buffer when resetting state
+void TextLlmContext::resetStateKeepingMemory(bool resetStats) {
+  // Between requests the memory, `nPast_`, the ledger and the checkpoints
+  // agree; only what a request leaves behind is dropped. What stays is no
+  // longer any key's until a request reconciles it.
+  residentStateBorrowed_ = nPast_ > 0;
+  discardPendingResidentToken();
+  pendingPromptLedger_.entries.clear();
+  preRequestLedger_.entries.clear();
+  preRequestCacheSnapshot_.clear();
+  pendingHistoryCheckpoint_.reset();
+  historyCheckpointEntries_ = 0;
+  cacheRequestActive_ = false;
+  cacheRequestRolledBack_ = false;
   utf8Buffer_.clear();
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
   requestRollback_.clear();
-  // Finish queued backend work before mutating KV/recurrent memory.
   llama_synchronize(modelCtx_.lctx);
-  clearSequenceMemory(modelCtx_.lctx);
-
-  // Reset performance metrics
   if (resetStats) {
     llama_perf_context_reset(modelCtx_.lctx);
   }
-
-  // Reset sampler if available
   common_sampler_reset(smpl_.get());
 }
 

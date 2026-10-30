@@ -311,6 +311,29 @@ public:
   /// existing behavior.
   virtual void setCacheReconciliationEnabled(bool enabled) { (void)enabled; }
 
+  /// See `SequenceDriver::sharesCacheAcrossKeys`.
+  [[nodiscard]] virtual bool sharesCacheAcrossKeys() const { return false; }
+
+  /// See `SequenceDriver::setCacheSourceProvider`.
+  virtual void setCacheSourceProvider(
+      qvac_lib_inference_addon_llama::cache::CacheSourceProvider provider) {
+    (void)provider;
+  }
+
+  /// Ends the per-request state like `resetState`, but keeps the sequence
+  /// memory and the ledger describing it, so the next request can reuse the
+  /// prefix it shares with them whatever its `cacheKey`. Contexts that do
+  /// not share their cache across keys reset fully.
+  virtual void resetStateKeepingMemory(bool resetStats) {
+    resetState(resetStats);
+  }
+
+  /// True while the memory holds another conversation's state that no
+  /// request has reconciled against its own prompt yet: a conversation set
+  /// aside in place or a donor just copied in. It belongs to no key, so it
+  /// must not be saved as the active key's.
+  [[nodiscard]] virtual bool holdsBorrowedState() const { return false; }
+
   /// Process-local checkpoint policy (count, byte budget, storage); see
   /// `cache::parseCheckpointPolicy`. Set once at model load.
   virtual void setCacheCheckpointPolicy(
