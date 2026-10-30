@@ -1,38 +1,124 @@
 ---
 title: Kotlin SDK
+icon: SiKotlin
 description: Build local AI apps with Kotlin coroutines and self-contained Android runtimes.
 schemaType: TechArticle
 ---
 
-The Kotlin SDK drives the same QVAC worker contract as the JS/TS and Python
-clients. It provides Kotlin data classes, `Flow` streams, structured completion
-runs, and an isolated Android service host.
+## Overview
+
+The Kotlin SDK (`io.tether:qvac-sdk-kotlin`) is the Kotlin client for QVAC. It
+drives the same worker contract as the JS/TS and Python clients, and provides
+Kotlin data classes, `Flow` streams, structured completion runs, and an
+isolated Android service host.
+
+## Requirements
+
+- Android: `arm64-v8a`, API 29 or newer.
+- Desktop JVM: experimental. The client resolves and starts a local `@qvac/sdk`
+  worker.
+- A Kotlin 2.3 or newer compiler. The artifacts depend on
+  [`bare-rpc-kotlin`](https://github.com/holepunchto/bare-rpc-kotlin), which is
+  compiled with Kotlin 2.4.
+
+Kotlin/Native targets are not published.
 
 ## Install
 
-Use the Multiplatform client when the application supplies or resolves a
-worker transport:
+The Kotlin SDK is not published to a public Maven registry. Each SDK release on
+GitHub carries it as Maven repository archives that you download and point
+Gradle at. There is one archive per Android runtime profile:
+
+| Archive | Dependency | Capabilities |
+| --- | --- | --- |
+| `qvac-sdk-android-0.23.0-maven.zip` | `io.tether:qvac-sdk-android` | all current SDK addons/capabilities |
+| `qvac-sdk-android-assistant-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-assistant` | chat and transcription |
+| `qvac-sdk-android-llm-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-llm` | completion and embeddings |
+| `qvac-sdk-android-speech-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-speech` | Whisper, Parakeet and BCI transcription, translation, and TTS |
+| `qvac-sdk-android-vision-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-vision` | multimodal completion, OCR, and classification |
+| `qvac-sdk-android-media-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-media` | audio, image, video, world generation, and upscaling |
+| `qvac-sdk-android-robotics-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-robotics` | VLA inference |
+
+For the experimental desktop JVM client, see the
+[package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-kotlin/README.md).
+
+<Steps>
+
+<Step>
+Download the archive of the profile your app needs, and the release's
+checksums, from the
+[`sdk-v0.23.0` release](https://github.com/tetherto/qvac/releases/tag/sdk-v0.23.0).
+For example, the LLM profile:
+
+```bash
+curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/qvac-sdk-android-llm-0.23.0-maven.zip
+curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS
+# macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
+```
+</Step>
+
+<Step>
+Extract it. The archive is a Maven repository: it holds the runtime and the
+Kotlin client modules it depends on.
+
+```bash
+unzip qvac-sdk-android-llm-0.23.0-maven.zip -d qvac-maven-repository
+```
+</Step>
+
+<Step>
+Declare the extracted directory as a Maven repository, next to JitPack, which
+serves the `bare-rpc-kotlin` dependency the archive does not include:
 
 ```kotlin
-implementation("io.tether:qvac-sdk-kotlin:0.20.1")
+// settings.gradle.kts
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        exclusiveContent {
+            forRepository { maven("https://jitpack.io") } // bare-rpc-kotlin
+            filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
+        }
+        maven { url = uri("/absolute/path/to/qvac-maven-repository") }
+    }
+}
+```
+</Step>
+
+<Step>
+Add the dependency of the archive you downloaded:
+
+```kotlin
+// app/build.gradle.kts
+dependencies {
+    implementation("io.tether:qvac-sdk-android-llm:0.23.0")
+}
+```
+</Step>
+
+</Steps>
+
+A project on AGP 9 compiles with the Kotlin Gradle plugin on its classpath, and
+bundles Kotlin 2.2 when none is declared. Add the plugin without applying it:
+
+```kotlin
+// app/build.gradle.kts
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android") version "2.4.20" apply false
+}
 ```
 
-Android applications normally choose one embedded runtime (same version as the
-install snippet above):
+All artifacts use the `io.tether.qvac.sdk` namespace, so the Kotlin API is the
+same whichever profile you choose. Each profile embeds a capability manifest
+that is checked before each request; calling a capability the profile does not
+contain throws `UnsupportedCapabilityException`. Inspect it with
+`client.runtimeProfile`.
 
-| Artifact | Capabilities |
-| --- | --- |
-| `io.tether:qvac-sdk-android` | all current SDK addons/capabilities |
-| `io.tether:qvac-sdk-android-assistant` | chat and transcription |
-| `io.tether:qvac-sdk-android-llm` | completion and embeddings |
-| `io.tether:qvac-sdk-android-speech` | Whisper, Parakeet and BCI transcription, translation, and TTS |
-| `io.tether:qvac-sdk-android-vision` | multimodal completion, OCR, and classification |
-| `io.tether:qvac-sdk-android-media` | audio, image, video, world generation, and upscaling |
-| `io.tether:qvac-sdk-android-robotics` | VLA inference |
-
-All artifacts use the `io.tether.qvac.sdk` namespace. A profile's capability
-manifest is checked before each request; a missing addon produces
-`UnsupportedCapabilityException`. Inspect it with `client.runtimeProfile`.
+To build the artifacts yourself instead, see the
+[package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-kotlin/README.md).
 
 ## Connect
 
