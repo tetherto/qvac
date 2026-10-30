@@ -41,7 +41,8 @@ function fakeOperations(fake: Fake): RuntimeOperations {
 async function server(
   fake: Fake,
   enableAdmin: boolean,
-  corsOrigins?: string[]
+  corsOrigins?: string[],
+  apiKey?: string
 ): Promise<FastifyInstance> {
   const app = await buildServer({
     projectRoot: tmpdir(),
@@ -50,7 +51,8 @@ async function server(
     quiet: true,
     extensions: [],
     enableAdmin,
-    corsOrigins
+    corsOrigins,
+    apiKey
   })
   await app.register(runtimeRoutes(fakeOperations(fake)))
   // lunte-disable-next-line require-await
@@ -104,7 +106,7 @@ describe('runtime routes with --enable-admin', () => {
     await app.inject({ method: 'POST', url: '/qvac/v1/runtime/resume' })
   })
 
-  it('suspends, gates every other route with 503, and resumes', async () => {
+  it('suspends, gates every route but the runtime ones with 503, and resumes', async () => {
     const suspended = await app.inject({ method: 'POST', url: '/qvac/v1/runtime/suspend' })
     assert.equal(suspended.statusCode, 200, suspended.payload)
     assert.deepEqual(suspended.json(), { object: 'runtime.state', state: 'suspended' })
@@ -229,5 +231,48 @@ describe('runtime admin routes and the request Origin', () => {
       headers: { origin: 'https://evil.example' }
     })
     assert.equal(res.statusCode, 200, res.payload)
+  })
+})
+
+describe('runtime routes behind an API key', () => {
+  const KEY = 'test-key'
+  const auth = { authorization: `Bearer ${KEY}` }
+
+  for (const enableAdmin of [false, true]) {
+    it(`answers 401 before the admin check with --enable-admin ${enableAdmin ? 'on' : 'off'}`, async () => {
+      const fake: Fake = { state: 'active', failSuspend: false, failResume: false }
+      const app = await server(fake, enableAdmin, undefined, KEY)
+      try {
+        for (const url of ['/qvac/v1/runtime/suspend', '/qvac/v1/runtime/resume']) {
+          const res = await app.inject({ method: 'POST', url })
+          assert.equal(res.statusCode, 401, url)
+          assert.equal(code(res), 'invalid_api_key')
+        }
+        assert.equal(fake.state, 'active')
+      } finally {
+        await app.close()
+      }
+    })
+  }
+
+  it('answers 401 before the suspended gate', async () => {
+    const fake: Fake = { state: 'active', failSuspend: false, failResume: false }
+    const app = await server(fake, true, undefined, KEY)
+    try {
+      const suspended = await app.inject({
+        method: 'POST',
+        url: '/qvac/v1/runtime/suspend',
+        headers: auth
+      })
+      assert.equal(suspended.statusCode, 200, suspended.payload)
+
+      const anonymous = await app.inject({ method: 'GET', url: '/probe' })
+      assert.equal(anonymous.statusCode, 401)
+      assert.equal(code(anonymous), 'invalid_api_key')
+      const keyed = await app.inject({ method: 'GET', url: '/probe', headers: auth })
+      assert.equal(code(keyed), 'runtime_suspended')
+    } finally {
+      await app.close()
+    }
   })
 })
