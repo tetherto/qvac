@@ -15,6 +15,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [5. Load Model](#5-load-model)
   - [6. Run Inference](#6-run-inference)
     - [Tool calling](#tool-calling)
+    - [Ordered text and media](#ordered-text-and-media)
     - [Batch inference](#batch-inference)
   - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
@@ -344,6 +345,28 @@ const response = await model.run([
 `arguments` is an object or the text of a JSON object, and `content` may be empty on the assistant turn. A malformed tool turn is rejected with `InvalidInputFormat`. [`examples/toolCalling.js`](./examples/toolCalling.js) shows a full round trip.
 
 The tool grammar holds the model to the order of `parameters`. Inside an object it accepts the required properties first, in declared order, then the optional ones, also in declared order. When the model writes a property out of that order, the call isn't rejected with an error: the model drops a field, writes a broken value or never finishes the call. Declare `required` properties before optional ones at every level, and declare each group in the order the model is likely to write it. This applies to nested objects, and to every argument in formats that write the arguments as one JSON object (Qwen3). Qwen3.5's top-level `<parameter=...>` arguments are less strict: up to six required arguments in any order, then the optional ones in any order. An optional argument before a required one is still rejected there.
+
+#### Ordered text and media
+
+A user message's `content` is either a string or an ordered array of parts. Use the array when the position of an image inside the text matters — multiple-choice options that are pictures, illustrated forms, steps — so the model sees the text and every image in one turn, in order:
+
+```javascript
+const response = await model.run([{
+  role: 'user',
+  content: [
+    { type: 'text', text: 'Which image shows the same place as ' },
+    { type: 'media', content: '/images/place.jpg' },
+    { type: 'text', text: '?\nA. ' },
+    { type: 'media', content: imageABytes }, // raw bytes work too
+    { type: 'text', text: '\nB. ' },
+    { type: 'media', content: '/images/option-b.jpg' }
+  ]
+}])
+```
+
+Each media part becomes an `<__media__>` marker at its own position in the rendered turn — the same prompt llama-server builds from an OpenAI content-parts request. A part's `content` is an absolute path or a `Uint8Array`; media parts are only valid on user messages, and an unknown part type is rejected with `InvalidInputFormat`.
+
+The alternative — one `{ role: 'user', type: 'media' }` message per part — keeps the order but renders each text part as its own user turn, so text that refers to "this image" ends up in a different turn from the image.
 
 #### Batch inference
 

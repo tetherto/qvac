@@ -21,6 +21,16 @@
   `InvalidInputFormat` instead of picojson's raw type-mismatch error
   ([#5430](https://github.com/tetherto/qvac/pull/5430)).
 
+### Added
+
+- A user message's `content` may be an ordered array of parts
+  (`{ type: 'text', text }` and `{ type: 'media', content: pathOrBytes }`), so
+  one turn can interleave text and media. Each media part renders as an
+  `<__media__>` marker at its position, the prompt llama-server builds from an
+  OpenAI content-parts request, instead of the split turns the one-message-per-
+  part workaround produces. Media parts on non-user messages and unknown part
+  types are rejected with `InvalidInputFormat`.
+
 ## [0.65.1] - 2026-10-29
 
 ### Changed
