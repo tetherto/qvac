@@ -1,0 +1,36 @@
+name: Setup Vulkan
+description: Make a Vulkan SDK available and export its env. Uses sdk-root when the runner already has one.
+
+inputs:
+  version:
+    description: x.y.z.n or latest; empty reads .github/config/vulkan-sdk-version.txt
+    default: ""
+  arch:
+    description: The runner's own architecture; arm64 on Linux builds the SDK or restores it from S3
+    required: true
+  sdk-root:
+    description: Preinstalled SDK path; empty uses the self-hosted image's own SDK where present
+    default: ""
+  cache-bucket:
+    description: S3 bucket of the Linux arm64 SDK cache; the job holds the credentials
+    default: ""
+
+outputs:
+  upload-archive:
+    description: Built arm64 SDK archive to upload, empty on a cache hit
+    value: ${{ steps.setup.outputs.upload-archive }}
+  upload-key:
+    description: S3 key for the upload
+    value: ${{ steps.setup.outputs.upload-key }}
+
+runs:
+  using: composite
+  steps:
+    - id: setup
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ARCH: ${{ inputs.arch }}
+        SDK_ROOT: ${{ inputs.sdk-root }}
+        CACHE_BUCKET: ${{ inputs.cache-bucket }}
+      run: node "$GITHUB_ACTION_PATH/setup-vulkan.mjs"

@@ -1,0 +1,31 @@
+name: Place prebuilds
+description: Move a downloaded prebuilds bundle into <workdir>/prebuilds/<platform>-<arch>/ and reject any other layout.
+
+inputs:
+  staging:
+    description: Directory the bundle was downloaded to
+    required: true
+  workdir:
+    description: Package directory
+    required: true
+  platform:
+    description: Place only this platform (pair with arch); empty places all
+    default: ""
+  arch:
+    description: Place only this arch (pair with platform)
+    default: ""
+  extra-dirs:
+    description: Space-separated non-platform directories the bundle may ship, e.g. "include share"
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        STAGING: ${{ inputs.staging }}
+        WORKDIR: ${{ inputs.workdir }}
+        PLATFORM: ${{ inputs.platform }}
+        ARCH: ${{ inputs.arch }}
+        EXTRA_DIRS: ${{ inputs.extra-dirs }}
+      run: node "$GITHUB_ACTION_PATH/prebuilds-place.mjs"

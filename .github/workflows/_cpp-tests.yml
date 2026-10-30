@@ -1,0 +1,172 @@
+name: C++ tests
+
+# Each package's cpp:build and cpp:tests targets through Nx, on the runner each configuration names: cpp:build
+# builds the test binary against the build job's prebuilds for that platform, then cpp:tests runs it with its models.
+on:
+  workflow_call:
+    inputs:
+      rows:
+        description: JSON cpp:tests rows, on cpp:build's runners
+        type: string
+        default: "[]"
+      trusted:
+        description: Write the vcpkg and model caches; honoured only off pull requests, on the default branch
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  tests:
+    if: inputs.rows != '[]'
+    name: ${{ matrix.row.slug }} ${{ matrix.row.config }}
+    runs-on: ${{ matrix.row.runner }}
+    environment: release
+    timeout-minutes: ${{ matrix.row.timeout || 60 }}
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(inputs.rows) }}
+    env:
+      WORKDIR: src/${{ matrix.row.dir }}
+      NX_DAEMON: "false"
+      NX_NO_CLOUD: "true"
+      TRUSTED: ${{ inputs.trusted && github.event_name != 'pull_request_target' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: |
+            .github/actions
+            .github/config
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: src
+          persist-credentials: "false"
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      - uses: ./.github/actions/setup-vulkan
+        with:
+          arch: ${{ matrix.row.arch }}
+      - uses: ./.github/actions/vcpkg-bootstrap
+      - uses: ./.github/actions/vcpkg-cache-setup
+        with:
+          mode: files
+          workdir: ${{ env.WORKDIR }}
+          trusted: ${{ env.TRUSTED }}
+      - uses: ./.github/actions/setup-windows-host
+        with:
+          arch: ${{ matrix.row.arch }}
+      - uses: ./.github/actions/vcpkg-toolchain-hash
+      # Restore only; the save waits for the build, so a run that compiled nothing never saves an empty entry.
+      - id: vcpkg
+        uses: tetherto/qvac-actions/cache-restore@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          key: cpp-tests-v6-${{ matrix.row.key || matrix.row.slug }}-${{ matrix.row.platform == 'win32' && 'windows' || matrix.row.platform }}-${{ matrix.row.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR), format('{0}/vcpkg-configuration.json', env.WORKDIR), 'src/vcpkg-overlays/triplets/**', 'src/vcpkg-overlays/toolchains/**') }}-${{ env.TOOLCHAIN_FINGERPRINT }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
+      - uses: ./.github/actions/setup-apple-clang
+      # The native dependencies come prebuilt, so only the toolkits the configuration itself asks for.
+      - if: contains(matrix.row.setup, 'cuda')
+        uses: ./.github/actions/setup-cuda
+        with:
+          cuda-version: ${{ matrix.row.toolchain.cuda }}
+      - if: contains(matrix.row.setup, 'rocm')
+        uses: ./.github/actions/setup-rocm
+        with:
+          rocm-version: ${{ matrix.row.toolchain.rocm.version }}
+          gfx: ${{ matrix.row.toolchain.rocm.gfx }}
+          sha256: ${{ matrix.row.toolchain.rocm.sha256 }}
+      - name: Install
+        shell: bash
+        working-directory: src
+        env:
+          NPM: ${{ matrix.row.npm }}
+        run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
+      # The build job's prebuilds for this platform: the package's and its native dependencies'.
+      - uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.platform }}-${{ matrix.row.arch }}
+          path: src
+      - name: ci:system
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          CONFIG: ${{ matrix.row.config }}
+        run: pnpm exec nx run-many -t ci:system -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
+      # Links each restored package's prebuilds where its dependents look for them, without rebuilding.
+      - name: link:platform
+        shell: bash
+        working-directory: src
+        run: |
+          dirs=$(printf "%s\n" packages/*/prebuilds | sed "s|/prebuilds$||" | paste -sd, -)
+          pnpm exec nx run-many -t link:platform -p "$dirs" --exclude-task-dependencies --outputStyle=stream
+      - name: cpp:build
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          CONFIG: ${{ matrix.row.config }}
+        run: pnpm exec nx run-many -t cpp:build -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
+      - if: env.TRUSTED == 'true'
+        uses: ./.github/actions/vcpkg-cache-sync
+      - if: env.TRUSTED == 'true' && hashFiles(format('{0}/vcpkg/cache/**', env.WORKDIR)) != ''
+        uses: tetherto/qvac-actions/cache-save@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          key: ${{ steps.vcpkg.outputs.cache-primary-key }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
+      - uses: tetherto/qvac-actions/configure-aws-credentials@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+      - id: models
+        uses: ./.github/actions/models-cache-key
+        with:
+          workdir: ${{ env.WORKDIR }}
+          target: cpp:tests
+      - if: runner.environment != 'github-hosted' && env.TRUSTED == 'true'
+        uses: tetherto/qvac-actions/cache@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          key: ${{ steps.models.outputs.key }}
+          path: ${{ steps.models.outputs.paths }}
+          enable-cross-os-archive: "true"
+      - if: runner.environment != 'github-hosted' && env.TRUSTED != 'true'
+        uses: tetherto/qvac-actions/cache-restore@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          key: ${{ steps.models.outputs.key }}
+          restore-keys: ${{ steps.models.outputs.restore-prefix }}
+          path: ${{ steps.models.outputs.paths }}
+          enable-cross-os-archive: "true"
+      - uses: ./.github/actions/models-download
+        with:
+          workdir: ${{ env.WORKDIR }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          target: cpp:tests
+      # cpp:build ran above; excluding task dependencies keeps Nx from building it again.
+      - name: cpp:tests
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          CONFIG: ${{ matrix.row.config }}
+        run: pnpm exec nx run-many -t cpp:tests -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
+      - if: always()
+        uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: cpp-test-results-${{ matrix.row.slug }}-${{ matrix.row.config }}
+          path: ${{ env.WORKDIR }}/build/**/cpp-test-results.xml
+          retention-days: "30"
+          if-no-files-found: warn

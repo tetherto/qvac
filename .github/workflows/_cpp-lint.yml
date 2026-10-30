@@ -1,0 +1,101 @@
+name: C++ lint
+
+# Runs each package's cpp:lint target through Nx, which lints the C/C++ the change touched against BASE.
+on:
+  workflow_call:
+    inputs:
+      rows:
+        description: JSON cpp:lint rows
+        type: string
+        default: "[]"
+
+permissions: {}
+
+jobs:
+  lint:
+    if: inputs.rows != '[]'
+    name: ${{ matrix.row.slug }}
+    runs-on: ${{ matrix.row.runner }}
+    environment: release
+    timeout-minutes: ${{ matrix.row.timeout || 120 }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(inputs.rows) }}
+    env:
+      NX_DAEMON: "false"
+      NX_NO_CLOUD: "true"
+      BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: |
+            .github/actions
+            .github/config
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: src
+          fetch-depth: "0"
+          persist-credentials: "false"
+      # vcpkg's S3 binary cache, which generate reads through the AWS CLI.
+      - uses: tetherto/qvac-actions/configure-aws-credentials@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+      - uses: tetherto/qvac-actions/setup-aws-cli@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: ./.github/actions/vcpkg-bootstrap
+      - uses: ./.github/actions/vcpkg-cache-setup
+        with:
+          mode: s3
+          cache-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          platform: ${{ matrix.row.platform }}
+          arch: ${{ matrix.row.arch }}
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      - uses: ./.github/actions/setup-vulkan
+        with:
+          arch: ${{ matrix.row.arch }}
+      # Lint generates against native dependencies it builds here, so it takes the host's toolkits plus the configuration's.
+      - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'cuda') || contains(matrix.row.setup, 'cuda')
+        uses: ./.github/actions/setup-cuda
+        with:
+          cuda-version: ${{ matrix.row.toolchain.cuda }}
+      - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'rocm') || contains(matrix.row.setup, 'rocm')
+        uses: ./.github/actions/setup-rocm
+        with:
+          rocm-version: ${{ matrix.row.toolchain.rocm.version }}
+          gfx: ${{ matrix.row.toolchain.rocm.gfx }}
+          sha256: ${{ matrix.row.toolchain.rocm.sha256 }}
+      - name: Install
+        shell: bash
+        working-directory: src
+        env:
+          NPM: ${{ matrix.row.npm }}
+        run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
+      - name: ci:system
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          CONFIG: ${{ matrix.row.config }}
+        run: pnpm exec nx run-many -t ci:system -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
+      - name: cpp:lint
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          CONFIG: ${{ matrix.row.config }}
+        run: pnpm exec nx run-many -t cpp:lint -p "$PROJECT" -c "$CONFIG" --diff-base="$BASE" --parallel=1 --outputStyle=stream

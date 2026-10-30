@@ -1,0 +1,229 @@
+name: PR build and test
+
+# Native builds, C++ lint and tests, and desktop tests for packages on the CI contract, after trust and approval.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated package names or directories; empty selects by change
+        type: string
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: pr-build-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: ci:setup,build,cpp:lint,cpp:build,cpp:tests,test:integration,test:backend
+      combine: desktop=test:integration+test:backend
+      packages: ${{ inputs.packages }}
+
+  fork-approval:
+    needs: select
+    if: needs.select.outputs.any == 'true'
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+
+  # Labels to stages, as main's ci-router: independent of approval, so a skip still reads as a routing choice.
+  route:
+    needs: select
+    if: needs.select.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - id: route
+        uses: ./.github/actions/ci-route-stages
+
+  trust:
+    needs: [select, fork-approval]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      allowed: ${{ steps.trust.outputs.allowed }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - id: trust
+        uses: ./.github/actions/pr-check-trust
+        with:
+          github-token: ${{ github.token }}
+
+  build:
+    needs: [select, route, trust]
+    if: needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_prebuilds == 'true'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).build) }}
+
+  # Folds a package's build jobs into prebuilds-<slug>, taking its own prebuilds from each job's artifact.
+  merge:
+    needs: [select, build]
+    name: merge ${{ matrix.project.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.select.outputs.projects) }}
+    env:
+      BUILT: ${{ contains(matrix.project.targets, 'build') }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - if: env.BUILT == 'true'
+        uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          pattern: prebuild-${{ matrix.project.slug }}-*
+          path: prebuilds
+          merge-multiple: "true"
+      - if: env.BUILT == 'true'
+        uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: prebuilds-${{ matrix.project.slug }}
+          path: prebuilds/${{ matrix.project.dir }}/prebuilds
+
+  cpp-lint:
+    needs: [select, route, trust]
+    if: needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_cpp-lint.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['cpp:lint']) }}
+
+  # C++ and desktop tests run against the build's outputs.
+  cpp-tests:
+    needs: [select, route, trust, build]
+    if: needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_cpp_tests == 'true'
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/_cpp-tests.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['cpp:tests']) }}
+
+  desktop:
+    needs: [select, route, trust, build]
+    if: needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_desktop == 'true'
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/_desktop.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).desktop) }}
+
+  # The gate's qvac/prebuild-<key> and qvac/cpp-tests-<key>; a skip passes only when routing chose not to run.
+  status:
+    needs: [select, route, build, merge, cpp-tests]
+    if: always() && !cancelled() && startsWith(github.event_name, 'pull_request') && needs.select.outputs.any == 'true'
+    name: status ${{ matrix.project.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: write
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.select.outputs.projects) }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      CI_ROUTER_RESULT: ${{ needs.route.result }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/scripts/prebuild-status
+          persist-credentials: false
+      - if: matrix.project.prebuildStatus
+        shell: bash
+        env:
+          PREBUILD_RESULT: ${{ needs.build.result == 'success' && needs.merge.result || needs.build.result }}
+          REUSE_HIT: ""
+          RUN_PREBUILDS: ${{ needs.route.outputs.run_prebuilds }}
+          CONTEXT: qvac/prebuild-${{ matrix.project.key }}
+        run: node .github/scripts/prebuild-status/publish.mjs
+      - if: matrix.project.cppStatus
+        shell: bash
+        env:
+          CPP_TEST_RESULT: ${{ needs.cpp-tests.result }}
+          REUSE_HIT: ""
+          RUN_CPP_TESTS: ${{ needs.route.outputs.run_cpp_tests }}
+          CONTEXT: qvac/cpp-tests-${{ matrix.project.key }}
+          KIND: cpp-tests
+        run: node .github/scripts/prebuild-status/publish.mjs
+
+  # Not named qvac-merge-guard: that is the required check's job, and a second one would share its context.
+  # Reads this run's jobs, so the table shows each package, stage and failed job, not only the reusable callers.
+  summary:
+    needs: [select, fork-approval, route, trust, build, merge, cpp-lint, cpp-tests, desktop, status]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROJECTS: ${{ needs.select.outputs.projects }}
+          TITLE: PR build and test
+        run: node .github/scripts/summarize-run.mjs

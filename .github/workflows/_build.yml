@@ -1,0 +1,149 @@
+name: Build native prebuilds
+
+# One job per package and build configuration, on the runner the build target's metadata names. Nx runs the package's
+# ci:system and build targets with that configuration, building its native dependencies first.
+on:
+  workflow_call:
+    inputs:
+      rows:
+        description: JSON build rows from _select-projects, one per package and build configuration
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  build:
+    name: ${{ matrix.row.slug }} ${{ matrix.row.config }}
+    runs-on: ${{ matrix.row.runner }}
+    environment: release
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(inputs.rows) }}
+    env:
+      WORKDIR: src/${{ matrix.row.dir }}
+      NX_DAEMON: "false"
+      NX_NO_CLOUD: "true"
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: |
+            .github/actions
+            .github/config
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: src
+          persist-credentials: "false"
+      - if: runner.environment == 'github-hosted'
+        uses: tetherto/qvac-actions/runner-free-disk@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          keep-android: ${{ matrix.row.platform == 'android' }}
+      # Toolchain versions are the workspace's, from nx.json; a package's own system packages come from its ci:system target.
+      - if: runner.environment == 'github-hosted' && matrix.row.platform == 'android'
+        uses: tetherto/qvac-actions/runner-apt-install@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          packages: ${{ matrix.row.meta.toolchain.android.aptPackages }}
+      - if: runner.environment == 'github-hosted' && matrix.row.platform == 'android'
+        uses: tetherto/qvac-actions/setup-android-ndk@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          ndk-version: ${{ matrix.row.meta.toolchain.android.ndk }}
+          api-level: ${{ matrix.row.meta.toolchain.android.apiLevel }}
+      - if: runner.environment == 'github-hosted'
+        uses: tetherto/qvac-actions/setup-clang@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          version: ${{ matrix.row.meta.toolchain.llvm.linux }}
+          windows-version: ${{ matrix.row.meta.toolchain.llvm.windows }}
+      - uses: tetherto/qvac-actions/configure-aws-credentials@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+      - uses: tetherto/qvac-actions/setup-aws-cli@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: ./.github/actions/vcpkg-bootstrap
+      - uses: ./.github/actions/vcpkg-cache-setup
+        with:
+          mode: s3
+          cache-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          platform: ${{ matrix.row.platform }}
+          arch: ${{ matrix.row.arch }}
+      - uses: ./.github/actions/setup-windows-host
+        with:
+          arch: ${{ matrix.row.arch }}
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      - uses: ./.github/actions/setup-apple-clang
+      - id: vulkan
+        uses: ./.github/actions/setup-vulkan
+        with:
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+          cache-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+      - if: steps.vulkan.outputs.upload-archive != ''
+        shell: bash
+        env:
+          ARCHIVE: ${{ steps.vulkan.outputs.upload-archive }}
+          KEY: ${{ steps.vulkan.outputs.upload-key }}
+          BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: aws s3 cp "$ARCHIVE" "s3://$BUCKET/$KEY"
+      # The build compiles its native dependencies here, so it takes the host's toolkits plus any the configuration asks for.
+      - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'cuda') || contains(matrix.row.setup, 'cuda')
+        uses: ./.github/actions/setup-cuda
+        with:
+          cuda-version: ${{ matrix.row.toolchain.cuda }}
+      - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'rocm') || contains(matrix.row.setup, 'rocm')
+        uses: ./.github/actions/setup-rocm
+        with:
+          rocm-version: ${{ matrix.row.toolchain.rocm.version }}
+          gfx: ${{ matrix.row.toolchain.rocm.gfx }}
+          sha256: ${{ matrix.row.toolchain.rocm.sha256 }}
+      # The package and its workspace dependencies, so Nx builds a dependency the change touched from its sources.
+      - name: Install
+        shell: bash
+        working-directory: src
+        env:
+          NPM: ${{ matrix.row.npm }}
+        run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
+      - name: Build
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          CONFIG: ${{ matrix.row.config }}
+        run: pnpm exec nx run-many -t ci:system,build -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
+      - if: failure()
+        shell: bash
+        run: for f in "$VCPKG_ROOT"/buildtrees/*/{config,install,build}-*.log; do [ -f "$f" ] && { echo "== $f"; tail -200 "$f"; }; done; true
+      - uses: ./.github/actions/prebuilds-strip
+        with:
+          platform: ${{ matrix.row.platform }}
+          workdir: ${{ env.WORKDIR }}
+      - uses: ./.github/actions/prebuilds-check-exports
+        with:
+          platform: ${{ matrix.row.platform }}
+          workdir: ${{ env.WORKDIR }}
+          provider: ${{ matrix.row.provider }}
+      - if: matrix.row.platform == 'win32'
+        uses: ./.github/actions/prebuilds-check-windows-runtime
+        with:
+          workdir: ${{ env.WORKDIR }}
+      # Every package this job built, its native dependencies too, as packages/<dir>/prebuilds; package.json keeps
+      # that root when only one package built. Consumers take the <dir>/prebuilds they need.
+      - uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.config }}
+          path: |
+            src/package.json
+            src/packages/*/prebuilds

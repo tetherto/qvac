@@ -1,0 +1,43 @@
+name: Build iOS app
+description: Generate the iOS project for a built mobile test app, archive it and export a signed IPA.
+
+inputs:
+  profile-uuid:
+    description: Provisioning profile from ios-import-signing
+    required: true
+  export-method:
+    description: Export method from ios-import-signing
+    required: true
+  team-id:
+    description: Apple developer team id
+    required: true
+  bundle-id:
+    description: App bundle id
+    default: io.tether.test.qvac
+  app-dir:
+    description: Mobile test framework checkout, after mobile-build-test-app
+    default: test-framework
+
+outputs:
+  app-path:
+    description: Absolute path to the IPA
+    value: ${{ steps.build.outputs.app-path }}
+  app-type:
+    description: Device Farm app type
+    value: ${{ steps.build.outputs.app-type }}
+  app-name:
+    description: File name to upload the IPA under
+    value: ${{ steps.build.outputs.app-name }}
+
+runs:
+  using: composite
+  steps:
+    - id: build
+      shell: bash
+      env:
+        PROFILE_UUID: ${{ inputs.profile-uuid }}
+        EXPORT_METHOD: ${{ inputs.export-method }}
+        TEAM_ID: ${{ inputs.team-id }}
+        BUNDLE_ID: ${{ inputs.bundle-id }}
+        APP_DIR: ${{ inputs.app-dir }}
+      run: node "$GITHUB_ACTION_PATH/ios-build-app.mjs"

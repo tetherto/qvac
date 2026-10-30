@@ -132,7 +132,6 @@ jobs:
               - ".github/workflows/prebuilds-fabric.yml"
             vla:
               - "packages/vla-ggml/**"
-              - ".github/workflows/prebuilds-vla.yml"
 
       # Package dir names mostly match the filter/job key (packages/<key>),
       # except vla (packages/vla-ggml) - mapped explicitly here so

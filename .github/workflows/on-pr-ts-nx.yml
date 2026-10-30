@@ -127,13 +127,6 @@ jobs:
     with:
       workdir: packages/turbovec-ggml
 
-  vla-pr-head-ts-checks:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'vla-ggml')
-    uses: ./.github/workflows/reusable-ts-checks.yml
-    with:
-      workdir: packages/vla-ggml
-
   # diffusion predates reusable-ts-checks and runs its steps inline, so its
   # check run is "diffusion-pr-head-ts-checks" with no "/ ts-checks" suffix.
   # on-pr-nx's name map carries that exception; keep the shape until diffusion

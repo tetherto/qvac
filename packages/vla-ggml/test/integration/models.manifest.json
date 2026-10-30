@@ -1,0 +1,54 @@
+{
+  "cacheEpoch": 1,
+  "source": "s3",
+  "models": {
+    "smolvla-libero-vision-q8.gguf": {
+      "s3Path": "qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf",
+      "dest": "model/vla/smolvla-libero-vision-q8.gguf",
+      "targets": ["test:integration", "test:backend"],
+      "skip": ["darwin-x64"]
+    },
+    "pi05-base-q-aggressive.gguf": {
+      "s3Path": "qvac_models_compiled/vla/pi05-base/2026-05-21/pi05-base-q-aggressive.gguf",
+      "dest": "model/vla/pi05/pi05-base-q-aggressive.gguf",
+      "targets": ["test:integration"],
+      "skip": ["darwin-x64"]
+    },
+    "pi05-fixture.safetensors": {
+      "s3Path": "qvac_models_compiled/vla/pi05-base/2026-05-21/fixture.safetensors",
+      "dest": "test/pi05-oracle/fixture.safetensors",
+      "targets": ["test:integration"],
+      "skip": ["darwin-x64"]
+    },
+    "pi05-activations.safetensors": {
+      "s3Path": "qvac_models_compiled/vla/pi05-base/2026-05-21/activations.safetensors",
+      "dest": "test/pi05-oracle/activations.safetensors",
+      "targets": ["test:integration"],
+      "skip": ["darwin-x64"]
+    },
+    "groot-multi-q8_vf16.gguf": {
+      "s3Path": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
+      "dest": "model/vla/groot/groot-q8_vf16.gguf",
+      "targets": ["test:integration", "cpp:tests"],
+      "skip": ["darwin-x64"]
+    },
+    "groot-multi-activations_sweep.safetensors": {
+      "s3Path": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/activations_sweep.safetensors",
+      "dest": "test/groot-oracle/activations_sweep.safetensors",
+      "targets": ["cpp:tests"],
+      "skip": ["darwin-x64"]
+    },
+    "groot-libero-q8_vf16.gguf": {
+      "s3Path": "qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf",
+      "dest": "model/vla/groot/groot-libero-q8_vf16.gguf",
+      "targets": ["cpp:tests"],
+      "skip": ["darwin-x64"]
+    },
+    "groot-libero-activations_v4.safetensors": {
+      "s3Path": "qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors",
+      "dest": "test/groot-oracle/activations_v4.safetensors",
+      "targets": ["test:integration", "cpp:tests"],
+      "skip": ["darwin-x64"]
+    }
+  }
+}

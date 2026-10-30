@@ -1,0 +1,27 @@
+name: Download models
+description: Fetch the manifest's models a target needs that are not already present. The job holds the S3 credentials.
+
+inputs:
+  workdir:
+    description: Package directory
+    required: true
+  bucket:
+    description: S3 bucket holding the models
+    required: true
+  target:
+    description: Only models whose targets include this one; empty means all
+    default: ""
+  manifest:
+    description: Manifest path inside workdir
+    default: test/integration/models.manifest.json
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        BUCKET: ${{ inputs.bucket }}
+        TARGET: ${{ inputs.target }}
+        MANIFEST: ${{ inputs.manifest }}
+      run: node "$GITHUB_ACTION_PATH/models-download.mjs"

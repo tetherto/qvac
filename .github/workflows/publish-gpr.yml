@@ -1,0 +1,154 @@
+name: Publish to GitHub Packages
+
+# Prerelease builds of packages on the CI contract as @tetherto/<name>-mono. Dispatch only: a branch pushed here can be an open PR's head.
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated package names or directories to publish
+        type: string
+        required: true
+      tag:
+        description: Dist-tag; auto uses the one the branch implies
+        type: choice
+        options: [auto, latest, dev, feature, temp]
+        default: auto
+
+permissions: {}
+
+concurrency:
+  group: publish-gpr-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  select:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: build,verify:generated,publish
+      packages: ${{ inputs.packages }}
+
+  logic:
+    needs: select
+    if: needs.select.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    # Prereleases come from main, feature-* and tmp-*; publish-gpr picks the tag each implies unless one is given.
+    outputs:
+      publish: ${{ github.ref_name == 'main' || startsWith(github.ref_name, 'feature-') || startsWith(github.ref_name, 'tmp-') }}
+      tag: ${{ inputs.tag != 'auto' && inputs.tag || '' }}
+    steps:
+      - shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          case "$REF_NAME" in
+            main|feature-*|tmp-*) echo "Publishing a prerelease from $REF_NAME" ;;
+            *) echo "::notice::$REF_NAME is not main, feature-* or tmp-*, so nothing is published" ;;
+          esac
+
+  verify:
+    needs: [select, logic]
+    if: needs.logic.outputs.publish == 'true' && toJSON(fromJSON(needs.select.outputs.matrices)['verify:generated']) != '[]'
+    name: verify:generated ${{ matrix.row.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices)['verify:generated'] }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          path: src
+          persist-credentials: "false"
+      # As pr-checks runs it: the newest Node LTS, a workspace install, and the target through Nx.
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      - shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          NX_DAEMON: "false"
+          NX_NO_CLOUD: "true"
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec nx run "$PROJECT:verify:generated" --outputStyle=stream
+
+  build:
+    needs: [select, logic]
+    if: needs.logic.outputs.publish == 'true' && toJSON(fromJSON(needs.select.outputs.matrices).build) != '[]'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).build) }}
+
+  publish:
+    needs: [select, logic, verify, build]
+    if: >-
+      always() && !cancelled() && needs.logic.outputs.publish == 'true' && toJSON(fromJSON(needs.select.outputs.matrices).publish) != '[]' &&
+      (needs.verify.result == 'success' || needs.verify.result == 'skipped') &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
+    name: publish ${{ matrix.row.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices).publish }}
+    env:
+      WORKDIR: src/${{ matrix.row.dir }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          path: src
+          persist-credentials: "false"
+      # The build jobs' prebuilds straight into place; this group has no merged bundle to wait for.
+      - if: contains(matrix.row.targets, 'build')
+        uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          pattern: prebuild-${{ matrix.row.slug }}-*
+          path: ${{ runner.temp }}/prebuilds
+          merge-multiple: "true"
+      - if: contains(matrix.row.targets, 'build')
+        uses: ./.github/actions/prebuilds-place
+        with:
+          staging: ${{ runner.temp }}/prebuilds/${{ matrix.row.dir }}/prebuilds
+          workdir: ${{ env.WORKDIR }}
+          extra-dirs: ${{ join(matrix.row.meta.prebuildExtraDirs, ' ') }}
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - uses: ./.github/actions/gpr-publish
+        with:
+          workdir: ${{ env.WORKDIR }}
+          tag: ${{ needs.logic.outputs.tag }}
+          token: ${{ github.token }}
