@@ -610,8 +610,7 @@ bool SpeculativeRuntime::process(const llama_batch& batch) const {
       }
     }
   }
-  return common_speculative_process(
-      spec_.get(), toCommonBatch(ctxTgt_, batch));
+  return common_speculative_process(spec_.get(), toCommonBatch(ctxTgt_, batch));
 }
 
 DraftSequenceState captureDraftSequenceState(
