@@ -380,6 +380,7 @@ if(BUILD_TESTING)
   add_executable(
     tts_ggml_tests
       addon/tests/backend_env.cpp
+      addon/tests/test_app_memory_budget.cpp
       addon/tests/test_audio8_config.cpp
       addon/tests/test_backend_utils.cpp
       addon/tests/test_chatterbox_config.cpp

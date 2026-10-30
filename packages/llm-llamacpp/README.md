@@ -265,7 +265,7 @@ projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
 
 `spec-type: 'draft-mtp'` turns on llama-server's multi-token-prediction speculative decoding for models that ship their MTP layers (`blk.N.nextn.*`, e.g. Qwen3.5 / Qwen3.6 GGUFs that keep them; quantizations that strip them fail to load with this option unless an external head is given, see below). Every step the MTP head drafts up to `spec-draft-n-max` tokens from the model's own hidden states, the model verifies the sampled token and the draft in one decode, and the longest matching prefix plus one new token is kept. The sampler decides every kept token, so sampling settings, grammars and stop conditions behave as without speculation. The implementation follows llama-server step by step: the same draft limits, rollback by trimming or by a checkpoint for memory that cannot trim, and the same replay.
 
-For a model without MTP layers, give an external MTP head as `spec-draft-model` (llama-server's `--spec-type draft-mtp -md <head>`): a GGUF with MTP layers for the same model, such as the MTP quantization of it, or a Gemma 4 assistant for its Gemma 4 model. The head is loaded next to the model and placed like it (`device`, `gpu-layers`), and the load's fit and `assessFit` count its weights as well as its context. A head without MTP layers fails the load, and `assessFit` refuses it with `unsupported-config`. A head for another model, with a different hidden width or vocabulary, also fails the load, and `assessFit` refuses it the same way. A Gemma 4 assistant reads the model's own tensors, so fabric measures it next to the model, as the load creates it.
+For a model without MTP layers, give an external MTP head as `spec-draft-model` (llama-server's `--spec-type draft-mtp -md <head>`): a GGUF with MTP layers for the same model, such as the MTP quantization of it, or a Gemma 4 assistant for its Gemma 4 model. The head is loaded next to the model and placed like it (`device`, `gpu-layers`), and the load's fit and `assessFit` count its weights as well as its context. A head without MTP layers fails the load, and `assessFit` rejects it. A head for another model, with a different hidden width or vocabulary, also fails the load, and `assessFit` rejects it the same way. A Gemma 4 assistant reads the model's own tensors, so fabric measures it next to the model, as the load creates it.
 
 `spec-type: 'draft-dflash'` drafts with a separate DFlash model instead, given as `spec-draft-model` (an absolute path; llama-server's `-md`). The DFlash model reads the hidden states of the target layers it was trained on and denoises a whole block of draft tokens in one pass, so a step drafts up to its block size minus one tokens (`spec-draft-n-max` caps it further). It is loaded next to the model and placed like it (`device`, `gpu-layers`). The load's fit and `assessFit` count its weights and context, measured next to the model when the drafter borrows the model's embeddings and output head. A draft model fabric still cannot measure is left out of both, and fabric logs `failed to measure the memory of the extra model, fitting without it`. Everything else (verification, rollback, batching, caches, stats) is the same as for MTP.
 
@@ -469,26 +469,33 @@ const fit = await LlmLlamacpp.assessFit({
   config: { device: 'gpu', 'ctx-size': '4096' }
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // 'fits', 'does-not-fit', 'model-unreadable', 'no-backend-device' or 'unsupported-config'
-fit.gpuLayers // what fits, which is not always what the request asked for
-fit.ctxSize
-fit.devices // one row per device the model was assigned to, then a `host` row
-fit.deviceBytes // model, context and compute summed across the devices, host excluded
-fit.hostBytes // the same, for the trailing host row
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // one row per device the model is assigned to, then the host CPU
+fit.devices[0] // { id, name, unified, usedBytes, freeBytes, totalBytes }
+fit.stats // { ctxSize, gpuLayers }
 ```
 
-`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`. A setting left out takes llama's default.
+Each device row gives the memory the load takes on that device, as `usedBytes`, and the device's free and total memory. `id` is the PCI bus ID when the backend reports one, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. With `load_mode: 'mmap'`, the host row leaves out the mapped weights, which the OS can evict.
 
-With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the per-device figures; on a model or head without MTP layers the load fails, so the projection is refused with `unsupported-config`. A DFlash draft model or a Gemma 4 assistant is fitted the same way, measured next to the model since it reads the model's tensors, and is in the verdict and the figures too (see [Speculative decoding](#speculative-decoding-mtp-dflash)).
+On an iOS device every unified row shares the app's own memory limit, `os_proc_available_memory()`. Each such row's free memory is capped at that limit, and a load whose unified rows together take more than the limit less the margin does not fit. A limit of 0 means the app has none left.
 
-Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
+`stats` is the load as the fit resolved it. On `fits`, `ctxSize` and `gpuLayers` are the context and GPU layer count the fitter settled on, which can be smaller than the load asked for. On `does-not-fit` they are the ones the load asked for.
 
-`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device, defaulting to llama's `fit-target` of 1 GiB per device. `backendsDir` is where the dynamically-loaded ggml backends live.
+`status` is `unknown` for a load the fitter cannot project: one placed on the CPU, one with a LoRA adapter or a multimodal projector, one with `fit` turned off, or one the fitter cannot break down per device, the host CPU included. `devices` is then empty and `stats` is `{}`.
+
+The projection reads the model's vocabulary, and llama asserts on a vocabulary it finds inconsistent. An assert aborts the process instead of rejecting, so take the model from a source you trust, or call `assessFit` behind a process boundary.
+
+`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse rejects here. A setting left out takes llama's default.
+
+With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the device rows; on a model or head without MTP layers the load fails, so the projection rejects. A DFlash draft model or a Gemma 4 assistant is fitted the same way, measured next to the model since it reads the model's tensors, and is in the verdict and the rows too (see [Speculative decoding](#speculative-decoding-mtp-dflash)).
+
+Pinning `gpu-layers` fixes the placement: the fitter keeps layers on the devices the load claimed, so the answer is for that exact placement. Leave it unset for a projection that can place the model itself.
+
+`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device. The load's own `fit-target`, 1 GiB per device by default, applies too, and the larger of the two binds. `backendsDir` is where the dynamically-loaded ggml backends live.
 
 `assessFit` returns a Promise. Concurrent calls run one at a time within this addon.
 
-A model the fitter cannot read resolves to `status: "error"`; only a broken request rejects.
+A model the fitter cannot read, an invalid request, or a machine with no backend device rejects with an error whose message starts with `assessFit:` and names the cause.
 
 ## Fine-tuning
 
