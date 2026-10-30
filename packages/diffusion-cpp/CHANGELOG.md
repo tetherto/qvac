@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-10-30
+
 ### Breaking
 
 - `assessFit` returns `{ status, devices, stats }`: the GPU devices the
@@ -14,7 +16,8 @@
 
 - Linux ARM64 and x64 releases include a dynamically loaded CUDA backend
   built with the pinned CUDA 13 toolkit, including SM121a support for DGX
-  Spark and SM120a support for RTX 5090.
+  Spark and SM120a support for RTX 5090
+  ([#5043](https://github.com/tetherto/qvac/pull/5043)).
 - A distilled FLUX.2 Klein 4B CUDA example and measured Spark/RTX 5090
   latency and recipes in the README. The example selects the existing
   im2col VAE convolution path.
