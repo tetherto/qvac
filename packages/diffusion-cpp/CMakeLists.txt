@@ -12,40 +12,23 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-option(SD_CUDA "Enable CUDA GPU backend" OFF)
-if(SD_CUDA)
-  list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
-
-  # nvcc defaults its host compiler to g++, which rejects the -stdlib=libc++
-  # that vcpkg-overlays/triplets/{x64,arm64}-linux.cmake put in
-  # VCPKG_CXX_FLAGS / VCPKG_LINKER_FLAGS. enable_language(CUDA) then fails its
-  # ABI check inside the port build with
-  #   g++: error: unrecognized command-line option '-stdlib=libc++'
-  # Export CUDAHOSTCXX for the vcpkg child process rather than setting
-  # CMAKE_CUDA_HOST_COMPILER in vcpkg-overlays/toolchains/linux-clang.cmake:
-  # that file's contents feed the vcpkg ABI hash of every package on the linux
-  # triplets, so editing it invalidates the binary cache for non-CUDA builds
-  # too and forces every port to rebuild from source. Windows and macOS keep
-  # their default host compiler (MSVC / clang), which already matches.
-  if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE AND NOT DEFINED ENV{CUDAHOSTCXX})
-    set(ENV{CUDAHOSTCXX} "clang++")
-  endif()
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ConfigureCuda.cmake)
 
 option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)
 if(SD_OPENCL)
   list(APPEND VCPKG_MANIFEST_FEATURES "opencl")
 endif()
 
-# Vulkan and Metal are auto-enabled via default-features in the ggml and
-# stable-diffusion-cpp registry ports.  CUDA requires a specific build machine
-# so it remains opt-in via SD_CUDA.
+# CUDA is opt-in through SD_CUDA; Linux release prebuilds enable it in CI.
+# Ordinary source, unit-test, coverage and fuzz builds need no CUDA toolkit.
+# Vulkan and Metal use the registry ports' platform-specific defaults.
 #
 # GGML_BACKEND_DL is ON on Android and desktop Linux (set in the ggml
 # portfile), mirroring qvac-fabric: GPU backends are dlopen'd MODULE .so files
 # shipped next to the addon, so the .bare itself never links
 # libvulkan/libOpenCL and loads on hosts without a graphics stack (QVAC-23767).
-# On macOS/iOS (Metal) and Windows GPU backends are statically linked.
+# Windows CUDA source builds also use runtime-loaded GPU modules; other
+# Windows builds and macOS/iOS (Metal) keep static GPU backends.
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
@@ -104,12 +87,12 @@ else()
 endif()
 message("Building inference-addon-sd module '${module_name}'")
 
-# On Android and desktop Linux with GGML_BACKEND_DL, install GPU backend .so
-# modules alongside the addon so ggml can dlopen them at runtime.  CPU
+# With GGML_BACKEND_DL, install GPU backend modules alongside the addon
+# on Android, Linux, and Windows CUDA source builds. CPU
 # backends are statically linked (GGML_CPU_STATIC) and excluded from this
 # loop.
 set(BACKEND_DL_EXPORTS "")
-if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+if(GGML_BACKEND_DL AND (ANDROID OR WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if("${_backend}" MATCHES "^ggml-cpu")
       continue()
@@ -233,6 +216,8 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
+  add_test(NAME cuda-options
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/cuda-options.cmake)
   add_subdirectory(test/unit)
 endif()
 
