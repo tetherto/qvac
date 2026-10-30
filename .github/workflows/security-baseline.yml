@@ -98,6 +98,7 @@ jobs:
           .github/scripts/test/runner-names.test.mjs
           .github/scripts/test/mobile-caller-permissions.test.mjs
           .github/scripts/test/nx-lockfile-mode.test.mjs
+          .github/scripts/test/nx-fabric-graph-policy.test.mjs
           .github/scripts/test/cache-models-branches.test.mjs
           .github/scripts/test/download-artifact-retry.test.mjs
           .github/scripts/test/integration-test-script.test.mjs

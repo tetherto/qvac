@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include <parakeet/attributed.h>
 #include <parakeet/diarization.h>
 #include <parakeet/engine.h>
 #include <parakeet/streaming.h>
@@ -43,6 +44,7 @@ class ParakeetModel
 public:
   using OutputCallback = std::function<void(const Transcript&)>;
   using VadEventCallback = std::function<void(const VadEvent&)>;
+  using EndOfTurnCallback = std::function<void(const EndOfTurnEvent&)>;
   using ValueType = float;
   using Input = std::vector<ValueType>;
   using InputView = std::span<const ValueType>;
@@ -111,7 +113,7 @@ public:
 
   // Active backend identity captured at load(); surfaced to JS via the addon's
   // getBackendInfo(). getBackendId() codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan
-  // 4=OpenCL 99=other. getBackendDeviceClass(): 0=CPU 1=GPU.
+  // 4=OpenCL 99=other. getBackendDeviceClass(): 0=CPU 1=GPU 2=NPU.
   int getBackendId() const { return backend_id_; }
   int getBackendDeviceClass() const { return backend_device_; }
   const std::string& getBackendName() const { return backend_name_; }
@@ -193,12 +195,26 @@ public:
   void setOnSegmentCallback(const OutputCallback& callback) {
     on_segment_ = callback;
   }
+  void setOnStreamingSegmentCallback(OutputCallback callback) {
+    onStreamingSegment_ = std::move(callback);
+  }
   // Receives the VAD transitions of the framework-path streaming session
   // (cfg_.streaming). Called from inside feed_pcm_f32 / finalize, i.e. on
   // the processing thread or the endOfStream() caller's.
   void setOnVadEventCallback(VadEventCallback callback) {
     onVadEvent_ = std::move(callback);
   }
+  void setOnEndOfTurnCallback(EndOfTurnCallback callback) {
+    onEndOfTurn_ = std::move(callback);
+  }
+  static Transcript toStreamingTranscript(const pkt::StreamingSegment& segment);
+  static Transcript toStreamingDiarizationTranscript(
+      const pkt::StreamingDiarizationSegment& segment);
+  static EndOfTurnEvent toEndOfTurnEvent(const pkt::StreamEvent& event);
+  static pkt::AttributedTranscriptionOptions
+  buildAttributionOptions(const ParakeetConfig& config);
+  static Output toAttributedTranscripts(
+      const pkt::AttributedTranscriptionResult& result, float offset = 0.0F);
   // TEST-ONLY hook: directly append a Transcript to output_ so unit
   // tests can exercise the framework's drainage path without driving a
   // real engine. Production callers should never invoke this -- any
@@ -324,6 +340,9 @@ private:
   // The Engine itself (pimpl-owned via unique_ptr to keep the
   // qvac-parakeet headers out of the binding's public include surface).
   std::unique_ptr<pkt::Engine> engine_;
+  std::unique_ptr<pkt::Engine> attribution_engine_;
+  std::unique_ptr<pkt::Engine> createAttributionEngine() const;
+  Output runAttributedProcess(const Input& input, float offset);
   mutable std::mutex engine_mutex_;
 
   // Only one session is open at a time (model_type decides which).
@@ -410,6 +429,7 @@ private:
   void pushPendingSegment(Transcript segment);
   std::vector<Transcript> takePendingStreamingSegments();
   void emitStreamingSegments(const std::vector<Transcript>& segments);
+  void emitStreamingTranscript(const Transcript& segment);
   int64_t feedStreamingChunk(const Input& input);
   void reopenStreamingSession();
 
@@ -420,6 +440,9 @@ private:
   std::vector<Transcript> pending_streaming_segments_;
 
   VadEventCallback onVadEvent_;
+  EndOfTurnCallback onEndOfTurn_;
+  OutputCallback onStreamingSegment_;
+  bool streamingSegmentsDelivered_ = false;
   // Last state forwarded by the framework-path session; repeats are dropped.
   // Guarded by streaming_mutex_ (finalize() can run on another thread).
   std::optional<bool> lastVadSpeaking_;

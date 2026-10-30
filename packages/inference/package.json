@@ -183,7 +183,7 @@
   "dependencies": {
     "@qvac/error": "^0.1.1",
     "@qvac/logging": "^0.1.1",
-    "@qvac/rag": "^0.8.1",
+    "@qvac/rag": "^0.9.0",
     "@qvac/registry-client": "^0.7.0",
     "bare-abort-controller": "^1.1.2",
     "bare-buffer": "^3.6.2",

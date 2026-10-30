@@ -477,7 +477,8 @@ void CosyvoiceModel::loadPostProcessingLocked() {
       cfg_.enhancerGgufPath,
       backendDevice_ == kBackendDeviceGpu,
       "CosyvoiceModel::load: lavasr enhancer: ",
-      cfg_.vulkanDevice.value_or(0));
+      cfg_.vulkanDevice.value_or(0),
+      cfg_.enhancerCoreml);
   enhancer_ = std::move(loaded.enhancer);
   enhancerBackendDevice_ = loaded.backendDevice;
   enhancerBackendId_ = loaded.backendId;
@@ -485,7 +486,8 @@ void CosyvoiceModel::loadPostProcessingLocked() {
   LoadedDenoiser denoiser = loadDenoiser(
       cfg_.denoiserGgufPath,
       backendDevice_ == kBackendDeviceGpu,
-      "CosyvoiceModel::load: lavasr denoiser: ");
+      "CosyvoiceModel::load: lavasr denoiser: ",
+      cfg_.denoiserCoreml);
   denoiser_ = std::move(denoiser.denoiser);
   denoiserBackendDevice_ = denoiser.backendDevice;
   denoiserBackendId_ = denoiser.backendId;

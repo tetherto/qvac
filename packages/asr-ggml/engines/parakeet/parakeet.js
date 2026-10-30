@@ -109,6 +109,9 @@ class ParakeetInterface {
         }
         if (isError || eventStr.includes("Error"))
             return "Error";
+        if (data !== null && typeof data === "object" &&
+            data.type === "endOfTurn")
+            return "EndOfTurn";
         if (this._looksLikeVadEvent(data))
             return "VadState";
         if (eventStr.includes("RuntimeStats"))
