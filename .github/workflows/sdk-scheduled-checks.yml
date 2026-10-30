@@ -1,0 +1,184 @@
+name: SDK scheduled checks
+
+# Daily tripwires on what users install from npm, not on this repository's code: @qvac/sdk@latest from the public
+# registry (06:00 UTC), the latest OpenCode with the latest @qvac/opencode-plugin (07:00), and the latest OpenClaw with
+# the latest @qvac/openclaw-plugin (07:30, and on PRs that change its smoke). A scheduled failure opens or updates an issue.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/sdk-scheduled-checks.yml"
+      - "scripts/ci/openclaw-upstream-compat-smoke.sh"
+      # The verifiers decide the verdict, so a change to one changes this workflow's behaviour.
+      - "scripts/ci/verify-openclaw-agent-output.cjs"
+      - "scripts/ci/verify-openclaw-prompt-surface.cjs"
+  schedule:
+    - cron: "0 6 * * *"
+    - cron: "0 7 * * *"
+    - cron: "30 7 * * *"
+  workflow_dispatch:
+    inputs:
+      check:
+        description: Which check to run
+        type: choice
+        options: [sdk-install, opencode-compat, openclaw-compat]
+        default: sdk-install
+      attempts:
+        description: "OpenClaw: agent attempts before failing. Raise only to investigate; a green that needed a retry is hiding something."
+        default: "1"
+      tool_profile:
+        description: "OpenClaw: tools.profile for the run (minimal | coding | messaging | full). Has no effect unless tool_deny is widened too."
+        default: "minimal"
+      tool_deny:
+        description: "OpenClaw: tools.deny, as JSON. Denies everything by default and wins over tool_profile; set to [] to restore the profile's tools."
+        default: '["*"]'
+      agent_prompt:
+        description: "OpenClaw: override the agent prompt. For calibrating compliance without a code change; blank uses the default."
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  # A single npm install of @qvac/sdk@latest pulls every @qvac/* runtime dependency under the SDK's ranges, so a private
+  # republish or a 404 on any of them fails it.
+  sdk-install:
+    if: github.event.schedule == '0 6 * * *' || inputs.check == 'sdk-install'
+    name: npm install @qvac/sdk@latest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+          check-latest: "false"
+      # No token: every @qvac/* runtime dependency must be reachable to anonymous users.
+      - name: Configure public npm registry
+        run: |
+          mkdir -p /tmp/install-check
+          printf '%s\n' \
+            'registry=https://registry.npmjs.org/' \
+            '@qvac:registry=https://registry.npmjs.org/' \
+            'foreground-scripts=true' \
+            > /tmp/install-check/.npmrc
+      # --ignore-scripts keeps it on registry visibility; the addons' native install steps are tested elsewhere.
+      - name: Install @qvac/sdk@latest in fresh dir
+        working-directory: /tmp/install-check
+        run: |
+          set -eo pipefail
+          npm init -y > /dev/null
+          npm install --no-fund --no-audit --ignore-scripts "@qvac/sdk@latest"
+      - name: Smoke require
+        working-directory: /tmp/install-check
+        run: node -e "require('@qvac/sdk'); console.log('require ok')"
+
+  opencode-compat:
+    if: github.event.schedule == '0 7 * * *' || inputs.check == 'opencode-compat'
+    name: opencode-ai@latest + @qvac/opencode-plugin@latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: opencode-upstream-compat
+      cancel-in-progress: false
+    env:
+      QVAC_SMOKE_MODEL: qwen3.5-0.8b
+      QVAC_READY_TIMEOUT_MS: "1800000"
+      QVAC_UPSTREAM_TIMEOUT_MS: "300000"
+      OPENCODE_TIMEOUT: 45m
+    steps:
+      # No persisted token: the smoke runs opencode-ai's own install scripts on purpose.
+      - name: Checkout
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+          check-latest: "false"
+      - name: Run OpenCode through QVAC plugin
+        env:
+          SMOKE_DIR: ${{ runner.temp }}/opencode-compat-smoke
+          ARTIFACT_DIR: ${{ runner.temp }}/opencode-compat-artifacts
+          QVAC_HOST_LOG: ${{ runner.temp }}/opencode-compat-artifacts/qvac-host.log
+          QVAC_DEBUG: "1"
+          QVAC_MODEL: ${{ env.QVAC_SMOKE_MODEL }}
+        run: bash scripts/ci/opencode-upstream-compat-smoke.sh
+      - name: Upload smoke artifacts
+        if: always()
+        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: opencode-upstream-compat
+          path: ${{ runner.temp }}/opencode-compat-artifacts
+          if-no-files-found: warn
+
+  # A PR run skips the agent turn, so 15 minutes covers install and setup; otherwise about 6 minutes of setup plus
+  # the attempt budget, 5 minutes per attempt at the 300s backstop.
+  openclaw-compat:
+    if: github.event_name == 'pull_request' || github.event.schedule == '30 7 * * *' || inputs.check == 'openclaw-compat'
+    name: openclaw@latest + @qvac/openclaw-plugin@latest
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 45 }}
+    concurrency:
+      group: openclaw-upstream-compat
+      cancel-in-progress: false
+    env:
+      QVAC_SMOKE_MODEL: qwen3.5-2b
+      # Under OPENCLAW_AGENT_TIMEOUT_SECONDS: readiness is awaited inside the agent run.
+      QVAC_READY_TIMEOUT_MS: "180000"
+      OPENCLAW_AGENT_TIMEOUT_SECONDS: "240"
+    steps:
+      # No persisted token: the smoke runs openclaw's bundled plugins and native builds on purpose.
+      - name: Checkout
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+          check-latest: "true"
+      - name: Run OpenClaw through QVAC plugin
+        env:
+          SMOKE_DIR: ${{ runner.temp }}/openclaw-compat-smoke
+          ARTIFACT_DIR: ${{ runner.temp }}/openclaw-compat-artifacts
+          QVAC_MODEL: ${{ env.QVAC_SMOKE_MODEL }}
+          QVAC_READY_TIMEOUT_MS: ${{ env.QVAC_READY_TIMEOUT_MS }}
+          OPENCLAW_AGENT_TIMEOUT_SECONDS: ${{ env.OPENCLAW_AGENT_TIMEOUT_SECONDS }}
+          OPENCLAW_AGENT_MAX_ATTEMPTS: ${{ inputs.attempts || '1' }}
+          OPENCLAW_TOOL_PROFILE: ${{ inputs.tool_profile || 'minimal' }}
+          OPENCLAW_TOOL_DENY: ${{ inputs.tool_deny || '["*"]' }}
+          # Blank falls through to the script's default, so scheduled runs are unaffected.
+          AGENT_PROMPT: ${{ inputs.agent_prompt }}
+          SKIP_OPENCLAW_AGENT: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+        run: bash scripts/ci/openclaw-upstream-compat-smoke.sh
+      - name: Upload smoke artifacts
+        if: always()
+        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: openclaw-upstream-compat
+          path: ${{ runner.temp }}/openclaw-compat-artifacts
+          if-no-files-found: error
+
+  # Scheduled failures only: manual runs are for debugging these checks.
+  notify-on-failure:
+    name: Open or update tracking issues
+    needs: [sdk-install, opencode-compat, openclaw-compat]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: scripts/ci
+          persist-credentials: false
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        with:
+          script: await require('./scripts/ci/sdk-scheduled-notify.cjs')({ github, context, core })

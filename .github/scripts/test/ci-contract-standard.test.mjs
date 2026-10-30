@@ -20,8 +20,8 @@ import {
 const root = fileURLToPath(new URL('../../..', import.meta.url))
 const read = (path) => readFileSync(join(root, path), 'utf8')
 
-const contract = readdirSync(join(root, 'packages'))
-  .map((dir) => join('packages', dir, 'project.json'))
+const contract = ['packages', 'plugins']
+  .flatMap((parent) => readdirSync(join(root, parent)).map((dir) => join(parent, dir, 'project.json')))
   .filter((path) => existsSync(join(root, path)))
   .map((path) => ({ path, ...JSON.parse(read(path)) }))
   .filter((project) => project.tags?.includes(TAG))
@@ -75,11 +75,14 @@ for (const project of contract) {
     }
   })
 
-  test(`${project.name}: has a Merge Guard key`, () => {
-    const dir = project.path.split('/')[1]
+  test(`${project.name}: has a Merge Guard key when it posts a status`, () => {
+    // Native builds and C++ tests post the statuses Merge Guard waits for; a package with neither needs no key.
+    const configured = Object.keys(project.targets.build?.configurations ?? {}).length > 0
+    if (!configured && !project.targets['cpp:tests']) return
+    const [parent, dir] = project.path.split('/')
     assert.ok(
       gateKeys(read('.github/workflows/pr-gate-merge.yml'))[dir],
-      `${project.path}: add a pr-gate-merge.yml filter whose first path is "packages/${dir}/**"`
+      `${project.path}: add a pr-gate-merge.yml filter whose first path is "${parent}/${dir}/**"`
     )
   })
 
@@ -93,8 +96,8 @@ for (const project of contract) {
   })
 
   test(`${project.name}: every configuration that restores the build has a build configuration to restore`, () => {
-    // A package without a build target restores no prebuilds; its tests run against the installed workspace.
-    if (!project.targets.build) return
+    // A package without a native build restores no prebuilds; its tests run against the installed workspace.
+    if (!Object.keys(project.targets.build?.configurations ?? {}).length) return
     const built = new Set(Object.keys(project.targets.build.configurations ?? {}))
     for (const target of RESTORE_BUILD.filter((t) => targets.includes(t)))
       for (const cfg of configurations(project, target))

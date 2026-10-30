@@ -2012,8 +2012,10 @@ test("Android mobile runs collect the device logcat without rewriting the verdic
 const GITHUB_RELEASE_REUSABLE = "./.github/workflows/create-github-release.yml";
 // release-train.yml cuts the same sdk-v<version> release. It takes the package
 // from .github/release-trains.json, so release-train.test.mjs holds that
-// catalog to @qvac/sdk.
+// catalog to @qvac/sdk. publish-npm.yml cuts it for a package whose publish
+// metadata sets githubRelease, which only @qvac/sdk does.
 const ALLOWED_RELEASE_CALLERS = [
+  ".github/workflows/publish-npm.yml",
   ".github/workflows/publish-sdk.yml",
   ".github/workflows/release-train.yml",
 ];
@@ -2039,6 +2041,7 @@ test("release policy: only the SDK workflow calls create-github-release.yml", ()
 const RELEASE_WRITE_EXEMPT = new Set([
   ".github/workflows/create-github-release.yml",
   ".github/workflows/build-sdk-python-fat-wheels.yml",
+  ".github/workflows/publish-pypi.yml",
 ]);
 
 test("release policy: no workflow cuts a GitHub Release outside the SDK surface", () => {

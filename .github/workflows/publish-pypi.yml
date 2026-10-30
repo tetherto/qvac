@@ -1,0 +1,213 @@
+name: Publish to PyPI
+
+# tetherto-qvac-sdk, generated from @qvac/sdk and released at its version from release-sdk-<x.y.z>: the thin wheel and
+# sdist to PyPI once npm serves @qvac/sdk, then the self-contained per-platform wheels, too large for PyPI, attached to
+# the sdk-v<version> GitHub release that publish-npm.yml creates. release-train.yml calls it for the wheels alone.
+on:
+  push:
+    branches: [release-sdk-*]
+    paths: ["packages/sdk/**", "packages/sdk-python/**"]
+  workflow_dispatch:
+    inputs:
+      publish_pypi_only:
+        description: Republish to PyPI only, at @qvac/sdk's version, without waiting for npm
+        type: boolean
+        default: false
+      tag:
+        description: Existing release tag to attach the wheels to, e.g. sdk-v0.17.0; builds the wheels only
+        type: string
+        default: ""
+      platforms:
+        description: "Wheels to build with tag: 'all' or comma-separated darwin-arm64,linux-x64,linux-arm64,win32-x64"
+        type: string
+        default: all
+      create_release:
+        description: With tag, create a draft release for it if none exists
+        type: boolean
+        default: false
+      dry_run:
+        description: Build and check without publishing
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      version:
+        description: Published version; attaches the wheels to sdk-v<version>
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-pypi-${{ inputs.version || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # wheels: only the per-platform wheels, for a call or a tagged dispatch; else the PyPI release, then its wheels.
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      wheels_only: ${{ steps.mode.outputs.wheels_only }}
+      tag: ${{ steps.mode.outputs.tag }}
+      matrix: ${{ steps.mode.outputs.matrix }}
+    steps:
+      - name: Checkout scripts
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: |
+            packages/sdk/package.json
+            packages/sdk-python
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - id: mode
+        env:
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+          PLATFORMS: ${{ inputs.platforms || 'all' }}
+        run: |
+          tag="${TAG:-}"
+          [ -n "${VERSION:-}" ] && tag="sdk-v${VERSION}"
+          [ -z "$tag" ] && tag="sdk-v$(jq -r .version packages/sdk/package.json)"
+          node packages/sdk-python/ci/release.mjs version "$tag"
+          all='[
+            {"label":"darwin-arm64","os":"macos-15","platform":"macosx_11_0_arm64"},
+            {"label":"linux-x64","os":"ubuntu-22.04","platform":"manylinux_2_35_x86_64"},
+            {"label":"linux-arm64","os":"ubuntu-22.04-arm","platform":"manylinux_2_35_aarch64"},
+            {"label":"win32-x64","os":"windows-2025","platform":"win_amd64"}
+          ]'
+          matrix=$(jq -c --arg p "$PLATFORMS" '{include: [.[] | select($p == "all" or (($p | split(",")) | index(.label)))]}' <<<"$all")
+          {
+            echo "wheels_only=$([ -n "${VERSION:-}${TAG:-}" ] && echo true || echo false)"
+            echo "tag=$tag"
+            echo "matrix=$matrix"
+          } >> "$GITHUB_OUTPUT"
+      - if: inputs.create_release && inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "$TAG" --notes "Self-contained tetherto-qvac-sdk wheels."
+
+  build:
+    needs: setup
+    if: needs.setup.outputs.wheels_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/sdk-python
+    steps:
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
+      - name: Install build tooling
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -U pip
+          .venv/bin/pip install --quiet build twine
+          .venv/bin/pip install --quiet -e ".[gen]"
+      - name: Contract check
+        run: .venv/bin/python3 scripts/generate.py --check
+      - name: Build
+        run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
+      - name: Check metadata
+        run: .venv/bin/twine check dist/*
+      - uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: dist-sdk-python
+          path: packages/sdk-python/dist/*
+          if-no-files-found: error
+          retention-days: "30"
+
+  # After @qvac/sdk reaches npm at the same version, unless a dispatch republishes PyPI alone.
+  publish:
+    needs: [setup, build]
+    if: github.repository == 'tetherto/qvac' && !inputs.dry_run && (startsWith(github.ref_name, 'release-sdk-') || inputs.publish_pypi_only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tetherto-qvac-sdk
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout scripts
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: |
+            packages/sdk/package.json
+            packages/sdk-python
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - if: ${{ !inputs.publish_pypi_only }}
+        run: node packages/sdk-python/ci/release.mjs wait-npm
+      - uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: dist-sdk-python
+          path: dist
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  # The self-contained wheels: the thin client, the Bare runtime, the built worker and pruned native prebuilds.
+  wheels:
+    needs: [setup, publish]
+    if: >-
+      always() && !cancelled() && needs.setup.result == 'success' && !inputs.dry_run && !inputs.publish_pypi_only &&
+      (needs.setup.outputs.wheels_only == 'true' || needs.publish.result == 'success')
+    name: fat wheel (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/sdk-python
+    steps:
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: "22"
+      - run: python -m pip install --upgrade pip build
+      # All-public @qvac deps, no auth: npm install in ../sdk fetches the addons with their published prebuilds.
+      - run: python scripts/build_worker.py
+      - env:
+          WHEEL_PLATFORM: ${{ matrix.platform }}
+        run: python scripts/build_wheel.py --out-dir dist --platform "$WHEEL_PLATFORM"
+      # A wheel records no commit and a rebuild is not byte-identical, so a re-run replaces the assets. A release push
+      # waits for publish-npm.yml's release; the version check above ties the tag to this commit.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.setup.outputs.tag }}
+        run: |
+          node ci/release.mjs wait-release "$TAG"
+          gh release upload "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: fat-wheel-${{ matrix.label }}
+          path: packages/sdk-python/dist/*.whl
+          if-no-files-found: error
+          retention-days: "14"

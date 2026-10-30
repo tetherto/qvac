@@ -40,6 +40,9 @@ on:
       ubuntu_2604:
         description: "Ubuntu 26.04 hosted x64"
         value: ${{ jobs.export.outputs.ubuntu_2604 }}
+      ubuntu_latest:
+        description: "GitHub's alias, for contract configurations main ran on it"
+        value: ${{ jobs.export.outputs.ubuntu_latest }}
       linux_ubuntu2204_x64:
         description: "Self-hosted Ubuntu 22.04 x64 CPU"
         value: ${{ jobs.export.outputs.linux_ubuntu2204_x64 }}
@@ -55,6 +58,9 @@ on:
       macos_arm64_gpu:
         description: "Self-hosted Apple Silicon GPU/Metal"
         value: ${{ jobs.export.outputs.macos_arm64_gpu }}
+      macos_arm64_gpu_gui:
+        description: "Self-hosted Apple Silicon GPU with a GUI session (Electron)"
+        value: ${{ jobs.export.outputs.macos_arm64_gpu_gui }}
       win_2025_x64:
         description: "Self-hosted Windows Server 2025 x64 CPU"
         value: ${{ jobs.export.outputs.win_2025_x64 }}
@@ -81,11 +87,13 @@ jobs:
       ubuntu_2404: ${{ steps.export.outputs.ubuntu_2404 }}
       ubuntu_2404_arm: ${{ steps.export.outputs.ubuntu_2404_arm }}
       ubuntu_2604: ${{ steps.export.outputs.ubuntu_2604 }}
+      ubuntu_latest: ${{ steps.export.outputs.ubuntu_latest }}
       linux_ubuntu2204_x64: ${{ steps.export.outputs.linux_ubuntu2204_x64 }}
       linux_ubuntu2204_x64_gpu: ${{ steps.export.outputs.linux_ubuntu2204_x64_gpu }}
       linux_ubuntu2404_x64: ${{ steps.export.outputs.linux_ubuntu2404_x64 }}
       linux_ubuntu2404_x64_gpu: ${{ steps.export.outputs.linux_ubuntu2404_x64_gpu }}
       macos_arm64_gpu: ${{ steps.export.outputs.macos_arm64_gpu }}
+      macos_arm64_gpu_gui: ${{ steps.export.outputs.macos_arm64_gpu_gui }}
       win_2025_x64: ${{ steps.export.outputs.win_2025_x64 }}
       win_2025_x64_gpu: ${{ steps.export.outputs.win_2025_x64_gpu }}
     steps:
@@ -103,10 +111,12 @@ jobs:
           echo "ubuntu_2404=ubuntu-24.04" >> "$GITHUB_OUTPUT"
           echo "ubuntu_2404_arm=ubuntu-24.04-arm" >> "$GITHUB_OUTPUT"
           echo "ubuntu_2604=ubuntu-26.04" >> "$GITHUB_OUTPUT"
+          echo "ubuntu_latest=ubuntu-latest" >> "$GITHUB_OUTPUT"
           echo "linux_ubuntu2204_x64=qvac-ubuntu2204-x64" >> "$GITHUB_OUTPUT"
           echo "linux_ubuntu2204_x64_gpu=qvac-ubuntu2204-x64-gpu" >> "$GITHUB_OUTPUT"
           echo "linux_ubuntu2404_x64=qvac-ubuntu2404-x64" >> "$GITHUB_OUTPUT"
           echo "linux_ubuntu2404_x64_gpu=qvac-ubuntu2404-x64-gpu" >> "$GITHUB_OUTPUT"
           echo "macos_arm64_gpu=qvac-macos26-arm64-gpu" >> "$GITHUB_OUTPUT"
+          echo "macos_arm64_gpu_gui=qvac-macos26-arm64-gpu-gui" >> "$GITHUB_OUTPUT"
           echo "win_2025_x64=qvac-win25-x64" >> "$GITHUB_OUTPUT"
           echo "win_2025_x64_gpu=qvac-win25-x64-gpu" >> "$GITHUB_OUTPUT"

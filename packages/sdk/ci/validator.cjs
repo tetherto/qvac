@@ -4,8 +4,8 @@
  * Unified validator for commit messages and PR titles/descriptions
  *
  * Usage:
- *   node scripts/validator.cjs --type=commit --msg="feat[api]: add new loadModel signature"
- *   node scripts/validator.cjs --type=pr --title="QVAC-123 feat[api]: add new loadModel signature" --body="..."
+ *   node packages/sdk/ci/validator.cjs --type=commit --msg="feat[api]: add new loadModel signature"
+ *   node packages/sdk/ci/validator.cjs --type=pr --title="QVAC-123 feat[api]: add new loadModel signature" --body="..."
  */
 
 /**
@@ -391,9 +391,9 @@ function main() {
 
   if (args.length === 0) {
     console.error("Usage:");
-    console.error('  node scripts/validator.js --type=commit --msg="..."');
+    console.error('  node packages/sdk/ci/validator.cjs --type=commit --msg="..."');
     console.error(
-      '  node scripts/validator.js --type=pr --title="..." --body="..."',
+      '  node packages/sdk/ci/validator.cjs --type=pr --title="..." --body="..."',
     );
     process.exit(1);
   }

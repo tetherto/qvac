@@ -29,7 +29,7 @@ jobs:
     if: inputs.rows != '[]'
     name: ${{ matrix.row.slug }} ${{ matrix.row.target }} ${{ matrix.row.config }}
     runs-on: ${{ matrix.row.runner }}
-    environment: release
+    environment: ${{ matrix.row.environment || 'release' }}
     timeout-minutes: ${{ matrix.row.timeout || 180 }}
     permissions:
       contents: read
@@ -90,6 +90,12 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: "3.10"
+      - if: contains(matrix.row.setup, 'java')
+        uses: tetherto/qvac-actions/setup-java@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          java-version: "17"
+      - if: contains(matrix.row.setup, 'android')
+        uses: tetherto/qvac-actions/setup-android@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
       - id: models
         uses: ./.github/actions/models-cache-key
         with:
@@ -146,6 +152,21 @@ jobs:
           BUCKET: ${{ contains(matrix.row.meta.secrets, 'MODEL_S3_BUCKET') && secrets.MODEL_S3_BUCKET || '' }}
           HF: ${{ contains(matrix.row.meta.secrets, 'HF_TOKEN') && secrets.HF_TOKEN || '' }}
           GH: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
+          MQTT_HOST_S: ${{ contains(matrix.row.meta.secrets, 'MQTT_HOST') && secrets.MQTT_HOST || '' }}
+          MQTT_USERNAME_S: ${{ contains(matrix.row.meta.secrets, 'MQTT_USERNAME') && secrets.MQTT_USERNAME || '' }}
+          MQTT_PASSWORD_S: ${{ contains(matrix.row.meta.secrets, 'MQTT_PASSWORD') && secrets.MQTT_PASSWORD || '' }}
+          MQTT_CA_CERT_S: ${{ contains(matrix.row.meta.secrets, 'MQTT_CA_CERT') && secrets.MQTT_CA_CERT || '' }}
+          MQTT_CLIENT_CERT_S: ${{ contains(matrix.row.meta.secrets, 'MQTT_CLIENT_CERT') && secrets.MQTT_CLIENT_CERT || '' }}
+          MQTT_CLIENT_KEY_S: ${{ contains(matrix.row.meta.secrets, 'MQTT_CLIENT_KEY') && secrets.MQTT_CLIENT_KEY || '' }}
+          # Variables, not secrets: GitHub masks a short secret such as a port inside other values.
+          MQTT_PROTOCOL: ${{ contains(matrix.row.meta.secrets, 'MQTT_HOST') && vars.MQTT_PROTOCOL || '' }}
+          MQTT_PORT: ${{ contains(matrix.row.meta.secrets, 'MQTT_HOST') && vars.MQTT_PORT || '' }}
+          # The live benchmark host's runner-local files, named by its environment's variables.
+          BENCHMARK_CONFIG_PATH: ${{ matrix.row.target == 'benchmark' && vars.BENCHMARK_CONFIG_PATH || '' }}
+          BENCHMARK_ENVIRONMENT_PATH: ${{ matrix.row.target == 'benchmark' && vars.BENCHMARK_ENVIRONMENT_PATH || '' }}
+          # A configuration selected by a label, with the suite that label passes; see ci.labels.
+          CI_LABEL: ${{ matrix.row.label }}
+          CI_SUITE: ${{ matrix.row.suite }}
           PERF_RUNS: ${{ inputs.perf_runs }}
           PERF_WARMUP_RUNS: ${{ inputs.perf_warmup_runs }}
           ARGS: ${{ inputs.args }}
@@ -158,6 +179,10 @@ jobs:
           if [ -n "$BUCKET" ]; then export MODEL_S3_BUCKET="$BUCKET"; fi
           if [ -n "$HF" ]; then export HF_TOKEN="$HF"; fi
           if [ -n "$GH" ]; then export GITHUB_TOKEN="$GH"; fi
+          for name in MQTT_HOST MQTT_USERNAME MQTT_PASSWORD MQTT_CA_CERT MQTT_CLIENT_CERT MQTT_CLIENT_KEY; do
+            value_var="${name}_S"
+            if [ -n "${!value_var}" ]; then export "$name=${!value_var}"; fi
+          done
           pnpm exec nx run-many -t "$TARGET" -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
       # Diagnostic: the addon's DLL imports, for when LoadLibrary misses one.
       - if: failure() && runner.os == 'Windows'

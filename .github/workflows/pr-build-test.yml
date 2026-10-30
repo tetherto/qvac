@@ -12,6 +12,10 @@ on:
         description: Comma-separated package names or directories; empty selects by change
         type: string
         default: ""
+      labels:
+        description: Comma-separated PR labels whose test:integration configurations to run, e.g. test-e2e-smoke
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -28,6 +32,7 @@ jobs:
       targets: ci:setup,build,cpp:lint,cpp:build,cpp:tests,test:integration,test:backend
       combine: desktop=test:integration+test:backend
       packages: ${{ inputs.packages }}
+      labels: ${{ inputs.labels }}
 
   fork-approval:
     needs: select
@@ -182,6 +187,20 @@ jobs:
     with:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).desktop) }}
 
+  # Configurations that declare ci.labels run on their own labels or base branch, not on run-desktop-addon-tests.
+  e2e:
+    needs: [select, route, trust, build]
+    if: always() && !cancelled() && needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true' && (needs.build.result == 'success' || needs.build.result == 'skipped') && fromJSON(needs.select.outputs.matrices)['test:integration:labelled'][0] != null
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/_desktop.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['test:integration:labelled']) }}
+
   # One cross-platform report per package whose test:integration asks for it, from the desktop jobs' perf artifacts.
   perf-report:
     needs: [select, desktop]
@@ -265,7 +284,7 @@ jobs:
   # Not named qvac-merge-guard: that is the required check's job, and a second one would share its context.
   # Reads this run's jobs, so the table shows each package, stage and failed job, not only the reusable callers.
   summary:
-    needs: [select, fork-approval, route, trust, providers, build, merge, cpp-lint, cpp-tests, desktop, perf-report, status]
+    needs: [select, fork-approval, route, trust, providers, build, merge, cpp-lint, cpp-tests, desktop, e2e, perf-report, status]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

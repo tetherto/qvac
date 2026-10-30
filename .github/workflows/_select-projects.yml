@@ -20,6 +20,10 @@ on:
         description: Comma-separated configurations to keep, e.g. ios-arm64; empty keeps every configuration
         type: string
         default: ""
+      labels:
+        description: Comma-separated labels that route test:integration configurations outside a pull request
+        type: string
+        default: ""
     outputs:
       matrices:
         description: JSON object of target to matrix rows
@@ -67,6 +71,7 @@ jobs:
           PACKAGES: ${{ inputs.packages }}
           COMBINE: ${{ inputs.combine }}
           CONFIGS: ${{ inputs.configs }}
+          LABELS: ${{ inputs.labels }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
         run: node .github/scripts/select-projects.mjs

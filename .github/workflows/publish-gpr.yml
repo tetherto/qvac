@@ -26,7 +26,8 @@ jobs:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
     with:
-      targets: build,verify:generated,publish
+      targets: build,verify:generated,verify:deps,publish
+      combine: verify=verify:generated+verify:deps
       packages: ${{ inputs.packages }}
 
   logic:
@@ -51,8 +52,8 @@ jobs:
 
   verify:
     needs: [select, logic]
-    if: needs.logic.outputs.publish == 'true' && toJSON(fromJSON(needs.select.outputs.matrices)['verify:generated']) != '[]'
-    name: verify:generated ${{ matrix.row.slug }}
+    if: needs.logic.outputs.publish == 'true' && toJSON(fromJSON(needs.select.outputs.matrices).verify) != '[]'
+    name: ${{ matrix.row.target }} ${{ matrix.row.slug }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -60,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        row: ${{ fromJSON(needs.select.outputs.matrices)['verify:generated'] }}
+        row: ${{ fromJSON(needs.select.outputs.matrices).verify }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
@@ -83,11 +84,12 @@ jobs:
         working-directory: src
         env:
           PROJECT: ${{ matrix.row.project }}
+          TARGET: ${{ matrix.row.target }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
         run: |
           pnpm install --frozen-lockfile
-          pnpm exec nx run "$PROJECT:verify:generated" --outputStyle=stream
+          pnpm exec nx run "$PROJECT:$TARGET" --outputStyle=stream
 
   # Providers build first, once per configuration; a provider's own prerelease builds its rows here.
   providers:
@@ -134,6 +136,8 @@ jobs:
         row: ${{ fromJSON(needs.select.outputs.matrices).publish }}
     env:
       WORKDIR: src/${{ matrix.row.dir }}
+      # A JavaScript build ships its dist as built here; npm must not rebuild it.
+      NPM_CONFIG_IGNORE_SCRIPTS: ${{ matrix.row.jsBuild && 'true' || 'false' }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
@@ -161,6 +165,27 @@ jobs:
       - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           node-version: lts/*
+      # A JavaScript build compiles in a workspace install; its publish target then prepares the package for this
+      # registry, for example pinning a dependency published in the same run.
+      - if: matrix.row.jsBuild
+        uses: tetherto/qvac-actions/setup-pnpm@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      - if: matrix.row.jsBuild
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          PUBLISH_REGISTRY: gpr
+          PUBLISH_PROJECTS: ${{ toJSON(fromJSON(needs.select.outputs.matrices).publish.*.project) }}
+          PUBLISH_TAG: ${{ needs.logic.outputs.tag }}
+          NX_DAEMON: "false"
+          NX_NO_CLOUD: "true"
+          NPM_CONFIG_IGNORE_SCRIPTS: "false"
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec nx run "$PROJECT:build" --outputStyle=stream
+          pnpm exec nx run "$PROJECT:publish" --outputStyle=stream
       - uses: ./.github/actions/gpr-publish
         with:
           workdir: ${{ env.WORKDIR }}
