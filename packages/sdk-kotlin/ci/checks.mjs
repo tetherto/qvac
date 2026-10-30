@@ -34,6 +34,8 @@ const sdkTgz = packFrom(sdk)
 const inferenceTgz = packFrom(join(packages, 'inference'))
 // The committed registry pin first, before it is swapped: the Kotlin runtime, its @qvac/sdk pin and the SDK share a version.
 run('node', ['scripts/check-version-alignment.mjs'], kotlin)
+// The pin swap below is for this run only; verify:generated reads the committed manifest after it.
+process.on('exit', () => execFileSync('git', ['checkout', '--', 'package.json'], { cwd: kotlin }))
 // Transitive here, so an override may point the worker bundle at this commit's engine.
 run('npm', ['pkg', 'set', `overrides.@qvac/inference=file:../inference/${inferenceTgz}`], kotlin)
 run(
