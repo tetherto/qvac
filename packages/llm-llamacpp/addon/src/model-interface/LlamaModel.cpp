@@ -40,6 +40,7 @@
 #include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/JsonDepth.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
 #include "utils/ScopeGuard.hpp"
@@ -1822,6 +1823,9 @@ std::string optionalString(
   return it->second.get<std::string>();
 }
 
+using qvac_lib_inference_addon_llama::utils::K_MAX_JSON_DEPTH;
+using qvac_lib_inference_addon_llama::utils::nestsTooDeep;
+
 // The same value in an order-preserving parse of the request, or null when
 // that parse failed or lacks it.
 const common_json* orderedChild(const common_json* parent, const char* key) {
@@ -1888,6 +1892,9 @@ void readToolTurnFields(
         // back to a render without tools. The iterator overload catches
         // trailing text.
         const std::string& text = args->second.get<std::string>();
+        if (nestsTooDeep(text)) {
+          throwInvalidToolTurn("tool_calls arguments nest too deep");
+        }
         picojson::value parsedArgs;
         std::string parseErr;
         const auto stop =
@@ -1929,6 +1936,13 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
     std::string errorMsg = string_format("%s: empty prompt\n", __func__);
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
+  if (nestsTooDeep(input)) {
+    state_->llmContext_->resetMedia();
+    std::string errorMsg = string_format(
+        "%s: input nests deeper than %zu levels\n", __func__, K_MAX_JSON_DEPTH);
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(InvalidInputFormat), errorMsg);
+  }
   ParsedPromptPayload parsed;
   std::vector<common_chat_msg>& chatMsgs = parsed.chatMsgs;
   std::vector<common_chat_tool>& tools = parsed.tools;
@@ -1959,13 +1973,17 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
         picojson::object jsonObj = subObj.get<picojson::object>();
         const common_json* orderedEntry = orderedChild(ordered, i);
 
-        if (jsonObj.find("type") != jsonObj.end() &&
-            jsonObj["type"].get<std::string>() == "function") {
+        const std::string type =
+            optionalString(jsonObj, "type", "type must be a string");
+        if (type == "function") {
           common_chat_tool tool;
-          tool.name = jsonObj["name"].get<std::string>();
-          if (jsonObj.find("description") != jsonObj.end()) {
-            tool.description = jsonObj["description"].get<std::string>();
+          tool.name =
+              optionalString(jsonObj, "name", "tool name must be a string");
+          if (tool.name.empty()) {
+            throwInvalidToolTurn("each function tool needs a top-level name");
           }
+          tool.description = optionalString(
+              jsonObj, "description", "tool description must be a string");
           if (jsonObj.find("parameters") != jsonObj.end()) {
             tool.parameters = serializeInCallerOrder(
                 jsonObj["parameters"],
@@ -1981,7 +1999,7 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
           throw qvac_errors::StatusError(
               ADDON_ID, toString(NoRoleProvided), errorMsg);
         }
-        newMsg.role = jsonObj["role"].get<std::string>();
+        newMsg.role = optionalString(jsonObj, "role", "role must be a string");
 
         // OpenAI-shaped history leaves `content` null or absent on an
         // assistant turn that only carries `tool_calls`.
@@ -2003,8 +2021,7 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
                                   ? std::string()
                                   : contentIt->second.get<std::string>();
 
-        if (jsonObj.find("type") != jsonObj.end() &&
-            jsonObj["type"].get<std::string>() == "media") {
+        if (type == "media") {
           if (state_->isTextLlm_) {
             const char* errorMsg = "Media not supported by text-only models";
             throw qvac_errors::StatusError(

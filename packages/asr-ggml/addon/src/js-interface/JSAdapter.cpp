@@ -1,5 +1,7 @@
 #include "JSAdapter.hpp"
 
+#include <cmath>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -29,6 +31,21 @@ void readInt(js::Object& obj, js_env_t* env, const char* name, int& target) {
   if (auto value = obj.getOptionalPropertyAs<js::Number, int32_t>(env, name)) {
     target = *value;
   }
+}
+
+std::optional<int>
+readAttributionDuration(js::Object& object, js_env_t* env, const char* name) {
+  auto value = object.getOptionalPropertyAs<js::Number, double>(env, name);
+  if (!value)
+    return std::nullopt;
+  if (!std::isfinite(*value) || *value < 0 || std::floor(*value) != *value ||
+      *value > std::numeric_limits<int32_t>::max()) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("speakerAttribution.") + name +
+            " must be a non-negative native integer");
+  }
+  return static_cast<int>(*value);
 }
 
 void readBool(js::Object& obj, js_env_t* env, const char* name, bool& target) {
@@ -232,6 +249,21 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
   readString(jsObject, env, "path", config.modelPath);
   readInt(jsObject, env, "maxThreads", config.maxThreads);
   readBool(jsObject, env, "useGPU", config.useGPU);
+  readString(jsObject, env, "backend", config.backend);
+  if (auto value =
+          jsObject.getOptionalProperty<js::Object>(env, "speakerAttribution")) {
+    parakeet::SpeakerAttributionConfig attribution;
+    auto object = *value;
+    readString(object, env, "modelPath", attribution.modelPath);
+    attribution.mergeSameSpeaker =
+        object.getOptionalPropertyAs<js::Boolean, bool>(
+            env, "mergeSameSpeaker");
+    attribution.minSegmentMs =
+        readAttributionDuration(object, env, "minSegmentMs");
+    attribution.padSegmentMs =
+        readAttributionDuration(object, env, "padSegmentMs");
+    config.speakerAttribution = std::move(attribution);
+  }
   readInt(jsObject, env, "sampleRate", config.sampleRate);
   readInt(jsObject, env, "channels", config.channels);
   readBool(jsObject, env, "captionEnabled", config.captionEnabled);
