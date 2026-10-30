@@ -146,8 +146,16 @@ test('a cpu load is unknown', { timeout: 600_000 }, async (t) => {
 const MTP_MODEL = 'Qwen3.5-0.8B-MTP-Q8_0.gguf'
 const NO_MTP_MODEL = 'Qwen3.5-0.8B-Q8_0.gguf'
 
-// A pinned context and placement keep two projections comparable.
-const PINNED = { 'ctx-size': '4096', 'gpu-layers': '0' }
+// A pinned context, placement and batch keep two projections comparable.
+// Speculative decoding caps the outputs a batch holds logits for, so at the
+// default batch a plain load reserves a far larger output buffer than the
+// draft context adds; a small batch reserves about the same either way.
+const PINNED = {
+  'ctx-size': '4096',
+  'gpu-layers': '0',
+  'batch-size': '16',
+  'ubatch-size': '16'
+}
 
 async function localModel(modelName) {
   const [name, dir] = await ensureModel({ modelName })
@@ -255,11 +263,15 @@ test('a draft model that is not a file rejects', { timeout: 600_000 }, async (t)
 // as the device leaves no room to offload, and the placement matches a load
 // that pins no layers. Each projection reads free memory again, and another
 // job on a shared GPU moves it between calls, so the margin is sized from the
-// device's total, which free never exceeds.
+// device's total, which free never exceeds. The fitter shrinks an unpinned
+// context before it drops layers, and a device's compute buffer can grow with
+// the context, so every projection pins it.
+const MARGIN_CTX = { 'ctx-size': '4096' }
+
 test('the stricter of the two margins binds', { timeout: 600_000 }, async (t) => {
   const file = await modelPath()
-  const base = await assess(file)
-  const noOffload = await assess(file, { 'gpu-layers': '0' })
+  const base = await assess(file, MARGIN_CTX)
+  const noOffload = await assess(file, { ...MARGIN_CTX, 'gpu-layers': '0' })
 
   if (base.status !== 'fits' || deviceUsed(base) === deviceUsed(noOffload)) {
     t.pass('this runner offloads nothing, so no margin can reduce the placement')
@@ -271,10 +283,18 @@ test('the stricter of the two margins binds', { timeout: 600_000 }, async (t) =>
   const allMib = `${Math.ceil(all / (1024 * 1024))}`
   const placed = deviceUsed(noOffload)
 
-  t.is(deviceUsed(await assess(file, {}, { marginBytes: all })), placed, 'the caller margin binds')
-  t.is(deviceUsed(await assess(file, { 'fit-target': allMib })), placed, 'the load target binds')
   t.is(
-    deviceUsed(await assess(file, { 'fit-target': allMib }, { marginBytes: 0 })),
+    deviceUsed(await assess(file, MARGIN_CTX, { marginBytes: all })),
+    placed,
+    'the caller margin binds'
+  )
+  t.is(
+    deviceUsed(await assess(file, { ...MARGIN_CTX, 'fit-target': allMib })),
+    placed,
+    'the load target binds'
+  )
+  t.is(
+    deviceUsed(await assess(file, { ...MARGIN_CTX, 'fit-target': allMib }, { marginBytes: 0 })),
     placed,
     'a slack caller margin does not loosen the load target'
   )
