@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.32.1] - 2026-10-29
+
+This patch moves the addon to stable-diffusion-cpp `2026-08-11#8`. It retains
+the existing model support and JavaScript API.
+
+### Bug Fixes
+
+Memory fitting plans on the integrated GPUs when there is no discrete GPU,
+caps the free memory of a GPU that shares host memory at the host's, and on an
+iOS device plans against the app's own memory limit.
+
+The addon requires stable-diffusion-cpp `2026-08-11#8` from the QVAC registry
+while retaining the existing registry baseline
+([#5446](https://github.com/tetherto/qvac/pull/5446)).
+
+## [0.32.0] - 2026-10-29
+
+### Features
+
+- Add optional `GenerationParams.custom_sigmas` for explicit image sampling
+  schedules. Values must be finite, non-negative, strictly decreasing at float
+  precision, and end in zero. The schedule overrides `scheduler` and `steps`;
+  its length minus one determines the step count.
+- Add a Qwen-Image-2.1-Turbo recipe using Euler, CFG 1, and the model's fixed
+  eight-step schedule. Set `QWEN_TURBO=1` and provide `QWEN_TURBO_MODEL` to use
+  Turbo weights with the existing Qwen examples and shared components.
+
+### Fixes
+
+- Enable VAE tiling with `vae_tile_size: 64` in the Qwen example for output
+  areas of at least 2048×2048 pixels, avoiding the full-frame CUDA decode
+  assertion observed during 2K validation. Tile sizes use native latent units.
+
+Existing requests without `custom_sigmas` retain ordinary sampling behavior.
+
+### Pull Requests
+
+- [#5415](https://github.com/tetherto/qvac/pull/5415) - QVAC-27530 feat: support Qwen-Image-2.1-Turbo sampling.
+
 ## [0.31.0] - 2026-10-21
 
 This release adds Qwen-Image-2.1 generation and reference editing, including

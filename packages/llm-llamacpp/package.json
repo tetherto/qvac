@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.65.0",
+  "version": "0.65.1",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -79,8 +79,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.24.0",
-    "@qvac/fabric-ios": "^0.24.0",
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "bare-process": "^4.2.2",
@@ -102,22 +102,22 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.24.0",
+    "@qvac/fabric": "^0.25.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.24.0",
-    "@qvac/fabric-linux-arm64": "^0.24.0",
-    "@qvac/fabric-darwin-arm64": "^0.24.0",
-    "@qvac/fabric-darwin-x64": "^0.24.0",
-    "@qvac/fabric-win32-x64": "^0.24.0"
+    "@qvac/fabric-linux-x64": "^0.25.0",
+    "@qvac/fabric-linux-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-x64": "^0.25.0",
+    "@qvac/fabric-win32-x64": "^0.25.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.24.0",
-    "@qvac/fabric-ios": "^0.24.0"
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {
