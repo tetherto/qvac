@@ -9,7 +9,7 @@
   can then interleave text and images, so text that refers to a specific image
   sits next to it; `attachments` always sends every image before the text.
   Parts are user-only and cannot be combined with `attachments` on the same
-  message.
+  message ([#5480](https://github.com/tetherto/qvac/pull/5480)).
 
 ## [0.22.0]
 
