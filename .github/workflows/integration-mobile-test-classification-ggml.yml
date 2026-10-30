@@ -30,7 +30,7 @@ on:
         required: false
         default: ""
       prebuild_run_id:
-        description: "Run id whose prebuilds artifact to install. Takes precedence over this run's artifacts and the published release, and fails the run if that artifact is missing or expired. Mutually exclusive with a pinned package."
+        description: "Run id whose prebuilds artifact to install. Takes precedence over this run's artifacts and the published release, and fails the run if that artifact is missing or expired."
         type: string
         required: false
         default: ""

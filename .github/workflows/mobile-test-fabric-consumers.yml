@@ -47,11 +47,12 @@ on:
 permissions:
   contents: read
 
-# A second dispatch for the same fabric run supersedes the first, so the
-# Device Farm runs are never stacked. The called workflows key their own groups
-# per package, so the consumers below run in parallel.
+# A second dispatch for the same fabric run and consumers supersedes the first,
+# so the Device Farm runs are never stacked; a subset dispatch leaves a full run
+# alone. The called workflows key their own groups per package, so the consumers
+# below run in parallel.
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.fabric_prebuild_run_id }}
+  group: ${{ github.workflow }}-${{ inputs.fabric_prebuild_run_id }}-${{ inputs.consumers }}
   cancel-in-progress: true
 
 jobs:
@@ -114,10 +115,11 @@ jobs:
           done
           [ "$errors" -eq 0 ] || exit 1
 
-          # One artifact listing per run id, live (unexpired) names only.
+          # One artifact listing per run id, live (unexpired) names only. Returns
+          # 2 when the run cannot be read, 3 when that was already reported.
           listed() {
             local run="$1" cache="$RUNNER_TEMP/artifacts-$1.txt"
-            [ -f "$cache.failed" ] && return 2
+            [ -f "$cache.failed" ] && return 3
             if [ ! -f "$cache" ]; then
               if ! gh api --paginate "repos/$REPO/actions/runs/$run/artifacts?per_page=100" \
                   --jq '.artifacts[] | select(.expired | not) | .name' > "$cache"; then
@@ -132,13 +134,15 @@ jobs:
             local input="$1" run="$2" artifact="$3" status=0
             listed "$run" "$artifact" || status=$?
             case "$status" in
-              0) ;;
+              0) return 0 ;;
               2) fail "Cannot read run $run from $input. Check that it is a run in $REPO." ;;
+              3) ;;
               *) fail "Run $run from $input has no live '$artifact' artifact (missing, expired, or not built by that run)." ;;
             esac
+            return 1
           }
 
-          require fabric_prebuild_run_id "$FABRIC_RUN_ID" fabric-prebuilds
+          require fabric_prebuild_run_id "$FABRIC_RUN_ID" fabric-prebuilds || true
 
           used_nx=false; used_classification=false; used_vla=false
           {
@@ -156,9 +160,7 @@ jobs:
             bundle="prebuilds-$consumer"
             [ "$consumer" = vla ] && bundle="prebuilds-vla-ggml"
             if [ -n "$run" ]; then
-              before="$errors"
-              require "$input" "$run" "$bundle"
-              if [ "$errors" -eq "$before" ]; then
+              if require "$input" "$run" "$bundle"; then
                 echo "- $consumer: \`$bundle\` from run $run" >> "$GITHUB_STEP_SUMMARY"
               fi
             else

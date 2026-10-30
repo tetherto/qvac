@@ -157,6 +157,41 @@ test('each called consumer accepts prebuild_run_id when called and installs from
       `${target} must declare prebuild_run_id under workflow_call, or GitHub rejects the caller`,
     )
     assert.ok(source.includes('prebuild-run-id: ${{ inputs.prebuild_run_id }}'), `${target} must pass it to setup`)
+    // Dispatch-only jobs and pins key on platform, e.g. ggml-rpc-server's
+    // prebuild-manual, which the caller's write grant exists for.
+    assert.doesNotMatch(
+      topLevelBlock(source, 'workflow_call'),
+      /^ {6}platform:$/m,
+      `${target} must keep platform a dispatch-only input`,
+    )
+  }
+})
+
+// Under workflow_call github.run_id is the caller's, so the package name is what
+// keeps sibling calls from one run out of each other's group.
+test('every mobile workflow keys its call-path group on its own package', () => {
+  const leaves = readdirSync(WORKFLOW_DIR).filter((name) => name.startsWith(LEAF_PREFIX) && name.endsWith('.yml'))
+  assert.ok(leaves.length >= calls.length, `found ${leaves.length} mobile workflows`)
+  for (const name of leaves) {
+    const slug = name.slice(LEAF_PREFIX.length, -'.yml'.length)
+    assert.match(
+      read(name),
+      new RegExp(`^  group: .*format\\('mobile-call-\\{0\\}-${slug}['-]`, 'm'),
+      `${name} must put ${slug} in its mobile-call group`,
+    )
+  }
+})
+
+test('the resolve step reads each value from its own input', () => {
+  const step = caller.slice(caller.indexOf(`- name: ${RESOLVE_STEP}`))
+  for (const [env, input] of [
+    ['FABRIC_RUN_ID', 'fabric_prebuild_run_id'],
+    ['NX_RUN_ID', 'nx_prebuild_run_id'],
+    ['CLASSIFICATION_RUN_ID', 'classification_prebuild_run_id'],
+    ['VLA_RUN_ID', 'vla_prebuild_run_id'],
+    ['CONSUMERS', 'consumers'],
+  ]) {
+    assert.match(step, new RegExp(`^ {10}${env}: \\$\\{\\{ inputs\\.${input} \\}\\}$`, 'm'))
   }
 })
 
@@ -182,7 +217,8 @@ test('the caller is dispatch-only', () => {
 
 // ── resolve step ────────────────────────────────────────────────────────────
 // Run the real shell against a fake `gh` that serves artifact listings from
-// FAKE_ARTIFACTS ({ runId: [names] }) and records each run id it was asked for.
+// FAKE_ARTIFACTS ({ runId: [name | { name, expired }] }) through the step's own
+// --jq filter, and records each run id it was asked for.
 
 function extractRunBlock(stepName) {
   const index = caller.indexOf(`- name: ${stepName}`)
@@ -202,12 +238,19 @@ function extractRunBlock(stepName) {
 
 const FAKE_GH = `#!/usr/bin/env node
 const { appendFileSync } = require('node:fs')
-const url = process.argv.find((arg) => /actions\\/runs\\/\\d+\\/artifacts/.test(arg)) ?? ''
+const { spawnSync } = require('node:child_process')
+const args = process.argv.slice(2)
+const url = args.find((arg) => /actions\\/runs\\/\\d+\\/artifacts/.test(arg)) ?? ''
 const run = url.match(/runs\\/(\\d+)\\//)?.[1]
 appendFileSync(process.env.FAKE_GH_LOG, run + '\\n')
 const artifacts = JSON.parse(process.env.FAKE_ARTIFACTS)
 if (!(run in artifacts)) { console.error('HTTP 404: Not Found'); process.exit(1) }
-for (const name of artifacts[run]) console.log(name)
+if (!args.includes('--jq')) { console.error('fake gh: expected --jq'); process.exit(1) }
+const page = { artifacts: artifacts[run].map((a) => (typeof a === 'string' ? { name: a, expired: false } : a)) }
+const jq = spawnSync('jq', ['-r', args[args.indexOf('--jq') + 1]], { input: JSON.stringify(page), encoding: 'utf8' })
+process.stdout.write(jq.stdout ?? '')
+process.stderr.write(jq.stderr ?? '')
+process.exit(jq.status ?? 1)
 `
 
 const NX_BUNDLES = ['embed-llamacpp', 'ggml-rpc-server', 'llm-llamacpp', 'model-fit', 'ocr-ggml', 'translation-nmtcpp', 'turbovec-ggml']
@@ -270,6 +313,14 @@ test('resolve: a run missing a selected consumer bundle fails before any build',
   assert.equal(run.consumers, null)
 })
 
+test('resolve: an expired bundle counts as missing', () => {
+  const nx = [...NX_BUNDLES.filter((name) => name !== 'prebuilds-turbovec-ggml'), { name: 'prebuilds-turbovec-ggml', expired: true }]
+  const run = resolveConsumers(ALL_IDS, { ...FULL, 2: nx })
+  assert.equal(run.status, 1, run.log)
+  assert.match(run.log, /::error::Run 2 from nx_prebuild_run_id has no live 'prebuilds-turbovec-ggml' artifact/)
+  assert.doesNotMatch(run.summary, /turbovec-ggml: `prebuilds-turbovec-ggml`/)
+})
+
 test('resolve: the fabric run must carry fabric-prebuilds', () => {
   const run = resolveConsumers({ FABRIC_RUN_ID: '2', CONSUMERS: 'llm-llamacpp' })
   assert.equal(run.status, 1, run.log)
@@ -280,6 +331,8 @@ test('resolve: an unreadable run is reported as such', () => {
   const run = resolveConsumers({ ...ALL_IDS, NX_RUN_ID: '99' })
   assert.equal(run.status, 1, run.log)
   assert.match(run.log, /::error::Cannot read run 99 from nx_prebuild_run_id/)
+  assert.equal(run.log.match(/Cannot read run 99/g).length, 1, 'reported once, not once per nx consumer')
+  assert.doesNotMatch(run.summary, /from run 99/)
 })
 
 test('resolve: malformed inputs fail without calling the API', () => {

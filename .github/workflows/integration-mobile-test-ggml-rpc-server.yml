@@ -90,6 +90,8 @@ permissions:
   id-token: write
 
 concurrency:
+  # Under workflow_call github.* resolves to the CALLER, so run_id plus a literal
+  # package name keeps each call apart from sibling mobile calls in that run.
   group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-ggml-rpc-server', github.run_id) }}
   cancel-in-progress: ${{ inputs.platform != '' }}
 

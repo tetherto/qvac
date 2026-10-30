@@ -677,31 +677,35 @@ place of the published `@qvac/fabric`.
 - **Devices.** Each consumer's `workflow_call` defaults (its pool, dual flagship
   or sharded pool), not the one-device manual path. Narrow a failure afterwards
   with a single-consumer dispatch.
-- **Fail fast.** The first job checks every run id, and that each run holds the
-  artifact a selected consumer needs, before anything builds.
-- **Re-runs.** A second dispatch for the same fabric run cancels the first.
-  Re-run only the failed consumers with `gh run rerun <id> --failed`.
+- **Fail fast.** The first job checks every run id, and that each run holds a
+  live artifact for every selected consumer, before anything builds. Whether a
+  bundle covers the device's platform is checked later, in each consumer's setup.
+- **Re-runs.** A second dispatch for the same fabric run and `consumers` cancels
+  the first; a different `consumers` list runs alongside it. Re-run only the
+  failed consumers with `gh run rerun <id> --failed`.
 
 ```bash
 PR=<fabric PR number>
 SHA=$(gh pr view "$PR" --repo tetherto/qvac --json headRefOid --jq .headRefOid)
-# The run on that commit that uploaded artifact $1.
+# The run of workflow $1 on that commit that uploaded artifact $2.
 run_with() {
-  for rid in $(gh api "repos/tetherto/qvac/actions/runs?head_sha=$SHA&per_page=100" \
-                 --jq '.workflow_runs[].id'); do
+  for rid in $(gh run list --repo tetherto/qvac --workflow "$1" --commit "$SHA" \
+                 --json databaseId --jq '.[].databaseId'); do
     gh api "repos/tetherto/qvac/actions/runs/$rid/artifacts?per_page=100" \
-      --jq ".artifacts[]|select(.name==\"$1\" and .expired==false)|.name" \
+      --jq ".artifacts[]|select(.name==\"$2\" and .expired==false)|.name" \
       2>/dev/null | grep -q . && { echo "$rid"; return; }
   done
 }
 
 gh workflow run mobile-test-fabric-consumers.yml --repo tetherto/qvac --ref main \
-  -f fabric_prebuild_run_id="$(run_with fabric-prebuilds)" \
-  -f nx_prebuild_run_id="$(run_with prebuilds-llm-llamacpp)" \
-  -f classification_prebuild_run_id="$(run_with prebuilds-classification-ggml)" \
-  -f vla_prebuild_run_id="$(run_with prebuilds-vla-ggml)"
+  -f fabric_prebuild_run_id="$(run_with on-pr-fabric.yml fabric-prebuilds)" \
+  -f nx_prebuild_run_id="$(run_with on-pr-nx.yml prebuilds-llm-llamacpp)" \
+  -f classification_prebuild_run_id="$(run_with on-pr-classification-ggml.yml prebuilds-classification-ggml)" \
+  -f vla_prebuild_run_id="$(run_with on-pr-vla.yml prebuilds-vla-ggml)"
 ```
 
+An empty lookup installs the published addon for those consumers. The nx lookup
+keys on llm's bundle; for a subset without llm, look up one of its own bundles.
 Add `-f consumers=llm-llamacpp,ocr-ggml` to run a subset, and
 `-f ref=refs/pull/$PR/head` when the PR also changes consumer test code.
 
