@@ -14,6 +14,14 @@ type Rule = {
 
 const RULES: Rule[] = [
   {
+    match: /^embeddinggemma2-/,
+    skip: {
+      reason:
+        'Multimodal embedding checks use a portable JavaScript executor; Python coverage is limited to generated contract validation.',
+      platforms: ['desktop-python']
+    }
+  },
+  {
     match: /^tts-moss-/,
     skip: {
       reason:

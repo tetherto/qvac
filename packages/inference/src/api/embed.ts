@@ -1,6 +1,7 @@
 import { send } from '@/dispatch'
 import {
   type EmbedParams,
+  type EmbedInput,
   type EmbedRequest,
   type EmbedStats,
   type RPCOptions
@@ -21,7 +22,7 @@ import { generateRequestId } from '@/runtime/request-id'
  * @throws {QvacErrorBase} When the response type is invalid or when the embedding fails
  */
 export function embed(
-  params: { modelId: string; text: string },
+  params: { modelId: string; text: string; inputs?: never },
   options?: RPCOptions
 ): Promise<{ embedding: number[]; stats?: EmbedStats }> & { requestId: string }
 
@@ -37,11 +38,38 @@ export function embed(
  * @throws {QvacErrorBase} When the response type is invalid or when the embedding fails
  */
 export function embed(
-  params: { modelId: string; text: string[] },
+  params: { modelId: string; text: string[]; inputs?: never },
   options?: RPCOptions
 ): Promise<{ embedding: number[][]; stats?: EmbedStats }> & {
   requestId: string
 }
+
+/**
+ * Embeds ordered text and media inputs.
+ *
+ * @overloadLabel "Text and media batch"
+ * @param params - Model identifier and ordered inputs to embed
+ * @param options - Optional RPC options including per-call profiling
+ * @returns One embedding vector per input, with optional statistics and a synchronous requestId for cancellation.
+ * @throws {QvacErrorBase} When validation or embedding fails
+ */
+export function embed(
+  params: { modelId: string; inputs: EmbedInput[]; text?: never },
+  options?: RPCOptions
+): Promise<{ embedding: number[][]; stats?: EmbedStats }> & { requestId: string }
+
+/**
+ * Embeds text or a batch of ordered text and media inputs.
+ *
+ * @param params - Model identifier and either text or inputs
+ * @param options - Optional RPC options including per-call profiling
+ * @returns Embeddings with optional statistics and a synchronous requestId for cancellation.
+ * @throws {QvacErrorBase} When validation or embedding fails
+ */
+export function embed(
+  params: EmbedParams,
+  options?: RPCOptions
+): Promise<{ embedding: number[] | number[][]; stats?: EmbedStats }> & { requestId: string }
 
 export function embed(
   params: EmbedParams,

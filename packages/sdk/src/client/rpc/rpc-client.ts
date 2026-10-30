@@ -78,7 +78,24 @@ function pinpointRequestError(request: unknown, fallback: z.ZodError): z.ZodErro
   for (const option of requestSchema.options) {
     if (memberDiscriminator(option as RequestMemberIntrospect) !== type) continue
     const result = (option as z.ZodType).safeParse(request)
-    return result.success ? fallback : result.error
+    if (result.success) return fallback
+    // A method can itself accept several input shapes. Preserve field errors
+    // shared by every shape, such as an invalid modelId on either embed arm.
+    const union = result.error.issues.find((issue) => issue.code === 'invalid_union')
+    if (union?.code === 'invalid_union' && union.errors.length > 0) {
+      const shared = union.errors[0]!.filter((issue) =>
+        union.errors.every((branch) =>
+          branch.some(
+            (other) =>
+              other.code === issue.code &&
+              other.message === issue.message &&
+              JSON.stringify(other.path) === JSON.stringify(issue.path)
+          )
+        )
+      )
+      if (shared.length > 0) return new z.ZodError(shared)
+    }
+    return result.error
   }
   return fallback
 }
