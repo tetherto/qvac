@@ -1417,7 +1417,8 @@ TEST_F(ToolGrammarModelTest, CancelWithLiveToolGrammarLeavesNextRequestClean) {
   // A cancel after prefill keeps what the caller received, with or without a
   // cacheKey (see `SequenceDriver::onCancel`): the memory and the context's
   // cursor must agree on it.
-  EXPECT_GE(llama_memory_seq_pos_max(mem, 0) + 1, preRequestNPast);
+  EXPECT_GT(llama_memory_seq_pos_max(mem, 0) + 1, preRequestNPast)
+      << "the cancel dropped what the caller received";
   EXPECT_EQ(
       llama_memory_seq_pos_max(mem, 0) + 1,
       LlamaModelTestPeer::llmContext(*model)->getNPast())

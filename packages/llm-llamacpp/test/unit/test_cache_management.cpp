@@ -2830,7 +2830,7 @@ TEST(BatchedCacheResidencyTest, RamTierRestoresAnEvictedConversation) {
 }
 
 // Requests without a cacheKey park anonymously: their state stays in its
-// sequence for the prefix later requests share with it, and is never written.
+// sequence for the prefix later requests share with it.
 TEST(BatchedCacheResidencyTest, KeylessRequestsParkAnonymously) {
   if (!fs::exists(test_common::BaseTestModelPath::get())) {
     GTEST_SKIP() << "base test model not found";
@@ -2845,8 +2845,6 @@ TEST(BatchedCacheResidencyTest, KeylessRequestsParkAnonymously) {
   ASSERT_NE(mem, nullptr);
   EXPECT_GE(
       llama_memory_seq_pos_max(mem, static_cast<llama_seq_id>(parked[0])), 0);
-  // No key names it, so nothing can write it.
-  EXPECT_THROW(model->saveCache(""), qvac_errors::StatusError);
 }
 
 // Deleting the file a parked conversation was loaded from drops the

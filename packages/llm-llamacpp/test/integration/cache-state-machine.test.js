@@ -454,8 +454,14 @@ safeTest(
     const primer = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
     const base = path.join(primer.dirPath, 'cache-base-primed.bin')
     const session = path.join(primer.dirPath, 'cache-base-session.bin')
-    cleanupIntegrationCacheFiles(base)
-    t.teardown(() => cleanupIntegrationCacheFiles(base))
+    cleanupIntegrationCacheFiles(base, session)
+    // The helper skips paths it has already cleaned, so the files written
+    // below are removed directly.
+    t.teardown(() => {
+      for (const file of [base, session]) {
+        if (fs.existsSync(file)) fs.unlinkSync(file)
+      }
+    })
     await runAndCollectStats(primer.model, buildPrompt(), cacheOpts(base, { prefill: true }))
     await primer.model.saveCache(base)
     await primer.model.unload()
@@ -483,7 +489,10 @@ safeTest(
     const primer = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
     const base = path.join(primer.dirPath, 'cache-base-keyless.bin')
     cleanupIntegrationCacheFiles(base)
-    t.teardown(() => cleanupIntegrationCacheFiles(base))
+    // See the test above: the helper would not remove the file again.
+    t.teardown(() => {
+      if (fs.existsSync(base)) fs.unlinkSync(base)
+    })
     await runAndCollectStats(primer.model, buildPrompt(), cacheOpts(base, { prefill: true }))
     await primer.model.saveCache(base)
     await primer.model.unload()
