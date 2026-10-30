@@ -420,7 +420,9 @@ private:
   ledgerFromChunks(const mtmd::input_chunks& chunks) const;
   void rebuildSamplerFromLedger(
       const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
-  /// See TextLlmContext::adoptBestCacheSource.
+  /// See TextLlmContext::adoptBestCacheSource. This, `adoptDonorState` and
+  /// `resetStateKeepingMemory` repeat TextLlmContext's: a change to one
+  /// belongs in both.
   void adoptBestCacheSource(
       const qvac_lib_inference_addon_llama::cache::Ledger& prompt);
   /// See TextLlmContext::adoptDonorState.

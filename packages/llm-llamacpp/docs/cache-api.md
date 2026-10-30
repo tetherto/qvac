@@ -596,11 +596,10 @@ models. On hybrid, recurrent and sliding-window models the same holds by
 default; `cache_checkpoint_storage: 'disk'` moves their snapshots and
 checkpoints to temp files.
 
-The same rule applies to requests without `cacheKey`. On text models their
-state stays in memory for the prefix the next request shares with it; on
-multimodal models nothing reuses it, so the only visible difference is
-`CacheTokens`, which reports the tokens actually decoded rather than the
-pre-request cursor.
+The same rule applies to requests without `cacheKey`. Their state stays in
+memory for the prefix the next request shares with it; on encoder-decoder
+models nothing reuses it, so the only visible difference is `CacheTokens`,
+which reports the tokens actually decoded rather than the pre-request cursor.
 
 The `cacheKey` file changes only through the writes described in [Save the
 cache to disk](#save-the-cache-to-disk), which also carry the newest
