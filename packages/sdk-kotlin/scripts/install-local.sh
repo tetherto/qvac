@@ -2,10 +2,11 @@
 # Build a local Maven repository of the Kotlin SDK from a standalone checkout
 # of packages/sdk-kotlin, without the rest of the monorepo.
 #
-#   install-local.sh <git-ref> [directory]
+#   install-local.sh <tag-or-branch> [directory]
 #
-# <git-ref> is the release tag to build, such as sdk-v0.23.0; [directory]
-# is where the sparse clone goes (default ./qvac-sdk-kotlin). The build needs
+# <tag-or-branch> is the release tag to build, such as sdk-v0.23.0; [directory]
+# is where the sparse clone goes (default ./qvac-sdk-kotlin) and must not exist
+# yet, so the build is always of the named ref. The build needs
 # JDK 17, the Android SDK with NDK 29.0.14206865 and Node.js 22 on PATH, and
 # bundles the @qvac/sdk version pinned by the checkout. Afterwards
 # the directory printed last is ready to be added as a Gradle Maven repository.
@@ -15,7 +16,7 @@
 # media, robotics). Both are for testing this script.
 set -euo pipefail
 
-ref="${1:?usage: install-local.sh <git-ref> [directory]}"
+ref="${1:?usage: install-local.sh <tag-or-branch> [directory]}"
 directory="${2:-qvac-sdk-kotlin}"
 repository="${QVAC_REPO_URL:-https://github.com/tetherto/qvac}"
 profile="${QVAC_PROFILE:-}"
@@ -59,10 +60,12 @@ if [ "$missing" -ne 0 ]; then
   exit 1
 fi
 
-if [ ! -d "$directory/.git" ]; then
-  git clone --depth 1 --filter=blob:none --sparse --branch "$ref" "$repository" "$directory"
-  git -C "$directory" sparse-checkout set packages/sdk-kotlin
+if [ -e "$directory" ]; then
+  echo "$directory already exists; remove it or pass another directory so the build is of $ref" >&2
+  exit 1
 fi
+git clone --depth 1 --filter=blob:none --sparse --branch "$ref" "$repository" "$directory"
+git -C "$directory" sparse-checkout set packages/sdk-kotlin
 
 package="$directory/packages/sdk-kotlin"
 gradle_args=(--no-daemon publishSdkToBuildRepository)

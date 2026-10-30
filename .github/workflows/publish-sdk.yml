@@ -806,7 +806,6 @@ jobs:
     if: ${{ needs.publish-npm.outputs.published_version != '' }}
     permissions:
       contents: write
-      packages: write
     uses: ./.github/workflows/publish-sdk-kotlin.yml
     with:
       destination: release-assets
