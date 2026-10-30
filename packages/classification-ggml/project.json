@@ -2,7 +2,7 @@
   "name": "@qvac/classification-ggml",
   "root": "packages/classification-ggml",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

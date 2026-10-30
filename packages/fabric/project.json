@@ -2,7 +2,7 @@
   "name": "@qvac/fabric",
   "root": "packages/fabric",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "ci:system": {

@@ -112,7 +112,7 @@ test('RAG release publishing requires a successful build, release authorization 
   }
 })
 
-const isContract = (project) => Boolean(project?.tags?.includes('ci:contract'))
+const isContract = (project) => Boolean(project?.tags?.includes('ci:addons'))
 
 // Packages requiring the gate: an on-merge or CI contract addon that has generated wrappers.
 //

@@ -215,7 +215,7 @@ for (const relativePath of WORKFLOWS) {
 for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
   // On the CI contract the publish groups request only build, verify:generated and publish, so neither publish can
   // start integration tests, and publish-gpr is a dispatch that runs from any branch.
-  if (JSON.parse(read(`packages/${slug}/project.json`)).tags?.includes('ci:contract')) {
+  if (JSON.parse(read(`packages/${slug}/project.json`)).tags?.includes('ci:addons')) {
     test(`${slug}: publishing on the CI contract never runs integration tests (QVAC-24365)`, () => {
       for (const workflow of ['publish-npm.yml', 'publish-gpr.yml']) {
         const source = read(`.github/workflows/${workflow}`)

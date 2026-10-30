@@ -2,7 +2,7 @@
   "name": "@qvac/audiogen-ggml",
   "root": "packages/audiogen-ggml",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

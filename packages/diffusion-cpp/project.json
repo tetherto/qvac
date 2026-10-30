@@ -2,7 +2,7 @@
   "name": "@qvac/diffusion-cpp",
   "root": "packages/diffusion-cpp",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

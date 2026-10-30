@@ -2,7 +2,7 @@
   "name": "@qvac/model-fit",
   "root": "packages/model-fit",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url'
 
 import { CPP_TEST_KEYS, PREBUILD_KEYS } from './prebuild-status/lib.mjs'
 
-export const TAG = 'ci:contract'
+export const TAG = 'ci:addons'
 
 // The standard target names. The groups run only these, and a package on the contract declares only these.
 export const TARGETS = [
