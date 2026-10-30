@@ -129,7 +129,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tools-gemma4': {
-    on: ['desktop'],
+    on: ['desktop-linux', 'desktop-python'],
     constant: { $const: 'GEMMA4_2B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: { ctx_size: 4096, tools: true }
@@ -182,7 +182,7 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   'vla-groot': {
     on: ['desktop'],
-    constant: { $const: 'GROOT_Q5_VF16' },
+    constant: { $const: 'GROOT_MULTI_Q5_VF16' },
     type: 'ggml-vla',
     config: { backend: ['cpu'] }
   },
@@ -357,7 +357,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-moss-sfx': {
-    on: ['desktop'],
+    on: ['desktop-linux'],
     constant: { $const: 'AUDIOGEN_MOSS_SFX_V2_Q8_0' },
     constantSourceOnly: true,
     type: 'tts-ggml',
@@ -566,7 +566,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   world: {
-    on: ['desktop'],
+    on: ['desktop-linux', 'desktop-python'],
     constant: { $const: 'ABOT_WORLD_0_5B_Q8_0' },
     type: 'sdcpp-generation',
     config: {
@@ -622,13 +622,14 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   'diffusion-esrgan': {
     on: ['desktop'],
-    constant: { $const: 'SD_V2_1_1B_Q8_0' },
+    constant: { $const: 'FLUX_2_KLEIN_4B_Q4_0' },
     type: 'sdcpp-generation',
     config: {
       device: 'gpu',
       threads: 4,
-      prediction: 'v',
-      params_backend: 'vae=cpu',
+      prediction: 'flux2_flow',
+      llmModelSrc: { $const: 'QWEN3_4B_Q4_K_M' },
+      vaeModelSrc: { $const: 'FLUX_2_KLEIN_4B_VAE' },
       upscaler: {
         type: 'esrgan',
         model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },
@@ -639,12 +640,14 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   'diffusion-esrgan-fit-probe': {
     on: ['desktop'],
-    constant: { $const: 'SD_V2_1_1B_Q8_0' },
+    constant: { $const: 'FLUX_2_KLEIN_4B_Q4_0' },
     type: 'sdcpp-generation',
     config: {
       device: 'gpu',
       threads: 4,
-      prediction: 'v',
+      prediction: 'flux2_flow',
+      llmModelSrc: { $const: 'QWEN3_4B_Q4_K_M' },
+      vaeModelSrc: { $const: 'FLUX_2_KLEIN_4B_VAE' },
       upscaler: {
         type: 'esrgan',
         model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },

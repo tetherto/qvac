@@ -40,8 +40,19 @@ def _load_table() -> dict[str, dict[str, Any]]:
     return {
         dep: entry
         for dep, entry in table.items()
-        if _PLATFORM in entry.get("on", [_PLATFORM])
+        if "on" not in entry or any(_applies(name) for name in entry["on"])
     }
+
+
+def _applies(name: str) -> bool:
+    """Whether a platform name covers this one: itself, or a leading run of its segments."""
+    if name == _PLATFORM:
+        return True
+    segments = _PLATFORM.split("-")
+    parts = name.split("-")
+    return len(parts) < len(segments) and all(
+        part == segments[index] for index, part in enumerate(parts)
+    )
 
 
 def _config_for(definition: dict[str, Any]) -> Any:
@@ -51,19 +62,9 @@ def _config_for(definition: dict[str, Any]) -> Any:
     if not overrides:
         return config
 
-    segments = _PLATFORM.split("-")
-
-    def applies(name: str) -> bool:
-        if name == _PLATFORM:
-            return True
-        parts = name.split("-")
-        return len(parts) < len(segments) and all(
-            part == segments[index] for index, part in enumerate(parts)
-        )
-
     merged = dict(config or {})
     for name, patch in overrides.items():
-        if applies(name):
+        if _applies(name):
             merged.update(patch)
     return merged or None
 
