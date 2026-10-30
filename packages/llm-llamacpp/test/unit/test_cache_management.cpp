@@ -4574,6 +4574,16 @@ TEST(CrossKeyMultimodalTest, ARefusedPromptKeepsTheKeysOwnState) {
   EXPECT_ANY_THROW(runSingle(*model, continuing(keys[0], tooLong)));
   EXPECT_EQ(mtmd.donorAdoptionsForTesting(), 0u)
       << "the refused prompt replaced the key's state with another one";
+
+  // The second key serves no more of this prompt than the first key's own
+  // state does, so only a lost state would make it a donor.
+  const SingleTurn again =
+      runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_EQ(mtmd.donorAdoptionsForTesting(), 0u)
+      << "the key's next request started from another conversation";
+  EXPECT_GT(again.reuse, 0u) << "the key lost its own state";
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the key encoded its image again";
   model.reset();
   for (const auto& key : keys) {
     fs::remove(key);
