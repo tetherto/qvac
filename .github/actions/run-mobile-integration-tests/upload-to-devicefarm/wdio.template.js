@@ -100,6 +100,22 @@ exports.config = {
       return ['/sdcard/Android/data/' + bundleId + '/files/bare_console.log'];
     };
 
+    // The runtime mirrors console output into native-tail.log with synchronous
+    // writes, so the C++ lines an abort() cuts from bare_console.log are on disk.
+    // iOS only: Android's app output already reaches logcat under the `bare` tag.
+    global.flushNativeTail = async function (reason) {
+      if ('__ENABLE_FLUSH_BARE_LOG__' !== 'true') return;
+      if ((capabilities.platformName || '').toLowerCase() === 'android') return;
+      try {
+        var text = await global.pullDeviceText('@' + BUNDLE_ID + ':documents/native-tail.log');
+        var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
+        require('fs').writeFileSync(logDir + '/native-tail.log', text);
+        console.log('[native-tail] ' + reason + ' flush ok (' + text.length + ' bytes)');
+      } catch (e) {
+        console.log('[native-tail] ' + reason + ' flush skipped: ' + e.message);
+      }
+    };
+
     global.flushBareLog = async function (reason) {
       if ('__ENABLE_FLUSH_BARE_LOG__' !== 'true') return;
       var isAndroid = (capabilities.platformName || '').toLowerCase() === 'android';
@@ -127,41 +143,44 @@ exports.config = {
       );
     };
 
-    global.pullBareLog = async function (reason, devicePath) {
-      {
-        var http = require('http');
-        var body = JSON.stringify({ path: devicePath });
-        var b64 = await new Promise(function (resolve, reject) {
-          var req = http.request({
-            hostname: '127.0.0.1', port: 4723,
-            path: '/wd/hub/session/' + browser.sessionId + '/appium/device/pull_file',
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-          }, function (res) {
-            var chunks = '';
-            res.on('data', function (c) { chunks += c; });
-            res.on('end', function () {
-              try { resolve(JSON.parse(chunks).value); } catch (e) { reject(e); }
-            });
+    // Pull one file from the device as text via raw HTTP to Appium.
+    global.pullDeviceText = async function (devicePath) {
+      var http = require('http');
+      var body = JSON.stringify({ path: devicePath });
+      var b64 = await new Promise(function (resolve, reject) {
+        var req = http.request({
+          hostname: '127.0.0.1', port: 4723,
+          path: '/wd/hub/session/' + browser.sessionId + '/appium/device/pull_file',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        }, function (res) {
+          var chunks = '';
+          res.on('data', function (c) { chunks += c; });
+          res.on('end', function () {
+            try { resolve(JSON.parse(chunks).value); } catch (e) { reject(e); }
           });
-          req.on('error', reject);
-          req.write(body);
-          req.end();
         });
-        // Appium returns a base64 string on success, an error object on failure.
-        // Passing the object to Buffer.from threw a type error that replaced
-        // Appium's real reason.
-        if (typeof b64 !== 'string') {
-          var why = (b64 && (b64.message || b64.error)) || JSON.stringify(b64);
-          throw new Error('pull_file returned no base64 payload — ' + why);
-        }
-        var text = Buffer.from(b64, 'base64').toString();
-        var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
-        require('fs').writeFileSync(logDir + '/bare_console.log', text);
-        console.log(
-          '[bare-log] ' + reason + ' flush ok (' + text.length + ' bytes) from ' + devicePath
-        );
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+      });
+      // Appium returns a base64 string on success, an error object on failure.
+      // Passing the object to Buffer.from threw a type error that replaced
+      // Appium's real reason.
+      if (typeof b64 !== 'string') {
+        var why = (b64 && (b64.message || b64.error)) || JSON.stringify(b64);
+        throw new Error('pull_file returned no base64 payload — ' + why);
       }
+      return Buffer.from(b64, 'base64').toString();
+    };
+
+    global.pullBareLog = async function (reason, devicePath) {
+      var text = await global.pullDeviceText(devicePath);
+      var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
+      require('fs').writeFileSync(logDir + '/bare_console.log', text);
+      console.log(
+        '[bare-log] ' + reason + ' flush ok (' + text.length + ' bytes) from ' + devicePath
+      );
     };
 
     // Android: synchronously dump the full device logcat to
@@ -221,8 +240,12 @@ exports.config = {
           setTimeout(function () { process.exit(1); }, 5000);
           try {
             await browser.pause(1500);
+            // Concurrent: the native tail carries the crash reason, so don't let it wait behind bare_console.
             await Promise.race([
-              global.flushBareLog('crash-' + stage),
+              Promise.all([
+                global.flushNativeTail('crash-' + stage),
+                global.flushBareLog('crash-' + stage),
+              ]),
               new Promise(function (_, reject) {
                 setTimeout(function () { reject(new Error('flush timed out')); }, 3000);
               }),
@@ -310,6 +333,7 @@ exports.config = {
     }
     console.log('[bare-log] Waiting for log flush...');
     await browser.pause(3000);
+    if (global.flushNativeTail) await global.flushNativeTail('after');
     if (global.flushBareLog) await global.flushBareLog('after');
 
     // Android: on FAILURE, dump logcat here (test phase) so the bare runtime
