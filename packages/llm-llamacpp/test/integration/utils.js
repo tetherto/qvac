@@ -292,7 +292,9 @@ function resolveModelEntry(modelName, { manifest } = {}) {
   if (!entry) {
     throw new Error(`Model "${modelName}" is missing from required models.manifest.json`)
   }
-  if (!Array.isArray(entry.urls) || entry.urls.length === 0) {
+  const hasUrls = Array.isArray(entry.urls) && entry.urls.length > 0
+  const hasS3Path = typeof entry.s3Path === 'string' && entry.s3Path.length > 0
+  if (!hasUrls && !hasS3Path) {
     throw new Error(`Model "${modelName}" has no source URL in models.manifest.json`)
   }
   if (typeof entry.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(entry.sha256)) {
@@ -532,6 +534,14 @@ async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, do
         `${how === 'link' ? 'hardlinked' : 'copied'} into writable modelDir)`
     )
     return [modelName, dir]
+  }
+
+  // S3-only entries are staged before the run by scripts/stage-s3-models.mjs.
+  if (!urls) {
+    throw new Error(
+      `[download] ${modelName} is S3-only (${entry.s3Path}) and was not staged; run ` +
+        'scripts/stage-s3-models.mjs with MODEL_S3_BUCKET and AWS credentials'
+    )
   }
 
   fs.mkdirSync(dir, { recursive: true })

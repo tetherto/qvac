@@ -75,6 +75,9 @@ jobs:
     timeout-minutes: 120
     environment: release
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
+    permissions:
+      contents: read
+      id-token: write
 
     env:
       WORKDIR: ${{ inputs.workdir }}
@@ -202,10 +205,20 @@ jobs:
           # The C++ unit tests load none of the integration models.
           warm: 'false'
 
+      # bitnet_b1_58-large-TQ2_0.gguf is S3-hosted (scripts/download-unit-test-models.js).
+      - name: Configure AWS credentials via OIDC
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
       - name: Download test models
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ env.WORKDIR }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           npm run test:cpp:models:ci
 

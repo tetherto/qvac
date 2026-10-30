@@ -199,6 +199,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
+      - name: Stage S3-hosted test models
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: node scripts/stage-s3-models.mjs
+
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         run: |

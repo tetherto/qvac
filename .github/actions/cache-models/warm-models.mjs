@@ -308,6 +308,11 @@ export function validateModelName(name) {
   return name
 }
 
+// S3-only entries carry no HTTP source; the package workflow stages them.
+function isWarmable(entry) {
+  return entry.warm !== false && !(entry.s3Path && !(Array.isArray(entry.urls) && entry.urls.length))
+}
+
 export function selectManifestEntries(manifest, group = '', { includeDeferred = false } = {}) {
   const declared = Object.entries(manifest.models || {})
   for (const [name] of declared) validateModelName(name)
@@ -315,7 +320,7 @@ export function selectManifestEntries(manifest, group = '', { includeDeferred = 
     ? declared.filter(([, entry]) => entry.group === group)
     : includeDeferred
       ? declared
-      : declared.filter(([, entry]) => entry.warm !== false)
+      : declared.filter(([, entry]) => isWarmable(entry))
 
   if (group && entries.length === 0) {
     throw new Error(`[warm] manifest has no models in group "${group}"`)
@@ -334,7 +339,7 @@ export function manifestModelPaths(packageName, entries) {
 // deferred with `warm: false`. Retained for callers/tests that predate group
 // selection; equivalent to selectManifestEntries(manifest).entries.
 export function selectWarmEntries(manifest) {
-  return Object.entries(manifest.models || {}).filter(([, entry]) => entry.warm !== false)
+  return Object.entries(manifest.models || {}).filter(([, entry]) => isWarmable(entry))
 }
 
 // Per-group verified marker. It lives inside the cached model dir so it is

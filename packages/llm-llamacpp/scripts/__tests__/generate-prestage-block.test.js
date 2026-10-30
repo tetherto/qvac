@@ -112,9 +112,46 @@ test('real mobile models all resolve to pinned integration URLs', () => {
 
   for (const models of Object.values(resolved)) {
     for (const model of models) {
-      assert.equal(model.url, integrationManifest.models[model.name].urls[0])
+      const entry = integrationManifest.models[model.name]
+      if (entry.s3Path) {
+        assert.equal(model.url, undefined, `${model.name} is S3-only and has no HF url`)
+        continue
+      }
+      assert.equal(model.url, entry.urls[0])
       assert.doesNotMatch(model.url, /\/resolve\/(?:main|master)\//)
     }
+  }
+})
+
+test('S3-only models take the presigned URL and fail without one', () => {
+  const integ = {
+    models: {
+      ...integrationManifest.models,
+      's3.gguf': { s3Path: 'qvac_models_compiled/ggml/x/s3.gguf', sha256: 'a'.repeat(64), bytes: 1 }
+    }
+  }
+  const mobile = { runS3Test: [{ name: 's3.gguf' }] }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prestage-s3-'))
+  const mapPath = path.join(dir, 'map.json')
+  const prev = process.env.PRESTAGE_URL_MAP
+  try {
+    fs.writeFileSync(
+      mapPath,
+      JSON.stringify({ 's3.gguf': 'https://us-bucket.example/s3.gguf?sig' })
+    )
+    process.env.PRESTAGE_URL_MAP = mapPath
+    assert.deepEqual(resolvePinnedManifest(mobile, integ).runS3Test, [
+      { name: 's3.gguf', url: 'https://us-bucket.example/s3.gguf?sig' }
+    ])
+    fs.writeFileSync(mapPath, JSON.stringify({}))
+    assert.throws(
+      () => resolvePinnedManifest(mobile, integ),
+      /s3\.gguf has no usable pinned manifest URL/
+    )
+  } finally {
+    if (prev === undefined) delete process.env.PRESTAGE_URL_MAP
+    else process.env.PRESTAGE_URL_MAP = prev
+    fs.rmSync(dir, { recursive: true, force: true })
   }
 })
 

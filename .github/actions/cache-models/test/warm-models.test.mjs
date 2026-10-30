@@ -13,6 +13,7 @@ import {
   manifestModelPaths,
   markerFileName,
   selectManifestEntries,
+  selectWarmEntries,
   validateModelName,
   warmModels
 } from '../warm-models.mjs'
@@ -165,6 +166,29 @@ test('group selection is exact and legacy selection still honors warm:false', ()
     'cache paths retain lazily populated warm:false files'
   )
   assert.throws(() => selectManifestEntries(manifest, 'missing'), /no models in group/)
+})
+
+test('S3-only entries are left to the package workflow but stay in cache paths', () => {
+  const manifest = {
+    models: {
+      'hf.gguf': { urls: ['https://huggingface.co/o/r/resolve/abc/hf.gguf'] },
+      's3.gguf': { s3Path: 'qvac_models_compiled/ggml/x/s3.gguf' },
+      'both.gguf': { urls: ['https://huggingface.co/o/r/resolve/abc/both.gguf'], s3Path: 'x/both.gguf' }
+    }
+  }
+
+  assert.deepEqual(
+    selectManifestEntries(manifest).entries.map(([name]) => name),
+    ['hf.gguf', 'both.gguf']
+  )
+  assert.deepEqual(
+    selectWarmEntries(manifest).map(([name]) => name),
+    ['hf.gguf', 'both.gguf']
+  )
+  assert.deepEqual(
+    selectManifestEntries(manifest, '', { includeDeferred: true }).entries.map(([name]) => name),
+    ['hf.gguf', 's3.gguf', 'both.gguf']
+  )
 })
 
 test('manifest names must be plain basenames', () => {

@@ -19,8 +19,7 @@
   ],
   "runBitnetTest": [
     {
-      "name": "bitnet_b1_58-large-TQ2_0.gguf",
-      "url": "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/e3131d78f06395ab62f7e7fb6c9ae9c00d829db0/bitnet_b1_58-large-TQ2_0.gguf"
+      "name": "bitnet_b1_58-large-TQ2_0.gguf"
     }
   ],
   "runCacheStateMachineTest": [
@@ -67,8 +66,7 @@
       "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
     },
     {
-      "name": "bitnet_b1_58-large-TQ2_0.gguf",
-      "url": "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/e3131d78f06395ab62f7e7fb6c9ae9c00d829db0/bitnet_b1_58-large-TQ2_0.gguf"
+      "name": "bitnet_b1_58-large-TQ2_0.gguf"
     }
   ],
   "runGemma4ImageElephantPerfTest": [

@@ -5,6 +5,7 @@ const fs = require('fs')
 const path = require('path')
 const https = require('https')
 const crypto = require('crypto')
+const { spawn } = require('child_process')
 
 const PKG_ROOT = path.resolve(__dirname, '..')
 const MODEL_DIR = path.join(PKG_ROOT, 'models', 'unit-test')
@@ -188,6 +189,28 @@ function downloadFileOnce(url, dest, opts = {}) {
   })
 }
 
+// S3-hosted fixtures come from the QVAC model registry bucket via the aws CLI.
+function copyFromS3Once(s3Path, dest) {
+  const bucket = process.env.MODEL_S3_BUCKET
+  if (!bucket) {
+    return Promise.reject(new Error('MODEL_S3_BUCKET is not set (needed for S3-hosted models)'))
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'aws',
+      ['s3', 'cp', `s3://${bucket}/${s3Path}`, dest, '--only-show-errors'],
+      {
+        stdio: ['ignore', 'inherit', 'inherit']
+      }
+    )
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`aws s3 cp exited ${code} for ${s3Path}`))
+    })
+  })
+}
+
 function removeIfExists(filePath) {
   try {
     fs.unlinkSync(filePath)
@@ -220,13 +243,14 @@ async function verifySha256(filePath, expected) {
 }
 
 async function downloadFileWithRetries(url, dest, opts = {}) {
-  const { retries = 3, minBytes = 1, sha256, ...downloadOpts } = opts
+  const { retries = 3, minBytes = 1, sha256, s3Path, ...downloadOpts } = opts
   const partPath = `${dest}.part`
 
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const host = urlHost(url)
+    const host = s3Path ? 's3' : urlHost(url)
     try {
-      await downloadFileOnce(url, partPath, downloadOpts)
+      if (s3Path) await copyFromS3Once(s3Path, partPath)
+      else await downloadFileOnce(url, partPath, downloadOpts)
 
       const stat = fs.statSync(partPath)
       if (stat.size < minBytes) {
@@ -257,7 +281,7 @@ async function downloadFileWithRetries(url, dest, opts = {}) {
 
 async function downloadFile(url, dest, opts = {}) {
   const name = path.basename(dest)
-  const { sha256 } = opts
+  const { sha256, s3Path } = opts
 
   if (fs.existsSync(dest)) {
     const stat = fs.statSync(dest)
@@ -285,10 +309,10 @@ async function downloadFile(url, dest, opts = {}) {
   log(`download: ${name}`)
 
   try {
-    await downloadFileWithRetries(url, dest, { sha256 })
+    await downloadFileWithRetries(url, dest, { sha256, s3Path })
   } catch (err) {
     removeIfExists(dest)
-    throw new Error(`failed to download ${name} from ${url}: ${err.message}`)
+    throw new Error(`failed to download ${name} from ${url || s3Path}: ${err.message}`)
   }
 
   const stat = fs.statSync(dest)
@@ -312,7 +336,9 @@ async function downloadShardedRepo(baseUrl, files, sha256Map = {}) {
 //   'optional' -> only downloaded for full local runs; the matching unit tests
 //                 use OnMissing::Skip, so CI deliberately skips them.
 // SHA256 digests are computed from known-good local fixtures; downloads that
-// do not match are retried as transient and ultimately fail the run.
+// do not match are retried as transient and ultimately fail the run. An entry
+// with `s3Path` instead of `url` is copied from the registry bucket
+// (MODEL_S3_BUCKET + AWS credentials).
 const SINGLE_FILE_MANIFEST = [
   {
     scope: 'ci',
@@ -352,7 +378,7 @@ const SINGLE_FILE_MANIFEST = [
   },
   {
     scope: 'ci',
-    url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf',
+    s3Path: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf',
     dest: 'bitnet_b1_58-large-TQ2_0.gguf',
     sha256: '281aafb18a9f4a3124c10a1d8683e2296f0cfe8a2944da0a5667d17488a951bb'
   }
@@ -487,7 +513,8 @@ async function ensureUnitTestModels(options = {}) {
     for (const entry of SINGLE_FILE_MANIFEST) {
       if (!shouldInclude(entry, opts)) continue
       await downloadFile(entry.url, path.join(MODEL_DIR, entry.dest), {
-        sha256: entry.sha256
+        sha256: entry.sha256,
+        s3Path: entry.s3Path
       })
     }
 

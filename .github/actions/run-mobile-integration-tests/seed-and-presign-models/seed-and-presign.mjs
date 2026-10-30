@@ -211,7 +211,6 @@ function main(workDir) {
     for (const name of names) {
       const entry = manifest.models[name]
       const urls = Array.isArray(entry.urls) ? entry.urls : []
-      if (urls.length === 0) throw new Error(`[seed] ${name}: no urls in manifest`)
       const key = s3Key(name)
 
       const existingSize = headObjectSize(key)
@@ -222,6 +221,12 @@ function main(workDir) {
         present++
         console.log(`[seed] ${name}: already in US bucket (${existingSize} bytes), skipping`)
         continue
+      }
+
+      // S3-only entries have no HTTP source to mirror from; copy them in by hand.
+      if (urls.length === 0) {
+        const from = entry.s3Path ? ` (registry path ${entry.s3Path})` : ''
+        throw new Error(`[seed] ${name}: not in US bucket and no urls in manifest${from}`)
       }
 
       const tmp = join(workDir, name)

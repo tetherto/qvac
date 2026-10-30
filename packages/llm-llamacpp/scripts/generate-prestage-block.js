@@ -76,6 +76,11 @@ function resolvePinnedManifest(mobileManifest, integrationManifest) {
             ? { name, url: overrideMap[name], fallback: pinned }
             : { name, url: overrideMap[name] }
         }
+        // S3-only models reach the device only through the presigned map; a
+        // names-only listing (no map yet) still needs them.
+        if (!pinnedOk && !overrideMap && entry && typeof entry.s3Path === 'string') {
+          return { name }
+        }
         if (!pinnedOk) {
           throw new Error(`[prestage] ${name} has no usable pinned manifest URL`)
         }
@@ -247,6 +252,11 @@ function main() {
   const mobileManifest = JSON.parse(fs.readFileSync(mobileManifestPath, 'utf8'))
   const integrationManifest = JSON.parse(fs.readFileSync(integrationManifestPath, 'utf8'))
   const manifest = resolvePinnedManifest(mobileManifest, integrationManifest)
+  for (const models of Object.values(manifest)) {
+    for (const { name, url } of models) {
+      if (!url) throw new Error(`[prestage] ${name} is S3-only and needs PRESTAGE_URL_MAP`)
+    }
+  }
   const manifestB64 = Buffer.from(JSON.stringify(normalizeManifest(manifest))).toString('base64')
 
   // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the

@@ -254,6 +254,10 @@ async function main() {
   try {
     for (const [name, entry] of Object.entries(manifest.models)) {
       if (args.only && args.only !== name) continue
+      if (!Array.isArray(entry.urls) && entry.s3Path) {
+        console.log(`skip ${name} (s3Path entry; pins come from the model registry)`)
+        continue
+      }
       if (entry.sha256 && !args.force) {
         console.log(`skip ${name} (already pinned; use --force to recompute)`)
         continue
