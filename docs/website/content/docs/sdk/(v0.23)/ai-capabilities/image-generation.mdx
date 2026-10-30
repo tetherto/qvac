@@ -71,6 +71,14 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionFlux2Klein.kt title="DiffusionFlux2Klein.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Qwen-Image-2.1
@@ -100,6 +108,14 @@ The following script combines subjects from two reference images and requests an
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/diffusion_qwen_image_21.py title="diffusion_qwen_image_21.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionQwenImage21.kt title="DiffusionQwenImage21.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -139,7 +155,17 @@ The following script loads Ideogram 4 in split-layout (diffusion model + uncondi
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionIdeogram.kt title="DiffusionIdeogram.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
+
+The Kotlin example serializes the caption with `buildJsonObject { ... }.toString()`, which already produces the compact form.
 
 ### Stable Diffusion
 
@@ -166,6 +192,14 @@ The following script shows a minimal text-to-image generation example using a si
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/diffusion_simple.py title="diffusion_simple.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionSimple.kt title="DiffusionSimple.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -202,6 +236,14 @@ The following script loads FLUX.2-klein in split-layout and transforms an input 
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/diffusion_flux2_klein_img2img.py title="diffusion_flux2_klein_img2img.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionFlux2KleinImg2img.kt title="DiffusionFlux2KleinImg2img.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -247,6 +289,14 @@ The following script loads SD 2.1 with an ESRGAN upscaler and generates both a s
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionEsrganUpscale.kt title="DiffusionEsrganUpscale.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 #### Standalone
@@ -265,5 +315,5 @@ const [upscaledPng] = await outputs;
 `tile_size` defaults to 128. Increase it to reduce tile seams on large inputs, at the cost of more memory per pass.
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>

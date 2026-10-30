@@ -141,6 +141,14 @@ The following script shows text-to-video generation using Wan 2.1 T2V 1.3B with 
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionTxt2vid.kt title="DiffusionTxt2vid.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Image-to-video (WAN 2.1)
@@ -175,6 +183,14 @@ The following script shows image-to-video generation using Wan 2.1 I2V with its 
 
 ```
 
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionImg2vid.kt title="DiffusionImg2vid.kt" lineNumbers
+```
 </WrapCode>
 </Tab>
 </Tabs>
@@ -213,6 +229,14 @@ The following script shows text-to-video generation with Wan 2.2 TI2V-5B Turbo (
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionTxt2vidWan22.kt title="DiffusionTxt2vidWan22.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Text-to-video with audio (LTX-2)
@@ -247,6 +271,14 @@ The following script loads LTX-2 with its split layout (diffusion model + Gemma 
 
 ```
 
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionTxt2vidLtx.kt title="DiffusionTxt2vidLtx.kt" lineNumbers
+```
 </WrapCode>
 </Tab>
 </Tabs>
@@ -285,6 +317,14 @@ The following script animates a first-frame `init_image` with LTX-2. Unlike WAN 
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionImg2vidLtx.kt title="DiffusionImg2vidLtx.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Reference-conditioned text-to-video (LTX-2 IC-LoRA)
@@ -319,6 +359,14 @@ The following script conditions LTX-2 on a composite reference sheet so the gene
 
 ```
 
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionIcLoraLtx.kt title="DiffusionIcLoraLtx.kt" lineNumbers
+```
 </WrapCode>
 </Tab>
 </Tabs>
@@ -357,6 +405,14 @@ The following script loads MiniMax-H3 with its split layout (diffusion model + Q
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionTxt2vidMinimaxH3.kt title="DiffusionTxt2vidMinimaxH3.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Image-to-video (MiniMax-H3)
@@ -393,11 +449,20 @@ The following script animates a first-frame image with MiniMax-H3. It uses the s
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionImg2vidMinimaxH3.kt title="DiffusionImg2vidMinimaxH3.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
   **Tip:** all examples throughout this documentation are self-contained and
   runnable. For instructions on how to run them, see the [JS/TS
-  quickstart](/sdk/js-ts-sdk#quickstart) or the [Python
-  quickstart](/sdk/python-sdk#quickstart).
+  quickstart](/sdk/js-ts-sdk#quickstart), the [Python
+  quickstart](/sdk/python-sdk#quickstart), or the [Kotlin
+  quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>

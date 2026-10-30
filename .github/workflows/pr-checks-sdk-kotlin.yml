@@ -218,6 +218,10 @@ jobs:
             :android-example:compileDebugAndroidTestKotlin \
             verifyMavenPublications
           ./scripts/verify-maven-consumers.sh -PqvacProfile="$QVAC_PROFILE"
+
+          # Compile every example the docs embed, each in isolation against this
+          # SDK, so an API change that breaks one fails here.
+          ./gradlew --no-daemon -p examples check
           popd
 
           # Build and unit-test the Kotlin e2e app against this SDK, so an API break fails
