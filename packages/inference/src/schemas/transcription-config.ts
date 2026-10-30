@@ -277,7 +277,27 @@ export const parakeetRuntimeConfigSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.'
+      "Run the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron streaming sessions and emit `{ type: 'vad', source: 'energy' }` events on each speech/silence transition. Tune it with `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, and `streamingEnergyVadHangoverMs`. Default false."
+    ),
+  streamingEnergyVadThresholdDb: z
+    .number()
+    .optional()
+    .describe(
+      'Energy-VAD speech threshold in dBFS RMS; audio above it counts as speech. Default -35.'
+    ),
+  streamingEnergyVadWindowMs: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Energy-VAD RMS window in ms; the engine caps it at 1000. Default 30.'),
+  streamingEnergyVadHangoverMs: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Silence the energy VAD requires before leaving the speaking state, in ms. Default 200.'
     ),
   streamingLeftContextMs: z
     .number()
@@ -362,6 +382,21 @@ export const parakeetRuntimeConfigSchema = z.object({
     .positive()
     .optional()
     .describe('AOSC: FIFO-overflow pop-out count. Default 144.'),
+
+  // === Load-time prewarm ================================================
+  // The pass runs inside `loadModel`, so these have no per-stream
+  // counterpart and nothing to reload.
+  prewarm: z
+    .boolean()
+    .optional()
+    .describe(
+      'Run one synthetic encoder pass while loading so the first request does not pay the GPU shader or kernel compile; Nemotron 3 Diarization also runs one streaming chunk. Default false.'
+    ),
+  prewarmAudioSeconds: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Length of the prewarm pass in seconds of audio; must be greater than 0. Default 1.'),
 
   // === Long recordings (offline `transcribe`) ============================
   // The offline encoder runs a long input as overlapping windows so memory

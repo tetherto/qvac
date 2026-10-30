@@ -13682,8 +13682,24 @@
                       "type": "boolean"
                     },
                     "streamingEnergyVad": {
-                      "description": "CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
+                      "description": "Run the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron streaming sessions and emit `{ type: 'vad', source: 'energy' }` events on each speech/silence transition. Tune it with `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, and `streamingEnergyVadHangoverMs`. Default false.",
                       "type": "boolean"
+                    },
+                    "streamingEnergyVadThresholdDb": {
+                      "description": "Energy-VAD speech threshold in dBFS RMS; audio above it counts as speech. Default -35.",
+                      "type": "number"
+                    },
+                    "streamingEnergyVadWindowMs": {
+                      "description": "Energy-VAD RMS window in ms; the engine caps it at 1000. Default 30.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "streamingEnergyVadHangoverMs": {
+                      "description": "Silence the energy VAD requires before leaving the speaking state, in ms. Default 200.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
                     },
                     "streamingLeftContextMs": {
                       "description": "ASR encoder left-context window in ms; omit to keep the model default (10000).",
@@ -13751,6 +13767,15 @@
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "prewarm": {
+                      "description": "Run one synthetic encoder pass while loading so the first request does not pay the GPU shader or kernel compile; Nemotron 3 Diarization also runs one streaming chunk. Default false.",
+                      "type": "boolean"
+                    },
+                    "prewarmAudioSeconds": {
+                      "description": "Length of the prewarm pass in seconds of audio; must be greater than 0. Default 1.",
+                      "type": "number",
+                      "exclusiveMinimum": 0
                     },
                     "longFormWindowFrames": {
                       "description": "Offline encoder window for long recordings, in 80 ms encoder frames. `0` takes the window the model recommends (TranscribePsy: 750 frames, 60 s, with 94 frames of context on each side; other models: the engine's balanced automatic windows); a negative value encodes the whole input in one pass. Default 0.",
@@ -24449,6 +24474,19 @@
             },
             "emitEnergyVad": {
               "type": "boolean"
+            },
+            "energyVadThresholdDb": {
+              "type": "number"
+            },
+            "energyVadWindowMs": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "energyVadHangoverMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "emitSpeakerVad": {
               "type": "boolean"
