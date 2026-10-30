@@ -327,27 +327,41 @@ safeTest(
       vae: await ensureModelPath({ modelName: 'wan_2.1_vae.safetensors' }),
       t5Xxl: await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
     }
-    for (const videoFrames of [1, 5]) {
-      const request = { files, workload: { width: 256, height: 256, videoFrames, vaeTiling: true } }
-      const base = await assessFit(request)
-      t.ok(base.status === 'fits' || base.status === 'does-not-fit', 'valid video projection')
-      const unused = await assessFit({
-        ...request,
-        files: { ...files, esrgan: '/missing/unused-esrgan.safetensors' }
-      })
-      t.is(unused.status, base.status)
-      t.is(unused.reason, base.reason)
-      const stableReport = (report) =>
-        report.replace(/\b(free|budget|available)\s+\d+ MiB/g, '$1 MiB')
-      t.is(
-        stableReport(unused.report),
-        stableReport(base.report),
-        'unused image upscaler does not affect measured memory'
-      )
-      t.absent(
-        unused.report.includes('upscaler'),
-        'video does not measure a separate image upscaler'
-      )
+    // This compares model measurements, so both calls need the same memory
+    // inputs. Live free VRAM can cross the fit threshold between calls on a
+    // shared runner, changing placement even though ESRGAN is ignored.
+    const previousDevices = proc.env.SD_FIT_DEBUG_DEVICES
+    const previousHostMemory = proc.env.SD_FIT_DEBUG_HOST_MEMORY_GIB
+    try {
+      proc.env.SD_FIT_DEBUG_HOST_MEMORY_GIB = '64'
+      for (const freeGiB of [32, 8]) {
+        proc.env.SD_FIT_DEBUG_DEVICES = `GPU0:${freeGiB}`
+        for (const videoFrames of [1, 5]) {
+          const request = {
+            files,
+            workload: { width: 256, height: 256, videoFrames, vaeTiling: true }
+          }
+          const base = await assessFit(request)
+          t.ok(base.status === 'fits' || base.status === 'does-not-fit', 'valid video projection')
+          t.ok(base.report.includes('simulated device'), 'planner uses fixed memory inputs')
+          const unused = await assessFit({
+            ...request,
+            files: { ...files, esrgan: '/missing/unused-esrgan.safetensors' }
+          })
+          t.is(unused.status, base.status)
+          t.is(unused.reason, base.reason)
+          t.is(unused.report, base.report, 'unused image upscaler does not affect measured memory')
+          t.absent(
+            unused.report.includes('upscaler'),
+            'video does not measure a separate image upscaler'
+          )
+        }
+      }
+    } finally {
+      if (previousDevices === undefined) os.unsetEnv('SD_FIT_DEBUG_DEVICES')
+      else proc.env.SD_FIT_DEBUG_DEVICES = previousDevices
+      if (previousHostMemory === undefined) os.unsetEnv('SD_FIT_DEBUG_HOST_MEMORY_GIB')
+      else proc.env.SD_FIT_DEBUG_HOST_MEMORY_GIB = previousHostMemory
     }
   }
 )
