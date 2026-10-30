@@ -7,6 +7,7 @@
 
 #include "SpeculativeRuntime.hpp"
 #include "addon/LlmErrors.hpp"
+#include "utils/LlamaBatch.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 
@@ -153,10 +154,10 @@ void SpeculativeSequence::addToBatch(
     llama_batch& batch, llama_token sampled, llama_pos pos) {
   iBatch_.clear();
   iBatch_.push_back(batch.n_tokens);
-  common_batch_add(batch, sampled, pos, {seqId_}, true);
+  llamaBatchAdd(batch, sampled, pos, {seqId_}, true);
   for (size_t i = 0; i < draft_.size(); ++i) {
     iBatch_.push_back(batch.n_tokens);
-    common_batch_add(
+    llamaBatchAdd(
         batch, draft_[i], pos + 1 + static_cast<llama_pos>(i), {seqId_}, true);
   }
 }

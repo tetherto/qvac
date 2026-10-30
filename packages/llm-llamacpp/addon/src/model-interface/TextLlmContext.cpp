@@ -20,6 +20,7 @@
 #include "common/log.h"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/LlamaBatch.hpp"
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
@@ -874,7 +875,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
       break;
     }
 
-    common_batch_clear(*batch);
+    llamaBatchClear(*batch);
     if (stopGeneration_.load()) {
       // Route through the post-loop `onCancel` instead of injecting
       // EOT — EOT would advance `nPast_` past the rollback target.
@@ -883,7 +884,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
       ++lastGeneratedTokenCount_;
       break;
     }
-    common_batch_add(*batch, step.token, nPast_, {seqId_}, true);
+    llamaBatchAdd(*batch, step.token, nPast_, {seqId_}, true);
 
     // NOLINT(clang-analyzer-core.CallAndMessage)
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -961,8 +962,8 @@ void TextLlmContext::generateSpeculative(
         generatedAfterAccept >= static_cast<unsigned>(params_.n_predict)) {
       // The plain loop decodes the token it stops on for the prediction
       // budget, so the sequence and the ledger hold it.
-      common_batch_clear(*batch);
-      common_batch_add(*batch, sampled, nPast_, {seqId_}, false);
+      llamaBatchClear(*batch);
+      llamaBatchAdd(*batch, sampled, nPast_, {seqId_}, false);
       if (llama_decode(modelCtx_.lctx, *batch) != 0) {
         throw qvac_errors::StatusError(
             ADDON_ID,
@@ -983,12 +984,12 @@ void TextLlmContext::generateSpeculative(
       spec_.afterDraft();
     }
 
-    common_batch_clear(*batch);
+    llamaBatchClear(*batch);
     const bool verifying = spec_.hasDraft();
     if (verifying) {
       spec_.addToBatch(*batch, sampled, nPast_);
     } else {
-      common_batch_add(*batch, sampled, nPast_, {seqId_}, true);
+      llamaBatchAdd(*batch, sampled, nPast_, {seqId_}, true);
     }
     // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
