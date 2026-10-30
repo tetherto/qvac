@@ -257,7 +257,7 @@ test('every fabric-consumer package has an on-pr workflow that detects the stack
     ? new Set(nxCoveredPackages())
     : new Set()
   const onContract = (pkg) =>
-    (JSON.parse(read(`packages/${pkg}/project.json`)).tags ?? []).includes('ci:contract')
+    (JSON.parse(read(`packages/${pkg}/project.json`)).tags ?? []).includes('ci:addons')
   const nxBuilds = /nx run-many -t [a-z:,]*\bbuild\b/.test(read('.github/workflows/_build.yml'))
   const buildsFabric = (pkg) =>
     (JSON.parse(read(`packages/${pkg}/project.json`)).targets?.build?.dependsOn ?? []).some(

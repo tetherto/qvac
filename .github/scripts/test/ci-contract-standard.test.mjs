@@ -1,4 +1,4 @@
-// Every package tagged ci:contract follows the package standard (docs/ci/workflow-standard.md), checked with the
+// Every package tagged ci:addons follows the package standard (docs/ci/workflow-standard.md), checked with the
 // same rules select-projects.mjs applies when it builds job rows, so a mistake fails here rather than mid-run.
 
 import { test } from 'node:test'

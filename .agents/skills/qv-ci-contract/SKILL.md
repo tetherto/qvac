@@ -1,6 +1,6 @@
 ---
 name: qv-ci-contract
-description: Change CI for a package tagged ci:contract, migrate the next package onto the CI contract, or write or change an action the contract's groups call. Use when a task touches a tagged package's build, test, mobile or publish CI, the contract's groups (pr-checks, pr-build-test, mobile-tests, cache-warm, publish-npm, publish-gpr, the _*.yml templates), select-projects.mjs, or moves a package off on-pr-nx.yml or its own on-pr workflow.
+description: Change CI for a package tagged ci:addons, migrate the next package onto the CI contract, or write or change an action the contract's groups call. Use when a task touches a tagged package's build, test, mobile or publish CI, the contract's groups (pr-checks, pr-build-test, mobile-tests, cache-warm, publish-npm, publish-gpr, the _*.yml templates), select-projects.mjs, or moves a package off on-pr-nx.yml or its own on-pr workflow.
 ---
 
 # qv-ci-contract
@@ -15,7 +15,7 @@ Pick the task:
 
 ## 1. Change CI for a package
 
-1. Confirm the tag: `pnpm exec nx show projects --projects tag:ci:contract`. An untagged package is not on the contract; follow `.github/AGENTS.md` instead and stop here.
+1. Confirm the tag: `pnpm exec nx show projects --projects tag:ci:addons`. An untagged package is not on the contract; follow `.github/AGENTS.md` instead and stop here.
 2. Put the change in the package's own files:
    - a command: a target command in `project.json`, or a script in the package's `ci/` directory that a target runs;
    - platform flags: the platform configuration's `args`;
@@ -33,7 +33,7 @@ Done when both test files pass and the target runs locally, or the change is con
 
 One pull request switches the package: before it merges only the old path runs, after it merges only the contract does, and reverting it restores the old path with no other edit. `main` is the source of truth: port its runners, flags, system packages, timeouts and dormant settings as they are.
 
-1. Tag the package `ci:contract` in its `project.json`.
+1. Tag the package `ci:addons` in its `project.json`.
 2. Map every step its current workflow runs (`options.ci` for `on-pr-nx.yml`, or its own `on-pr-<pkg>.yml` and `prebuilds-<pkg>.yml`) to a standard target, with a configuration per platform on the runner the old job used.
 3. Depend on each native dependency's `link:platform` by name. Give the dependency a `link:platform` target if it lacks one.
 4. Move scripts the targets call into the package's `ci/` directory, and models into its manifest.

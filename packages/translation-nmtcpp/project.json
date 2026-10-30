@@ -2,7 +2,7 @@
   "name": "@qvac/translation-nmtcpp",
   "root": "packages/translation-nmtcpp",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

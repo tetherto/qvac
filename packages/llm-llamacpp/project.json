@@ -2,7 +2,7 @@
   "name": "@qvac/llm-llamacpp",
   "root": "packages/llm-llamacpp",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

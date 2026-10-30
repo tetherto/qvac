@@ -95,7 +95,7 @@ test("at least one package opts into the C++ baseline, so the wiring below is ex
 test("every contract baseline package has build and cpp:tests configurations", () => {
   for (const name of contractBaselinePackages()) {
     const { targets, tags } = JSON.parse(read(`packages/${name}/project.json`));
-    assert.ok(tags?.includes("ci:contract"), `${name}: metadata.baseline is read only for packages on the CI contract`);
+    assert.ok(tags?.includes("ci:addons"), `${name}: metadata.baseline is read only for packages on the CI contract`);
     assert.ok(Object.keys(targets["cpp:tests"].configurations ?? {}).length, `${name}: cpp:tests needs a configuration`);
     assert.ok(Object.keys(targets.build.configurations ?? {}).length, `${name}: the baseline build needs a configuration`);
   }
@@ -122,7 +122,7 @@ test("select-projects emits baseline rows for the opted-in package alone", async
     name,
     data: {
       root: `packages/${name}`,
-      tags: ["ci:contract"],
+      tags: ["ci:addons"],
       targets: {
         build: { configurations: cfg },
         "cpp:tests": { configurations: cfg, metadata: baseline ? { baseline: true } : {} },
