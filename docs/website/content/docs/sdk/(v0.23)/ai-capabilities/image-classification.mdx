@@ -38,7 +38,7 @@ For models available as constants, see [SDK — Models](/sdk#models).
 
 ## Example
 
-The following script classifies a JPEG image using the bundled MobileNetV3-Small model:
+The following script classifies a JPEG image using the bundled MobileNetV3-Small model. Pass the path of a JPEG or PNG image as the first argument:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -56,11 +56,15 @@ The following script classifies a JPEG image using the bundled MobileNetV3-Small
 ```
 </WrapCode>
 </Tab>
-</Tabs>
 
-<Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
-</Callout>
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/classify_image.py title="classify_image.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
