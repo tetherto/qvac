@@ -1,5 +1,11 @@
 import test from 'brittle'
-import { normalizeDocs, generateId, createLRUCache } from '../../src/utils/helper.js'
+import {
+  normalizeDocs,
+  generateId,
+  createLRUCache,
+  calculateTextScore,
+  scoreDocuments
+} from '../../src/utils/helper.js'
 import { QvacErrorRAG, ERR_CODES } from '../../src/errors.js'
 import cryptoShim from '../../src/shims/crypto.js'
 import type { PartialDoc } from '../../src/types.js'
@@ -386,4 +392,106 @@ test('createLRUCache: should handle complex values', (t) => {
   t.alike(cache.get('obj'), obj, 'Should store objects')
   t.alike(cache.get('arr'), arr, 'Should store arrays')
   t.is(cache.get('null'), null, 'Should store null')
+})
+
+const REFUND = 'Refund policy: you can return items within 30 days.'
+const SHIPPING = 'This page lists delivery times.'
+// "Refund policy: items can be returned within 30 days."
+const REFUND_ZH = '退款政策：30天内可以退货。'
+
+test('calculateTextScore: should match a word followed by punctuation', (t) => {
+  const score = calculateTextScore('refund policy?', REFUND)
+  t.is(score, calculateTextScore('refund policy', REFUND), 'Question mark should not count')
+  t.ok(score > 0.7, 'Both words should match')
+})
+
+test('calculateTextScore: should not match a word inside another word', (t) => {
+  t.is(calculateTextScore('is', SHIPPING), 0, '"is" should not match "This"')
+})
+
+test('calculateTextScore: should ignore leading and trailing whitespace', (t) => {
+  t.is(calculateTextScore(' refund policy ', 'Delivery takes three days.'), 0, 'No empty word')
+  t.is(
+    calculateTextScore(' refund policy', REFUND),
+    calculateTextScore('refund policy', REFUND),
+    'Leading space should not change the score'
+  )
+})
+
+test('calculateTextScore: should return 0 for a query without words', (t) => {
+  t.is(calculateTextScore('', REFUND), 0, 'Empty query should score 0')
+  t.is(calculateTextScore(' ?! ', REFUND), 0, 'Punctuation-only query should score 0')
+})
+
+test('calculateTextScore: should match words regardless of case', (t) => {
+  t.is(calculateTextScore('REFUND', REFUND), 0.7, 'Single matching word should score 0.7')
+})
+
+test('calculateTextScore: should match words in text written without spaces', (t) => {
+  t.ok(calculateTextScore('退款政策', REFUND_ZH) >= 0.7, 'Chinese query should match')
+})
+
+test('calculateTextScore: should split a query written without spaces into words', (t) => {
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') {
+    t.pass('Intl.Segmenter is not available')
+    return
+  }
+  // "What is the refund policy". The content has "refund" and "policy" but not "what is".
+  t.ok(calculateTextScore('退款政策是什么', REFUND_ZH) > 0, 'Partial match should count')
+})
+
+test('calculateTextScore: should fall back to substring matching without Intl.Segmenter', (t) => {
+  const intl = (globalThis as { Intl?: { Segmenter?: unknown } }).Intl
+  const original = intl?.Segmenter
+  if (intl) intl.Segmenter = undefined
+  try {
+    t.is(calculateTextScore('退款政策', REFUND_ZH), 0.7, 'Chinese query should match')
+    t.is(calculateTextScore('is', SHIPPING), 0, '"is" should not match "This"')
+    t.is(
+      calculateTextScore('refund policy?', REFUND),
+      calculateTextScore('refund policy', REFUND),
+      'Question mark should not count'
+    )
+  } finally {
+    if (intl) intl.Segmenter = original
+  }
+})
+
+test('scoreDocuments: should combine vector and text scores and skip incomplete documents', (t) => {
+  const query = 'refund policy?'
+  const contentMap = new Map([
+    ['policy', REFUND],
+    ['shipping', SHIPPING],
+    ['empty', '']
+  ])
+  const vectorMap = new Map([
+    ['policy', [1, 0]],
+    ['shipping', [1, 0]],
+    ['empty', [1, 0]]
+  ])
+  const ids = ['shipping', 'policy', 'empty', 'missing']
+  const results = scoreDocuments(query, [1, 0], ids, vectorMap, contentMap, 10)
+
+  t.alike(
+    results.map((r) => r.id),
+    ['policy', 'shipping'],
+    'Should rank the match first and skip incomplete documents'
+  )
+  t.is(results[0].score, 0.7 + calculateTextScore(query, REFUND) * 0.3, 'Policy score')
+  t.is(results[1].score, 0.7, 'Shipping score should have no text part')
+})
+
+test('scoreDocuments: should rank a whole-word match above a match inside another word', (t) => {
+  const contentMap = new Map([
+    ['inside', SHIPPING],
+    ['whole', 'Delivery is free.']
+  ])
+  const vectorMap = new Map([
+    ['inside', [1, 0]],
+    ['whole', [1, 0]]
+  ])
+  const results = scoreDocuments('is', [1, 0], ['inside', 'whole'], vectorMap, contentMap, 2)
+
+  t.is(results[0].id, 'whole', 'Document with the word should rank first')
+  t.ok(results[0].score > results[1].score, 'Scores should differ')
 })

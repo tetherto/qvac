@@ -20,21 +20,92 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB))
 }
 
-// Calculate the lexical score between a query and a content string.
-export function calculateTextScore(query: string, content: string): number {
-  return scoreContentAgainstTerms(query.toLowerCase().split(/\s+/), content)
+const SUPPORTS_UNICODE_PROPS = (() => {
+  try {
+    // eslint-disable-next-line prefer-regex-literals
+    new RegExp('\\p{L}', 'u').test('a')
+    return true
+  } catch {
+    return false
+  }
+})()
+
+// Letters, marks and digits. Anything else is trimmed from the edges of a word.
+const WORD_CHAR_RE = SUPPORTS_UNICODE_PROPS
+  ? // eslint-disable-next-line prefer-regex-literals
+    new RegExp('[\\p{L}\\p{M}\\p{N}]', 'u')
+  : /[^!-/:-@[-`{-~]/
+
+// Thai, Lao, Myanmar, Khmer, Japanese kana and Chinese characters, written without spaces.
+const NO_SPACE_SCRIPT_RE =
+  /[\u0E00-\u0EFF\u1000-\u109F\u1780-\u17FF\u3040-\u30FF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF66-\uFF9F]/
+
+// Return a word segmenter, or null where the runtime has no Intl.Segmenter.
+function createWordSegmenter(): Intl.Segmenter | null {
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') return null
+  return new Intl.Segmenter(undefined, { granularity: 'word' })
 }
 
-// Score content against query terms that were already split.
+// Trim anything other than letters, marks and digits from both ends of a word. Only the
+// edges are read, so long runs of text written without spaces stay cheap.
+function trimPunctuation(token: string): string {
+  let start = 0
+  let end = token.length
+  while (start < end) {
+    const char = String.fromCodePoint(token.codePointAt(start) as number)
+    if (WORD_CHAR_RE.test(char)) break
+    start += char.length
+  }
+  while (end > start) {
+    // A low surrogate ends a character made of two code units.
+    const code = token.charCodeAt(end - 1)
+    const size = code >= 0xdc00 && code <= 0xdfff && end - 2 >= start ? 2 : 1
+    if (WORD_CHAR_RE.test(token.slice(end - size, end))) break
+    end -= size
+  }
+  return token.slice(start, end)
+}
+
+// Split lowercase text into words on whitespace and trim punctuation from their edges.
+// A segmenter, used for queries, also splits text written without spaces into words.
+function splitWords(text: string, segmenter: Intl.Segmenter | null = null): string[] {
+  const words: string[] = []
+  for (const token of text.split(/\s+/)) {
+    const word = trimPunctuation(token)
+    if (word.length === 0) continue
+    if (segmenter && NO_SPACE_SCRIPT_RE.test(word)) {
+      for (const part of segmenter.segment(word)) {
+        if (part.isWordLike) words.push(part.segment)
+      }
+    } else {
+      words.push(word)
+    }
+  }
+  return words
+}
+
+// Calculate the lexical score between a query and a content string.
+export function calculateTextScore(query: string, content: string): number {
+  return scoreContentAgainstTerms(splitWords(query.toLowerCase(), createWordSegmenter()), content)
+}
+
+// Score content against query terms that were already split. A term matches a whole word,
+// or anywhere in the content for text written without spaces.
 function scoreContentAgainstTerms(queryTerms: string[], content: string): number {
+  if (queryTerms.length === 0) return 0
   const contentLower = content.toLowerCase()
-  const exactMatches = queryTerms.filter((term) => contentLower.includes(term)).length
-  const contentTerms = contentLower.split(/\s+/)
-  const positions = queryTerms.reduce((map, term) => {
+  const contentTerms = splitWords(contentLower)
+  let exactMatches = 0
+  const positions = new Map<string, number>()
+  for (const term of queryTerms) {
     const pos = contentTerms.indexOf(term)
-    if (pos !== -1) map.set(term, pos)
-    return map
-  }, new Map<string, number>())
+    if (pos !== -1) {
+      exactMatches++
+      positions.set(term, pos)
+    } else if (NO_SPACE_SCRIPT_RE.test(term) && contentLower.includes(term)) {
+      exactMatches++
+    }
+  }
   let proximityScore = 0
   if (positions.size > 1) {
     const posArray = Array.from(positions.values())
@@ -55,7 +126,7 @@ export function scoreDocuments(
 ): SearchResult[] {
   const results: SearchResult[] = []
   // Split the query once and reuse the terms for every document.
-  const queryTerms = query.toLowerCase().split(/\s+/)
+  const queryTerms = splitWords(query.toLowerCase(), createWordSegmenter())
   for (const id of ids) {
     const vector = vectorMap.get(id)
     const content = contentMap.get(id)
