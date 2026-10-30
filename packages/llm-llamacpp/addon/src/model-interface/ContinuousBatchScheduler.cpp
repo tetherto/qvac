@@ -608,7 +608,9 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // A failed admission leaves the sequence as it found it: a conversation
   // adopted with unsaved turns is rolled back and parked again (its file
   // does not have them), anything else is cleared (it is still on disk, or
-  // there was nothing).
+  // there was nothing). A rollback onto another conversation's state, or onto
+  // nothing after a donor copy failed, is not the key's: its file keeps the
+  // turns it has.
   ScopeGuard cacheGuard([this,
                          seqId,
                          &driver,
@@ -618,7 +620,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
                          activeCacheSavedToDisk]() noexcept {
     if (adoptedDirtyState && driver) {
       try {
-        if (driver->onFailure({})) {
+        if (driver->onFailure({}) && !driver->holdsBorrowedState() &&
+            driver->getNPast() > 0) {
           std::vector<llama_token> words = driver->residentStateTokens();
           if (!words.empty()) {
             // Never park a ledger whose totals disagree with its header: a

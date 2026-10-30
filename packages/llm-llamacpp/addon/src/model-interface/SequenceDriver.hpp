@@ -234,6 +234,9 @@ public:
   /// a key's state to that key.
   [[nodiscard]] virtual bool sharesCacheAcrossKeys() const { return false; }
 
+  /// See `LlmContext::holdsBorrowedState`.
+  [[nodiscard]] virtual bool holdsBorrowedState() const { return false; }
+
   /// Where `preparePrefill` looks, after tokenizing the prompt, for a state
   /// kept outside this sequence that serves more of it than the sequence
   /// does. None (the default) keeps to the sequence's own state.

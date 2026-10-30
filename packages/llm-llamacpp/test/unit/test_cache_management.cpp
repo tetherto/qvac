@@ -4283,3 +4283,58 @@ TEST(CrossKeyPrefixTest, AFailedFirstRequestSavesNoOtherConversation) {
     fs::remove(key);
   }
 }
+
+// A key with unsaved turns whose donor fails to load starts cold; when its
+// admission then fails, nothing of the key's is left to park, so its file
+// keeps the turns it had instead of an empty state.
+TEST(CrossKeyPrefixTest, AFailedDonorCopyLeavesTheKeysFileAsSaved) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string key = "cross_failed_copy_a.bin";
+  const std::string base = "cross_failed_copy_base.bin";
+  fs::remove(key);
+  fs::remove(base);
+  std::string saved;
+  {
+    auto model = loadBatchedModel();
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    std::vector<std::pair<std::string, std::string>> chat = {
+        {"system", fruitStallRules()}, {"user", "Say one word: apple."}};
+    chat.emplace_back(
+        "assistant", harness.run(chatInput(chat), key, true).output);
+    ASSERT_TRUE(fs::exists(key));
+    saved = bytesOf(key);
+    chat.emplace_back("user", "Say one word: banana.");
+    chat.emplace_back("assistant", harness.run(chatInput(chat), key).output);
+    chat.emplace_back("user", "Say one word: cherry.");
+    {
+      // A single-prompt model writes a state file the batched model cannot
+      // load, sharing more of the next prompt than the key's own state.
+      auto single = loadSinglePromptModel(nullptr);
+      ASSERT_TRUE(single->isLoaded());
+      LlamaModel::Prompt prime;
+      prime.input = chatInput(chat);
+      prime.cacheKey = base;
+      prime.prefill = true;
+      single->processPrompt(prime);
+      single->saveCache(base);
+    }
+    ASSERT_TRUE(fs::exists(base));
+
+    LlamaModel::Prompt next;
+    next.input = chatInput(chat);
+    next.cacheKey = key;
+    next.baseCacheKey = base;
+    next.generationParams.n_predict = 4000;
+    EXPECT_ANY_THROW(model->processPromptBatch({next}))
+        << "test setup: the generation budget refuses the request";
+    EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u)
+        << "test setup: the primed file loaded into the batched model";
+  }
+  EXPECT_EQ(bytesOf(key), saved)
+      << "the unload wrote another state over the key's saved turns";
+  fs::remove(key);
+  fs::remove(base);
+}
