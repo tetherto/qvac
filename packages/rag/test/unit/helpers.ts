@@ -5,7 +5,11 @@ import HyperDB from 'hyperdb'
 import dbSpec from '../../src/db/hyperspec/hyperdb/index.js'
 import { createRag } from '../../src/index.js'
 import { QvacErrorRAG } from '../../src/errors.js'
-import type { Corestore as Store, HyperDBReader } from '../../src/db/db-types.js'
+import type {
+  Corestore as Store,
+  HyperDBReader,
+  HyperDBTransaction
+} from '../../src/db/db-types.js'
 import type { EmbeddedDocumentInput, EmbeddingSpace, Rag } from '../../src/types.js'
 
 // brittle's types don't export the test instance; the last overload returns it.
@@ -67,6 +71,23 @@ export async function inspect<T>(
     return await read(snapshot)
   } finally {
     await snapshot.close()
+    await db.close()
+  }
+}
+
+// Writes raw HyperDB rows while no RAG is open on the store.
+export async function mutate(
+  store: Store,
+  write: (tx: HyperDBTransaction) => Promise<void>
+): Promise<void> {
+  const db = HyperDB.bee(store.get({ name: 'qvac-rag' }), dbSpec, { autoUpdate: true })
+  await db.ready()
+  const tx = await db.exclusiveTransaction()
+  try {
+    await write(tx)
+    await tx.flush()
+  } finally {
+    await tx.close()
     await db.close()
   }
 }

@@ -1,7 +1,12 @@
 import test from 'brittle'
 
-import { ERR_CODES } from '../../src/index.js'
-import { decodeNativeId, unpackNativeIds } from '../../src/db/encoding.js'
+import { ERR_CODES, createRag } from '../../src/index.js'
+import {
+  MAX_NATIVE_ID,
+  decodeNativeId,
+  encodeNativeId,
+  unpackNativeIds
+} from '../../src/db/encoding.js'
 import {
   CHUNKS,
   DOCUMENTS,
@@ -14,7 +19,7 @@ import {
   type NamespaceRecord,
   type NativeIdRecord
 } from '../../src/db/records.js'
-import { doc, inspect, openRag, rejectsWithCode } from './helpers.js'
+import { doc, inspect, mutate, openRag, rejectsWithCode } from './helpers.js'
 
 const ALL_NS = { gte: { namespace: 'ns' }, lte: { namespace: 'ns' } }
 
@@ -279,4 +284,38 @@ test('deleteDocuments removes chunks and native ids and ignores unknown ids', as
     const mutations = await reader.find<MutationRecord>(MUTATIONS, ALL_NS).toArray()
     t.alike(unpackNativeIds(mutations[2].removed), [1n])
   })
+})
+
+test('a document that fails mid-batch keeps its old generation and the next write still runs', async (t) => {
+  const { rag, store, spaceId } = await openRag(t)
+  await rag.close()
+
+  // Leave exactly one native ID so the re-ingest below runs out after
+  // deleting the old generation inside the batch.
+  await mutate(store, async (tx) => {
+    const ns = await tx.get<NamespaceRecord>(NAMESPACES, { name: 'ns' })
+    await tx.insert(NAMESPACES, { ...ns!, nextNativeId: encodeNativeId(MAX_NATIVE_ID) })
+  })
+
+  const reopened = createRag({ corestore: store })
+  await reopened.ready()
+  t.teardown(() => reopened.close())
+  await reopened.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['old', [1, 0, 0]]])] })
+
+  await rejectsWithCode(
+    t,
+    reopened.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['new', [0, 1, 0]]])] }),
+    ERR_CODES.NATIVE_ID_EXHAUSTED,
+    'no native id left for the new generation'
+  )
+
+  const hits = await reopened.search({ scope: { namespace: 'ns' }, vector: [1, 1, 0], k: 5 })
+  t.alike(
+    hits.map((hit) => hit.content),
+    ['old'],
+    'the failed batch was dropped, the old generation stays'
+  )
+
+  const deleted = await reopened.deleteDocuments({ namespace: 'ns', documentIds: ['a'] })
+  t.alike(deleted.deleted, ['a'], 'the next transaction gets the lock')
 })

@@ -77,15 +77,26 @@ test('documentIds scope ranks only allowed chunks', async (t) => {
   )
 })
 
-test('namespaces do not see each other', async (t) => {
-  const { rag, spaceId } = await openRag(t, ['one', 'two'])
-  await rag.ingest({ namespace: 'one', documents: [doc('a', spaceId, [['in one', [1, 0, 0]]])] })
-  await rag.ingest({ namespace: 'two', documents: [doc('a', spaceId, [['in two', [1, 0, 0]]])] })
+test('namespaces do not see each other, including name prefixes', async (t) => {
+  const { rag, spaceId } = await openRag(t, ['ns', 'ns2'])
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['in ns', [1, 0, 0]]])] })
+  await rag.ingest({
+    namespace: 'ns2',
+    documents: [doc('a', spaceId, [['in ns2', [1, 0, 0]]]), doc('ab', spaceId, [['ab', [1, 0, 0]]])]
+  })
 
-  const hits = await rag.search({ scope: { namespace: 'two' }, vector: [1, 0, 0], k: 10 })
+  const query = { vector: [1, 0, 0], k: 10 }
   t.alike(
-    hits.map((hit) => hit.content),
-    ['in two']
+    (await rag.search({ ...query, scope: { namespace: 'ns' } })).map((hit) => hit.content),
+    ['in ns'],
+    'ns does not pick up ns2 rows'
+  )
+  t.alike(
+    (await rag.search({ ...query, scope: { namespace: 'ns2', documentIds: ['a'] } })).map(
+      (hit) => hit.content
+    ),
+    ['in ns2'],
+    'document a does not pick up document ab'
   )
 })
 

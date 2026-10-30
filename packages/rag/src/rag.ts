@@ -66,9 +66,15 @@ export function createRag(options: CreateRagOptions): Rag {
   let opening: Promise<void> | null = null
   let closed = false
 
+  // A failed open is not cached, so ready() can be retried.
   function ready(): Promise<void> {
     if (closed) return Promise.reject(notReady('it has been closed'))
-    if (!opening) opening = open()
+    if (!opening) {
+      opening = open().catch((error) => {
+        opening = null
+        throw error
+      })
+    }
     return opening
   }
 
@@ -166,25 +172,34 @@ export function createRag(options: CreateRagOptions): Rag {
     })
   }
 
+  // A direct caller names documents explicitly, so an unknown one is an error.
   async function search(params: SearchParams): Promise<SearchHit[]> {
     const { scope, vector, k } = parseSearch(params)
-    return await runSearch(parseScope(scope), vector, k)
+    return await runSearch(parseScope(scope), vector, k, true)
   }
 
+  // A handle's documents are granted, not chosen per request: an ID the
+  // namespace no longer has is skipped, so the handle keeps working with what
+  // remains and fails closed to no hits. Only the scope's shape can error.
   function scoped(scope: SearchScope): ScopedRag {
     const bound = parseScope(scope)
     return {
       async search(params: ScopedSearchParams): Promise<SearchHit[]> {
         const { scope: request, vector, k } = parseSearch({ scope: undefined, ...params })
-        return await runSearch(intersectScope(bound, request), vector, k)
+        return await runSearch(intersectScope(bound, request), vector, k, false)
       }
     }
   }
 
-  function runSearch(scope: SearchScope, vector: Float32Array, k: number): Promise<SearchHit[]> {
+  function runSearch(
+    scope: SearchScope,
+    vector: Float32Array,
+    k: number,
+    strict: boolean
+  ): Promise<SearchHit[]> {
     return withSnapshot(database(), async (reader) => {
       const { space } = await readNamespace(reader, scope.namespace)
-      return scanSearch(reader, space, scope, vector, k)
+      return scanSearch(reader, space, scope, vector, k, { strict })
     })
   }
 

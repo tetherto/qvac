@@ -56,11 +56,10 @@ test('a namespace-wide handle can be narrowed to documents', async (t) => {
 
   t.alike(ids(await reader.search(query)), ['a', 'b', 'c'])
   t.alike(ids(await reader.search({ ...query, scope: { documentIds: ['b'] } })), ['b'])
-  await rejectsWithCode(
-    t,
-    reader.search({ ...query, scope: { documentIds: ['x'] } }),
-    ERR_CODES.DOCUMENT_OUT_OF_SCOPE,
-    'a document from another namespace'
+  t.alike(
+    await reader.search({ ...query, scope: { documentIds: ['x'] } }),
+    [],
+    'a document from another namespace is not searched'
   )
 })
 
@@ -100,15 +99,25 @@ test('scoped validates the bound scope up front', async (t) => {
   t.alike(await empty.search(query), [], 'an empty bound scope returns nothing')
 })
 
-test('a scoped handle stops seeing deleted documents', async (t) => {
+test('a scoped handle stops seeing deleted documents and keeps serving the rest', async (t) => {
   const { rag } = await setup(t)
-  const reader = rag.scoped({ namespace: 'ns', documentIds: ['b'] })
+  const reader = rag.scoped({ namespace: 'ns', documentIds: ['b', 'c'] })
   await rag.deleteDocuments({ namespace: 'ns', documentIds: ['b'] })
+
+  t.alike(ids(await reader.search(query)), ['c'], 'the deleted document is gone, c still answers')
+  t.alike(
+    await reader.search({ ...query, scope: { documentIds: ['b'] } }),
+    [],
+    'narrowing to the deleted document returns nothing'
+  )
+
+  await rag.deleteDocuments({ namespace: 'ns', documentIds: ['c'] })
+  t.alike(await reader.search(query), [], 'a fully stale grant returns nothing')
 
   await rejectsWithCode(
     t,
-    reader.search(query),
+    rag.search({ ...query, scope: { namespace: 'ns', documentIds: ['b'] } }),
     ERR_CODES.DOCUMENT_OUT_OF_SCOPE,
-    'the revoked document fails closed'
+    'direct search still fails on an unknown document'
   )
 })

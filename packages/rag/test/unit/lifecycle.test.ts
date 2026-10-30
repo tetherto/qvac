@@ -32,6 +32,27 @@ test('operations before ready and after close fail with NOT_READY', async (t) =>
   await rejectsWithCode(t, rag.ready(), ERR_CODES.NOT_READY, 'ready after close')
 })
 
+test('ready can be retried after the corestore fails to open', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close())
+  let failures = 1
+  const flaky = {
+    get: (options: { name: string }) => store.get(options),
+    close: () => store.close(),
+    ready: async () => {
+      if (failures-- > 0) throw new Error('disk busy')
+      await store.ready()
+    }
+  }
+  const rag = createRag({ corestore: flaky })
+
+  await t.exception(rag.ready(), /disk busy/, 'first open fails')
+  await rag.ready()
+  await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.close()
+  t.pass('second ready() opened the database')
+})
+
 test('close leaves the caller-owned corestore open', async (t) => {
   const store = new Corestore(await tmp(t))
   t.teardown(() => store.close())

@@ -97,7 +97,7 @@ Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, meta
 
 ### `scoped(scope)`
 
-Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace.
+Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
 
 ```ts
 const reader = rag.scoped({ namespace: 'handbook', documentIds: ['leave-policy', 'travel'] })

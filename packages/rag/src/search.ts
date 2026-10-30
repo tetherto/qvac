@@ -25,7 +25,8 @@ export async function scanSearch(
   space: SpaceRecord,
   scope: SearchScope,
   query: Float32Array,
-  k: number
+  k: number,
+  options: { strict: boolean }
 ): Promise<SearchHit[]> {
   if (query.length !== space.dimensions) {
     throw new QvacErrorRAG({
@@ -35,7 +36,7 @@ export async function scanSearch(
   }
   if (scope.documentIds !== undefined && scope.documentIds.length === 0) return []
 
-  const ranges = await resolveRanges(reader, scope)
+  const ranges = await resolveRanges(reader, scope, options.strict)
   const cosine = space.metric === 'cosine'
   const queryNorm = cosine ? norm(query, 0, query.length) : 1
   const dims = space.dimensions
@@ -74,9 +75,15 @@ export async function scanSearch(
   return top.map((entry) => entry.hit)
 }
 
-// Resolves the scope to key ranges over current-generation chunks. A document
-// that isn't in the namespace fails the whole search.
-async function resolveRanges(reader: HyperDBReader, scope: SearchScope): Promise<object[]> {
+// Resolves the scope to key ranges over current-generation chunks. When
+// `strict`, a document that isn't in the namespace fails the whole search;
+// otherwise it is skipped, so a bound scope whose documents were deleted
+// degrades to fewer or no hits instead of an error.
+async function resolveRanges(
+  reader: HyperDBReader,
+  scope: SearchScope,
+  strict: boolean
+): Promise<object[]> {
   const { namespace, documentIds } = scope
   if (documentIds === undefined) {
     return [{ gte: { namespace }, lte: { namespace } }]
@@ -86,16 +93,19 @@ async function resolveRanges(reader: HyperDBReader, scope: SearchScope): Promise
       reader.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
     )
   )
-  return documents.map((document, i) => {
+  const ranges: object[] = []
+  documents.forEach((document, i) => {
     if (!document) {
+      if (!strict) return
       throw new QvacErrorRAG({
         code: ERR_CODES.DOCUMENT_OUT_OF_SCOPE,
         adds: `'${documentIds[i]}' in '${namespace}'`
       })
     }
     const key = { namespace, documentId: document.documentId, generation: document.generation }
-    return { gte: key, lte: key }
+    ranges.push({ gte: key, lte: key })
   })
+  return ranges
 }
 
 function offer(top: Ranked[], k: number, score: number, chunk: ChunkRecord): void {
