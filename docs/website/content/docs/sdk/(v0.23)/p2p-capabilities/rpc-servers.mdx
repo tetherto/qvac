@@ -7,10 +7,12 @@ schemaType: HowTo
 
 ## Overview
 
-Use `startRpcServer()` to serve native devices from a QVAC worker and `discoverRpcServers()` to find endpoints on a shared discovery topic. Load a model with the selected endpoints to run inference across their devices.
+Use `startRpcServer()` to serve native devices from a QVAC worker and `discoverRpcServers()` to find endpoints on the same local network using a shared discovery topic. Load a model with the selected endpoints to run inference across their devices.
 
 <Callout type="warn">
-Use RPC endpoints only on a trusted private network. Native RPC traffic is unencrypted and unauthenticated. A discovery topic does not authenticate peers.
+  Use RPC endpoints only on a trusted private network. Native RPC traffic is
+  unencrypted and unauthenticated. A discovery topic does not authenticate
+  peers.
 </Callout>
 
 ## Enable serving
@@ -35,9 +37,44 @@ Python callers must select the generated worker with `QVAC_WORKER_PATH` or `Clie
 
 `rdmaCapable` reports whether the server will try RDMA. On Linux, this requires an RDMA-capable backend, `libibverbs.so.1`, an RDMA device, and `GGML_RPC_NO_RDMA` unset. Without the library or a device, the server runs over TCP. Each connection can still fall back to TCP when the client or link cannot use RDMA. Pass `expectRdma: true` to reject startup when runtime RDMA is unavailable, including hosts that have libibverbs but no RDMA device.
 
-To serve another machine, set `host` to your private IPv4 address and explicitly set `allowNonLoopbackHost: true`. Set `discoveryTopic` to advertise the ready endpoint under a shared topic.
+To serve and advertise on the LAN, set `allowNonLoopbackHost: true` and a shared `discoveryTopic`. When `host` is omitted, QVAC selects the only eligible private IPv4 Wi-Fi or Ethernet address:
+
+```ts
+const server = await startRpcServer({
+  allowNonLoopbackHost: true,
+  discoveryTopic: "my-private-rpc-group",
+});
+```
+
+If there are multiple eligible addresses, startup fails before opening the native server and lists the choices. Pass an explicit `host` to choose one. No eligible address also fails before startup. Automatic selection applies only to advertising with the non-loopback opt-in. Calls without `discoveryTopic` retain the `127.0.0.1` default, including when `allowNonLoopbackHost` is true. The returned `url` contains the address and port that callers can discover.
 
 Unload models using the endpoint before calling `stopRpcServer({ serverId })`. This withdraws the announcement and waits for the native server to stop. Native stop under Bare has no deadline.
+
+## Local network discovery
+
+Announcements use QVAC's versioned UDP multicast protocol at `239.255.77.76:49764`, with multicast TTL 1. This is a QVAC protocol, not mDNS or DNS-SD. RPC discovery no longer uses Hyperswarm or the public DHT. Older DHT-based discovery and this protocol cannot discover each other. Upgrade both callers and advertisers together. Model downloads retain their existing peer discovery.
+
+An advertiser selects the interface whose IPv4 address matches its selected or explicit `host`. Its UDP socket binds that address and sets that multicast interface. There is no default-route or Internet discovery fallback. Lookup joins each supported Wi-Fi or Ethernet interface and accepts only private IPv4 sources in one of those interfaces' connected subnets. The RPC host comes from the packet source, never from an advertised destination address.
+
+Supported interface names are `en` followed by digits, `eth` followed by digits, `wlan` followed by digits, Linux predictable names beginning with `eno`, `enp`, `ens`, `enx`, `wlo`, `wlp`, `wls`, or `wlx`, and Windows `Ethernet` or `Wi-Fi` with an optional numbered suffix. Unknown names, tunnels, cellular interfaces and bridges are excluded. IPv6-only links and IPv4 link-local addresses are unsupported. At most eight eligible interface addresses are allowed. Custom interface aliases require a transport change. Interface names are an operating-system convention, not a security boundary.
+
+Both devices must share a multicast-capable local link and connected IPv4 subnet. Routed private networks, guest networks with client isolation, and Wi-Fi networks filtering multicast are unsupported. Allow inbound UDP port 49764 and the selected TCP RPC ports in the host firewall. TTL and interface selection limit ordinary routing; they do not authenticate peers, isolate people sharing a LAN, or prevent a local participant from deliberately relaying traffic.
+
+Advertisers send a 55-byte packet immediately and once per second. Packets contain a protocol version, topic hash, random instance identifier and RPC port. Stopping or suspending an advertiser closes its socket. Lookups expire its last announcement after three seconds. UDP can lose packets, so use the default five-second search budget for normal operation. A short search may find nothing.
+
+Each lookup admits at most 64 unique endpoints, runs at most four inventory probes concurrently, and tries each endpoint at most twice within its budget. It accepts at most 256 correctly sized datagrams per second before topic parsing. Oversized, malformed and unrelated-topic packets cannot create candidates. Every candidate still passes the native protocol and device inventory probe.
+
+The transport checks interface addresses and netmasks before every send and accepted receive, and once per second while idle. A detected change closes its sockets and invalidates lookup results. A lookup reports an error; an advertiser logs that advertising stopped while its native server remains owned by the caller. Restart discovery or stop and restart the server with its current address. Runtime suspend closes discovery sockets and cancels probes. Resume rebuilds memberships from current interfaces; an advertiser can resume only if its original bind address remains eligible.
+
+### Mobile prerequisites
+
+Rebuild the app and worker after upgrading. The SDK Expo plugin sets `NSLocalNetworkUsageDescription` if the app has not supplied its own text, and adds Android `INTERNET`, `ACCESS_WIFI_STATE` and `CHANGE_WIFI_MULTICAST_STATE` permissions. It cannot grant platform privileges or acquire a native Wi-Fi multicast lock.
+
+On a physical iPhone, the app must have Apple's approved `com.apple.developer.networking.multicast` entitlement in its signed provisioning profile, and the user must allow Local Network access. Add the entitlement through your app's signing configuration after Apple grants it. Adding a key alone does not grant the capability. No Bonjour service declaration is needed for this custom protocol. See [Apple's local network privacy guidance](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy) and [multicast entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.networking.multicast). Simulator success does not prove physical-device access.
+
+On Samsung and other Android Wi-Fi devices, the host app must acquire a native [`WifiManager.MulticastLock`](https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock) while discovery is active, and release it in `finally`, on backgrounding, and on teardown. Use a native module or the app's existing Wi-Fi integration to manage this lock around `discoverRpcServers()`. The Bare worker cannot call this Java API, and the permission alone does not disable Wi-Fi multicast filtering. Standalone Bare and non-Expo hosts must configure their own permissions too.
+
+Apps targeting Android API 37 or later must also declare and request `ACCESS_LOCAL_NETWORK` before using LAN sockets. Apps testing Android 16's opt-in local network restrictions need the corresponding Nearby devices permission. The Expo plugin does not request runtime permissions. Follow [Android's local network permission guidance](https://developer.android.com/privacy-and-security/local-network-permission) for the app's target SDK.
 
 ## Discover and select devices
 
@@ -59,14 +96,16 @@ Pending server starts and discovery calls expose a synchronous `requestId` on th
 
 ### Serve and discover endpoints
 
-The following script starts an RPC server on a private IPv4 address and shared topic, then waits for you to stop it after clients unload their models:
+The following script starts an RPC server on the sole eligible LAN address and shared topic, with an optional explicit IPv4 address, then waits for you to stop it after clients unload their models:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rpc-server.js title="rpc-server.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -74,7 +113,9 @@ The following script starts an RPC server on a private IPv4 address and shared t
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rpc-server.ts title="rpc-server.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -82,7 +123,9 @@ The following script starts an RPC server on a private IPv4 address and shared t
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/rpc_servers.py title="rpc_servers.py" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -91,14 +134,16 @@ The Python script has separate `serve` and `discover` modes. See [Python SDK](/s
 
 ### Inference across two servers
 
-The following script discovers two idle RPC servers, maps their device aliases, and streams a completion with layer splitting and equal device weights:
+The following script discovers two idle RPC servers, maps their device aliases, selects devices reporting usable memory, and streams a completion with layer splitting and equal device weights. Assign aliases before filtering the map so endpoint-local indices remain correct. Some enumerated utility backends, such as macOS BLAS with zero reported memory, cannot run a complete model graph and can abort the native server if selected. Discovery preserves their inventory entries; the GPU example excludes them.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rpc-inference.js title="rpc-inference.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -106,11 +151,29 @@ The following script discovers two idle RPC servers, maps their device aliases, 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rpc-inference.ts title="rpc-inference.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
 
 <Callout type="success">
-All examples are self-contained and runnable. See the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or [Python quickstart](/sdk/python-sdk#quickstart) for instructions.
+  All examples are self-contained and runnable. See the [JS/TS
+  quickstart](/sdk/js-ts-sdk#quickstart) or [Python
+  quickstart](/sdk/python-sdk#quickstart) for instructions.
 </Callout>
+
+## Validate with an iPhone and Samsung phone
+
+These steps require physical devices and remain separate from desktop and bundle checks. Use a development build, not Expo Go. Record app commit, OS version, Bare version, Wi-Fi addresses, discovered URLs, inventory, and completion output for each run.
+
+1. Put the Mac, iPhone and Samsung on the same Wi-Fi network and IPv4 subnet. Confirm the mobile prerequisites above, including the signed iPhone entitlement and Android runtime multicast lock. Disable client isolation on the access point. Keep both apps in the foreground.
+2. Build the worker with `rpcServerProvider` as shown above and the `@qvac/sdk/llamacpp-completion/plugin` plugin. Enable `loggerConsoleOutput` in `qvac.config.json`. For a repository build, use `npm run install:build:full` in `packages/sdk-e2e` so the SDK and mobile consumers use the changed inference package. See the repository's SDK e2e README for native build prerequisites.
+3. Start a server on the Mac with the serving example and a unique topic. On each phone, run `discoverRpcServers({ topic, timeoutMs: 5000 })`. Check the Mac's actual address, a nonempty device inventory, and no candidates for a different topic. Run two discovery calls concurrently and cancel one by its `requestId`; the other must finish normally.
+4. In the Samsung app, call `startRpcServer({ allowNonLoopbackHost: true, discoveryTopic: topic })`. If it reports multiple eligible addresses, add `host` with the Samsung's Wi-Fi IPv4 address. Keep the returned `serverId` for cleanup. From the iPhone, discover and select exactly the Mac and Samsung endpoints. Run the load/completion/unload body of the inference example with those selected candidates. Use the UI to display tokens instead of `process.stdout`. Require a completed, nonempty response and native server logs showing connections and remote tensor work on both endpoints. Discovery or inventory alone is not inference validation. If the backend exposes no usable devices, report that platform limitation instead of substituting a local-only run.
+5. Unload the model before stopping a server. Swap the phones' roles, using the iPhone and Mac as servers and the Samsung as the inference caller. Require the same evidence. Stop each phone server with its owned ID and call `close()` during app teardown.
+6. Stop one advertiser during a five-second lookup. Confirm it disappears after its three-second lease. Background and foreground each app, rerun discovery, then rerun inference. Switch Wi-Fi or disable it during lookup and serving; require cleanup and a reported error or stopped advertisement, then restart on the new bind address. No announcement should continue on the former interface.
+7. Deny Local Network permission on iOS and release the Android multicast lock in separate negative runs. Record the denial or discovery failure. Restore prerequisites and confirm recovery. Disconnect the router's WAN while keeping Wi-Fi active and use an already downloaded model to confirm LAN discovery and inference continue. A private address on another routed subnet must not become a discovery candidate.
+
+On a development machine with a multicast-capable link, `npm run test:rpc:lan` in `packages/inference` exercises real UDP multicast, native TCP inventory, multiple advertisers, concurrent sockets, separate processes, expiry and suspend/resume. It fails when the required link is unavailable. The regular unit suite uses deterministic transport fixtures and does not establish phone support.

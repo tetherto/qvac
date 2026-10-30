@@ -791,6 +791,9 @@ importers:
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-dgram:
+        specifier: 1.1.1
+        version: 1.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       bare-env:
         specifier: ^3.0.1
         version: 3.0.1
@@ -5675,6 +5678,18 @@ packages:
 
   bare-debug-log@2.0.0:
     resolution: {integrity: sha512-Vi42PkMQsNV9PUpx2Gl1hikshx5O9FzMJ6o9Nnopseg7qLBBK7Nl31d0RHcfwLEAfmcPApytpc0ZFfq68u22FQ==}
+
+  bare-dgram@1.1.1:
+    resolution: {integrity: sha512-fqL5xD7k6iGL4SdmkW9LXCoMEbrk1Fwg6ZLN0vEG1XaFtTFUmgXxAfbZ6kL+385TZ+nRfLz32xeBZV9gs6lmsw==}
+    engines: {bare: '>=1.16.0'}
+    peerDependencies:
+      bare-buffer: '*'
+      bare-pipe: '*'
+    peerDependenciesMeta:
+      bare-buffer:
+        optional: true
+      bare-pipe:
+        optional: true
 
   bare-diagnostics-channel@1.1.0:
     resolution: {integrity: sha512-Reu+EQo+eLpB+a5p8UykFEdXndFaRaSgKV38uAMh/qhE2eTeJcdwAwo74hKYyeN8GD3DIFqC9ZlM4bnDc03CIg==}
@@ -15905,6 +15920,16 @@ snapshots:
   bare-debug-log@2.0.0:
     dependencies:
       bare-os: 3.9.3
+
+  bare-dgram@1.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)):
+    dependencies:
+      bare-dns: 2.1.4
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-pipe: 4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    transitivePeerDependencies:
+      - bare-abort-controller
 
   bare-diagnostics-channel@1.1.0: {}
 

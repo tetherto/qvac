@@ -23416,7 +23416,10 @@ class Device1(RootModel[list[Device1Item]]):
 class StartRpcServerRequest(GeneratedBaseModel):
     host: Annotated[
         str | None,
-        Field(description="IPv4 bind address. Defaults to 127.0.0.1.", min_length=1),
+        Field(
+            description="IPv4 bind address. Defaults to 127.0.0.1. With discoveryTopic and allowNonLoopbackHost: true, omission selects the only eligible private IPv4 Wi-Fi or Ethernet address. Multiple eligible addresses require an explicit host.",
+            min_length=1,
+        ),
     ] = None
     port: Annotated[
         int | None,

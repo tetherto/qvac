@@ -1,15 +1,17 @@
+// Discovery requires the same multicast-capable Wi-Fi or Ethernet link and IPv4 subnet.
 // Rebuild the worker with
 // rpcServerProvider: '@qvac/sdk/ggml-rpc-server/provider' in qvac.config.json.
-// npx tsx rpc-server.ts 10.0.0.2 my-private-rpc-group
+// npx tsx rpc-server.ts my-private-rpc-group
+// Choose an interface explicitly: npx tsx rpc-server.ts 10.0.0.2 my-private-rpc-group
 import { createInterface } from 'node:readline/promises'
 import { startRpcServer, stopRpcServer, close } from '@qvac/sdk'
 
 try {
-  const host = process.argv[2]
-  const topic = process.argv[3]
-  if (!host || !topic) throw new Error('Usage: rpc-server.ts <private-ipv4> <topic>')
+  const host = process.argv[3] ? process.argv[2] : undefined
+  const topic = process.argv[3] ?? process.argv[2]
+  if (!topic) throw new Error('Usage: rpc-server.ts [private-ipv4] <topic>')
   const server = await startRpcServer({
-    host,
+    ...(host ? { host } : {}),
     allowNonLoopbackHost: true,
     discoveryTopic: topic
   })
