@@ -4,6 +4,7 @@ import {
   parakeetStreamingRunConfigSchema,
   transcribeStreamResponseSchema
 } from '@/schemas/transcription'
+import { whisperConfigSchema } from '@/schemas/transcription-config'
 import {
   buildParakeetEngineConfig,
   buildParakeetReloadConfig,
@@ -65,6 +66,73 @@ test('Whisper config maps detect_language to the unified auto language mode', (t
       language: 'fr'
     }
   })
+})
+
+test('Whisper config forwards carry_initial_prompt and the main-gpu selector', (t) => {
+  t.alike(
+    buildWhisperEngineConfig({
+      initial_prompt: 'QVAC',
+      carry_initial_prompt: true,
+      contextParams: { use_gpu: true, 'main-gpu': 'dedicated' }
+    }),
+    {
+      engine: 'whisper',
+      whisperConfig: {
+        initial_prompt: 'QVAC',
+        carry_initial_prompt: true
+      },
+      contextParams: {
+        use_gpu: true,
+        'main-gpu': 'dedicated'
+      }
+    }
+  )
+  t.alike(
+    buildWhisperEngineConfig({ contextParams: { use_gpu: true, main_gpu: 1 } }).contextParams,
+    { use_gpu: true, main_gpu: 1 },
+    'the main_gpu alias reaches the addon untouched'
+  )
+  t.alike(
+    buildWhisperReloadConfig({ carry_initial_prompt: false }),
+    { whisperConfig: { carry_initial_prompt: false } },
+    'carry_initial_prompt is a reloadable whisperConfig key'
+  )
+})
+
+test('whisperConfigSchema accepts each main-gpu spelling and rejects conflicting selectors', (t) => {
+  t.ok(whisperConfigSchema.safeParse({ carry_initial_prompt: true }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 0 } }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': '1' } }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { main_gpu: 'integrated' } }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { gpu_device: 1 } }).success)
+  t.absent(
+    whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 1.5 } }).success,
+    'a fractional registry index is rejected'
+  )
+  const bothSpellings = whisperConfigSchema.safeParse({
+    contextParams: { 'main-gpu': 0, main_gpu: 0 }
+  })
+  t.absent(bothSpellings.success, 'both spellings at once are rejected')
+  if (!bothSpellings.success) {
+    t.ok(
+      bothSpellings.error.issues.some((issue) => issue.message.includes('only one of main-gpu')),
+      'the error names the duplicated selector'
+    )
+  }
+  const withLegacy = whisperConfigSchema.safeParse({
+    contextParams: { main_gpu: 'dedicated', gpu_device: 0 }
+  })
+  t.absent(withLegacy.success, 'main-gpu combined with the legacy gpu_device is rejected')
+  if (!withLegacy.success) {
+    t.ok(
+      withLegacy.error.issues.some((issue) => issue.message.includes('gpu_device')),
+      'the error names gpu_device'
+    )
+  }
+  t.absent(
+    whisperConfigSchema.partial().strict().safeParse({ main_gpu: 0 }).success,
+    'main_gpu belongs under contextParams, not at the top level'
+  )
 })
 
 test('buildParakeetEngineConfig removes undefined addon fields', (t) => {

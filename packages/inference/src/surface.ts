@@ -32,6 +32,7 @@ export {
   type VadStateEvent,
   type EndOfTurnEvent,
   type TranscribeSegment,
+  type TranscribeToken,
   type BciConfig,
   type BciTranscribeClientParams,
   type BciTranscribeStreamClientParams,

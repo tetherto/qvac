@@ -157,12 +157,50 @@ The CLI accepts MOSS `hotwords` and `max_new_tokens` in transcription requests.
 Its `verbose_json` response includes MOSS speaker labels and Nemotron
 `speaker_segments` with `speaker_id`, `start`, and `end` in seconds.
 
+## Whisper segment metadata
+
+With `metadata: true`, every whisper segment carries the fields the engine
+reports for its decode window alongside `text`, `startMs`, `endMs`, `append`
+and `id`:
+
+- `language` — the ISO 639-1 code the window was decoded in. Under
+  `language: "auto"` (or `detect_language: true`) this is the detected
+  language.
+- `noSpeechProb` — the probability (0–1) that the window holds no speech, the
+  value `no_speech_thold` is compared against.
+- `speakerTurnNext` — `true` when a speaker turn follows the segment. Needs
+  `tdrz_enable: true` and a tinydiarize model.
+- `tokens` — the decoded text tokens, each `{ text, startMs, endMs, probability }`
+  (special tokens are left out). Needs `token_timestamps: true`.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: './ggml-small.bin',
+  modelType: 'whisper',
+  modelConfig: { language: 'auto', token_timestamps: true, tdrz_enable: true }
+})
+const segments = await transcribe({ modelId, audioChunk: 'meeting.wav', metadata: true })
+for (const segment of segments) {
+  console.log(segment.language, segment.noSpeechProb, segment.speakerTurnNext)
+  for (const token of segment.tokens ?? []) {
+    console.log(token.text, token.startMs, token.endMs, token.probability)
+  }
+}
+```
+
+Two more whisper `modelConfig` keys reach the engine: `carry_initial_prompt:
+true` prepends `initial_prompt` to every decode window instead of only the
+first, and `contextParams["main-gpu"]` (alias `contextParams.main_gpu`) picks
+the GPU once `use_gpu` is `true` — a ggml device-registry index, `"dedicated"`,
+or `"integrated"`. Supply only one spelling, and do not combine it with the
+legacy `contextParams.gpu_device` ordinal.
+
 ## Streaming with `transcribeStream()`
 
 `transcribeStream()` opens a duplex session for both engines — write audio chunks via `session.write(...)`, iterate events with `for await (const event of session) { ... }`. Events are typed as a discriminated union `{ type }`:
 
 - `{ type: "text", text }` — incremental transcript text.
-- `{ type: "segment", segment }` — segment metadata when `metadata: true`, on both engines. Parakeet segments also carry `isEndOfTurn` and `startsWord`.
+- `{ type: "segment", segment }` — segment metadata when `metadata: true`, on both engines. Parakeet segments also carry `isEndOfTurn` and `startsWord`; whisper segments carry `language`, `noSpeechProb`, and, when enabled, `speakerTurnNext` and `tokens` (see "Whisper segment metadata").
 - `{ type: "vad", speaking, probability, source }` — voice-activity-detection state (whisper-only; `source` is `"silero"`).
 - `{ type: "endOfTurn", source: "whisper", silenceDurationMs }` — turn boundary detected from a measured silence window (whisper).
 - `{ type: "endOfTurn", source: "parakeet" }` — turn boundary detected from the EOU model's `<EOU>` token (parakeet; no silence window — the event is token-driven).
