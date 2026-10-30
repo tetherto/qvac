@@ -22,8 +22,7 @@ function errorMessage(err) {
 }
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- package metadata is read from the package root at runtime.
 const { name, version } = require("../package.json");
-// Allocated error code range: 8101..8200
-// (translation-nmtcpp uses 8001..9000 broadly; ocr-onnx claims its own block.)
+// Reservations are maintained in packages/error/code-ranges.json.
 exports.ERR_CODES = Object.freeze({
     FAILED_TO_LOAD_WEIGHTS: 8101,
     FAILED_TO_CANCEL: 8102,

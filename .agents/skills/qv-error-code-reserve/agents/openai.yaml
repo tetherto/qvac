@@ -1,0 +1,3 @@
+interface:
+  display_name: "QVAC Error Code Reservation"
+  short_description: "Reserve and validate shared QVAC error code ranges"
