@@ -14,6 +14,15 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: the device the load
+  resolves to, then the host CPU. `status` is `fits`, `does-not-fit` or
+  `unknown`. An unreadable model or an invalid request rejects
+  ([#5471](https://github.com/tetherto/qvac/pull/5471)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5471](https://github.com/tetherto/qvac/pull/5471)).
+
 ### Added
 
 - Parakeet backend selection through `parakeetConfig.backend` and `assessFit`.
@@ -25,8 +34,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Update the shared `speech-cpp` native dependency to `2026-10-28`
-  ([#5420](https://github.com/tetherto/qvac/pull/5420)).
+- Update the shared `speech-cpp` native dependency to `2026-10-29`
+  ([#5420](https://github.com/tetherto/qvac/pull/5420),
+  [#5447](https://github.com/tetherto/qvac/pull/5447)).
+- `assessFit` names the device by its ggml device name (`CPU`, `CUDA0`,
+  `MTL0`, `GPUOpenCL`), counts Android's OpenCL GPU as sharing host memory,
+  and gives a device that reports no memory of its own the host's free and
+  total figures ([#5447](https://github.com/tetherto/qvac/pull/5447)).
 
 ## [0.11.2] - 2026-10-28
 

@@ -502,29 +502,33 @@ const fit = await EmbedLlamacpp.assessFit({
   config: { device: 'gpu', 'batch-size': '1024' }
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // 'fits', 'does-not-fit', 'model-unreadable', 'no-backend-device' or 'unsupported-config'
-fit.message // with status 'error': what caused it, e.g. the refused config key
-fit.gpuLayers // what fits, which is not always what the request asked for
-fit.ctxSize
-fit.devices // one row per device the model was assigned to, then a `host` row
-fit.deviceBytes // model, context and compute summed across the devices, host excluded
-fit.hostBytes // the same, for the trailing host row
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // one row per device the model is assigned to, then the host CPU
+fit.devices[0] // { id, name, unified, usedBytes, freeBytes, totalBytes }
+fit.stats // { ctxSize, gpuLayers }
 ```
 
-A multimodal load is refused with `unsupported-config`: pass its `projectionModel` (or projector options in `config`), and the projection does not count the projector's weights and buffers, so it would otherwise answer for the text model alone.
+Each device row gives the memory the load takes on that device, as `usedBytes`, and the device's free and total memory. `id` is the PCI bus ID when the backend reports one, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. With `load_mode: 'mmap'`, the host row leaves out the mapped weights, which the OS can evict.
 
-`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`, and `message` names the setting and why. A setting left out takes llama's default.
+On an iOS device every unified row shares the app's own memory limit, `os_proc_available_memory()`. Each such row's free memory is capped at that limit, and a load whose unified rows together take more than the limit less the margin does not fit. A limit of 0 means the app has none left.
 
-Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
+`stats` is the load as the fit resolved it. On `fits`, `ctxSize` and `gpuLayers` are the context and GPU layer count the fitter settled on, which can be smaller than the load asked for. On `does-not-fit` they are the ones the load asked for.
+
+`status` is `unknown` for a load the fitter cannot project: one placed on the CPU, one with a LoRA adapter or a `projectionModel`, one with `fit` turned off, or one the fitter cannot break down per device, the host CPU included. `devices` is then empty and `stats` is `{}`. Projector options without a `projectionModel` reject, as the load refuses them.
+
+The projection reads the model's vocabulary, and llama asserts on a vocabulary it finds inconsistent. An assert aborts the process instead of rejecting, so take the model from a source you trust, or call `assessFit` behind a process boundary.
+
+`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse rejects here. A setting left out takes llama's default.
+
+Pinning `gpu-layers` fixes the placement: the fitter keeps layers on the devices the load claimed, so the answer is for that exact placement. Leave it unset for a projection that can place the model itself.
 
 The projection applies the embedding load's own normalization: the micro-batch follows `batch-size`, a single sequence uses a unified KV cache, and the context is pinned to the model's trained context, or capped at it.
 
-`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device, defaulting to llama's `fit-target` of 1 GiB per device. `backendsDir` is where the dynamically-loaded ggml backends live.
+`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device. The load's own `fit-target`, 1 GiB per device by default, applies too, and the larger of the two binds. `backendsDir` is where the dynamically-loaded ggml backends live.
 
 `assessFit` returns a Promise. Concurrent calls run one at a time within this addon.
 
-A model the fitter cannot read resolves to `status: "error"`; only a broken request rejects.
+A model the fitter cannot read, an invalid request, or a machine with no backend device rejects with an error whose message starts with `assessFit:` and names the cause.
 
 ## Vector index
 

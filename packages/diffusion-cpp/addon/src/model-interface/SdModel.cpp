@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include <ggml-backend.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <picojson/picojson.h>
 
@@ -311,6 +312,46 @@ prepareLoras(const std::string& loraPath, float multiplier = 1.0f) {
   return prepared;
 }
 
+// The PCI bus ID when the backend reports one, so the same GPU matches across
+// addons built on different backends; the device name otherwise. Unified marks
+// memory the host owns: the CPU, an integrated GPU, the Metal device on Apple
+// silicon, Android's OpenCL GPU, and a device the backend reports with host
+// memory figures because it has none of its own. An Intel Mac's discrete GPU
+// keeps its own memory under Metal.
+SdModel::FitDevice fitDevice(const sd_fit_device_t& entry) {
+  SdModel::FitDevice row{
+      entry.name,
+      entry.name,
+      entry.host || entry.shares_host_memory,
+      entry.used_bytes,
+      entry.free_bytes,
+      entry.total_bytes};
+  ggml_backend_dev_t device =
+      entry.host ? ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)
+                 : ggml_backend_dev_by_name(entry.name);
+  if (device == nullptr) {
+    return row;
+  }
+  ggml_backend_dev_props props{};
+  ggml_backend_dev_get_props(device, &props);
+  if (props.device_id != nullptr) {
+    row.id = props.device_id;
+  }
+  ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(device);
+  const char* regName = reg != nullptr ? ggml_backend_reg_name(reg) : nullptr;
+  row.unified = row.unified || props.type == GGML_BACKEND_DEVICE_TYPE_IGPU ||
+                props.type == GGML_BACKEND_DEVICE_TYPE_CPU;
+#if defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__))
+  row.unified =
+      row.unified || (regName != nullptr && std::strcmp(regName, "MTL") == 0);
+#endif
+#if defined(__ANDROID__)
+  row.unified = row.unified ||
+                (regName != nullptr && std::strcmp(regName, "OpenCL") == 0);
+#endif
+  return row;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -540,8 +581,6 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
   CtxParams ctx;
   fillCtxParams(ctx);
 
-  FitOutcome outcome;
-
   // `sd_fit_params` answers any pinned placement with SD_FIT_FAILURE, and a
   // `device` of cpu reaches it as `preferred_gpu_backend`, which its planner
   // does not read: it would judge a CPU load against the first GPU's budget.
@@ -558,9 +597,7 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
       !sd_backend_selection::openClPreferenceMatchesEnumeratedGpu();
   if (!workload.upscaleOnly &&
       (pinnedBackend || pinnedParams || cpuPreferred || openClElsewhere)) {
-    outcome.status = SD_FIT_ERROR;
-    outcome.reason = "unsupported-config";
-    return outcome;
+    return {};
   }
 
   const bool offloadParamsToCpu = ctx.paramsBackend == "*=cpu";
@@ -614,58 +651,64 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
                          scale,
                          workload.upscaleRepeats,
                          config_.maxImagePixels)) {
-      outcome.reason = "unsupported-config";
-      return outcome;
+      throw StatusError(
+          general_error::InvalidArgument,
+          "assessFit: the upscaled image exceeds the pixel limit");
     }
   }
+  struct FitResultGuard {
+    sd_fit_result_t& result;
+    ~FitResultGuard() { sd_fit_result_free(&result); }
+  } guard{result};
+  sd_fit_status_t status = SD_FIT_ERROR;
   try {
     if (workload.upscaleOnly) {
-      outcome.status = sd_upscaler_fit_params(&upscaler, &result);
+      status = sd_upscaler_fit_params(&upscaler, &result);
     } else if (useUpscaler) {
-      outcome.status = sd_fit_params_with_upscaler(
+      status = sd_fit_params_with_upscaler(
           &ctx.params, &request, &upscaler, &result);
     } else {
-      outcome.status = sd_fit_params(&ctx.params, &request, &result);
+      status = sd_fit_params(&ctx.params, &request, &result);
     }
   } catch (const std::exception& error) {
-    QLOG_IF(
-        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        std::string("fit assessment threw: ") + error.what());
-    sd_fit_result_free(&result);
-    return outcome;
+    throw StatusError(
+        general_error::InternalError,
+        std::string("assessFit: the engine failed: ") + error.what());
   }
-  outcome.changed = result.changed;
-  outcome.vaeTiling = result.vae_tiling;
-  outcome.streamLayers = result.stream_layers;
-  if (result.backend != nullptr)
-    outcome.backend = result.backend;
-  if (result.params_backend != nullptr)
-    outcome.paramsBackend = result.params_backend;
-  if (result.report != nullptr)
-    outcome.report = result.report;
-  sd_fit_result_free(&result);
 
   // With params offloaded the engine plans a placement for every module and
   // always reports it as a change, so the plan is compared against the one an
   // "*=cpu" load makes for itself.
-  if (outcome.status == SD_FIT_SUCCESS && outcome.changed &&
-      offloadParamsToCpu &&
+  bool changed = result.changed;
+  if (status == SD_FIT_SUCCESS && changed && offloadParamsToCpu &&
       sd_backend_selection::matchesCpuOffloadPlacement(
-          outcome.backend,
-          outcome.paramsBackend,
-          outcome.vaeTiling,
-          outcome.streamLayers,
+          result.backend != nullptr ? result.backend : "",
+          result.params_backend != nullptr ? result.params_backend : "",
+          result.vae_tiling,
+          result.stream_layers,
           workload.vaeTiling,
           config_.streamLayers)) {
-    outcome.changed = false;
+    changed = false;
   }
+  return fitOutcome(status, result, changed);
+}
 
-  if (outcome.status == SD_FIT_SUCCESS) {
-    outcome.reason = outcome.changed ? "does-not-fit" : "fits";
-  } else if (outcome.status == SD_FIT_FAILURE) {
-    outcome.reason = "does-not-fit";
+SdModel::FitOutcome SdModel::fitOutcome(
+    sd_fit_status_t status, const sd_fit_result_t& result, bool changed) {
+  if (status == SD_FIT_ERROR) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "assessFit: the engine cannot read the model or measure this load");
   }
-
+  FitOutcome outcome;
+  if (result.devices == nullptr || result.device_count <= 0) {
+    return outcome;
+  }
+  outcome.status =
+      status == SD_FIT_SUCCESS && !changed ? "fits" : "does-not-fit";
+  for (int i = 0; i < result.device_count; ++i) {
+    outcome.devices.push_back(fitDevice(result.devices[i]));
+  }
   return outcome;
 }
 

@@ -56,6 +56,12 @@ function esrganHeader(t, scale = 4) {
   return tempFile(t, 'esrgan.fit.safetensors', Buffer.concat([length, json]))
 }
 
+const MiB = 1024 * 1024
+
+function hostRow(fit) {
+  return fit.devices[fit.devices.length - 1]
+}
+
 test('standalone ESRGAN projects a CPU load from headers without weights', async (t) => {
   const esrgan = esrganHeader(t)
   const fit = await assessFit({
@@ -65,9 +71,13 @@ test('standalone ESRGAN projects a CPU load from headers without weights', async
     workload: { width: 128, height: 96, upscaleRepeats: 2 }
   })
   t.is(fit.status, 'fits')
-  t.is(fit.changed, false)
-  t.ok(fit.report.includes('upscaler'))
-  t.ok(fit.report.includes('host memory'))
+  t.alike(fit.stats, {})
+  t.is(fit.devices.length, 1, 'a CPU load is one host row')
+  const host = hostRow(fit)
+  t.ok(host.unified, 'the host row is host memory')
+  t.ok(host.id.length > 0 && host.name.length > 0)
+  t.ok(host.usedBytes > 0, 'the weights and image buffers are charged')
+  t.ok(host.freeBytes > 0 && host.totalBytes >= host.freeBytes)
 })
 
 test('standalone ESRGAN validates paths and workload numbers', async (t) => {
@@ -88,15 +98,14 @@ test('standalone ESRGAN validates paths and workload numbers', async (t) => {
   })
   const esrgan = esrganHeader(t)
   for (const workload of [{ upscaleRepeats: 0 }, { upscaleRepeats: 1.5 }, { width: Infinity }]) {
-    const fit = await assessFit({ mode: 'upscale', files: { esrgan }, workload })
-    t.is(fit.status, 'error')
-    t.is(fit.reason, 'unsupported-config')
+    await t.exception.all(assessFit({ mode: 'upscale', files: { esrgan }, workload }), {
+      message: /workload\.\w+ is out of range/
+    })
   }
-  const unreadable = await assessFit({
-    mode: 'upscale',
-    files: { esrgan: '/missing/esrgan.safetensors' }
-  })
-  t.is(unreadable.reason, 'model-unreadable')
+  await t.exception.all(
+    assessFit({ mode: 'upscale', files: { esrgan: '/missing/esrgan.safetensors' } }),
+    { message: /cannot read the model/ }
+  )
 })
 
 test('standalone ESRGAN sizes full-image RAM even when tiles stay small', async (t) => {
@@ -113,11 +122,7 @@ test('standalone ESRGAN sizes full-image RAM even when tiles stay small', async 
     ...request,
     workload: { width: 1024, height: 1024, upscaleRepeats: 2 }
   })
-  function hostMiB(fit) {
-    const match = fit.report.match(/host memory:.*projected use (\d+) MiB/)
-    t.ok(match, 'host memory projection is reported')
-    return match ? Number(match[1]) : 0
-  }
+  const hostMiB = (fit) => hostRow(fit).usedBytes / MiB
   t.ok(hostMiB(large) >= 4080, 'the full image buffers need 4080 MiB despite small tiles')
   t.ok(hostMiB(repeated) >= 4083, 'repeated scaling includes intermediate and final images')
   t.ok(hostMiB(large) > hostMiB(small))
@@ -125,37 +130,42 @@ test('standalone ESRGAN sizes full-image RAM even when tiles stay small', async 
 
 test('ESRGAN fit enforces the runtime output limits', async (t) => {
   const esrgan = esrganHeader(t)
+  const overLimit = { message: /exceeds the pixel limit/ }
   for (const workload of [
     { width: 1024, height: 1024, upscaleRepeats: 2 },
     { width: 4097, height: 1 }
   ]) {
-    const fit = await assessFit({ mode: 'upscale', files: { esrgan }, workload })
-    t.is(fit.reason, 'unsupported-config')
+    await t.exception.all(assessFit({ mode: 'upscale', files: { esrgan }, workload }), overLimit)
   }
-  const fit = await assessFit({
-    mode: 'upscale',
-    files: { esrgan },
-    config: { max_image_pixels: 1000 },
-    workload: { width: 16, height: 16 }
-  })
-  t.is(fit.reason, 'unsupported-config', 'a configured pixel limit also applies to fit')
+  await t.exception.all(
+    assessFit({
+      mode: 'upscale',
+      files: { esrgan },
+      config: { max_image_pixels: 1000 },
+      workload: { width: 16, height: 16 }
+    }),
+    overLimit,
+    'a configured pixel limit also applies to fit'
+  )
   for (const scale of [1, 2, 4]) {
-    const scaled = await assessFit({
+    const scaled = assessFit({
       mode: 'upscale',
       files: { esrgan: esrganHeader(t, scale) },
       config: { device: 'cpu', max_image_pixels: 1000 },
       workload: { width: 16, height: 16 }
     })
-    t.is(scaled.reason, scale === 1 ? 'fits' : 'unsupported-config', `${scale}x checkpoint limits`)
+    if (scale === 1) {
+      t.is((await scaled).status, 'fits', '1x checkpoint stays within the limit')
+    } else {
+      await t.exception.all(scaled, overLimit, `${scale}x checkpoint exceeds the limit`)
+    }
   }
 })
 
-test('an unreadable model returns an error outcome', async (t) => {
-  const fit = await assessFit({ files: { model: '/nonexistent/model.gguf' } })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'model-unreadable')
-  t.is(fit.changed, false)
+test('an unreadable model rejects', async (t) => {
+  await t.exception.all(assessFit({ files: { model: '/nonexistent/model.gguf' } }), {
+    message: /cannot read the model/
+  })
 })
 
 test('world fit validates its companion paths and session length', async (t) => {
@@ -171,47 +181,37 @@ test('world fit validates its companion paths and session length', async (t) => 
     )
   }
   for (const walkSteps of [0, -1, 1.5, Infinity, 1000001]) {
-    const fit = await assessFit({ mode: 'world', files, workload: { walkSteps } })
-    t.is(fit.status, 'error')
-    t.is(fit.reason, 'unsupported-config')
+    await t.exception.all(assessFit({ mode: 'world', files, workload: { walkSteps } }), {
+      message: /workload\.walkSteps is out of range/
+    })
   }
-  const fit = await assessFit({ mode: 'world', files, config: { backend: 'cpu' } })
-  t.is(fit.reason, 'model-unreadable')
+  await t.exception.all(assessFit({ mode: 'world', files, config: { backend: 'cpu' } }), {
+    message: /cannot read the model/
+  })
   for (const config of [
     { backend: 'gpux' },
     { paramsBackend: 'decoder=cpu' },
     { paramsBackend: 'diffusion=gpux' },
     { maxVram: 'gpux=4' }
   ]) {
-    const invalid = await assessFit({ mode: 'world', files, config })
-    t.is(invalid.status, 'error')
-    t.is(invalid.reason, 'unsupported-config')
+    const unplanned = await assessFit({ mode: 'world', files, config })
+    t.is(unplanned.status, 'unknown', `${JSON.stringify(config)} is not a placement to plan`)
+    t.alike(unplanned.devices, [])
   }
 })
 
-test('a file that is not a model is unreadable too', async (t) => {
-  const fit = await assessFit({ files: { model: tempFile(t, 'model.gguf', Buffer.alloc(512, 7)) } })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'model-unreadable')
-})
-
-// A load refuses a relative path up front; the fit would otherwise hand it to
-// the engine and get back an opaque error.
-test('a relative path is refused rather than projected', async (t) => {
-  try {
-    await assessFit({ files: { model: 'model.gguf' } })
-    t.fail('a relative path should not reach the engine')
-  } catch (err) {
-    t.ok(err instanceof TypeError)
-    t.ok(err.message.includes('must be an absolute path'))
-  }
+test('a file that is not a model rejects too', async (t) => {
+  const model = tempFile(t, 'model.gguf', Buffer.alloc(512, 7))
+  await t.exception.all(assessFit({ files: { model } }), { message: /cannot read the model/ })
 })
 
 test('a broken request rejects', async (t) => {
   const relative = assessFit({ files: { model: 'model.gguf' } })
   t.ok(relative instanceof Promise)
   await t.exception.all(relative, TypeError)
+  await t.exception.all(assessFit({ files: { model: 'model.gguf' } }), {
+    message: /must be an absolute path/
+  })
 
   const model = tempFile(t, 'model.gguf', Buffer.alloc(512, 7))
   const badConfig = assessFit({ files: { model }, config: { rng: 'not-an-rng' } })
@@ -233,25 +233,28 @@ test('concurrent fits keep independent requests and all settle', async (t) => {
   const missing = assessFit({ mode: 'upscale', files: { esrgan: '/missing/esrgan.safetensors' } })
   const refused = assessFit({ ...request, workload: { upscaleRepeats: 0 } })
 
-  const [a, b, c, d] = await Promise.all([small, large, missing, refused])
-  const hostMiB = (fit) => Number(fit.report.match(/host memory:.*projected use (\d+) MiB/)[1])
-  t.is(a.status, 'fits')
-  t.ok(hostMiB(b) > hostMiB(a), 'each call owns the workload it was given')
-  t.is(c.reason, 'model-unreadable', 'an error outcome does not strand the other calls')
-  t.is(d.reason, 'unsupported-config', 'a refused workload settles alongside the rest')
+  const [a, b, c, d] = await Promise.allSettled([small, large, missing, refused])
+  t.is(a.value.status, 'fits')
+  t.ok(
+    hostRow(b.value).usedBytes > hostRow(a.value).usedBytes,
+    'each call owns the workload it was given'
+  )
+  t.is(c.status, 'rejected', 'a rejection does not strand the other calls')
+  t.is(d.status, 'rejected', 'a refused workload settles alongside the rest')
 })
 
-test('a pinned placement is refused', async (t) => {
+test('a pinned placement is unknown', async (t) => {
   const model = tempFile(t, 'model.gguf', Buffer.alloc(512, 7))
 
   const pinned = await assessFit({ files: { model }, config: { device: 'gpu', 'main-gpu': 0 } })
-  t.is(pinned.reason, 'unsupported-config', 'a main-gpu pin the engine cannot validate')
+  t.is(pinned.status, 'unknown', 'a main-gpu pin the engine cannot plan from')
+  t.alike(pinned.devices, [])
 
   const cpu = await assessFit({ files: { model }, config: { device: 'cpu' } })
-  t.is(cpu.reason, 'unsupported-config', 'a cpu device the engine plans as a GPU load')
+  t.is(cpu.status, 'unknown', 'a cpu device the engine plans as a GPU load')
 })
 
-test('a workload number the engine cannot represent is refused', async (t) => {
+test('a workload number the engine cannot represent rejects', async (t) => {
   const model = tempFile(t, 'model.gguf', Buffer.alloc(512, 7))
   const cases = [
     ['NaN', { width: NaN }],
@@ -264,9 +267,11 @@ test('a workload number the engine cannot represent is refused', async (t) => {
   ]
 
   for (const [name, workload] of cases) {
-    const fit = await assessFit({ files: { model }, workload })
-    t.is(fit.reason, 'unsupported-config', name)
-    t.is(fit.status, 'error', `${name} is an outcome, not a throw`)
+    await t.exception.all(
+      assessFit({ files: { model }, workload }),
+      { message: /is out of range/ },
+      name
+    )
   }
 })
 
@@ -275,10 +280,19 @@ safeTest('a real model projects a verdict', { timeout: 600_000, skip }, async (t
 
   const fit = await assessFit({ files: { model } })
 
-  t.comment(`status=${fit.status} reason=${fit.reason} changed=${fit.changed}`)
-  t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
-  t.is(fit.reason, fit.status, 'a verdict reports itself as its reason')
-  t.ok(fit.report.length > 0, 'the engine reported its placement')
+  t.comment(JSON.stringify(fit))
+  t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict')
+  t.ok(fit.devices.length >= 1, 'the placement is reported per device')
+  t.ok(hostRow(fit).unified, 'the host row is last')
+  for (const row of fit.devices) {
+    t.ok(row.id.length > 0 && row.name.length > 0, `${row.name} is identified`)
+    t.ok(Number.isSafeInteger(row.usedBytes) && row.usedBytes >= 0, `${row.name} has a use`)
+    t.ok(row.freeBytes > 0, `${row.name} has free memory`)
+  }
+  t.ok(
+    fit.devices.some((row) => row.usedBytes > 0),
+    'the weights are charged to some device'
+  )
 })
 
 safeTest('fitting keeps the event loop responsive', { timeout: 600_000, skip }, async (t) => {
@@ -291,7 +305,10 @@ safeTest('fitting keeps the event loop responsive', { timeout: 600_000, skip }, 
   try {
     const fit = await assessFit({ files: { model } })
     pending = false
-    t.not(fit.status, 'error', 'a real native projection completed')
+    t.ok(
+      fit.status === 'fits' || fit.status === 'does-not-fit',
+      'a real native projection completed'
+    )
     t.ok(ticks > 0, 'timers ran before fitting settled')
     t.comment(`${ticks} timer ticks before completion`)
   } finally {
@@ -306,15 +323,22 @@ safeTest(
   async (t) => {
     const model = await ensureModelPath({ modelName: MODEL_NAME })
     const esrgan = esrganHeader(t)
-    const fit = await assessFit({ files: { model, esrgan }, workload: { width: 512, height: 512 } })
+    const workload = { width: 512, height: 512 }
+    const plain = await assessFit({ files: { model }, workload })
+    const fit = await assessFit({ files: { model, esrgan }, workload })
     t.ok(fit.status === 'fits' || fit.status === 'does-not-fit')
-    t.ok(fit.report.includes('upscaler'), 'combined measurement includes ESRGAN')
-    t.ok(fit.report.includes('host memory'), 'combined measurement includes upscaler image buffers')
-    const tooLarge = await assessFit({
-      files: { model, esrgan },
-      workload: { width: 1024, height: 1024, upscaleRepeats: 2 }
-    })
-    t.is(tooLarge.reason, 'unsupported-config', 'combined fit enforces the same output limits')
+    t.ok(
+      hostRow(fit).usedBytes > hostRow(plain).usedBytes,
+      'the host row includes the upscaler image buffers'
+    )
+    await t.exception.all(
+      assessFit({
+        files: { model, esrgan },
+        workload: { width: 1024, height: 1024, upscaleRepeats: 2 }
+      }),
+      { message: /exceeds the pixel limit/ },
+      'combined fit enforces the same output limits'
+    )
   }
 )
 
@@ -336,16 +360,9 @@ safeTest(
         files: { ...files, esrgan: '/missing/unused-esrgan.safetensors' }
       })
       t.is(unused.status, base.status)
-      t.is(unused.reason, base.reason)
-      const stableReport = (report) =>
-        report.replace(/\b(free|budget|available)\s+\d+ MiB/g, '$1 MiB')
-      t.is(
-        stableReport(unused.report),
-        stableReport(base.report),
-        'unused image upscaler does not affect measured memory'
-      )
-      t.absent(
-        unused.report.includes('upscaler'),
+      t.alike(
+        unused.devices.map((row) => [row.id, row.usedBytes]),
+        base.devices.map((row) => [row.id, row.usedBytes]),
         'video does not measure a separate image upscaler'
       )
     }

@@ -10,6 +10,20 @@
   ([#5430](https://github.com/tetherto/qvac/pull/5430)).
 - A tool with an empty `name` is rejected with `InvalidInputFormat` instead of
   `InvalidArgument` ([#5430](https://github.com/tetherto/qvac/pull/5430)).
+- `assessFit` returns `{ status, devices, stats }`: a row per device, then the
+  host CPU, and the resolved `ctxSize` and `gpuLayers`. `status` is `fits`,
+  `does-not-fit` or `unknown`. An unreadable model or an invalid request
+  rejects ([#5469](https://github.com/tetherto/qvac/pull/5469)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5469](https://github.com/tetherto/qvac/pull/5469)).
+
+### Added
+
+- `LlmLlamacpp.calcTokens({ text?, history?, tools? })`: counts the tokens a
+  text takes on the loaded model, or a conversation rendered by its chat
+  template as a fresh `run()` would, without running it. It answers while
+  requests are generating
+  ([#5353](https://github.com/tetherto/qvac/pull/5353)).
 
 ### Fixed
 

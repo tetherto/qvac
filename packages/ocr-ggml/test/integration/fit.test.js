@@ -7,6 +7,10 @@ const { ensureModelPath, ensureDoctrModels, platform, createOcrGgml } = require(
 
 const gpuBackend = platform === 'darwin' || platform === 'ios' ? 'metal' : 'vulkan'
 
+const isVerdict = (fit) => fit.status === 'fits' || fit.status === 'does-not-fit'
+const demand = (fit) => fit.devices.map((row) => [row.id, row.usedBytes])
+const onGpu = (fit) => fit.devices.length > 0 && fit.devices[0].name !== 'CPU'
+
 async function easyOcrPaths() {
   return {
     pathDetector: path.resolve(await ensureModelPath('detector_craft')),
@@ -18,24 +22,20 @@ test('assessFit reads both EasyOCR model descriptions without loading an image',
   const { pathDetector, pathRecognizer } = await easyOcrPaths()
   const fit = await assessFit({ pathDetector, pathRecognizer, backendDevice: 'cpu' })
 
-  t.ok(['fits', 'does-not-fit', 'error'].includes(fit.status))
-  t.is(fit.deviceName, 'CPU')
-  t.ok(fit.weightsBytes > 0)
-  t.is(fit.hostBytes, fit.weightsBytes)
-  t.is(fit.deviceBytes, 0)
-  for (const key of [
-    'weightsBytes',
-    'hostBytes',
-    'deviceBytes',
-    'deviceFreeBytes',
-    'deviceTotalBytes'
-  ]) {
-    t.ok(Number.isSafeInteger(fit[key]) && fit[key] >= 0, `${key} is a non-negative safe integer`)
+  t.comment(JSON.stringify(fit))
+  t.ok(['fits', 'does-not-fit', 'unknown'].includes(fit.status))
+  t.alike(fit.stats, {})
+  if (isVerdict(fit)) {
+    t.is(fit.devices.length, 1, 'a CPU load is one row')
+    const [row] = fit.devices
+    t.ok(row.unified, 'the CPU row is the host')
+    for (const key of ['usedBytes', 'freeBytes', 'totalBytes']) {
+      t.ok(Number.isSafeInteger(row[key]) && row[key] >= 0, `${key} is a non-negative safe integer`)
+    }
+    t.ok(row.usedBytes > 0, 'the weights were measured')
+  } else {
+    t.alike(fit.devices, [], 'an unknown carries no rows')
   }
-  t.ok(fit.report.includes('excludes image and inference-graph memory'))
-  if (fit.status === 'fits') t.is(fit.reason, 'weights-fit')
-  else if (fit.status === 'does-not-fit') t.is(fit.reason, 'source-weights-exceed-memory')
-  else t.ok(['uncertain', 'device-memory-unavailable'].includes(fit.reason))
 
   const reserved = await assessFit({
     pathDetector,
@@ -43,18 +43,17 @@ test('assessFit reads both EasyOCR model descriptions without loading an image',
     backendDevice: 'cpu',
     marginBytes: Number.MAX_SAFE_INTEGER
   })
-  t.is(reserved.status, 'error', 'an unusably large margin cannot produce a fit verdict')
-  t.ok(['uncertain', 'device-memory-unavailable'].includes(reserved.reason))
+  t.is(reserved.status, 'does-not-fit', 'a margin larger than free memory leaves no room')
+  t.is(reserved.devices.length, 1, 'a CPU load is one row')
+  t.is(reserved.devices[0].name, 'CPU', 'the row is the host CPU')
 })
 
-test('assessFit returns model-unreadable for a missing recognizer', async (t) => {
+test('assessFit rejects a missing recognizer', async (t) => {
   const pathDetector = path.resolve(await ensureModelPath('detector_craft'))
-  const fit = await assessFit({
-    pathDetector,
-    pathRecognizer: path.join(pathDetector, 'missing-recognizer.gguf')
-  })
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'model-unreadable')
+  await t.exception(
+    assessFit({ pathDetector, pathRecognizer: path.join(pathDetector, 'missing-recognizer.gguf') }),
+    /cannot read the recognizer/
+  )
 })
 
 test('assessFit uses the requested gpuDevice when selecting a backend', async (t) => {
@@ -62,10 +61,9 @@ test('assessFit uses the requested gpuDevice when selecting a backend', async (t
   const automatic = await assessFit(request)
   const explicit = await assessFit({ ...request, gpuDevice: 9999 })
 
-  t.is(explicit.deviceName, 'CPU', 'out-of-range GPU index falls back to CPU')
-  t.is(explicit.deviceBytes, 0)
-  if (automatic.deviceName !== 'CPU') {
-    t.ok(explicit.deviceName !== automatic.deviceName, 'explicit GPU index changes placement')
+  t.ok(explicit.devices.length <= 1, 'out-of-range GPU index falls back to the CPU alone')
+  if (onGpu(automatic) && explicit.devices.length === 1) {
+    t.not(explicit.devices[0].id, automatic.devices[0].id, 'explicit GPU index changes placement')
   }
 })
 
@@ -85,30 +83,31 @@ test('assessFit recognizes actual DocTR detector and CPU-assist placement', asyn
     detectionBackendDevice: gpuBackend,
     recognizerCpuAssist: false
   }
+  // A CPU load whose free memory sits between the source tensors and the upper
+  // bound is unknown, so a margin that leaves no room shows it was projected.
   const singleDevice = await assessFit(request)
-  t.ok(singleDevice.weightsBytes > 0, 'DocTR model metadata was read')
-  t.ok(singleDevice.deviceName, 'DocTR backend was selected')
-  t.ok(
-    singleDevice.reason !== 'unsupported-config',
-    'matching detector and recognizer devices are supported'
-  )
+  const projected =
+    isVerdict(singleDevice) ||
+    (await assessFit({ ...request, marginBytes: Number.MAX_SAFE_INTEGER })).status ===
+      'does-not-fit'
+  t.ok(projected, 'matching detector and recognizer devices are projected')
 
-  if (singleDevice.deviceName === 'CPU') {
+  if (!onGpu(singleDevice)) {
     t.pass('GPU unavailable; split-device checks require a GPU')
     return
   }
 
   const assisted = await assessFit({ ...request, recognizerCpuAssist: true })
-  t.is(assisted.status, 'error')
-  t.is(assisted.reason, 'unsupported-config', 'GPU recognition with CPU assist is split')
+  t.is(assisted.status, 'unknown', 'GPU recognition with CPU assist is split')
+  t.alike(assisted.devices, [])
 
   const splitDetector = await assessFit({
     ...request,
     backendDevice: 'cpu',
     detectionBackendDevice: gpuBackend
   })
-  t.is(splitDetector.status, 'error')
-  t.is(splitDetector.reason, 'unsupported-config', 'CPU recognition with GPU detection is split')
+  t.is(splitDetector.status, 'unknown', 'CPU recognition with GPU detection is split')
+  t.alike(splitDetector.devices, [])
 })
 
 test('assessFit keeps the event loop responsive while fits are queued', async (t) => {
@@ -130,7 +129,7 @@ test('assessFit keeps the event loop responsive while fits are queued', async (t
   t.comment(`${turns} loop turns before the fits settled`)
   t.ok(turns > 0, 'the loop turned while the fitter ran')
   for (const fit of fits) {
-    t.is(fit.weightsBytes, expected.weightsBytes, 'every queued fit read the same models')
+    t.alike(demand(fit), demand(expected), 'every queued fit read the same models')
   }
 })
 
@@ -143,15 +142,13 @@ test('queued fits retain independent requests and all settle', async (t) => {
   })
   request.marginBytes = Number.MAX_SAFE_INTEGER
   const reserved = assessFit(request)
-  const [a, b, c] = await Promise.all([first, missing, reserved])
+  const [a, b, c] = await Promise.allSettled([first, missing, reserved])
 
-  t.ok(a.weightsBytes > 0, 'the first call read both models')
-  if (a.reason !== 'device-memory-unavailable') {
-    t.ok(a.report.includes('margin=0 '), 'the first call owns its original margin')
-  }
-  t.is(b.reason, 'model-unreadable', 'an error outcome does not strand queued callers')
-  t.is(c.status, 'error', 'the later call owns its changed margin')
-  t.ok(['uncertain', 'device-memory-unavailable'].includes(c.reason))
+  t.is(a.status, 'fulfilled', 'the first call read both models')
+  t.is(c.status, 'fulfilled', 'the later call read both models')
+  t.not(a.value.status, 'does-not-fit', 'the first call owns its original margin')
+  t.is(b.status, 'rejected', 'a rejection does not strand queued callers')
+  t.is(c.value.status, 'does-not-fit', 'the later call owns its changed margin')
 })
 
 test('a fit settles while a loaded model unloads', async (t) => {
@@ -162,8 +159,7 @@ test('a fit settles while a loaded model unloads', async (t) => {
     const pending = assessFit({ ...paths, backendDevice: 'cpu' })
     await model.unload()
     const fit = await pending
-    t.ok(fit.weightsBytes > 0, 'unloading the model did not invalidate the fit backend')
-    t.is(fit.deviceName, 'CPU')
+    t.ok(['fits', 'does-not-fit', 'unknown'].includes(fit.status), 'the fit settled')
   } finally {
     await model.unload()
   }

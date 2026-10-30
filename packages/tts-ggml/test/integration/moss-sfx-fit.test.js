@@ -24,11 +24,8 @@ test('MOSS sound-effect fit rejects missing workload and invalid load controls',
   await t.exception(TTSGgml.assessFit(request({ marginBytes: -1 })))
 })
 
-test('MOSS sound-effect fit reports unreadable models', async (t) => {
-  const fit = await TTSGgml.assessFit(request())
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'model-unreadable')
-  t.is(fit.modelVariant, 'moss-sfx')
+test('MOSS sound-effect fit rejects unreadable models', async (t) => {
+  await t.exception(TTSGgml.assessFit(request()), /model-unreadable/)
 })
 
 test(
@@ -41,23 +38,13 @@ test(
     const cfg = { mossSoundEffectPath: model }
     const fit = await TTSGgml.assessFit(request(cfg))
     t.ok(fit.status === 'fits' || fit.status === 'does-not-fit')
-    t.is(fit.modelVariant, 'moss-sfx')
-    t.ok(fit.deviceIsCpu)
-    t.ok(fit.deviceSharesHostMemory)
-    t.ok(fit.weightsBytes > 0)
-    t.ok(fit.lmComputeBytes > 0)
-    t.ok(fit.hostBytes > 0)
-    t.is(
-      fit.deviceBytes,
-      fit.weightsBytes + fit.stateBytes + fit.lmComputeBytes + fit.codecComputeBytes
-    )
+    t.is(fit.devices.length, 1, 'a CPU load is one row')
+    t.ok(fit.devices[0].unified, 'the CPU row is the host')
+    t.ok(fit.devices[0].usedBytes > 0)
     const shorter = await TTSGgml.assessFit(request({ ...cfg, seconds: 1 }))
-    t.is(shorter.weightsBytes, fit.weightsBytes)
-    t.is(shorter.lmComputeBytes, fit.lmComputeBytes)
+    t.ok(shorter.devices[0].usedBytes <= fit.devices[0].usedBytes, 'a shorter clip needs no more')
     const noHeadroom = await TTSGgml.assessFit(request({ ...cfg, marginBytes: Number.MAX_VALUE }))
     t.is(noHeadroom.status, 'does-not-fit')
-    const invalid = await TTSGgml.assessFit(request({ ...cfg, seconds: 0 }))
-    t.is(invalid.status, 'error')
-    t.is(invalid.reason, 'invalid-arguments')
+    await t.exception(TTSGgml.assessFit(request({ ...cfg, seconds: 0 })), /invalid-arguments/)
   }
 )

@@ -826,6 +826,51 @@ const LlmLlamacpp = class LlmLlamacpp {
         }
         await this.addon.discardCache(cacheKey);
     }
+    /**
+     * Tokens `input` takes on the loaded model, without running it. `text`
+     * alone is counted raw, with no chat template and no BOS. With `history` or
+     * `tools` the conversation, `text` (even empty) appended as the last user
+     * turn, is rendered by the chat template as the opening request of a fresh
+     * conversation, with BOS and the generation prompt, as `run()` renders it.
+     * Tools the template leaves out are not counted. `tools` alone has no
+     * message to render and rejects, as `run()` does. Never queues behind
+     * `run()`: it reads only load-time state. A wrong-typed argument rejects
+     * with `TypeError`, and before `load()` it rejects with `Model is not
+     * loaded`. Other invalid input, a media message included, rejects with code
+     * `InvalidArgument`; a conversation the chat template cannot render fails
+     * as it would in `run()`.
+     */
+    async calcTokens(input) {
+        if (input === null || typeof input !== "object") {
+            throw new TypeError("calcTokens(input) requires an object");
+        }
+        const text = input.text ?? undefined;
+        const history = input.history ?? undefined;
+        const tools = input.tools ?? undefined;
+        if (text !== undefined && typeof text !== "string") {
+            throw new TypeError("calcTokens: text must be a string");
+        }
+        if (history !== undefined && !Array.isArray(history)) {
+            throw new TypeError("calcTokens: history must be a Message[]");
+        }
+        if (tools !== undefined && !Array.isArray(tools)) {
+            throw new TypeError("calcTokens: tools must be an array of function definitions");
+        }
+        if (!this.addon) {
+            throw new Error("Model is not loaded");
+        }
+        const params = {};
+        if (text !== undefined)
+            params.text = text;
+        // Media bytes are dropped rather than serialized: the native side rejects
+        // any media message by its type.
+        if (history !== undefined) {
+            params.history = JSON.stringify(history.map((message) => message?.type === "media" ? { ...message, content: "" } : message));
+        }
+        if (tools !== undefined)
+            params.tools = JSON.stringify(tools);
+        return this.addon.calcTokens(params);
+    }
     getState() {
         return this.state;
     }
