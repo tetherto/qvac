@@ -8,7 +8,7 @@ export type { LayaConfig, LayaRequest, LayaSingleRequest, LayaBatchRequest, Laya
 export { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
 export type { RerankConfig, RerankRequest, RerankScores, RerankerArgs, } from "./rerank";
 export { assessFit } from "./fit";
-export type { EmbedFitDevice, EmbedFitRequest, EmbedFitResult, EmbedFitStatus } from "./fit";
+export type { EmbedFitDevice, EmbedFitRequest, EmbedFitResult, EmbedFitStats, EmbedFitStatus } from "./fit";
 export type { QvacResponse };
 export interface GGMLBertArgs {
     /**
