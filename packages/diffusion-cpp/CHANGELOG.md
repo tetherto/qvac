@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-10-30
+
 ### Breaking
 
 - `assessFit` returns `{ status, devices, stats }`: the GPU devices the
@@ -9,6 +11,12 @@
   `unknown`; a placement the fitter had to change is `does-not-fit`. An
   invalid request or a load the engine cannot measure rejects
   ([#5477](https://github.com/tetherto/qvac/pull/5477)).
+
+### CUDA Support
+
+- Add CUDA acceleration on Linux ARM64 and x64, including DGX Spark and RTX 5090.
+- Automatically fall back to Vulkan or CPU when CUDA is unavailable.
+- Add a FLUX.2 Klein 4B CUDA example and setup instructions.
 
 ## [0.32.1] - 2026-10-29
 

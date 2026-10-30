@@ -15,6 +15,7 @@ packages/**/node_modules/
 # for local tooling — slipped through and reached CI as a dangling link.
 packages/**/node_modules
 packages/**/package-lock.json
+.github/bare-toolchain/node_modules
 packages/**/.npmrc
 packages/sdk/bun.lock
 NOTICE_LOG.txt

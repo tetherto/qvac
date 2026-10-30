@@ -7,7 +7,7 @@ import {
   TTS_CODEC_DECODER_MOSS_TTS_F16,
   TTS_CODEC_ENCODER_MOSS_TTS_F16
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // MOSS (GGML): OpenMOSS MOSS-TTS v1.5 Delay, an 8B backbone (about 17 GB)
 // plus a codec, so desktop only. The primary modelSrc is the backbone; the

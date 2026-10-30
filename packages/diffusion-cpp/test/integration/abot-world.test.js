@@ -365,6 +365,11 @@ function framesAre(blocks, width, height, magic) {
 
 let streamingScene
 const residentWalks = new Map()
+// Linux GPU CI must exercise CUDA explicitly: generic GPU selection could
+// silently fall back to Vulkan if the packaged CUDA module fails to load.
+// Keep the default here because PR workflows read project metadata from main.
+// Local runs can select another backend with ABOT_PARITY_BACKEND.
+const parityBackend = proc.env.ABOT_PARITY_BACKEND || (canFetchRegistry ? 'cuda0' : 'gpu')
 
 async function provisionStreamingScene(t) {
   const provisioned = await provisionWorldGeneration(t)
@@ -377,7 +382,11 @@ async function provisionStreamingScene(t) {
   const { dir, taehvPath, vaePath, t5Xxl } = provisioned
   const scenePath = path.join(dir, 'scene-streaming-e2e.safetensors')
   const files = { model: path.join(dir, DIT_NAME), taehv: taehvPath, scene: scenePath }
-  const scene = new WorldStableDiffusion({ files, config: { backend: 'gpu' }, logger: console })
+  const scene = new WorldStableDiffusion({
+    files,
+    config: { backend: parityBackend },
+    logger: console
+  })
   try {
     const creation = await scene.createScene({
       prompt:
@@ -415,6 +424,7 @@ for (const lane of [
     `ABot-World: ${lane.name} matches resident frames across history updates`,
     { skip, timeout: 2_400_000 },
     async (t) => {
+      t.comment(`ABot parity backend: ${parityBackend}`)
       streamingScene ??= provisionStreamingScene(t)
       const files = await streamingScene
       if (!files) return
@@ -444,7 +454,7 @@ for (const lane of [
         const fit = await assessFit({
           mode: 'world',
           files,
-          config: { backend: 'gpu', ...config },
+          config: { backend: parityBackend, ...config },
           workload: { walkSteps: 4 }
         })
         t.ok(
@@ -454,7 +464,7 @@ for (const lane of [
         t.ok(fit.devices.length >= 1, 'streaming world fit reports its placement per device')
         const world = new WorldStableDiffusion({
           files,
-          config: { backend: 'gpu', seed: 42, verbosity: 3, ...config },
+          config: { backend: parityBackend, seed: 42, verbosity: 3, ...config },
           logger: console
         })
         try {
