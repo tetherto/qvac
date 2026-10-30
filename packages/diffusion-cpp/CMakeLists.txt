@@ -41,11 +41,12 @@ endif()
 # stable-diffusion-cpp registry ports.  CUDA requires a specific build machine
 # so it remains opt-in via SD_CUDA.
 #
-# GGML_BACKEND_DL is ON on Android and desktop Linux (set in the ggml
-# portfile), mirroring qvac-fabric: GPU backends are dlopen'd MODULE .so files
-# shipped next to the addon, so the .bare itself never links
-# libvulkan/libOpenCL and loads on hosts without a graphics stack (QVAC-23767).
-# On macOS/iOS (Metal) and Windows GPU backends are statically linked.
+# GGML_BACKEND_DL is ON on Android, desktop Linux and Windows (set in the
+# ggml portfile), mirroring qvac-fabric: GPU backends are runtime-loaded
+# MODULE .so / .dll files shipped next to the addon, so the .bare itself never
+# links libvulkan/libOpenCL/vulkan-1 and loads on hosts without a graphics
+# stack (QVAC-23767, QVAC-25560). On macOS/iOS (Metal) GPU backends are
+# statically linked.
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
@@ -136,7 +137,32 @@ if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   endforeach()
 endif()
 
+# On Windows ggml installs the MODULE .dll files into vcpkg's lib/ (a MODULE
+# is a LIBRARY artifact to install(TARGETS)). Stage them as loose files into
+# the same per-host subdir cmake-bare uses for the INSTALL TARGET exports
+# above, which is where BackendLoader scans.
+set(BACKEND_DL_LOOSE_DLLS "")
+if(GGML_BACKEND_DL AND WIN32)
+  file(GLOB BACKEND_DL_LOOSE_DLLS
+    "${VCPKG_INSTALLED_PATH}/lib/qvac-diffusion-ggml-*.dll")
+  if(NOT BACKEND_DL_LOOSE_DLLS)
+    message(FATAL_ERROR "inference-addon-sd: GGML_BACKEND_DL is on but no "
+      "qvac-diffusion-ggml-*.dll under ${VCPKG_INSTALLED_PATH}/lib; the "
+      "prebuild would ship without GPU backends")
+  endif()
+  foreach(_dll IN LISTS BACKEND_DL_LOOSE_DLLS)
+    message(STATUS "inference-addon-sd: will stage ggml backend ${_dll}")
+  endforeach()
+endif()
+
 add_bare_module(inference-addon-sd NAME ${module_name} EXPORTS ${BACKEND_DL_EXPORTS})
+
+if(BACKEND_DL_LOOSE_DLLS)
+  install(
+    FILES ${BACKEND_DL_LOOSE_DLLS}
+    DESTINATION ${bare_target_value}/${module_name}
+  )
+endif()
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp

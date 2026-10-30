@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// QVAC-23767: hard merge gate for the linux prebuild dynamic-linking layout.
+// QVAC-23767, QVAC-25560: hard merge gate for the linux and win32 prebuild
+// dynamic-linking layout.
 //
-// Scans the linux prebuild artifacts and fails (exit 1) when
+// Scans the linux and win32 prebuild artifacts and fails (exit 1) when
 //   - the addon (.bare) hard-links a GPU userspace loader or an external C++
 //     runtime (either breaks a CPU-only host at addon load, gh#3853), or
-//   - the dlopen'd Vulkan backend module is missing, or itself depends on an
-//     external C++ runtime (its dlopen would fail silently on stock distros).
+//   - the runtime-loaded Vulkan backend module is missing, or itself depends
+//     on an external C++ runtime (its load would fail silently on stock
+//     hosts).
 //
 // This is the blocking twin of test/integration/prebuild-dynamic-linking.
 // test.js: the integration legs are continue-on-error (a signal, not a
@@ -19,6 +21,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const TARGETS = ['linux-x64', 'linux-arm64']
+const WIN_TARGETS = ['win32-x64']
 
 // Platform-package module name. Every iOS host shares `ios`; desktop and
 // Android use the host triple. Keep in sync with CMakeLists.txt and
@@ -88,6 +91,71 @@ function elfNeeded(buffer) {
   return needed
 }
 
+// Windows twin of the ELF reader: the DLL names in a PE32+ import table and
+// delay-load import table. Keep in sync with peImports in
+// test/integration/prebuild-dynamic-linking.test.js.
+function peImports(buffer) {
+  const isMz = buffer.length > 0x40 && buffer[0] === 0x4d && buffer[1] === 0x5a
+  if (!isMz) throw new Error('not a PE file')
+  const pe = buffer.readUInt32LE(0x3c)
+  if (buffer.readUInt32LE(pe) !== 0x00004550) throw new Error('missing PE signature')
+  const numberOfSections = buffer.readUInt16LE(pe + 6)
+  const sizeOfOptionalHeader = buffer.readUInt16LE(pe + 20)
+  const optional = pe + 24
+  if (buffer.readUInt16LE(optional) !== 0x20b) throw new Error('only PE32+ is supported')
+
+  const sections = []
+  for (let i = 0; i < numberOfSections; i++) {
+    const off = optional + sizeOfOptionalHeader + i * 40
+    sections.push({
+      virtualAddress: buffer.readUInt32LE(off + 12),
+      sizeOfRawData: buffer.readUInt32LE(off + 16),
+      pointerToRawData: buffer.readUInt32LE(off + 20)
+    })
+  }
+  const rvaToOffset = (rva) => {
+    const s = sections.find(
+      (sec) => rva >= sec.virtualAddress && rva < sec.virtualAddress + sec.sizeOfRawData
+    )
+    if (!s) throw new Error('RVA outside every section: ' + rva)
+    return rva - s.virtualAddress + s.pointerToRawData
+  }
+
+  const imports = []
+  const readNames = (dirRva, descriptorSize, nameField) => {
+    if (dirRva === 0) return
+    for (let pos = rvaToOffset(dirRva); ; pos += descriptorSize) {
+      const nameRva = buffer.readUInt32LE(pos + nameField)
+      if (nameRva === 0) break
+      const nameOff = rvaToOffset(nameRva)
+      const end = buffer.indexOf(0, nameOff)
+      imports.push(buffer.toString('utf8', nameOff, end).toLowerCase())
+    }
+  }
+
+  // Data directory at optional header offset 112, entry count at 108. Entry 1
+  // is the import table (20-byte descriptors, name at +12), entry 13 the
+  // delay-load import table (32-byte descriptors, name at +4).
+  const numberOfRvaAndSizes = buffer.readUInt32LE(optional + 108)
+  const dirRva = (index) =>
+    index < numberOfRvaAndSizes ? buffer.readUInt32LE(optional + 112 + index * 8) : 0
+  readNames(dirRva(1), 20, 12)
+  readNames(dirRva(13), 32, 4)
+  return imports
+}
+
+// The prebuild links the static CRT; a dynamic UCRT shows up as the
+// api-ms-win-crt-* API sets.
+const FORBIDDEN_WIN_IMPORTS = [
+  'vulkan-1.dll',
+  'opencl.dll',
+  'nvcuda.dll',
+  'cudart64',
+  'cublas64',
+  'cublaslt64'
+]
+const FORBIDDEN_WIN_RUNTIME = ['vcruntime', 'msvcp', 'ucrtbase.dll', 'api-ms-win-crt-']
+
 const prebuildsDir = process.argv[2]
 if (!prebuildsDir) {
   console.error('usage: verify-prebuild-linking.mjs <prebuilds-dir>')
@@ -96,6 +164,7 @@ if (!prebuildsDir) {
 
 let failures = 0
 let checkedTargets = 0
+let linuxCheckedTargets = 0
 const fail = (msg) => {
   failures++
   console.error(`FAIL: ${msg}`)
@@ -109,6 +178,7 @@ for (const target of TARGETS) {
     continue
   }
   checkedTargets++
+  linuxCheckedTargets++
 
   const addonNeeded = elfNeeded(fs.readFileSync(addonPath))
   console.log(`${target}/${moduleName}.bare NEEDED: ${addonNeeded.join(', ')}`)
@@ -136,7 +206,46 @@ for (const target of TARGETS) {
   }
 }
 
-if (checkedTargets === 0) {
+// CI runs this gate only after every prebuild succeeded, so the merged
+// artifact always carries win32-x64; a missing one means it was dropped or
+// staged under the wrong name, and skipping it would pass the gate unchecked.
+for (const target of WIN_TARGETS) {
+  const moduleName = moduleNameForHost(target)
+  const addonPath = path.join(prebuildsDir, target, `${moduleName}.bare`)
+  if (!fs.existsSync(addonPath)) {
+    fail(`${target}: no prebuild at ${addonPath}`)
+    continue
+  }
+  checkedTargets++
+
+  const addonImports = peImports(fs.readFileSync(addonPath))
+  console.log(`${target}/${moduleName}.bare imports: ${addonImports.join(', ')}`)
+  for (const dll of [...FORBIDDEN_WIN_IMPORTS, ...FORBIDDEN_WIN_RUNTIME]) {
+    if (addonImports.some((n) => n.startsWith(dll))) {
+      fail(`${target}: addon imports ${dll}* (breaks hosts without it)`)
+    }
+  }
+
+  const modulePath = path.join(prebuildsDir, target, moduleName, 'qvac-diffusion-ggml-vulkan.dll')
+  if (!fs.existsSync(modulePath)) {
+    fail(`${target}: Vulkan DL backend module missing at ${modulePath}`)
+    continue
+  }
+
+  const moduleImports = peImports(fs.readFileSync(modulePath))
+  console.log(`${target}/qvac-diffusion-ggml-vulkan.dll imports: ${moduleImports.join(', ')}`)
+  if (!moduleImports.includes('vulkan-1.dll')) {
+    fail(`${target}: Vulkan module does not import vulkan-1.dll (broken module)`)
+  }
+  for (const dll of FORBIDDEN_WIN_RUNTIME) {
+    if (moduleImports.some((n) => n.startsWith(dll))) {
+      fail(`${target}: Vulkan module imports ${dll}* (LoadLibrary fails on stock hosts)`)
+    }
+  }
+}
+
+// A present win32 prebuild must not hide missing linux ones.
+if (linuxCheckedTargets === 0) {
   console.error('FAIL: no linux prebuilds found to verify (artifact download broken?)')
   process.exit(1)
 }
@@ -144,4 +253,4 @@ if (failures > 0) {
   console.error(`${failures} dynamic-linking violation(s); see FAIL lines above`)
   process.exit(1)
 }
-console.log(`OK: ${checkedTargets} linux target(s) verified`)
+console.log(`OK: ${checkedTargets} target(s) verified`)
