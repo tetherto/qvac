@@ -146,8 +146,16 @@ test('a cpu load is unknown', { timeout: 600_000 }, async (t) => {
 const MTP_MODEL = 'Qwen3.5-0.8B-MTP-Q8_0.gguf'
 const NO_MTP_MODEL = 'Qwen3.5-0.8B-Q8_0.gguf'
 
-// A pinned context and placement keep two projections comparable.
-const PINNED = { 'ctx-size': '4096', 'gpu-layers': '0' }
+// A pinned context, placement and batch keep two projections comparable.
+// Speculative decoding caps the outputs a batch holds logits for, so at the
+// default batch a plain load reserves a far larger output buffer than the
+// draft context adds; a small batch reserves about the same either way.
+const PINNED = {
+  'ctx-size': '4096',
+  'gpu-layers': '0',
+  'batch-size': '16',
+  'ubatch-size': '16'
+}
 
 async function localModel(modelName) {
   const [name, dir] = await ensureModel({ modelName })
