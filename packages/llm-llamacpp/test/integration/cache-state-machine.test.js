@@ -473,12 +473,6 @@ safeTest(
       `the new conversation reused ${reusedTokens(stats)} tokens of its baseCacheKey`
     )
     t.ok(fs.readFileSync(base).equals(primedBytes), 'the base file is unchanged')
-    // TypeError is a native error, which plain t.exception rethrows.
-    await t.exception.all(
-      model.run(buildPrompt(), { baseCacheKey: 42 }),
-      /baseCacheKey must be a string/,
-      'a non-string baseCacheKey is refused'
-    )
   }
 )
 
@@ -680,6 +674,21 @@ safeTest('Validation: ephemeral must be a boolean', { timeout: 600_000 }, async 
       t.ok(
         /ephemeral must be a boolean/.test(err.message),
         'rejects ephemeral: ' + JSON.stringify(bad)
+      )
+    }
+  }
+})
+
+safeTest('Validation: baseCacheKey must be a string', { timeout: 600_000 }, async (t) => {
+  const { model } = await setupModel(t)
+  for (const bad of [42, true, [], {}]) {
+    try {
+      await model.run([...BASE_PROMPT], { baseCacheKey: bad })
+      t.fail('should have thrown for baseCacheKey: ' + JSON.stringify(bad))
+    } catch (err) {
+      t.ok(
+        /baseCacheKey must be a string/.test(err.message),
+        'rejects baseCacheKey: ' + JSON.stringify(bad)
       )
     }
   }

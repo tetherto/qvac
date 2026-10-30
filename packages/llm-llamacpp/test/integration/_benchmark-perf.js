@@ -16,7 +16,7 @@ const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
-const { recordPerformance, isMobile } = require('./_perf-helper.js')
+const { recordPerformance, isMobile, coldPrompt } = require('./_perf-helper.js')
 const { modelId, modelFileName } = require('./_benchmark-matrix.js')
 const os = require('bare-os')
 
@@ -74,16 +74,6 @@ function modelSpec(size, quant) {
     name: modelFileName(size, quant),
     url: `https://huggingface.co/unsloth/Qwen3.5-${size}-GGUF/resolve/main/Qwen3.5-${size}-${quant}.gguf`
   }
-}
-
-// A request without a cacheKey keeps its state for the next one, which would
-// then reuse all of an identical prompt. A distinct first line per call keeps
-// every timed run's prefill cold.
-let promptRuns = 0
-function coldPrompt(prompt) {
-  const [first, ...rest] = prompt
-  promptRuns++
-  return [{ ...first, content: `Run ${promptRuns}. ${first.content}` }, ...rest]
 }
 
 async function runInference(addon, prompt, reasoningBudget) {

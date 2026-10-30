@@ -4,7 +4,7 @@ const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
-const { recordPerformance } = require('./_perf-helper.js')
+const { recordPerformance, coldPrompt } = require('./_perf-helper.js')
 
 const os = require('bare-os')
 const isAndroid = os.platform() === 'android'
@@ -39,16 +39,6 @@ function _envInt(key, fallback) {
 const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
 const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 const PERF_LABEL = '[bitnet] [GPU]'
-
-// A request without a cacheKey keeps its state for the next one, which would
-// then reuse all of an identical prompt. A distinct first line per call keeps
-// every run's prefill cold.
-let promptRuns = 0
-function coldPrompt(prompt) {
-  const [first, ...rest] = prompt
-  promptRuns++
-  return [{ ...first, content: `Run ${promptRuns}. ${first.content}` }, ...rest]
-}
 
 async function runBitnetInference(addon, prompt) {
   const startTime = Date.now()
