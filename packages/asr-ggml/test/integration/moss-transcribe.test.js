@@ -95,8 +95,7 @@ test(
           cuda: 2,
           vulkan: 3,
           opencl: 4,
-          webgpu: 5,
-          hexagon: 6
+          webgpu: 5
         }[backend]
         if (expectedId !== undefined) {
           t.is(info.backendId, expectedId, 'requested backend is active')
@@ -107,7 +106,6 @@ test(
       t.is(typeof info.backendDescription, 'string', 'backend description is present')
       t.is(typeof info.encoderBackend, 'string', 'encoder route is present')
       t.is(typeof info.encoderOnCoreml, 'boolean', 'sidecar state is present')
-      if (backend === 'hexagon') t.is(info.backendDevice, 'NPU', 'Hexagon is reported as an NPU')
       const progress = []
       const plain = await collect(
         await model.run(audio, {

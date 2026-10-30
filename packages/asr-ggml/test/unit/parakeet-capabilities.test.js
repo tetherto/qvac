@@ -93,10 +93,8 @@ test('Parakeet selectors reach the native boundary without a whitelist or GPU co
     'vulkan',
     'opencl',
     'webgpu',
-    'hexagon',
     'CUDA1',
     'MTL0',
-    'HTP0',
     'future-device'
   ]) {
     for (const useGPU of [false, true]) {

@@ -24,13 +24,9 @@ qvac_addon_fuzz_manifest()
 # host-compiler setup lives in vcpkg-overlays/toolchains/linux-clang.cmake.
 option(ASR_CUDA "Enable the CUDA GPU backend (requires nvcc on the build host)" OFF)
 option(ASR_WEBGPU "Enable the WebGPU backend (requires Dawn)" OFF)
-option(ASR_HEXAGON "Enable the Hexagon backend (requires Qualcomm SDK and Tools)" OFF)
-foreach(_asr_backend WEBGPU HEXAGON)
-  if(ASR_${_asr_backend})
-    string(TOLOWER "${_asr_backend}" _asr_feature)
-    list(APPEND VCPKG_MANIFEST_FEATURES "${_asr_feature}")
-  endif()
-endforeach()
+if(ASR_WEBGPU)
+  list(APPEND VCPKG_MANIFEST_FEATURES "webgpu")
+endif()
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -166,10 +162,6 @@ if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ASR_CUDA))
   endif()
 endif()
 
-if(ASR_HEXAGON)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AsrHexagon.cmake)
-  asr_stage_hexagon_assets("${VCPKG_INSTALLED_PATH}/lib" "${BACKENDS_SUBDIR_VALUE}")
-endif()
 
 add_bare_module(asr-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
 
@@ -218,9 +210,6 @@ target_link_libraries(
 )
 
 target_compile_definitions(${asr-ggml} PUBLIC JS_LOGGER)
-if(ASR_HEXAGON)
-  target_compile_definitions(${asr-ggml} PRIVATE QVAC_ASR_HEXAGON)
-endif()
 # Read by ModuleBackendsDir.hpp; every target compiling the model sources
 # (this module and asr_ggml_tests below) needs it.
 target_compile_definitions(${asr-ggml} PRIVATE
@@ -479,9 +468,6 @@ if(BUILD_TESTING)
     QVAC_ASR_TEST_BACKENDS_DIR="${VCPKG_INSTALLED_PATH}/lib"
     QVAC_ASR_GGML_TESTING)
 
-  if(ASR_HEXAGON)
-    target_compile_definitions(asr_ggml_tests PRIVATE QVAC_ASR_HEXAGON)
-  endif()
 
   set_target_properties(asr_ggml_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/addon/tests)

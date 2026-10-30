@@ -127,7 +127,6 @@ test('MOSS integration checks the requested backend and runs both prompts', asyn
     ['cuda', 2, 'CUDA0'],
     ['vulkan', 3, 'Vulkan0'],
     ['webgpu', 5, 'WEBGPU0'],
-    ['hexagon', 6, 'HTP0'],
     ['CUDA1', 2, 'CUDA1'],
     ['Vulkan0', 3, 'Vulkan0']
   ]) {

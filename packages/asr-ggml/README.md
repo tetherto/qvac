@@ -904,13 +904,13 @@ that ends mid-sample is rejected.
 ## Backends and GPU Acceleration
 
 For Parakeet, `parakeetConfig.backend` accepts the native selector unchanged:
-`auto`, `cpu`, `cuda`, `vulkan`, `opencl`, `webgpu`, `metal`, `hexagon`, or an
-exact ggml device name such as `CUDA1`, `MTL0` or `HTP0`. An explicit selector
+`auto`, `cpu`, `cuda`, `vulkan`, `opencl`, `webgpu`, `metal`, or an
+exact ggml device name such as `CUDA1` or `MTL0`. An explicit selector
 overrides `useGPU` and fails at load if unavailable; it does not silently
 retry on CPU. Omitted, empty and `auto` selectors preserve existing automatic
 selection and fallback. A selector requires the corresponding backend to be
 built and available on the host. `getBackendInfo()` reports the resolved
-device, including `NPU` for a native NPU backend. Use the same `backend` in
+device. Use the same `backend` in
 the Parakeet `assessFit` request. Core ML sidecars retain their existing
 native routing; selecting a ggml device does not control Core ML placement.
 
@@ -993,22 +993,10 @@ additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
-Optional source builds accept `-D ASR_WEBGPU=ON` or `-D ASR_HEXAGON=ON`
-with `bare-make generate`. Both are off by default. WebGPU builds Dawn from
-the official vcpkg registry with its platform Metal/Vulkan feature, without
-Dawn's default X11/GL dependencies. Hexagon requires a compatible Qualcomm
-SDK and Tools installation: pass `HEXAGON_SDK_ROOT` and `HEXAGON_TOOLS_ROOT`
-through the build triplet's tracked `VCPKG_ENV_PASSTHROUGH` settings. The port
-builds the host backend and every matching `libggml-htp-v*.so` DSP skeleton
-from the same pinned ggml source; the addon stages them together. On Android,
-its backend directory is prepended to `DSP_LIBRARY_PATH` before discovery,
-preserving existing DSP paths, legacy ADSP paths and vendor defaults.
-
-`BackendId.WebGPU` is `5`; `BackendId.Hexagon` is `6`. Hexagon reports `NPU`
-(device class `2`), including ggml versions that register HTP as a GPU.
-An unavailable explicit Parakeet/MOSS backend fails instead of silently
-falling back. Validate these builds on compatible hardware; successful CPU
-fallback is not evidence of accelerator execution.
+Optional source builds accept `-D ASR_WEBGPU=ON`. The manifest pins a compatible
+Dawn version and avoids its default X11/GL dependencies. `BackendId.WebGPU` is
+`5`. An unavailable explicit Parakeet/MOSS backend fails instead of silently
+falling back. Hexagon is not included in JavaScript package builds.
 
 The Apple `coreml` feature also enables Whisper's encoder, retaining native
 fallback when a matching sidecar is absent. `encoderOnCoreml` comes from the

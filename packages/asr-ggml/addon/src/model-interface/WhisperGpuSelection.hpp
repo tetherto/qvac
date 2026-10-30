@@ -11,23 +11,6 @@
 
 namespace main_gpu {
 
-inline std::string
-dspLibraryPath(const std::string& dir, const std::string& existing) {
-  if (dir.empty() || dir.find(';') != std::string::npos)
-    return existing;
-  size_t start = 0;
-  while (start < existing.size()) {
-    const size_t end = existing.find(';', start);
-    if (existing.substr(start, end == std::string::npos ? end : end - start) ==
-        dir)
-      return existing;
-    if (end == std::string::npos)
-      break;
-    start = end + 1;
-  }
-  return existing.empty() ? dir : dir + ";" + existing;
-}
-
 inline std::string lower(const char* value) {
   std::string result = value != nullptr ? value : "";
   std::transform(
@@ -98,8 +81,7 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
     // captured for the CPU-fallback warning.
     device.eligible = backend == "mtl" || backend == "metal" ||
                       backend == "cuda" || backend == "vulkan" ||
-                      backend == "opencl" || backend == "webgpu" ||
-                      backend == "hexagon" || backend == "htp";
+                      backend == "opencl" || backend == "webgpu";
     hasAdrenoOpencl = hasAdrenoOpencl || device.adrenoOpencl;
     adrenoVulkan[i] = backend == "vulkan" && adreno;
     device.identity = deviceIdentity(registry, dev);

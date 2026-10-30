@@ -212,10 +212,8 @@ TEST(ParakeetEngineOptions, ExplicitSelectorsAreIndependentOfGpuPreference) {
         "vulkan",
         "opencl",
         "webgpu",
-        "hexagon",
         "CUDA1",
         "MTL0",
-        "HTP0",
         "unknown-device"}) {
     for (const bool useGpu : {false, true}) {
       ParakeetConfig config;
@@ -920,10 +918,8 @@ TEST(AsrBackendIdentity, DistinguishesOptionalFamiliesAndDeviceClasses) {
   EXPECT_EQ(backendDeviceClass(nullptr, 0), 0);
   EXPECT_EQ(backendFamily("WebGPU0"), 5);
   EXPECT_EQ(backendFamily("WEBGPU"), 5);
-  EXPECT_EQ(backendFamily("HTP0"), 6);
-  EXPECT_EQ(backendFamily("Hexagon"), 6);
-  EXPECT_EQ(backendDeviceClass(nullptr, 6), 2);
-  EXPECT_STREQ(backendDeviceLabel(2), "NPU");
+  EXPECT_EQ(backendFamily("HTP0"), 99);
+  EXPECT_EQ(backendFamily("Hexagon"), 99);
   EXPECT_EQ(backendDeviceClass(nullptr, 99), -1);
   EXPECT_STREQ(backendDeviceLabel(-1), "Unknown");
 }

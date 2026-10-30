@@ -136,7 +136,6 @@ export enum BackendId {
   Vulkan = 3,
   OpenCL = 4,
   WebGPU = 5,
-  Hexagon = 6,
   Other = 99,
 }
 

@@ -119,25 +119,12 @@
           "default-features": false
         }
       ]
-    },
-    "hexagon": {
-      "description": "Opt-in Hexagon backend and matching DSP skeletons. Build with ASR_HEXAGON=ON and a configured Qualcomm SDK toolchain.",
-      "dependencies": [
-        {
-          "name": "speech-cpp",
-          "default-features": false,
-          "features": [
-            "hexagon"
-          ]
-        }
-      ]
     }
   },
   "overrides": [
     {
       "name": "ggml-speech",
-      "version": "2026-10-27",
-      "port-version": 1
+      "version": "2026-10-27"
     },
     {
       "name": "speech-cpp",

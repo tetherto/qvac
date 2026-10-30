@@ -184,7 +184,7 @@ TEST(MainGpuRegistry, CpuFallbackNamesEveryRefusedGpuTypeDevice) {
   EXPECT_TRUE(select(eligibleOnly, {}).refused.empty());
 }
 
-TEST(MainGpuRegistry, AllowsWebGpuAndHexagonFromOptInBuilds) {
+TEST(MainGpuRegistry, AllowsWebGpuAndRejectsHexagon) {
   const MockDevice webgpu{
       GGML_BACKEND_DEVICE_TYPE_GPU, "WebGPU", "Dawn", "WebGPU0"};
   const MockDevice hexagon{
@@ -192,20 +192,9 @@ TEST(MainGpuRegistry, AllowsWebGpuAndHexagonFromOptInBuilds) {
   const auto devices =
       main_gpu::registryDevices(MockRegistry{{&webgpu, &hexagon}});
   EXPECT_TRUE(devices[0].eligible);
-  EXPECT_TRUE(devices[1].eligible);
+  EXPECT_FALSE(devices[1].eligible);
   EXPECT_EQ(select(devices, {Kind::Index, 0}).whisperIndex, 0);
-  EXPECT_EQ(select(devices, {Kind::Index, 1}).whisperIndex, 1);
-}
-
-TEST(MainGpuRegistry, DspSearchPathPreservesVendorAndLegacyEntries) {
-  EXPECT_EQ(
-      main_gpu::dspLibraryPath("/app/native", "/vendor/lib/rfsa/adsp;/dsp"),
-      "/app/native;/vendor/lib/rfsa/adsp;/dsp");
-  EXPECT_EQ(
-      main_gpu::dspLibraryPath("/app/native", "/app/native;/dsp"),
-      "/app/native;/dsp");
-  EXPECT_EQ(main_gpu::dspLibraryPath("/app;invalid", "/dsp"), "/dsp");
-  EXPECT_EQ(main_gpu::dspLibraryPath("", "/dsp"), "/dsp");
+  EXPECT_EQ(select(devices, {Kind::Index, 1}).whisperIndex, -1);
 }
 
 } // namespace

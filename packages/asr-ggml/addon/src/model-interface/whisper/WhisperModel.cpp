@@ -148,18 +148,6 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         std::string("loading ggml backends from: ") + dir.string());
-#if defined(__ANDROID__) && defined(QVAC_ASR_HEXAGON)
-    const char* previous = std::getenv("DSP_LIBRARY_PATH");
-    if (!previous)
-      previous = std::getenv("ADSP_LIBRARY_PATH");
-    const auto dspPath =
-        main_gpu::dspLibraryPath(dir.string(), previous ? previous : "");
-    if (!dspPath.empty() &&
-        ::setenv("DSP_LIBRARY_PATH", dspPath.c_str(), 1) != 0)
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "Whisper: failed to set DSP_LIBRARY_PATH before backend discovery");
-#endif
     ggml_backend_load_all_from_path(dir.string().c_str());
   });
 }

@@ -25,7 +25,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
-- Opt-in WebGPU and Hexagon source builds with backend identities and bundled DSP skeletons.
+- Opt-in WebGPU source builds with backend identity reporting.
 - Whisper Core ML encoder activation with missing-sidecar fallback and native state reporting.
 - Optional MOSS token progress callbacks, typed runtime statistics and per-transcription encoder routing.
 - Optional batch diarization probability matrices, batch ASR token IDs and native Parakeet stage timings.

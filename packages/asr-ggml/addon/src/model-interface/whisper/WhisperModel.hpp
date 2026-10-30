@@ -125,7 +125,7 @@ public:
 
   // Active backend identity captured by captureActiveBackendInfo() at load();
   // surfaced to JS via the addon's getBackendInfo() verb. getBackendId()
-  // codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 5=WebGPU 6=Hexagon 99=other
+  // codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 5=WebGPU 99=other
   // (lock-stepped with parakeet's BackendId). Device class: 0=CPU 1=GPU 2=NPU
   // -1=unknown. gpuMem*Mb are the device-memory snapshot at load(); -1 =
   // "device does not report" (matching runtimeStats()). Report constructor
