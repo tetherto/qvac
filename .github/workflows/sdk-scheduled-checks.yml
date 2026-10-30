@@ -4,8 +4,9 @@ name: SDK scheduled checks
 # registry (06:00 UTC), the latest OpenCode with the latest @qvac/opencode-plugin (07:00), and the latest OpenClaw with
 # the latest @qvac/openclaw-plugin (07:30, and on PRs that change its smoke). A scheduled failure opens or updates an issue.
 on:
+  # TEMP rehearsal: the feat/package-ci-contract-* bases register the workflow so the stack can dispatch it.
   pull_request:
-    branches: [main]
+    branches: [main, feat/package-ci-contract-*]
     paths:
       - ".github/workflows/sdk-scheduled-checks.yml"
       - "scripts/ci/openclaw-upstream-compat-smoke.sh"

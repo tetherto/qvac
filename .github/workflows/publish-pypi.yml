@@ -7,6 +7,10 @@ on:
   push:
     branches: [release-sdk-*]
     paths: ["packages/sdk/**", "packages/sdk-python/**"]
+  # TEMP rehearsal: registers the workflow so the stack can dispatch it; on a pull request it only builds and checks.
+  pull_request:
+    branches: [feat/package-ci-contract-*]
+    paths: [".github/workflows/publish-pypi.yml"]
   workflow_dispatch:
     inputs:
       publish_pypi_only:
