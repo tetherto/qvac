@@ -1,5 +1,9 @@
 'use strict'
 
+const binding = require('../../binding.js')
+const test = require('brittle')
+const { LayaDecisions, Reranker } = require('../../index.js')
+
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
@@ -15,10 +19,6 @@ const SHARDED_MODEL = {
   baseUrl: 'https://huggingface.co/gianni-cor/gte-large_fp16-sharded/resolve/main/',
   embeddingDimension: 1024,
   files: [
-    {
-      name: 'gte-large_fp16.tensors.txt',
-      size: 8966
-    },
     {
       name: 'gte-large_fp16-00001-of-00005.gguf',
       size: 156815424
@@ -91,7 +91,7 @@ safeTest(
     const modelFiles = await ensureShardedModel(modelDir)
 
     const addon = new GGMLBert({
-      files: { model: modelFiles },
+      files: { model: [modelFiles.find((file) => /-00001-of-\d{5}\.gguf$/.test(file))] },
       config: {
         device: 'cpu',
         gpu_layers: '0',
@@ -126,3 +126,23 @@ safeTest(
     }
   }
 )
+
+test('native binding does not expose weight streaming', function (t) {
+  t.is(binding.loadWeights, undefined)
+})
+
+// prestage-ignore: missing-model-00001-of-10000000.gguf — intentionally missing path for the allocation regression
+test('all model classes reject missing disk filenames without expanding oversized shard counts', async function (t) {
+  for (const Model of [GGMLBert, LayaDecisions, Reranker]) {
+    const model = new Model({
+      files: { model: [path.resolve(__dirname, 'missing-model-00001-of-10000000.gguf')] },
+      config: { device: 'cpu', gpu_layers: '0' }
+    })
+    try {
+      await t.exception(() => model.load(), /Failed to read GGUF metadata from disk/)
+      t.is(model.getState().configLoaded, false)
+    } finally {
+      await model.unload()
+    }
+  }
+})

@@ -307,13 +307,6 @@
       "sha256": "f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82",
       "bytes": 445053216
     },
-    "Qwen3-0.6B-UD-IQ1_S.tensors.txt": {
-      "urls": [
-        "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/d1538d52a81de36a7a0d6879ab96ebc6502ce822/Qwen3-0.6B-UD-IQ1_S.tensors.txt"
-      ],
-      "sha256": "c10b950a18ec75d3ee61b55ed1ba5b4c3ff3d7afd726651b813d48165bd5847a",
-      "bytes": 7067
-    },
     "Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf": {
       "urls": [
         "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/d1538d52a81de36a7a0d6879ab96ebc6502ce822/Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf"

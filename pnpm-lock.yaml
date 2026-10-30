@@ -565,9 +565,6 @@ importers:
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
-      bare-fs:
-        specifier: ^4.5.1
-        version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-path:
         specifier: ^3.0.0
         version: 3.1.1
@@ -584,6 +581,9 @@ importers:
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-fs:
+        specifier: ^4.5.1
+        version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-https:
         specifier: ^3.0.0
         version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
@@ -875,7 +875,7 @@ importers:
         version: 0.31.0
       '@qvac/embed-llamacpp':
         specifier: ^0.53.0
-        version: link:../embed-llamacpp
+        version: 0.53.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/ggml-rpc-server':
         specifier: ^0.7.0
         version: link:../ggml-rpc-server
@@ -884,7 +884,7 @@ importers:
         version: 0.1.3
       '@qvac/llm-llamacpp':
         specifier: ^0.65.0
-        version: link:../llm-llamacpp
+        version: 0.65.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/ocr-ggml':
         specifier: ^0.31.0
         version: link:../ocr-ggml
@@ -1619,7 +1619,7 @@ importers:
         version: 0.31.0
       '@qvac/embed-llamacpp':
         specifier: ^0.53.0
-        version: link:../embed-llamacpp
+        version: 0.53.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
@@ -1634,7 +1634,7 @@ importers:
         version: 0.1.3
       '@qvac/llm-llamacpp':
         specifier: ^0.65.0
-        version: link:../llm-llamacpp
+        version: 0.65.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -4561,6 +4561,18 @@ packages:
       '@qvac/fabric-ios':
         optional: true
 
+  '@qvac/embed-llamacpp@0.53.0':
+    resolution: {integrity: sha512-hES4SkNr3fcuwu/jM8JnV74b8ThSicQUFKCiijpwQLPipol1mISrACg5PWioxInYK7KPT1kDj/Le/q/OVRxXcQ==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.24.0
+      '@qvac/fabric-ios': ^0.24.0
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
+
   '@qvac/error@0.1.1':
     resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
 
@@ -4726,6 +4738,18 @@ packages:
     peerDependencies:
       '@qvac/fabric-android-arm64': ^0.22.0
       '@qvac/fabric-ios': ^0.22.0
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
+
+  '@qvac/llm-llamacpp@0.65.0':
+    resolution: {integrity: sha512-vTO38IjHKqVG4Y1ov509YAGSKN+MQ9kvvGJAlTS5W166ownZR3Ul+Jcoq8LrLlGsSAgRI0esKsiFXeNwIswTOA==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.24.0
+      '@qvac/fabric-ios': ^0.24.0
     peerDependenciesMeta:
       '@qvac/fabric-android-arm64':
         optional: true
@@ -14332,6 +14356,26 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
+  '@qvac/embed-llamacpp@0.53.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/fabric': 0.24.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+    optionalDependencies:
+      '@qvac/fabric-android-arm64': 0.24.0
+      '@qvac/fabric-darwin-arm64': 0.24.0
+      '@qvac/fabric-darwin-x64': 0.24.0
+      '@qvac/fabric-ios': 0.24.0
+      '@qvac/fabric-linux-arm64': 0.24.0
+      '@qvac/fabric-linux-x64': 0.24.0
+      '@qvac/fabric-win32-x64': 0.24.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
   '@qvac/error@0.1.1': {}
 
   '@qvac/fabric-android-arm64@0.22.0':
@@ -14457,6 +14501,26 @@ snapshots:
       '@qvac/fabric-linux-arm64': 0.22.0
       '@qvac/fabric-linux-x64': 0.22.0
       '@qvac/fabric-win32-x64': 0.22.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
+  '@qvac/llm-llamacpp@0.65.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/fabric': 0.24.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+    optionalDependencies:
+      '@qvac/fabric-android-arm64': 0.24.0
+      '@qvac/fabric-darwin-arm64': 0.24.0
+      '@qvac/fabric-darwin-x64': 0.24.0
+      '@qvac/fabric-ios': 0.24.0
+      '@qvac/fabric-linux-arm64': 0.24.0
+      '@qvac/fabric-linux-x64': 0.24.0
+      '@qvac/fabric-win32-x64': 0.24.0
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer

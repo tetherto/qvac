@@ -12,7 +12,6 @@
 
 #include "ModelMetadata.hpp"
 #include "addon/BertErrors.hpp"
-#include "inference-addon-cpp/GGUFShards.hpp"
 #include "logging.hpp"
 #include "utils.hpp"
 
@@ -346,19 +345,14 @@ BertModel::BertModel(
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0),
       projectionPath_(projectionPath),
       loader_(
-          "BertModel", loadHooks(), modelGgufPath,
+          loadHooks(), modelGgufPath,
           withoutMultimodalOptions(config, projectionPath, multimodalOptions_),
           backendsDir) {}
 
 BertModel::BertModel(BertModelSetup& setup)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0),
-      loader_("BertModel", loadHooks(), setup) {}
-
-void BertModel::resolveShardPaths(
-    GGUFShards& shards, const std::string& modelPath) {
-  LlamaModelLoader::resolveShardPaths(shards, modelPath);
-}
+      loader_(loadHooks(), setup) {}
 
 LlamaModelLoader::Hooks BertModel::loadHooks() {
   return {

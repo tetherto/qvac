@@ -1,6 +1,6 @@
 // Type-level consumer test mirroring the SDK's import shapes, compiled with
 // the SDK's module settings. Type-checked only — never executed.
-import LlmLlamacpp, { pickPrimaryGgufPath, assessFit } from "../../index";
+import LlmLlamacpp, { validateModelPath, assessFit } from "../../index";
 import type { GenerationParams, RunOptions, Message, BatchPrompt, QvacResponse } from "../../index";
 import llmAddonLogging, {
   setLogger,
@@ -44,7 +44,7 @@ void sdkShapes;
 declare const response: QvacResponse;
 void response;
 
-const primary: string = pickPrimaryGgufPath(["/abs/model.gguf"]);
+const primary: string = validateModelPath(["/abs/model.gguf"]);
 void primary;
 
 const logging: AddonLogging = llmAddonLogging;

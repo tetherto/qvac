@@ -653,7 +653,7 @@ inline FitResult runFit(FitRequest request) {
         qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);
     ModelMetaData metadata;
-    metadata.parse(modelPath, GGUFShards{}, false, ADDON_ID);
+    metadata.parse(modelPath, ADDON_ID);
     auto normalized = load_fit_normalization::normalizeLoadForFit(
         modelPath,
         std::move(configFilemap),

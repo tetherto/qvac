@@ -579,13 +579,17 @@ TEST_F(LlamaModelTest, SetWeightsForFile) {
   std::string test_data1 = "test weight data";
   auto shard1 = std::make_unique<std::stringbuf>(test_data1);
 
-  EXPECT_NO_THROW({ model.setWeightsForFile(filename1, std::move(shard1)); });
+  EXPECT_THROW(
+      model.setWeightsForFile(filename1, std::move(shard1)),
+      qvac_errors::StatusError);
 
   std::string filename2 = "test_model2.gguf";
   std::string test_data2 = "more test weight data";
   auto shard2 = std::make_unique<std::stringbuf>(test_data2);
 
-  EXPECT_NO_THROW({ model.setWeightsForFile(filename2, std::move(shard2)); });
+  EXPECT_THROW(
+      model.setWeightsForFile(filename2, std::move(shard2)),
+      qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, LlamaLogCallback) {
@@ -1164,42 +1168,26 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidChatTemplate) {
       qvac_errors::StatusError);
 }
 
-TEST_F(LlamaModelTest, ReloadThrowsForStreamedShardedModel) {
+TEST_F(LlamaModelTest, DiskShardedModelReloadsAfterRejectedStreaming) {
   using MP = test_common::TestModelPath;
   MP shardedModel(
       "Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf",
       "SHARDED_MODEL_FIRST_SHARD_PATH",
       MP::OnMissing::Fail,
-      "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded",
-      true /* isSharded */);
+      "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded");
   REQUIRE_MODEL(shardedModel);
-  LlamaModel::resolveShardPaths(shardedModel.shards, shardedModel.path);
-
-  std::string path = shardedModel.path;
-  std::string projection;
-  auto cfg = config_files;
-  LlamaModel model(std::move(path), std::move(projection), std::move(cfg));
-
-  {
-    std::string tensorsBasename =
-        fs::path(shardedModel.shards.tensors_file).filename().string();
-    auto tensorsBuf = test_common::readFileToStreambufBinary(
-        shardedModel.shards.tensors_file);
-    ASSERT_NE(tensorsBuf, nullptr);
-    model.setWeightsForFile(tensorsBasename, std::move(tensorsBuf));
-
-    for (const auto& shardPath : shardedModel.shards.gguf_files) {
-      auto streambuf = test_common::readFileToStreambufBinary(shardPath);
-      ASSERT_NE(streambuf, nullptr);
+  LlamaModel model(
+      std::string(shardedModel.path),
+      std::string(),
+      std::unordered_map<std::string, std::string>(config_files));
+  EXPECT_THROW(
       model.setWeightsForFile(
-          fs::path(shardPath).filename().string(), std::move(streambuf));
-    }
-  }
-
+          "model.tensors.txt", std::make_unique<std::stringbuf>("weights")),
+      qvac_errors::StatusError);
   model.waitForLoadInitialization();
   ASSERT_TRUE(model.isLoaded());
-
-  EXPECT_THROW(model.reload(), qvac_errors::StatusError);
+  EXPECT_NO_THROW(model.reload());
+  ASSERT_TRUE(model.isLoaded());
 }
 
 TEST_F(LlamaModelTest, ReloadDuringProcessingWaitsAndDoesNotCrash) {

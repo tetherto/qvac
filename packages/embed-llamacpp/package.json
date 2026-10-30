@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.53.1",
+  "version": "0.54.0",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -111,13 +111,13 @@
     "bare-process": "^4.2.2",
     "bare-https": "^3.0.0",
     "bare-os": "^3.6.2",
-    "bare-url": "^2.1.6"
+    "bare-url": "^2.1.6",
+    "bare-fs": "^4.5.1"
   },
   "dependencies": {
     "@qvac/fabric": "^0.25.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
-    "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
   },
   "optionalDependencies": {

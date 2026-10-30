@@ -37,7 +37,6 @@
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
 #include "handlers/LoadConfigHandlers.hpp"
-#include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/JsonDepth.hpp"
@@ -112,23 +111,10 @@ static void preflightImagePixels(
   }
 }
 
-void LlamaModel::resolveShardPaths(
-    GGUFShards& shards, const std::string& modelPath) {
-  if (shards.gguf_files.empty())
-    return;
-  auto baseDir = std::filesystem::path(modelPath).parent_path();
-  if (baseDir.empty())
-    return;
-  for (auto& f : shards.gguf_files)
-    f = (baseDir / f).string();
-  shards.tensors_file = (baseDir / shards.tensors_file).string();
-}
-
 LlamaModel::LlamaModel(
     std::string&& modelPath, std::string&& projectionPath,
     std::unordered_map<std::string, std::string>&& configFilemap)
-    : loadingContext_(InitLoader::getLoadingContext("LlamaModel")),
-      constructionArgs_{
+    : constructionArgs_{
           std::move(modelPath),
           std::move(projectionPath),
           std::move(configFilemap)} {
@@ -140,18 +126,6 @@ LlamaModel::LlamaModel(
 
 void LlamaModel::reload(
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
-  {
-    std::shared_lock lock(stateMtx_);
-    if (state_->asyncWeightsLoader_.isStreaming()) {
-      // TODO: Make Fabric support moving/streaming existing loaded tensors
-      // TODO: to a different backend.
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(ReloadNotSupportedForStreamedModel),
-          "Cannot reload a model that was loaded via streamed shards; "
-          "the streamed weights have already been consumed.");
-    }
-  }
   setInitLoader(InitLoader::LOADER_TYPE::IMMEDIATE, newFinetuneOverrides);
 }
 
@@ -229,8 +203,7 @@ void LlamaModel::setInitLoader(
   if (loaderType.has_value()) {
     constructionArgs_.loaderType = loaderType.value();
   }
-  state_ = std::make_shared<ReloadableState>(
-      constructionArgs_, loadingContext_, metadata_);
+  state_ = std::make_shared<ReloadableState>();
   bool callerHoldsLock =
       constructionArgs_.loaderType == InitLoader::LOADER_TYPE::IMMEDIATE;
   state_->initLoader_.init(
@@ -258,19 +231,7 @@ void LlamaModel::init(bool acquireLock) {
 
   setVerbosityLevel(configFilemap);
 
-  if (!snap->asyncWeightsLoader_.isStreaming()) {
-    if (!snap.promoteToWrite()) {
-      return;
-    }
-    resolveShardPaths(snap->shards_, modelPath);
-    snap.demoteToRead();
-  }
-
-  metadata_.parse(
-      modelPath,
-      snap->shards_,
-      snap->asyncWeightsLoader_.isStreaming(),
-      ADDON_ID);
+  metadata_.parse(modelPath, ADDON_ID);
   {
     auto fileType = metadata_.tryGetU32("general.file_type");
     QLOG_IF(
@@ -348,7 +309,6 @@ void LlamaModel::init(bool acquireLock) {
   snap->normalizedFitSnapshot_ = normalized.fitSnapshot;
   runtimeBackendDevice_ = normalized.runtimeBackendDevice;
   common_params params = std::move(normalized.params);
-  const bool isStreaming = snap->asyncWeightsLoader_.isStreaming();
   try {
     qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
         speculativeConfig, params);
@@ -357,33 +317,8 @@ void LlamaModel::init(bool acquireLock) {
         qvac_errors::general_error::InvalidArgument, e.what());
   }
 
-  // Match llama-server for every on-disk GGUF. llama_model_load_from_file
-  // discovers the remaining split files from shard 0, while
-  // common_init_from_params runs fabric's automatic fit before loading.
-  if (!isStreaming && !snap->shards_.gguf_files.empty()) {
-    params.model.path = snap->shards_.gguf_files.front();
-  }
-
-  const std::string errorWhenFailed = toString(UnableToLoadModel);
-  auto streamedFiles =
-      snap->asyncWeightsLoader_.extractIndividualStreamedFiles();
-
   snap.demoteToRead();
-
-  common_init_result_ptr llamaInit;
-  if (isStreaming) {
-    llamaInit = initFromConfig(
-        params,
-        modelPath,
-        streamedFiles,
-        snap->shards_,
-        loadingContext_,
-        true,
-        ADDON_ID,
-        errorWhenFailed);
-  } else {
-    llamaInit = common_init_from_params(params);
-  }
+  common_init_result_ptr llamaInit = common_init_from_params(params);
 
   if (!snap.promoteToWrite()) {
     return;
@@ -572,10 +507,11 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
 }
 
 void LlamaModel::setWeightsForFile(
-    const std::string& filename,
-    std::unique_ptr<std::basic_streambuf<char>>&& shard) {
-  std::shared_lock lock(stateMtx_);
-  state_->asyncWeightsLoader_.setWeightsForFile(filename, std::move(shard));
+    const std::string&, std::unique_ptr<std::basic_streambuf<char>>&&) {
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "Weight streaming is no longer supported. Pass a disk path; for a "
+      "sharded model, pass only the first shard path.");
 }
 
 bool LlamaModel::isLoaded() {

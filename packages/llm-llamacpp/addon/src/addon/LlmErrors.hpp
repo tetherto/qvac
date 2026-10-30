@@ -29,6 +29,7 @@ enum LlmErrorCode : uint32_t {
   MediaRequestNotProvided = 21,
   UnableToDeleteThreadPool = 22,
   UnableToLoadMetadata = 23,
+  // No longer thrown; kept so code 24 is not reused.
   ReloadNotSupportedForStreamedModel = 24,
   UnableToSaveSessionFile = 25,
   // Retired with sliding-context support and never thrown now. Kept so a new

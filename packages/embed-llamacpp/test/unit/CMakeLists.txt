@@ -7,7 +7,6 @@ endif()
 add_executable(
   addon-test
   test_addon_cpp.cpp
-  test_async_weights_loader.cpp
   test_backend_selection.cpp
   test_cancel_stale_flag.cpp
   test_bert_model.cpp
@@ -19,7 +18,6 @@ add_executable(
   test_multimodal_options.cpp
   test_utils.cpp
   backend_env.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp

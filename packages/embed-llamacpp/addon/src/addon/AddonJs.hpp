@@ -230,8 +230,7 @@ inline FitResult runFit(FitRequest request) {
   // which owns the unreadable-model verdict.
   try {
     ModelMetaData metadata;
-    metadata.parse(
-        modelPath, {}, false, qvac_lib_infer_llamacpp_embed::errors::ADDON_ID);
+    metadata.parse(modelPath, qvac_lib_infer_llamacpp_embed::errors::ADDON_ID);
     const auto architecture = metadata.tryGetString("general.architecture");
     if (architecture.has_value() && !architecture->empty()) {
       const auto trainedCtx =

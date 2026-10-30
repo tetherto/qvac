@@ -97,11 +97,7 @@ function immutableHuggingFaceRevision(url) {
 }
 
 function requiresHuggingFaceLfsMetadata(url) {
-  // Every Hugging Face artifact in this manifest is LFS-backed except the
-  // sharded-model tensors index, which is a regular Git blob.
-  return (
-    isTrustedHuggingFaceUrl(url) && !new URL(url).pathname.toLowerCase().endsWith('.tensors.txt')
-  )
+  return isTrustedHuggingFaceUrl(url)
 }
 
 function parseHuggingFaceLfsMetadata(url, headers) {

@@ -2,7 +2,7 @@ import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { type Addon, type EmbedRunInput, type GGMLConfig } from "./addon";
 export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon, EmbedMediaPart, EmbedInputPart, EmbedMultimodalInput, EmbedBatchInput, EmbedRunInput, } from "./addon";
-export { BertInterface, pickPrimaryGgufPath } from "./addon";
+export { BertInterface, validateModelPath } from "./addon";
 export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type { LayaConfig, LayaRequest, LayaSingleRequest, LayaBatchRequest, LayaQuestion, LayaChoiceQuestion, LayaScoreQuestion, LayaNoulQuestion, LayaState, LayaCriterion, LayaResponse, LayaResult, LayaAnswer, LayaChoiceAnswer, LayaScoreAnswer, LayaNoulAnswer, LayaUsage, LayaDecisionsArgs, } from "./laya";
 export { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
@@ -12,13 +12,15 @@ export type { EmbedFitDevice, EmbedFitRequest, EmbedFitResult, EmbedFitStatus } 
 export type { QvacResponse };
 export interface GGMLBertArgs {
     /**
-     * `model`: the GGUF file, or all shards of a sharded GGUF.
+     * `model`: exactly one absolute disk path: a GGUF file or the first GGUF
+     * shard. Fabric reads the other shards from the same directory. Weight
+     * buffers, multiple paths and tensor-name files are not supported.
      * `projectionModel`: optional projection model (mmproj) that lets `run()`
      * embed images and audio, for multimodal embedding models such as
      * EmbeddingGemma 2.
      */
     files: {
-        model: string[];
+        model: [string];
         projectionModel?: string;
     };
     config?: GGMLConfig;
@@ -37,7 +39,7 @@ export declare class GGMLBert {
     state: {
         configLoaded: boolean;
     };
-    private readonly _files;
+    private readonly _modelPath;
     private readonly _projectionModelPath;
     private readonly _config;
     private readonly _job;
@@ -46,7 +48,6 @@ export declare class GGMLBert {
     constructor({ files, config, logger, opts }: GGMLBertArgs);
     load(): Promise<void>;
     private _load;
-    private _streamShards;
     /**
      * Embed text, or text mixed with images and audio when the model was given
      * `files.projectionModel`. See {@link EmbedRunInput} for the input shapes.

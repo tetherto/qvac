@@ -29,7 +29,6 @@ qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
     qvac_lib_inference_addon_embed::createRerankInstance)
   V("runJob", qvac_lib_inference_addon_embed::runJob)
 
-  V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
   V("destroyInstance",

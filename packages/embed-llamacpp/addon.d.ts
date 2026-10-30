@@ -91,11 +91,6 @@ export interface BertJobInput {
  * the text path (`text` / `sequences`), so they need no projection model.
  */
 export declare function toBertJobInput(input: EmbedRunInput): BertJobInput;
-export interface LoadWeightsData {
-    filename: string;
-    chunk: Uint8Array | null;
-    completed: boolean;
-}
 export interface RuntimeStats {
     total_tokens: number;
     total_time_ms: number;
@@ -110,12 +105,10 @@ export interface BertBinding {
     createInstance(owner: BertInterface, configurationParams: AddonConfigurationParams, outputCallback: AddonOutputCallback): object;
     activate(handle: unknown): Promise<void> | void;
     runJob(handle: unknown, input: BertJobInput): Promise<boolean>;
-    loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
     cancel(handle: unknown): Promise<void>;
     destroyInstance(handle: unknown): void;
 }
 export interface Addon {
-    loadWeights(data: LoadWeightsData): Promise<void>;
     activate(): Promise<void>;
     runJob(input: BertJobInput): Promise<boolean>;
     cancel(): Promise<void>;
@@ -141,11 +134,10 @@ export type MappedAddonEvent = {
  */
 export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedAddonEvent | null;
 /**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
+ * Validates the single disk path. For a sharded GGUF, pass only the first
+ * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-export declare function pickPrimaryGgufPath(files: string[]): string;
+export declare function validateModelPath(files: string[]): string;
 /** An interface between the Bare C++ addon and the JS runtime. */
 export declare class BertInterface implements Addon {
     private readonly _binding;
@@ -161,7 +153,6 @@ export declare class BertInterface implements Addon {
      * Resolves `true` if the job was accepted, `false` if busy.
      */
     runJob(data: BertJobInput): Promise<boolean>;
-    loadWeights(data: LoadWeightsData): Promise<void>;
     /** Activates the model to start processing the queue. */
     activate(): Promise<void>;
     /** Stops the addon process and clears resources (including memory). */

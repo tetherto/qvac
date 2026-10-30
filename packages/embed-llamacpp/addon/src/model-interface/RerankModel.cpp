@@ -135,9 +135,7 @@ RerankModel::RerankModel(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
     const std::string& backendsDir)
-    : loader_(
-          "RerankModel", loadHooks(), modelGgufPath, checkConfig(config),
-          backendsDir) {}
+    : loader_(loadHooks(), modelGgufPath, checkConfig(config), backendsDir) {}
 
 RerankModel::~RerankModel() { llama_batch_free(batch_); }
 
@@ -178,8 +176,7 @@ void RerankModel::configureParams(
   }
   // A reranker scores with a classifier head: `cls` (BERT-style rerankers)
   // and/or `cls.output` (e.g. Qwen3-Reranker). A chat model declares no
-  // pooling and has neither. A streamed model's tensor table is not on disk,
-  // so it is not checked.
+  // pooling and has neither.
   if (metadata.hasAnyTensor({"cls.weight", "cls.output.weight"}) == false) {
     throw qvac_errors::StatusError(
         ADDON_ID,

@@ -41,7 +41,6 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/handlers/GenerationParamHandlers.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/handlers/FinetuneParamHandlers.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
@@ -99,7 +98,6 @@ if(BUILD_CLI AND NOT BUILD_FUZZING)
     ${PROJECT_SOURCE_DIR}/addon/src/cli/cli_tool.cc
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp

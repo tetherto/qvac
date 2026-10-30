@@ -364,14 +364,11 @@ const SHARDED_REPOS = [
     label: 'Qwen3-0.6B-UD-IQ1_S (3 shards)',
     baseUrl: 'https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/main',
     files: [
-      'Qwen3-0.6B-UD-IQ1_S.tensors.txt',
       'Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf',
       'Qwen3-0.6B-UD-IQ1_S-00002-of-00003.gguf',
       'Qwen3-0.6B-UD-IQ1_S-00003-of-00003.gguf'
     ],
     sha256: {
-      'Qwen3-0.6B-UD-IQ1_S.tensors.txt':
-        'c10b950a18ec75d3ee61b55ed1ba5b4c3ff3d7afd726651b813d48165bd5847a',
       'Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf':
         '27a0f5d92fffa1b1907218f62d7a82fa1a0bf5adce4975c9b7f4ccc0f34e8c88',
       'Qwen3-0.6B-UD-IQ1_S-00002-of-00003.gguf':
@@ -385,7 +382,6 @@ const SHARDED_REPOS = [
     label: 'bitnet_b1_58-large-TQ2_0 (8 shards)',
     baseUrl: 'https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded/resolve/main',
     files: [
-      'bitnet_b1_58-large-TQ2_0.tensors.txt',
       'bitnet_b1_58-large-TQ2_0-00001-of-00008.gguf',
       'bitnet_b1_58-large-TQ2_0-00002-of-00008.gguf',
       'bitnet_b1_58-large-TQ2_0-00003-of-00008.gguf',
@@ -396,8 +392,6 @@ const SHARDED_REPOS = [
       'bitnet_b1_58-large-TQ2_0-00008-of-00008.gguf'
     ],
     sha256: {
-      'bitnet_b1_58-large-TQ2_0.tensors.txt':
-        '6d7950adc98635bb67a198abe72b9c511643ade55e8016ec413237d99210fb4e',
       'bitnet_b1_58-large-TQ2_0-00001-of-00008.gguf':
         'fb913ff5d3df8508f312f7ea1429de8ae1ed0efb907809540225fb0fa2206af6',
       'bitnet_b1_58-large-TQ2_0-00002-of-00008.gguf':
@@ -417,13 +411,12 @@ const SHARDED_REPOS = [
     }
   },
   {
-    // Enables ModelFullLoadingTest.{LargeSharded,StreamingLargeShards}_LoadsSuccessfully,
+    // Enables ModelFullLoadingTest.LargeSharded_LoadsSuccessfully,
     // which gtest-skip on CI because the shards aren't fetched there.
     scope: 'optional',
     label: 'Llama-3.2-1B-Instruct-Q4_0 (8 shards)',
     baseUrl: 'https://huggingface.co/jmb95/Llama-3.2-1B-Instruct-Q4_0-sharded/resolve/main',
     files: [
-      'Llama-3.2-1B-Instruct-Q4_0.tensors.txt',
       'Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf',
       'Llama-3.2-1B-Instruct-Q4_0-00002-of-00008.gguf',
       'Llama-3.2-1B-Instruct-Q4_0-00003-of-00008.gguf',
@@ -434,8 +427,6 @@ const SHARDED_REPOS = [
       'Llama-3.2-1B-Instruct-Q4_0-00008-of-00008.gguf'
     ],
     sha256: {
-      'Llama-3.2-1B-Instruct-Q4_0.tensors.txt':
-        '94d891c22bca7700d422a3974b6aaa8095a4b2f132a53c89e7312b8435412cbf',
       'Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf':
         'fafc6166dc5e7a9791b053cda2e71924c037b16f09fa41d69383cedd37cd91d8',
       'Llama-3.2-1B-Instruct-Q4_0-00002-of-00008.gguf':

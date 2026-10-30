@@ -16,7 +16,6 @@
 #include <llama.h>
 #include <picojson/picojson.h>
 
-#include "AsyncWeightsLoader.hpp"
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
 #include "ContinuousBatchScheduler.hpp"
@@ -29,8 +28,6 @@
 #include "LoadFitNormalization.hpp"
 #include "ModelMetadata.hpp"
 #include "common/chat.h"
-#include "inference-addon-cpp/BlobsStream.hpp"
-#include "inference-addon-cpp/GGUFShards.hpp"
 #include "inference-addon-cpp/InitLoader.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
@@ -53,11 +50,6 @@ public:
   LlamaModel& operator=(const LlamaModel&) = delete;
   LlamaModel(LlamaModel&&) = delete;
   LlamaModel& operator=(LlamaModel&&) = delete;
-
-  /// @brief Resolves shard basenames in-place to absolute paths relative to
-  /// the parent directory of @p modelPath.
-  static void
-  resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
 
   /**
    * The Constructor for llama model.
@@ -350,17 +342,8 @@ private:
   qvac_lib_inference_addon_cpp::RuntimeStats singleRuntimeStatsLocked() const;
 
   struct ReloadableState {
-    ReloadableState(
-        const ConstructionArgs& args, const std::string& loadingContext,
-        ModelMetaData& metadata)
-        : shards_(GGUFShards::expandGGUFIntoShards(args.modelPath)),
-          asyncWeightsLoader_(shards_, initLoader_, loadingContext, &metadata) {
-    }
-
-    GGUFShards shards_;
     friend class InitLoader;
     InitLoader initLoader_;
-    AsyncWeightsLoader asyncWeightsLoader_;
 
     bool isTextLlm_ = false;
 
@@ -460,7 +443,6 @@ private:
 
   void init(bool acquireLock);
 
-  const std::string loadingContext_;
   ModelMetaData metadata_;
   ConstructionArgs constructionArgs_;
   uint64_t maxImagePixels_ = image_pixel_limit::DEFAULT_MAX_PIXELS;
