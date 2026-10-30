@@ -1,7 +1,7 @@
 {
   "name": "@qvac/sdk-python",
   "root": "packages/sdk-python",
-  "tags": ["ci:contract"],
+  "tags": ["ci:contract", "ci:sdk"],
   "implicitDependencies": ["@qvac/sdk", "sdk-e2e"],
   "targets": {
     "lint": {

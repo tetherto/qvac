@@ -39,7 +39,7 @@ flowchart LR
     PP -->|check name| CHK["qvac-merge-guard / validate-pr"]
 ```
 
-The SDK pod's checks are not in Merge Guard. They run in `pr-checks.yml`, from each package's `project.json` targets, with the other contract packages' checks; no ruleset requires `PR checks` yet, so a pod PR with failing checks is not blocked from merging until the `main` ruleset requires it.
+The SDK pod's checks are not in Merge Guard. They run in `sdk-checks.yml`, from each package's `project.json` targets; no ruleset requires `PR checks` yet, so a pod PR with failing checks is not blocked from merging until the `main` ruleset requires it.
 
 The final job in `pr-gate-merge.yml`:
 

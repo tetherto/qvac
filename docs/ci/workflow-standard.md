@@ -14,7 +14,7 @@ A package without the tag runs the workflows it names itself, such as the regist
 
 | Group | Runs on | Targets it runs |
 |---|---|---|
-| `pr-checks.yml` | every pull request, edits included; no secrets; `release-train.yml` calls it for a train | `lint`, `typecheck`, `test:unit`, `verify:generated`, `verify:deps`, and the range, dependency, release and PR-rule checks below |
+| `pr-checks.yml` | every pull request; no secrets | `lint`, `typecheck`, `test:unit`, `verify:generated`, `verify:deps`, and the range and dependency checks below |
 | `pr-build-test.yml` | every pull request, after fork approval and trust | `build`, `cpp:lint`, `cpp:build`, `cpp:tests`, `test:integration`, `test:backend` |
 | `mobile-tests.yml` | dispatch | `test:mobile` |
 | `benchmarks.yml` | dispatch; weekly for the perf report | `build`, `benchmark`, `test:mobile` |
@@ -22,11 +22,13 @@ A package without the tag runs the workflows it names itself, such as the regist
 | `publish-npm.yml` | push to `release-<slug>-<x.y.z>`, dispatch (`dry_run`) | `build`, `verify:generated`, `verify:deps`, `publish` |
 | `publish-gpr.yml` | dispatch | `build`, `verify:generated`, `verify:deps`, `publish` |
 
+The SDK pod's packages carry a second tag, `ci:sdk`. `pr-checks.yml`, `pr-build-test.yml` and `mobile-tests.yml` leave them out (`_select-projects.yml`'s `exclude-tag`), and two workflows of their own select them (`tag: ci:sdk`): `sdk-checks.yml` runs their check targets in each package's own install, with the pod's release guard and PR rules, and `release-train.yml` calls it for a train; `sdk-e2e.yml` runs their labelled `test:integration` configurations through `_desktop.yml`, and their Device Farm runs by dispatch. The publish, benchmark and cache groups serve them as any contract package.
+
 Two registries have one workflow each outside the groups: `publish-pypi.yml` releases `tetherto-qvac-sdk` from `release-sdk-<x.y.z>` once npm serves `@qvac/sdk` at that version, then attaches the fat wheels to the `sdk-v<version>` release; `publish-kotlin.yml` publishes the Kotlin SDK's Maven artifacts from an `sdk-kotlin-v<version>` tag. `sdk-scheduled-checks.yml` holds the daily checks of what users install from npm.
 
 Each group calls `_select-projects.yml` for its rows, then the templates `_build.yml`, `_cpp-lint.yml`, `_cpp-tests.yml`, `_desktop.yml` and `_mobile.yml` run them. `.github/scripts/select-projects.mjs` is the only code that reads a package's CI settings. A group that builds calls `_build.yml` twice: first for its providers' rows (see [Native dependencies](#native-dependencies)), then for the packages' own.
 
-In `pr-build-test.yml`, stages beyond `cpp:lint` run on labels: `prebuilds` builds, `run-cpp-addon-tests` adds C++ tests, and `run-desktop-addon-tests` adds desktop tests. Both test labels build too. A `test:integration` configuration that sets `ci.labels` runs instead on its own labels, in the `e2e` job (see [Configurations](#configurations)). Mobile runs only by dispatch (`docs/ci/MOBILE-ON-DEMAND.md`).
+In `pr-build-test.yml`, stages beyond `cpp:lint` run on labels: `prebuilds` builds, `run-cpp-addon-tests` adds C++ tests, and `run-desktop-addon-tests` adds desktop tests. Both test labels build too. Mobile runs only by dispatch (`docs/ci/MOBILE-ON-DEMAND.md`).
 
 ## project.json
 
@@ -60,7 +62,7 @@ Each platform a target runs on is an Nx configuration of that target, named `<pl
 - `commands`: replaces the target's commands on this platform, when the step itself differs.
 - `ci.runner`: the runner key from `reusable-runner-names.yml`.
 - `ci.setup`: extra host toolkits: `cuda` or `rocm`; `cuda-jetson`, the CUDA 12 toolkit for Jetson beside the host's CUDA 13, exported only as `QVAC_CUDA_JETSON_PATH` for the commands that read it; `python` for Python 3.10, `java` for JDK 17, or `android` for the Android SDK on a desktop leg.
-- `ci.labels` (`test:integration` only): the PR labels that run this configuration, each mapped to the suite its command reads as `CI_SUITE` (`""` for the full suite); a key `base:<branch>`, with an optional trailing `*`, runs it on a PR into that branch. A label runs it only on the event that applied it, and a base key on a PR's opening and pushes. Such a configuration never runs on `run-desktop-addon-tests`. A dispatch of `pr-build-test.yml` names its labels in `labels`; a key `dispatch:<name>` runs the configuration only on a dispatch whose `labels` names `<name>`, never on a PR, as the sdk's Electron and Snap legs do.
+- `ci.labels` (`test:integration` only): the PR labels that run this configuration, each mapped to the suite its command reads as `CI_SUITE` (`""` for the full suite); a key `base:<branch>`, with an optional trailing `*`, runs it on a PR into that branch. A label runs it only on the event that applied it, and a base key on a PR's opening and pushes. `sdk-e2e.yml` runs these configurations, never `pr-build-test.yml`. A dispatch names its labels in `labels`; a key `dispatch:<name>` runs the configuration only on a dispatch whose `labels` names `<name>`, never on a PR, as the sdk's Electron and Snap legs do.
 
 `benchmark` may also define `report`, the one configuration not named for a platform. `benchmarks.yml` runs it once on Linux after every other configuration and the mobile runs finish, with their results downloaded under `<dir>/benchmarks/results/`. A benchmark command writes its own results there, and reads `BENCHMARK_ARGS`, `QVAC_PERF_RUNS` and `QVAC_PERF_WARMUP_RUNS` when the dispatch sets them. A desktop or producer run uploads what its command leaves in `<package>/test/results/e2e` as `<slug>-results-<configuration>`, kept 90 days on `main` and 30 elsewhere. Every desktop command also gets `CI_RUNNER_LABEL`, the runner label its configuration resolves to, so results can name their host without repeating it in `args`.
 
@@ -83,7 +85,7 @@ Each platform a target runs on is an Nx configuration of that target, named `<pl
 
 `test:mobile` may set step outputs for its run: `test-groups`, `device-env`, `mocha-timeout-ms`, `per-test-timeout-minutes`, `enables-perf` (`true` turns on the perf report for a run whose metadata leaves `enablesPerf` off), `after-hook-pulls` (a JSON list of `{device_path, artifact_name}` copied off the device into the run's logs), and `workdir` (the directory of the addon the test app bundles, when it is not the package's own).
 
-A producer row (`mobile.mode: producer`, the SDK's) brings its own app instead of `qvac-test-addon-mobile`'s. `_mobile.yml` runs its `test:mobile` twice. The first run builds the app and sets `app-path`, `app-type`, `app-name`, `test-package` (a stub the device runs) and `specs` (a JSON list of `{name, file}`); the group uploads them and schedules one run on a pool from the row's variable: the one the dispatch's `devices` names, else an available private pool, else a random public one. `.github/scripts/devicefarm-pool-run.mjs` then runs the package's `test:mobile` again with `MOBILE_PHASE=produce`, `RUN_ARNS` and the dispatch's `tests`, which waits for the device, drives the tests over MQTT and fails on a failed test; the group then stops the run, downloads its logs and uploads `<package>/test/results/e2e` as `<slug>-results-<configuration>`. A producer row skips the device-model check, the test app build, the spec writer and the result summary.
+A producer row (`mobile.mode: producer`, the SDK's) brings its own app instead of `qvac-test-addon-mobile`'s, and runs in `sdk-e2e.yml`'s mobile job, not `_mobile.yml`, which runs its `test:mobile` twice. The first run builds the app and sets `app-path`, `app-type`, `app-name`, `test-package` (a stub the device runs) and `specs` (a JSON list of `{name, file}`); the group uploads them and schedules one run on a pool from the row's variable: the one the dispatch's `pool` names, else an available private pool, else a random public one. `.github/scripts/devicefarm-pool-run.mjs` then runs the package's `test:mobile` again with `MOBILE_PHASE=produce`, `RUN_ARNS` and the dispatch's `tests`, which waits for the device, drives the tests over MQTT and fails on a failed test; the group then stops the run, downloads its logs and uploads `<package>/test/results/e2e` as `<slug>-results-<configuration>`.
 
 ### Models
 
@@ -142,6 +144,6 @@ A pull request that changes only the groups, `select-projects.mjs` or an action 
 - `select-projects.mjs` applies the same rules when it builds rows, and rejects a request for a target outside the standard.
 - `ci-trust-policy.test.mjs` checks the trust gate in `pr-build-test.yml` and the Merge Guard filter entries.
 - `scripts/ci/check-workspace-ranges.mjs` runs in `pr-checks.yml` on every pull request, as does `scripts/ci/check-disallowed-deps.mjs`: no git URLs and no `-dev` or `-tmp` prerelease pins outside `@tetherto/*` in a contract package's dependencies.
-- On a PR into `release-*`, `pr-checks.yml`'s release-guard job checks a release train's versions against npm, or a package's release branch, version bump and CHANGELOG section when its publish metadata sets `releaseGuard`.
-- On a PR that changes a path `.github/teams/sdk.json` owns, `pr-checks.yml`'s pod-rules job checks the title and description with `packages/sdk/ci/validator.cjs`, and reruns on edits.
-- With a `train` input, `pr-checks.yml` resolves the train (`scripts/ci/checks-source.mjs`), packs its packages once, and checks each against the train's tarballs, or against npm for `source: published`; a `backmerge/release-train-*` PR into the default branch does the same.
+- On a PR into `release-*`, `sdk-checks.yml`'s release-guard job checks a release train's versions against npm, or a package's release branch, version bump and CHANGELOG section when its publish metadata sets `releaseGuard`.
+- On a PR that changes a path `.github/teams/sdk.json` owns, `sdk-checks.yml`'s pod-rules job checks the title and description with `packages/sdk/ci/validator.cjs`, and reruns on edits.
+- With a `train` input, `sdk-checks.yml` resolves the train (`scripts/ci/checks-source.mjs`), packs its packages once, and checks each against the train's tarballs, or against npm for `source: published`; a `backmerge/release-train-*` PR into the default branch does the same.

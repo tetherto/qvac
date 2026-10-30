@@ -288,9 +288,14 @@ export function select({
   configs = [],
   prLabels = [],
   baseRef = '',
-  dispatch = false
+  dispatch = false,
+  tag = TAG,
+  excludeTag = ''
 }) {
-  const tagged = Object.values(graph.nodes).filter((n) => n.data.tags?.includes(TAG))
+  // tag picks the packages a workflow serves; excludeTag leaves out a group that runs in its own workflows.
+  const tagged = Object.values(graph.nodes).filter(
+    (n) => n.data.tags?.includes(tag) && !(excludeTag && n.data.tags.includes(excludeTag))
+  )
   const chosen = tagged.filter((n) => affected === null || affected.includes(n.name))
   const out = { matrices: {}, projects: [] }
   for (const t of targets) out.matrices[t] = []
@@ -591,6 +596,8 @@ function main(env) {
     prLabels,
     baseRef: pr && ['opened', 'synchronize'].includes(event.action) ? pr.base.ref : '',
     dispatch: !pr && env.GITHUB_EVENT_NAME === 'workflow_dispatch',
+    tag: env.TAG || TAG,
+    excludeTag: env.EXCLUDE_TAG || '',
     configs: (env.CONFIGS || '').split(/[\s,]+/).filter(Boolean),
     gate: gateKeys(readFileSync('.github/workflows/pr-gate-merge.yml', 'utf8'))
   })

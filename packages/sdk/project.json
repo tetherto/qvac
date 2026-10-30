@@ -1,7 +1,7 @@
 {
   "name": "@qvac/sdk",
   "root": "packages/sdk",
-  "tags": ["ci:contract"],
+  "tags": ["ci:contract", "ci:sdk"],
   "implicitDependencies": ["sdk-e2e", "@qvac/registry-server"],
   "targets": {
     "lint": {

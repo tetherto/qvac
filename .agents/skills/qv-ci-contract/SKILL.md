@@ -21,9 +21,8 @@ Pick the task:
    - platform flags: the platform configuration's `args`;
    - a step that differs on one platform: that configuration's `commands`;
    - a runner: the configuration's `ci.runner` key from `reusable-runner-names.yml`;
-   - a toolkit: the configuration's `ci.setup`, or a check target's `metadata.setup` for `pr-checks.yml`;
-   - a configuration that runs on its own PR labels or a release base instead of `run-desktop-addon-tests`: the `test:integration` configuration's `ci.labels`;
-   - checks in npm's layout instead of the pnpm workspace: `test:unit`'s `metadata.sources`;
+   - a toolkit: the configuration's `ci.setup`, or a check target's `metadata.setup` for `sdk-checks.yml`;
+   - an SDK pod package (`ci:sdk` tag, run by `sdk-checks.yml` and `sdk-e2e.yml`): a `test:integration` configuration that runs on its own PR labels or a release base takes `ci.labels`, and checks in npm's layout instead of the pnpm workspace take `test:unit`'s `metadata.sources`;
    - a timeout, mobile setting, release tag prefix or release check: the target's `metadata`;
    - models: the package's model manifest.
 3. Leave the workflows and actions alone. A package name or directory never appears in a condition there. If the standard cannot express the change, that is a change to the standard: raise it before writing it.

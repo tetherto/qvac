@@ -13,7 +13,7 @@ on:
         type: string
         required: true
       devices:
-        description: Comma-separated Device Farm models, at least one; for a producer row, one pool name or empty
+        description: Comma-separated Device Farm models, at least one
         type: string
         required: true
       device_model_operator:
@@ -93,8 +93,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
-      - if: matrix.row.meta.mobile.mode != 'producer'
-        uses: ./.github/actions/devicefarm-check-devices
+      - uses: ./.github/actions/devicefarm-check-devices
         with:
           platform: ${{ inputs.platform }}
           devices: ${{ env.DEVICES }}
@@ -123,8 +122,6 @@ jobs:
         row: ${{ fromJSON(inputs.rows) }}
     env:
       WORKDIR: src/${{ matrix.row.dir }}
-      PROJECT: ${{ matrix.row.project }}
-      CONFIG: ${{ matrix.row.config }}
       NX_DAEMON: "false"
       NX_NO_CLOUD: "true"
       # Named one by one: indexing secrets by an expression hands every secret to the runner.
@@ -138,21 +135,13 @@ jobs:
         || matrix.row.meta.mobile.devicefarmProject == 'AUDIOGEN_GGML' && (secrets.AWS_DEVICE_FARM_PROJECT_ARN_AUDIOGEN_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS)
         || matrix.row.meta.mobile.devicefarmProject == 'WHISPERCPP' && secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP
         || matrix.row.meta.mobile.devicefarmProject == 'DECODER_AUDIO' && secrets.AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO
-        || matrix.row.meta.mobile.mode == 'producer' && vars[matrix.row.meta.mobile.projectArnVar]
         || '' }}
-      PRODUCER: ${{ matrix.row.meta.mobile.mode == 'producer' }}
-      MQTT_HOST: ${{ contains(matrix.row.meta.secrets, 'MQTT_HOST') && secrets.MQTT_HOST || '' }}
-      MQTT_USERNAME: ${{ contains(matrix.row.meta.secrets, 'MQTT_USERNAME') && secrets.MQTT_USERNAME || '' }}
-      MQTT_PASSWORD: ${{ contains(matrix.row.meta.secrets, 'MQTT_PASSWORD') && secrets.MQTT_PASSWORD || '' }}
-      MQTT_PROTOCOL: ${{ contains(matrix.row.meta.secrets, 'MQTT_HOST') && vars.MQTT_PROTOCOL || '' }}
-      MQTT_PORT: ${{ contains(matrix.row.meta.secrets, 'MQTT_HOST') && vars.MQTT_PORT || '' }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           sparse-checkout: |
             .github/actions
-            .github/scripts
             scripts/perf-report
             scripts/test-utils
           persist-credentials: false
@@ -232,12 +221,49 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-duration-seconds: "7200"
+      - id: prepare
+        name: test:mobile
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          CONFIG: ${{ matrix.row.config }}
+          PLATFORM: ${{ inputs.platform }}
+          AWS_REGION: us-west-2
+          MODEL_S3_BUCKET: tether-ai-dev-us
+          HF_TOKEN: ${{ contains(matrix.row.meta.secrets, 'HF_TOKEN') && secrets.HF_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
+          BENCHMARK_ARGS: ${{ inputs.args }}
+        run: pnpm exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
+      # The provider's bundle from the named run, else from prebuild_run_id's run when it built the provider too.
+      - if: matrix.row.providers[0] != null && (inputs.dependency_prebuild_run_id != '' || inputs.prebuild_run_id != '')
+        uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: ${{ inputs.dependency_prebuild_run_id != '' && format('prebuilds-{0}', matrix.row.providers[0]) || '' }}
+          pattern: ${{ inputs.dependency_prebuild_run_id == '' && format('prebuilds-{0}', matrix.row.providers[0]) || '' }}
+          merge-multiple: "true"
+          run-id: ${{ inputs.dependency_prebuild_run_id || inputs.prebuild_run_id }}
+          github-token: ${{ github.token }}
+          path: dep-prebuilds
+      - uses: ./.github/actions/mobile-build-test-app
+        with:
+          platform: ${{ inputs.platform }}
+          workdir: ${{ steps.prepare.outputs.workdir || env.WORKDIR }}
+          npm-name: ${{ matrix.row.npm }}
+          app-dir: test-framework
+          dependency-prebuilds: ${{ hashFiles('dep-prebuilds/**') != '' && format('{0}={1}/dep-prebuilds', matrix.row.provider, github.workspace) || '' }}
+          per-test-timeout-minutes: ${{ steps.prepare.outputs.per-test-timeout-minutes || matrix.row.meta.mobile.perTestTimeoutMinutes[inputs.platform] || '' }}
       - if: inputs.platform == 'Android'
         uses: tetherto/qvac-actions/setup-java@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           java-version: "17"
       - if: inputs.platform == 'Android'
         uses: tetherto/qvac-actions/setup-android@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - id: android
+        if: inputs.platform == 'Android'
+        uses: ./.github/actions/android-build-app
+        with:
+          app-dir: test-framework
       - if: inputs.platform == 'iOS'
         uses: tetherto/qvac-actions/setup-xcode@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
@@ -254,45 +280,8 @@ jobs:
           certificate-password: ${{ secrets.APPLE_P12_PASSWORD }}
           profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           bundle-id: ${{ env.BUNDLE_ID }}
-      - id: prepare
-        name: test:mobile
-        shell: bash
-        working-directory: src
-        env:
-          PLATFORM: ${{ inputs.platform }}
-          AWS_REGION: us-west-2
-          MODEL_S3_BUCKET: tether-ai-dev-us
-          HF_TOKEN: ${{ contains(matrix.row.meta.secrets, 'HF_TOKEN') && secrets.HF_TOKEN || '' }}
-          GITHUB_TOKEN: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
-          BENCHMARK_ARGS: ${{ inputs.args }}
-          IOS_SIGNING: ${{ env.PRODUCER == 'true' && inputs.platform == 'iOS' && format('{0},{1},{2}', steps.signing.outputs.profile-uuid, steps.signing.outputs.export-method, secrets.APPLE_TEAM_ID) || '' }}
-        run: pnpm exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
-      # The provider's bundle from the named run, else from prebuild_run_id's run when it built the provider too.
-      - if: matrix.row.providers[0] != null && (inputs.dependency_prebuild_run_id != '' || inputs.prebuild_run_id != '')
-        uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
-        with:
-          name: ${{ inputs.dependency_prebuild_run_id != '' && format('prebuilds-{0}', matrix.row.providers[0]) || '' }}
-          pattern: ${{ inputs.dependency_prebuild_run_id == '' && format('prebuilds-{0}', matrix.row.providers[0]) || '' }}
-          merge-multiple: "true"
-          run-id: ${{ inputs.dependency_prebuild_run_id || inputs.prebuild_run_id }}
-          github-token: ${{ github.token }}
-          path: dep-prebuilds
-      - if: env.PRODUCER != 'true'
-        uses: ./.github/actions/mobile-build-test-app
-        with:
-          platform: ${{ inputs.platform }}
-          workdir: ${{ steps.prepare.outputs.workdir || env.WORKDIR }}
-          npm-name: ${{ matrix.row.npm }}
-          app-dir: test-framework
-          dependency-prebuilds: ${{ hashFiles('dep-prebuilds/**') != '' && format('{0}={1}/dep-prebuilds', matrix.row.provider, github.workspace) || '' }}
-          per-test-timeout-minutes: ${{ steps.prepare.outputs.per-test-timeout-minutes || matrix.row.meta.mobile.perTestTimeoutMinutes[inputs.platform] || '' }}
-      - id: android
-        if: inputs.platform == 'Android' && env.PRODUCER != 'true'
-        uses: ./.github/actions/android-build-app
-        with:
-          app-dir: test-framework
       - id: ios
-        if: inputs.platform == 'iOS' && env.PRODUCER != 'true'
+        if: inputs.platform == 'iOS'
         uses: ./.github/actions/ios-build-app
         with:
           profile-uuid: ${{ steps.signing.outputs.profile-uuid }}
@@ -301,7 +290,6 @@ jobs:
           bundle-id: ${{ env.BUNDLE_ID }}
           app-dir: test-framework
       - id: specs
-        if: env.PRODUCER != 'true'
         uses: ./.github/actions/devicefarm-write-specs
         with:
           platform: ${{ inputs.platform }}
@@ -322,24 +310,22 @@ jobs:
         uses: tetherto/qvac-actions/devicefarm-upload@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           project-arn: ${{ env.PROJECT_ARN }}
-          type: ${{ steps.android.outputs.app-type || steps.ios.outputs.app-type || steps.prepare.outputs.app-type }}
-          files: ${{ steps.android.outputs.app-path || steps.ios.outputs.app-path || steps.prepare.outputs.app-path }}
-          name: ${{ steps.android.outputs.app-name || steps.ios.outputs.app-name || steps.prepare.outputs.app-name }}
-          max-wait-seconds: ${{ env.PRODUCER == 'true' && '600' || '300' }}
+          type: ${{ steps.android.outputs.app-type || steps.ios.outputs.app-type }}
+          files: ${{ steps.android.outputs.app-path || steps.ios.outputs.app-path }}
+          name: ${{ steps.android.outputs.app-name || steps.ios.outputs.app-name }}
       - id: package
         uses: tetherto/qvac-actions/devicefarm-upload@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: APPIUM_NODE_TEST_PACKAGE
-          files: ${{ steps.specs.outputs.test-package || steps.prepare.outputs.test-package }}
+          files: ${{ steps.specs.outputs.test-package }}
       - id: spec-uploads
         uses: tetherto/qvac-actions/devicefarm-upload@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           project-arn: ${{ env.PROJECT_ARN }}
           type: APPIUM_NODE_TEST_SPEC
-          files: ${{ steps.specs.outputs.specs || steps.prepare.outputs.specs }}
+          files: ${{ steps.specs.outputs.specs }}
       - id: schedule
-        if: env.PRODUCER != 'true'
         uses: tetherto/qvac-actions/devicefarm-schedule-runs@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           platform: ${{ inputs.platform }}
@@ -351,49 +337,28 @@ jobs:
           devices: ${{ env.DEVICES }}
           device-model-operator: ${{ inputs.device_model_operator }}
           job-timeout-minutes: ${{ matrix.row.meta.mobile.jobTimeoutMinutes || '120' }}
-      - if: env.PRODUCER != 'true'
-        uses: tetherto/qvac-actions/devicefarm-wait-runs@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/devicefarm-wait-runs@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           specs: ${{ steps.spec-uploads.outputs.uploads }}
           # As main did: a device stopped on its timeout after every counted test passed is a teardown overrun.
           accept-stopped: "true"
-      # A producer row (the SDK): one run on a pool, then the package's test:mobile drives it over MQTT.
-      - id: pool
-        name: test:mobile producer
-        if: env.PRODUCER == 'true'
-        shell: bash
-        working-directory: src
-        env:
-          POOLS: ${{ toJSON(fromJSON(vars[matrix.row.meta.mobile.devicePoolsVar[inputs.platform]])) }}
-          APP_ARN: ${{ steps.app.outputs.arn }}
-          PACKAGE_ARN: ${{ steps.package.outputs.arn }}
-          SPECS: ${{ steps.spec-uploads.outputs.uploads }}
-          TIMEOUT: ${{ matrix.row.meta.mobile.jobTimeoutMinutes || '120' }}
-          TESTS: ${{ inputs.tests }}
-          GITHUB_TOKEN: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
-        run: node ../.github/scripts/devicefarm-pool-run.mjs schedule -- pnpm exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
-      - if: cancelled() && (steps.schedule.outputs.run-arns || steps.pool.outputs.run-arns || '[]') != '[]'
+      - if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
         uses: tetherto/qvac-actions/devicefarm-cancel-runs@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
-          run-arns: ${{ steps.schedule.outputs.run-arns || steps.pool.outputs.run-arns }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
       # Fresh credentials: the session above may have run out during a long wait.
-      - if: always() && (steps.schedule.outputs.run-count || steps.pool.outputs.run-count || '0') != '0'
+      - if: always() && steps.schedule.outputs.run-count != '' && steps.schedule.outputs.run-count != '0'
         uses: tetherto/qvac-actions/configure-aws-credentials@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
-      - if: always() && steps.pool.outputs.run-count == '1'
-        shell: bash
-        env:
-          RUN_ARNS: ${{ steps.pool.outputs.run-arns }}
-        run: node .github/scripts/devicefarm-pool-run.mjs stop
       - id: logs
-        if: always() && (steps.schedule.outputs.run-count || steps.pool.outputs.run-count || '0') != '0'
+        if: always() && steps.schedule.outputs.run-count != '' && steps.schedule.outputs.run-count != '0'
         uses: tetherto/qvac-actions/devicefarm-download-logs@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           platform: ${{ inputs.platform }}
-          run-arns: ${{ steps.schedule.outputs.run-arns || steps.pool.outputs.run-arns }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
           files: |
             bare_console.log
             appium.log
@@ -402,7 +367,7 @@ jobs:
             crash-reports/QvacAddonTester*
             ${{ steps.prepare.outputs.after-hook-pulls && format('{0}/*', join(fromJSON(steps.prepare.outputs.after-hook-pulls).*.artifact_name, '/* ')) || '' }}
           skip-extensions: ${{ inputs.platform == 'Android' && 'mp4' || '' }}
-      - if: always() && steps.logs.outcome == 'success' && env.PRODUCER != 'true'
+      - if: always() && steps.logs.outcome == 'success'
         uses: tetherto/qvac-actions/devicefarm-summarize-results@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           title: ${{ format('{0} ({1})', matrix.row.npm, inputs.platform) }}
@@ -416,12 +381,6 @@ jobs:
           name: console-logs-${{ matrix.row.slug }}-${{ inputs.platform }}
           path: ${{ steps.logs.outputs.console-dir }}
           retention-days: "30"
-          if-no-files-found: ignore
-      - if: always() && env.PRODUCER == 'true'
-        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
-        with:
-          name: ${{ matrix.row.slug }}-results-${{ matrix.row.config }}
-          path: ${{ env.WORKDIR }}/test/results/e2e/
           if-no-files-found: ignore
       - id: perf
         if: >-

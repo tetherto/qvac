@@ -1,7 +1,7 @@
 {
   "name": "sdk-kotlin",
   "root": "packages/sdk-kotlin",
-  "tags": ["ci:contract"],
+  "tags": ["ci:contract", "ci:sdk"],
   "implicitDependencies": ["@qvac/sdk", "@qvac/inference", "sdk-e2e"],
   "targets": {
     "test:unit": {

@@ -24,6 +24,14 @@ on:
         description: Comma-separated labels that route test:integration configurations outside a pull request
         type: string
         default: ""
+      tag:
+        description: Nx tag of the packages to select
+        type: string
+        default: ci:contract
+      exclude-tag:
+        description: Nx tag of packages to leave out, a group with workflows of its own
+        type: string
+        default: ""
     outputs:
       matrices:
         description: JSON object of target to matrix rows
@@ -72,6 +80,8 @@ jobs:
           COMBINE: ${{ inputs.combine }}
           CONFIGS: ${{ inputs.configs }}
           LABELS: ${{ inputs.labels }}
+          TAG: ${{ inputs.tag }}
+          EXCLUDE_TAG: ${{ inputs.exclude-tag }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
         run: node .github/scripts/select-projects.mjs

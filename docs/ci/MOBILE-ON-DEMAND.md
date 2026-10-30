@@ -463,26 +463,24 @@ and free.
 
 ## The SDK's e2e apps
 
-`@qvac/sdk` and `sdk-kotlin` are producer packages: their `test:mobile` builds the
-SDK e2e consumer app from `packages/sdk-e2e`, and the run drives it over MQTT
-from the runner instead of a test package on the device. For them:
+`@qvac/sdk` and `sdk-kotlin` are producer packages, and they run from `sdk-e2e.yml`,
+not `mobile-tests.yml`: their `test:mobile` builds the SDK e2e consumer app from
+`packages/sdk-e2e`, and the run drives it over MQTT from the runner instead of a
+test package on the device. Dispatch `sdk-e2e.yml` with `platform`:
 
-- `devices` names one Device Farm pool from the `SDK_ANDROID_DEVICE_FARM_POOLS` or
-  `SDK_IOS_DEVICE_FARM_POOLS` repository variable, not a device model. Leave it
-  empty to take an available private pool first, else a random public one.
-  Dispatch the SDK on its own: a device model in `devices` names no pool and
-  fails its run.
+- `pool` names one Device Farm pool from the `SDK_ANDROID_DEVICE_FARM_POOLS` or
+  `SDK_IOS_DEVICE_FARM_POOLS` repository variable. Leave it empty to take an
+  available private pool first, else a random public one.
 - `tests` takes comma-separated catalog categories or testId prefixes, not a
   mocha `--grep`; empty runs the full catalog.
-- `package`, `prebuild_run_id` and `dependency_prebuild_run_id` do not apply:
-  the app always builds this commit's `packages/sdk`, `packages/inference` and
+- The app always builds this commit's `packages/sdk`, `packages/inference` and
   `packages/test-suite`.
 - The job summary compares the results with the newest dispatch run's on the
   base branch, and `<package>-results-<configuration>` holds the reports.
 
 ```bash
-gh workflow run mobile-tests.yml --ref <branch> -f platform=Android -f packages=@qvac/sdk
-gh workflow run mobile-tests.yml --ref <branch> -f platform=Android -f packages=sdk-kotlin
+gh workflow run sdk-e2e.yml --ref <branch> -f platform=Android -f packages=@qvac/sdk
+gh workflow run sdk-e2e.yml --ref <branch> -f platform=Android -f packages=sdk-kotlin
 ```
 
 ## PRs and Merge Guard

@@ -1,7 +1,7 @@
 {
   "name": "@qvac/opencode-plugin",
   "root": "plugins/opencode",
-  "tags": ["ci:contract"],
+  "tags": ["ci:contract", "ci:sdk"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

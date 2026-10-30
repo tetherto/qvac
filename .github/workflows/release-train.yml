@@ -235,7 +235,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/pr-checks.yml
+    uses: ./.github/workflows/sdk-checks.yml
     with:
       train: ${{ needs.train.outputs.name }}
       source: train
@@ -504,7 +504,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/pr-checks.yml
+    uses: ./.github/workflows/sdk-checks.yml
     with:
       train: ${{ needs.train.outputs.name }}
       source: published

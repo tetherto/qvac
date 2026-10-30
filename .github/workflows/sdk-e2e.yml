@@ -1,0 +1,278 @@
+name: SDK e2e
+
+# The SDK pod's end-to-end suites (packages tagged ci:sdk). Desktop configurations run on the label, base branch or
+# dispatch their ci.labels name, through _desktop.yml; Device Farm runs by dispatch, the runner driving the app over MQTT.
+on:
+  # TEMP rehearsal: pull_request until the stack merges, as pr-build-test.yml.
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*, feat/package-ci-contract-*]
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated SDK pod packages or directories; empty selects by change
+        type: string
+        default: ""
+      labels:
+        description: Labels whose desktop configurations to run, e.g. test-e2e-smoke; dispatch-only ones too, e.g. electron
+        type: string
+        default: ""
+      platform:
+        description: Device Farm platform; none runs the desktop configurations only
+        type: choice
+        options: [none, Android, iOS]
+        default: none
+      pool:
+        description: Device pool name; empty picks a ready private pool, else a public one
+        type: string
+        default: ""
+      tests:
+        description: Optional filter over the mobile test names
+        type: string
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: sdk-e2e-${{ github.event.pull_request.number || github.ref }}-${{ inputs.platform || 'none' }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: test:integration,test:mobile
+      packages: ${{ inputs.packages }}
+      labels: ${{ inputs.labels }}
+      configs: ${{ inputs.platform == 'iOS' && 'ios-arm64' || inputs.platform == 'Android' && 'android-arm64' || '' }}
+      tag: ci:sdk
+
+  fork-approval:
+    needs: select
+    if: needs.select.outputs.any == 'true'
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+
+  route:
+    needs: select
+    if: needs.select.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - id: route
+        uses: ./.github/actions/ci-route-stages
+
+  trust:
+    needs: [select, fork-approval]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      allowed: ${{ steps.trust.outputs.allowed }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - id: trust
+        uses: ./.github/actions/pr-check-trust
+        with:
+          github-token: ${{ github.token }}
+
+  desktop:
+    needs: [select, route, trust]
+    if: >-
+      needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true' &&
+      fromJSON(needs.select.outputs.matrices)['test:integration:labelled'][0] != null
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/_desktop.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['test:integration:labelled']) }}
+
+  # The package's test:mobile builds the app and a stub test package; the runner then schedules one run on a pool and
+  # drives it over MQTT, as main's SDK Device Farm workflows did.
+  mobile:
+    needs: select
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.platform != 'none' &&
+      fromJSON(needs.select.outputs.matrices)['test:mobile'][0] != null
+    name: mobile / ${{ matrix.row.slug }} ${{ matrix.row.config }}
+    runs-on: ${{ matrix.row.runner }}
+    environment: release
+    timeout-minutes: ${{ matrix.row.timeout || 280 }}
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices)['test:mobile'] }}
+    env:
+      WORKDIR: src/${{ matrix.row.dir }}
+      PROJECT: ${{ matrix.row.project }}
+      CONFIG: ${{ matrix.row.config }}
+      PLATFORM: ${{ inputs.platform }}
+      PROJECT_ARN: ${{ vars[matrix.row.meta.mobile.projectArnVar] }}
+      NX_DAEMON: "false"
+      NX_NO_CLOUD: "true"
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+      # Variables, not secrets: GitHub masks a short secret such as a port inside other values.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: |
+            .github/actions
+            .github/scripts
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          path: src
+          persist-credentials: "false"
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/setup-pnpm@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      - name: Install
+        working-directory: src
+        run: pnpm install --frozen-lockfile --filter .
+      - uses: tetherto/qvac-actions/configure-aws-credentials@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-duration-seconds: "7200"
+      - if: inputs.platform == 'Android'
+        uses: tetherto/qvac-actions/setup-java@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          java-version: "17"
+      - if: inputs.platform == 'Android'
+        uses: tetherto/qvac-actions/setup-android@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - if: inputs.platform == 'iOS'
+        uses: tetherto/qvac-actions/setup-xcode@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          xcode-versions: "16.1 16.2"
+          brew-packages: ninja
+          gems: cocoapods
+          require-tools: xcodebuild pod ninja
+          sdk: iphoneos
+      - id: signing
+        if: inputs.platform == 'iOS'
+        uses: tetherto/qvac-actions/ios-import-signing@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          certificate-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          certificate-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          bundle-id: io.tether.test.qvac
+      # The package's build phase writes the app, the stub test package and the spec to its outputs. Its install
+      # rewrites the SDK's manifest, so pnpm must not reinstall before nx.
+      - id: prepare
+        name: test:mobile build
+        working-directory: src
+        env:
+          AWS_REGION: us-west-2
+          IOS_SIGNING: ${{ inputs.platform == 'iOS' && format('{0},{1},{2}', steps.signing.outputs.profile-uuid, steps.signing.outputs.export-method, secrets.APPLE_TEAM_ID) || '' }}
+        run: pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
+      - id: app
+        uses: tetherto/qvac-actions/devicefarm-upload@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          project-arn: ${{ env.PROJECT_ARN }}
+          type: ${{ steps.prepare.outputs.app-type }}
+          files: ${{ steps.prepare.outputs.app-path }}
+          name: ${{ steps.prepare.outputs.app-name }}
+          max-wait-seconds: "600"
+      - id: package
+        uses: tetherto/qvac-actions/devicefarm-upload@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          project-arn: ${{ env.PROJECT_ARN }}
+          type: APPIUM_NODE_TEST_PACKAGE
+          files: ${{ steps.prepare.outputs.test-package }}
+      - id: spec
+        uses: tetherto/qvac-actions/devicefarm-upload@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          project-arn: ${{ env.PROJECT_ARN }}
+          type: APPIUM_NODE_TEST_SPEC
+          files: ${{ steps.prepare.outputs.specs }}
+      # One run on a pool, then the package's produce phase waits for RUNNING, drives the tests and fails on any failure.
+      - id: pool
+        name: test:mobile produce
+        working-directory: src
+        env:
+          POOLS: ${{ toJSON(fromJSON(vars[matrix.row.meta.mobile.devicePoolsVar[inputs.platform]])) }}
+          DEVICES: ${{ inputs.pool }}
+          APP_ARN: ${{ steps.app.outputs.arn }}
+          PACKAGE_ARN: ${{ steps.package.outputs.arn }}
+          SPECS: ${{ steps.spec.outputs.uploads }}
+          TIMEOUT: ${{ matrix.row.meta.mobile.jobTimeoutMinutes || '120' }}
+          TESTS: ${{ inputs.tests }}
+        run: >-
+          node ../.github/scripts/devicefarm-pool-run.mjs schedule --
+          pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
+      - if: cancelled() && steps.pool.outputs.run-count == '1'
+        uses: tetherto/qvac-actions/devicefarm-cancel-runs@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          run-arns: ${{ steps.pool.outputs.run-arns }}
+      # Fresh credentials: the session above may have run out during a long run.
+      - if: always() && steps.pool.outputs.run-count == '1'
+        uses: tetherto/qvac-actions/configure-aws-credentials@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+      - if: always() && steps.pool.outputs.run-count == '1'
+        env:
+          RUN_ARNS: ${{ steps.pool.outputs.run-arns }}
+        run: node .github/scripts/devicefarm-pool-run.mjs stop
+      - id: logs
+        if: always() && steps.pool.outputs.run-count == '1'
+        uses: tetherto/qvac-actions/devicefarm-download-logs@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          platform: ${{ inputs.platform }}
+          run-arns: ${{ steps.pool.outputs.run-arns }}
+          files: |
+            bare_console.log
+            appium.log
+            logcat_full.txt
+          skip-extensions: ${{ inputs.platform == 'Android' && 'mp4' || '' }}
+      - if: always() && steps.logs.outcome == 'success'
+        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: console-logs-${{ matrix.row.slug }}-${{ inputs.platform }}
+          path: ${{ steps.logs.outputs.console-dir }}
+          retention-days: "30"
+          if-no-files-found: ignore
+      - if: always()
+        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: ${{ matrix.row.slug }}-results-${{ matrix.row.config }}
+          path: ${{ env.WORKDIR }}/test/results/e2e/
+          if-no-files-found: ignore

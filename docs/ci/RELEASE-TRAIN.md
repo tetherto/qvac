@@ -37,7 +37,7 @@ above that version.
     tag. Every package gets a `<slug>-v<version>` tag.
   - `checks`: the check jobs in `release-train.yml` that must pass;
     `package-checks` runs each package's `project.json` targets through
-    `pr-checks.yml`
+    `sdk-checks.yml`
 
 ## Making a release
 
@@ -76,7 +76,7 @@ above that version.
    no changelog of their own. When the train moves `@qvac/sdk`, bring
    `packages/sdk-python` and `packages/sdk-kotlin` to its new version (the
    `sdk-python` and `sdk-kotlin` syncs of `qv-sdk-inference-version`);
-   sdk-kotlin's `verify:generated` in `pr-checks.yml` checks the Kotlin version
+   sdk-kotlin's `verify:generated` in `sdk-checks.yml` checks the Kotlin version
    on both PRs.
 
    When the train lists `fromNpm` packages, take them out of the workspace in a
@@ -156,7 +156,7 @@ above that version.
 
 ## Checks
 
-On the release PR (`pr-checks.yml`'s release-guard job and `release-train.yml`)
+On the release PR (`sdk-checks.yml`'s release-guard job and `release-train.yml`)
 and on every push (`release-train.yml`):
 
 - every train package moves, and each anchor package is at the branch version
@@ -171,13 +171,13 @@ and on every push (`release-train.yml`):
 
 Before npm publish:
 
-- **`package-checks`**: `pr-checks.yml` with the train, running each package's
+- **`package-checks`**: `sdk-checks.yml` with the train, running each package's
   `build`, `lint`, `typecheck`, `test:unit`, `verify:generated` and
   `verify:deps` targets (format, unit, Bare and e2e tests, and the SDK's
   consumer installs), with every train package installed from a tarball of
   this commit and everything else from npm. The backmerge PR, from
   `backmerge/release-train-<train>-<x.y.z>` into `main`, runs the same in
-  `pr-checks.yml`, except for a train with `fromNpm` packages. `main` keeps
+  `sdk-checks.yml`, except for a train with `fromNpm` packages. `main` keeps
   those packages in the workspace, and its code may already need versions of
   them that npm does not have, so that backmerge runs the checks after npm
   publish again: on the commit npm records as the anchor package's `gitHead`,

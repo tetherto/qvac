@@ -1,0 +1,302 @@
+name: SDK checks
+
+# The SDK pod's PR checks (packages tagged ci:sdk): each package installed as main's pod checks did, then its lint,
+# typecheck, unit, generated and dependency targets, plus the pod's PR rules and release guard. release-train.yml calls it
+# with a train, whose packages it checks against the train's tarballs or npm.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated package names or directories; empty selects every SDK pod package
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      train:
+        description: Release train whose packages to check; empty checks the PR's changed packages
+        type: string
+        default: ""
+      source:
+        description: "train: every train package from tarballs of ref; published: from npm"
+        type: string
+        default: ""
+      ref:
+        description: Commit to check out and test
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# An edit only reruns the PR rules, so it gets its own group and never cancels a check run.
+concurrency:
+  group: sdk-checks-${{ inputs.source || (github.event.action == 'edited' && 'edited') || 'pr' }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The release train a run checks, and its tarballs; empty outside a train or a train's backmerge.
+  train:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      train: ${{ steps.resolve.outputs.train }}
+      source: ${{ steps.resolve.outputs.source }}
+      ref: ${{ steps.resolve.outputs.ref }}
+      projects: ${{ steps.resolve.outputs.projects }}
+    steps:
+      - name: Checkout scripts
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: |
+            .github
+            scripts/ci
+            nx.json
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - id: resolve
+        env:
+          TRAIN_INPUT: ${{ inputs.train }}
+          SOURCE_INPUT: ${{ inputs.source }}
+          REF_INPUT: ${{ inputs.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/ci/checks-source.mjs resolve
+      # The tarballs are what the release would publish.
+      - if: steps.resolve.outputs.source == 'train'
+        name: Checkout the train
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          ref: ${{ steps.resolve.outputs.ref || github.event.pull_request.head.sha || github.sha }}
+          path: src
+          persist-credentials: "false"
+      - if: steps.resolve.outputs.source == 'train'
+        uses: tetherto/qvac-actions/setup-pnpm@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      - if: steps.resolve.outputs.source == 'train'
+        name: Pack the release train
+        working-directory: src
+        env:
+          TRAIN: ${{ steps.resolve.outputs.train }}
+          PROJECTS: ${{ steps.resolve.outputs.projects }}
+          NX_DAEMON: "false"
+          NX_NO_CLOUD: "true"
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec nx run-many -t build --projects="$PROJECTS" --exclude-task-dependencies --outputStyle=stream
+          node .github/scripts/release-train.mjs pack "$TRAIN" "$RUNNER_TEMP/train-tarballs"
+      - if: steps.resolve.outputs.source == 'train'
+        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: train-tarballs
+          path: ${{ runner.temp }}/train-tarballs
+          retention-days: "1"
+
+  select:
+    needs: train
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: lint,typecheck,test:unit,verify:generated,verify:deps
+      packages: ${{ needs.train.outputs.projects || inputs.packages }}
+      tag: ci:sdk
+
+  # A release PR fails here on what its release push would fail on later: the train's versions, or, when the package's
+  # publish metadata sets releaseGuard, its release branch, version bump and CHANGELOG section.
+  release-guard:
+    needs: select
+    if: github.event_name == 'pull_request' && github.event.action != 'edited' && !inputs.train && startsWith(github.base_ref, 'release-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source and actions
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: pkg
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PROJECTS: ${{ needs.select.outputs.projects }}
+        run: node scripts/ci/release-guard.mjs
+      - if: steps.pkg.outputs.train == 'true'
+        uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - if: steps.pkg.outputs.train == 'true'
+        uses: tetherto/qvac-actions/setup-pnpm@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      # From the merge base, so commits already on the train branch are not read as this PR's.
+      - if: steps.pkg.outputs.train == 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          node .github/scripts/release-train.mjs resolve "$BASE_REF" "$(git merge-base "$BASE_SHA" "$HEAD_SHA")" "$HEAD_SHA" --check-npm
+      - if: steps.pkg.outputs.dir != ''
+        uses: ./.github/actions/release-merge-guard
+        with:
+          base-ref: ${{ github.base_ref }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+          package-slug: ${{ steps.pkg.outputs.slug }}
+          package-json-path: ${{ steps.pkg.outputs.dir }}/package.json
+          changelog-path: ${{ steps.pkg.outputs.dir }}/CHANGELOG.md
+      # The section create-github-release.yml reads after publishing, read from the PR head before merge.
+      - if: steps.pkg.outputs.dir != ''
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGELOG: ${{ steps.pkg.outputs.dir }}/CHANGELOG.md
+        run: git show "$HEAD_SHA:$CHANGELOG" > "$RUNNER_TEMP/changelog-head.md"
+      - if: steps.pkg.outputs.dir != ''
+        uses: ./.github/actions/verify-changelog-notes
+        with:
+          changelog-path: ${{ runner.temp }}/changelog-head.md
+          version: ${{ steps.pkg.outputs.version }}
+
+  # The pod's PR title and description rules, on every PR touching a path the pod owns, edits included.
+  pod-rules:
+    if: github.event_name == 'pull_request' && !inputs.train
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout pull request
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node packages/sdk/ci/pr-rules.mjs
+
+  checks:
+    needs: [train, select]
+    if: needs.select.outputs.any == 'true'
+    name: checks (${{ matrix.project.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ needs.train.outputs.train != '' && 100 || 45 }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      NX_DAEMON: "false"
+      NX_NO_CLOUD: "true"
+      PROJECT: ${{ matrix.project.name }}
+      SOURCE: >-
+        ${{ needs.train.outputs.source || (contains(matrix.project.sources, 'workspace') && 'workspace')
+        || (contains(matrix.project.sources, 'npm') && 'npm') || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.select.outputs.projects) }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: Checkout pull request
+        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ inputs.ref || needs.train.outputs.ref || github.event.pull_request.head.sha || github.sha }}
+          path: src
+          persist-credentials: "false"
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/setup-pnpm@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          package-json-file: src/package.json
+      # The toolkits the package's check targets name in metadata.setup.
+      - if: contains(matrix.project.checkSetup, 'python')
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
+      - if: contains(matrix.project.checkSetup, 'java')
+        uses: tetherto/qvac-actions/setup-java@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          java-version: "17"
+      - if: contains(matrix.project.checkSetup, 'android-ndk')
+        uses: tetherto/qvac-actions/setup-android@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - if: contains(matrix.project.checkSetup, 'android-ndk')
+        working-directory: src
+        run: sdkmanager "ndk;$(jq -r '.targetDefaults.build.metadata.toolchain.android.ndk' nx.json)"
+      # The Bare runtime on PATH, for brittle-bare and bare scripts, as main's pod checks installed it.
+      - if: contains(matrix.project.checkSetup, 'bare')
+        run: npm install -g --force bare
+      # Private @tetherto builds from GitHub Packages, read with this job's token.
+      - name: Configure npm registries
+        env:
+          GPR_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "@tetherto:registry=https://npm.pkg.github.com/"
+            echo "//npm.pkg.github.com/:_authToken=${GPR_TOKEN}"
+          } >> "$HOME/.npmrc"
+      # A workspace install, so a package checks against its dependencies' sources in this PR, not their published builds.
+      - name: Install
+        working-directory: src
+        run: pnpm install --frozen-lockfile ${{ env.SOURCE != '' && '--filter .' || '' }}
+      - if: env.SOURCE == 'train'
+        uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: train-tarballs
+          path: ${{ runner.temp }}/train-tarballs
+      # One step per target; nx run-many skips a target the package does not declare.
+      - name: lint
+        if: env.SOURCE == ''
+        working-directory: src
+        run: pnpm exec nx run-many -t lint -p "$PROJECT" --outputStyle=stream
+      - name: typecheck
+        if: env.SOURCE == ''
+        working-directory: src
+        run: pnpm exec nx run-many -t typecheck -p "$PROJECT" --outputStyle=stream
+      - name: test:unit
+        if: env.SOURCE == ''
+        working-directory: src
+        run: pnpm exec nx run-many -t test:unit -p "$PROJECT" --outputStyle=stream
+      - name: verify:generated
+        if: env.SOURCE == ''
+        working-directory: src
+        run: pnpm exec nx run-many -t verify:generated -p "$PROJECT" --outputStyle=stream
+      - name: verify:deps
+        if: env.SOURCE == ''
+        working-directory: src
+        run: pnpm exec nx run-many -t verify:deps -p "$PROJECT" --outputStyle=stream
+      # The package installed on its own, by its sdk-source:workspace script or from the train's tarballs or npm, then each
+      # check, its JavaScript build first.
+      - name: checks (${{ env.SOURCE }})
+        if: env.SOURCE != ''
+        working-directory: src
+        env:
+          DIR: ${{ matrix.project.dir }}
+          TARGETS: ${{ matrix.project.jsBuild && 'build,' || '' }}lint,typecheck,test:unit,verify:generated,verify:deps
+        run: node scripts/ci/checks-source.mjs check "$SOURCE" "$DIR" "$PROJECT" "$TARGETS" "$RUNNER_TEMP/train-tarballs"
+      # A package whose test:unit names the published source also checks against npm on its release branch and a dispatch.
+      - name: checks (published)
+        if: >-
+          contains(matrix.project.sources, 'published') && needs.train.outputs.source == '' &&
+          (github.event_name == 'workflow_dispatch' || startsWith(github.base_ref, format('release-{0}-', matrix.project.slug)))
+        working-directory: src
+        env:
+          DIR: ${{ matrix.project.dir }}
+          TARGETS: ${{ matrix.project.jsBuild && 'build,' || '' }}lint,typecheck,test:unit,verify:generated,verify:deps
+        run: node scripts/ci/checks-source.mjs check published "$DIR" "$PROJECT" "$TARGETS"
