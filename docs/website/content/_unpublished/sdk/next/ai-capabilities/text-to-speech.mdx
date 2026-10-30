@@ -84,14 +84,14 @@ A cancelled run ends cleanly rather than as an error: `done` resolves `true`,
 statistics from the final frame (`undefined` if the run reported none).
 
 <Callout type="info">
-  The five backend fields (`backendDevice`, `backendId`, `gpuUnsupported`,
-  `enhancerBackendDevice`, `enhancerBackendId`) are reported by batch
-  synthesis (`stream: false`) only. The chunked paths — `stream: true` (the
-  default), `sentenceStream: true`, and `textToSpeechStream()` — run one
-  native job per sentence and aggregate only the timing and sample counts,
-  plus Audio8's two Core ML fields, which keep the last sentence's value.
-  MOSS is the exception for `stream: true`: it runs the whole text as one
-  native job, so it reports them there too.
+  The chunked paths — `stream: true` (the default), `sentenceStream: true`,
+  and `textToSpeechStream()` — run one native job per sentence. Their `stats`
+  aggregate the timing and sample counts across sentences, while the backend
+  fields (`backendDevice`, `backendId`, `gpuUnsupported`,
+  `enhancerBackendDevice`, `enhancerBackendId`) and Audio8's two Core ML
+  fields keep the value of the last sentence that reported them, so a chunked
+  run reports where it ran just as batch synthesis (`stream: false`) does. A
+  field no sentence reported stays absent.
 </Callout>
 
 | Field | Meaning |
