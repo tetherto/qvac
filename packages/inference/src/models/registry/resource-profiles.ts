@@ -631,6 +631,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 2394799678,
     assumptions: ['artifactBytes sums 6 companion-set files']
   },
+  '1bbf6c214017cb3d02499da8946e0e2a8d9fa9555db7f1a954e21bd22c257e64': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 630374592
+  },
   '1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b': {
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
@@ -716,6 +721,32 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'llamacpp-completion',
     artifactBytes: 1200726208
+  },
+  '2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135': {
+    schemaVersion: 1,
+    engine: 'llamacpp-embedding',
+    artifactBytes: 309855456,
+    ggufFacts: {
+      architecture: 'gemma-embedding2',
+      blockCount: 24,
+      headCount: 4,
+      headCountKv: 2,
+      keyLength: 512,
+      valueLength: 512,
+      embeddingLength: 512,
+      contextLength: 262144,
+      slidingWindow: 1024,
+      keyLengthSwa: 256,
+      valueLengthSwa: 256,
+      kvLayerClasses: [
+        { count: 20, headCountKv: 2, keyLength: 256, valueLength: 256, windowed: true },
+        { count: 4, headCountKv: 1, keyLength: 512, valueLength: 512, windowed: false }
+      ],
+      assumptions: [
+        'head_count_kv is per-layer — used the maximum',
+        'kvLayerClasses derived from per-layer attention metadata'
+      ]
+    }
   },
   '2190798297bc12505f917189defcf451ab5bd2e815bc05df244dc291dc2ae63b': {
     schemaVersion: 1,
@@ -1085,6 +1116,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'parakeet-transcription',
     artifactBytes: 626254
+  },
+  '337de2d7aeb1f7e5523a59a03e3369d16697a69406d130af5e5590bd56abb2d0': {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 170113920
   },
   '3397f2e15859d268dc91782e92e70c485c7780448d57d622d145374390168f71': {
     schemaVersion: 1,
@@ -2168,6 +2204,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 36751365,
     assumptions: ['artifactBytes sums 4 companion-set files']
+  },
+  '638eb415a66238b7d01820d8b60ee06773047eb303815c7faefd189e378bd2e1': {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 370
   },
   '6435d3d9d766159fe192ab90892540b438ad7adb7ab4ea4049f68d0b4cdea3bd': {
     schemaVersion: 1,
@@ -3262,6 +3303,22 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'tts-ggml',
     artifactBytes: 3667407712
   },
+  '90a7f7680fb0e9149e6febda599568f48ca5423f1dbda24e333b74e06a714374': {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 4791642112,
+    ggufFacts: {
+      architecture: 'acestep-dit',
+      blockCount: 24,
+      headCount: 16,
+      headCountKv: 8,
+      keyLength: 128,
+      valueLength: 128,
+      embeddingLength: 2048,
+      contextLength: 32768,
+      assumptions: ['key_length/value_length absent — derived from embedding_length / head_count']
+    }
+  },
   '90b0abe16180f1fe5918bc5d89c3b6eeaf40520a50f906d6303a59a32b699fbc': {
     schemaVersion: 1,
     engine: 'llamacpp-completion',
@@ -3531,6 +3588,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 2248
+  },
+  '994f21adbc9378ba10b36addd925b43b01c6469d3062861cdd36b1a3c8bfb0cf': {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 617
   },
   '99645a36944f83372329d19c73c4836d55755116d86426fa9dde8a59a59a6f72': {
     schemaVersion: 1,
@@ -4098,6 +4160,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 35925689,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  b171e95129b83692ad4d45d28b1f304157b1a1d1ba114468974b1b29733de154: {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 101802
+  },
   b19abe7154430c1ee321e29391b14b2752c3350c3fbfcd1caf1ef7a0f9a30a97: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -4301,6 +4368,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 36733850,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  b82ded120ccde3630617b61d118f2063977040fd98c44a0f2ba4e589944f2842: {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 1779
+  },
   b894457533d13ef25cd4a5af5e0bc25c102783a041be933c2c1e16f0b5c79ca0: {
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
@@ -4320,6 +4392,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 796018
+  },
+  ba73e94f205a6d3a1b0ccc9945dc157361dc7580f7eced3372c7ba5a70645526: {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 243
   },
   bafcb48a25fe7fa2b05ae0721822773ec1d2232bed1124295be9f22a5f26e313: {
     schemaVersion: 1,
@@ -4524,6 +4601,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 20785239,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f: {
+    schemaVersion: 1,
+    engine: 'llamacpp-embedding',
+    artifactBytes: 554821024
+  },
   c4e9eafc03f9ac7aac35b494dfea02feda9797b5f69b682bd3bb9f565ec4ba2e: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -4563,6 +4645,22 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 1109047
+  },
+  c7b463b728cdce2f3d4e5205fc5747d0344ebfea37f19542f5236cd8a76cf462: {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 4791642080,
+    ggufFacts: {
+      architecture: 'acestep-dit',
+      blockCount: 24,
+      headCount: 16,
+      headCountKv: 8,
+      keyLength: 128,
+      valueLength: 128,
+      embeddingLength: 2048,
+      contextLength: 32768,
+      assumptions: ['key_length/value_length absent — derived from embedding_length / head_count']
+    }
   },
   c7c9eb64a20f03b30a327a450381d2159e75012fddb2e806a590e4651d3d65d8: {
     schemaVersion: 1,
@@ -4715,6 +4813,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 2238
+  },
+  cee90a9c5ea8a8b47d9b6913c94b9ffa1f1ab8105ec50ec2db2b4746bc9d2f93: {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 121815
   },
   cfa6a9e601d74686b117f041eb1ad9de94c34219110b67367d570a9e27026a46: {
     schemaVersion: 1,

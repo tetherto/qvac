@@ -173,6 +173,42 @@ AUDIOGEN_ACESTEP_V15_SFT_Q8_0 = ModelConstant(
     params="",
 )
 
+AUDIOGEN_ACESTEP_V15_TURBO_BF16 = ModelConstant(
+    name="AUDIOGEN_ACESTEP_V15_TURBO_BF16",
+    src="registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-BF16.gguf",
+    registry_path="qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-BF16.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2050940,
+    blob_block_length=73115,
+    blob_byte_offset=134380631617,
+    model_id="acestep-v15-turbo-BF16.gguf",
+    expected_size=4791642080,
+    sha256_checksum="c7b463b728cdce2f3d4e5205fc5747d0344ebfea37f19542f5236cd8a76cf462",
+    addon="audiogen",
+    engine="audiogen-ggml",
+    quantization="bf16",
+    params="",
+)
+
+AUDIOGEN_ACESTEP_V15_TURBO_F16 = ModelConstant(
+    name="AUDIOGEN_ACESTEP_V15_TURBO_F16",
+    src="registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-F16.gguf",
+    registry_path="qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-F16.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2124056,
+    blob_block_length=73115,
+    blob_byte_offset=139172330753,
+    model_id="acestep-v15-turbo-F16.gguf",
+    expected_size=4791642112,
+    sha256_checksum="90a7f7680fb0e9149e6febda599568f48ca5423f1dbda24e333b74e06a714374",
+    addon="audiogen",
+    engine="audiogen-ggml",
+    quantization="fp16",
+    params="",
+)
+
 AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M = ModelConstant(
     name="AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M",
     src="registry://s3/qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q4_K_M.gguf",
@@ -206,6 +242,42 @@ AUDIOGEN_ACESTEP_V15_TURBO_Q8_0 = ModelConstant(
     addon="audiogen",
     engine="audiogen-ggml",
     quantization="q8_0",
+    params="",
+)
+
+AUDIOGEN_MANIFEST = ModelConstant(
+    name="AUDIOGEN_MANIFEST",
+    src="registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Manifest.json",
+    registry_path="qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Manifest.json",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2202371,
+    blob_block_length=1,
+    blob_byte_offset=144304483802,
+    model_id="Manifest.json",
+    expected_size=617,
+    sha256_checksum="994f21adbc9378ba10b36addd925b43b01c6469d3062861cdd36b1a3c8bfb0cf",
+    addon="audiogen",
+    engine="audiogen-ggml",
+    quantization="",
+    params="",
+)
+
+AUDIOGEN_MODEL = ModelConstant(
+    name="AUDIOGEN_MODEL",
+    src="registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    registry_path="qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2199773,
+    blob_block_length=2,
+    blob_byte_offset=144134268080,
+    model_id="model.mlmodel",
+    expected_size=101802,
+    sha256_checksum="b171e95129b83692ad4d45d28b1f304157b1a1d1ba114468974b1b29733de154",
+    addon="audiogen",
+    engine="audiogen-ggml",
+    quantization="",
     params="",
 )
 
@@ -2279,6 +2351,24 @@ DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS = ModelConstant(
     params="2x7B",
 )
 
+EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
+    name="EMBEDDINGGEMMA_2_Q8_0",
+    src="registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf",
+    registry_path="ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2211992,
+    blob_block_length=4729,
+    blob_byte_offset=144934876963,
+    model_id="embeddinggemma-2-Q8_0.gguf",
+    expected_size=309855456,
+    sha256_checksum="2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135",
+    addon="embeddings",
+    engine="llamacpp-embedding",
+    quantization="q8_0",
+    params="",
+)
+
 EMBEDDINGGEMMA_300M_BF16 = ModelConstant(
     name="EMBEDDINGGEMMA_300M_BF16",
     src="registry://hf/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-BF16.gguf",
@@ -3645,6 +3735,24 @@ MEDGEMMA_4B_IT_Q8_0_SHARD = ModelConstant(
     engine="llamacpp-completion",
     quantization="q8_0",
     params="4B",
+)
+
+MMPROJ_EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
+    name="MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
+    src="registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
+    registry_path="ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2216722,
+    blob_block_length=8466,
+    blob_byte_offset=145244759043,
+    model_id="mmproj-embeddinggemma-2-Q8_0.gguf",
+    expected_size=554821024,
+    sha256_checksum="c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f",
+    addon="embeddings",
+    engine="llamacpp-embedding",
+    quantization="q8_0",
+    params="",
 )
 
 MMPROJ_GEMMA4_2B_MULTIMODAL_BF16 = ModelConstant(
@@ -6941,6 +7049,24 @@ TTS_LM_MULTILINGUAL_AUDIO8_FP16 = ModelConstant(
     params="0.6B",
 )
 
+TTS_LM_MULTILINGUAL_AUDIO8_Q4_0 = ModelConstant(
+    name="TTS_LM_MULTILINGUAL_AUDIO8_Q4_0",
+    src="registry://s3/qvac_models_compiled/ggml/audio8/2026-10-28/audio8-lm-q4_0.gguf",
+    registry_path="qvac_models_compiled/ggml/audio8/2026-10-28/audio8-lm-q4_0.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2202372,
+    blob_block_length=9619,
+    blob_byte_offset=144304484419,
+    model_id="audio8-lm-q4_0.gguf",
+    expected_size=630374592,
+    sha256_checksum="1bbf6c214017cb3d02499da8946e0e2a8d9fa9555db7f1a954e21bd22c257e64",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="q4_0",
+    params="0.6B",
+)
+
 TTS_LM_MULTILINGUAL_AUDIO8_Q8_0 = ModelConstant(
     name="TTS_LM_MULTILINGUAL_AUDIO8_Q8_0",
     src="registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf",
@@ -8481,8 +8607,12 @@ __all__ = [
     "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0",
     "AUDIOGEN_ACESTEP_V15_BASE_Q4_K_M",
     "AUDIOGEN_ACESTEP_V15_SFT_Q8_0",
+    "AUDIOGEN_ACESTEP_V15_TURBO_BF16",
+    "AUDIOGEN_ACESTEP_V15_TURBO_F16",
     "AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M",
     "AUDIOGEN_ACESTEP_V15_TURBO_Q8_0",
+    "AUDIOGEN_MANIFEST",
+    "AUDIOGEN_MODEL",
     "AUDIOGEN_MOSS_SFX_V2_F16",
     "AUDIOGEN_MOSS_SFX_V2_Q8_0",
     "AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0",
@@ -8598,6 +8728,7 @@ __all__ = [
     "DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS",
+    "EMBEDDINGGEMMA_2_Q8_0",
     "EMBEDDINGGEMMA_300M_BF16",
     "EMBEDDINGGEMMA_300M_F32",
     "EMBEDDINGGEMMA_300M_Q4_0",
@@ -8674,6 +8805,7 @@ __all__ = [
     "MEDGEMMA_4B_IT_Q4_1_TENSORS",
     "MEDGEMMA_4B_IT_Q8_0",
     "MEDGEMMA_4B_IT_Q8_0_SHARD",
+    "MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_BF16",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_F16",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_Q8_0",
@@ -8857,6 +8989,7 @@ __all__ = [
     "TTS_LARGE_V1_EN_PARLER_TTS_FP32",
     "TTS_LARGE_V1_EN_PARLER_TTS_Q8_0",
     "TTS_LM_MULTILINGUAL_AUDIO8_FP16",
+    "TTS_LM_MULTILINGUAL_AUDIO8_Q4_0",
     "TTS_LM_MULTILINGUAL_AUDIO8_Q8_0",
     "TTS_MECAB_IPADIC_CHATTERBOX",
     "TTS_MINI_V1_EN_PARLER_TTS_FP16",
