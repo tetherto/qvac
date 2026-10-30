@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -9,6 +10,7 @@
 #include <string>
 #include <system_error>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <llama.h>
@@ -23,12 +25,16 @@ namespace qvac_lib_inference_addon_llama::cache {
 /// prompt. Only paths a request or `saveCache` named are known: the addon
 /// never scans directories. A file is read again when its size or
 /// modification time changes; one that is missing, empty or in another
-/// format, or that failed to load, is skipped until it is written.
-/// Thread-safe.
+/// format, or that failed to load, is skipped until it is written. The
+/// ledgers kept are bounded in bytes as well as in files; the files named or
+/// matched least recently are forgotten first. Thread-safe.
 class CacheFileIndex {
 public:
   /// Paths kept at most; the least recently noted one is forgotten first.
   static constexpr size_t MAX_FILES = 256;
+  /// Bytes of ledgers kept in memory at most; the files noted least recently
+  /// are forgotten first, and one file is kept even if it alone is larger.
+  static constexpr size_t MAX_LEDGER_BYTES = size_t{64} << 20;
   /// Ledger words read from a header at most (a 1M-token context).
   static constexpr size_t MAX_LEDGER_WORDS =
       LEDGER_HEADER_WORDS + LEDGER_ENTRY_WORDS * ((size_t{1} << 20) + 1);
@@ -39,6 +45,9 @@ public:
     // Ledger words read from the file's header.
     std::vector<llama_token> words;
   };
+
+  explicit CacheFileIndex(size_t maxLedgerBytes = MAX_LEDGER_BYTES)
+      : maxLedgerBytes_(maxLedgerBytes) {}
 
   /// Remembers `path` as a cacheKey file of this model.
   void note(const std::string& path) {
@@ -59,14 +68,34 @@ public:
   }
 
   /// The file other than `excluded` with the longest `reusablePrefix` of
-  /// `prompt`. Files carry no checkpoints here, so on memory that cannot be
-  /// trimmed only a file whose state is a prefix of `prompt` serves.
+  /// `prompt`, which counts as noted again. Files carry no checkpoints here,
+  /// so on memory that cannot be trimmed only a file whose state is a prefix
+  /// of `prompt` serves. Files are read newest first, and none once the
+  /// ledgers read pass the byte budget: the older ones are forgotten.
   [[nodiscard]] std::optional<Match> longestPrefix(
       const Ledger& prompt, bool trimmable, const std::string& excluded) {
     std::scoped_lock lock(mutex_);
+    std::vector<std::pair<const std::string, Known>*> newestFirst;
+    newestFirst.reserve(files_.size());
+    for (auto& file : files_) {
+      newestFirst.push_back(&file);
+    }
+    std::sort(
+        newestFirst.begin(),
+        newestFirst.end(),
+        [](const auto* a, const auto* b) {
+          return a->second.lastNoted > b->second.lastNoted;
+        });
     std::optional<Match> best;
-    for (auto& [path, known] : files_) {
-      if (path == excluded || !refreshLocked(path, known)) {
+    size_t kept = 0;
+    for (auto* file : newestFirst) {
+      if (kept > maxLedgerBytes_) {
+        break;
+      }
+      auto& [path, known] = *file;
+      const bool usable = path != excluded && refreshLocked(path, known);
+      kept += known.bytes();
+      if (!usable) {
         continue;
       }
       const size_t reusable =
@@ -76,16 +105,22 @@ public:
       }
     }
     if (best.has_value()) {
-      best->words = files_.at(best->path).words;
+      Known& matched = files_.at(best->path);
+      best->words = matched.words;
+      matched.lastNoted = ++clock_;
     }
+    forgetBeyondBudgetLocked();
     return best;
   }
 
-  /// Skips `path` until it changes: it failed to load as read.
+  /// Skips `path` until it changes: it failed to load as read. Its ledger is
+  /// released; its size and modification time tell when it changes.
   void markUnusable(const std::string& path) {
     std::scoped_lock lock(mutex_);
     if (auto it = files_.find(path); it != files_.end()) {
       it->second.unusable = true;
+      it->second.words = {};
+      it->second.ledger = {};
     }
   }
 
@@ -133,6 +168,12 @@ public:
     return files_.size();
   }
 
+  /// Bytes of the ledgers kept.
+  [[nodiscard]] size_t ledgerBytes() const {
+    std::scoped_lock lock(mutex_);
+    return ledgerBytesLocked();
+  }
+
 private:
   struct Known {
     uint64_t lastNoted = 0;
@@ -143,32 +184,66 @@ private:
     std::filesystem::file_time_type mtime;
     std::vector<llama_token> words;
     Ledger ledger;
+
+    [[nodiscard]] size_t bytes() const {
+      return words.size() * sizeof(llama_token) +
+             ledger.entries.size() * sizeof(Entry);
+    }
   };
 
-  /// Reads `path` again when its size or modification time changed. False
-  /// when it is gone, empty or not a current-format cacheKey file.
+  [[nodiscard]] size_t ledgerBytesLocked() const {
+    size_t total = 0;
+    for (const auto& [path, known] : files_) {
+      total += known.bytes();
+    }
+    return total;
+  }
+
+  /// Forgets the least recently noted files until the ledgers kept fit in
+  /// `maxLedgerBytes_`, keeping at least the most recently noted one.
+  void forgetBeyondBudgetLocked() {
+    size_t total = ledgerBytesLocked();
+    while (total > maxLedgerBytes_ && files_.size() > 1) {
+      auto oldest = files_.begin();
+      for (auto it = files_.begin(); it != files_.end(); ++it) {
+        if (it->second.lastNoted < oldest->second.lastNoted) {
+          oldest = it;
+        }
+      }
+      total -= oldest->second.bytes();
+      files_.erase(oldest);
+    }
+  }
+
+  /// Reads `path` again when its size or modification time changed. False,
+  /// with the ledger it held released, when it is gone, empty or not a
+  /// current-format cacheKey file.
   static bool refreshLocked(const std::string& path, Known& known) {
+    const auto unreadable = [&known]() {
+      known.read = false;
+      known.words = {};
+      known.ledger = {};
+      return false;
+    };
     std::error_code sizeEc;
     std::error_code timeEc;
     const auto size = std::filesystem::file_size(path, sizeEc);
     const auto mtime = std::filesystem::last_write_time(path, timeEc);
     if (sizeEc || timeEc || size == 0) {
-      known.read = false;
-      return false;
+      return unreadable();
     }
     if (known.read && size == known.size && mtime == known.mtime) {
       return !known.unusable;
     }
-    known.read = false;
     known.unusable = false;
     auto words = readLedgerWords(path);
     if (!words.has_value()) {
-      return false;
+      return unreadable();
     }
     try {
       known.ledger = deserialize(words->data(), words->size()).ledger;
     } catch (const std::exception&) {
-      return false;
+      return unreadable();
     }
     known.words = std::move(*words);
     known.size = size;
@@ -177,6 +252,7 @@ private:
     return true;
   }
 
+  size_t maxLedgerBytes_;
   mutable std::mutex mutex_;
   std::unordered_map<std::string, Known> files_;
   uint64_t clock_ = 0;

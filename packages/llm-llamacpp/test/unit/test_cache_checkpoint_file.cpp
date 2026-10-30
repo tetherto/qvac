@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "model-interface/CacheCheckpointFile.hpp"
+#include "model-interface/CacheDonors.hpp"
 #include "model-interface/CacheFileIndex.hpp"
 #include "model-interface/CacheLedger.hpp"
 #include "model-interface/SlotStateCache.hpp"
@@ -446,6 +447,7 @@ TEST_F(CacheFileIndexTest, FollowsRewrittenAndDeletedFiles) {
 
   fs::remove(path);
   EXPECT_FALSE(index.longestPrefix(prompt, true, "").has_value());
+  EXPECT_EQ(index.ledgerBytes(), 0u) << "the deleted file's ledger was kept";
 }
 
 // A file that failed to load is skipped until it is written again, instead of
@@ -459,11 +461,119 @@ TEST_F(CacheFileIndexTest, SkipsAFileThatFailedToLoadUntilItChanges) {
 
   index.markUnusable(path);
   EXPECT_FALSE(index.longestPrefix(prompt, true, "").has_value());
+  EXPECT_EQ(index.ledgerBytes(), 0u) << "the unusable file's ledger was kept";
 
   (void)write("broken.bin", {1, 2, 3, 4});
   const auto match = index.longestPrefix(prompt, true, "");
   ASSERT_TRUE(match.has_value()) << "the rewritten file stayed skipped";
   EXPECT_EQ(match->reusable, 4u);
+}
+
+namespace {
+
+// A conversation of 64 tokens that starts with `first`.
+std::vector<llama_token> conversation(llama_token first) {
+  std::vector<llama_token> tokens(64, 7);
+  tokens.front() = first;
+  return tokens;
+}
+
+// A prompt that continues `conversation(first)`.
+cache::Ledger promptFor(llama_token first) {
+  std::vector<llama_token> tokens = conversation(first);
+  tokens.push_back(9);
+  return cache::fromTokens(tokens);
+}
+
+} // namespace
+
+// The ledgers kept stay within the byte budget: the files named or matched
+// least recently are forgotten first, and naming one again brings it back.
+TEST_F(CacheFileIndexTest, KeepsItsLedgersWithinTheByteBudget) {
+  const std::vector<std::string> paths = {
+      write("a.bin", conversation(1)),
+      write("b.bin", conversation(2)),
+      write("c.bin", conversation(3))};
+  size_t oneFile = 0;
+  {
+    cache::CacheFileIndex probe;
+    probe.note(paths[0]);
+    ASSERT_TRUE(probe.longestPrefix(promptFor(1), true, "").has_value());
+    oneFile = probe.ledgerBytes();
+  }
+  ASSERT_GT(oneFile, 0u);
+
+  cache::CacheFileIndex index(oneFile * 2 + oneFile / 2);
+  for (const auto& path : paths) {
+    index.note(path);
+  }
+  const auto match = index.longestPrefix(promptFor(3), true, "");
+  ASSERT_TRUE(match.has_value());
+  EXPECT_EQ(match->path, paths[2]);
+  EXPECT_EQ(index.size(), 2u);
+  EXPECT_LE(index.ledgerBytes(), oneFile * 2 + oneFile / 2);
+  EXPECT_FALSE(index.longestPrefix(promptFor(1), true, "").has_value())
+      << "the file named least recently was kept";
+  EXPECT_TRUE(index.longestPrefix(promptFor(2), true, "").has_value());
+
+  index.note(paths[0]);
+  const auto again = index.longestPrefix(promptFor(1), true, "");
+  ASSERT_TRUE(again.has_value()) << "naming the file again did not restore it";
+  EXPECT_EQ(again->path, paths[0]);
+  EXPECT_EQ(index.size(), 2u);
+  // b was matched after c was: c went.
+  EXPECT_TRUE(index.longestPrefix(promptFor(2), true, "").has_value())
+      << "a file matched more recently was forgotten first";
+  EXPECT_FALSE(index.longestPrefix(promptFor(3), true, "").has_value());
+}
+
+// A scan reads the files named most recently first and stops reading once
+// their ledgers pass the budget, so older files are never read.
+TEST_F(CacheFileIndexTest, ReadsNoFileBeyondTheByteBudget) {
+  const std::vector<std::string> paths = {
+      write("a.bin", conversation(1)),
+      write("b.bin", conversation(2)),
+      write("c.bin", conversation(3))};
+  size_t oneFile = 0;
+  {
+    cache::CacheFileIndex probe;
+    probe.note(paths[0]);
+    ASSERT_TRUE(probe.longestPrefix(promptFor(1), true, "").has_value());
+    oneFile = probe.ledgerBytes();
+  }
+
+  cache::CacheFileIndex index(oneFile + oneFile / 2);
+  for (const auto& path : paths) {
+    index.note(path);
+  }
+  EXPECT_FALSE(index.longestPrefix(promptFor(1), true, "").has_value())
+      << "the oldest file was read beyond the budget";
+  EXPECT_EQ(index.size(), 1u);
+  EXPECT_LE(index.ledgerBytes(), oneFile + oneFile / 2);
+}
+
+// A request its own state already serves whole reads no file.
+TEST_F(CacheFileIndexTest, MemoryServingTheWholePromptReadsNoFile) {
+  cache::CacheFileIndex index;
+  index.note(write("conversation.bin", conversation(1)));
+  const cache::Ledger prompt = promptFor(1);
+  bool offered = false;
+  const cache::DonorAdopter adopt = [&offered](const cache::DonorState&) {
+    offered = true;
+    return false;
+  };
+
+  EXPECT_FALSE(
+      cache::offerStoredState(
+          nullptr, &index, "", prompt, true, prompt.entries.size(), adopt));
+  EXPECT_FALSE(offered);
+  EXPECT_EQ(index.ledgerBytes(), 0u) << "the file was read";
+
+  EXPECT_FALSE(
+      cache::offerStoredState(
+          nullptr, &index, "", prompt, true, prompt.entries.size() - 2, adopt));
+  EXPECT_TRUE(offered) << "test setup: the file serves more than the minimum";
+  EXPECT_GT(index.ledgerBytes(), 0u);
 }
 
 // Files in another format share nothing, and the index stays bounded.

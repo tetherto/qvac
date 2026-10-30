@@ -100,6 +100,10 @@ inline bool offerStoredState(
     batching::SlotStateCache* ramTier, CacheFileIndex* files,
     const std::string& excludedFile, const Ledger& prompt, bool trimmable,
     size_t minimum, const DonorAdopter& adopt) {
+  // No state serves more than the whole prompt, so the files are not read.
+  if (minimum >= prompt.entries.size()) {
+    return false;
+  }
   std::optional<CacheFileIndex::Match> inFile;
   if (files != nullptr) {
     inFile = files->longestPrefix(prompt, trimmable, excludedFile);

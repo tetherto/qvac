@@ -199,9 +199,12 @@ state serves the longest prefix of it, cheapest first on a tie:
 2. on the batch path, the conversation parked in another free slot;
 3. the RAM tier (`cache_ram_mib`);
 4. the `cacheKey` files a request (as `cacheKey` or `baseCacheKey`) or
-   `saveCache()` named in this process, the 256 named most recently (no
-   directory is scanned; a changed file is read again, a deleted one
-   skipped).
+   `saveCache()` named in this process, the 256 named or picked as a
+   prompt's closest match most recently, as far as 64 MiB of memory holds
+   their ledgers (no directory is
+   scanned; a changed file is read again, a deleted one skipped). A request
+   its own sequence, or on the batch path another parked one, already serves
+   whole reads none of them.
 
 Any prefix longer than what its own sequence serves is used; there is no
 threshold. Memory that cannot be trimmed (full-state models, and another
