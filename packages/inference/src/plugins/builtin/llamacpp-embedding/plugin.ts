@@ -10,7 +10,9 @@ import {
   ADDON_EMBEDDING,
   type CreateModelParams,
   type PluginModelResult,
-  type EmbedConfig
+  type EmbedConfig,
+  type EmbedConfigInput,
+  type ResolveContext
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
 import { getFirstShardPath } from '@/utils/index'
@@ -42,7 +44,12 @@ const turbovecIndexProvider: TurboVecIndexProvider = {
   }
 }
 
-function createEmbeddingsModel(modelId: string, modelPath: string, embedConfig: EmbedConfig) {
+function createEmbeddingsModel(
+  modelId: string,
+  modelPath: string,
+  embedConfig: EmbedConfig,
+  projectionModelPath?: string
+) {
   const logger = createStreamLogger(modelId, ModelType.llamacppEmbedding)
   registerAddonLogger(modelId, ModelType.llamacppEmbedding, logger)
 
@@ -58,7 +65,10 @@ function createEmbeddingsModel(modelId: string, modelPath: string, embedConfig: 
   }
 
   const model = new EmbedLlamacpp({
-    files: { model: [getFirstShardPath(modelPath)] },
+    files: {
+      model: [getFirstShardPath(modelPath)],
+      ...(projectionModelPath && { projectionModel: projectionModelPath })
+    },
     config,
     logger,
     opts: { stats: true }
@@ -74,10 +84,22 @@ export const embeddingsPlugin = definePlugin({
   loadConfigSchema: embedConfigBaseSchema,
   assessFit: embedAssessFit,
 
+  async resolveConfig(cfg: EmbedConfigInput, ctx: ResolveContext) {
+    const { projectionModelSrc, ...config } = cfg
+    if (!projectionModelSrc) return { config }
+    const projectionModelPath = await ctx.resolveModelPath(projectionModelSrc)
+    return { config, artifacts: { projectionModelPath } }
+  },
+
   createModel(params: CreateModelParams): PluginModelResult {
     const embedConfig = (params.modelConfig ?? {}) as EmbedConfig
 
-    const { model } = createEmbeddingsModel(params.modelId, params.modelPath, embedConfig)
+    const { model } = createEmbeddingsModel(
+      params.modelId,
+      params.modelPath,
+      embedConfig,
+      params.artifacts?.['projectionModelPath']
+    )
 
     return { model }
   },
@@ -93,10 +115,9 @@ export const embeddingsPlugin = definePlugin({
 
       handler: async function (request) {
         const embedResult = await embed(
-          {
-            modelId: request.modelId,
-            text: request.text
-          },
+          request.inputs !== undefined
+            ? { modelId: request.modelId, inputs: request.inputs }
+            : { modelId: request.modelId, text: request.text },
           request.requestId
         )
 

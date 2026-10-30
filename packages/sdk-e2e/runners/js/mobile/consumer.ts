@@ -1,3 +1,4 @@
+import { EmbeddingGemma2Executor } from '../shared/executors/embeddinggemma2-executor.js'
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
 import { RerankExecutor } from '../shared/executors/rerank-executor.js'
 import { MobileSpeakerAwareExecutor } from './executors/speaker-aware-executor.js'
@@ -220,6 +221,7 @@ export const executor = createExecutor({
     new MobileTranscriptionExecutor(resources),
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
+    new EmbeddingGemma2Executor(resources, resolveTableAsset),
     new DecisionExecutor(resources),
     new RerankExecutor(resources),
     new MobileRagExecutor(resources),
