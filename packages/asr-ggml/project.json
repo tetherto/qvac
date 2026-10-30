@@ -2,7 +2,7 @@
   "name": "@qvac/asr-ggml",
   "root": "packages/asr-ggml",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

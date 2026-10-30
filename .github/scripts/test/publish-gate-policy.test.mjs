@@ -131,7 +131,7 @@ function consolidatedPackages() {
   return [...read(CONSOLIDATED).matchAll(/^ {6}- "packages\/([^/]+)\/\*\*"$/gm)].map((m) => m[1])
 }
 
-const isContract = (project) => Boolean(project?.tags?.includes('ci:contract'))
+const isContract = (project) => Boolean(project?.tags?.includes('ci:addons'))
 
 // Packages requiring the gate: an on-merge or CI contract addon that has generated wrappers.
 //

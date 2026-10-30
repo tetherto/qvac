@@ -2,7 +2,7 @@
   "name": "@qvac/ggml-rpc-server",
   "root": "packages/ggml-rpc-server",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

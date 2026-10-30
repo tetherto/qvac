@@ -2,7 +2,7 @@
   "name": "@qvac/embed-llamacpp",
   "root": "packages/embed-llamacpp",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

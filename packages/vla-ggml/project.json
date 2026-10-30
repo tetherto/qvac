@@ -1,7 +1,7 @@
 {
   "name": "@qvac/vla-ggml",
   "root": "packages/vla-ggml",
-  "tags": ["ci:contract"],
+  "tags": ["ci:addons"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

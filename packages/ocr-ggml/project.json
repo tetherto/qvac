@@ -2,7 +2,7 @@
   "name": "@qvac/ocr-ggml",
   "root": "packages/ocr-ggml",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

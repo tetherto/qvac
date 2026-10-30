@@ -2,7 +2,7 @@
   "name": "@qvac/decoder-audio",
   "root": "packages/decoder-audio",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

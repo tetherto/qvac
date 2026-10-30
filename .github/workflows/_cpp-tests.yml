@@ -39,23 +39,23 @@ jobs:
       TRUSTED: ${{ inputs.trusted && github.event_name != 'pull_request_target' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           sparse-checkout: |
             .github/actions
             .github/config
           persist-credentials: false
       - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: src
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           node-version: lts/*
-      - uses: tetherto/qvac-actions/setup-pnpm@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           package-json-file: src/package.json
       - uses: ./.github/actions/setup-vulkan
@@ -73,7 +73,7 @@ jobs:
       - uses: ./.github/actions/vcpkg-toolchain-hash
       # Restore only; the save waits for the build, so a run that compiled nothing never saves an empty entry.
       - id: vcpkg
-        uses: tetherto/qvac-actions/cache-restore@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/cache-restore@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           key: cpp-tests-v6-${{ matrix.row.key || matrix.row.slug }}-${{ matrix.row.platform == 'win32' && 'windows' || matrix.row.platform }}-${{ matrix.row.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR), format('{0}/vcpkg-configuration.json', env.WORKDIR), 'src/vcpkg-overlays/triplets/**', 'src/vcpkg-overlays/toolchains/**') }}-${{ env.TOOLCHAIN_FINGERPRINT }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
@@ -96,7 +96,7 @@ jobs:
           NPM: ${{ matrix.row.npm }}
         run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
       # The build job's prebuilds for this platform: the package's and its native dependencies'.
-      - uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.platform }}-${{ matrix.row.arch }}
           path: src
@@ -124,11 +124,11 @@ jobs:
       - if: env.TRUSTED == 'true'
         uses: ./.github/actions/vcpkg-cache-sync
       - if: env.TRUSTED == 'true' && hashFiles(format('{0}/vcpkg/cache/**', env.WORKDIR)) != ''
-        uses: tetherto/qvac-actions/cache-save@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/cache-save@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           key: ${{ steps.vcpkg.outputs.cache-primary-key }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
-      - uses: tetherto/qvac-actions/configure-aws-credentials@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/configure-aws-credentials@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -138,13 +138,13 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           target: cpp:tests
       - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted' && env.TRUSTED == 'true'
-        uses: tetherto/qvac-actions/cache@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/cache@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           key: ${{ steps.models.outputs.key }}
           path: ${{ steps.models.outputs.paths }}
           enable-cross-os-archive: "true"
       - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted' && env.TRUSTED != 'true'
-        uses: tetherto/qvac-actions/cache-restore@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/cache-restore@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           key: ${{ steps.models.outputs.key }}
           restore-keys: ${{ steps.models.outputs.restore-prefix }}
@@ -164,7 +164,7 @@ jobs:
           CONFIG: ${{ matrix.row.config }}
         run: pnpm exec nx run-many -t cpp:tests -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
       - if: always()
-        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           name: cpp-test-results-${{ matrix.row.slug }}-${{ matrix.row.config }}
           path: ${{ env.WORKDIR }}/build/**/cpp-test-results.xml
@@ -172,7 +172,7 @@ jobs:
           if-no-files-found: warn
       # A configuration whose commands measure coverage leaves its report here.
       - if: always()
-        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           name: cpp-coverage-${{ matrix.row.slug }}-${{ matrix.row.config }}
           path: |

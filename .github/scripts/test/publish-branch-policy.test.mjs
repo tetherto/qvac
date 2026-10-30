@@ -176,7 +176,7 @@ test('every exemption names a file that exists', () => {
 
 test('model-fit publishing is covered by the CI contract', () => {
   const project = JSON.parse(readFileSync(join(WORKFLOW_DIR, '../../packages/model-fit/project.json'), 'utf8'))
-  assert.ok(project.tags.includes('ci:contract'))
+  assert.ok(project.tags.includes('ci:addons'))
   assert.ok(project.targets.publish, 'publish-npm.yml publishes packages with a publish target')
   assert.doesNotMatch(read('on-merge-nx.yml'), /packages\/model-fit\//)
   assert.equal(existsSync(join(WORKFLOW_DIR, 'on-merge-model-fit.yml')), false)
