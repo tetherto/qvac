@@ -325,9 +325,6 @@
 /sdk/v0.21/        /sdk/v0.21/index.html        200
 /sdk/v0.21         /sdk/v0.21/                  301
 /sdk/v0.21/*       /sdk/v0.21/:splat/index.html 200
-/sdk/v0.20/        /sdk/v0.20/index.html        200
-/sdk/v0.20         /sdk/v0.20/                  301
-/sdk/v0.20/*       /sdk/v0.20/:splat/index.html 200
 /cli/v0.17/        /cli/v0.17/index.html        200
 /cli/v0.17         /cli/v0.17/                  301
 /cli/v0.17/*       /cli/v0.17/:splat/index.html 200
@@ -352,6 +349,9 @@
 # Same order as the rules above, and for the same reason: the with-slash
 # source first, then the bare form, then the splat, so the line root is
 # answered by its own rule and not by the splat with an empty match.
+/sdk/v0.20/        /sdk/                        301
+/sdk/v0.20         /sdk/                        301
+/sdk/v0.20/*       /sdk/:splat                  301
 /sdk/v0.19/        /sdk/                        301
 /sdk/v0.19         /sdk/                        301
 /sdk/v0.19/*       /sdk/:splat                  301
