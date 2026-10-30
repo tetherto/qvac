@@ -1,50 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
 
-# Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
-# rather than qvac_addon_preproject() so overlay triplets and Android STL
-# stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
+# Shared addon build helpers. See docs/architecture/ADDON-CMAKE-TEMPLATE.md.
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
-
-option(BUILD_TESTING "Build tests" OFF)
-option(ENABLE_COVERAGE "Enable coverage" OFF)
-option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
-option(ENABLE_CUDA "Enable CUDA GPU acceleration" OFF)
-qvac_addon_fuzz_manifest()
-
-if(BUILD_TESTING)
-  list(APPEND VCPKG_MANIFEST_FEATURES "tests")
-endif()
-
-if(ENABLE_VULKAN)
-  list(APPEND VCPKG_MANIFEST_FEATURES "vulkan")
-endif()
-
-if(ENABLE_CUDA)
-  list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
-endif()
-
-find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
-find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
-
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
-include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
+qvac_addon_preproject()
 
 project(tts-ggml CXX C)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++)
-endif()
-
-find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.valgrind.supp
-               ${CMAKE_CURRENT_SOURCE_DIR}/.valgrind.supp COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/tools/lint-cpp/hooks/pre-commit
-               ${CMAKE_CURRENT_SOURCE_DIR}/.git/hooks/pre-commit COPYONLY)
+qvac_addon_project_setup(VALGRIND_SUPP PRE_COMMIT_HOOK)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
 
@@ -52,6 +14,11 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelIn
 # fuzz targets and skip engine find_package() + the .bare module so pure
 # parse/transform drivers keep full ASan + LSan.
 qvac_addon_fuzz_only_return()
+
+# The ggml runtime is the shared @qvac/fabric prebuild (dynamically linked,
+# loaded once per process, its backends found and loaded by fabric itself);
+# sets qvac_fabric_target.
+qvac_addon_use_fabric()
 
 find_package(tts-cpp CONFIG REQUIRED COMPONENTS pocket)
 # Older configs may not implement component checks. Reject those explicitly.
@@ -63,33 +30,20 @@ if(NOT tts-cpp_pocket_FOUND)
     "share/tts-cpp directory; see README.md for local build instructions.")
 endif()
 find_package(mecab CONFIG REQUIRED)
-# Pull in ggml directly (in addition to the transitive
-# find_package(ggml) that tts-cppConfig.cmake already does) so the
-# `GGML_AVAILABLE_BACKENDS` list and per-backend `ggml::<backend>`
-# IMPORTED targets are visible in *this* listfile's scope. We need
-# them for the dynamic-backend install plumbing below.
-find_package(ggml CONFIG REQUIRED)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# tts-cpp was compiled against the same ggml headers; its ggml symbols come
+# from the shared runtime, not from the qvac-fabric port's static archives.
+qvac_addon_engine_on_fabric(tts-cpp::tts-cpp tts-cpp::tts-cpp-backend-defs)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_definitions(-D_DEBUG)
 endif()
 
-if(WIN32)
-  add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
-endif()
-
 # The module is named after the platform package that ships it,
 # qvac__tts-ggml-<suffix> (every iOS host shares `ios`), so that package is an
 # ordinary addon: require.addon(), bare-pack and bare-link all find
-# prebuilds/<host>/qvac__tts-ggml-<suffix>.bare there. cmake-bare installs the
-# dynamically loadable ggml backends to <host>/<module name>, the directory the
-# addon looks in next to itself (see ModuleBackendsDir.hpp); bare-link
-# flattens them next to the module in a mobile app instead. Keep the suffix in
-# sync with "#host-addon" in package.json and SLICE_DEFINITIONS in
+# prebuilds/<host>/qvac__tts-ggml-<suffix>.bare there. Keep the suffix in sync
+# with "#host-addon" in package.json and SLICE_DEFINITIONS in
 # scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
 if(bare_target_value MATCHES "^ios-")
@@ -97,113 +51,8 @@ if(bare_target_value MATCHES "^ios-")
 else()
   set(module_name "qvac__tts-ggml-${bare_target_value}")
 endif()
-set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 
-# Collect every dynamically-loadable ggml backend the ggml-speech port
-# produced ($CURRENT_PACKAGES_DIR/lib/libqvac-speech-ggml-*.so on
-# Android; nothing on Apple/static-only platforms). cmake-bare's
-# `add_bare_module(... EXPORTS INSTALL TARGET <tgt>)` bundles each
-# IMPORTED `ggml::<backend>` target into the per-arch prebuilds folder
-# next to the `.bare` module. Mirrors qvac/packages/transcription-
-# parakeet/CMakeLists.txt's BACKEND_DL_LIBS path.
-#
-# Hybrid-mode caveat: the ggml-speech vcpkg port builds Android (and
-# linux-arm64, and linux-x64 with the cuda feature) with
-# GGML_BACKEND_DL=ON, so backends
-# ship as MODULE .so files at
-# `${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-{cpu*,vulkan,opencl,cuda}.so`
-# but ggml-config.cmake.in deliberately leaves them out of
-# `GGML_AVAILABLE_BACKENDS`' IMPORTED set (the loader is expected to
-# find them via `ggml_backend_load_all_from_path()` at runtime). We
-# pick those up with an explicit `install(FILES ...)` below so the
-# runtime scan of the module's backends directory actually finds them.
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    if(TARGET ggml::${_backend})
-      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-    endif()
-  endforeach()
-endif()
-
-# Loose-file pickup for MODULE backends that aren't surfaced as
-# IMPORTED targets by find_package(ggml). On Android this is what
-# actually delivers Vulkan + OpenCL into the prebuilds folder, and on
-# hybrid desktop builds (linux-arm64, linux-x64 / win32-x64 with
-# ENABLE_CUDA) it delivers the CPU-variant / Vulkan / CUDA modules.
-# Glob runs at configure time -- the module files come from ggml-speech's
-# portfile pickup into lib/ (.so on Linux/Android, .dll on Windows),
-# which has already completed by the time vcpkg hands control back to
-# us. Apple / static-only configs return an empty list and skip the
-# install rule below.
-set(BACKEND_DL_LOOSE_SOS "")
-if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
-  if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
-    message(WARNING "tts-ggml: VCPKG_INSTALLED_PATH "
-      "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
-      "ggml backend module pickup -- the runtime may fail to find "
-      "Vulkan / OpenCL / CUDA backends.")
-  else()
-    file(GLOB BACKEND_DL_LOOSE_SOS
-      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so"
-      "${VCPKG_INSTALLED_PATH}/lib/qvac-speech-ggml-*.dll")
-    foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
-      message(STATUS "tts-ggml: will stage ggml backend ${_lib}")
-    endforeach()
-  endif()
-endif()
-
-# Developer builds may consume the shared speech ggml package on macOS.
-# Package its dylibs alongside the addon, using cmake-bare's SONAME-aware
-# install rules; the module's @loader_path rpath already points here.
-if(APPLE)
-  foreach(_library ggml::ggml ggml::ggml-base ggml::ggml-cpu tts-cpp::tts-cpp)
-    if(TARGET ${_library})
-      get_target_property(_library_type ${_library} TYPE)
-      if(_library_type STREQUAL "SHARED_LIBRARY")
-        list(APPEND BACKEND_DL_LIBS INSTALL TARGET ${_library})
-      elseif(_library_type STREQUAL "UNKNOWN_LIBRARY")
-        # ggml-config.cmake uses UNKNOWN IMPORTED targets even for dylibs.
-        # Preserve the complete symlink chain so the versioned LC_ID_DYLIB
-        # names resolve without depending on the developer's install prefix.
-        get_target_property(_dylib ${_library} IMPORTED_LOCATION)
-        if(_dylib MATCHES "\\.dylib$")
-          list(APPEND BACKEND_DYLIB_FILES "${_dylib}")
-          while(IS_SYMLINK "${_dylib}")
-            get_filename_component(_dylib_dir "${_dylib}" DIRECTORY)
-            file(READ_SYMLINK "${_dylib}" _dylib_link)
-            get_filename_component(_dylib "${_dylib_link}" ABSOLUTE BASE_DIR "${_dylib_dir}")
-            list(APPEND BACKEND_DYLIB_FILES "${_dylib}")
-          endwhile()
-        endif()
-      endif()
-    endif()
-  endforeach()
-endif()
-
-add_bare_module(tts-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
-if(BACKEND_DYLIB_FILES)
-  list(REMOVE_DUPLICATES BACKEND_DYLIB_FILES)
-  install(FILES ${BACKEND_DYLIB_FILES} DESTINATION ${BACKENDS_SUBDIR_VALUE})
-endif()
-
-# Stage every loose MODULE backend (Vulkan / OpenCL on Android, CUDA on desktop, ...)
-# into the same per-host/per-module subdir cmake-bare's INSTALL TARGET
-# branch uses for IMPORTED targets (see cmake-bare.cmake's
-# `DESTINATION ${host}/${name}` -- e.g.
-# `android-arm64/qvac__tts-ggml-android-arm64`). Keeping the destinations
-# identical means one `ggml_backend_load_all_from_path()` scan discovers
-# IMPORTED-target CPU and loose-file GPU backends.
-if(BACKEND_DL_LOOSE_SOS)
-  install(
-    FILES ${BACKEND_DL_LOOSE_SOS}
-    DESTINATION ${BACKENDS_SUBDIR_VALUE}
-  )
-endif()
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${tts-ggml}_module PRIVATE -Wl,--exclude-libs,ALL)
-endif()
+add_bare_module(tts-ggml NAME ${module_name} EXPORTS)
 
 target_sources(
   ${tts-ggml}
@@ -230,13 +79,6 @@ target_include_directories(
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
-# No direct CUDA linkage here: the ggml-speech port builds the linux-x64
-# [cuda] configuration in hybrid BACKEND_DL mode, so the CUDA backend ships
-# as a MODULE .so (staged by the loose-file pickup above) that carries its
-# own libcuda / cudart / cuBLAS DT_NEEDED entries. Linking them into the
-# .bare would make the whole addon fail to dlopen on hosts without an
-# NVIDIA driver and the CUDA runtime, instead of gracefully skipping the
-# CUDA module and falling back to Vulkan or CPU.
 target_link_libraries(
   ${tts-ggml}
   PRIVATE
@@ -244,29 +86,8 @@ target_link_libraries(
     mecab::mecab
 )
 
-target_compile_definitions(${tts-ggml} PUBLIC JS_LOGGER)
-target_compile_definitions(${tts-ggml} PRIVATE
-  QVAC_ADDON_MODULE_NAME="${module_name}")
-
-# Android 15+ on Pixel 9 / Pixel 9 Pro / Pixel 9 Pro XL ships with a
-# 16 KB page size kernel (`getconf PAGE_SIZE` -> 16384). The dynamic
-# loader on those devices silently refuses .so files whose LOAD
-# segments are aligned to the older 4 KB max-page-size, which is what
-# NDK r27 still emits by default (NDK r28 flipped the default).
-# Without this flag the addon never registers via bare-kit's linker
-# (Bare's resolver then reports
-# `ADDON_NOT_FOUND: linked:libqvac__tts-ggml.*.so`) while the same APK
-# loads fine on 4 KB devices like the Samsung S25 Ultra. Mirrors
-# qvac/packages/transcription-parakeet/CMakeLists.txt; drop the flag
-# once we move to NDK r28+.
-if(ANDROID)
-  target_link_options(
-    ${tts-ggml}_module
-    PRIVATE
-      -Wl,-z,max-page-size=16384
-      -Wl,-z,common-page-size=16384
-  )
-endif()
+qvac_addon_link_fabric(${tts-ggml} ${qvac_fabric_target})
+qvac_addon_finalize(${tts-ggml})
 
 if(WIN32)
   # mecab.lib and bare_delay_load.lib both export DllMain. mecab's
@@ -283,100 +104,15 @@ if(WIN32)
   )
 endif()
 
-if(APPLE)
-  target_link_options(
-    ${tts-ggml}_module
-    PRIVATE
-      -Wl,-exported_symbol,_bare_get_module_name_v0
-      -Wl,-exported_symbol,_bare_register_module_v0
-  )
-
-  # Force-load clang's compiler-rt builtins archive so the
-  # `__isPlatformVersionAtLeast` symbol that lowers every Objective-C
-  # `@available(...)` runtime check resolves at link time.
-  if(IOS)
-    if(CMAKE_OSX_SYSROOT MATCHES "Simulator")
-      set(_qvac_rtlib_variant "iossim")
-      set(_qvac_xcrun_sdk      "iphonesimulator")
-    else()
-      set(_qvac_rtlib_variant "ios")
-      set(_qvac_xcrun_sdk      "iphoneos")
-    endif()
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "tvOS")
-    if(CMAKE_OSX_SYSROOT MATCHES "Simulator")
-      set(_qvac_rtlib_variant "tvossim")
-      set(_qvac_xcrun_sdk      "appletvsimulator")
-    else()
-      set(_qvac_rtlib_variant "tvos")
-      set(_qvac_xcrun_sdk      "appletvos")
-    endif()
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "watchOS")
-    if(CMAKE_OSX_SYSROOT MATCHES "Simulator")
-      set(_qvac_rtlib_variant "watchossim")
-      set(_qvac_xcrun_sdk      "watchsimulator")
-    else()
-      set(_qvac_rtlib_variant "watchos")
-      set(_qvac_xcrun_sdk      "watchos")
-    endif()
-  else()
-    set(_qvac_rtlib_variant "osx")
-    set(_qvac_xcrun_sdk      "macosx")
-  endif()
-
-  # Resolve clang's resource dir via xcrun against the same SDK we're
-  # building for. We deliberately do NOT use ${CMAKE_C_COMPILER} -- on
-  # this build host that points at Homebrew's llvm@19, whose
-  # compiler-rt only carries the macOS variants (iOS/tvOS/watchOS
-  # libclang_rt.<platform>.a only ship inside Xcode). Going through
-  # `xcrun --sdk <sdk> clang` always lands on Xcode's clang for the
-  # right SDK so the iOS / iOS-simulator / etc. variants are present.
-  execute_process(
-    COMMAND xcrun --sdk "${_qvac_xcrun_sdk}" clang -print-resource-dir
-    OUTPUT_VARIABLE _qvac_clang_resource_dir
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    RESULT_VARIABLE _qvac_clang_resource_dir_result
-    ERROR_QUIET
-  )
-  if(NOT _qvac_clang_resource_dir_result EQUAL 0
-     OR NOT IS_DIRECTORY "${_qvac_clang_resource_dir}/lib/darwin")
-    message(FATAL_ERROR
-      "Apple bare-module link needs Xcode clang's compiler-rt for "
-      "__isPlatformVersionAtLeast (Xcode 16 / iOS SDK 18 @available "
-      "lowering). `xcrun --sdk ${_qvac_xcrun_sdk} clang -print-resource-dir`"
-      " returned '${_qvac_clang_resource_dir}' but lib/darwin/ doesn't "
-      "exist there. Verify Xcode + the ${_qvac_xcrun_sdk} SDK are "
-      "installed (`xcrun --sdk ${_qvac_xcrun_sdk} --show-sdk-path` "
-      "should resolve).")
-  endif()
-
-  set(_qvac_clang_rtlib
-    "${_qvac_clang_resource_dir}/lib/darwin/libclang_rt.${_qvac_rtlib_variant}.a")
-  if(NOT EXISTS "${_qvac_clang_rtlib}")
-    message(FATAL_ERROR
-      "Apple bare-module link expected compiler-rt at "
-      "'${_qvac_clang_rtlib}' but it doesn't exist. Toolchain layout "
-      "may have changed; pick the correct libclang_rt.<variant>.a "
-      "for ${CMAKE_SYSTEM_NAME} (sysroot: ${CMAKE_OSX_SYSROOT}).")
-  endif()
-  message(STATUS "tts-ggml: force-loading ${_qvac_clang_rtlib} "
-                 "to satisfy clang @available -> __isPlatformVersionAtLeast")
-
-  target_link_options(
-    ${tts-ggml}_module
-    PRIVATE
-      "SHELL:-Wl,-force_load,${_qvac_clang_rtlib}"
-  )
-endif()
 if(BUILD_TESTING)
   enable_testing()
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
 
-  # Test exec recompiles ChatterboxModel.cpp + SupertonicModel.cpp from
-  # source (rather than linking the bare-module artefact) so coverage
-  # instrumentation lands on those translation units.  JSAdapter.cpp is
-  # excluded because it depends on Bare's <js.h>, which isn't available
-  # outside the bare module link.
+  # Test exec recompiles the model sources (rather than linking the
+  # bare-module artefact) so coverage instrumentation lands on those
+  # translation units. JSAdapter.cpp is excluded because it depends on Bare's
+  # <js.h>, which isn't available outside the bare module link.
   add_executable(
     tts_ggml_tests
       addon/tests/backend_env.cpp
@@ -415,17 +151,16 @@ if(BUILD_TESTING)
       ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
   )
 
+  # The test links the shared fabric runtime like the module does; the helper
+  # stages the runtime and its backends next to the executable.
   target_link_libraries(tts_ggml_tests
     PRIVATE
       GTest::gmock_main
       tts-cpp::tts-cpp
+      qvac-fabric::headers
+      ${qvac_fabric_target}_module
   )
-  # The test binary does not sit next to the addon's backends, and hybrid
-  # ggml builds keep even the CPU backend in runtime-loaded modules.
-  target_compile_definitions(tts_ggml_tests PRIVATE
-    QVAC_TTS_TEST_BACKENDS_DIR="${VCPKG_INSTALLED_PATH}/lib"
-    QVAC_ADDON_MODULE_NAME="${module_name}"
-  )
+  qvac_addon_stage_fabric_for_test(tts_ggml_tests ${qvac_fabric_target})
 
   if(ENABLE_COVERAGE)
     # LLVM source-based coverage (clang).  Same flag set parakeet uses.

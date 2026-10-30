@@ -752,7 +752,7 @@ host's policy:
 | Platform                | Default backend when `useGPU: true`          |
 |-------------------------|----------------------------------------------|
 | macOS / iOS             | Metal                                        |
-| Linux x64 — NVIDIA      | CUDA (the linux-x64 prebuild bundles CUDA and Vulkan; CUDA wins the cascade; opt-in via `ENABLE_CUDA` builds on linux-arm64 and win32-x64) |
+| Linux x64 — NVIDIA      | CUDA (the `@qvac/fabric` runtime ships CUDA next to Vulkan on linux-x64, linux-arm64 and win32-x64; CUDA wins the cascade) |
 | Linux — other / Windows | Vulkan                                       |
 | Android — Adreno 700+   | OpenCL                                       |
 | Android — Mali / others | Vulkan                                       |
@@ -822,10 +822,8 @@ and
 [MOSS](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/moss.md#core-ml-codec-decoder)
 guides cover export, placement, and measurements.
 
-When the addon is built with `ENABLE_CUDA` — on in the published linux-x64
-prebuilds, opt-in on linux-arm64 and win32-x64 (`npm run build:cuda` or
-`bare-make generate -D ENABLE_CUDA=ON`) — the CUDA backend ships as a
-runtime-loaded module
+The CUDA backend comes with the `@qvac/fabric` runtime on linux-x64,
+linux-arm64 and win32-x64 as a runtime-loaded module
 (`.so` on Linux, `.dll` on Windows): engaging it requires the NVIDIA driver
 plus the CUDA 13 runtime libraries (cudart and cuBLAS, from a CUDA toolkit
 install) resolvable at load time. On hosts without them — including CPU-only
@@ -867,11 +865,11 @@ registration and the addon falls back to Vulkan or CPU.
 
 ### Android: dynamic backend loading
 
-Android prebuilds enable `GGML_BACKEND_DL=ON` and ship per-arch
-backend `.so` files under
-`prebuilds/android-arm64/qvac__tts-ggml-android-arm64/` of
-`@qvac/tts-ggml-android-arm64`; `bare-link` puts them next to the module in
-the app, where the addon looks when `backendsDir` is unset.
+On Android the ggml backends are per-arch `.so` files that ship with the
+`@qvac/fabric-android-arm64` runtime under
+`prebuilds/android-arm64/qvac__fabric-android-arm64/`; `bare-link` puts them
+next to the runtime in the app, and fabric finds them there when
+`backendsDir` is unset.
 
 The engine `dlopen()`s the highest-tier CPU variant the device's
 HWCAPs support and one of the GPU `.so` files based on the policy
@@ -1180,7 +1178,7 @@ with `VCPKG_FEATURE_FLAGS=-compilertracking` to check registry resolution only.
 For a bounded native build on a suitably provisioned Linux GPU host:
 
 ```sh
-CMAKE_BUILD_PARALLEL_LEVEL=2 VCPKG_MAX_CONCURRENCY=2 npm run build:cuda
+CMAKE_BUILD_PARALLEL_LEVEL=2 VCPKG_MAX_CONCURRENCY=2 npm run build
 ```
 
 The normal PR workflow requires approval of the `fork-ci` environment for
@@ -1417,7 +1415,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `promptText`              | string     | —          | CosyVoice3-only: verbatim transcript of `referenceAudio` — set for zero-shot cloning, omit for cross-lingual; without a reference it overrides the baked voice's transcript |
 | `mecabDictDir`            | string     | —          | Chatterbox MTL Japanese (`ja`): compiled MeCab/IPAdic dictionary directory |
 | `cangjieTsvPath`          | string     | —          | Chatterbox MTL Chinese (`zh`): `Cangjie5_TC` TSV path |
-| `backendsDir`             | string     | the module's own | Directory the addon scans, as given, for dynamically-loaded ggml backend `.so` / `.dll` files.  Unset scans the directory the native module was loaded from (`prebuilds/<host>/qvac__tts-ggml-<suffix>/` in a platform package, the app's native library directory after `bare-link`); ignored on platforms that statically link the backend |
+| `backendsDir`             | string     | fabric's own | Directory the addon scans, as given, for dynamically-loaded ggml backend `.so` / `.dll` files.  Unset uses the directory the `@qvac/fabric` runtime loads its own backends from (`prebuilds/<host>/qvac__fabric-<suffix>/` of the installed platform package, or next to the runtime in a `bare-link`ed app). |
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English; MOSS takes it as a prompt hint (`en`, `zh`, ...) |
@@ -1779,24 +1777,18 @@ The vcpkg port is hosted in
 [`vcpkg-configuration.json`](./vcpkg-configuration.json) for the
 baseline commit.
 
-`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the
-same versions in every speech addon (`@qvac/asr-ggml`,
-`@qvac/audiogen-ggml`, `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and
-`package.json` records the `ggml-speech` build as `qvac["ggml-speech"]`.
-The speech addons ship their ggml backends under the same file names, so
-an app that bundles several of them keeps one copy of each: use releases
-that record the same `ggml-speech`.
+The ggml runtime is the shared `@qvac/fabric` prebuild: the addon links it
+dynamically (`DT_NEEDED qvac__fabric-<host>@0.bare`), ships no ggml of its
+own, and shares one runtime in memory with every other fabric addon in the
+process. `speech-cpp` is pinned with a vcpkg `override` and compiles the
+engine against the same ggml headers the runtime was built from. See
+[`packages/fabric/INTEGRATION.md`](../fabric/INTEGRATION.md).
 
-GPU backends are controlled by the `speech-cpp` port's vcpkg features:
-`metal` (default on osx/ios), `vulkan` (default on
-linux/windows/android), `opencl` (default on android), and `cuda`
-(opt-in via the addon's `ENABLE_CUDA` cmake option; the published
-linux-x64 prebuilds enable it).
-On Android the port is configured with
-`GGML_BACKEND_DL=ON` + `GGML_CPU_ALL_VARIANTS=ON`, so the build
-produces per-arch CPU + Vulkan + OpenCL `.so` files alongside the
-`.bare` module instead of statically linking; the resulting prebuilds
-layout is what the `backendsDir` option expects (see
+GPU backends come with the runtime: Metal inside the runtime on macOS and
+iOS, and per-platform modules (CPU variants, Vulkan, CUDA on linux-x64,
+linux-arm64 and win32-x64, OpenCL on Android) next to it elsewhere. The
+`speech-cpp` port is built without backend features here; the engine
+selects among the backends fabric loads at runtime (see
 [Backends & GPU acceleration](#backends--gpu-acceleration)).
 
 [registry]: https://github.com/tetherto/qvac-registry-vcpkg

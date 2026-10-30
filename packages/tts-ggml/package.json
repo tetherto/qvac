@@ -2,11 +2,8 @@
   "name": "@qvac/tts-ggml",
   "version": "0.14.1",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 + moss + moss-sfx + moss-speech + Pocket engines from tts-cpp)",
-  "qvac": {
-    "ggml-speech": "2026-10-27"
-  },
   "engines": {
-    "bare": ">=1.19.0"
+    "bare": ">=1.24.0"
   },
   "imports": {
     "#host-addon": {
@@ -35,9 +32,7 @@
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
-    "build:native:cuda": "bare-make generate -D ENABLE_CUDA=ON -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
     "link:platform": "node ../../scripts/ci/slice-platform-packages.mjs --link-local --workdir .",
-    "build:cuda": "npm run build:ts && npm run build:native:cuda",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "check:generated": "node scripts/check-generated.mjs",
@@ -202,10 +197,13 @@
     "bare-https": "^3.0.0",
     "bare-stream": "^2.7.0",
     "bare-subprocess": "^6.2.1",
-    "brittle": "^3.17.0"
+    "brittle": "^3.17.0",
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
+    "@qvac/fabric": "^0.25.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
@@ -222,7 +220,24 @@
     "@qvac/tts-ggml-linux-arm64": "0.11.0",
     "@qvac/tts-ggml-darwin-arm64": "0.11.0",
     "@qvac/tts-ggml-darwin-x64": "0.11.0",
-    "@qvac/tts-ggml-win32-x64": "0.11.0"
+    "@qvac/tts-ggml-win32-x64": "0.11.0",
+    "@qvac/fabric-linux-x64": "^0.25.0",
+    "@qvac/fabric-linux-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-x64": "^0.25.0",
+    "@qvac/fabric-win32-x64": "^0.25.0"
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
   },
   "types": "index.d.ts"
 }

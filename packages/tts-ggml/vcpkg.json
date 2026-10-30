@@ -9,15 +9,15 @@
       "version>=": "1.4.4#3"
     },
     {
-      "name": "ggml-speech",
-      "default-features": false
+      "name": "qvac-fabric",
+      "default-features": false,
+      "version>=": "11259.2.0#1"
     },
     {
       "name": "speech-cpp",
       "default-features": false,
       "features": [
         "tts",
-        "metal",
         "coreml"
       ],
       "platform": "osx | ios"
@@ -26,37 +26,12 @@
       "name": "speech-cpp",
       "default-features": false,
       "features": [
-        "tts",
-        "vulkan",
-        "opencl"
+        "tts"
       ],
-      "platform": "android"
-    },
-    {
-      "name": "speech-cpp",
-      "default-features": false,
-      "features": [
-        "tts",
-        "vulkan"
-      ],
-      "platform": "!(osx | ios | android)"
+      "platform": "!(osx | ios)"
     }
   ],
   "features": {
-    "cuda": {
-      "description": "Enable CUDA GPU acceleration",
-      "supports": "!(osx | ios | android)",
-      "dependencies": [
-        {
-          "name": "speech-cpp",
-          "default-features": false,
-          "features": [
-            "cuda"
-          ],
-          "platform": "!(osx | ios | android)"
-        }
-      ]
-    },
     "fuzz": {
       "description": "Build fuzz targets (Google FuzzTest dependencies)",
       "dependencies": [
@@ -90,30 +65,13 @@
       "dependencies": [
         "gtest"
       ]
-    },
-    "vulkan": {
-      "description": "Enable Vulkan GPU acceleration",
-      "dependencies": [
-        {
-          "name": "speech-cpp",
-          "default-features": false,
-          "features": [
-            "vulkan"
-          ],
-          "platform": "!(osx | ios)"
-        }
-      ]
     }
   },
   "overrides": [
     {
-      "name": "ggml-speech",
-      "version": "2026-10-27"
-    },
-    {
       "name": "speech-cpp",
       "version": "2026-10-29",
-      "port-version": 0
+      "port-version": 2
     }
   ]
 }
