@@ -44,8 +44,6 @@ const isAllowed = (branch) =>
 // markers and pushing off main/feature-*/tmp-* passed every assertion.
 const LIBRARY_PUBLISHERS = new Set([
   'publish-registry-server.yml',
-  'trigger-reusable-infer-base.yml',
-  'trigger-reusable-lib.yml',
 ])
 
 function read(name) {

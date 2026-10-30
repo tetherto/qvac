@@ -32,9 +32,9 @@ jobs:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
     with:
-      targets: build,verify:generated,verify:deps,publish
-      tags: ci:addons,ci:sdk
-      combine: verify=verify:generated+verify:deps
+      targets: build,verify:generated,verify:deps,publish:pre,publish
+      tags: ci:addons,ci:sdk,ci:libs
+      combine: verify=verify:generated+verify:deps+publish:pre
       packages: ${{ inputs.packages }}
 
   logic:

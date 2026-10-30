@@ -521,30 +521,6 @@ function withoutComments(block) {
     .join("\n");
 }
 
-test("npm integration uses a dedicated run label, not verified", () => {
-  const source = read(".github/workflows/public-reusable-npm.yml");
-  const integrationStep = source.slice(
-    source.indexOf("name: Run integration tests if labeled"),
-  );
-  assert.match(integrationStep, /run-desktop-addon-tests/);
-  assert.doesNotMatch(integrationStep.split("name: Check for")[0], /verified/);
-});
-
-test("npm reusable pins PR checkout and keeps user input out of run scripts", () => {
-  const source = read(".github/workflows/public-reusable-npm.yml");
-  assert.match(
-    source,
-    /ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/,
-  );
-  assert.match(source, /persist-credentials: false/);
-
-  const echoScript = extractRunBlock(
-    ".github/workflows/public-reusable-npm.yml",
-    "Echo Step",
-  );
-  assert.doesNotMatch(echoScript, /\$\{\{\s*(github\.event|inputs\.)/);
-});
-
 const FORK_CI_ENV_RE =
   /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/;
 
@@ -1128,32 +1104,17 @@ test("publish-prebuild-status stamps its run URL into target_url", () => {
   );
 });
 
-test("infer-base publish jobs are gated on generated-artifact validation", () => {
-  const source = read(".github/workflows/trigger-reusable-infer-base.yml");
+test("infer-base publishes only after its generated artifacts check", () => {
+  const { targets } = JSON.parse(read("packages/infer-base/project.json"));
+  assert.match(targets["publish:pre"].options.command, /npm run test:types/);
+  assert.equal(targets["publish:pre"].options.cwd, "packages/infer-base");
 
-  const validate = jobBlock(source, "validate-artifacts");
-  assert.match(validate, /working-directory: packages\/infer-base/);
-  assert.match(validate, /npm run test:types/);
-
-  for (const job of [
-    "publish-main-gpr-dev",
-    "publish-release-npm",
-    "publish-feature-gpr",
-    "publish-tmp-gpr",
-  ]) {
-    const block = jobBlock(source, job);
-    assert.match(
-      block,
-      /needs:[\s\S]*?- validate-artifacts/,
-      `'${job}' declares validate-artifacts as a dependency`,
-    );
-    // Asserted explicitly rather than relying on implicit needs-failure
-    // skipping, which an always() in the same condition would defeat.
-    assert.match(
-      block,
-      /needs\.validate-artifacts\.result == 'success'/,
-      `'${job}' if-gates on validate-artifacts success`,
-    );
+  for (const workflow of ["publish-npm.yml", "publish-gpr.yml"]) {
+    const source = read(`.github/workflows/${workflow}`);
+    assert.match(source, /combine: verify=[^\n]*publish:pre/, `${workflow} runs publish:pre in its verify job`);
+    const publish = jobBlock(source, "publish");
+    assert.match(publish, /needs:[^\n]*verify/, `${workflow}'s publish job needs verify`);
+    assert.match(publish, /needs\.verify\.result == 'success'/, `${workflow}'s publish job gates on verify`);
   }
 });
 

@@ -12,7 +12,7 @@ import { CPP_TEST_KEYS, PREBUILD_KEYS } from './prebuild-status/lib.mjs'
 
 export const TAG = 'ci:addons'
 // Every group of packages on the contract: ci:addons runs in the shared groups, ci:sdk (the SDK pod) in sdk-checks.yml and
-// sdk-e2e.yml; the publish, benchmark and cache groups serve both.
+// sdk-e2e.yml; the publish, benchmark and cache groups serve both. ci:libs (JavaScript libraries) joins only the publish groups.
 export const TAGS = ['ci:addons', 'ci:sdk']
 
 // The standard target names. The groups run only these, and a package on the contract declares only these.
@@ -34,6 +34,7 @@ export const TARGETS = [
   'test:mobile',
   'cache:models',
   'benchmark',
+  'publish:pre',
   'publish'
 ]
 

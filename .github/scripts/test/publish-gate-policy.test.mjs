@@ -116,7 +116,7 @@ test('every package with generated wrappers is covered by a pipeline', () => {
 
   // A package on the CI contract is covered when it declares verify:generated, which publish-npm.yml runs before it
   // publishes; any other gated package needs its own on-merge-<pkg>.yml calling the verify reusable.
-  const contractVerifies = /^ {6}targets: build,verify:generated,verify:deps,publish$/m.test(read('.github/workflows/publish-npm.yml'))
+  const contractVerifies = /^ {6}targets: build,verify:generated,verify:deps,publish:pre,publish$/m.test(read('.github/workflows/publish-npm.yml'))
   const offenders = gated.filter((pkg) => {
     const project = JSON.parse(read(`packages/${pkg}/project.json`))
     if (isContract(project)) return !(contractVerifies && project.targets['verify:generated'])

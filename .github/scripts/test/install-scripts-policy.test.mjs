@@ -108,7 +108,6 @@ const PENDING = [
     ['.github/workflows/fill-fit-blobs-registry-server.yml', 1],
     ['.github/workflows/pr-models-validation-registry-server.yml', 7],
     ['.github/workflows/publish-registry-server.yml', 1],
-    ['.github/workflows/trigger-reusable-lib.yml', 1],
     ['.github/actions/run-lint-and-integration-tests/action.yaml', 1],
     ['.github/actions/run-lint-and-unit-tests/action.yaml', 1],
   ].map(([file, count]) => ({
