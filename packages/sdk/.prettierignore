@@ -4,3 +4,4 @@ test/mocks/*
 SECURITY.md
 .github
 *.mdx
+ci/validator.cjs

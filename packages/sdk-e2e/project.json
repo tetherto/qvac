@@ -1,0 +1,24 @@
+{
+  "name": "sdk-e2e",
+  "root": "packages/sdk-e2e",
+  "implicitDependencies": ["@qvac/sdk"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-e2e",
+        "command": "npm run format"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-e2e",
+        "command": "npm run check:catalog"
+      },
+      "metadata": {
+        "sources": ["npm"]
+      }
+    }
+  }
+}

@@ -33,6 +33,21 @@
         "command": "pnpm run check:generated"
       }
     },
+    "verify:deps": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": false,
+        "commands": [
+          "node --test .github/scripts/test/speech-ggml.test.mjs .github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.test.mjs",
+          "node .github/scripts/check-speech-ggml-lockstep.mjs ${VCPKG_INSTALLATION_ROOT:+--vcpkg \"$VCPKG_INSTALLATION_ROOT/vcpkg\"}"
+        ]
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/packages/*/vcpkg.json",
+        "{workspaceRoot}/vcpkg-overlays/triplets/**/*"
+      ]
+    },
     "ci:system": {
       "executor": "nx:run-commands",
       "dependsOn": [

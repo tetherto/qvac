@@ -1,0 +1,60 @@
+{
+  "name": "@qvac/openclaw-plugin",
+  "root": "plugins/openclaw",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "plugins/openclaw",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "plugins/openclaw",
+        "command": "pnpm run typecheck"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/cli"],
+          "target": "build"
+        }
+      ]
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "plugins/openclaw",
+        "command": "pnpm run build"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/cli"],
+          "target": "build"
+        }
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "plugins/openclaw",
+        "command": "pnpm run test:unit"
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "sources": ["npm"]
+      }
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "openclaw-plugin",
+          "releaseNotes": true
+        }
+      }
+    }
+  }
+}

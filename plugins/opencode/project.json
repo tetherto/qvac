@@ -1,0 +1,61 @@
+{
+  "name": "@qvac/opencode-plugin",
+  "root": "plugins/opencode",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "plugins/opencode",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "plugins/opencode",
+        "command": "pnpm run typecheck"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/cli"],
+          "target": "build"
+        }
+      ]
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "plugins/opencode",
+        "command": "pnpm run build"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/cli"],
+          "target": "build"
+        }
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "plugins/opencode",
+        "parallel": false,
+        "commands": ["pnpm run test:unit", "pnpm run test:e2e"]
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "sources": ["npm"]
+      }
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "opencode-plugin",
+          "releaseNotes": true
+        }
+      }
+    }
+  }
+}

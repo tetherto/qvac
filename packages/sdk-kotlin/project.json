@@ -1,0 +1,51 @@
+{
+  "name": "sdk-kotlin",
+  "root": "packages/sdk-kotlin",
+  "implicitDependencies": ["@qvac/sdk", "@qvac/inference", "sdk-e2e"],
+  "targets": {
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node ci/checks.mjs"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/sdk"],
+          "target": "build"
+        }
+      ],
+      "metadata": {
+        "setup": ["python", "java", "android-ndk"]
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node scripts/check-version-alignment.mjs"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-kotlin",
+        "command": "node ci/conformance.mjs"
+      },
+      "configurations": {
+        "linux-x64-conformance": {
+          "ci": {
+            "runner": "ubuntu_latest",
+            "setup": ["python", "java", "android"],
+            "labels": {
+              "test-e2e-smoke": ""
+            }
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 90
+      }
+    }
+  }
+}

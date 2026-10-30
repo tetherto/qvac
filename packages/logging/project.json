@@ -2,18 +2,48 @@
   "name": "@qvac/logging",
   "root": "packages/logging",
   "targets": {
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/logging"
-      }
-    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/logging"
+        "cwd": "packages/logging",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/logging",
+        "command": "pnpm run typecheck"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/logging",
+        "command": "pnpm run build"
+      },
+      "dependsOn": []
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/logging",
+        "command": "pnpm run test:unit"
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "sources": ["npm"],
+        "setup": ["bare"]
+      }
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "logging",
+          "releaseGuard": true
+        }
       }
     }
   }

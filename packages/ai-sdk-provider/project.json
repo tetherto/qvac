@@ -2,32 +2,59 @@
   "name": "@qvac/ai-sdk-provider",
   "root": "packages/ai-sdk-provider",
   "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/ai-sdk-provider",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/ai-sdk-provider",
+        "command": "pnpm run typecheck"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/cli"],
+          "target": "build"
+        }
+      ]
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run build",
-        "cwd": "packages/ai-sdk-provider"
-      }
+        "cwd": "packages/ai-sdk-provider",
+        "command": "pnpm run build"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/cli"],
+          "target": "build"
+        }
+      ]
     },
     "test:unit": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/ai-sdk-provider"
+        "cwd": "packages/ai-sdk-provider",
+        "parallel": false,
+        "commands": ["pnpm run test:unit", "pnpm run test:e2e"]
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "sources": ["npm"]
       }
     },
-    "test:integration": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run test:integration",
-        "cwd": "packages/ai-sdk-provider"
-      }
-    },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/ai-sdk-provider"
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "ai-sdk-provider",
+          "releaseGuard": true
+        }
       }
     }
   }

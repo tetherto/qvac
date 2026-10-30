@@ -1,0 +1,49 @@
+{
+  "name": "@qvac/test-suite",
+  "root": "packages/test-suite",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/test-suite",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/test-suite",
+        "command": "pnpm run typecheck"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/test-suite",
+        "command": "pnpm run build"
+      },
+      "dependsOn": []
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/test-suite",
+        "command": "pnpm run test:unit"
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "sources": ["npm"]
+      }
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "test-suite",
+          "releaseGuard": true
+        }
+      }
+    }
+  }
+}

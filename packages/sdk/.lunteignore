@@ -1,2 +1,3 @@
 dist
 tsconfig.alias.json
+ci/validator.cjs

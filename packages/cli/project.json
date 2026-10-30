@@ -2,25 +2,84 @@
   "name": "@qvac/cli",
   "root": "packages/cli",
   "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/cli",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/cli",
+        "command": "pnpm run typecheck"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/sdk"],
+          "target": "build"
+        }
+      ]
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run build",
-        "cwd": "packages/cli"
-      }
+        "cwd": "packages/cli",
+        "command": "pnpm run build"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/sdk"],
+          "target": "build"
+        }
+      ]
     },
     "test:unit": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/cli"
+        "cwd": "packages/cli",
+        "parallel": false,
+        "commands": ["pnpm run test:unit", "pnpm run test:e2e"]
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "sources": ["workspace", "published"]
       }
     },
-    "lint": {
+    "benchmark": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/cli"
+        "cwd": "packages/cli",
+        "command": "node ci/benchmark.mjs live"
+      },
+      "configurations": {
+        "darwin-arm64-live": {
+          "ci": {
+            "runner": "macos_arm64_gpu",
+            "environment": "benchmark-live"
+          }
+        },
+        "report": {
+          "commands": ["node ci/benchmark.mjs report"]
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 180
+      }
+    },
+    "publish": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/cli",
+        "command": "node ci/prepare-publish.mjs"
+      },
+      "metadata": {
+        "publish": {
+          "tagPrefix": "cli",
+          "releaseGuard": true
+        }
       }
     }
   }

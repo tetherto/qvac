@@ -1,26 +1,100 @@
 {
   "name": "@qvac/sdk",
   "root": "packages/sdk",
+  "implicitDependencies": ["sdk-e2e", "@qvac/registry-server"],
   "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/inference"],
+          "target": "build"
+        }
+      ]
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "pnpm run typecheck"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/inference"],
+          "target": "build"
+        }
+      ]
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run build",
-        "cwd": "packages/sdk"
-      }
+        "cwd": "packages/sdk",
+        "command": "pnpm run build"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/inference"],
+          "target": "build"
+        }
+      ]
     },
     "test:unit": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/sdk"
+        "cwd": "packages/sdk",
+        "parallel": false,
+        "commands": ["pnpm run test:unit", "node ci/consumer-install.mjs"]
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "setup": ["bare"],
+        "sources": ["workspace", "published"]
       }
     },
-    "lint": {
+    "verify:generated": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/sdk"
+        "cwd": "packages/sdk",
+        "parallel": false,
+        "commands": [
+          "pnpm run contract:check",
+          "pnpm run check:resource-collectors --host darwin-arm64 --host darwin-x64 --host linux-arm64 --host linux-x64 --host win32-arm64 --host win32-x64"
+        ]
+      },
+      "dependsOn": [
+        {
+          "projects": ["@qvac/inference"],
+          "target": "build"
+        }
+      ]
+    },
+    "verify:deps": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": false,
+        "commands": [
+          "node --test .github/scripts/test/shared-runtime-libs.test.mjs",
+          "node packages/sdk/ci/verify-deps.mjs"
+        ]
+      }
+    },
+    "publish": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "node ci/prepare-publish.mjs"
+      },
+      "metadata": {
+        "publish": {
+          "tagPrefix": "sdk",
+          "githubRelease": "QVAC SDK",
+          "releaseGuard": true
+        }
       }
     }
   }

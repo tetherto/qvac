@@ -103,5 +103,19 @@
     "llm-splitter": "^0.2.0",
     "ready-resource": "^1.1.2",
     "zod": "^4.1.13"
+  },
+  "nx": {
+    "includedScripts": [
+      "format",
+      "format:fix",
+      "lint",
+      "lint:fix",
+      "typecheck",
+      "build",
+      "prepare",
+      "build:test",
+      "test:unit",
+      "build:hyperdb-spec"
+    ]
   }
 }
