@@ -1591,9 +1591,11 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
       // The memory below is wiped, so the single-prompt context must not
       // keep describing it: the next single prompt would reuse cells that
       // are gone. Its sequence may hold a parked batch conversation, which
-      // the wipe keeps, so only the bookkeeping is reset here.
+      // the wipe keeps, so only the bookkeeping is reset here: positions and
+      // KV cells, which differ on multimodal contexts.
       state_->llmContext_->clearCacheReconciliationState();
       state_->llmContext_->setNPast(0);
+      state_->llmContext_->setCacheTokens(0);
       // Conversations the scheduler parked for their next request on the same
       // cacheKey are its own state, not single-prompt leftovers. No batch job
       // is in flight, but the worker can still run a save or discard job, so
