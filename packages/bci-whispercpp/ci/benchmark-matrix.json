@@ -1,0 +1,28 @@
+{
+  "cpu": [
+    {
+      "useGPU": false,
+      "backendHint": "cpu"
+    }
+  ],
+  "cpu-metal": [
+    {
+      "useGPU": false,
+      "backendHint": "cpu"
+    },
+    {
+      "useGPU": true,
+      "backendHint": "metal"
+    }
+  ],
+  "cpu-vulkan": [
+    {
+      "useGPU": false,
+      "backendHint": "cpu"
+    },
+    {
+      "useGPU": true,
+      "backendHint": "vulkan"
+    }
+  ]
+}

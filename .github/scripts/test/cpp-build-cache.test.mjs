@@ -91,7 +91,7 @@ test('coverage builds cap CMake and vcpkg concurrency together', () => {
   }
 })
 
-test('documented TTS dispatch exercises matrix flattening and override validation', () => {
+test('documented cpp-tests dispatch exercises matrix flattening and override validation', () => {
   const doc = readFileSync(join(ROOT, 'docs/ci/nx-ci-consolidation.md'), 'utf8')
   const overrides = doc.match(/-f overrides='([^']+)'/)[1]
   const action = readFileSync(join(ROOT, '.github/actions/nx-project-matrix/action.yml'), 'utf8').replaceAll('\r\n', '\n')
@@ -104,82 +104,21 @@ test('documented TTS dispatch exercises matrix flattening and override validatio
     const jqWrapper = "jq() { command jq \"$@\" | tr -d '\\r'; }\n"
     const result = spawnSync('bash', ['--noprofile', '--norc', '-c', jqWrapper + body], {
       cwd: ROOT, encoding: 'utf8',
-      env: { ...process.env, INPUT_TARGET: 'test:cpp', INPUT_PACKAGES: '["tts-ggml"]',
+      env: { ...process.env, INPUT_TARGET: 'test:cpp', INPUT_PACKAGES: '["diffusion-cpp"]',
         INPUT_OVERRIDES: overrides, INPUT_CONFIG_REF: 'HEAD', INPUT_BASE_REF: 'HEAD',
         INPUT_HEAD_REF: 'HEAD', GITHUB_OUTPUT: output.replaceAll('\\', '/') },
     })
     assert.equal(result.status, 0, result.stderr + result.stdout)
     const matrix = JSON.parse(readFileSync(output, 'utf8').match(/^matrix=(.+)$/m)[1])
-    assert.equal(matrix.length, 1)
-    assert.equal(matrix[0].os, 'ubuntu-24.04')
-    assert.equal(matrix[0].runner, 'qvac-ubuntu2404-x64-gpu')
-    assert.equal(matrix[0].cppBuildJobs, 2)
-    assert.equal(matrix[0].platform, 'linux')
-    assert.equal(matrix[0].arch, 'x64')
+    // One row per declared platform, each carrying the override.
+    assert.equal(matrix.length, 3)
+    assert.ok(matrix.every((row) => row.mode === 'standard' && row.needsSd2Model === true))
+    assert.deepEqual(matrix.map((row) => row.platform).sort(), ['darwin', 'linux', 'win32'])
+    assert.equal(matrix.find((row) => row.platform === 'linux').runner, 'qvac-ubuntu2404-x64')
+    assert.equal(matrix.find((row) => row.platform === 'linux').arch, 'x64')
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
-})
-
-test('AudioGen native build restores caches, limits builds and propagates failures', () => {
-  const source = readFileSync(join(ROOT, '.github/workflows/cpp-test-coverage-audiogen-ggml.yml'), 'utf8')
-  assert.doesNotMatch(source, /fuzz-ready|needs.detect/)
-  const manifest = JSON.parse(readFileSync(join(ROOT, 'packages/audiogen-ggml/package.json'), 'utf8'))
-  assert.ok(manifest.scripts['build:native'])
-  assert.ok(manifest.scripts['fuzz:build'])
-  assert.ok(manifest.scripts['fuzz:run'])
-  assert.match(source, /cppBuildJobs: 2/)
-  assert.match(source, /hasCcache: true/)
-  assert.match(source, /vcpkg-binary-cache-dir/)
-  assert.match(source, /vcpkg-toolchain-fingerprint/)
-  assert.match(source, /configure-cpp-build.mjs/)
-  assert.match(source, /npm run build:native/)
-  assert.match(source, /npm install --ignore-scripts/)
-  assert.match(source, /No addon-level C\+\+ tests yet/)
-  assert.match(source, /npm run fuzz:build/)
-  assert.match(source, /npm run fuzz:run/)
-  assert.doesNotMatch(source, /continue-on-error/)
-  const saveCcache = source.indexOf('name: Save ccache (trusted contexts)')
-  const fuzzBuild = source.indexOf('name: Build fuzz targets')
-  assert.ok(saveCcache > 0 && fuzzBuild > saveCcache, 'fuzz reconfigure must follow the native cache save')
-  const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c',
-    'npm() { return 134; }\nnpm run build:native'], { encoding: 'utf8' })
-  assert.equal(result.status, 134, result.stderr)
-  for (const name of ['Save vcpkg cache (trusted contexts)', 'Save ccache (trusted contexts)']) {
-    const block = source.split('\n      - ').find((text) => text.startsWith(`name: ${name}\n`))
-    assert.match(block, /github.event.repository.default_branch/)
-    assert.match(block, /inputs.repository == github.repository/)
-    assert.match(block, /inputs.ref == github.ref_name/)
-  }
-})
-
-test('AudioGen rejects alternate code in cache-writing events before checkout', () => {
-  const source = readFileSync(join(ROOT, '.github/workflows/cpp-test-coverage-audiogen-ggml.yml'), 'utf8').replaceAll('\r\n', '\n')
-  const blocks = source.split('\n      - ')
-  const validation = blocks.find((text) => text.startsWith('name: Validate checkout inputs for cache-writing events\n'))
-  assert.match(validation, /if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'/)
-  const body = validation.split('        run: |\n')[1].split('\n')
-    .filter((line) => line.startsWith('          ')).map((line) => line.slice(10)).join('\n')
-  const env = { ...process.env, EVENT_REPOSITORY: 'tetherto/qvac', EVENT_REF: 'refs/heads/main',
-    EVENT_REF_NAME: 'main', EVENT_SHA: 'trusted-sha', SOURCE_REPOSITORY: '', SOURCE_REF: '' }
-  for (const [repository, ref, expected] of [
-    ['', '', 0], ['tetherto/qvac', 'main', 0], ['', 'refs/heads/main', 0], ['', 'trusted-sha', 0],
-    ['attacker/qvac', '', 1], ['', 'untrusted-sha', 1], ['', 'refs/pull/1/head', 1],
-    ['', 'main\nINJECTED=true', 1],
-  ]) {
-    const result = spawnSync('bash', ['--noprofile', '--norc', '-c', body], {
-      encoding: 'utf8', env: { ...env, SOURCE_REPOSITORY: repository, SOURCE_REF: ref },
-    })
-    assert.equal(result.status, expected, result.stderr + result.stdout)
-  }
-  const trusted = blocks.find((text) => text.startsWith('name: Checkout repository\n'))
-  assert.match(trusted, /ref: \$\{\{ github.sha \}\}/)
-  assert.match(trusted, /repository: \$\{\{ github.repository \}\}/)
-  assert.doesNotMatch(trusted, /inputs\./)
-  const pr = blocks.find((text) => text.startsWith('name: Checkout PR code\n'))
-  assert.match(pr, /if: github.event_name == 'pull_request' \|\| github.event_name == 'pull_request_target'/)
-  assert.match(pr, /ref: \$\{\{ inputs.ref \|\| github.ref \}\}/)
-  assert.ok(source.indexOf('Validate checkout inputs') < source.indexOf('name: Checkout repository'))
 })
 
 test('compiler caches are isolated per package and use compiler contents', () => {
@@ -239,17 +178,18 @@ test('compiler cache restores compatible entries and saves a refreshed key', () 
   assert.match(restore, /restore-keys:/)
   assert.match(step('Save ccache (trusted contexts)'), /steps\.ccache-cache\.outputs\.cache-primary-key/)
   assert.ok(WORKFLOW.indexOf('Configure C++ build resources') < WORKFLOW.indexOf('Get ccache cache'))
+  // The speech packages build their C++ tests on the CI contract with main's two jobs, and no compiler cache.
   for (const name of SPEECH_PACKAGES) {
-    const config = JSON.parse(readFileSync(join(ROOT, `packages/${name}/project.json`), 'utf8')).targets['test:cpp'].options.ci
-    assert.equal(config.hasCcache, true, name)
-    assert.equal(config.cppBuildJobs, 2, name)
+    const build = JSON.parse(readFileSync(join(ROOT, `packages/${name}/project.json`), 'utf8')).targets['cpp:build']
+    assert.equal(build.options.env.CMAKE_BUILD_PARALLEL_LEVEL, '2', name)
   }
 })
 
 test('ASR and BCI failures reach the merge guard and retain diagnostic artifacts', () => {
-  for (const name of ['asr-ggml', 'bci-whispercpp']) {
-    const config = JSON.parse(readFileSync(join(ROOT, `packages/${name}/project.json`), 'utf8')).targets['test:cpp'].options.ci
-    assert.equal(config.continueOnError, false, name)
+  // On the CI contract every cpp:tests leg is required; tts's full run joins them.
+  for (const name of ['asr-ggml', 'bci-whispercpp', 'tts-ggml']) {
+    const tests = JSON.parse(readFileSync(join(ROOT, `packages/${name}/project.json`), 'utf8')).targets['cpp:tests']
+    assert.ok(tests.options.commands.some((c) => /test:cpp:run/.test(c) && !/\|\| true/.test(c)), name)
     assert.ok(CPP_TEST_KEYS.includes(name), name)
   }
   const body = step('Run C++ tests').split('        run: |\n')[1]

@@ -9,9 +9,8 @@ set -euo pipefail
 # (s3gen exceeds Metro's 0x1fffffe8 ~= 512 MiB per-asset string-read
 # limit; mobile Chatterbox tests degrade cleanly to a passing skip).
 #
-# Called from .github/workflows/integration-mobile-test-tts-ggml.yml
-# in a step gated by the actions/cache hit — cache miss runs this,
-# cache hit skips it (the GGUF is already cached at models/).
+# A local helper: CI stages the mobile models through ci/prepare-mobile.mjs's
+# presigned manifest instead.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ADDON_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"

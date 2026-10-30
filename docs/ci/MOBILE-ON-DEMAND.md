@@ -5,14 +5,14 @@ To cut that cost, they **no longer run automatically on PRs**. Instead you start
 them by hand, choosing exactly one platform, the device(s) to run on, and,
 where supported, a subset of tests.
 
-This applies to all 16 mobile addons. Nine are on the CI contract and run through
-one workflow, `mobile-tests.yml`: `classification-ggml`, `embed-llamacpp`,
+This applies to all 16 mobile addons. Fourteen are on the CI contract and run
+through one workflow, `mobile-tests.yml`: `asr-ggml`, `audiogen-ggml`,
+`bci-whispercpp`, `classification-ggml`, `decoder-audio`, `embed-llamacpp`,
 `ggml-rpc-server`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`,
-`turbovec-ggml` and `vla-ggml`; see
-[Packages on the CI contract](#packages-on-the-ci-contract). The other seven keep
+`tts-ggml`, `turbovec-ggml` and `vla-ggml`; see
+[Packages on the CI contract](#packages-on-the-ci-contract). The other two keep
 a workflow each, `integration-mobile-test-<addon>.yml`, and the rest of this page
-covers them: `asr-ggml`, `audiogen-ggml`, `bci-whispercpp`, `decoder-audio`,
-`diffusion-cpp`, `inference-addon-cpp` and `tts-ggml`.
+covers them: `diffusion-cpp` and `inference-addon-cpp`.
 
 ## How to run a mobile test
 
@@ -60,6 +60,14 @@ gh workflow run mobile-tests.yml --repo tetherto/qvac --ref main \
 name without `@qvac/`. Pass that spec as `-f package=`, or a published
 `@qvac/<name>@<version>`.
 
+`decoder-audio` has no native build of its own (it rides on `bare-ffmpeg`), so
+it takes neither source: a plain dispatch tests the `ref` you name. A mobile
+benchmark run goes through `benchmarks.yml` with `run_mobile`; for `asr-ggml`,
+`audiogen-ggml` and `tts-ggml` its `args` input picks the one matrix row the run
+measures, as `key=value` words, for example `args=engine=parakeet model_type=ctc
+use_gpu=true` for asr, `args=dit_variant=sft use_gpu=true` for audiogen, or
+`args=engine=supertonic use_gpu=true` for tts.
+
 ### Quick start — test your own PR on a device
 
 For an addon with its own workflow, this is the common case end to end. A first run should
@@ -70,8 +78,8 @@ re-running a known failure or iterating on one test, narrow it, because Device
 Farm is billed per device minute.
 
 ```bash
-WF=bci-whispercpp           # workflow slug: integration-mobile-test-$WF.yml
-PKG=bci-whispercpp          # package dir: packages/$PKG
+WF=diffusion-cpp            # workflow slug: integration-mobile-test-$WF.yml
+PKG=diffusion-cpp           # package dir: packages/$PKG
 PR=1234
 BRANCH=$(git branch --show-current)
 
@@ -128,7 +136,7 @@ Verified: prebuilds come from run <id> — artifact 'prebuilds-<pkg>', …, head
 | **device_model_operator** | How the model name is matched: `EQUALS` (**default** — that exact fleet model only; dropdown values are exact fleet names) or `CONTAINS` (any model containing the value — Device Farm picks by availability, so `Pixel 9` can also match `Pixel 9 Pro`). Default is `EQUALS` so a single-device run bills exactly the model you picked. |
 | **tests** | Optional test filter — see [below](#the-tests-filter). Empty = the full mobile suite. |
 | **prebuild_run_id** | The run id whose `prebuilds` artifact holds the native binaries to install. **This is the route for testing your own PR on a device** — see [below](#testing-unmerged--unpublished-native-code). Outranks `package`, and a wrong or expired run id **fails the run** instead of quietly resolving `@latest`. |
-| **package** (or **package_spec**) | Which *published* build to put on the phone — see [below](#which-build-gets-tested). Default **empty** resolves the **published `@qvac/<addon>@latest`** on a manual run, *not* your branch — a manual dispatch builds no prebuild artifacts of its own. Use it for a release or a build from **another** branch; for your own PR prefer `prebuild_run_id`. Mutually exclusive with it. |
+| **package** | Which *published* build to put on the phone — see [below](#which-build-gets-tested). Default **empty** resolves the **published `@qvac/<addon>@latest`** on a manual run, *not* your branch — a manual dispatch builds no prebuild artifacts of its own. Use it for a release or a build from **another** branch; for your own PR prefer `prebuild_run_id`. Mutually exclusive with it. |
 | **ref** | Git ref to check out for the **test harness / app** (not the native binary — see below). |
 
 ### Which devices to run on
@@ -406,8 +414,8 @@ bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
 unreliable. Scope by your PR's head commit instead:
 
 ```bash
-PKG=bci-whispercpp   # the package directory name, i.e. packages/<PKG>
-WF=bci-whispercpp    # workflow slug: integration-mobile-test-<WF>.yml
+PKG=diffusion-cpp    # the package directory name, i.e. packages/<PKG>
+WF=diffusion-cpp     # workflow slug: integration-mobile-test-<WF>.yml
 PR=4519            # your PR number
 BRANCH=$(git branch --show-current)
 
@@ -443,7 +451,7 @@ gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRAN
 The build job's *Resolve prebuilds from a run id* step prints the provenance:
 
 ```
-Verified: prebuilds come from run 33179656677 — artifact 'prebuilds-bci-whispercpp',
+Verified: prebuilds come from run 33179656677 — artifact 'prebuilds-diffusion-cpp',
 workflow 'On PR Trigger (LLM)', head 1d2c3b4…,
 branch feat/backend-selection (tetherto/qvac), success
 ```
@@ -468,13 +476,6 @@ Three things to know:
   cancelled still publishes a bundle, just without `ios-arm64`; the run fails
   with the directories the artifact does contain, rather than building an app
   around a missing binary.
-- **`audiogen-ggml` is the exception.** It loads its composite actions from the
-  default branch (a supply-chain guard for its `release`-environment job), so it
-  only honours `prebuild_run_id` once that support is on the default branch.
-  Until then the run fails with an explicit message rather than quietly
-  installing `@latest` — use `-f package_spec=@tetherto/audiogen-ggml-mono@<dev>`
-  in the meantime. An empty input installs the published release's
-  per-platform package, as for the other split addons below.
 - **Check which repository built it.** This repo is fork-first, so a PR's
   `on-pr` run is usually `pull_request_target` on a *fork* — it appears in this
   repo's run list while its head repository is the contributor's fork. That is
@@ -497,7 +498,7 @@ the prebuilds and publishes
 
 ```bash
 BRANCH=tmp-QVAC-1234
-PKG=bci-whispercpp   # package directory name; `package` is a required input
+PKG=diffusion-cpp    # package directory name; `package` is a required input
 git push origin HEAD:refs/heads/$BRANCH
 # The addons with their own mobile workflow publish from on-merge-nx.yml.
 gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref $BRANCH -f package=$PKG
@@ -529,8 +530,8 @@ Two names are involved and for one addon they differ, so set them separately
 rather than deriving one from the other:
 
 ```bash
-WF=bci-whispercpp             # workflow slug: integration-mobile-test-$WF.yml
-GPR_NAME=bci-whispercpp-mono  # the npm package name (minus @qvac/) plus -mono
+WF=diffusion-cpp              # workflow slug: integration-mobile-test-$WF.yml
+GPR_NAME=diffusion-cpp-mono   # the npm package name (minus @qvac/) plus -mono
 
 RUN_ID=$(gh run list --repo tetherto/qvac \
   --workflow on-merge-nx.yml --branch $BRANCH \
@@ -539,7 +540,7 @@ RUN_ID=$(gh run list --repo tetherto/qvac \
 PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
   --jq ".[] | select(.name | endswith(\"runid-$RUN_ID\")) | \"@tetherto/$GPR_NAME@\" + .name")
 
-echo "$PKG"   # @tetherto/bci-whispercpp-mono@0.4.0-tmp.runid-33179656677
+echo "$PKG"   # @tetherto/diffusion-cpp-mono@0.4.0-tmp.runid-33179656677
 ```
 
 These addons publish from `on-merge-nx.yml`, so the run is found by branch
@@ -591,29 +592,19 @@ Verified: prebuilds come from @tetherto/<addon>-mono@<version> (pinned, GitHub P
 If you instead see `downloading @qvac/<addon>@latest from npm (registry.npmjs.org)`,
 the pin did not arrive and you are testing the published release.
 
-**The Route B input is named `package` on most addons but `package_spec` on three.**
-`prebuild_run_id` (Route A) has the same name everywhere:
+The Route B input is `package`, and Route A's `prebuild_run_id`, on every
+workflow that takes them:
 
 | input | addons |
 |---|---|
-| `-f package=` | `bci-whispercpp`, `decoder-audio`, `diffusion-cpp`, and `mobile-tests.yml` for the packages on the CI contract |
-| `-f package_spec=` | `asr-ggml`, `audiogen-ggml`, `tts-ggml` |
+| `-f package=` | `diffusion-cpp`, and `mobile-tests.yml` for the packages on the CI contract |
 | *(no such input)* | `inference-addon-cpp` |
-| `-f prebuild_run_id=` | every addon above **except** `decoder-audio` and `inference-addon-cpp` (see *Addons that need none of this*) |
+| `-f prebuild_run_id=` | every addon above **except** `inference-addon-cpp` and, on `mobile-tests.yml`, `decoder-audio` (see *Addons that need none of this*) |
 
 **Addons that need none of this:** `inference-addon-cpp` compiles its `.bare` in
 the same run from `ref`, and `decoder-audio` has no native prebuild of its own
-(it rides on `bare-ffmpeg`'s, so its `package` input does not change what is
-tested) — for both, plain `--ref <branch>` is enough, which is why neither
-exposes `prebuild_run_id`.
-
-> **Three addons publish their mobile binaries as separate packages.**
-> `@qvac/asr-ggml`, `@qvac/tts-ggml` and `@qvac/audiogen-ggml` ship a JS-only
-> meta package; the setup step fetches `@qvac/<addon>-android-arm64` or
-> `@qvac/<addon>-ios` at the same version, so an **empty** input or a `@qvac`
-> pin works as for any other addon. Their `@tetherto/<addon>-mono` dev builds
-> carry prebuilds inline, so Routes A and B work too. (`@qvac/decoder-audio`
-> ships none, but it needs no prebuilds of its own — see above.)
+(it rides on `bare-ffmpeg`'s). For both, the `ref` you dispatch is what gets
+tested.
 
 > The **`ref`** input defaults to **blank**, so the run checks out the branch you
 > dispatch from (`gh workflow run … --ref <branch>` — no `-f ref=` needed). Pass
@@ -636,8 +627,6 @@ exposes `prebuild_run_id`.
 - **`inference-addon-cpp`** has no published package — it **compiles its `.bare`
   natively in the same run from `ref`**, so a branch dispatch already tests that
   branch's native code directly (no `package` input, none needed).
-- **`decoder-audio`** has no native prebuild of its own (it rides on
-  `bare-ffmpeg`'s), so its `package` input does not change what is tested.
 
 ### One run at a time (per branch)
 
@@ -660,20 +649,20 @@ Run the full suite across the phones you care about (one dispatch per platform):
 
 ```bash
 # Android — across the pool phones (one run per exact model)
-gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
+gh workflow run mobile-tests.yml --ref <branch> -f packages=tts-ggml \
   -f platform=Android \
   -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
   -f device_model_operator=EQUALS
 
 # iOS — the iPhones
-gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
+gh workflow run mobile-tests.yml --ref <branch> -f packages=tts-ggml \
   -f platform=iOS \
   -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
   -f device_model_operator=EQUALS
 ```
 
 Run the iOS dispatch only after the Android one finishes — same workflow, same
-branch, so a second dispatch cancels the first. (Once the workflow is on
+package and branch, so a second dispatch cancels the first. (Once the workflow is on
 the default branch you can do the same from **Actions → Run workflow** in the UI.)
 
 ### 2. Narrow after a failure — one device, one test
@@ -684,7 +673,7 @@ When a device fails, don't re-run everything. Re-dispatch **just that device** w
 
 ```bash
 # e.g. runChatterboxSpeedTest failed on the S26 Ultra — re-run only that
-gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
+gh workflow run mobile-tests.yml --ref <branch> -f packages=tts-ggml \
   -f platform=Android \
   -f devices_custom="Samsung Galaxy S26 Ultra" \
   -f device_model_operator=EQUALS \
@@ -758,12 +747,10 @@ and free.
 
 ## Publishing and reusable workflows
 
-Speech, OCR and translation publishing in `on-merge-nx.yml` does not launch
-mobile E2E or desktop integration tests. ASR, TTS, BCI, decoder-audio, AudioGen,
-OCR and translation opt out of post-publish testing in their package CI
-configuration. Generated-wrapper verification remains a pre-publish integrity
-gate, including on release pushes and manual dispatches without a PR.
-The publish workflow has no speech mobile callers.
+The packages on the CI contract publish from `publish-npm.yml` and
+`publish-gpr.yml`, which run no mobile E2E or desktop integration tests.
+Generated-wrapper verification (`verify:generated`) remains a pre-publish
+integrity gate, including on release pushes and manual dispatches without a PR.
 
 The reusable (`workflow_call`) interfaces remain available to benchmarks and
 other test workflows with their existing inputs and scheduling (sharded /

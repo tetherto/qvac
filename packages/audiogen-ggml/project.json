@@ -1,29 +1,143 @@
 {
   "name": "@qvac/audiogen-ggml",
   "root": "packages/audiogen-ggml",
+  "tags": [
+    "ci:addons"
+  ],
   "targets": {
-    "on-pr": {
+    "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'orchestrated by on-pr-nx.yml'",
         "cwd": "packages/audiogen-ggml",
-        "ci": {
-          "hasCppLint": true
+        "command": "pnpm run lint"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/audiogen-ggml",
+        "command": "pnpm run test:dts"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/audiogen-ggml",
+        "command": "pnpm run test:unit"
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/audiogen-ggml",
+        "command": "pnpm run check:generated"
+      }
+    },
+    "ci:system": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "^ci:system"
+      ],
+      "options": {
+        "cwd": "packages/audiogen-ggml",
+        "parallel": false,
+        "forwardAllArgs": false,
+        "commands": [
+          "echo no system packages"
+        ]
+      },
+      "configurations": {
+        "linux-arm64": {
+          "commands": [
+            "dpkg -s pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libgomp1 libomp5 libblas3 mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libgomp1 libomp5 libblas3 mesa-vulkan-drivers)"
+          ]
+        },
+        "android-arm64": {
+          "commands": [
+            "dpkg -s pkg-config libx11-dev libxcb1-dev libxkbcommon-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y pkg-config libx11-dev libxcb1-dev libxkbcommon-dev)"
+          ]
         }
       }
     },
     "build": {
       "executor": "nx:run-commands",
+      "dependsOn": [],
       "options": {
-        "command": "pnpm run build",
         "cwd": "packages/audiogen-ggml",
-        "ci": {
-          "artifactNamePrefix": "audiogen-ggml-",
-          "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev",
-          "includeVulkanSdk": true,
-          "setupPythonOnWindows": true,
-          "includeCuda": true,
-          "platformCmakeDefines": "linux-x64: -D ENABLE_CUDA=ON"
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm run build:ts",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+            "forwardAllArgs": true
+          },
+          {
+            "command": "pnpm exec bare-make build",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make install",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--platform=linux --arch=x64 -D ENABLE_CUDA=ON",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-arm64": {
+          "args": "--platform=linux --arch=arm64",
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "ios-arm64": {
+          "args": "--platform=ios --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-arm64-simulator": {
+          "args": "--platform=ios --arch=arm64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-x64-simulator": {
+          "args": "--platform=ios --arch=x64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--platform=darwin --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-x64": {
+          "args": "--platform=darwin --arch=x64",
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "args": "--platform=win32 --arch=x64",
+          "ci": {
+            "runner": "win_2025_x64"
+          }
         }
       },
       "inputs": [
@@ -34,147 +148,260 @@
         "{projectRoot}/prebuilds"
       ]
     },
-    "test:unit": {
+    "link:platform": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
+      "options": {
+        "cwd": "packages/audiogen-ggml",
+        "command": "pnpm run link:platform"
+      }
+    },
+    "cpp:lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/audiogen-ggml"
+        "cwd": "packages/audiogen-ggml",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"pnpm exec bare-make generate -D ENABLE_VULKAN=OFF\"",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
+      }
+    },
+    "cpp:build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/audiogen-ggml",
+        "parallel": false,
+        "env": {
+          "CMAKE_BUILD_PARALLEL_LEVEL": "2",
+          "VCPKG_MAX_CONCURRENCY": "2"
+        },
+        "commands": [
+          "pnpm run build:native"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      }
+    },
+    "cpp:tests": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "cpp:build"
+      ],
+      "options": {
+        "cwd": "packages/audiogen-ggml",
+        "parallel": false,
+        "commands": [
+          "node --test scripts/__tests__/run-cpp-fuzz.test.js",
+          "pnpm run fuzz:build",
+          "pnpm run fuzz:run"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "pnpm run test:integration",
         "cwd": "packages/audiogen-ggml",
-        "ci": {
-          "timeoutMinutes": 360,
-          "envVarName": "GITHUB_TOKEN",
-          "envSecretName": "GITHUB_TOKEN",
-          "runIntegrationTests": true,
-          "runRtfBenchmarks": false,
-          "linuxArmApt": ["libgomp1", "libomp5", "libblas3", "mesa-vulkan-drivers"],
-          "windowsVulkan": { "setSdk": true, "visibleDevices": true },
-          "modelCache": [
-            {
-              "cacheKeySuffix": "all-dit-variants",
-              "paths": "packages/audiogen-ggml/models",
-              "hashFilesGlob": "packages/audiogen-ggml/scripts/download-audiogen-ggml-models.js",
-              "warm": "false"
-            }
-          ],
-          "modelEnv": { "INTEGRATION_TEST_TIMEOUT": "3600", "LD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}", "DYLD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}" },
-          "modelDownloadScript": "download-models:registry:all",
-          "modelDownloadSkipOnCacheHit": true,
-          "rtfBenchmark": {
-            "command": "node scripts/run-rtf-benchmark-matrix.js",
-            "matrixEnvVar": "QVAC_AUDIOGEN_GGML_BENCHMARK_MATRIX_JSON",
-            "env": {
-              "QVAC_AUDIOGEN_GGML_BENCHMARK_WARMUP_RUNS": "1",
-              "QVAC_AUDIOGEN_GGML_BENCHMARK_RUNS": "3",
-              "QVAC_AUDIOGEN_GGML_BENCHMARK_DURATION_S": "15"
-            }
-          },
-          "platforms": [
-            {
-              "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu",
-              "benchmarkMatrixJson": [
-                { "ditVariant": "turbo-q4", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "turbo-q8", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "sft", "useGPU": false, "backendHint": "cpu", "numWarmup": 0, "numRuns": 1 },
-                { "ditVariant": "turbo-q4", "useGPU": true, "backendHint": "vulkan" },
-                { "ditVariant": "turbo-q8", "useGPU": true, "backendHint": "vulkan" },
-                { "ditVariant": "sft", "useGPU": true, "backendHint": "vulkan", "numRuns": 2 }
-              ]
-            },
-            {
-              "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu",
-              "benchmarkMatrixJson": [
-                { "ditVariant": "turbo-q4", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "turbo-q8", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "sft", "useGPU": false, "backendHint": "cpu", "numWarmup": 0, "numRuns": 1 },
-                { "ditVariant": "turbo-q4", "useGPU": true, "backendHint": "vulkan" },
-                { "ditVariant": "turbo-q8", "useGPU": true, "backendHint": "vulkan" },
-                { "ditVariant": "sft", "useGPU": true, "backendHint": "vulkan", "numRuns": 2 }
-              ]
-            },
-            {
-              "os": "ubuntu-26.04", "platform": "linux", "arch": "x64", "noGpu": true,
-              "benchmarkMatrixJson": [
-                { "ditVariant": "turbo-q4", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "turbo-q8", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "sft", "useGPU": false, "backendHint": "cpu", "numWarmup": 0, "numRuns": 1 }
-              ]
-            },
-            {
-              "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "noGpu": true,
-              "benchmarkMatrixJson": [
-                { "ditVariant": "turbo-q4", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "turbo-q8", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "sft", "useGPU": false, "backendHint": "cpu", "numWarmup": 0, "numRuns": 1 }
-              ]
-            },
-            {
-              "os": "macos-26", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu",
-              "benchmarkMatrixJson": [
-                { "ditVariant": "turbo-q4", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "turbo-q8", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "sft", "useGPU": false, "backendHint": "cpu", "numWarmup": 0, "numRuns": 1 },
-                { "ditVariant": "turbo-q4", "useGPU": true, "backendHint": "metal" },
-                { "ditVariant": "turbo-q8", "useGPU": true, "backendHint": "metal" },
-                { "ditVariant": "sft", "useGPU": true, "backendHint": "metal", "numRuns": 2 }
-              ]
-            },
-            {
-              "os": "macos-15-large", "platform": "darwin", "arch": "x64", "noGpu": true,
-              "benchmarkMatrixJson": [
-                { "ditVariant": "turbo-q4", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "turbo-q8", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "sft", "useGPU": false, "backendHint": "cpu", "numWarmup": 0, "numRuns": 1 }
-              ]
-            },
-            {
-              "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu",
-              "benchmarkMatrixJson": [
-                { "ditVariant": "turbo-q4", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "turbo-q8", "useGPU": false, "backendHint": "cpu" },
-                { "ditVariant": "sft", "useGPU": false, "backendHint": "cpu", "numWarmup": 0, "numRuns": 1 },
-                { "ditVariant": "turbo-q4", "useGPU": true, "backendHint": "vulkan" },
-                { "ditVariant": "turbo-q8", "useGPU": true, "backendHint": "vulkan" },
-                { "ditVariant": "sft", "useGPU": true, "backendHint": "vulkan", "numRuns": 2 }
-              ]
-            }
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/integration.mjs",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64-gpu2204": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu"
+          }
+        },
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-x64-2604": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2604"
+          }
+        },
+        "linux-arm64": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "macos_15_large"
+          }
+        },
+        "win32-x64": {
+          "args": "--set GGML_VK_VISIBLE_DEVICES=1",
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 360,
+        "secrets": [
+          "GITHUB_TOKEN"
+        ]
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/audiogen-ggml",
+        "command": "node ci/prepare-mobile.mjs"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "devicefarmProject": "AUDIOGEN_GGML",
+          "enablesPerf": false,
+          "mochaTimeoutMs": 3600000,
+          "waitforTimeoutMs": 600000,
+          "perfReport": {
+            "title": "Mobile Performance: audiogen-ggml",
+            "merge": true
+          }
+        }
+      }
+    },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
+      "options": {
+        "cwd": "packages/audiogen-ggml",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/benchmark.mjs",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64-gpu2204": {
+          "args": "--matrix cpu-vulkan",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu"
+          }
+        },
+        "linux-x64-gpu": {
+          "args": "--matrix cpu-vulkan",
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-x64-2604": {
+          "args": "--matrix cpu --set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2604"
+          }
+        },
+        "linux-arm64": {
+          "args": "--matrix cpu --set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--matrix cpu-metal",
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "args": "--matrix cpu --set NO_GPU=true",
+          "ci": {
+            "runner": "macos_15_large"
+          }
+        },
+        "win32-x64": {
+          "args": "--matrix cpu-vulkan --set GGML_VK_VISIBLE_DEVICES=1",
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        },
+        "report": {
+          "commands": [
+            "bash ci/benchmark-report.sh"
           ]
         }
+      },
+      "metadata": {
+        "timeoutMinutes": 360,
+        "secrets": [
+          "GITHUB_TOKEN"
+        ]
       }
     },
-    "test:cpp": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'carve-out: routed to cpp-test-coverage-audiogen-ggml.yml'",
-        "cwd": "packages/audiogen-ggml",
-        "ci": {
-          "carveOut": true
-        }
-      }
+    "cache:models": {
+      "executor": "nx:noop"
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/audiogen-ggml"
-      }
-    },
-    "on-merge": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
-        "cwd": "packages/audiogen-ggml",
-        "ci": {
-          "verifyGenerated": true,
-          "nameTransform": "rename-prefix",
-          "repoName": "audiogen-ggml",
-          "testGateMode": "none",
-          "slicePlatformPackages": true
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "audiogen-ggml",
+          "platformPackages": true,
+          "nameTransform": "rename-prefix"
         }
       }
     }

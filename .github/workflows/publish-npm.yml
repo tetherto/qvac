@@ -199,6 +199,21 @@ jobs:
         with:
           workdir: ${{ env.WORKDIR }}
           tag: ${{ inputs.npm_tag || 'latest' }}
+      # One npm package per platform, sliced off the meta and published before it.
+      - if: matrix.row.meta.publish.platformPackages
+        shell: bash
+        working-directory: src
+        env:
+          DIR: ${{ matrix.row.dir }}
+          KEEP_DIRS: ${{ join(matrix.row.meta.prebuildExtraDirs, ' ') }}
+        run: node scripts/ci/slice-platform-packages.mjs --workdir "$DIR" --out-dir "$RUNNER_TEMP/platform-packages" --keep-dirs "$KEEP_DIRS"
+      - if: matrix.row.meta.publish.platformPackages
+        uses: ./.github/actions/npm-publish-platform-packages
+        with:
+          workdir: ${{ env.WORKDIR }}
+          slices-dir: ${{ runner.temp }}/platform-packages
+          tag: ${{ steps.dist-tag.outputs.tag }}
+          dry-run: ${{ inputs.dry_run == true }}
       - id: publish
         if: ${{ !inputs.dry_run }}
         uses: tetherto/qvac-actions/npm-release-publish@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges

@@ -186,8 +186,8 @@ jobs:
           # This tree is fork code and npm install runs over it (scripted in the
           # coverage lane), so the token must not be left in .git/config.
           persist-credentials: false
-          # Coverage lanes (asr/tts/bci) carry LFS test fixtures; legacy set
-          # lfs:true on those checkouts.
+          # Coverage lanes carry LFS test fixtures; legacy set lfs:true on
+          # those checkouts.
           lfs: ${{ matrix.mode == 'coverage' }}
 
       - name: Setup AWS + Windows CLI
@@ -438,58 +438,6 @@ jobs:
             -o models/unit-test/rerank-test.gguf \
             "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf"
 
-      # --- asr-ggml: HuggingFace whisper models (curl, no cache) ---
-      - name: Download whisper test models
-        if: matrix.needsWhisperHfModels
-        working-directory: ${{ matrix.workdir }}
-        run: |
-          mkdir -p models
-          curl -L -o models/ggml-tiny.bin \
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" \
-            --fail --silent --show-error --connect-timeout 30 --max-time 300
-          curl -L -o models/ggml-silero-v5.1.2.bin \
-            "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin" \
-            --fail --silent --show-error --connect-timeout 30 --max-time 300
-
-      # --- asr-ggml: parakeet GGUF from S3 via AWS OIDC (cached) ---
-      - name: Configure AWS credentials via OIDC
-        if: matrix.needsParakeetS3Gguf
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - name: Cache Parakeet sortformer q4 GGUF
-        if: matrix.needsParakeetS3Gguf
-        id: cache-parakeet-models
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ${{ matrix.workdir }}/models/sortformer-4spk-v1.q4_0.gguf
-          key: ${{ matrix.package }}-cpp-q4-sortformer-v1-${{ hashFiles('.github/workflows/cpp-tests-nx.yml') }}
-          restore-keys: ${{ matrix.package }}-cpp-q4-sortformer-v1-
-
-      - name: Download sortformer q4_0 GGUF from QVAC registry (cache miss)
-        if: matrix.needsParakeetS3Gguf && steps.cache-parakeet-models.outputs.cache-hit != 'true'
-        working-directory: ${{ matrix.workdir }}
-        shell: bash
-        env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-        run: |
-          set -euo pipefail
-          mkdir -p models
-          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf" models/
-
-      - name: Verify parakeet GGUF for C++ tests
-        if: matrix.needsParakeetS3Gguf
-        working-directory: ${{ matrix.workdir }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ ! -s models/sortformer-4spk-v1.q4_0.gguf ]; then
-            echo "ERROR: missing or empty models/sortformer-4spk-v1.q4_0.gguf" >&2
-            exit 1
-          fi
-
       # --- embed-llamacpp: Laya GGUF from S3 via AWS OIDC (cached) ---
       # Found by path convention (models/unit-test/laya-test.gguf), no env var.
       - name: Configure AWS credentials via OIDC (Laya)
@@ -529,41 +477,6 @@ jobs:
             echo "ERROR: missing or empty models/unit-test/laya-test.gguf" >&2
             exit 1
           fi
-
-      # --- tts-ggml: Python-venv HF->GGUF conversion pipeline (cached) ---
-      - name: Cache TTS venv + q4 GGUFs
-        if: matrix.needsTtsVenvModels
-        id: cache-tts-models
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: |
-            ${{ matrix.workdir }}/venv
-            ${{ matrix.workdir }}/models/chatterbox-t3-mtl.gguf
-            ${{ matrix.workdir }}/models/chatterbox-s3gen-mtl.gguf
-            ${{ matrix.workdir }}/models/supertonic.gguf
-          key: ${{ matrix.package }}-cpp-mtl-supertonic-en-q4-v1-${{ hashFiles(format('{0}/scripts/convert-models.sh', matrix.workdir), format('{0}/scripts/setup-venv.sh', matrix.workdir), format('{0}/scripts/requirements.txt', matrix.workdir)) }}
-          restore-keys: ${{ matrix.package }}-cpp-mtl-supertonic-en-q4-v1-
-
-      - name: Convert HF -> q4_0 GGUFs (cache miss)
-        if: matrix.needsTtsVenvModels && steps.cache-tts-models.outputs.cache-hit != 'true'
-        working-directory: ${{ matrix.workdir }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/setup-venv.sh
-          bash scripts/convert-models.sh -t multilingual -q q4_0
-          bash scripts/convert-models.sh -t supertonic-en -q q4_0
-
-      - name: Verify TTS GGUFs for C++ tests
-        if: matrix.needsTtsVenvModels
-        working-directory: ${{ matrix.workdir }}
-        shell: bash
-        run: |
-          for f in chatterbox-t3-mtl.gguf chatterbox-s3gen-mtl.gguf supertonic.gguf; do
-            if [ ! -s "models/$f" ]; then
-              echo "WARN: missing or empty models/$f -- gated tests will skip" >&2
-            fi
-          done
 
       - name: Build C++ tests
         id: cpp-build
@@ -732,20 +645,6 @@ jobs:
           fi
           npm run fuzz:build
           npm run fuzz:run
-
-  # Carve-out packages have bespoke C++ test flows; routed to their own reusable
-  # when nx flags them affected via options.ci carveOut:true.
-  cpp-tests-audiogen:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'audiogen-ggml')
-    permissions:
-      contents: read
-      packages: read
-    uses: ./.github/workflows/cpp-test-coverage-audiogen-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
 
   coverage-report:
     permissions:

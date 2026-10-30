@@ -17,9 +17,9 @@
 // dtype the active GPU backend can't run the MTL graph with) SIGABRTs the
 // Bare process, failing the CI step.
 //
-// Coverage notes (see also: integration-test-tts-ggml.yml matrix):
+// Coverage notes (see also: the test:integration configurations in project.json):
 //   - Real **Metal** coverage comes from the iOS Device Farm leg
-//     (integration-mobile-test-tts-ggml.yml), which auto-includes this file
+//     (test:mobile), which auto-includes this file
 //     via test/mobile/integration.auto.cjs.  The desktop macOS-arm64 runner
 //     is `no_gpu:true` (hosted paravirtual Metal is broken), so it skips.
 //   - The Vulkan-pinned linux/windows GPU runners can't reproduce the Metal

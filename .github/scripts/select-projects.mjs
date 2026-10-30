@@ -52,17 +52,29 @@ const METADATA = {
   perfReport: ['test:integration']
 }
 // Secrets a target may ask for by name; each is named once in _desktop.yml or _mobile.yml, never indexed.
-export const SECRETS = ['QASE_API_TOKEN', 'HF_TOKEN', 'MODEL_S3_BUCKET']
-const PUBLISH_KEYS = ['tagPrefix']
+export const SECRETS = ['QASE_API_TOKEN', 'HF_TOKEN', 'MODEL_S3_BUCKET', 'GITHUB_TOKEN']
+// platformPackages publishes one npm package per platform before the meta; nameTransform renames the GPR build.
+const PUBLISH_KEYS = ['tagPrefix', 'platformPackages', 'nameTransform']
 const MOBILE_KEYS = [
   'devicefarmProject',
   'enablesPerf',
   'mochaTimeoutMs',
   'perTestTimeoutMinutes',
-  'perfReport'
+  'perfReport',
+  'waitforTimeoutMs'
 ]
 // Each needs its secret named in _mobile.yml's PROJECT_ARN.
-export const DEVICEFARM_PROJECTS = ['LLAMACPP_EMBED', 'LLM', 'OCR_FASTTEXT', 'NMTCPP']
+export const DEVICEFARM_PROJECTS = [
+  'LLAMACPP_EMBED',
+  'LLM',
+  'OCR_FASTTEXT',
+  'NMTCPP',
+  'ASR_GGML',
+  'TTS_GGML',
+  'AUDIOGEN_GGML',
+  'WHISPERCPP',
+  'DECODER_AUDIO'
+]
 
 // benchmark's report configuration reads every other configuration's results, so it runs once, after them, never as a row.
 export const REPORT = 'report'
@@ -204,7 +216,9 @@ export function select({ graph, affected, targets, labels, gate, configs = [] })
       key: gate[dir],
       provider,
       providerArtifact,
-      targets: own
+      targets: own,
+      // A package without a build target has no prebuilds to restore.
+      hasBuild: Boolean(n.data.targets.build)
     }
     out.projects.push({
       name: n.name,

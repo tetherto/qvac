@@ -143,25 +143,6 @@ jobs:
           # and runs on its own non-GPU runner regardless of the platform rows.
           echo "pinmodel=$(echo "$M" | jq -c '[.[] | select(.hasPinModelManifest == true) | {package, workdir}] | unique_by(.package)')" >> "$GITHUB_OUTPUT"
 
-  # Carve-outs asr-ggml and llm-llamacpp have bespoke integration flows; routed to
-  # their own reusable when nx flags them affected (options.ci carveOut:true).
-  run-integration-asr:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'asr-ggml')
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-    uses: ./.github/workflows/integration-test-asr-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      # The carve-out gates its whole RTF leg on run_rtf_benchmarks; without
-      # this the desktop benchmarks never run and only warn at the summarize step.
-      run_rtf_benchmarks: ${{ inputs.run_rtf_benchmarks }}
-      run_integration_tests: ${{ inputs.run_integration_tests }}
-
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
     needs: [matrix, runner_names]
@@ -369,8 +350,7 @@ jobs:
       # install resolves the optionalDependency pinned in git, which is the
       # previously published platform package, so the prebuild staged above
       # would never load. Packages that define `link:platform` wrap
-      # prebuilds/<host>/ as that package in node_modules. Same step as the
-      # asr-ggml and audiogen-ggml integration workflows.
+      # prebuilds/<host>/ as that package in node_modules.
       - name: Stage the platform package
         if: matrix.hasPrebuilds == true
         working-directory: ${{ matrix.workdir }}
@@ -474,8 +454,8 @@ jobs:
           aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
 
-      # Model staging via npm script (options.ci.modelDownloadScript). continueOnError
-      # and skipOnCacheHit mirror the legacy bci / tts / audiogen gates.
+      # Model staging via npm script (options.ci.modelDownloadScript), with its
+      # continueOnError and skipOnCacheHit gates.
       - name: Download models (npm)
         if: >-
           matrix.modelDownloadScript &&
@@ -611,7 +591,7 @@ jobs:
           RTF_MATRIX_VAR: ${{ matrix.rtfBenchmark.matrixEnvVar }}
           RTF_MATRIX_JSON: ${{ toJson(matrix.benchmarkMatrixJson) }}
           # options.ci.rtfBenchmark.env — optional {VAR: value} map of extra
-          # benchmark tuning vars a package's runner reads (e.g. audiogen's RUNS).
+          # benchmark tuning vars a package's runner reads.
           RTF_EXTRA_ENV: ${{ toJson(matrix.rtfBenchmark.env) }}
         run: |
           node -e 'const fs=require("fs");const v=process.env.RTF_MATRIX_VAR,j=process.env.RTF_MATRIX_JSON;if(v&&j&&j!=="null")fs.appendFileSync(process.env.GITHUB_ENV,`${v}=${JSON.stringify(JSON.parse(j))}\n`)'

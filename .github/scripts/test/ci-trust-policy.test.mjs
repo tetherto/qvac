@@ -895,29 +895,6 @@ test("audit-called-out privileged checkouts are pinned to event head SHA", () =>
   assert.doesNotMatch(sanityChecks, /PR_HEAD_REF|PR_FORK_URL|refs\/pr\/head/);
 });
 
-test("audiogen mobile actions come from an isolated default-branch checkout", () => {
-  const workflow = read(
-    ".github/workflows/integration-mobile-test-audiogen-ggml.yml",
-  );
-  const trustedActionUses =
-    workflow.match(
-      /uses:\s+\.\/trusted-actions\/\.github\/actions\/run-mobile-integration-tests\//g,
-    ) || [];
-
-  assert.match(
-    workflow,
-    /name:\s+Checkout composite action source[\s\S]*?repository:\s+\$\{\{ github\.repository \}\}[\s\S]*?ref:\s+\$\{\{ github\.event\.repository\.default_branch \}\}[\s\S]*?path:\s+trusted-actions[\s\S]*?persist-credentials:\s+false/,
-  );
-  // 10, not 9: the on-demand validate-devices job also runs in the release
-  // environment (OIDC), so it too sources its action from the default-branch
-  // trusted-actions checkout rather than a caller-selected ref.
-  assert.equal(trustedActionUses.length, 10);
-  assert.doesNotMatch(
-    workflow,
-    /uses:\s+\.\/\.github\/actions\/run-mobile-integration-tests\//,
-  );
-});
-
 test("no GitHub Actions checkout/ref input resolves mutable PR head.ref", () => {
   const actionFiles = filesUnder(join(root, ".github")).filter((path) =>
     /\.(?:ya?ml)$/.test(path),
@@ -1988,21 +1965,10 @@ test("shared-ci-infra: runs on pull_request (fork-safe), never pull_request_targ
 });
 
 test("tts-ggml Android per-test wait remains below its Mocha ceiling", () => {
-  const workflow = read(
-    ".github/workflows/integration-mobile-test-tts-ggml.yml",
-  );
+  const mobile = JSON.parse(read("packages/tts-ggml/project.json")).targets["test:mobile"].metadata.mobile;
 
-  function integerValue(key) {
-    const match = workflow.match(
-      new RegExp(`^\\s*${key}:\\s*['"]?(\\d+)['"]?\\s*$`, "m"),
-    );
-    assert.ok(match, `${key} must be a literal integer`);
-    return Number(match[1]);
-  }
-
-  const androidWaitMs =
-    integerValue("android-per-test-timeout-minutes") * MILLISECONDS_PER_MINUTE;
-  const mochaTimeoutMs = integerValue("mocha-timeout-ms");
+  const androidWaitMs = mobile.perTestTimeoutMinutes.Android * MILLISECONDS_PER_MINUTE;
+  const mochaTimeoutMs = mobile.mochaTimeoutMs;
 
   assert.ok(
     androidWaitMs < mochaTimeoutMs,
@@ -2012,29 +1978,18 @@ test("tts-ggml Android per-test wait remains below its Mocha ceiling", () => {
 });
 
 test("asr-ggml per-test wait remains below its Mocha ceiling", () => {
-  const workflow = read(
-    ".github/workflows/integration-mobile-test-asr-ggml.yml",
-  );
+  const mobile = JSON.parse(read("packages/asr-ggml/project.json")).targets["test:mobile"].metadata.mobile;
 
-  function integerValue(key) {
-    const match = workflow.match(
-      new RegExp(`^\\s*${key}:\\s*['"]?(\\d+)['"]?\\s*$`, "m"),
+  const mochaTimeoutMs = mobile.mochaTimeoutMs;
+  for (const [platform, minutes] of Object.entries(mobile.perTestTimeoutMinutes)) {
+    const perTestWaitMs = minutes * MILLISECONDS_PER_MINUTE;
+    assert.ok(
+      perTestWaitMs < mochaTimeoutMs,
+      `ASR ${platform} per-test wait (${perTestWaitMs} ms) must remain below ` +
+        `Mocha timeout (${mochaTimeoutMs} ms)`,
     );
-    assert.ok(match, `${key} must be a literal integer`);
-    return Number(match[1]);
   }
-
-  const perTestWaitMs =
-    integerValue("per-test-timeout-minutes") * MILLISECONDS_PER_MINUTE;
-  const mochaTimeoutMs = integerValue("mocha-timeout-ms");
-
-  assert.ok(
-    perTestWaitMs < mochaTimeoutMs,
-    `ASR per-test wait (${perTestWaitMs} ms) must remain below ` +
-      `Mocha timeout (${mochaTimeoutMs} ms)`,
-  );
 });
-
 test("mobile scheduler preserves automatic sharding and supports explicit multi-spec dual flagship", () => {
   const action = read(
     ".github/actions/run-mobile-integration-tests/schedule-test-run/action.yml",
@@ -2142,7 +2097,7 @@ test("mobile validate-devices reads its filter/shard data from the tested ref, n
   // a branch that renames/adds runners passes stale validation and can run zero
   // tests. The executable composite action stays on the trusted workflow ref,
   // so the data file must NEVER be sparse-checked-out alongside it.
-  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 7);
+  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 2);
   for (const path of MOBILE_TEST_WORKFLOWS) {
     const src = read(path);
     // Validation data comes from the SAME immutable commit the build compiles,
@@ -2194,7 +2149,7 @@ test("mobile dispatch inputs are injection-safe and default to branch-native + e
   // near-match (e.g. Pixel 9 -> Pixel 9 Pro); (3) the dispatch package spec
   // defaults to EMPTY so a `--ref <branch>` run tests the branch's native
   // prebuild artifact, not the published @latest.
-  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 7);
+  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 2);
   for (const path of MOBILE_TEST_WORKFLOWS) {
     const src = read(path);
     assert.doesNotMatch(
@@ -2213,21 +2168,6 @@ test("mobile dispatch inputs are injection-safe and default to branch-native + e
       `${path} must default the dispatch package spec to empty (artifact-first), not @latest`,
     );
   }
-});
-
-test("audiogen keeps the composite action on the default branch but reads data from the tested ref", () => {
-  // audiogen runs validate-devices in the `release` environment, so the
-  // executable action stays pinned to the default branch (supply-chain guard);
-  // only the JSON data follows the tested ref.
-  const src = read(
-    ".github/workflows/integration-mobile-test-audiogen-ggml.yml",
-  );
-  assert.match(
-    src,
-    /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/,
-  );
-  assert.match(src, /ref: \$\{\{ inputs\.ref \|\| github\.sha \}\}/);
-  assert.match(src, /test-groups-path: validation-data\//);
 });
 
 test("inference generates its runner map in an unprivileged job and fails closed", () => {
@@ -2438,196 +2378,6 @@ test("Android mobile runs collect the device logcat without rewriting the verdic
   );
 });
 
-test("tts-ggml functional mobile workflow opts into dual flagship per shard", () => {
-  const workflow = read(
-    ".github/workflows/integration-mobile-test-tts-ggml.yml",
-  );
-  // The workflow_call branch (benchmark || functional) is unchanged; it is now
-  // preceded inside fromJSON() by the manual-dispatch single-platform branch,
-  // so anchor on the matrix JSON rather than on `fromJSON(` directly.
-  const matrices = workflow.match(
-    /inputs\.run_rtf_benchmarks && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'/,
-  );
-  // Scope to the build job's name: validate-devices is now the first job in the
-  // file, so a bare "first name:" capture would pick the wrong job.
-  const jobName = workflow.match(/^\s{4}name:\s*(Build .+)$/m);
-
-  assert.ok(
-    matrices,
-    "benchmark and functional matrices must be literal JSON objects",
-  );
-  assert.ok(jobName, "build-and-test job must have a name");
-  const benchmarkMatrix = JSON.parse(matrices[1]);
-  const functionalMatrix = JSON.parse(matrices[2]);
-  assert.deepEqual(
-    functionalMatrix.include.map((entry) => entry.platform),
-    ["Android", "iOS"],
-  );
-  // Manual dispatch (inputs.platform set) selects ONE row on the chosen
-  // platform; devices come from the manual inputs, not the matrix.
-  const dispatchMatrices = workflow.match(
-    /inputs\.platform != '' && \(inputs\.platform == 'iOS' && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'\)/,
-  );
-  assert.ok(
-    dispatchMatrices,
-    "manual dispatch must select a single-platform matrix",
-  );
-  const dispatchIos = JSON.parse(dispatchMatrices[1]);
-  const dispatchAndroid = JSON.parse(dispatchMatrices[2]);
-  assert.equal(dispatchIos.include.length, 1);
-  assert.equal(dispatchIos.include[0].platform, "iOS");
-  assert.equal(dispatchAndroid.include.length, 1);
-  assert.equal(dispatchAndroid.include[0].platform, "Android");
-  assert.equal(benchmarkMatrix.include.length, 25);
-  assert.equal(
-    benchmarkMatrix.include.filter((entry) => entry.platform === "Android")
-      .length,
-    13,
-  );
-  assert.equal(
-    benchmarkMatrix.include.filter((entry) => entry.platform === "iOS").length,
-    12,
-  );
-  assert.match(workflow, /release environment authorizes GitHub OIDC/);
-  // A manual `tests` filter (steps.manual_tests) overrides the automatic
-  // perf/functional groups; otherwise the auto-sharded groups are used.
-  assert.match(
-    workflow,
-    /test-groups:\s*\$\{\{ steps\.manual_tests\.outputs\.groups != '' && steps\.manual_tests\.outputs\.groups \|\| steps\.perf_groups\.outputs\.groups \}\}/,
-  );
-  assert.doesNotMatch(workflow, /Resolve functional test-groups by engine/);
-  assert.match(jobName[1], /^Build \$\{\{ matrix\.platform \}\}/);
-  assert.match(jobName[1], /matrix\.engine/);
-  assert.match(jobName[1], /matrix\.variant/);
-  assert.match(jobName[1], /matrix\.use_gpu/);
-  assert.doesNotMatch(jobName[1], /inputs\.run_rtf_benchmarks/);
-  // Manual dispatch pins the chosen device(s) (manual-devices); the automatic
-  // workflow_call path keeps its dual-flagship sharding, unchanged.
-  assert.match(
-    workflow,
-    /scheduling-mode:\s*\$\{\{ inputs\.platform != '' && 'manual-devices' \|\| 'dual-flagship' \}\}/,
-  );
-  assert.match(
-    workflow,
-    /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
-  );
-  assert.match(
-    workflow,
-    /TTS_GGML_MOBILE_FUNCTIONAL_MULTI_SPEC:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
-  );
-  assert.match(
-    workflow,
-    /package-version:\s*\$\{\{ inputs\.prebuild_package \|\| inputs\.package_spec \}\}/,
-  );
-  assert.match(
-    workflow,
-    /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
-  );
-  assert.match(
-    workflow,
-    /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 180 \|\| 150 \}\}/,
-  );
-  assert.match(
-    workflow,
-    /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
-  );
-});
-
-test("asr-ggml functional mobile workflow opts into dual flagship per engine shard", () => {
-  const workflow = read(
-    ".github/workflows/integration-mobile-test-asr-ggml.yml",
-  );
-  // The workflow_call branch (benchmark || functional) is unchanged; it is now
-  // preceded inside fromJSON() by the manual-dispatch single-platform branch,
-  // so anchor on the matrix JSON rather than on `fromJSON(` directly.
-  const matrices = workflow.match(
-    /inputs\.run_rtf_benchmarks && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'/,
-  );
-
-  assert.ok(
-    matrices,
-    "benchmark and functional matrices must be literal JSON objects",
-  );
-  const benchmarkMatrix = JSON.parse(matrices[1]);
-  const functionalMatrix = JSON.parse(matrices[2]);
-  assert.equal(benchmarkMatrix.include.length, 20);
-  assert.deepEqual(
-    functionalMatrix.include.map((entry) => entry.platform),
-    ["Android", "iOS"],
-  );
-  // Manual dispatch (inputs.platform set) selects ONE row on the chosen
-  // platform; devices come from the manual inputs, not the matrix.
-  const dispatchMatrices = workflow.match(
-    /inputs\.platform != '' && \(inputs\.platform == 'iOS' && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'\)/,
-  );
-  assert.ok(
-    dispatchMatrices,
-    "manual dispatch must select a single-platform matrix",
-  );
-  const dispatchIos = JSON.parse(dispatchMatrices[1]);
-  const dispatchAndroid = JSON.parse(dispatchMatrices[2]);
-  assert.equal(dispatchIos.include.length, 1);
-  assert.equal(dispatchIos.include[0].platform, "iOS");
-  assert.equal(dispatchAndroid.include.length, 1);
-  assert.equal(dispatchAndroid.include[0].platform, "Android");
-  // Manual dispatch is serialized per (workflow, branch) and supersedes an
-  // in-flight manual run; workflow_call keys on the unique run_id and never
-  // cancels, so parallel automated callers cannot collide or cancel each other.
-  assert.match(
-    workflow,
-    /concurrency:\s*\n[\s\S]*?group:\s*\$\{\{ inputs\.platform != '' && format\('mobile-dispatch-\{0\}-\{1\}', github\.workflow, github\.ref\) \|\| format\('mobile-call-\{0\}', github\.run_id\) \}\}/,
-  );
-  assert.match(
-    workflow,
-    /cancel-in-progress:\s*\$\{\{ inputs\.platform != '' \}\}/,
-  );
-  assert.match(
-    workflow,
-    /name: Manual Workspace Cleanup[\s\S]*?if: runner\.environment != 'github-hosted'[\s\S]*?working-directory: \./,
-  );
-  assert.match(workflow, /release environment authorizes GitHub OIDC/);
-  assert.match(
-    workflow,
-    /PACKAGE_SPEC:\s*\$\{\{ github\.event\.inputs\.package_spec \}\}[\s\S]*?if \[\[ ! "\$PACKAGE_SPEC"/,
-  );
-  assert.doesNotMatch(
-    workflow,
-    /if \[\[ ! "\$\{\{ github\.event\.inputs\.package_spec \}\}"/,
-  );
-  // A manual `tests` filter (steps.manual_tests) overrides the automatic
-  // perf/functional groups; otherwise the auto-sharded groups are used.
-  assert.match(
-    workflow,
-    /test-groups:\s*\$\{\{ steps\.manual_tests\.outputs\.groups != '' && steps\.manual_tests\.outputs\.groups \|\| steps\.perf_groups\.outputs\.groups \}\}/,
-  );
-  // Manual dispatch pins the chosen device(s) (manual-devices); the automatic
-  // workflow_call path keeps its dual-flagship sharding, unchanged.
-  assert.match(
-    workflow,
-    /scheduling-mode:\s*\$\{\{ inputs\.platform != '' && 'manual-devices' \|\| 'dual-flagship' \}\}/,
-  );
-  assert.match(
-    workflow,
-    /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
-  );
-  assert.match(
-    workflow,
-    /package-version:\s*\$\{\{ inputs\.prebuild_package \|\| inputs\.package_spec \}\}/,
-  );
-  assert.match(
-    workflow,
-    /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
-  );
-  assert.match(
-    workflow,
-    /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 210 \|\| 180 \}\}/,
-  );
-  assert.match(
-    workflow,
-    /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
-  );
-});
-
 // --- SDK-only GitHub Releases policy ----------------------------------------
 // Only the SDK cuts GitHub Releases; every other package cuts a plain version
 // tag via create-release-tag.yml, keeping the Releases page SDK-focused. Adding
@@ -2713,16 +2463,12 @@ const TRUSTED_CACHE_EVENTS = [
   "schedule",
 ];
 
-// Known-ungated, tracked on QVAC-24711. Both write a ccache/models cache with no
-// event gate at all; neither has a vcpkg cache step yet, so they were out of
-// scope for QVAC-24711's first pass. Remove each entry as it is fixed -- this
+// Known-ungated, tracked on QVAC-24711. Remove each entry as it is fixed -- this
 // list should only ever shrink.
 const TRUSTED_CACHE_EXEMPT = new Set([
-  ".github/workflows/cpp-test-coverage-asr-ggml.yml",
-  ".github/workflows/cpp-test-coverage-tts-ggml.yml",
-  // Exempt only for its three pre-existing ungated actions/cache@ writes (ccache,
-  // parakeet GGUF, tts venv), reachable from on-pr-nx.yml (pull_request_target).
-  // Needs its own ticket. Its vcpkg cache write IS gated, and is checked below.
+  // Exempt only for its pre-existing ungated actions/cache@ write (the Laya GGUF),
+  // reachable from on-pr-nx.yml (pull_request_target). Needs its own ticket. Its
+  // vcpkg cache write IS gated, and is checked below.
   ".github/workflows/cpp-tests-nx.yml",
 ]);
 
@@ -2873,14 +2619,13 @@ test("cache policy: the host-cache sync step is gated on trusted events", () => 
   }
   // Every cpp-tests workflow with a persistent host layer must have the step.
   // Floor, not an exact count: it guards against the discovery globbing silently
-  // matching nothing. Dropped from 5 to 4 when cpp-tests-diffusion.yml and
-  // cpp-tests-embed.yml were consolidated into cpp-tests-nx.yml, then to 2 when
-  // the fabric consumers' C++ tests moved to the CI contract's _cpp-tests.yml.
+  // matching nothing. cpp-tests-nx.yml is the last one; the packages on the CI
+  // contract run their C++ tests in _cpp-tests.yml.
   assert.ok(
     eachCppTestsCacheStep({
       match: /name: Sync the host and workspace vcpkg caches/,
       includeExempt: true,
-    }).length >= 2,
+    }).length >= 1,
   );
   assert.deepEqual(offenders, []);
 });

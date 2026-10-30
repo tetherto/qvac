@@ -39,7 +39,7 @@ A package on the contract declares only these targets:
 | `ci:system` | Installs the system packages a configuration needs; idempotent | named like the build's, `commands` only |
 | `build` | Builds the native prebuilds | yes |
 | `link:platform` | Links a native dependency's prebuilds into `node_modules` | no |
-| `cpp:lint` | Lints the C++ the change touched | yes |
+| `cpp:lint` | Lints the C++ the change touched; with `--generate "<command>"`, `cpp-lint-changed.mjs` generates and lints only when the change touched a C/C++ file in the package | yes |
 | `cpp:build`, `cpp:tests` | Builds and runs the C++ test binary | yes |
 | `test:integration`, `test:backend` | Desktop tests | yes |
 | `test:mobile` | Prepares the Device Farm test package | yes |
@@ -58,7 +58,7 @@ Each platform a target runs on is an Nx configuration of that target, named `<pl
 - `ci.runner`: the runner key from `reusable-runner-names.yml`.
 - `ci.setup`: extra host toolkits: `cuda` or `rocm`, or `python` for Python 3.10 on a desktop leg.
 
-`benchmark` may also define `report`, the one configuration not named for a platform. `benchmarks.yml` runs it once on Linux after every other configuration and the mobile runs finish, with their results downloaded under `<dir>/benchmarks/results/`. A benchmark command writes its own results there, and reads `BENCHMARK_ARGS`, `QVAC_PERF_RUNS` and `QVAC_PERF_WARMUP_RUNS` when the dispatch sets them.
+`benchmark` may also define `report`, the one configuration not named for a platform. `benchmarks.yml` runs it once on Linux after every other configuration and the mobile runs finish, with their results downloaded under `<dir>/benchmarks/results/`. A benchmark command writes its own results there, and reads `BENCHMARK_ARGS`, `QVAC_PERF_RUNS` and `QVAC_PERF_WARMUP_RUNS` when the dispatch sets them. Every desktop command also gets `CI_RUNNER_LABEL`, the runner label its configuration resolves to, so results can name their host without repeating it in `args`.
 
 `nx run-many -c <configuration>` passes the configuration to the target's dependencies that define it, so `ci:system` and the build of a native dependency run with the same configuration.
 
@@ -68,9 +68,11 @@ Each platform a target runs on is an Nx configuration of that target, named `<pl
 |---|---|---|
 | `timeoutMinutes` | any | the job's timeout |
 | `toolchain` | `build` | toolchain pins; set once in `nx.json`'s build `targetDefaults` |
-| `mobile` | `test:mobile` | `devicefarmProject`, `enablesPerf`, `mochaTimeoutMs`, `perTestTimeoutMinutes`, `perfReport` |
-| `publish` | `publish` | `tagPrefix` for the release tag |
-| `secrets` | `test:integration`, `test:backend`, `benchmark`, `test:mobile` | secrets the command reads from its environment, from `SECRETS` in `select-projects.mjs` (`QASE_API_TOKEN`, `HF_TOKEN`, `MODEL_S3_BUCKET`) |
+| `mobile` | `test:mobile` | `devicefarmProject`, `enablesPerf`, `mochaTimeoutMs`, `waitforTimeoutMs`, `perTestTimeoutMinutes`, `perfReport` |
+| `publish` | `publish` | `tagPrefix` for the release tag; `platformPackages: true` publishes one npm package per platform before the meta; `nameTransform: rename-prefix` renames the `qvac_` prebuild files and `binding.js` references to `tetherto_` in the GitHub Packages build |
+| `secrets` | `test:integration`, `test:backend`, `benchmark`, `test:mobile` | secrets the command reads from its environment, from `SECRETS` in `select-projects.mjs` (`QASE_API_TOKEN`, `HF_TOKEN`, `MODEL_S3_BUCKET`, and `GITHUB_TOKEN`, the job's token) |
+
+`test:mobile` may set step outputs for its run: `test-groups`, `device-env`, `mocha-timeout-ms`, `per-test-timeout-minutes`, and `enables-perf` (`true` turns on the perf report for a run whose metadata leaves `enablesPerf` off).
 
 ### Models
 
@@ -99,6 +101,7 @@ A package that links another package's native build depends on that package's `l
 - Each build job uploads `prebuild-<slug>-<configuration>`, holding `packages/<dir>/prebuilds` for every package it built, native dependencies included.
 - `pr-build-test.yml`'s merge job folds each package's own folder into `prebuilds-<slug>`, the bundle mobile tests install. The publish groups place only the package's own folder, so a dependency never ships inside it.
 - C++ and desktop test jobs restore `prebuild-<slug>-<platform>-<arch>`, run `link:platform` on what they restored, and run their target with `--exclude-task-dependencies`. Every platform and architecture a test configuration uses needs a build configuration.
+- A package without a `build` target restores no prebuilds: its desktop and mobile rows run against the installed workspace and the package itself.
 
 ## Trust
 

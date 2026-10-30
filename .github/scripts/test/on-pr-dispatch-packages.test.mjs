@@ -41,12 +41,13 @@ test('the on-pr orchestrator accepts explicit packages only on manual dispatch',
   assert.match(workflow, /target: on-pr\n[^\n]*config-ref:[^\n]*\n\s+packages: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.packages \|\| '\[\]' \}\}/)
 })
 
-test('explicit ASR selection builds a nonempty on-pr matrix even with no affected code', () => {
-  const result = runMatrix('["asr-ggml"]')
+test('explicit package selection builds a nonempty on-pr matrix even with no affected code', () => {
+  // diffusion-cpp, which still builds and runs C++ tests through on-pr-nx.yml.
+  const result = runMatrix('["diffusion-cpp"]')
   assert.equal(result.status, 0, result.stderr)
   const matrix = JSON.parse(result.output.match(/^matrix=(.+)$/m)[1])
   assert.ok(matrix.length > 0)
-  assert.deepEqual([...new Set(matrix.map(row => row.package))], ['asr-ggml'])
+  assert.deepEqual([...new Set(matrix.map(row => row.package))], ['diffusion-cpp'])
   assert.ok(matrix.every(row => row.hasPrebuilds && row.hasCppTests))
   assert.match(result.output, /^any=true$/m)
 })

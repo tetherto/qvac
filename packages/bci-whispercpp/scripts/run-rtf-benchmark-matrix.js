@@ -4,7 +4,7 @@
 // Drives the BCI throughput benchmark (test/benchmark/rtf-benchmark.test.js)
 // once per matrix entry, passing each entry's config through QVAC_BCI_BENCHMARK_*
 // env vars. The matrix is supplied as JSON via QVAC_BCI_BENCHMARK_MATRIX_JSON
-// (set per-runner by integration-test-bci-whispercpp.yml). BCI ships a single
+// (set per configuration by ci/benchmark.mjs). BCI ships a single
 // registry model, so the matrix sweeps platform × CPU/GPU backend rather than
 // model quantizations.
 

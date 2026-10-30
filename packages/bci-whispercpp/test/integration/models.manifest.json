@@ -1,0 +1,22 @@
+{
+  "models": {
+    "ggml-bci-windowed.bin": {
+      "s3Path": "qvac_models_compiled/bci-whispercpp/2026-05-07/ggml-bci-windowed.bin",
+      "dest": "models/ggml-bci-windowed.bin",
+      "targets": [
+        "test:integration",
+        "benchmark",
+        "test:mobile"
+      ]
+    },
+    "bci-embedder.bin": {
+      "s3Path": "qvac_models_compiled/bci-whispercpp/2026-05-07/bci-embedder.bin",
+      "dest": "models/bci-embedder.bin",
+      "targets": [
+        "test:integration",
+        "benchmark",
+        "test:mobile"
+      ]
+    }
+  }
+}

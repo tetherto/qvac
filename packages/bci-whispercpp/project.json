@@ -1,27 +1,168 @@
 {
   "name": "@qvac/bci-whispercpp",
   "root": "packages/bci-whispercpp",
+  "tags": [
+    "ci:addons"
+  ],
   "targets": {
-    "on-pr": {
+    "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'orchestrated by on-pr-nx.yml'",
         "cwd": "packages/bci-whispercpp",
-        "ci": {
-          "hasCppLint": true
+        "command": "pnpm run lint"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/bci-whispercpp",
+        "command": "pnpm run test:dts"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/bci-whispercpp",
+        "command": "pnpm run test:unit"
+      }
+    },
+    "verify:generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/bci-whispercpp",
+        "command": "pnpm run check:generated"
+      }
+    },
+    "ci:system": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "^ci:system"
+      ],
+      "options": {
+        "cwd": "packages/bci-whispercpp",
+        "parallel": false,
+        "forwardAllArgs": false,
+        "commands": [
+          "echo no system packages"
+        ]
+      },
+      "configurations": {
+        "linux-arm64": {
+          "commands": [
+            "dpkg -s libopenblas-dev liblapack-dev libfftw3-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev)"
+          ]
+        },
+        "android-arm64": {
+          "commands": [
+            "dpkg -s libopenblas-dev liblapack-dev libfftw3-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev)"
+          ]
+        },
+        "ios-arm64": {
+          "commands": [
+            "brew list --versions openblas lapack fftw >/dev/null 2>&1 || brew install --quiet openblas lapack fftw"
+          ]
+        },
+        "ios-arm64-simulator": {
+          "commands": [
+            "brew list --versions openblas lapack fftw >/dev/null 2>&1 || brew install --quiet openblas lapack fftw"
+          ]
+        },
+        "ios-x64-simulator": {
+          "commands": [
+            "brew list --versions openblas lapack fftw >/dev/null 2>&1 || brew install --quiet openblas lapack fftw"
+          ]
+        },
+        "darwin-arm64": {
+          "commands": [
+            "brew list --versions openblas lapack fftw >/dev/null 2>&1 || brew install --quiet openblas lapack fftw"
+          ]
+        },
+        "darwin-x64": {
+          "commands": [
+            "brew list --versions openblas lapack fftw >/dev/null 2>&1 || brew install --quiet openblas lapack fftw"
+          ]
         }
       }
     },
     "build": {
       "executor": "nx:run-commands",
+      "dependsOn": [],
       "options": {
-        "command": "pnpm run build",
         "cwd": "packages/bci-whispercpp",
-        "ci": {
-          "artifactNamePrefix": "bci-whispercpp-",
-          "linuxExtraPackages": "libopenblas-dev liblapack-dev libfftw3-dev",
-          "macBrewPackages": "openblas lapack fftw",
-          "includeVulkanSdk": true
+        "parallel": false,
+        "commands": [
+          {
+            "command": "pnpm run build:ts",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+            "forwardAllArgs": true
+          },
+          {
+            "command": "pnpm exec bare-make build",
+            "forwardAllArgs": false
+          },
+          {
+            "command": "pnpm exec bare-make install",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "args": "--platform=linux --arch=x64",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        },
+        "linux-arm64": {
+          "args": "--platform=linux --arch=arm64",
+          "ci": {
+            "runner": "ubuntu_2204_arm"
+          }
+        },
+        "android-arm64": {
+          "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",
+          "ci": {
+            "runner": "ubuntu_2404"
+          }
+        },
+        "ios-arm64": {
+          "args": "--platform=ios --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-arm64-simulator": {
+          "args": "--platform=ios --arch=arm64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "ios-x64-simulator": {
+          "args": "--platform=ios --arch=x64 --simulator",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--platform=darwin --arch=arm64",
+          "ci": {
+            "runner": "macos_15"
+          }
+        },
+        "darwin-x64": {
+          "args": "--platform=darwin --arch=x64",
+          "ci": {
+            "runner": "macos_15_intel"
+          }
+        },
+        "win32-x64": {
+          "args": "--platform=win32 --arch=x64",
+          "ci": {
+            "runner": "win_2025_x64"
+          }
         }
       },
       "inputs": [
@@ -32,184 +173,253 @@
         "{projectRoot}/prebuilds"
       ]
     },
-    "test:unit": {
+    "cpp:lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/bci-whispercpp"
+        "cwd": "packages/bci-whispercpp",
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"pnpm exec bare-make generate -D ENABLE_VULKAN=OFF\"",
+            "forwardAllArgs": false
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
+      }
+    },
+    "cpp:build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/bci-whispercpp",
+        "parallel": false,
+        "env": {
+          "CMAKE_BUILD_PARALLEL_LEVEL": "2",
+          "VCPKG_MAX_CONCURRENCY": "2"
+        },
+        "commands": [
+          "pnpm run coverage:cpp:build"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      }
+    },
+    "cpp:tests": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "cpp:build"
+      ],
+      "options": {
+        "cwd": "packages/bci-whispercpp",
+        "parallel": false,
+        "commands": [
+          "ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1 LSAN_OPTIONS=suppressions=$PWD/.lsan-suppressions.txt pnpm run test:cpp:run",
+          "pnpm run coverage:cpp:report",
+          "pnpm run fuzz:build",
+          "pnpm run fuzz:run"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "pnpm run test:integration",
         "cwd": "packages/bci-whispercpp",
-        "ci": {
-          "timeoutMinutes": 60,
-          "envVarName": "GITHUB_TOKEN",
-          "envSecretName": "GITHUB_TOKEN",
-          "runIntegrationTests": true,
-          "windowsVulkan": { "setSdk": true, "addPath": true, "copyLoaderDll": true },
-          "modelDownloadScript": "download-models",
-          "modelDownloadContinueOnError": true,
-          "runRtfBenchmarks": false,
-          "rtfBenchmark": {
-            "command": "node scripts/run-rtf-benchmark-matrix.js",
-            "matrixEnvVar": "QVAC_BCI_BENCHMARK_MATRIX_JSON"
-          },
-          "platforms": [
-            {
-              "os": "ubuntu-22.04",
-              "platform": "linux",
-              "arch": "x64",
-              "runner": "qvac-ubuntu2204-x64-gpu",
-              "benchmarkMatrixJson": [
-                {
-                  "useGPU": false,
-                  "backendHint": "cpu"
-                },
-                {
-                  "useGPU": true,
-                  "backendHint": "vulkan"
-                }
-              ]
-            },
-            {
-              "os": "ubuntu-24.04",
-              "platform": "linux",
-              "arch": "x64",
-              "runner": "qvac-ubuntu2404-x64-gpu",
-              "benchmarkMatrixJson": [
-                {
-                  "useGPU": false,
-                  "backendHint": "cpu"
-                },
-                {
-                  "useGPU": true,
-                  "backendHint": "vulkan"
-                }
-              ]
-            },
-            {
-              "os": "ubuntu-26.04",
-              "platform": "linux",
-              "arch": "x64",
-              "noGpu": true,
-              "benchmarkMatrixJson": [
-                {
-                  "useGPU": false,
-                  "backendHint": "cpu"
-                }
-              ]
-            },
-            {
-              "os": "ubuntu-24.04-arm",
-              "platform": "linux",
-              "arch": "arm64",
-              "noGpu": true,
-              "benchmarkMatrixJson": [
-                {
-                  "useGPU": false,
-                  "backendHint": "cpu"
-                }
-              ]
-            },
-            {
-              "os": "macos-26",
-              "platform": "darwin",
-              "arch": "arm64",
-              "runner": "qvac-macos26-arm64-gpu",
-              "benchmarkMatrixJson": [
-                {
-                  "useGPU": false,
-                  "backendHint": "cpu"
-                },
-                {
-                  "useGPU": true,
-                  "backendHint": "metal"
-                }
-              ]
-            },
-            {
-              "os": "macos-15-large",
-              "platform": "darwin",
-              "arch": "x64",
-              "noGpu": true,
-              "timeoutMinutes": 30,
-              "testScript": "test:integration:smoke",
-              "benchmarkMatrixJson": [
-                {
-                  "useGPU": false,
-                  "backendHint": "cpu"
-                }
-              ]
-            },
-            {
-              "os": "windows-2025",
-              "platform": "win32",
-              "arch": "x64",
-              "runner": "qvac-win25-x64-gpu",
-              "benchmarkMatrixJson": [
-                {
-                  "useGPU": false,
-                  "backendHint": "cpu"
-                },
-                {
-                  "useGPU": true,
-                  "backendHint": "vulkan"
-                }
-              ]
-            }
-          ]
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/integration.mjs",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64-gpu2204": {
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu"
+          }
+        },
+        "linux-x64-gpu": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-x64-2604": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2604"
+          }
+        },
+        "linux-arm64": {
+          "args": "--set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "darwin-arm64": {
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "args": "--script test:integration:smoke --set NO_GPU=true",
+          "ci": {
+            "runner": "macos_15_large"
+          }
+        },
+        "win32-x64": {
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
         }
+      },
+      "metadata": {
+        "timeoutMinutes": 60,
+        "secrets": [
+          "GITHUB_TOKEN"
+        ]
+      }
+    },
+    "test:mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/bci-whispercpp",
+        "command": "node ci/prepare-mobile.mjs"
+      },
+      "configurations": {
+        "android-arm64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        },
+        "ios-arm64": {
+          "ci": {
+            "runner": "macos_ios"
+          }
+        }
+      },
+      "metadata": {
+        "mobile": {
+          "devicefarmProject": "WHISPERCPP",
+          "enablesPerf": true,
+          "mochaTimeoutMs": 2700000,
+          "waitforTimeoutMs": 600000,
+          "perfReport": {
+            "title": "Mobile Performance: bci"
+          }
+        },
+        "secrets": [
+          "GITHUB_TOKEN"
+        ]
       }
     },
     "benchmark": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        "build"
+      ],
       "options": {
-        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
         "cwd": "packages/bci-whispercpp",
-        "ci": {
-          "aggregateScript": "scripts/perf-report/aggregate-bci-rtf.js",
-          "manualDir": "packages/bci-whispercpp/benchmarks/manual-results"
+        "parallel": false,
+        "commands": [
+          {
+            "command": "node ci/benchmark.mjs",
+            "forwardAllArgs": true
+          }
+        ]
+      },
+      "configurations": {
+        "linux-x64-gpu2204": {
+          "args": "--matrix cpu-vulkan",
+          "ci": {
+            "runner": "linux_ubuntu2204_x64_gpu"
+          }
+        },
+        "linux-x64-gpu": {
+          "args": "--matrix cpu-vulkan",
+          "ci": {
+            "runner": "linux_ubuntu2404_x64_gpu"
+          }
+        },
+        "linux-x64-2604": {
+          "args": "--matrix cpu --set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2604"
+          }
+        },
+        "linux-arm64": {
+          "args": "--matrix cpu --set NO_GPU=true",
+          "ci": {
+            "runner": "ubuntu_2404_arm"
+          }
+        },
+        "darwin-arm64": {
+          "args": "--matrix cpu-metal",
+          "ci": {
+            "runner": "macos_arm64_gpu"
+          }
+        },
+        "darwin-x64": {
+          "args": "--matrix cpu --set NO_GPU=true",
+          "ci": {
+            "runner": "macos_15_large"
+          }
+        },
+        "win32-x64": {
+          "args": "--matrix cpu-vulkan",
+          "ci": {
+            "runner": "win_2025_x64_gpu"
+          }
+        },
+        "report": {
+          "commands": [
+            "mkdir -p benchmarks/report",
+            "node ../../scripts/perf-report/aggregate-bci-rtf.js --dir benchmarks/results --manual-dir benchmarks/manual-results --output benchmarks/report/bci-whispercpp-performance-findings.md --output-json benchmarks/report/bci-whispercpp-performance-findings.json",
+            "if [ -n \"$GITHUB_STEP_SUMMARY\" ]; then cat benchmarks/report/bci-whispercpp-performance-findings.md >> \"$GITHUB_STEP_SUMMARY\"; fi"
+          ]
         }
+      },
+      "metadata": {
+        "timeoutMinutes": 60,
+        "secrets": [
+          "GITHUB_TOKEN"
+        ]
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/bci-whispercpp"
-      }
+    "cache:models": {
+      "executor": "nx:noop"
     },
-    "test:cpp": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run test:cpp",
-        "cwd": "packages/bci-whispercpp",
-        "ci": {
-          "mode": "coverage",
-          "continueOnError": false,
-          "cppBuildJobs": 2,
-          "platforms": [
-            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" }
-          ],
-          "hasCcache": true,
-          "buildOutputDir": "build/addon/tests",
-          "testEnvVars": []
-        }
-      }
-    },
-    "on-merge": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
-        "cwd": "packages/bci-whispercpp",
-        "ci": {
-          "verifyGenerated": true,
-          "nameTransform": "rename-prefix",
-          "repoName": "bci-whispercpp",
-          "testGateMode": "none"
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "bci-whispercpp",
+          "nameTransform": "rename-prefix"
         }
       }
     }

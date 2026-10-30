@@ -1,16 +1,14 @@
 'use strict'
 
-// Guards test/integration/whisper-models.manifest.json — the set
-// scripts/stage-whisper-models.mjs pre-populates into the shared
-// packages/asr-ggml/models cache entry, and (via the
-// test/integration/*.manifest.json glob) part of that entry's cache key.
+// Guards the whisper (urls) entries of test/integration/models.manifest.json —
+// the set CI pre-populates into packages/asr-ggml/models, keyed on the whole
+// manifest.
 //
-// Why this guard matters more than it looks: once on-merge-model-cache-asr.yml
-// seeds the entry, every PR leg gets an EXACT primary-key hit and actions/cache
-// skips its post-job save. Anything the tests need but the seed did not stage
-// is therefore re-downloaded on every run and never makes it into the cache. A
-// test quietly switching to a different whisper model would restore that
-// silent, permanent regression — so the drift is caught here instead.
+// Why this guard matters more than it looks: once the cache is warmed, every
+// PR leg gets an exact key hit and saves nothing. Anything the tests need but
+// the manifest does not stage is therefore re-downloaded on every run and never
+// makes it into the cache. A test quietly switching to a different whisper model
+// would restore that silent, permanent regression, so the drift is caught here.
 //
 // Kept import-light (reads files only, never requires the native addon) so it
 // runs under brittle-bare without a prebuild.
@@ -20,7 +18,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 
 const INTEGRATION_DIR = path.join(__dirname, '..', 'integration')
-const MANIFEST_PATH = path.join(INTEGRATION_DIR, 'whisper-models.manifest.json')
+const MANIFEST_PATH = path.join(INTEGRATION_DIR, 'models.manifest.json')
 
 // mobile-*.test.js and mobile-*.js run on Device Farm, where the model is
 // pulled on-device over the session network into the app's own sandbox. They
@@ -31,8 +29,13 @@ const isDesktopSource = (name) => name.endsWith('.js') && !name.startsWith('mobi
 
 const MODEL_LITERAL = /'(ggml-[A-Za-z0-9._-]+\.bin)'/g
 
+// The manifest with only the whisper entries: the urls ones.
 function readManifest() {
-  return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
+  const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
+  const models = Object.fromEntries(
+    Object.entries(manifest.models).filter(([, entry]) => entry.urls)
+  )
+  return { ...manifest, models }
 }
 
 function desktopModelReferences() {
@@ -51,10 +54,12 @@ test('whisper manifest carries only cache-key-relevant metadata', (t) => {
   const manifest = readManifest()
   t.alike(
     Object.keys(manifest).sort(),
-    ['cacheEpoch', 'models', 'source'],
+    ['cacheEpoch', 'models', 'sidecars'],
     'unexpected top-level key — everything here is hashed into the cache key'
   )
-  t.is(manifest.source, 'huggingface')
+  for (const [name, entry] of Object.entries(manifest.models)) {
+    t.ok(entry.s3Path === undefined, `${name}: source is huggingface, not s3`)
+  }
   t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch >= 1)
 })
 
@@ -65,7 +70,13 @@ test('every whisper model is pinned by revision, sha256 and size', (t) => {
 
   for (const name of names) {
     const entry = models[name]
-    t.alike(Object.keys(entry).sort(), ['bytes', 'sha256', 'urls'], `${name}: schema`)
+    t.alike(
+      Object.keys(entry).sort(),
+      ['bytes', 'dest', 'sha256', 'targets', 'urls'],
+      `${name}: schema`
+    )
+    t.is(entry.dest, `models/${name}`, `${name}: stages into models/`)
+    t.ok(entry.targets.includes('test:integration'), `${name}: staged for the integration tests`)
     t.ok(Array.isArray(entry.urls) && entry.urls.length > 0, `${name}: has urls`)
     for (const url of entry.urls) {
       t.ok(url.startsWith('https://huggingface.co/'), `${name}: ${url} is a HuggingFace URL`)

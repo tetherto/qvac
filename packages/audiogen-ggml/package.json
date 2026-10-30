@@ -143,7 +143,15 @@
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
-    "cmake-npm": "^1.1.0"
+    "cmake-npm": "^1.1.0",
+    "bare": "^1.36.0",
+    "bare-runtime": "^1.36.0",
+    "bare-make": "^2.1.0",
+    "cmake-toolchains": "^2.1.0",
+    "cmake-runtime": "^4.1.1",
+    "llvm-runtime": "^23.1.0",
+    "nasm-runtime": "^3.2.0",
+    "ninja-runtime": "^1.13.1"
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
