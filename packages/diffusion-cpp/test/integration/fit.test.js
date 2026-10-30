@@ -351,20 +351,59 @@ safeTest(
       vae: await ensureModelPath({ modelName: 'wan_2.1_vae.safetensors' }),
       t5Xxl: await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
     }
-    for (const videoFrames of [1, 5]) {
-      const request = { files, workload: { width: 256, height: 256, videoFrames, vaeTiling: true } }
-      const base = await assessFit(request)
-      t.ok(base.status === 'fits' || base.status === 'does-not-fit', 'valid video projection')
-      const unused = await assessFit({
-        ...request,
-        files: { ...files, esrgan: '/missing/unused-esrgan.safetensors' }
-      })
-      t.is(unused.status, base.status)
-      t.alike(
-        unused.devices.map((row) => [row.id, row.usedBytes]),
-        base.devices.map((row) => [row.id, row.usedBytes]),
-        'video does not measure a separate image upscaler'
+    // Native Windows runtimes can keep their own getenv snapshot. Supply the
+    // fixed budgets at process creation, before the addon is loaded, rather
+    // than changing the parent process environment between assessments.
+    const { spawn } = require('bare-subprocess')
+    for (const freeGiB of [32, 8]) {
+      const outputPath = tempFile(t, 'fit-results.json', '')
+      const child = spawn(
+        proc.execPath,
+        [path.join(__dirname, '_fit-upscaler-worker.js'), JSON.stringify(files), outputPath],
+        {
+          env: {
+            ...proc.env,
+            SD_FIT_DEBUG_DEVICES: `GPU0:${freeGiB}`,
+            SD_FIT_DEBUG_HOST_MEMORY_GIB: '64'
+          },
+          stdio: ['ignore', 'inherit', 'pipe']
+        }
       )
+      let finished = false
+      let stderr = ''
+      t.teardown(() => {
+        if (!finished) child.kill()
+      })
+      child.stderr.on('data', (data) => {
+        stderr = (stderr + data.toString()).slice(-16384)
+      })
+      await new Promise((resolve, reject) => {
+        child.once('error', reject)
+        child.once('close', (code, signal) => {
+          finished = true
+          if (code === 0) resolve()
+          else reject(new Error(`Fit worker failed (${signal || code}): ${stderr}`))
+        })
+      })
+      const results = JSON.parse(fs.readFileSync(outputPath, 'utf8'))
+      t.alike(
+        results.map(({ videoFrames }) => videoFrames),
+        [1, 5],
+        'both video workloads ran'
+      )
+      for (const { base, unused } of results) {
+        t.ok(base.status === 'fits' || base.status === 'does-not-fit', 'valid video projection')
+        const gpu = base.devices.find((row) => row.name === 'GPU0')
+        t.ok(gpu, 'planner uses the simulated GPU')
+        t.is(gpu?.freeBytes, freeGiB * 1024 ** 3, 'planner uses the fixed GPU memory budget')
+        t.is(unused.status, base.status)
+        t.alike(
+          unused.devices,
+          base.devices,
+          'unused image upscaler does not affect per-device memory'
+        )
+        t.alike(unused.stats, base.stats, 'unused image upscaler does not affect fit stats')
+      }
     }
   }
 )
