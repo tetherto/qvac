@@ -39,6 +39,35 @@ export const attachmentSchema = z.object({
     )
 })
 
+/**
+ * One ordered piece of a message's `content`. A media part keeps its place in
+ * the turn, so text that refers to "this image" sits next to it; `attachments`
+ * cannot express that because every attachment is sent before the text.
+ */
+export const historyContentPartSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('text'),
+      text: z.string().describe('Text rendered at this position in the turn.')
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('media'),
+      path: z
+        .string()
+        .min(1)
+        .describe(
+          'Absolute or resolvable path to the media file (e.g., image for multimodal models).'
+        )
+    })
+    .strict()
+])
+
+export type HistoryContentPart = z.infer<typeof historyContentPartSchema>
+/** A message's content: plain text, or ordered text/media parts. */
+export type HistoryContent = string | HistoryContentPart[]
+
 const kvCacheSchema = z.union([
   z.boolean(),
   z.string().min(1, 'KV cache key cannot be empty string')
@@ -202,10 +231,10 @@ export const historyMessageSchema = z
       .string()
       .describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'),
     content: z
-      .string()
+      .union([z.string(), z.array(historyContentPartSchema)])
       .nullish()
       .describe(
-        'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.'
+        'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn.'
       ),
     attachments: z
       .array(attachmentSchema)
@@ -234,6 +263,22 @@ export const historyMessageSchema = z
         message: '`content` is required unless an assistant message carries `toolCalls`.',
         path: ['content']
       })
+    }
+    if (Array.isArray(message.content)) {
+      if (message.role !== 'user') {
+        ctx.addIssue({
+          code: 'custom',
+          message: '`content` parts are only valid on a user message.',
+          path: ['content']
+        })
+      }
+      if (message.attachments !== undefined && message.attachments.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Pass media either as `attachments` or as `content` parts, not both.',
+          path: ['attachments']
+        })
+      }
     }
     if (message.toolCalls !== undefined && message.role !== 'assistant') {
       ctx.addIssue({
