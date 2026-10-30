@@ -34,7 +34,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Update the shared `speech-cpp` native dependency to `2026-10-29`
+- Update the shared `speech-cpp` native dependency to `2026-10-30`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
 - `assessFit` names the device by its ggml device name (`CPU`, `CUDA0`,

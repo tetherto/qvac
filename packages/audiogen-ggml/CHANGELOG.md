@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Update the shared `speech-cpp` native dependency to `2026-10-29`
+- Update the shared `speech-cpp` native dependency to `2026-10-30`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
 - `assessFit` names the device and each stage's device by its ggml device name
