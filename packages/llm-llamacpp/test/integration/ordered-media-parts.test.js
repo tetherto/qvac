@@ -142,6 +142,34 @@ test(
       )
       t.ok(fromBytes.output.length > 0, 'byte-part request produced output')
 
+      // 2b. Mixed forms in one turn: a byte part before and after a path part.
+      // Only the byte parts travel in the leading media messages, so the native
+      // plan has to interleave them with the path entry by marker position.
+      const fromMixed = await runAndCapture([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Image A:' },
+            { type: 'media', content: imageABytes },
+            { type: 'text', text: 'Image B:' },
+            { type: 'media', content: imageBPath },
+            { type: 'text', text: 'Compare.' }
+          ]
+        }
+      ])
+
+      t.alike(
+        userBlocks(fromMixed.prompt),
+        [expected],
+        'mixed byte and path parts must render the same single turn'
+      )
+      t.ok(fromMixed.output.length > 0, 'mixed-part request produced output')
+      t.is(
+        fromMixed.stats.promptTokens,
+        fromPaths.stats.promptTokens,
+        'mixed parts encode the same images as the all-path request (same prompt token count)'
+      )
+
       // 3. The pre-parts workaround: one message per part keeps the order but
       // splits the turn. Pinned so a change that silently merges turns (or
       // drops the ordering) is caught.

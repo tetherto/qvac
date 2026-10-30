@@ -55,6 +55,15 @@ function normalizeRunOptions(runOptions) {
         rejectWhenBusy: options.rejectWhenBusy,
     };
 }
+// Malformed parts (null, non-objects) are not byte media: they pass through
+// untouched so the native validator rejects them with `InvalidInputFormat`.
+function isByteMediaPart(part) {
+    const candidate = part;
+    return (candidate !== null &&
+        typeof candidate === "object" &&
+        candidate.type === "media" &&
+        candidate.content instanceof Uint8Array);
+}
 function promptToAddonMessages(prompt, runOptions) {
     if (!Array.isArray(prompt)) {
         throw new TypeError("Prompt input must be Message[]");
@@ -80,7 +89,7 @@ function promptToAddonMessages(prompt, runOptions) {
             textMessages.push({
                 ...text,
                 content: text.content.map((part) => {
-                    if (part.type === "media" && part.content instanceof Uint8Array) {
+                    if (isByteMediaPart(part)) {
                         mediaItems.push(part.content);
                         return { type: "media" };
                     }
@@ -280,7 +289,7 @@ function sanitizePromptForLog(prompt) {
         if (Array.isArray(text?.content)) {
             return {
                 ...text,
-                content: text.content.map((part) => part.type === "media" && part.content instanceof Uint8Array
+                content: text.content.map((part) => isByteMediaPart(part)
                     ? { ...part, content: `[Uint8Array byteLength=${part.content.byteLength}]` }
                     : part),
             };
