@@ -1513,7 +1513,7 @@ void TextLlmContext::adoptBestCacheSource(const cache::Ledger& prompt) {
 bool TextLlmContext::adoptDonorState(
     const cache::DonorState& donor, const cache::Ledger& prompt) {
   // Every exit but the accepted one leaves the sequence empty: the request
-  // then starts cold, as it would have without a donor.
+  // then starts cold, and whatever the sequence held before is gone.
   ScopeGuard coldGuard([this]() noexcept {
     try {
       clearSequenceMemory(modelCtx_.lctx);

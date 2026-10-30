@@ -116,7 +116,7 @@ private:
   void setAsideInPlace();
   /// Copies the active conversation into the RAM tier under `key`; false when
   /// the tier is off or the state does not fit it. Its memory is left as it
-  /// is.
+  /// is; its checkpoints move to the tier entry.
   bool copyActiveCacheToRamTier(
       const std::string& key, bool dirty, bool savedToDisk, bool ephemeral);
   /// Restores `sessionPath_` from `entry`, already taken from the RAM tier;

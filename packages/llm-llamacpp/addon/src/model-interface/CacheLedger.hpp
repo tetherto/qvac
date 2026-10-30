@@ -60,10 +60,9 @@ inline constexpr const char* CACHE_CHECKPOINT_STORAGE_KEY_DASHED =
 inline constexpr const char* CACHE_CHECKPOINT_DIR_KEY = "cache_checkpoint_dir";
 inline constexpr const char* CACHE_CHECKPOINT_DIR_KEY_DASHED =
     "cache-checkpoint-dir";
-// Host-RAM budget, in MiB, for conversation states that are not running: a
-// single-prompt key switch or a batch slot eviction moves them there; 0
-// (default) disables that tier. Resident slots and the cacheKey file do not
-// depend on it.
+// Host-RAM budget, in MiB, for batch conversation states moved out of their
+// slot (`parallel >= 2`); 0 (default) disables that tier. Resident slots and
+// the cacheKey file do not depend on it.
 inline constexpr const char* CACHE_RAM_MIB_KEY = "cache_ram_mib";
 inline constexpr const char* CACHE_RAM_MIB_KEY_DASHED = "cache-ram-mib";
 inline constexpr uint64_t MAX_CACHE_RAM_MIB = 1ULL << 20; // 1 TiB
