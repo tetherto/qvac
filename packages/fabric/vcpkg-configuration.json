@@ -1,4 +1,5 @@
 {
+  "overlay-ports": ["../../vcpkg-overlays/ports"],
   "default-registry": {
     "kind": "git",
     "baseline": "f04e244701f462c4c8fead7b50bcaffa52c052ac",
@@ -9,9 +10,7 @@
       "kind": "git",
       "baseline": "16c71a39e5a0fc0bdb3fad03beef8f38ee00ee3b",
       "repository": "https://github.com/microsoft/vcpkg",
-      "packages": [
-        "spirv-headers"
-      ]
+      "packages": ["spirv-headers"]
     }
   ]
 }
