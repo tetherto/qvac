@@ -14,6 +14,8 @@ struct MinimaxConfig {
   // or "auto". Empty derives it from useGpu ("auto" / "cpu").
   std::string device;
   std::string backendsDir;
+  std::string coremlProfileDir;
+  std::string coremlComputeUnits;
 };
 
 } // namespace qvac::audiogenggml::minimax

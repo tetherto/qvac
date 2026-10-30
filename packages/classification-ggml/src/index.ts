@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 import fs = require("bare-fs");
-import path = require("bare-path");
 import env = require("bare-env");
 import QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -17,7 +16,7 @@ import {
 } from "./addon";
 
 /**
- * Canonical labels emitted by the bundled 3-class MobileNetV3-Small model.
+ * Canonical labels emitted by the default 3-class MobileNetV3-Small model.
  * Kept permissive for future fine-tunes that ship different class names
  * via the GGUF `mobilenet.class_N` metadata.
  */
@@ -51,8 +50,9 @@ export interface ImageClassifierLogger {
 
 export interface ImageClassifierOptions {
   /**
-   * Absolute path to the FP16 GGUF weights file. Defaults to the bundled
-   * `weights/mobilenetv3_3class_v3_fp16.gguf` shipped inside this package.
+   * Absolute path to the FP16 GGUF weights file. Required unless
+   * `QVAC_CLASSIFICATION_MODEL_PATH` is set. `@qvac/inference` downloads the
+   * registry model when `loadModel` omits `modelSrc`.
    */
   modelPath?: string;
   /** Optional logger compatible with `@qvac/logging`. */
@@ -75,15 +75,14 @@ export interface ImageClassifierState {
 
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
 
-const DEFAULT_WEIGHTS_FILENAME = "mobilenetv3_3class_v3_fp16.gguf";
 const RUN_BUSY_ERROR_MESSAGE =
   "Cannot set new job: a job is already set or being processed";
+const MODEL_PATH_REQUIRED =
+  "MobileNet GGUF modelPath is required. Pass modelPath or set QVAC_CLASSIFICATION_MODEL_PATH.";
 
-function resolveDefaultModelPath(): string {
-  if (env.QVAC_CLASSIFICATION_MODEL_PATH) {
-    return env.QVAC_CLASSIFICATION_MODEL_PATH;
-  }
-  return path.join(__dirname, "weights", DEFAULT_WEIGHTS_FILENAME);
+function resolveConfiguredModelPath(): string | undefined {
+  const fromEnv = env.QVAC_CLASSIFICATION_MODEL_PATH;
+  return typeof fromEnv === "string" && fromEnv.length > 0 ? fromEnv : undefined;
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -98,7 +97,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
  * High-level classifier for MobileNetV3-Small 3-class image triage.
  *
  * ```js
- * const classifier = new ImageClassifier()
+ * const classifier = new ImageClassifier({ modelPath })
  * await classifier.load()
  * const result = await classifier.classify(jpegBuffer)
  * // [ { label: 'food', confidence: 0.93 }, ... ]
@@ -118,7 +117,7 @@ export class ImageClassifier {
 
   constructor(opts: ImageClassifierOptions = {}) {
     const { modelPath, logger = undefined, nativeLogger = false } = opts;
-    this.modelPath = modelPath ?? resolveDefaultModelPath();
+    this.modelPath = modelPath ?? resolveConfiguredModelPath() ?? "";
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
     // Off by default: see `addon.js::_ensureLoggerInstalled` for the
     // process-wide JsLogger lifecycle that opt-in unlocks.
@@ -145,6 +144,9 @@ export class ImageClassifier {
   }
 
   private async loadInternal(): Promise<void> {
+    if (!this.modelPath) {
+      throw new Error(MODEL_PATH_REQUIRED);
+    }
     if (!fs.existsSync(this.modelPath)) {
       throw new Error(`MobileNet GGUF weights not found at: ${this.modelPath}`);
     }

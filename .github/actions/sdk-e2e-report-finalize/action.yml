@@ -9,7 +9,7 @@ description: >
 
 inputs:
   family:
-    description: "SDK e2e family: desktop | electron | snap | python | android | ios"
+    description: "SDK e2e family: desktop | electron | snap | python | android | kotlin-android | ios"
     required: true
   platforms:
     description: >
@@ -71,6 +71,9 @@ runs:
             ;;
           android)
             echo "results-pattern=results-android" >> "$GITHUB_OUTPUT"
+            ;;
+          kotlin-android)
+            echo "results-pattern=results-kotlin-android" >> "$GITHUB_OUTPUT"
             ;;
           ios)
             echo "results-pattern=results-ios" >> "$GITHUB_OUTPUT"
