@@ -4798,3 +4798,41 @@ TEST(CrossKeyMultimodalTest, HybridStartsFromAnotherConversationsCheckpoint) {
     }
   }
 }
+
+// A new key generating exactly the image prompt another key primed starts
+// from that key's checkpoint, as the primed key itself does, without encoding
+// the image again (see the text case in CrossKeyPrefixTest).
+TEST(CrossKeyMultimodalTest, HybridExactPromptStartsFromTheDonorsCheckpoint) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found() ||
+      !visionModelsFound(modelPath.path, qwen35ProjectionPath())) {
+    GTEST_SKIP() << "Qwen3.5 model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_exact_primed.bin", "cross_vision_exact_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(modelPath.path, qwen35ProjectionPath(), "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  LlamaModel::Prompt prime = imageQuestion("elephant.jpg", K_ANIMAL, keys[0]);
+  prime.prefill = true;
+  model->processPromptBatch({prime});
+
+  const BatchedTurn onCopy =
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[1]));
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_EQ(onCopy.visionEncodeTiles, 0)
+      << "the new key encoded the image the donor holds";
+  EXPECT_GT(onCopy.reuse, 0u);
+  const BatchedTurn onPrimed =
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_EQ(onPrimed.visionEncodeTiles, 0);
+  EXPECT_EQ(onCopy.reuse, onPrimed.reuse);
+  EXPECT_EQ(onCopy.output, onPrimed.output);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}

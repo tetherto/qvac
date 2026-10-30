@@ -424,7 +424,8 @@ private:
   /// `resetStateKeepingMemory` repeat TextLlmContext's: a change to one
   /// belongs in both.
   void adoptBestCacheSource(
-      const qvac_lib_inference_addon_llama::cache::Ledger& prompt);
+      const qvac_lib_inference_addon_llama::cache::Ledger& fullPrompt,
+      bool isPrefillOnlyRequest);
   /// See TextLlmContext::adoptDonorState.
   bool adoptDonorState(
       const qvac_lib_inference_addon_llama::cache::DonorState& donor,
