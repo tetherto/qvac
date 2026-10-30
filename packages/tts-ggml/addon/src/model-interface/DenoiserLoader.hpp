@@ -25,39 +25,41 @@ inline int denoiserBackendIdFromName(const std::string& name) {
   return name == "scalar" ? backendIdFromName("CPU") : backendIdFromName(name);
 }
 
-// Shared LavaSR-denoiser load path for the model backends. Every engine treats
-// the denoiser identically (batch-only, rate-preserving, runs before the
-// enhancer), so the logic lives in one place to keep the loaders from drifting
-// — the same reason loadEnhancer exists.
-//
-//   ggufPath      empty => denoiser disabled (returns the kBackend*None codes).
-//   resolvedGpu   the engine's *resolved* device, as for loadEnhancer: a GPU
-//                 engine runs the denoiser's ggml graph on the GPU
-//                 (Denoiser::load n_gpu_layers > 0, which itself falls back to
-//                 the ggml CPU backend when no GPU backend initialises); a CPU
-//                 engine keeps the default scalar core.
-//   errorContext  prefix for the InitializationFailed message on load failure.
-//
-// The UL-UNAS forward is implemented in qvac-fabric-speech.cpp PR #78; an
-// older tts-cpp pin (pre-#78) makes Denoiser::load throw, surfacing here as a
-// clean InitializationFailed error.
+inline int denoiserBackendDeviceFromName(const std::string& name) {
+  if (name.rfind("coreml-", 0) == 0)
+    return kBackendDeviceCoreML;
+  return denoiserBackendIdFromName(name) == backendIdFromName("CPU")
+             ? kBackendDeviceCpu
+             : kBackendDeviceGpu;
+}
+
 inline LoadedDenoiser loadDenoiser(
     const std::string& ggufPath, bool resolvedGpu,
-    const std::string& errorContext) {
+    const std::string& errorContext,
+    const tts_cpp::lavasr::CoreMLOptions& coreml = {}) {
   LoadedDenoiser out;
-  if (ggufPath.empty())
+  const bool coremlRequested =
+      !coreml.model_path.empty() || !coreml.compute_units.empty();
+  if (ggufPath.empty()) {
+    if (coremlRequested) {
+      throw qvac_errors::createTTSError(
+          qvac_errors::tts_error::InitializationFailed,
+          errorContext + "Core ML requires the denoiser GGUF path");
+    }
     return out;
+  }
+  tts_cpp::lavasr::DenoiserOptions opts;
+  opts.n_gpu_layers = !coremlRequested && resolvedGpu ? 1 : 0;
+  opts.coreml = coreml;
   try {
-    out.denoiser =
-        tts_cpp::lavasr::Denoiser::load(ggufPath, resolvedGpu ? 1 : 0);
+    out.denoiser = tts_cpp::lavasr::Denoiser::load(ggufPath, opts);
   } catch (const std::exception& e) {
     throw qvac_errors::createTTSError(
         qvac_errors::tts_error::InitializationFailed, errorContext + e.what());
   }
   out.backendId = denoiserBackendIdFromName(out.denoiser->backend_name());
-  out.backendDevice = out.backendId == backendIdFromName("CPU")
-                          ? kBackendDeviceCpu
-                          : kBackendDeviceGpu;
+  out.backendDevice =
+      denoiserBackendDeviceFromName(out.denoiser->backend_name());
   return out;
 }
 

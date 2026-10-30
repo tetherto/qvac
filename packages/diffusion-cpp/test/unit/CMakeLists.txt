@@ -20,6 +20,7 @@ add_executable(
   test_cancel_stale_flag.cpp
   test_img2img.cpp
   test_sd_gen_handlers.cpp
+  test_custom_sigmas.cpp
   test_sd_vid_gen_handlers.cpp
   test_sd_video_frames.cpp
   test_video_model_capabilities.cpp

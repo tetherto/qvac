@@ -6,9 +6,12 @@ const parakeet_1 = require("./parakeet");
 const error_1 = require("../../lib/error");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
+const options_1 = require("./options");
 const PARAKEET_CONFIG_KEYS = [
     "maxThreads",
     "useGPU",
+    "backend",
+    "speakerAttribution",
     "sampleRate",
     "channels",
     "captionEnabled",
@@ -119,8 +122,16 @@ class ParakeetDriver {
         this._files = { model: files.model };
         this.params = config.parakeetConfig || {};
     }
-    validateConfig() {
-        for (const key of Object.keys(this.params)) {
+    validateConfig(params = this.params) {
+        (0, options_1.validateParakeetBackend)(params.backend);
+        (0, options_1.validateSpeakerAttribution)(params.speakerAttribution);
+        if (params.speakerAttribution && params.streaming) {
+            throw new error_1.QvacErrorAddonASRGgml({
+                code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+                adds: "speakerAttribution uses batch run(), not streaming mode",
+            });
+        }
+        for (const key of Object.keys(params)) {
             if (!PARAKEET_CONFIG_KEYS.includes(key)) {
                 throw new error_1.QvacErrorAddonASRGgml({
                     code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
@@ -146,9 +157,9 @@ class ParakeetDriver {
     async reload(newConfig = {}) {
         const overrides = newConfig;
         this.ctx.logger.debug("Reloading addon with new configuration", overrides);
-        if (overrides.parakeetConfig) {
-            this.params = { ...this.params, ...overrides.parakeetConfig };
-        }
+        const nextParams = { ...this.params, ...overrides.parakeetConfig };
+        this.validateConfig(nextParams);
+        this.params = nextParams;
         const configurationParams = this._buildConfigurationParams();
         await this.cancelActive();
         if (this.ctx.job.active) {
@@ -187,6 +198,12 @@ class ParakeetDriver {
         return Promise.resolve(response);
     }
     async createStreamingSession(audio, opts = {}) {
+        if (this.params.speakerAttribution) {
+            throw new error_1.QvacErrorAddonASRGgml({
+                code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+                adds: "speakerAttribution uses batch run(), not runStreaming()",
+            });
+        }
         const streamingOpts = this._validateStreamingOptions(opts);
         const addon = this._requireAddon();
         const response = this.ctx.job.start();
@@ -267,6 +284,8 @@ class ParakeetDriver {
             modelPath: this._files.model || "",
             maxThreads: this.params.maxThreads ?? 4,
             useGPU: this.params.useGPU === true,
+            backend: this.params.backend,
+            speakerAttribution: this.params.speakerAttribution,
             sampleRate: this.params.sampleRate || 16000,
             channels: this.params.channels || 1,
             captionEnabled: this.params.captionEnabled === true,
@@ -312,17 +331,19 @@ class ParakeetDriver {
             return;
         }
         if (event === "Output") {
+            if (Array.isArray(data) && data.length === 0)
+                return;
             // The segment payload passes through untouched; a typed endOfTurn
             // event is additionally synthesized when the (last) segment carries
             // the model's end-of-utterance flag (double-signal).
             this.ctx.job.output(data);
             const segment = lastSegmentOf(data);
-            if (segment?.isEndOfTurn === true) {
+            if (segment?.isEndOfTurn === true && segment.eotConfidence === undefined) {
                 this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
             }
             return;
         }
-        if (event === "VadState") {
+        if (event === "VadState" || event === "EndOfTurn") {
             // The native payload is already VadEvent-shaped (energy detector or
             // Sortformer speaker activity).
             this.ctx.job.output(data);

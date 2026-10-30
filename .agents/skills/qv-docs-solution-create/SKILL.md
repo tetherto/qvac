@@ -52,7 +52,7 @@ The source material is the trigger for the page, not its source of truth. A thre
 
 - the current package manifests and source in this repository;
 - the documentation pages the Solution will rely on;
-- the release notes and API reference for the versions involved;
+- the API reference of the documentation line for each version involved, and that version's GitHub release for what it shipped;
 - the current state of any referenced issue or pull request, via `gh`.
 
 Correct the material wherever the repository contradicts it. Never carry a workaround into a page after the fix has shipped. State no roadmap or forthcoming-support claim, and no performance figure that was not measured.

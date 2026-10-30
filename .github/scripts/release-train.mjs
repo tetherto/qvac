@@ -4,13 +4,14 @@
 //   release-train.mjs slugs <train>
 //   release-train.mjs projects <train>
 //   release-train.mjs from-npm <train>
+//   release-train.mjs published-commit <release-train-<train>-x.y.z>
 //   release-train.mjs exclude <train>
 //   release-train.mjs linked <train>
 //   release-train.mjs pack <train> <dest-dir>
 //   release-train.mjs stage <package-dir> <tarball-dir>
-//   release-train.mjs publish <moved-json> [--tarballs=<dir>] [--dry-run]
-//   release-train.mjs wait <moved-json>
-//   release-train.mjs tag <train> <moved-json> [--push]
+//   release-train.mjs publish <moved-json> [--dry-run]
+//   release-train.mjs wait <moved-json> <published-json> <tarball-dir>
+//   release-train.mjs tag <moved-json> [--push]
 //
 // resolve prints the train and the packages whose version moved between the two
 // commits; publish, wait and tag take that list. Inside a workflow the results
@@ -31,10 +32,13 @@ import {
   movedProjects,
   parseBranch,
   parseLsRemote,
+  parseNpmView,
   planTags,
+  publishedCommit,
   publishedElsewhere,
   readRepoJson,
   repoRoot,
+  shasumMismatches,
   slugOf,
   stageManifest,
 } from './lib/release-train.mjs'
@@ -62,22 +66,16 @@ function gitShow (sha, path) {
   return result.status === 0 ? result.stdout : null
 }
 
-// E404 means both "no such package" and "no such version".
 function npmView (spec, field) {
-  const result = run('npm', ['view', spec, field, '--json', '--prefer-online'])
-  if (result.status !== 0) {
-    let code
-    try {
-      code = JSON.parse(result.stdout).error?.code
-    } catch {}
-    if (code === 'E404') return null
-    throw new Error(`npm view ${spec} failed (exit ${result.status}): ${result.stderr || result.stdout}`)
+  try {
+    return parseNpmView(run('npm', ['view', spec, field, '--json', '--prefer-online']))
+  } catch (error) {
+    throw new Error(`npm view ${spec} failed (${error.message})`)
   }
-  return result.stdout.trim() ? JSON.parse(result.stdout) : null
 }
 
 function isPublished (name, version) {
-  return npmView(`${name}@${version}`, 'version') !== null
+  return npmView(`${name}@${version}`, 'version').found
 }
 
 function setOutputs (outputs) {
@@ -197,6 +195,12 @@ function printFromNpm ([name]) {
   console.log(JSON.stringify(train(name).fromNpm))
 }
 
+function printPublishedCommit ([ref]) {
+  const branch = parseBranch(ref ?? '')
+  if (!branch) fail([`usage: published-commit <release-train-<train>-x.y.z>; got '${ref}'`])
+  console.log(publishedCommit(train(branch.train), branch.version, (name, version) => npmView(`${name}@${version}`, 'gitHead')))
+}
+
 function excludeFromNpm ([name]) {
   const path = join(repoRoot, WORKSPACE)
   const before = readFileSync(path, 'utf8')
@@ -268,14 +272,18 @@ function stagePackage ([dir, tarballDir]) {
 function publishTrain ([movedJson], options) {
   const moved = JSON.parse(movedJson ?? '[]')
   const head = capture('git', ['rev-parse', 'HEAD']).trim()
-  const errors = []
+  // A re-run of failed jobs does not resolve the train again, so a version
+  // published since then is checked here.
+  const gitHeads = new Map(moved.map((project) => [project.name, npmView(`${project.name}@${project.version}`, 'gitHead')]))
+  const errors = publishedElsewhere(moved, (project) => gitHeads.get(project.name), head)
   const pending = []
   for (const project of moved) {
-    if (isPublished(project.name, project.version)) {
-      console.log(`${project.name}@${project.version} is already on npm; skipped`)
+    const view = gitHeads.get(project.name)
+    if (view.found) {
+      if (view.value === head) console.log(`${project.name}@${project.version} is already on npm from this commit; skipped`)
       continue
     }
-    const latest = npmView(project.name, 'dist-tags.latest')
+    const { value: latest } = npmView(project.name, 'dist-tags.latest')
     if (latest && compareVersions(project.version, latest) < 0) {
       errors.push(`${project.name}@${project.version} is below npm's latest ${latest}; release an older line through its own workflow`)
     }
@@ -284,7 +292,7 @@ function publishTrain ([movedJson], options) {
   if (errors.length) fail(errors)
   if (pending.length === 0) {
     console.log('Nothing to publish.')
-    setOutputs({ published: false })
+    setOutputs({ published: '[]' })
     return
   }
 
@@ -299,54 +307,54 @@ function publishTrain ([movedJson], options) {
       '--exclude-task-dependencies', '--tag=latest', '--access=public']
     if (options['dry-run']) args.push('--dry-run')
     if (run('pnpm', args, { stdio: 'inherit' }).status !== 0) {
-      fail(['Publish failed. Re-run the workflow: versions already on npm are skipped.'])
+      fail(['Publish failed. Re-run the workflow: versions already on npm from this commit are skipped.'])
     }
   } finally {
     restores.forEach((restore) => restore())
   }
-
-  if (!options['dry-run'] && options.tarballs) {
-    const index = JSON.parse(readFileSync(join(options.tarballs, TARBALL_INDEX), 'utf8'))
-    for (const project of pending) {
-      const expected = sha1(join(options.tarballs, index[project.name]))
-      const actual = npmView(`${project.name}@${project.version}`, 'dist.shasum')
-      if (actual !== expected) errors.push(`${project.name}@${project.version} on npm has sha1 ${actual}; the built tarball has ${expected}`)
-    }
-    if (errors.length) fail(errors)
-  }
-  setOutputs({ published: !options['dry-run'] })
+  setOutputs({ published: JSON.stringify(pending.map((project) => project.name)) })
 }
 
-// A registry error counts as "not served yet": the versions are already
-// published, so the only outcome that matters is whether npm serves them in time.
-function waitServed ([movedJson]) {
-  const moved = JSON.parse(movedJson ?? '[]')
+// npm answers E404 for a version for some time after publishing it, so the
+// shasum check waits until npm serves the version. A registry error counts as
+// "not served yet": the versions are already published, so the only outcome
+// that matters is whether npm serves them in time, and what it serves.
+function waitServed ([movedJson, publishedJson, tarballDir]) {
+  if (!movedJson || !publishedJson || !tarballDir) fail(['usage: wait <moved-json> <published-json> <tarball-dir>'])
+  const moved = JSON.parse(movedJson)
+  const published = JSON.parse(publishedJson)
+  const index = JSON.parse(readFileSync(join(tarballDir, TARBALL_INDEX), 'utf8'))
   const deadline = Date.now() + 10 * 60 * 1000
+  const served = new Map()
   for (const project of moved) {
+    let view = { found: false }
     for (;;) {
-      let served = false
       try {
-        served = isPublished(project.name, project.version)
+        view = npmView(`${project.name}@${project.version}`, 'dist.shasum')
       } catch (error) {
         console.log(error.message)
       }
-      if (served) break
+      if (view.found) break
       if (Date.now() > deadline) fail([`npm does not serve ${project.name}@${project.version} after 10 minutes`])
       spawnSync('sleep', ['10'])
     }
     console.log(`npm serves ${project.name}@${project.version}`)
+    served.set(project.name, view.value)
   }
+  const errors = shasumMismatches(moved, published,
+    (project) => served.get(project.name),
+    (project) => sha1(join(tarballDir, index[project.name])))
+  if (errors.length) fail(errors)
 }
 
-function tagTrain ([name, movedJson], options) {
-  const resolved = train(name)
+function tagTrain ([movedJson], options) {
   const plan = planTags(JSON.parse(movedJson ?? '[]'), {
-    releaseProject: resolved.githubRelease?.project,
     remoteCommit: (tag) => parseLsRemote(capture('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`, `refs/tags/${tag}^{}`]), tag),
     gitHeadOf: (project) => {
-      const gitHead = npmView(`${project.name}@${project.version}`, 'gitHead')
-      if (!gitHead) throw new Error(`${project.name}@${project.version} has no gitHead on npm`)
-      return gitHead
+      const { found, value } = npmView(`${project.name}@${project.version}`, 'gitHead')
+      if (!found) throw new Error(`npm does not serve ${project.name}@${project.version}`)
+      if (!value) throw new Error(`${project.name}@${project.version} has no gitHead on npm`)
+      return value
     },
   })
   for (const tag of plan.existing) console.log(`${tag} is already on origin at its npm gitHead`)
@@ -366,7 +374,6 @@ const { positionals, values } = parseArgs({
   allowPositionals: true,
   options: {
     'check-npm': { type: 'boolean', default: false },
-    tarballs: { type: 'string' },
     'dry-run': { type: 'boolean', default: false },
     push: { type: 'boolean', default: false },
   },
@@ -377,6 +384,7 @@ const commands = {
   slugs: printSlugs,
   projects: printProjects,
   'from-npm': printFromNpm,
+  'published-commit': printPublishedCommit,
   exclude: excludeFromNpm,
   linked: checkLinked,
   pack: packTrain,
