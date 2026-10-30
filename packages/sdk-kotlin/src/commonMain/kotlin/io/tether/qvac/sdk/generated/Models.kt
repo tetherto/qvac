@@ -236,42 +236,6 @@ object Models {
         params = "",
     )
 
-    val AUDIOGEN_MANIFEST = ModelConstant(
-        name = "AUDIOGEN_MANIFEST",
-        src = "registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Manifest.json",
-        registryPath = "qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Manifest.json",
-        registrySource = "s3",
-        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
-        blobBlockOffset = 2202371,
-        blobBlockLength = 1,
-        blobByteOffset = 144304483802,
-        modelId = "Manifest.json",
-        expectedSize = 617,
-        sha256Checksum = "994f21adbc9378ba10b36addd925b43b01c6469d3062861cdd36b1a3c8bfb0cf",
-        addon = "audiogen",
-        engine = "audiogen-ggml",
-        quantization = "",
-        params = "",
-    )
-
-    val AUDIOGEN_MODEL = ModelConstant(
-        name = "AUDIOGEN_MODEL",
-        src = "registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
-        registryPath = "qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
-        registrySource = "s3",
-        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
-        blobBlockOffset = 2199773,
-        blobBlockLength = 2,
-        blobByteOffset = 144134268080,
-        modelId = "model.mlmodel",
-        expectedSize = 101802,
-        sha256Checksum = "b171e95129b83692ad4d45d28b1f304157b1a1d1ba114468974b1b29733de154",
-        addon = "audiogen",
-        engine = "audiogen-ggml",
-        quantization = "",
-        params = "",
-    )
-
     val AUDIOGEN_MOSS_SFX_V2_F16 = ModelConstant(
         name = "AUDIOGEN_MOSS_SFX_V2_F16",
         src = "registry://s3/qvac_models_compiled/ggml/openmoss/2026-10-01/moss-sfx-v2-f16.gguf",
@@ -8601,8 +8565,6 @@ object Models {
         AUDIOGEN_ACESTEP_V15_TURBO_F16,
         AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
         AUDIOGEN_ACESTEP_V15_TURBO_Q8_0,
-        AUDIOGEN_MANIFEST,
-        AUDIOGEN_MODEL,
         AUDIOGEN_MOSS_SFX_V2_F16,
         AUDIOGEN_MOSS_SFX_V2_Q8_0,
         AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
