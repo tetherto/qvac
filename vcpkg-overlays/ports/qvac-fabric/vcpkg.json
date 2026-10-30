@@ -18,10 +18,7 @@
       "host": true
     }
   ],
-  "default-features": [
-    "gpu-backends",
-    "llama"
-  ],
+  "default-features": ["gpu-backends", "llama"],
   "features": {
     "cuda-backend": {
       "description": "Build the NVIDIA CUDA GPU backend as a runtime-loaded module alongside Vulkan. Supports Linux x64 and arm64, and Windows x64. Requires a CUDA toolkit at build time. On Windows the CUDA 13 runtime is loaded from the user's CUDA install, %CUDA_PATH%\\bin\\x64. An absent or unloadable CUDA module is skipped so selection falls through to Vulkan and then CPU.",
@@ -30,9 +27,7 @@
         {
           "name": "qvac-fabric",
           "default-features": false,
-          "features": [
-            "gpu-backends"
-          ]
+          "features": ["gpu-backends"]
         }
       ]
     },
@@ -43,9 +38,7 @@
         {
           "name": "qvac-fabric",
           "default-features": false,
-          "features": [
-            "cuda-backend"
-          ]
+          "features": ["cuda-backend"]
         }
       ]
     },
@@ -90,9 +83,7 @@
         {
           "name": "qvac-fabric",
           "default-features": false,
-          "features": [
-            "llama"
-          ]
+          "features": ["llama"]
         }
       ]
     },
