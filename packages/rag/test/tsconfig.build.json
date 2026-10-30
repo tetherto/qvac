@@ -5,8 +5,8 @@
     "../node_modules",
     "../dist",
     "./dist",
-    "../src/adapters/database/hyperspec/**/*.js",
-    "../src/adapters/database/hyperspec/**/*.json"
+    "../src/db/hyperspec/**/*.js",
+    "../src/db/hyperspec/**/*.json"
   ],
   "compilerOptions": {
     "noEmit": false,

@@ -1,128 +1,115 @@
-import type { BaseLlmAdapter } from './adapters/llm/BaseLlmAdapter.js'
+import type { Corestore } from './db/db-types.js'
 
-export interface Doc {
-  id: string
-  content: string
+export type EmbeddingMetric = 'dot' | 'cosine'
+
+// Everything that decides whether two vectors are comparable. `spaceId` is a
+// hash of this record, so dimensions alone never make two spaces match.
+export interface EmbeddingSpace {
+  model: string
+  revision: string
+  dimensions: number
+  metric: EmbeddingMetric
+  normalized: boolean
+  documentEncoding: string
+  queryEncoding: string
+  preprocessing: string
 }
 
-export interface EmbeddedDoc extends Doc {
-  embedding: number[]
-  embeddingModelId: string
-  metadata?: Record<string, any> | undefined
+export interface CreateRagOptions {
+  corestore: Corestore
 }
 
-export interface PartialDoc {
-  content: string
+export interface CreateNamespaceParams {
+  name: string
+  space: EmbeddingSpace
+}
+
+export interface NamespaceInfo {
+  name: string
+  spaceId: string
+  revision: number
+}
+
+export interface EmbeddedChunkInput {
+  // Defaults to `<documentId>:<ordinal>`.
   id?: string
+  content: string
+  metadataJson?: string
+  embedding: Float32Array | number[]
+  spaceId: string
 }
 
-export interface SaveEmbeddingsResult {
-  status: 'fulfilled' | 'rejected'
-  id?: string | undefined
-  error?: string | undefined
+export interface EmbeddedDocumentInput {
+  id: string
+  metadata?: Record<string, unknown>
+  chunks: EmbeddedChunkInput[]
+}
+
+export interface IngestParams {
+  namespace: string
+  documents: EmbeddedDocumentInput[]
+}
+
+export interface IngestedDocument {
+  id: string
+  generation: number
+  chunkCount: number
 }
 
 export interface IngestResult {
-  processed: SaveEmbeddingsResult[]
-  droppedIndices: number[]
+  documents: IngestedDocument[]
+  revision: number
 }
 
-export interface SearchResult {
-  id: string
-  content: string
-  score: number
+export interface DeleteDocumentsParams {
+  namespace: string
+  documentIds: string[]
 }
 
-export interface BaseDBAdapterConfig {
-  embeddingModelId: string
-  dimension: number
-  createdAt: Date
+export interface DeleteDocumentsResult {
+  // Only the IDs that existed; unknown IDs are ignored.
+  deleted: string[]
+  revision: number
 }
 
-export interface HyperDBAdapterConfig extends BaseDBAdapterConfig {
-  key: string
-  NUM_CENTROIDS: number
-  BUCKET_SIZE: number
-  BATCH_SIZE: number
+export interface SearchScope {
+  namespace: string
+  documentIds?: string[]
 }
 
 export interface SearchParams {
-  topK?: number
-  n?: number
-  signal?: AbortSignal
+  scope: SearchScope
+  vector: Float32Array | number[]
+  k: number
 }
 
-export interface InferOpts extends SearchParams {
-  llmAdapter?: BaseLlmAdapter
-  systemPrompt?: string
+export interface ScopedSearchParams {
+  // Intersected with the bound scope; it can narrow it, never widen it.
+  scope?: Partial<SearchScope>
+  vector: Float32Array | number[]
+  k: number
 }
 
-export interface BaseChunkOpts {
-  [key: string]: unknown
+export interface SearchHit {
+  namespace: string
+  documentId: string
+  chunkId: string
+  ordinal: number
+  content: string
+  metadataJson?: string
+  score: number
 }
 
-export interface DbOpts {
-  [key: string]: unknown
+export interface ScopedRag {
+  search(params: ScopedSearchParams): Promise<SearchHit[]>
 }
 
-export interface LLMChunkOpts extends BaseChunkOpts {
-  chunkSize?: number | undefined
-  chunkOverlap?: number | undefined
-  chunkStrategy?: 'character' | 'paragraph' | undefined
-  splitStrategy?: 'character' | 'token' | 'word' | 'sentence' | 'line' | undefined
-  splitter?: ((text: string) => string[]) | undefined
-}
-
-export interface EmbeddingOpts {
-  onProgress?: (current: number, total: number) => void
-  signal?: AbortSignal
-}
-
-export interface GenerateEmbeddingsOpts {
-  chunk?: boolean
-  chunkOpts?: BaseChunkOpts
-  signal?: AbortSignal
-}
-
-export type SaveStage = 'deduplicating' | 'preparing' | 'writing'
-
-export interface SaveEmbeddingsOpts {
-  dbOpts?: DbOpts | undefined
-  onProgress?: ((stage: SaveStage, current: number, total: number) => void) | undefined
-  progressInterval?: number | undefined
-  signal?: AbortSignal | undefined
-}
-
-export type IngestStage =
-  'chunking' | 'embedding' | 'saving:deduplicating' | 'saving:preparing' | 'saving:writing'
-
-export interface IngestOpts {
-  chunk?: boolean | undefined
-  chunkOpts?: BaseChunkOpts | undefined
-  dbOpts?: DbOpts | undefined
-  onProgress?: ((stage: IngestStage, current: number, total: number) => void) | undefined
-  progressInterval?: number | undefined
-  signal?: AbortSignal | undefined
-}
-
-export type ReindexStage = 'collecting' | 'clustering' | 'reassigning' | 'updating'
-
-export interface ReindexOpts {
-  onProgress?: ((stage: ReindexStage, current: number, total: number) => void) | undefined
-  signal?: AbortSignal | undefined
-}
-
-export interface ReindexResult {
-  reindexed: boolean
-  details?: Record<string, any> | undefined
-}
-
-export type EmbeddingFunction = (text: string | string[]) => Promise<number[] | number[][]>
-
-// The QVAC LLM addon returns an engine-specific response. It originates in
-// @qvac/inference and is not a dependency here, so it is left opaque.
-export type QvacResponse = unknown
-
-export interface QvacLlmAddon {
-  run(messages: Array<{ role: string; content: string }>, opts?: object): Promise<QvacResponse>
+export interface Rag {
+  ready(): Promise<void>
+  close(): Promise<void>
+  createNamespace(params: CreateNamespaceParams): Promise<NamespaceInfo>
+  ingest(params: IngestParams): Promise<IngestResult>
+  deleteDocuments(params: DeleteDocumentsParams): Promise<DeleteDocumentsResult>
+  search(params: SearchParams): Promise<SearchHit[]>
+  scoped(scope: SearchScope): ScopedRag
 }

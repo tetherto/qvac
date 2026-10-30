@@ -1,6 +1,6 @@
 {
   "name": "@qvac/rag",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -22,27 +22,6 @@
       "node": "node:crypto",
       "react-native": "./dist/shims/crypto.js",
       "default": "./dist/shims/crypto.js"
-    },
-    "#fetch": {
-      "types": "./src/shims/fetch.ts",
-      "bare": "bare-fetch",
-      "node": "./dist/shims/fetch.js",
-      "react-native": "./dist/shims/fetch.js",
-      "default": "./dist/shims/fetch.js"
-    },
-    "#fs": {
-      "types": "./src/shims/fs.ts",
-      "bare": "bare-fs",
-      "node": "node:fs",
-      "react-native": "./dist/shims/fs.js",
-      "default": "./dist/shims/fs.js"
-    },
-    "#path": {
-      "types": "./src/shims/path.ts",
-      "bare": "bare-path",
-      "node": "node:path",
-      "react-native": "./dist/shims/path.js",
-      "default": "./dist/shims/path.js"
     }
   },
   "scripts": {
@@ -53,9 +32,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
     "build": "tsc -p tsconfig.build.json && bare scripts/copy-hyperspec.ts dist",
     "prepare": "npm run build",
-    "build:test": "tsc -p test/tsconfig.build.json && bare scripts/copy-hyperspec.ts test/dist/src && bare scripts/copy-test-fixtures.ts",
+    "build:test": "tsc -p test/tsconfig.build.json && bare scripts/copy-hyperspec.ts test/dist/src",
     "test:unit": "npm run build:test && brittle-bare 'test/dist/test/unit/*.test.js'",
-    "test:integration": "npm run build:test && brittle-bare 'test/dist/test/integration/*.test.js'",
     "build:hyperdb-spec": "bare scripts/build-hyperdb-spec.ts"
   },
   "license": "Apache-2.0",
@@ -73,13 +51,12 @@
     "NOTICE"
   ],
   "devDependencies": {
-    "@qvac/embed-llamacpp": "^0.48.1",
-    "@qvac/llm-llamacpp": "^0.61.1",
-    "@qvac/registry-client": "^0.6.0",
     "@types/brittle": "^3.5.0",
     "bare": "1.34.1 || >=1.35.1",
     "bare-abort-controller": "^1.1.2",
     "bare-console": "*",
+    "bare-fs": "^4.7.0",
+    "bare-path": "^3.0.0",
     "bare-url": "^2.4.7",
     "brittle": "^3.14.0",
     "corestore": "^7.4.7",
@@ -91,17 +68,9 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
-    "@qvac/response": "^0.1.2",
-    "@qvac/logging": "^0.1.1",
     "bare-crypto": "^1.13.4",
-    "bare-fetch": "^3.0.1",
-    "bare-fs": "^4.7.0",
-    "bare-path": "^3.0.0",
     "hyperdb": "^6.7.0",
-    "hyperdht": "^6.23.0",
     "hyperschema": "^1.13.0",
-    "llm-splitter": "^0.2.0",
-    "ready-resource": "^1.1.2",
     "zod": "^4.1.13"
   }
 }
