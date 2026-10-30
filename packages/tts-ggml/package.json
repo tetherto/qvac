@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 + moss + moss-sfx + moss-speech + Pocket engines from tts-cpp)",
   "qvac": {
     "ggml-speech": "2026-10-27"

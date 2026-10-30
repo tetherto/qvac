@@ -168,6 +168,8 @@ describe('serve: speech stream_format=sse', () => {
     const events = collectSSE(res.payload).map((e) => e.data as SpeechEvent)
     assert.equal(events[0]?.type, 'speech.audio.delta')
     assert.equal(events.at(-1)?.error?.code, 'internal_error')
+    assert.ok(res.payload.includes('An internal error occurred.'))
+    assert.ok(!res.payload.includes('engine exploded'))
     assert.ok(!events.some((e) => e.type === 'speech.audio.done'))
     assert.ok(!res.payload.includes('[DONE]'))
   })

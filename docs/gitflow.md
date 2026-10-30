@@ -213,6 +213,8 @@ git push -u origin release-<package>-<x.y.z>
 
 > Contributors: do not create `release-*` branches in upstream. You will PR into them from your fork.
 
+**Cut the documentation line at the same time**, for a package the documentation site versions — `@qvac/sdk` and `@qvac/cli` today. Run `qv-docs-cutoff` with the version being released, that one collection, and the release branch — the branch is what gives it the release base, since the cutoff publishes the tree the release was cut from and not `main`'s tip. It opens one PR into `main` that publishes the line written for this release and leaves the next one open; the documentation engineer reviews and merges it. Do not approve or merge it yourself, and do not promote it to production yet — that waits for step 3. The release train runs this same step for every collection it moves ([`docs/ci/RELEASE-TRAIN.md`](ci/RELEASE-TRAIN.md) step 6).
+
 ### 2) Contributor opens a “Release PR” from their fork into the upstream release branch
 
 PR source: `<your-fork>:<branch>` → target: `upstream:release-<package>-<x.y.z>`
@@ -234,6 +236,8 @@ On merge to the upstream `release-*` branch, CI should:
 **Tag format (standard):**
 - `<package>-v<x.y.z>`  
   Example: `sdk-v1.0.0`
+
+Once NPM serves the version, promote the documentation: verify that tree on staging, then run `promote-docs-production.yml` on the merge commit of step 1's documentation PR. Name that commit, never `main`'s tip — earlier would publish documentation for a version nobody can install, and later would publish whatever else merged meanwhile. The procedure is in [`docs/website/docs-workflow.md`](website/docs-workflow.md), "Production (manual promotion)".
 
 ### 4) Keep `main` aligned with what shipped (fork-based, no upstream cross-merge)
 

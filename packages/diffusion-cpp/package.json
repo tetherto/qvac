@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.31.0",
+  "version": "0.32.1",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "imports": {
     "#host-addon": {
@@ -167,11 +167,11 @@
     "bare-path": "^3.0.0"
   },
   "optionalDependencies": {
-    "@qvac/diffusion-cpp-linux-x64": "0.31.0",
-    "@qvac/diffusion-cpp-linux-arm64": "0.31.0",
-    "@qvac/diffusion-cpp-darwin-arm64": "0.31.0",
-    "@qvac/diffusion-cpp-darwin-x64": "0.31.0",
-    "@qvac/diffusion-cpp-win32-x64": "0.31.0"
+    "@qvac/diffusion-cpp-linux-x64": "0.32.1",
+    "@qvac/diffusion-cpp-linux-arm64": "0.32.1",
+    "@qvac/diffusion-cpp-darwin-arm64": "0.32.1",
+    "@qvac/diffusion-cpp-darwin-x64": "0.32.1",
+    "@qvac/diffusion-cpp-win32-x64": "0.32.1"
   },
   "engines": {
     "bare": ">=1.24.0"
