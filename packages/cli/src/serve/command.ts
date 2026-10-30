@@ -97,7 +97,7 @@ function addServeOptions(command: Command): Command {
     .option('--allow-any-host', 'Accept any Host header (turns off DNS-rebinding protection)')
     .option(
       '--enable-admin',
-      'Mount the admin endpoints (runtime suspend/resume); off by default, needs an API key off loopback'
+      'Allow the admin endpoints (runtime suspend/resume); off by default, needs an API key off loopback'
     )
     .option(
       '--public-base-url <url>',
