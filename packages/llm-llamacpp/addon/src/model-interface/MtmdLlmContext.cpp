@@ -662,7 +662,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
         fullLedger.positions() - sharedPositions,
         fullLedger.cacheTokens() - sharedTokens);
     if (cacheSourceProvider_ && sharesCacheAcrossKeys()) {
-      adoptBestCacheSource(fullLedger);
+      adoptBestCacheSource(fullLedger, prefill);
     }
     beginCacheRequest();
     reconciledPlan = reconcilePrompt(std::move(fullPlan), fullLedger, prefill);
@@ -1536,8 +1536,13 @@ void MtmdLlmContext::rebuildSamplerFromLedger(const cache::Ledger& ledger) {
   }
 }
 
-void MtmdLlmContext::adoptBestCacheSource(const cache::Ledger& prompt) {
+void MtmdLlmContext::adoptBestCacheSource(
+    const cache::Ledger& fullPrompt, bool isPrefillOnlyRequest) {
   // See TextLlmContext::adoptBestCacheSource.
+  const cache::Ledger prompt =
+      needsFullStateSnapshot_
+          ? cache::servablePrompt(fullPrompt, isPrefillOnlyRequest)
+          : fullPrompt;
   const size_t shared = cache::commonPrefix(residentLedger_, prompt);
   const bool trimmable =
       !needsFullStateSnapshot_ &&
@@ -1548,6 +1553,7 @@ void MtmdLlmContext::adoptBestCacheSource(const cache::Ledger& prompt) {
       !needsFullStateSnapshot_ && !slidingWindowCheckpoints_;
   (void)cacheSourceProvider_(
       prompt,
+      std::max(fullPrompt.positions(), fullPrompt.cacheTokens()),
       donorTrimmable,
       own,
       [this, &prompt](const cache::DonorState& donor) {
@@ -1612,7 +1618,8 @@ bool MtmdLlmContext::adoptDonorState(
   QLOG_IF(
       Priority::DEBUG,
       string_format(
-          "[MtmdLlm] starting from %s: %zu of %zu prompt entries resident\n",
+          "[MtmdLlm] starting from %s: %zu of %zu servable prompt entries "
+          "resident\n",
           donor.source.c_str(),
           cache::commonPrefix(residentLedger_, prompt),
           prompt.entries.size()));
@@ -1971,7 +1978,7 @@ PrefillPlan MtmdLlmContext::preparePrefill(
     // and before another conversation's state is copied in.
     throwIfOverflows(fullLedger.positions(), fullLedger.cacheTokens());
     if (cacheSourceProvider_ && sharesCacheAcrossKeys()) {
-      adoptBestCacheSource(fullLedger);
+      adoptBestCacheSource(fullLedger, isPrefillOnlyRequest);
     }
     beginCacheRequest();
     plan = reconcilePrompt(std::move(plan), fullLedger, isPrefillOnlyRequest);
