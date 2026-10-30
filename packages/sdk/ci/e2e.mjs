@@ -34,7 +34,7 @@ export function run(cmd, args, { cwd = ROOT, env = process.env, capture = false 
     cwd,
     env,
     encoding: 'utf8',
-    shell: process.platform === 'win32',
+    shell: process.platform === 'win32' && (cmd === 'npm' || cmd === 'npx'),
     stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit'
   })
 }
