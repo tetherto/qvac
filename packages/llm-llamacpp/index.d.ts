@@ -79,8 +79,11 @@ interface LlmLlamacpp {
      * conversation, with BOS and the generation prompt, as `run()` renders it.
      * Tools the template leaves out are not counted. `tools` alone has no
      * message to render and rejects, as `run()` does. Never queues behind
-     * `run()`: it reads only load-time state. Rejects with `InvalidArgument` on
-     * invalid input, a media message included.
+     * `run()`: it reads only load-time state. A wrong-typed argument rejects
+     * with `TypeError`, and before `load()` it rejects with `Model is not
+     * loaded`. Other invalid input, a media message included, rejects with code
+     * `InvalidArgument`; a conversation the chat template cannot render fails
+     * as it would in `run()`.
      */
     calcTokens(input: CalcTokensInput): Promise<number>;
     getState(): {
