@@ -2,7 +2,7 @@
   "name": "@qvac/turbovec-ggml",
   "root": "packages/turbovec-ggml",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

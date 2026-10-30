@@ -1,11 +1,11 @@
 # Package CI contract
 
-Packages tagged `ci:contract` in their `project.json` share one set of workflows, the groups. A group never knows a package by name: it asks Nx which packages changed, reads their targets and configurations, and runs `nx run-many` on each configuration's runner. How a package builds, tests and publishes lives in that package's `project.json`, its `ci/` directory and its model manifest.
+Packages tagged `ci:addons` in their `project.json` share one set of workflows, the groups. A group never knows a package by name: it asks Nx which packages changed, reads their targets and configurations, and runs `nx run-many` on each configuration's runner. How a package builds, tests and publishes lives in that package's `project.json`, its `ci/` directory and its model manifest.
 
 List the packages on the contract:
 
 ```bash
-pnpm exec nx show projects --projects tag:ci:contract
+pnpm exec nx show projects --projects tag:ci:addons
 ```
 
 A package without the tag runs the workflows it names itself, such as the registry server's `publish-registry-server.yml`. Change CI on the side the package is on.

@@ -2,7 +2,7 @@
   "name": "inference-addon-cpp",
   "root": "packages/inference-addon-cpp",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "cpp:build": {

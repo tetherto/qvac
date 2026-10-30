@@ -135,16 +135,16 @@ jobs:
         project: ${{ fromJSON(needs.select.outputs.projects) }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
-      - uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           pattern: prebuild-${{ matrix.project.slug }}-*
           path: prebuilds
           merge-multiple: "true"
-      - uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           name: prebuilds-${{ matrix.project.slug }}
           path: prebuilds/${{ matrix.project.dir }}/prebuilds
@@ -204,15 +204,15 @@ jobs:
       NX_NO_CLOUD: "true"
     steps:
       - if: matrix.project.benchmarkReport
-        uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           persist-credentials: false
       - if: matrix.project.benchmarkReport
-        uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           node-version: lts/*
       - if: matrix.project.benchmarkReport
-        uses: tetherto/qvac-actions/setup-pnpm@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
       - if: matrix.project.benchmarkReport
         shell: bash
         env:
@@ -220,13 +220,13 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM"
       # One directory per artifact: <slug>-benchmark-<config>, <slug>-perf-<config>-<n>, <slug>-perf-mobile-<platform>-<n>.
       - if: matrix.project.benchmarkReport
-        uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           pattern: ${{ matrix.project.slug }}-*
           path: ${{ matrix.project.dir }}/benchmarks/results
       # The mobile runs' device logs, which a report such as llm's VLM matrix reads.
       - if: matrix.project.benchmarkReport
-        uses: tetherto/qvac-actions/download-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           pattern: console-logs-${{ matrix.project.slug }}-*
           path: ${{ matrix.project.dir }}/benchmarks/results
@@ -237,7 +237,7 @@ jobs:
           BENCHMARK_ARGS: ${{ inputs.args }}
         run: pnpm exec nx run-many -t benchmark -p "$PROJECT" -c report --exclude-task-dependencies --outputStyle=stream
       - if: always() && matrix.project.benchmarkReport
-        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           name: ${{ matrix.project.slug }}-benchmark-report
           path: ${{ matrix.project.dir }}/benchmarks/report/
@@ -254,21 +254,21 @@ jobs:
     env:
       PERF_ADDON: ${{ github.event_name == 'schedule' && 'all' || inputs.perf_report }}
     steps:
-      - uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           node-version: lts/*
       # COMET scores nmtcpp's translations in the weekly report and in nmtcpp's own.
       - if: env.PERF_ADDON == 'all' || env.PERF_ADDON == 'nmtcpp'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        uses: tetherto/qvac-actions/setup-python@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: scripts/perf-report/run-reports.js
       - if: env.PERF_ADDON == 'all' || env.PERF_ADDON == 'nmtcpp'
-        uses: tetherto/qvac-actions/cache@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/cache@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           path: ~/.cache/huggingface/hub
           key: comet-model-v1-wmt22-comet-da
@@ -278,7 +278,7 @@ jobs:
           PERF_RUNS: ${{ inputs.perf_report_runs }}
         run: node scripts/perf-report/run-reports.js
       - if: always()
-        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           name: performance-reports-${{ github.run_number }}
           path: reports/

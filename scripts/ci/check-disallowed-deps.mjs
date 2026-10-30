@@ -14,7 +14,7 @@ execFileSync('pnpm', ['exec', 'nx', 'graph', `--file=${file}`], {
   env: { ...process.env, NX_DAEMON: 'false', NX_NO_CLOUD: 'true' }
 })
 const nodes = Object.values(JSON.parse(readFileSync(file, 'utf8')).graph.nodes)
-const roots = nodes.filter((n) => n.data.tags?.includes('ci:contract')).map((n) => n.data.root)
+const roots = nodes.filter((n) => n.data.tags?.includes('ci:addons')).map((n) => n.data.root)
 const errors = []
 for (const root of roots) {
   const file = join(root, 'package.json')

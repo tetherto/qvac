@@ -2,7 +2,7 @@
   "name": "@qvac/bci-whispercpp",
   "root": "packages/bci-whispercpp",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {

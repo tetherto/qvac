@@ -2,7 +2,7 @@
   "name": "@qvac/tts-ggml",
   "root": "packages/tts-ggml",
   "tags": [
-    "ci:contract"
+    "ci:addons"
   ],
   "targets": {
     "lint": {
