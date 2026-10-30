@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Align shared native dependencies to `ggml-speech` `2026-10-27#1` and
-  `speech-cpp` `2026-10-29#2`, adding opt-in Hexagon build support.
+  `speech-cpp` `2026-10-30#1`, adding opt-in Hexagon build support.
 
 - Update the shared `speech-cpp` native dependency to `2026-10-28`
   ([#5420](https://github.com/tetherto/qvac/pull/5420)).
