@@ -1,12 +1,8 @@
-# Staging pin for the b11739 sync: until that fabric tag exists, the port builds the
-# Adreno q8_1-quantize workaround + check-results diagnostics (TEMPORARY) from the zoq fork so
-# the mobile suite can validate it on the Galaxy S26 Ultra. Switching to b11739 is a
-# REPO/REF/SHA512 (and vcpkg.json version) update here only.
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO zoq/qvac-ext-lib-llama.cpp
-  REF 9002438fa4586eee668f5c708a854bf6fd48a6ca
-  SHA512 23ebbc04c81de6a882325615d2be23f4b6c61b276e675fa45a06d8e19a8bce6bf0e73031e94b310cc00618a018b88b7ec822ac4914fa83c0cebb400f25e605d3
+  REPO tetherto/qvac-fabric-llm.cpp
+  REF edf7e0da6a52f932624185ae9d0203469798742b
+  SHA512 6202dcd32aa693f1452684e6789f1efc0f2cc479d0c9ae52cba4714990545ba44bb4ec01c4b07f3cab32de869046722f73cba56bb6e7cf6206afd3bb58eaf362
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
@@ -26,6 +22,7 @@ vcpkg_check_features(
     kleidiai BUILD_KLEIDIAI
     openmp BUILD_OPENMP
     hip-backend BUILD_HIP_BACKEND
+    webgpu BUILD_WEBGPU
     cuda-backend BUILD_CUDA_BACKEND
     cuda-jetson-backend BUILD_CUDA_JETSON_BACKEND
     rpc-server BUILD_RPC_SERVER
@@ -48,9 +45,6 @@ if (VCPKG_TARGET_IS_ANDROID AND BUILD_GPU_BACKENDS)
   # `if (ANDROID)` block). The registry vcpkg-cmake sets FETCHCONTENT_FULLY_DISCONNECTED=ON
   # globally, so allow the fetch here (same as the kleidiai path below).
   list(APPEND PLATFORM_OPTIONS -DFETCHCONTENT_FULLY_DISCONNECTED=OFF)
-  # TEMPORARY diagnostics: compare every Vulkan op with the CPU on the device and log
-  # the first divergence to logcat (Adreno 840 finetune). Revert before merging.
-  list(APPEND PLATFORM_OPTIONS -DGGML_VULKAN_CHECK_RESULTS=ON)
 endif()
 
 if(NOT BUILD_GPU_BACKENDS)
@@ -209,6 +203,13 @@ if(BUILD_CUDA_BACKEND)
     list(APPEND PLATFORM_OPTIONS
       "-DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler -Xfatbin=-compress-all")
   endif()
+  # The pinned nvcc (13.0, and 12.6 for Jetson) cannot compile host code
+  # against libc++, so the CUDA module is built against libstdc++ throughout,
+  # including its own ggml-base, and links it statically and privately.
+  if(VCPKG_TARGET_IS_LINUX)
+    list(APPEND PLATFORM_OPTIONS
+      "-DCMAKE_PROJECT_ggml_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/linux-cuda-runtime.cmake")
+  endif()
 endif()
 
 if(VCPKG_TARGET_IS_ANDROID AND BUILD_KLEIDIAI)
@@ -231,6 +232,18 @@ endif()
 
 if (VCPKG_TARGET_IS_ANDROID AND BUILD_GPU_BACKENDS)
   list(APPEND PLATFORM_OPTIONS -DGGML_OPENCL=ON)
+endif()
+
+# WebGPU rides on the dawn port from the official registry (Dawn built from
+# source under the same triplet, so a clang/libc++ triplet never links a
+# libstdc++-built Dawn). Orthogonal to gpu-backends: it is the speech stack's
+# opt-in backend and lands as one more runtime-loaded module under
+# GGML_BACKEND_DL. ggml-webgpu embeds its WGSL shaders with a Python script at
+# configure time, hence the explicit interpreter.
+set(WEBGPU_OPTIONS -DGGML_WEBGPU=OFF)
+if(BUILD_WEBGPU)
+  vcpkg_find_acquire_program(PYTHON3)
+  set(WEBGPU_OPTIONS -DGGML_WEBGPU=ON "-DPython3_EXECUTABLE=${PYTHON3}")
 endif()
 
 if(BUILD_GPU_BACKENDS AND NOT VCPKG_TARGET_IS_OSX AND NOT VCPKG_TARGET_IS_IOS)
@@ -309,6 +322,7 @@ vcpkg_cmake_configure(
     -DLLAMA_ALL_WARNINGS=OFF
     ${LLAMA_OPTIONS}
     ${PLATFORM_OPTIONS}
+    ${WEBGPU_OPTIONS}
     ${FEATURE_OPTIONS}
 )
 
@@ -321,6 +335,18 @@ if(BUILD_CUDA_BACKEND)
   if(NOT EXISTS "${QVAC_CUDA_MODULE}")
     message(FATAL_ERROR "qvac-fabric: expected CUDA module was not installed at ${QVAC_CUDA_MODULE}")
   endif()
+endif()
+
+# Each module links its C++ runtime statically, which holds only if every
+# source in it compiled against that runtime. CUDA and HIP compile through
+# their own drivers, and a module that misses this loads only in processes
+# which already map libstdc++.
+if(VCPKG_TARGET_IS_LINUX AND DL_BACKENDS)
+  include("${CMAKE_CURRENT_LIST_DIR}/qvac-check-cxx-runtime.cmake")
+  file(GLOB QVAC_MODULES
+    "${CURRENT_PACKAGES_DIR}/lib/*.so"
+    "${CURRENT_PACKAGES_DIR}/debug/lib/*.so")
+  qvac_check_cxx_runtime(${QVAC_MODULES})
 endif()
 
 if(BUILD_LLAMA)
