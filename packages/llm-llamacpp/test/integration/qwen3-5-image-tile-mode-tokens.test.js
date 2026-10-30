@@ -158,7 +158,7 @@ test(
         header.setUint16(26, 1, true)
         header.setUint16(28, 24, true)
         header.setUint32(34, pixels, true)
-      const response = await inference.run([
+        const response = await inference.run([
           { role: 'user', type: 'media', content: new Uint8Array(image) },
           { role: 'user', content: 'Describe the image.' }
         ])
