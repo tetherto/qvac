@@ -122,6 +122,8 @@ declare namespace TTSGgml {
     type TtsFitRequest = Fit.TtsFitRequest;
     type TtsFitResult = Fit.TtsFitResult;
     type TtsFitStatus = Fit.TtsFitStatus;
+    type TtsFitDevice = Fit.TtsFitDevice;
+    type TtsFitStats = Fit.TtsFitStats;
     type SupertonicFitRequest = Fit.SupertonicFitRequest;
     type ParlerFitRequest = Fit.ParlerFitRequest;
     type ChatterboxFitRequest = Fit.ChatterboxFitRequest;

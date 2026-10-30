@@ -179,7 +179,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     implementation("org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.3.20")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.20")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

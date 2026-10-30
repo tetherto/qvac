@@ -396,6 +396,11 @@ async function runCacheStateMachineTest (options = {}) { // eslint-disable-line 
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)
 }
 
+async function runCalcTokensTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runCalcTokensTest')) return __FILTERED
+  return runIntegrationModule('../integration/calc-tokens.test.js', options)
+}
+
 async function runConfigParametersTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runConfigParametersTest')) return __FILTERED
   return runIntegrationModule('../integration/config-parameters.test.js', options)
