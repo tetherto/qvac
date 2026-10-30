@@ -39,6 +39,14 @@ inputs:
     description: "Presigned-URL lifetime in seconds (effective TTL capped by the STS session)"
     required: false
     default: "7200"
+  source-s3-bucket:
+    description: "QVAC model registry bucket that S3-only manifest entries (s3Path, no urls) are copied from when missing. Empty = such entries fail if not already seeded."
+    required: false
+    default: ""
+  source-aws-region:
+    description: "Region of source-s3-bucket"
+    required: false
+    default: eu-central-1
   mode:
     description: "both = seed then presign (default); seed = mirror-only (one writer, no map); presign = presign already-seeded objects (per matrix leg)"
     required: false
@@ -102,6 +110,8 @@ runs:
         MODEL_NAMES: ${{ inputs.model-names }}
         EXPIRES_IN: ${{ inputs.expires-in }}
         HF_TOKEN: ${{ inputs.hf-token }}
+        SOURCE_S3_BUCKET: ${{ inputs.source-s3-bucket }}
+        SOURCE_AWS_REGION: ${{ inputs.source-aws-region }}
         MODE: ${{ inputs.mode }}
       run: |
         set -euo pipefail

@@ -199,6 +199,15 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
+      # Single-test smoke legs never load an S3-hosted model.
+      - name: Stage S3-hosted test models
+        if: ${{ !matrix.single_test }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: node scripts/stage-s3-models.mjs
+
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         run: |

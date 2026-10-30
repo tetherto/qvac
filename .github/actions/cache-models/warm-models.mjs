@@ -308,18 +308,27 @@ export function validateModelName(name) {
   return name
 }
 
+// S3-only entries carry no HTTP source; the package workflow stages them.
+function isS3Only(entry) {
+  return !!entry.s3Path && !(Array.isArray(entry.urls) && entry.urls.length)
+}
+
+function isWarmable(entry) {
+  return entry.warm !== false && !isS3Only(entry)
+}
+
 export function selectManifestEntries(manifest, group = '', { includeDeferred = false } = {}) {
   const declared = Object.entries(manifest.models || {})
   for (const [name] of declared) validateModelName(name)
-  const entries = group
-    ? declared.filter(([, entry]) => entry.group === group)
-    : includeDeferred
-      ? declared
-      : declared.filter(([, entry]) => entry.warm !== false)
-
-  if (group && entries.length === 0) {
+  const inGroup = group ? declared.filter(([, entry]) => entry.group === group) : []
+  if (group && inGroup.length === 0) {
     throw new Error(`[warm] manifest has no models in group "${group}"`)
   }
+  const entries = group
+    ? inGroup.filter(([, entry]) => includeDeferred || !isS3Only(entry))
+    : includeDeferred
+      ? declared
+      : declared.filter(([, entry]) => isWarmable(entry))
   return { declared, entries }
 }
 
@@ -334,7 +343,7 @@ export function manifestModelPaths(packageName, entries) {
 // deferred with `warm: false`. Retained for callers/tests that predate group
 // selection; equivalent to selectManifestEntries(manifest).entries.
 export function selectWarmEntries(manifest) {
-  return Object.entries(manifest.models || {}).filter(([, entry]) => entry.warm !== false)
+  return Object.entries(manifest.models || {}).filter(([, entry]) => isWarmable(entry))
 }
 
 // Per-group verified marker. It lives inside the cached model dir so it is
@@ -455,6 +464,10 @@ export async function warmModels(args, { download = downloadWithRetries } = {}) 
       (deferred ? `, ${deferred} deferred to integration tests` : '') +
       `; target ${modelDir}`
   )
+  if (entries.length === 0) {
+    console.log('[warm] nothing to warm (every selected model is staged elsewhere)')
+    return { mode: 'nothing-to-warm', hashed: 0, downloaded: 0, verified: 0 }
+  }
 
   const digest = manifestDigest(rawManifest)
   const expectedMarker = buildMarker({
