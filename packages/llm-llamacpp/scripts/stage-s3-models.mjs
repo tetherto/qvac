@@ -16,25 +16,24 @@ import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const { downloadFile } = require('./download-unit-test-models.js')
+const { isS3Only } = require('./model-source.js')
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const MANIFEST_PATH = resolve(__dirname, '..', 'test', 'integration', 'models.manifest.json')
 const DEFAULT_OUT_DIR = resolve(__dirname, '..', 'test', 'model')
 
 export function s3StagedEntries(manifest) {
-  return Object.entries(manifest.models || {}).filter(
-    ([, entry]) =>
-      typeof entry.s3Path === 'string' &&
-      entry.s3Path.length > 0 &&
-      !(Array.isArray(entry.urls) && entry.urls.length > 0)
-  )
+  return Object.entries(manifest.models || {}).filter(([, entry]) => isS3Only(entry))
 }
 
 function parseArgs(argv) {
   const args = { output: DEFAULT_OUT_DIR }
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--output' || argv[i] === '-o') args.output = resolve(argv[++i])
-    else throw new Error(`Unknown argument: ${argv[i]}`)
+    if (argv[i] === '--output' || argv[i] === '-o') {
+      const value = argv[++i]
+      if (!value) throw new Error('Usage: stage-s3-models.mjs [--output <dir>]')
+      args.output = resolve(value)
+    } else throw new Error(`Unknown argument: ${argv[i]}`)
   }
   return args
 }

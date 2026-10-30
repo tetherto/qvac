@@ -18,6 +18,7 @@
 //            reachable; app installed by pre_test; byte-exact round-trip).
 const fs = require('fs')
 const path = require('path')
+const { isS3Only } = require('./model-source')
 const {
   matrix,
   modelFileName,
@@ -78,7 +79,7 @@ function resolvePinnedManifest(mobileManifest, integrationManifest) {
         }
         // S3-only models reach the device only through the presigned map; a
         // names-only listing (no map yet) still needs them.
-        if (!pinnedOk && !overrideMap && entry && typeof entry.s3Path === 'string') {
+        if (!pinnedOk && !overrideMap && isS3Only(entry)) {
           return { name }
         }
         if (!pinnedOk) {

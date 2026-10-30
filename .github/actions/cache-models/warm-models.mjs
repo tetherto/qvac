@@ -320,15 +320,15 @@ function isWarmable(entry) {
 export function selectManifestEntries(manifest, group = '', { includeDeferred = false } = {}) {
   const declared = Object.entries(manifest.models || {})
   for (const [name] of declared) validateModelName(name)
+  const inGroup = group ? declared.filter(([, entry]) => entry.group === group) : []
+  if (group && inGroup.length === 0) {
+    throw new Error(`[warm] manifest has no models in group "${group}"`)
+  }
   const entries = group
-    ? declared.filter(([, entry]) => entry.group === group && (includeDeferred || !isS3Only(entry)))
+    ? inGroup.filter(([, entry]) => includeDeferred || !isS3Only(entry))
     : includeDeferred
       ? declared
       : declared.filter(([, entry]) => isWarmable(entry))
-
-  if (group && entries.length === 0) {
-    throw new Error(`[warm] manifest has no models in group "${group}"`)
-  }
   return { declared, entries }
 }
 
@@ -464,6 +464,10 @@ export async function warmModels(args, { download = downloadWithRetries } = {}) 
       (deferred ? `, ${deferred} deferred to integration tests` : '') +
       `; target ${modelDir}`
   )
+  if (entries.length === 0) {
+    console.log('[warm] nothing to warm (every selected model is staged elsewhere)')
+    return { mode: 'nothing-to-warm', hashed: 0, downloaded: 0, verified: 0 }
+  }
 
   const digest = manifestDigest(rawManifest)
   const expectedMarker = buildMarker({

@@ -44,6 +44,7 @@
 //   node scripts/validate-mobile-manifest.js --fix    # repin urls (rule 4 only)
 const fs = require('fs')
 const path = require('path')
+const { isS3Only } = require('./model-source')
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
@@ -227,10 +228,7 @@ function pinnedUrlFor(integrationManifest, name) {
 }
 
 function isS3Staged(integrationManifest, name) {
-  const entry = integrationManifest.models && integrationManifest.models[name]
-  return (
-    !!entry && typeof entry.s3Path === 'string' && pinnedUrlFor(integrationManifest, name) === null
-  )
+  return isS3Only(integrationManifest.models && integrationManifest.models[name])
 }
 
 function knownTestFunctions() {

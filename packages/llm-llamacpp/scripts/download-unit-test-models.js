@@ -283,7 +283,7 @@ async function downloadFileWithRetries(url, dest, opts = {}) {
 
 async function downloadFile(url, dest, opts = {}) {
   const name = path.basename(dest)
-  const { sha256, s3Path, skipS3WithoutBucket = false } = opts
+  const { sha256, s3Path, s3Optional = false } = opts
 
   if (fs.existsSync(dest)) {
     const stat = fs.statSync(dest)
@@ -307,7 +307,7 @@ async function downloadFile(url, dest, opts = {}) {
     }
   }
 
-  if (s3Path && !process.env.MODEL_S3_BUCKET && skipS3WithoutBucket) {
+  if (s3Path && !process.env.MODEL_S3_BUCKET && s3Optional) {
     log(`WARNING: skip ${name}: S3-hosted; set MODEL_S3_BUCKET and AWS credentials to fetch it`)
     return
   }
@@ -319,6 +319,10 @@ async function downloadFile(url, dest, opts = {}) {
     await downloadFileWithRetries(url, dest, { sha256, s3Path })
   } catch (err) {
     removeIfExists(dest)
+    if (s3Path && s3Optional) {
+      log(`WARNING: skip ${name}: S3 copy failed (${err.message}); check AWS credentials`)
+      return
+    }
     throw new Error(`failed to download ${name} from ${url || s3Path}: ${err.message}`)
   }
 
@@ -522,7 +526,7 @@ async function ensureUnitTestModels(options = {}) {
       await downloadFile(entry.url, path.join(MODEL_DIR, entry.dest), {
         sha256: entry.sha256,
         s3Path: entry.s3Path,
-        skipS3WithoutBucket: !opts.ciOnly
+        s3Optional: !opts.ciOnly
       })
     }
 

@@ -203,6 +203,28 @@ test('S3-only entries are left to the package workflow but stay in cache paths',
   )
 })
 
+test('a group made only of S3-only entries warms nothing instead of failing', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'qvac-warm-s3-group-'))
+  try {
+    const dir = join(root, 'packages/example/test/integration')
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      join(dir, 'models.manifest.json'),
+      JSON.stringify({ models: { 's3.gguf': { group: 's3', s3Path: 'x/s3.gguf', sha256: SHA256, bytes: GOOD.length } } })
+    )
+    let downloads = 0
+    const result = await warmModels(
+      { package: 'example', root, group: 's3' },
+      { download: async () => { downloads++ } }
+    )
+    assert.equal(result.mode, 'nothing-to-warm')
+    assert.equal(downloads, 0)
+    assert.throws(() => selectManifestEntries({ models: {} }, 's3'), /no models in group/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('manifest names must be plain basenames', () => {
   assert.equal(validateModelName('model.gguf'), 'model.gguf')
   for (const invalid of [
