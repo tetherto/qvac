@@ -77,7 +77,7 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 
 Qwen-Image-2.1 uses a split layout with a Qwen3-VL LLM text encoder (`llmModelSrc`), its vision projector (`projectionModelSrc`), and the 2.1 VAE (`vaeModelSrc`). Reference images are passed in order through `init_images`.
 
-The following script combines subjects from two reference images and requests an RGBA image with a transparent background:
+The following script combines subjects from two reference images and requests an RGBA image with a transparent background. Pass the paths of the two reference images (PNG or JPEG) as the first two arguments; an optional third argument overrides the default prompt:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -92,6 +92,14 @@ The following script combines subjects from two reference images and requests an
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-qwen-image-21.ts title="diffusion-qwen-image-21.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_qwen_image_21.py title="diffusion_qwen_image_21.py" lineNumbers
 ```
 </WrapCode>
 </Tab>

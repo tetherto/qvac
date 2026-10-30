@@ -36,17 +36,25 @@ runs:
 
     - name: Fix desktop device names
       shell: bash
+      env:
+        ARTIFACT_PATTERN: ${{ inputs.artifact-pattern }}
+        RUN_NUMBER: ${{ github.run_number }}
       run: |
         for dir in combined-reports/*/; do
           [ -d "$dir" ] || continue
           base=$(basename "$dir")
           # Mobile artifacts have real Device Farm device names — skip them.
           case "$base" in *-Android-*|*-iOS-*) continue ;; esac
-          # Desktop: strip everything up to and including the addon slug,
-          # and the trailing run-number, to recover the platform tag
+          # Use the declared artifact prefix: addon slugs have different
+          # numbers of hyphens. Strip the trailing run number for the host tag
           # (e.g. "macos-14-arm64", "ubuntu-22.04-x64").
-          platform=$(echo "$base" | sed "s/-${{ github.run_number }}$//" \
-            | sed 's/^perf-report-[^-]*-[^-]*-[^-]*-//')
+          platform="${base%-${RUN_NUMBER}}"
+          prefix="${ARTIFACT_PATTERN%%\**}"
+          if [ -n "$prefix" ] && [[ "$platform" == "$prefix"* ]]; then
+            platform="${platform#"$prefix"}"
+          else
+            platform=$(echo "$platform" | sed 's/^perf-report-[^-]*-[^-]*-[^-]*-//')
+          fi
           [ -z "$platform" ] && continue
           for json in $(find "$dir" -name "performance-report.json" 2>/dev/null); do
             existing=$(jq -r '.device.name // ""' "$json" 2>/dev/null)

@@ -39,6 +39,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      config-ref:
+        description: "Trusted package CI configuration ref. Empty uses base-ref; manual dispatch may select a reviewed branch or commit."
+        required: false
+        type: string
+        default: ""
   workflow_call:
     inputs:
       overrides:
@@ -71,6 +76,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      config-ref:
+        description: "Trusted package CI configuration ref. Empty uses base-ref; manual dispatch may select a reviewed branch or commit."
+        required: false
+        type: string
+        default: ""
       packages:
         description: "JSON array of explicit package short-names, bypassing nx-affected. Empty = normal nx-affected."
         required: false
@@ -139,6 +149,7 @@ jobs:
           overrides: ${{ inputs.overrides || '{}' }}
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
+          config-ref: ${{ inputs.config-ref }}
           packages: ${{ steps.warm.outputs.packages || inputs.packages }}
 
   test-cpp:
