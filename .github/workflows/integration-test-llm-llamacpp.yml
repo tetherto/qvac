@@ -308,6 +308,29 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
+      # The suite runs under `bare`, whose binary links libstdc++, so a GPU
+      # module that needs a C++ runtime from the process still loads there.
+      # @qvac/core runs inference under bare-sidecar, which maps none.
+      - name: Smoke-test CUDA under bare-sidecar
+        if: ${{ matrix.label == 'linux-x64-u24-gpu' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          BARE_SIDECAR_VERSION: 0.5.13
+          # Warmed into test/model by the cache-models step.
+          MODEL: test/model/Llama-3.2-1B-Instruct-Q4_0.gguf
+          # The Vulkan module loads first, and Mesa's ICDs NEED libstdc++,
+          # which would let a broken CUDA module load.
+          VK_DRIVER_FILES: /nonexistent.json
+          VK_ICD_FILENAMES: /nonexistent.json
+        run: |
+          set -euo pipefail
+          sidecar="$RUNNER_TEMP/bare-sidecar"
+          rm -rf "$sidecar" && mkdir -p "$sidecar"
+          npm pack "bare-sidecar@$BARE_SIDECAR_VERSION" --pack-destination "$sidecar" --silent
+          tar -xzf "$sidecar/bare-sidecar-$BARE_SIDECAR_VERSION.tgz" -C "$sidecar"
+          "$sidecar/package/prebuilds/linux-x64/bare" test/integration/sidecar-cuda-smoke.js "$MODEL"
+
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}

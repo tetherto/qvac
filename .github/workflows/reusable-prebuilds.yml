@@ -163,6 +163,15 @@ on:
         type: boolean
         required: false
         default: false
+      verify-linux-module-cxx-runtime:
+        description: >-
+          Fail a Linux job when a shipped .so or .bare NEEDs a shared C++
+          runtime or leaves C++ runtime symbols undefined, so it loads only in
+          hosts that map one (bare-sidecar maps none). Off by default until each
+          package's prebuilds pass it.
+        type: boolean
+        required: false
+        default: false
       cuda-arm64-jetson-cmake-option:
         description: >-
           CMake option enabled for the second Jetson module build. The default
@@ -757,6 +766,12 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
+
+      - name: Verify no shared C++ runtime dependency (Linux)
+        if: ${{ inputs.verify-linux-module-cxx-runtime && matrix.platform == 'linux' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: node "${{ github.workspace }}/.github/scripts/check-linux-module-cxx-runtime.mjs" "prebuilds/linux-${{ matrix.arch }}"
 
       # Guards against regressing the static-runtime build: addons must link the
       # static MSVC runtime, so shipped .bare/.dll/.exe files must not import
