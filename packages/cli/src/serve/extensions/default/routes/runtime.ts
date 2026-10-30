@@ -31,7 +31,8 @@ Read the runtime lifecycle state, backed by the SDK's \`state()\`. Answers
 while the runtime is suspended.
 
 \`active\` serves every request. While \`suspending\`, \`suspended\` or
-\`resuming\`, every other route answers \`503 runtime_suspended\`.
+\`resuming\`, every route except this one, suspend and resume answers
+\`503 runtime_suspended\`.
 `.trim(),
   models: `
 List the \`serve.models\` aliases whose model is loaded, with the SDK's
@@ -42,9 +43,10 @@ are left out; \`/v1/models\` lists those.
 Suspend the runtime, backed by the SDK's \`suspend()\`. **Admin-only:** needs
 \`--enable-admin\`.
 
-P2P resources pause and every route except this group answers
-\`503 runtime_suspended\` until \`POST /qvac/v1/runtime/resume\`. Requests
-already running finish. Idempotent.
+P2P resources pause and every route except state, suspend and resume
+answers \`503 runtime_suspended\` until \`POST /qvac/v1/runtime/resume\`. A
+request whose SDK call is already running finishes; one still waiting, on a
+model load say, gets \`503 runtime_suspended\`. Idempotent.
 
 When a resource fails to pause the runtime is still suspended, and the error
 says so; resume is the recovery path.

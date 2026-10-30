@@ -22,7 +22,7 @@ import {
 } from '@/serve/core/extensions'
 import { createHostMatcher } from '@/serve/core/host-check'
 import { IDENTITY_NONCE_PATTERN, IDENTITY_PATH, identityProof } from '@/serve/core/identity'
-import { shutdownSDK } from '@/serve/core/lifecycle'
+import { runtimeSuspendedError, shutdownSDK } from '@/serve/core/lifecycle'
 import authPlugin from '@/serve/core/plugins/auth'
 import cancelBridgePlugin from '@/serve/core/plugins/cancel-bridge'
 import contextPlugin from '@/serve/core/plugins/context'
@@ -192,11 +192,7 @@ export async function createCoreServer(
       !isIntrospectionPath(req.url) &&
       req.routeOptions.url !== IDENTITY_PATH
     ) {
-      throw new HttpError(
-        503,
-        'runtime_suspended',
-        `The runtime is ${ctx.runtime.state}. Resume it with POST /qvac/v1/runtime/resume.`
-      )
+      throw runtimeSuspendedError(ctx.runtime.state)
     }
   })
 

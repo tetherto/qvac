@@ -7,6 +7,7 @@ import type { ModelConstant } from '@qvac/sdk'
 import type { ModelFitPolicy } from '@qvac/sdk/schemas'
 import type { ModelRegistry } from '@/serve/core/model-registry'
 import type { Logger } from '@/logger'
+import { isLifecycleBlockedError } from '@/serve/core/lifecycle'
 
 /** SDK loader, overridable in tests. `@qvac/sdk`'s `loadModel` is heavily
  * overloaded; this is the shape serve calls it with (free-form `modelType`
@@ -201,6 +202,9 @@ export function createLoadManager(
         registry.markUnloaded(alias)
       } else if (rec.cancelRequested) {
         logger.info(`Load of "${alias}" cancelled (client disconnected); left unloaded.`)
+        registry.markUnloaded(alias)
+      } else if (isLifecycleBlockedError(err)) {
+        logger.info(`Load of "${alias}" refused while the runtime is suspended; left unloaded.`)
         registry.markUnloaded(alias)
       } else {
         registry.setError(alias, err)

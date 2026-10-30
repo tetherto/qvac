@@ -260,8 +260,9 @@ Admin routes also refuse a request whose `Origin` header is outside `--cors-orig
 `serve.cors.origins` with `403 origin_not_allowed`, so a web page cannot suspend a local server.
 Clients that send no `Origin`, such as `curl` or an SDK, are unaffected.
 
-While the runtime is `suspending`, `suspended` or `resuming`, every route outside this group
-answers `503 runtime_suspended`. `/openapi.json`, `/docs` and `/qvac/identity` stay available.
+While the runtime is `suspending`, `suspended` or `resuming`, every route except
+`GET /qvac/v1/runtime/state`, `suspend` and `resume` answers `503 runtime_suspended`.
+`/openapi.json`, `/docs` and `/qvac/identity` stay available.
 
 ### `GET /qvac/v1/runtime/state`
 
@@ -300,8 +301,10 @@ on-disk path is not returned.
 
 ### `POST /qvac/v1/runtime/suspend` and `POST /qvac/v1/runtime/resume`
 
-Admin-only. Suspend pauses P2P resources and gates every other route until resume. Requests
-already running finish. Both are idempotent and return the state they leave the runtime in.
+Admin-only. Suspend pauses P2P resources and gates every route except state, suspend and resume
+until resume. A request whose SDK call is already running finishes; one still waiting, on a model
+load say, gets `503 runtime_suspended`. Both are idempotent and return the state they leave the
+runtime in.
 
 ```bash
 curl -sS -X POST http://localhost:11434/qvac/v1/runtime/suspend \
@@ -318,7 +321,7 @@ curl -sS -X POST http://localhost:11434/qvac/v1/runtime/suspend \
 | ---- | ------------------------ | ------------------------------------------------------------------- |
 | 403  | `admin_disabled`         | Suspend or resume on a server started without `--enable-admin`      |
 | 403  | `origin_not_allowed`     | Suspend or resume from a browser origin outside the CORS allowlist  |
-| 503  | `runtime_suspended`      | Any route outside this group while the runtime is not `active`      |
+| 503  | `runtime_suspended`      | Any route but state, suspend and resume while not `active`          |
 | 500  | `runtime_state_failed`   | The SDK could not report the lifecycle state                        |
 | 500  | `runtime_query_failed`   | The SDK could not describe a loaded model                           |
 | 500  | `runtime_suspend_failed` | A resource failed to pause; the runtime is suspended anyway, resume |
