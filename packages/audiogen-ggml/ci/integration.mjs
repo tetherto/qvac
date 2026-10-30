@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// audiogen's test:integration, as integration-test-nx.yml ran it: the suite with the addon's prebuilds on the library
+// audiogen's test:integration, as main's desktop test workflow ran it: the suite with the addon's prebuilds on the library
 // path and the long per-test timeout. The manifest supplies every dit variant's models.
 //
 //   node ci/integration.mjs [--set NAME=value]...

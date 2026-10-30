@@ -367,9 +367,9 @@ A model or embedder the fitter cannot read resolves to `status: "error"`; a brok
 
 ## Tests
 
-The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
-compiler cache, and two build workers. C++ test failures block the merge guard.
-See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+The C++ tests run through the CI contract's `cpp:build` and `cpp:tests` targets,
+with the shared vcpkg cache and two build workers. C++ test failures block the
+merge guard. See [the package CI contract](../../docs/ci/workflow-standard.md).
 for cache warming and resource settings.
 
 | Script | Purpose |

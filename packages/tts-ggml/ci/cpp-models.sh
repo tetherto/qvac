@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tts's C++ test models, as cpp-tests-nx.yml made them: a Python venv converts the Hugging Face weights to the q4_0
+# tts's C++ test models, as main's C++ test workflow made them: a Python venv converts the Hugging Face weights to the q4_0
 # GGUFs the RealGguf tests read. A missing GGUF only warns; its gated tests skip.
 set -euo pipefail
 cd "$(dirname "$0")/.."

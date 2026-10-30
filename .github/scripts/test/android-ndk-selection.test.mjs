@@ -14,10 +14,6 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const actionPath = ".github/actions/setup-build-host/action.yml";
-const workflowPaths = [
-  ".github/workflows/reusable-prebuilds.yml",
-  ".github/workflows/integration-mobile-test-inference-addon-cpp.yml",
-];
 
 function readStepScript(path, stepName) {
   const source = readFileSync(join(root, path), "utf8");
@@ -87,35 +83,3 @@ test("host setup replaces the runner's NDK 30 selector with the validated pin", 
     rmSync(directory, { recursive: true, force: true });
   }
 });
-
-for (const path of workflowPaths) {
-  test(`${path} overrides Bare's latest selector after pinned host setup`, () => {
-    const directory = mkdtempSync(join(tmpdir(), "qvac-ndk-"));
-    try {
-      const source = readFileSync(join(root, path), "utf8");
-      assert.ok(
-        source.indexOf("name: Align Bare NDK selection") >
-          source.indexOf(
-            "uses: tetherto/qvac/.github/actions/setup-build-host@",
-          ),
-      );
-      const output = join(directory, "github-env").replaceAll("\\", "/");
-      const selectedNdk = "C:/fake-sdk/ndk/pinned-version";
-      const script = readStepScript(path, "Align Bare NDK selection");
-      const result = runStep(script, {
-        ANDROID_NDK_HOME: selectedNdk,
-        ANDROID_NDK_LATEST_HOME: "C:/fake-sdk/ndk/newer-version",
-        GITHUB_ENV: output,
-      });
-      assert.equal(result.status, 0, result.stderr);
-      assert.equal(readExports(output).ANDROID_NDK_LATEST_HOME, selectedNdk);
-      const missingNdk = runStep(script, {
-        ANDROID_NDK_HOME: "",
-        GITHUB_ENV: output,
-      });
-      assert.notEqual(missingNdk.status, 0);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-}

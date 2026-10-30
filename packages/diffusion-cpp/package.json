@@ -159,7 +159,15 @@
     "typescript-eslint": "^8.64.0",
     "cmake-npm": "^1.1.0",
     "b4a": "^1.6.7",
-    "bare-https": "^3.0.0"
+    "bare-https": "^3.0.0",
+    "bare": "^1.36.0",
+    "bare-runtime": "^1.36.0",
+    "bare-make": "^2.1.0",
+    "cmake-toolchains": "^2.1.0",
+    "cmake-runtime": "^4.1.1",
+    "llvm-runtime": "^23.1.0",
+    "nasm-runtime": "^3.2.0",
+    "ninja-runtime": "^1.13.1"
   },
   "dependencies": {
     "@qvac/infer-base": "^0.8.0",

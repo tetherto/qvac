@@ -79,7 +79,7 @@ jobs:
             pkg-any:
               - "packages/**"
             # Shared CI definitions: they affect every addon but name none, so
-            # nx-affected selects nothing and on-pr-nx posts no
+            # nx-affected selects nothing and pr-build-test posts no
             # qvac/prebuild-<pkg> status for them. They therefore drive
             # sanity-checks only. Requiring a prebuild status here would poll to
             # the 180 minute deadline for a status nothing is going to post.
@@ -88,8 +88,8 @@ jobs:
               - ".github/workflows/prebuilds-*.yml"
               - ".github/workflows/cpp-tests-*.yml"
               - ".github/workflows/integration-test-*.yml"
-            # No prebuilds-<pkg>.yml line for on-pr-nx packages: on-pr-nx only
-            # triggers on packages/**, so a PR touching just that file would
+            # No workflow line on a package key: pr-build-test selects packages by
+            # their packages/** changes, so a PR touching just that file would
             # wait to the deadline for a status nothing posts. shared-ci covers it.
             asr-ggml:
               - "packages/asr-ggml/**"
@@ -128,7 +128,9 @@ jobs:
               - "packages/turbovec-ggml/**"
             fabric:
               - "packages/fabric/**"
-              - ".github/workflows/prebuilds-fabric.yml"
+            # C++ only, with no build and no status of its own: listed so pr-build-test can select it.
+            inference-addon-cpp:
+              - "packages/inference-addon-cpp/**"
             vla:
               - "packages/vla-ggml/**"
 
@@ -144,7 +146,7 @@ jobs:
           # Every package filter key above. Kept in step with that list.
           # One line: a folded scalar with a deeper indent keeps its newlines,
           # and $GITHUB_OUTPUT rejects a multiline value.
-          ALL_PACKAGES: '["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","ggml-rpc-server","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","turbovec-ggml","fabric","vla"]'
+          ALL_PACKAGES: '["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","ggml-rpc-server","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","turbovec-ggml","fabric","inference-addon-cpp","vla"]'
         run: |
           CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))')
 
@@ -161,6 +163,8 @@ jobs:
             SANITY=$(jq -c . <<< "$ALL_PACKAGES")
             echo "::notice::shared CI changed but no package path did; running sanity-checks across every addon"
           fi
+          # sanity-checks reads the package's package.json, so a package without one is left to its own targets.
+          SANITY=$(jq -r '.[]' <<< "$SANITY" | while read -r p; do d="packages/$p"; [ "$p" = vla ] && d=packages/vla-ggml; [ -f "$d/package.json" ] && echo "$p"; done | jq -Rsc 'split("\n") | map(select(length > 0))')
           echo "sanity-packages=${SANITY}" >> "$GITHUB_OUTPUT"
           echo "packages-with-path=$(echo "$SANITY" | jq -c '
             map({package: ., path: (if . == "vla" then "packages/vla-ggml" else "packages/" + . end)})

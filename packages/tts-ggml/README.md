@@ -1209,29 +1209,6 @@ case completes. Run both files together without test filters: a successful full
 run has 12 passing tests, including the two completion checks, and no skips.
 Preflight only checks asset presence; actual model loading and inference must
 also pass. These commands cover TTS, TTSD and Speech, not MOSS-SoundEffect (SFX).
-To validate the fresh packaged addons on the provisioned Linux GPU runner,
-dispatch the existing integration workflow on the branch being tested:
-
-```sh
-gh workflow run integration-test-nx.yml --repo tetherto/qvac --ref <branch> -f moss_packaged_gpu=true
-```
-
-This opt-in mode retains the `release` environment gate and builds both addons
-from the dispatch SHA with build concurrency capped at two. It stages the fresh
-platform packages through `link:platform`, verifies that both CUDA and Vulkan
-plugins are present, then runs CUDA and Vulkan sequentially. Each backend must
-pass the 12 TTS/TTSD/Speech tests above, two SFX tests (including exact backend
-and no-fallback assertions for both GPU clips), and the focused ASR Spanish
-transcription test with default and hotword prompts. Fixture skips fail the run.
-CPU control cases remain part of the TTS/SFX suites.
-
-The runner stages q8_0 TTS/TTSD/Speech/SFX backbones and q5_0 Transcribe, with
-the required codec precision preserved. TTS/TTSD q8_0 are generated on the
-runner from the source checkpoints using the pinned native quantizer. The
-artifacts retain source pins, model and prebuild hashes, the fresh prebuilds,
-and per-backend logs/results; model weights are removed and never uploaded.
-This mode does not publish. A dispatched or building run is not GPU validation:
-only passing case logs from both backends establish packaged-addon coverage.
 
 Without strict mode, developer behavior is unchanged: an unpinned run accepts
 the normal GPU cascade, missing model directories skip tests, and missing
@@ -1679,9 +1656,9 @@ concatenated wav.
 
 ## Testing
 
-The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
-compiler cache, and two build workers. The deterministic C++ tier remains a
-required gate. See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+The C++ tests run through the CI contract's `cpp:build` and `cpp:tests` targets,
+with the shared vcpkg cache and two build workers. The deterministic C++ tier
+remains a required gate. See [the package CI contract](../../docs/ci/workflow-standard.md).
 for cache warming and resource settings.
 
 ```bash

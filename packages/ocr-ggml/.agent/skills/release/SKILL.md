@@ -75,10 +75,9 @@ Proceed? (y/n)
    ```bash
    git push origin release-<package>-<version>
    ```
-4. Trigger the release workflow manually. Pushing the branch does not start it: a branch with no new commits never matches the workflow's `paths` filter. A package on the CI contract (`"tags": ["ci:addons"]` in its `project.json`) publishes through `publish-npm.yml`; the others through `on-merge-nx.yml`:
+4. Trigger the release workflow manually. Pushing the branch does not start it: a branch with no new commits never matches the workflow's `paths` filter. Every native addon publishes through `publish-npm.yml`:
    ```bash
-   gh workflow run publish-npm.yml --repo tetherto/qvac --ref release-<package>-<version> -f packages=<package>   # CI contract
-   gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref release-<package>-<version> -f package=<package>    # the rest
+   gh workflow run publish-npm.yml --repo tetherto/qvac --ref release-<package>-<version> -f packages=<package>
    ```
 
 This workflow:
@@ -171,5 +170,5 @@ git checkout main
 ## Important notes
 
 - This skill creates a local release branch, pushes it to remote, and triggers CI manually.
-- The on-merge workflow handles building and publishing — do not manually publish.
+- `publish-npm.yml` handles building and publishing; do not publish by hand.
 - Release branches are never merged back to main automatically. If main needs the changes, a separate PR is required.

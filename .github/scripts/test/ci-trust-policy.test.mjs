@@ -209,107 +209,6 @@ test("ci-router: missing head repo fails closed; fork and same-repo route alike"
   assert.deepEqual(route({ HEAD_REPO: "outsider/qvac" }), baselineRoute);
 });
 
-function inferenceAuthorization(relativePath, stepName, overrides = {}) {
-  const script = extractRunBlock(relativePath, stepName);
-  return runScript(script, {
-    EVENT: "pull_request",
-    IS_FORK: "false",
-    IS_DRAFT: "false",
-    HAS_RUN_LABEL: "false",
-    // SHA-bound approval (qvac/fork-verified status on the current head),
-    // resolved by the job's separate read-only step; injected here for the
-    // decision-logic unit.
-    HAS_APPROVED_SHA: "false",
-    ...overrides,
-  });
-}
-
-for (const [relativePath, stepName, label, runLabel] of [
-  [
-    ".github/workflows/pr-test-inference-addon-cpp.yml",
-    "Authorize native tests",
-    "native",
-    "run-cpp-addon-tests",
-  ],
-  [
-    ".github/workflows/pr-test-inference-addon-cpp-js.yml",
-    "Authorize JS tests",
-    "JS",
-    "run-desktop-addon-tests",
-  ],
-]) {
-  test(`${label} authorization: internal ready PR needs only ${runLabel}`, () => {
-    assert.equal(
-      inferenceAuthorization(relativePath, stepName).allowed,
-      "false",
-    );
-    assert.equal(
-      inferenceAuthorization(relativePath, stepName, {
-        HAS_RUN_LABEL: "true",
-      }).allowed,
-      "true",
-    );
-  });
-
-  test(`${label} authorization: drafts are denied until ready`, () => {
-    assert.equal(
-      inferenceAuthorization(relativePath, stepName, {
-        IS_DRAFT: "true",
-        HAS_RUN_LABEL: "true",
-      }).allowed,
-      "false",
-    );
-  });
-
-  test(`${label} authorization: external fork needs ${runLabel} AND a SHA-bound approval`, () => {
-    // Fork, nothing -> denied.
-    assert.equal(
-      inferenceAuthorization(relativePath, stepName, { IS_FORK: "true" })
-        .allowed,
-      "false",
-    );
-    // Approved SHA but no tier label -> denied.
-    assert.equal(
-      inferenceAuthorization(relativePath, stepName, {
-        IS_FORK: "true",
-        HAS_APPROVED_SHA: "true",
-      }).allowed,
-      "false",
-    );
-    // Tier label present but the current head SHA is NOT approved (stale label /
-    // draft->ready / close->reopen flip / fresh push) -> denied.
-    assert.equal(
-      inferenceAuthorization(relativePath, stepName, {
-        IS_FORK: "true",
-        HAS_RUN_LABEL: "true",
-      }).allowed,
-      "false",
-    );
-    // Tier label + SHA-bound approval on the current head -> allowed.
-    assert.equal(
-      inferenceAuthorization(relativePath, stepName, {
-        IS_FORK: "true",
-        HAS_RUN_LABEL: "true",
-        HAS_APPROVED_SHA: "true",
-      }).allowed,
-      "true",
-    );
-  });
-
-  test(`${label} authorization: a stale tier label on an unapproved (pushed) SHA is denied`, () => {
-    // The draft->ready / close->reopen flip and any later fork push land here:
-    // the label persists but the new head SHA carries no approval.
-    assert.equal(
-      inferenceAuthorization(relativePath, stepName, {
-        IS_FORK: "true",
-        HAS_RUN_LABEL: "true",
-        HAS_APPROVED_SHA: "false",
-      }).allowed,
-      "false",
-    );
-  });
-}
-
 function authorizePr(overrides = {}) {
   const script = extractRunBlock(
     ".github/actions/authorize-pr/action.yml",
@@ -608,13 +507,8 @@ test("public-pr: trusted non-PR calls do not require verified", () => {
 });
 
 test("all ci-router callers re-run when a draft becomes ready", () => {
-  // The uniform on-pr-<pkg>.yml orchestrators are consolidated into on-pr-nx.yml.
-  // Two carve-outs keep their own files, and vla is built by the CI contract's
-  // pr-build-test.yml, which routes with ci-route-stages; all must still re-run on the
-  // draft->ready transition, so they stay listed here.
+  // The CI contract's pr-build-test.yml routes with ci-route-stages and must re-run on the draft->ready transition.
   const workflowNames = [
-    "on-pr-nx.yml",
-    "on-pr-fabric.yml",
     "pr-build-test.yml",
   ];
 
@@ -631,8 +525,6 @@ test("all ci-router callers re-run when a draft becomes ready", () => {
 
 test("special workflows subscribe to ready and label events", () => {
   for (const relativePath of [
-    ".github/workflows/pr-test-inference-addon-cpp.yml",
-    ".github/workflows/pr-test-inference-addon-cpp-js.yml",
     ".github/workflows/check-approvals.yml",
   ]) {
     const source = read(relativePath);
@@ -906,25 +798,6 @@ test("no GitHub Actions checkout/ref input resolves mutable PR head.ref", () => 
   assert.deepEqual(offenders, []);
 });
 
-test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
-  const source = read(".github/workflows/cpp-lint.yaml");
-  assert.match(
-    source,
-    /PR_HEAD_SHA:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
-  );
-  assert.match(source, /ref:\s+\$\{\{ env\.HEAD_SHA \}\}/);
-  assert.doesNotMatch(source, /PR_HEAD_REF|env\.HEAD_REF/);
-});
-
-// Self-hosted legs (cpp-lint, linux-x64 prebuild) get libibverbs from the
-// runner image. This covers the GitHub-hosted legs on the PR path; the release
-// path reads linuxExtraPackages from packages/fabric/project.json.
-test("Fabric prebuilds install the Linux RDMA build dependency", () => {
-  const prebuilds = read(".github/workflows/prebuilds-fabric.yml");
-
-  assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs-dev$/m);
-});
-
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
   const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)
@@ -1106,7 +979,7 @@ test("verify-prebuilds binds a prebuild status to its producing on-pr run", () =
     "the default producer is still the consolidated on-pr-nx.yml",
   );
   for (const [pkg, workflow] of [
-    ["fabric", "on-pr-fabric.yml"],
+    ["fabric", "pr-build-test.yml"],
     ["vla", "pr-build-test.yml"],
     ["classification-ggml", "pr-build-test.yml"],
   ]) {
@@ -1189,8 +1062,8 @@ test("publish-cpp-test-status stamps its run URL into target_url", () => {
         /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(
           job,
         );
-      // on-pr-nx may force RUN_CPP_TESTS to 'true' for cppTestsBaseline
-      // packages, but it must still fall back to ci-router's decision.
+      // A producer may force RUN_CPP_TESTS to 'true' for baseline packages, but it
+      // must still fall back to ci-router's decision.
       const hasSkipGuard =
         /CPP_TEST_RESULT:\s*\$\{\{ needs\.cpp-tests(?:-coverage)?\.result \}\}/.test(
           job,
@@ -1325,72 +1198,7 @@ test("merge guard changes filter: ALL_PACKAGES and producer-less workflow paths"
   );
 });
 
-test("on-pr-nx treats a cppTestsBaseline package's skipped suite as a failure", () => {
-  const job = jobBlock(
-    read(".github/workflows/on-pr-nx.yml"),
-    "publish-cpp-test-status",
-  );
-  assert.match(
-    job,
-    /RUN_CPP_TESTS:\s*\$\{\{ contains\(fromJSON\(needs\.matrix\.outputs\.cppbaseline \|\| '\[\]'\), matrix\.package\) && 'true' \|\| needs\.ci-router\.outputs\.run_cpp_tests \}\}/,
-    "a baseline package runs without the label, so its skip must not read as a no-label skip",
-  );
-});
-
-// on-pr-nx runs on pull_request_target, so every job that executes PR code or
-// holds a write scope must gate on fork-approval. Enumerated from the file so a
-// newly added job cannot land ungated: anything not explicitly exempted below
-// has to carry the gate.
-test("on-pr-nx: every non-exempt job gates on fork-approval", () => {
-  const source = read(".github/workflows/on-pr-nx.yml");
-
-  // Exempt, and why. Each either runs no PR code or establishes the gate itself.
-  const exempt = new Map([
-    ["fork-approval", "is the gate"],
-    ["ci-router", "reads PR labels from a trusted checkout; runs no PR code"],
-    [
-      "authorize",
-      "needs fork-approval already, and is the second half of the gate",
-    ],
-    [
-      "matrix",
-      "checks out the default branch only and reads options.ci off it",
-    ],
-    [
-      "publish-prebuild-status",
-      "trusted sparse checkout; publishes a commit status after gated jobs",
-    ],
-    [
-      "publish-cpp-test-status",
-      "trusted sparse checkout; publishes a commit status after gated jobs",
-    ],
-  ]);
-
-  const jobNames = [...source.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].map(
-    (m) => m[1],
-  );
-  assert.ok(jobNames.length > 10, "parsed the on-pr-nx job list");
-
-  for (const job of jobNames) {
-    if (exempt.has(job)) continue;
-    const block = jobBlock(source, job);
-    const needs = block.match(/needs:[\s\S]*?(?=\n {4}[a-z#]|\n {2}[a-z])/);
-    assert.ok(needs, `'${job}' declares needs`);
-    assert.match(
-      needs[0],
-      /\bfork-approval\b/,
-      `'${job}' must gate on fork-approval (or be added to the exempt map with a reason)`,
-    );
-  }
-
-  // The exempt map must not drift into naming jobs that no longer exist.
-  for (const job of exempt.keys()) {
-    assert.ok(jobNames.includes(job), `exempt job '${job}' still exists`);
-  }
-});
-
-// pr-build-test is on-pr-nx's successor for contract packages and holds every privileged PR job, so the same rule
-// applies. trust reports allowed=false rather than failing, so a gated job needs it in both needs and if.
+// pr-build-test holds every privileged PR job for the packages on the CI contract, so the same rule applies. trust reports allowed=false rather than failing, so a gated job needs it in both needs and if.
 test("pr-build-test: every non-exempt job gates on trust", () => {
   const source = read(".github/workflows/pr-build-test.yml");
 
@@ -1430,69 +1238,6 @@ test("pr-build-test: every non-exempt job gates on trust", () => {
   for (const job of exempt.keys()) {
     assert.ok(jobNames.includes(job), `exempt job '${job}' still exists`);
   }
-});
-
-test("on-pr-nx matrix job loads nx-project-matrix from the trusted default branch and reads config off it, never PR head", () => {
-  const source = read(".github/workflows/on-pr-nx.yml");
-  const matrix = jobBlock(source, "matrix");
-
-  // (i) The matrix composite runs from a FULL (non-sparse) checkout of the trusted
-  // default branch, pinned before `uses:` — never PR head (fork RCE under pull_request_target).
-  const checkoutRefLine = matrix
-    .split("\n")
-    .find((line) => line.trim().startsWith("ref:"));
-  assert.ok(checkoutRefLine, "matrix job checkout pins a ref");
-  assert.doesNotMatch(
-    checkoutRefLine,
-    /github\.event\.pull_request\.head\./,
-    "matrix checkout ref must never resolve to a PR-head expression",
-  );
-  assert.match(
-    checkoutRefLine,
-    /github\.event\.repository\.default_branch/,
-    "matrix checkout ref is the trusted default branch",
-  );
-  assert.doesNotMatch(
-    matrix,
-    /sparse-checkout:\s*\.github\/actions\/nx-project-matrix/,
-    "matrix job must NOT sparse-checkout (sparse config leaks into the action checkout and breaks the pnpm pin)",
-  );
-  assert.match(
-    matrix,
-    /persist-credentials:\s*false/,
-    "matrix job checkout must not persist credentials",
-  );
-
-  const trustedCheckoutIndex = matrix.search(
-    /uses: actions\/checkout@[0-9a-f]{40}/,
-  );
-  const usesIndex = matrix.indexOf("uses: ./.github/actions/nx-project-matrix");
-  assert.notEqual(
-    usesIndex,
-    -1,
-    "matrix job runs the nx-project-matrix composite",
-  );
-  assert.ok(
-    trustedCheckoutIndex !== -1 && trustedCheckoutIndex < usesIndex,
-    "the trusted default-branch checkout must precede `uses: ./.github/actions/nx-project-matrix`",
-  );
-
-  // (ii) config-ref (the options.ci source) must resolve to the trusted default
-  // branch, never a PR-head expression (else a fork points the git-show at its tree).
-  const configRefLine = matrix
-    .split("\n")
-    .find((line) => line.trim().startsWith("config-ref:"));
-  assert.ok(configRefLine, "matrix job passes config-ref to nx-project-matrix");
-  assert.doesNotMatch(
-    configRefLine,
-    /github\.event\.pull_request\.head\./,
-    "config-ref must not resolve to a PR-head expression",
-  );
-  assert.match(
-    configRefLine,
-    /github\.event\.repository\.default_branch/,
-    "config-ref resolves to the trusted default branch",
-  );
 });
 
 test("publish-prebuild-status stamps its run URL into target_url", () => {
@@ -1760,10 +1505,10 @@ test("fork-ci: every pull_request_target verified-surface workflow has the fork-
   // dropped from 20 when transcription-* merged into asr-ggml, then to 18 when
   // ocr-onnx CI was retired on main, and the floor dropped again when the
   // per-package pull_request_target on-pr-<pkg> workflows were consolidated into
-  // on-pr-nx.yml. on-pr-nx carries its own fork-approval + authorize chain, so it
-  // satisfies the per-target assertions below.
+  // on-pr-nx.yml, and once more when the last orchestrators moved to the CI
+  // contract's pr-build-test.yml.
   assert.ok(
-    targets.length >= 5,
+    targets.length >= 4,
     `found ${targets.length} fork-ci target workflows`,
   );
   for (const path of targets) {
@@ -2087,124 +1832,6 @@ test("mobile validate-devices fails fast on an unknown tests filter and an overs
   assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/);
 });
 
-const MOBILE_TEST_WORKFLOWS = workflowPaths().filter((path) =>
-  /integration-mobile-test-.*\.ya?ml$/.test(path),
-);
-
-test("mobile validate-devices reads its filter/shard data from the tested ref, not the workflow ref", () => {
-  // The build checks out addon code from the tested ref, so the validator must
-  // read test-groups.json / integration.auto.cjs from the SAME ref — otherwise
-  // a branch that renames/adds runners passes stale validation and can run zero
-  // tests. The executable composite action stays on the trusted workflow ref,
-  // so the data file must NEVER be sparse-checked-out alongside it.
-  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 2);
-  for (const path of MOBILE_TEST_WORKFLOWS) {
-    const src = read(path);
-    // Validation data comes from the SAME immutable commit the build compiles,
-    // into a dedicated dir. Most addons pin to `inputs.ref || github.sha`
-    // (github.sha is the constant triggering commit, so a mid-run push can't
-    // make validation and build diverge); inference uses the equivalent
-    // `pull_request.head.sha || inputs.ref || github.sha` (the trailing
-    // github.sha pins a blank workflow_dispatch to the triggering commit too).
-    // github.ref (mutable) is never used for a checkout ref — only as a
-    // concurrency-group key.
-    assert.match(
-      src,
-      /ref: \$\{\{ (inputs\.ref \|\| github\.sha|github\.event\.pull_request\.head\.sha \|\| inputs\.ref \|\| github\.sha) \}\}/,
-      `${path} must check out validation data from the same immutable ref the build uses`,
-    );
-    assert.doesNotMatch(
-      src,
-      /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/,
-      `${path} must not resolve a checkout to the mutable github.ref`,
-    );
-    assert.match(
-      src,
-      /path: validation-data/,
-      `${path} must isolate validation data in validation-data/`,
-    );
-    // The path handed to the validator points at that dir, never a raw
-    // workflow-ref checkout path.
-    assert.match(
-      src,
-      /(test-groups-path|runner-source-path): validation-data\//,
-      `${path} must validate against the tested-ref data copy`,
-    );
-    // The data file is never co-located on the trusted composite-action
-    // checkout (that would pin validation to the workflow ref again).
-    assert.doesNotMatch(
-      src,
-      /run-mobile-integration-tests\n\s+packages\/[^\n]*\/test\/mobile\//,
-      `${path} must not sparse-checkout mobile test data on the action checkout`,
-    );
-  }
-});
-
-test("mobile dispatch inputs are injection-safe and default to branch-native + exact-model runs", () => {
-  // (1) `${{ github.event.inputs.package }}` must never be interpolated into a
-  // run: script — it goes through an `env:` block per .github/AGENTS.md, else a
-  // crafted spec (`"; curl … | bash; echo "`) breaks out of the scope check that
-  // renders after the quotes break; (2) the model-match operator defaults to
-  // EQUALS so a maxDevices:1 dispatch bills the exact fleet model, not a CONTAINS
-  // near-match (e.g. Pixel 9 -> Pixel 9 Pro); (3) the dispatch package spec
-  // defaults to EMPTY so a `--ref <branch>` run tests the branch's native
-  // prebuild artifact, not the published @latest.
-  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 2);
-  for (const path of MOBILE_TEST_WORKFLOWS) {
-    const src = read(path);
-    assert.doesNotMatch(
-      src,
-      /"\$\{\{ github\.event\.inputs\.package \}\}" =~/,
-      `${path} must validate the package spec via an env: block, not an inline run: template`,
-    );
-    assert.doesNotMatch(
-      src,
-      /default: CONTAINS/,
-      `${path} must default device_model_operator to EQUALS`,
-    );
-    assert.doesNotMatch(
-      src,
-      /default:\s*['"]@[a-z]+\/[^'"]*@latest['"]/,
-      `${path} must default the dispatch package spec to empty (artifact-first), not @latest`,
-    );
-  }
-});
-
-test("inference generates its runner map in an unprivileged job and fails closed", () => {
-  const src = read(
-    ".github/workflows/integration-mobile-test-inference-addon-cpp.yml",
-  );
-  // The generator runs repo-branch code, so it must hold no secrets.
-  const mapJob = src.slice(
-    src.indexOf("  resolve-runner-map:"),
-    src.indexOf("  validate-devices:"),
-  );
-  assert.ok(mapJob.length > 0, "resolve-runner-map job must exist");
-  assert.match(mapJob, /permissions:\n\s+contents: read/);
-  assert.doesNotMatch(mapJob, /id-token: write/);
-  assert.doesNotMatch(mapJob, /environment:/);
-  // It regenerates from the SAME immutable commit the build compiles: the
-  // build jobs share this exact expression, and the trailing github.sha pins a
-  // blank workflow_dispatch to the triggering commit (github.ref is deliberately
-  // NOT a fallback, so a mid-run push can't make validation inspect different
-  // code than the build), and fails closed.
-  assert.match(
-    mapJob,
-    /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| inputs\.ref \|\| github\.sha \}\}/,
-  );
-  assert.doesNotMatch(mapJob, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/);
-  assert.match(mapJob, /set -euo pipefail/);
-  assert.doesNotMatch(src, /falling back to device-only/);
-  // validate-devices consumes the artifact as data and hard-fails if the map
-  // could not be produced, before any build or Device Farm spend.
-  assert.match(src, /needs\.resolve-runner-map\.result != 'success'/);
-  assert.match(src, /Failing closed/);
-  assert.match(
-    src,
-    /test-groups-path: validation-data\/inference-mobile-test-groups\.json/,
-  );
-});
-
 test("mobile monitor maps each run back to its spec for any per-spec fan-out", () => {
   const action = read(
     ".github/actions/run-mobile-integration-tests/monitor-test-run/action.yml",
@@ -2466,10 +2093,6 @@ const TRUSTED_CACHE_EVENTS = [
 // Known-ungated, tracked on QVAC-24711. Remove each entry as it is fixed -- this
 // list should only ever shrink.
 const TRUSTED_CACHE_EXEMPT = new Set([
-  // Exempt only for its pre-existing ungated actions/cache@ write (the Laya GGUF),
-  // reachable from on-pr-nx.yml (pull_request_target). Needs its own ticket. Its
-  // vcpkg cache write IS gated, and is checked below.
-  ".github/workflows/cpp-tests-nx.yml",
 ]);
 
 // Events that must never appear in a cache WRITE gate. `pull_request_target` is
@@ -2592,44 +2215,6 @@ test("cache policy: cpp-tests cache writes are gated on trusted events", () => {
 // so the dead entry is never replaced. Observed on both Windows pools and on a
 // single macOS runner four days apart. Both cache steps in a workflow must
 // carry the fingerprint, and the step that produces it must come first.
-// The host cache directory outlives the job and is shared with every later job
-// on the box, so the step that copies archives into it must carry the same trust
-// gate as the cache write. It was gated only on VCPKG_CACHE_PERSISTENT at first,
-// which is true on any self-hosted runner including a pull_request_target run.
-test("cache policy: the host-cache sync step is gated on trusted events", () => {
-  const offenders = [];
-  for (const { path, step } of eachCppTestsCacheStep({
-    match: /name: Sync the host and workspace vcpkg caches/,
-    includeExempt: true,
-  })) {
-    const missing = TRUSTED_CACHE_EVENTS.filter(
-      (e) => !step.includes(`github.event_name == '${e}'`),
-    );
-    if (missing.length) {
-      offenders.push(
-        `${path}: the host-cache sync step does not gate on ${missing.join(", ")}`,
-      );
-    }
-    const unpinned = missingTrustGuards(step);
-    if (unpinned.length) {
-      offenders.push(
-        `${path}: the host-cache sync step is not pinned to ${unpinned.join(", ")}`,
-      );
-    }
-  }
-  // Every cpp-tests workflow with a persistent host layer must have the step.
-  // Floor, not an exact count: it guards against the discovery globbing silently
-  // matching nothing. cpp-tests-nx.yml is the last one; the packages on the CI
-  // contract run their C++ tests in _cpp-tests.yml.
-  assert.ok(
-    eachCppTestsCacheStep({
-      match: /name: Sync the host and workspace vcpkg caches/,
-      includeExempt: true,
-    }).length >= 1,
-  );
-  assert.deepEqual(offenders, []);
-});
-
 test("cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint", () => {
   const offenders = [];
   // Only the vcpkg cache; the model caches are keyed on manifests and are

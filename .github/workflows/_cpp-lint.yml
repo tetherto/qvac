@@ -1,6 +1,7 @@
 name: C++ lint
 
-# Runs each package's cpp:lint target through Nx, which lints the C/C++ the change touched against BASE.
+# Runs each package's cpp:lint target through Nx, which lints the C/C++ the change touched against BASE. A provider's
+# prebuilds come from its build job in the same run.
 on:
   workflow_call:
     inputs:
@@ -67,13 +68,13 @@ jobs:
           package-json-file: src/package.json
       - uses: ./.github/actions/setup-vulkan
         with:
-          arch: ${{ matrix.row.arch }}
-      # Lint generates against native dependencies it builds here, so it takes the host's toolkits plus the configuration's.
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+      # A provider's exported CMake config may find_dependency its toolkits, so the host's are here plus the configuration's.
       - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'cuda') || contains(matrix.row.setup, 'cuda')
         uses: ./.github/actions/setup-cuda
         with:
           cuda-version: ${{ matrix.row.toolchain.cuda }}
-          # Only fabric's CUDA build loads MSVC 14.44; the package builds with the runner's default toolset, as on main.
+          # Only commands that load it compile with MSVC 14.44; the rest keep the runner's default toolset, as on main.
           msvc-scope: file
       - if: contains(matrix.row.toolchain.hostSetup[format('{0}-{1}', matrix.row.platform, matrix.row.arch)], 'rocm') || contains(matrix.row.setup, 'rocm')
         uses: ./.github/actions/setup-rocm
@@ -94,10 +95,34 @@ jobs:
           PROJECT: ${{ matrix.row.project }}
           CONFIG: ${{ matrix.row.config }}
         run: pnpm exec nx run-many -t ci:system -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
+      - if: matrix.row.providers[0] != null
+        uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          pattern: prebuild-@(${{ join(matrix.row.providers, '|') }})-${{ matrix.row.config }}
+          path: ${{ runner.temp }}/providers
+          merge-multiple: "true"
+      - name: link:platform
+        if: matrix.row.providers[0] != null
+        shell: bash
+        working-directory: src
+        env:
+          PROVIDERS: ${{ join(matrix.row.providers, ' ') }}
+          CONFIG: ${{ matrix.row.config }}
+        run: |
+          read -ra list <<< "$PROVIDERS"
+          for p in "${list[@]}"; do
+            [ -d "$RUNNER_TEMP/providers/packages/$p/prebuilds" ] || { echo "::error::no $p prebuilds for $CONFIG; its build failed"; exit 1; }
+            cp -R "$RUNNER_TEMP/providers/packages/$p/prebuilds" "packages/$p/"
+          done
+          pnpm exec nx run-many -t link:platform -p "$(printf 'packages/%s\n' "${list[@]}" | paste -sd, -)" --exclude-task-dependencies --outputStyle=stream
       - name: cpp:lint
         shell: bash
         working-directory: src
         env:
           PROJECT: ${{ matrix.row.project }}
           CONFIG: ${{ matrix.row.config }}
-        run: pnpm exec nx run-many -t cpp:lint -p "$PROJECT" -c "$CONFIG" --diff-base="$BASE" --parallel=1 --outputStyle=stream
+          PROVIDED: ${{ matrix.row.providers[0] != null }}
+        run: |
+          exclude=()
+          if [ "$PROVIDED" = "true" ]; then exclude=(--exclude-task-dependencies); fi
+          pnpm exec nx run-many -t cpp:lint -p "$PROJECT" -c "$CONFIG" --diff-base="$BASE" "${exclude[@]}" --parallel=1 --outputStyle=stream

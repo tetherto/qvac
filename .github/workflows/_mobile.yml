@@ -37,7 +37,7 @@ on:
         type: string
         default: ""
       dependency_prebuild_run_id:
-        description: Run whose bundle of the package's native dependency replaces the published one
+        description: Run whose prebuilds-<provider> bundle replaces the published provider; empty takes prebuild_run_id's
         type: string
         default: ""
       args:
@@ -235,19 +235,23 @@ jobs:
           GITHUB_TOKEN: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
           BENCHMARK_ARGS: ${{ inputs.args }}
         run: pnpm exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
-      - if: inputs.dependency_prebuild_run_id != ''
+      # The provider's bundle from the named run, else from prebuild_run_id's run when it built the provider too.
+      - if: matrix.row.providers[0] != null && (inputs.dependency_prebuild_run_id != '' || inputs.prebuild_run_id != '')
         uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
-          name: ${{ matrix.row.providerArtifact }}
-          run-id: ${{ inputs.dependency_prebuild_run_id }}
-          path: ${{ runner.temp }}/dep-prebuilds
+          name: ${{ inputs.dependency_prebuild_run_id != '' && format('prebuilds-{0}', matrix.row.providers[0]) || '' }}
+          pattern: ${{ inputs.dependency_prebuild_run_id == '' && format('prebuilds-{0}', matrix.row.providers[0]) || '' }}
+          merge-multiple: "true"
+          run-id: ${{ inputs.dependency_prebuild_run_id || inputs.prebuild_run_id }}
+          github-token: ${{ github.token }}
+          path: dep-prebuilds
       - uses: ./.github/actions/mobile-build-test-app
         with:
           platform: ${{ inputs.platform }}
-          workdir: ${{ env.WORKDIR }}
+          workdir: ${{ steps.prepare.outputs.workdir || env.WORKDIR }}
           npm-name: ${{ matrix.row.npm }}
           app-dir: test-framework
-          dependency-prebuilds: ${{ inputs.dependency_prebuild_run_id != '' && format('{0}={1}/dep-prebuilds', matrix.row.provider, runner.temp) || '' }}
+          dependency-prebuilds: ${{ hashFiles('dep-prebuilds/**') != '' && format('{0}={1}/dep-prebuilds', matrix.row.provider, github.workspace) || '' }}
           per-test-timeout-minutes: ${{ steps.prepare.outputs.per-test-timeout-minutes || matrix.row.meta.mobile.perTestTimeoutMinutes[inputs.platform] || '' }}
       - if: inputs.platform == 'Android'
         uses: tetherto/qvac-actions/setup-java@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
@@ -289,13 +293,14 @@ jobs:
         uses: ./.github/actions/devicefarm-write-specs
         with:
           platform: ${{ inputs.platform }}
-          workdir: ${{ env.WORKDIR }}
+          workdir: ${{ steps.prepare.outputs.workdir || env.WORKDIR }}
           tests: ${{ inputs.tests }}
           app-dir: test-framework
           enables-perf: ${{ matrix.row.meta.mobile.enablesPerf == true || steps.prepare.outputs.enables-perf == 'true' }}
           mocha-timeout-ms: ${{ steps.prepare.outputs.mocha-timeout-ms || matrix.row.meta.mobile.mochaTimeoutMs || '1800000' }}
           waitfor-timeout-ms: ${{ matrix.row.meta.mobile.waitforTimeoutMs || '120000' }}
           extra-pre-test-commands: ${{ steps.prepare.outputs.pre-test-commands }}
+          after-hook-pulls: ${{ steps.prepare.outputs.after-hook-pulls }}
           test-groups: ${{ steps.prepare.outputs.test-groups }}
           device-env: ${{ steps.prepare.outputs.device-env }}
           perf-runs: ${{ inputs.perf_runs }}
@@ -331,6 +336,7 @@ jobs:
           specs: ${{ steps.spec-uploads.outputs.uploads }}
           devices: ${{ env.DEVICES }}
           device-model-operator: ${{ inputs.device_model_operator }}
+          job-timeout-minutes: ${{ matrix.row.meta.mobile.jobTimeoutMinutes || '120' }}
       - uses: tetherto/qvac-actions/devicefarm-wait-runs@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
@@ -359,6 +365,7 @@ jobs:
             test-results.json
             logcat_full.txt
             crash-reports/QvacAddonTester*
+            ${{ steps.prepare.outputs.after-hook-pulls && format('{0}/*', join(fromJSON(steps.prepare.outputs.after-hook-pulls).*.artifact_name, '/* ')) || '' }}
           skip-extensions: ${{ inputs.platform == 'Android' && 'mp4' || '' }}
       - if: always() && steps.logs.outcome == 'success'
         uses: tetherto/qvac-actions/devicefarm-summarize-results@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges

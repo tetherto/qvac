@@ -89,9 +89,22 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm exec nx run "$PROJECT:verify:generated" --outputStyle=stream
 
-  build:
+  # Providers build first, once per configuration; a provider's own prerelease builds its rows here.
+  providers:
     needs: [select, logic]
-    if: needs.logic.outputs.publish == 'true' && toJSON(fromJSON(needs.select.outputs.matrices).build) != '[]'
+    if: needs.logic.outputs.publish == 'true' && toJSON(fromJSON(needs.select.outputs.matrices)['build:providers']) != '[]'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['build:providers']) }}
+
+  build:
+    needs: [select, logic, providers]
+    if: always() && !cancelled() && needs.logic.outputs.publish == 'true' && toJSON(fromJSON(needs.select.outputs.matrices).build) != '[]' && (needs.providers.result == 'success' || needs.providers.result == 'skipped')
     permissions:
       contents: read
       actions: read
@@ -102,10 +115,11 @@ jobs:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).build) }}
 
   publish:
-    needs: [select, logic, verify, build]
+    needs: [select, logic, verify, providers, build]
     if: >-
       always() && !cancelled() && needs.logic.outputs.publish == 'true' && toJSON(fromJSON(needs.select.outputs.matrices).publish) != '[]' &&
       (needs.verify.result == 'success' || needs.verify.result == 'skipped') &&
+      (needs.providers.result == 'success' || needs.providers.result == 'skipped') &&
       (needs.build.result == 'success' || needs.build.result == 'skipped')
     name: publish ${{ matrix.row.slug }}
     runs-on: ubuntu-latest

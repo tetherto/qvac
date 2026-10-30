@@ -38,8 +38,9 @@ export const TARGETS = [
 export const CONFIG_NAME = /^(linux|android|ios|darwin|win32)-(x64|arm64)(-[a-z0-9]+)?$/
 const CONFIG_KEYS = ['args', 'commands', 'ci']
 const CI_KEYS = ['runner', 'setup']
-// Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json.
-const SETUP = ['cuda', 'rocm', 'python']
+// Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json. cuda-jetson puts
+// CUDA 12 for Jetson beside the host's CUDA 13 and exports only QVAC_CUDA_JETSON_PATH.
+const SETUP = ['cuda', 'cuda-jetson', 'rocm', 'python']
 
 // The metadata a target may carry, and on which targets. toolchain is nx.json's, merged into every build target.
 const METADATA = {
@@ -47,6 +48,8 @@ const METADATA = {
   toolchain: ['build'],
   mobile: ['test:mobile'],
   publish: ['publish'],
+  // Prebuild directories besides the platform ones that the meta package ships, such as fabric's include and share.
+  prebuildExtraDirs: ['publish'],
   secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile'],
   baseline: ['cpp:tests'],
   perfReport: ['test:integration']
@@ -58,6 +61,7 @@ const PUBLISH_KEYS = ['tagPrefix', 'platformPackages', 'nameTransform']
 const MOBILE_KEYS = [
   'devicefarmProject',
   'enablesPerf',
+  'jobTimeoutMinutes',
   'mochaTimeoutMs',
   'perTestTimeoutMinutes',
   'perfReport',
@@ -199,41 +203,45 @@ export function select({ graph, affected, targets, labels, gate, configs = [] })
   const chosen = tagged.filter((n) => affected === null || affected.includes(n.name))
   const out = { matrices: {}, projects: [] }
   for (const t of targets) out.matrices[t] = []
-  for (const n of chosen) {
-    const project = { name: n.name, root: n.data.root, targets: n.data.targets }
-    const own = targets.filter((t) => n.data.targets[t])
-    if (!own.length) continue
+  const common = (n) => {
     const dir = n.data.root.split('/').pop()
     // Without a key no status is posted, and Merge Guard waits for one until its deadline.
     if (!gate[dir])
       throw new Error(
         `${n.name}: no pr-gate-merge.yml filter starts with "packages/${dir}/**", so it has no Merge Guard key`
       )
-    const { provider, providerArtifact } = nativeProvider(graph, n.name, gate)
-    const common = {
+    const providers = providersOf(graph, n.name)
+    return {
       slug: dir,
-      npm: n.data.metadata?.js?.packageName ?? n.name,
+      npm: npmName(n),
       key: gate[dir],
-      provider,
-      providerArtifact,
-      targets: own,
+      // The npm name whose platform packages provide the addon's symbols, and the slugs whose prebuilds it restores.
+      provider: providers.length ? npmName(graph.nodes[providers[0]]) : '',
+      providers: providers.map((p) => graph.nodes[p].data.root.split('/').pop()),
+      targets: ['build'],
       // A package without a build target has no prebuilds to restore.
       hasBuild: Boolean(n.data.targets.build)
     }
+  }
+  for (const n of chosen) {
+    const project = { name: n.name, root: n.data.root, targets: n.data.targets }
+    const own = targets.filter((t) => n.data.targets[t])
+    if (!own.length) continue
+    const c = { ...common(n), targets: own }
     out.projects.push({
       name: n.name,
       dir: n.data.root,
-      ...common,
+      ...c,
       benchmarkReport: Boolean(n.data.targets.benchmark?.configurations?.[REPORT]),
       cppBaseline: Boolean(n.data.targets['cpp:tests']?.metadata?.baseline),
       perfReport: n.data.targets['test:integration']?.metadata?.perfReport ?? null,
-      prebuildStatus: PREBUILD_KEYS.includes(gate[dir]),
-      cppStatus: CPP_TEST_KEYS.includes(gate[dir])
+      prebuildStatus: PREBUILD_KEYS.includes(c.key),
+      cppStatus: CPP_TEST_KEYS.includes(c.key)
     })
     for (const t of own) {
       for (const r of rows(project, t, labels)) {
         if (configs.length && r.config && !configs.includes(r.config)) continue
-        out.matrices[t].push({ ...r, ...common })
+        out.matrices[t].push({ ...r, ...c })
       }
     }
   }
@@ -248,23 +256,75 @@ export function select({ graph, affected, targets, labels, gate, configs = [] })
     if (out.matrices.build)
       out.matrices['build:baseline'] = out.matrices.build.filter((r) => hosts.has(`${r.project}@${r.config}`))
   }
+  // Providers build first, once per configuration, for the rows each build matrix and C++ lint feed.
+  if (out.matrices.build) {
+    const lint = out.matrices['cpp:lint'] ?? []
+    const feeds = {
+      'build:providers': [...out.matrices.build, ...lint],
+      'build:baseline:providers': [...(out.matrices['build:baseline'] ?? []), ...lint],
+      'cpp:lint:providers': lint
+    }
+    for (const [name, consumers] of Object.entries(feeds))
+      out.matrices[name] = providerRows(graph, consumers, { labels, common })
+    // A selected provider's own build rows move into its provider rows, so each configuration builds once.
+    const id = (r) => `${r.project}@${r.config}`
+    for (const [name, into] of [
+      ['build', 'build:providers'],
+      ['build:baseline', 'build:baseline:providers']
+    ]) {
+      if (!out.matrices[name]) continue
+      const providing = providersIn(graph, out.matrices[name])
+      const have = new Set(out.matrices[into].map(id))
+      for (const r of out.matrices[name])
+        if (providing.has(r.project) && !have.has(id(r))) out.matrices[into].push(r)
+      out.matrices[name] = out.matrices[name].filter((r) => !providing.has(r.project))
+    }
+  }
   return out
 }
 
-// The npm dependency the gate expects prebuilds from, and its <dir>-prebuilds bundle; its platform packages provide the addon's symbols.
-export function nativeProvider(graph, name, gate) {
-  const dep = (graph.dependencies[name] ?? []).find(
-    (d) =>
-      d.type === 'static' &&
-      graph.nodes[d.target] &&
-      PREBUILD_KEYS.includes(gate[graph.nodes[d.target].data.root.split('/').pop()])
-  )
-  if (!dep) return { provider: '', providerArtifact: '' }
-  const node = graph.nodes[dep.target]
-  return {
-    provider: node.data.metadata?.js?.packageName ?? dep.target,
-    providerArtifact: `${node.data.root.split('/').pop()}-prebuilds`
+const npmName = (n) => n.data.metadata?.js?.packageName ?? n.name
+
+// The contract packages whose link:platform one of this package's targets depends on, in declaration order. A
+// provider off the contract is still built inside each consumer job, through the target's own dependencies.
+export function providersOf(graph, name) {
+  const out = []
+  for (const target of Object.values(graph.nodes[name]?.data.targets ?? {}))
+    for (const dep of target.dependsOn ?? [])
+      if (dep?.target === 'link:platform')
+        for (const p of dep.projects ?? [])
+          if (p !== name && graph.nodes[p]?.data.tags?.includes(TAG) && !out.includes(p)) out.push(p)
+  return out
+}
+
+// The selected rows' packages that another package in the graph links through link:platform.
+function providersIn(graph, selected) {
+  const all = new Set(Object.keys(graph.nodes).flatMap((name) => providersOf(graph, name)))
+  return new Set(selected.map((r) => r.project).filter((p) => all.has(p)))
+}
+
+// One build row per provider and configuration the consumer rows use; a configuration the provider lacks fails.
+export function providerRows(graph, consumers, { labels, common }) {
+  const out = []
+  const seen = new Set()
+  for (const row of consumers) {
+    for (const name of providersOf(graph, row.project)) {
+      const key = `${name}@${row.config}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const n = graph.nodes[name]
+      if (!n.data.targets.build)
+        throw new Error(`${name}: ${row.project} links its link:platform, but it has no build target`)
+      const project = { name, root: n.data.root, targets: n.data.targets }
+      const match = rows(project, 'build', labels).find((r) => r.config === row.config)
+      if (!match)
+        throw new Error(
+          `${name}: ${row.project} ${row.target} configuration ${row.config} needs ${name}'s build configuration ${row.config}, which it does not define`
+        )
+      out.push({ ...match, ...common(n) })
+    }
   }
+  return out
 }
 
 // "desktop=test:integration+test:backend" adds one matrix holding both targets' rows, for targets that share a job.

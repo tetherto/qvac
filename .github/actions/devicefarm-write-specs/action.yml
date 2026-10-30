@@ -41,6 +41,9 @@ inputs:
   device-env:
     description: Semicolon-separated KEY=VALUE pairs the on-device loader sets before the tests load
     default: ""
+  after-hook-pulls:
+    description: JSON [{device_path, artifact_name}] copied off the device after the tests, into the run's logs
+    default: "[]"
 
 outputs:
   specs:
@@ -69,4 +72,5 @@ runs:
         PERF_RUNS: ${{ inputs.perf-runs }}
         PERF_WARMUP_RUNS: ${{ inputs.perf-warmup-runs }}
         DEVICE_ENV: ${{ inputs.device-env }}
+        AFTER_PULLS: ${{ inputs.after-hook-pulls || '[]' }}
       run: node "$GITHUB_ACTION_PATH/devicefarm-write-specs.mjs"

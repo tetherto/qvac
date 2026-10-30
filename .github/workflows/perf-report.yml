@@ -25,9 +25,9 @@ on:
           - "Integration Tests (LLM)"
           - "Mobile Integration Tests (LLM)"
           - "Mobile Integration Tests (Parakeet)"
-          - "Mobile Integration Tests (Diffusion CPP)"
           - "Benchmarks"
           - "PR build and test"
+          - "Mobile tests"
       runs:
         description: "Number of recent runs to aggregate"
         type: number
@@ -72,6 +72,10 @@ jobs:
             ARTIFACT_ADDON="llamacpp-llm"
             FILTER_ARGS=(--filter "gemma4-vl|qwen3.5-vl")
           fi
+          # The contract groups name a package's perf artifacts <slug>-perf-*.
+          case "$PERF_WORKFLOW" in
+            "PR build and test"|"Mobile tests"|"Benchmarks") FILTER_ARGS+=(--artifact-pattern "${ARTIFACT_ADDON}-perf-*") ;;
+          esac
           # ACE-Step rows arrive in two differently shaped artifacts (desktop
           # rtf-benchmark-*.json and the canonical mobile report), which the
           # shared aggregator does not read, so it has its own script.
@@ -166,7 +170,8 @@ jobs:
           echo "=== Diffusion (Desktop) ==="
           node scripts/perf-report/aggregate.js \
             --addon diffusion-cpp \
-            --workflow "On PR Trigger (nx)" \
+            --workflow "PR build and test" \
+            --artifact-pattern "diffusion-cpp-perf-*" \
             --runs 6 \
             --output reports/diffusion-cpp-performance.md \
             --output-json reports/diffusion-cpp-performance.json \
@@ -175,7 +180,8 @@ jobs:
           echo "=== Diffusion (Mobile) ==="
           node scripts/perf-report/aggregate.js \
             --addon diffusion-cpp \
-            --workflow "Mobile Integration Tests (Diffusion CPP)" \
+            --workflow "Mobile tests" \
+            --artifact-pattern "diffusion-cpp-perf-mobile-*" \
             --runs 6 \
             --output reports/diffusion-cpp-mobile-performance.md \
             --output-json reports/diffusion-cpp-mobile-performance.json \

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Runs a package's `npm run test:integration` from its directory, as main's integration-test-nx did, then renders its
+// Runs a package's `npm run test:integration` from its directory, as main's desktop test workflow did, then renders its
 // performance reports into the step summary. Used by test:integration targets of packages on the CI contract.
 //
 //   node ../../scripts/ci/run-integration.mjs [--suffix] [--log] [--env NAME=path]... [--set NAME=value]...

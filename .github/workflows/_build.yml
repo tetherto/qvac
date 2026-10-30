@@ -1,7 +1,7 @@
 name: Build native prebuilds
 
 # One job per package and build configuration, on the runner the build target's metadata names. Nx runs the package's
-# ci:system and build targets with that configuration, building its native dependencies first.
+# ci:system and build targets with that configuration; a provider's prebuilds come from its own job, run first.
 on:
   workflow_call:
     inputs:
@@ -47,9 +47,11 @@ jobs:
           CONFIGS: ${{ toJSON(fromJSON(inputs.rows).*.config) }}
           DIRS: ${{ toJSON(fromJSON(inputs.rows).*.dir) }}
           RUNNERS: ${{ toJSON(fromJSON(inputs.rows).*.runner) }}
+          PROVIDERS: ${{ toJSON(fromJSON(inputs.rows).*.providers) }}
           SRC: src
           REUSE: ${{ inputs.reuse && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ github.token }}
         run: node .github/scripts/prebuild-reuse.mjs
 
@@ -140,13 +142,20 @@ jobs:
           KEY: ${{ steps.vulkan.outputs.upload-key }}
           BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: aws s3 cp "$ARCHIVE" "s3://$BUCKET/$KEY"
-      # The build compiles its native dependencies here, so it takes the host's toolkits plus any the configuration asks for.
+      # A provider's exported CMake config may find_dependency its toolkits, so the host's are here plus the configuration's.
       - if: contains(fromJSON(inputs.rows)[matrix.leg.i].toolchain.hostSetup[format('{0}-{1}', fromJSON(inputs.rows)[matrix.leg.i].platform, fromJSON(inputs.rows)[matrix.leg.i].arch)], 'cuda') || contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'cuda')
         uses: ./.github/actions/setup-cuda
         with:
           cuda-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.cuda }}
-          # Only fabric's CUDA build loads MSVC 14.44; the package builds with the runner's default toolset, as on main.
+          # Only commands that load it compile with MSVC 14.44; the rest keep the runner's default toolset, as on main.
           msvc-scope: file
+      # Jetson's CUDA 12 beside the host's CUDA 13: only the package command that reads QVAC_CUDA_JETSON_PATH uses it.
+      - if: contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'cuda-jetson')
+        uses: ./.github/actions/setup-cuda
+        with:
+          cuda-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.cudaJetson }}
+          cuda-target: jetson
+          export: path
       - if: contains(fromJSON(inputs.rows)[matrix.leg.i].toolchain.hostSetup[format('{0}-{1}', fromJSON(inputs.rows)[matrix.leg.i].platform, fromJSON(inputs.rows)[matrix.leg.i].arch)], 'rocm') || contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'rocm')
         uses: ./.github/actions/setup-rocm
         with:
@@ -160,13 +169,46 @@ jobs:
         env:
           NPM: ${{ fromJSON(inputs.rows)[matrix.leg.i].npm }}
         run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
+      - name: ci:system
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ fromJSON(inputs.rows)[matrix.leg.i].project }}
+          CONFIG: ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+        run: pnpm exec nx run-many -t ci:system -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
+      # The providers' prebuilds for this configuration, from their jobs in this run.
+      - if: fromJSON(inputs.rows)[matrix.leg.i].providers[0] != null
+        uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          pattern: prebuild-@(${{ join(fromJSON(inputs.rows)[matrix.leg.i].providers, '|') }})-${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+          path: ${{ runner.temp }}/providers
+          merge-multiple: "true"
+      - name: link:platform
+        if: fromJSON(inputs.rows)[matrix.leg.i].providers[0] != null
+        shell: bash
+        working-directory: src
+        env:
+          PROVIDERS: ${{ join(fromJSON(inputs.rows)[matrix.leg.i].providers, ' ') }}
+          CONFIG: ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
+        run: |
+          read -ra list <<< "$PROVIDERS"
+          for p in "${list[@]}"; do
+            [ -d "$RUNNER_TEMP/providers/packages/$p/prebuilds" ] || { echo "::error::no $p prebuilds for $CONFIG; its build failed"; exit 1; }
+            cp -R "$RUNNER_TEMP/providers/packages/$p/prebuilds" "packages/$p/"
+          done
+          pnpm exec nx run-many -t link:platform -p "$(printf 'packages/%s\n' "${list[@]}" | paste -sd, -)" --exclude-task-dependencies --outputStyle=stream
+      # With providers restored, nothing it depends on is built here.
       - name: Build
         shell: bash
         working-directory: src
         env:
           PROJECT: ${{ fromJSON(inputs.rows)[matrix.leg.i].project }}
           CONFIG: ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
-        run: pnpm exec nx run-many -t ci:system,build -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
+          PROVIDED: ${{ fromJSON(inputs.rows)[matrix.leg.i].providers[0] != null }}
+        run: |
+          exclude=()
+          if [ "$PROVIDED" = "true" ]; then exclude=(--exclude-task-dependencies); fi
+          pnpm exec nx run-many -t build -p "$PROJECT" -c "$CONFIG" "${exclude[@]}" --parallel=1 --outputStyle=stream
       - if: failure()
         shell: bash
         run: for f in "$VCPKG_ROOT"/buildtrees/*/{config,install,build}-*.log; do [ -f "$f" ] && { echo "== $f"; tail -200 "$f"; }; done; true

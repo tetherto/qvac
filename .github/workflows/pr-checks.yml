@@ -27,6 +27,23 @@ jobs:
       targets: lint,typecheck,test:unit,verify:generated
       packages: ${{ inputs.packages }}
 
+  # A range on a workspace package that excludes its workspace version makes pnpm install the npm copy instead, so a
+  # bump updates its dependents' ranges in the same pull request.
+  workspace-ranges:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout pull request
+        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      - run: node scripts/ci/check-workspace-ranges.mjs
+
   checks:
     needs: select
     if: needs.select.outputs.any == 'true'

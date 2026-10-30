@@ -72,7 +72,7 @@ jobs:
       - uses: tetherto/qvac-actions/setup-aws-cli@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
       - uses: ./.github/actions/setup-vulkan
         with:
-          arch: ${{ matrix.row.arch }}
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
           cache-bucket: ${{ secrets.MODEL_S3_BUCKET }}
       # The native dependencies come prebuilt, so only the toolkits the configuration itself asks for.
       - if: contains(matrix.row.setup, 'cuda')

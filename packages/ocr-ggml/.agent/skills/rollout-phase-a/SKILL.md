@@ -276,9 +276,8 @@ for w in embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml translation-nmtcp
   gh workflow run on-pr-$w.yml --repo tetherto/qvac --ref <validation-branch>
 done
 ```
-- The `vla-ggml` consumer has no `on-pr-*.yml`: it is on the CI contract, so dispatch
-  `pr-build-test.yml` with `-f packages=vla-ggml` instead. `on-pr-fabric.yml` and
-  `on-pr-model-fit.yml` follow the standard naming.
+- Every fabric consumer and fabric itself are on the CI contract, so dispatch
+  `pr-build-test.yml` with `-f packages=<dir>` (for example `-f packages=vla-ggml`).
 - **Triage `fabric` first.** It is the shared runtime addon the other consumers link against, so a
   break there usually explains failures in the rest; fixing it first avoids chasing the same root
   cause across six other runs.

@@ -318,8 +318,8 @@ ggml variants (whisper.cpp / parakeet / tts-cpp / stable-diffusion — separate
 vcpkg ports) and the ONNX addons (being phased out) are **out of scope**.
 
 Phase 1 packages (all migrated; none declares `qvac-fabric` in its `vcpkg.json`
-any more, and each is listed under `npm_runtime` in
-`.github/fabric-consumers.json`):
+any more, and each depends on `@qvac/fabric`'s `link:platform` in its
+`project.json`):
 
 - `packages/classification-ggml` — reference, [PR #3301][pr3301].
 - `packages/vla-ggml`

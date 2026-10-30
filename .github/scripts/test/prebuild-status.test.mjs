@@ -123,9 +123,9 @@ test('parseRunId extracts the numeric run id from a run URL', () => {
 
 test('isRunFresh requires the matching workflow and created_at >= threshold', () => {
   const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
-  const fresh = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T12:00:05Z' }
-  const stale = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T11:59:00Z' }
-  // legacy per-package producer is no longer trusted — only on-pr-nx.yml
+  const fresh = { path: '.github/workflows/pr-build-test.yml', created_at: '2026-08-10T12:00:05Z' }
+  const stale = { path: '.github/workflows/pr-build-test.yml', created_at: '2026-08-10T11:59:00Z' }
+  // a legacy per-package producer is not trusted, only diffusion-cpp's pr-build-test.yml
   const wrongWorkflow = { path: '.github/workflows/on-pr-diffusion-cpp.yml', created_at: '2026-08-10T13:00:00Z' }
   assert.equal(isRunFresh(fresh, 'diffusion-cpp', threshold), true)
   assert.equal(isRunFresh(stale, 'diffusion-cpp', threshold), false)
@@ -225,8 +225,8 @@ test('classifyState maps commit-status states to gate outcomes', () => {
 test('evaluatePackage: a superseded pre-label run cannot pass; the fresh labeled run decides', () => {
   const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000) // label event
   const runs = {
-    1: { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T09:00:00Z' }, // pre-label
-    2: { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T12:05:00Z' }, // labeled
+    1: { path: '.github/workflows/pr-build-test.yml', created_at: '2026-08-10T09:00:00Z' }, // pre-label
+    2: { path: '.github/workflows/pr-build-test.yml', created_at: '2026-08-10T12:05:00Z' }, // labeled
   }
   const lookup = (id) => runs[id] ?? null
 
@@ -258,7 +258,7 @@ test('evaluatePackage: a superseded pre-label run cannot pass; the fresh labeled
 // 502 turns a red gate green.
 test('evaluatePackage: a failed run lookup holds the gate at pending', () => {
   const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
-  const fresh = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T12:05:00Z' }
+  const fresh = { path: '.github/workflows/pr-build-test.yml', created_at: '2026-08-10T12:05:00Z' }
 
   const olderSuccess = status({
     updated_at: iso('2026-08-10T13:00:00Z'),
@@ -340,7 +340,7 @@ function fakeClock(startMs = 0) {
 }
 
 const THRESHOLD = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
-const FRESH_RUN = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T12:00:00Z' }
+const FRESH_RUN = { path: '.github/workflows/pr-build-test.yml', created_at: '2026-08-10T12:00:00Z' }
 
 test('pollPrebuilds retries a transient statuses fetch error, then passes', async () => {
   const clock = fakeClock()
