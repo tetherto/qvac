@@ -1,5 +1,12 @@
 // Embed text, an image, and audio with EmbeddingGemma 2 in one shared vector space.
-import { close, embed, loadModel, unloadModel } from '@qvac/sdk'
+import {
+  close,
+  embed,
+  EMBEDDINGGEMMA_2_Q8_0,
+  loadModel,
+  MMPROJ_EMBEDDINGGEMMA_2_Q8_0,
+  unloadModel
+} from '@qvac/sdk'
 import { resolve } from 'node:path'
 
 // EmbeddingGemma 2 normalizes its embeddings, so their dot product is cosine similarity.
@@ -11,8 +18,6 @@ function cosineSimilarity(vecA: number[], vecB: number[]) {
   return dotProduct
 }
 
-const registryPath =
-  'registry://huggingface/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/'
 let modelId: string | undefined
 try {
   const [imagePath, audioPath] = process.argv.slice(2)
@@ -22,9 +27,9 @@ try {
   console.error('▸ Loading EmbeddingGemma 2 and its projector')
   modelId = await loadModel({
     modelType: 'llamacpp-embedding',
-    modelSrc: registryPath + 'embeddinggemma-2-Q8_0.gguf',
+    modelSrc: EMBEDDINGGEMMA_2_Q8_0,
     modelConfig: {
-      projectionModelSrc: registryPath + 'mmproj-embeddinggemma-2-Q8_0.gguf',
+      projectionModelSrc: MMPROJ_EMBEDDINGGEMMA_2_Q8_0,
       ctxSize: 2048,
       batchSize: 2048
     },
