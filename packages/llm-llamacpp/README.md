@@ -735,7 +735,7 @@ npm run test:cpp:models:ci   # exactly what .github/workflows/cpp-tests-llm.yml
                              # downloads; matches what CI exercises
 ```
 
-First-run downloads pull several GB from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` (see `test/unit/test_common.hpp`).
+First-run downloads pull several GB, mostly from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Fixtures pinned by `s3Path` (currently `bitnet_b1_58-large-TQ2_0.gguf`) are copied from the QVAC model registry bucket and need `MODEL_S3_BUCKET` plus AWS credentials; without them a local run skips the fixture with a warning and its tests skip, while `--ci` fails. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` or `BITNET_MODEL_PATH` (see `test/unit/test_common.hpp`).
 
 ### Fuzzing
 

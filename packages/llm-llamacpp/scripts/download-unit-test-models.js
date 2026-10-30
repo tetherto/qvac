@@ -23,7 +23,8 @@ const TRANSIENT_ERROR_CODES = new Set([
   'ECONNRESET',
   'EPIPE',
   'ECONNABORTED',
-  'ESIZE'
+  'ESIZE',
+  'ES3COPY'
 ])
 
 function log(message) {
@@ -205,8 +206,9 @@ function copyFromS3Once(s3Path, dest) {
     )
     child.on('error', reject)
     child.on('close', (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(`aws s3 cp exited ${code} for ${s3Path}`))
+      if (code === 0) return resolve()
+      const err = new Error(`aws s3 cp exited ${code} for ${s3Path}`)
+      reject(Object.assign(err, { code: 'ES3COPY' }))
     })
   })
 }
@@ -281,7 +283,7 @@ async function downloadFileWithRetries(url, dest, opts = {}) {
 
 async function downloadFile(url, dest, opts = {}) {
   const name = path.basename(dest)
-  const { sha256, s3Path } = opts
+  const { sha256, s3Path, skipS3WithoutBucket = false } = opts
 
   if (fs.existsSync(dest)) {
     const stat = fs.statSync(dest)
@@ -303,6 +305,11 @@ async function downloadFile(url, dest, opts = {}) {
       log(`remove empty file: ${name}`)
       fs.unlinkSync(dest)
     }
+  }
+
+  if (s3Path && !process.env.MODEL_S3_BUCKET && skipS3WithoutBucket) {
+    log(`WARNING: skip ${name}: S3-hosted; set MODEL_S3_BUCKET and AWS credentials to fetch it`)
+    return
   }
 
   fs.mkdirSync(path.dirname(dest), { recursive: true })
@@ -514,7 +521,8 @@ async function ensureUnitTestModels(options = {}) {
       if (!shouldInclude(entry, opts)) continue
       await downloadFile(entry.url, path.join(MODEL_DIR, entry.dest), {
         sha256: entry.sha256,
-        s3Path: entry.s3Path
+        s3Path: entry.s3Path,
+        skipS3WithoutBucket: !opts.ciOnly
       })
     }
 
@@ -549,5 +557,7 @@ if (require.main === module) {
 
 module.exports = {
   MODEL_DIR,
+  SINGLE_FILE_MANIFEST,
+  downloadFile,
   ensureUnitTestModels
 }

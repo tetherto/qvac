@@ -309,15 +309,19 @@ export function validateModelName(name) {
 }
 
 // S3-only entries carry no HTTP source; the package workflow stages them.
+function isS3Only(entry) {
+  return !!entry.s3Path && !(Array.isArray(entry.urls) && entry.urls.length)
+}
+
 function isWarmable(entry) {
-  return entry.warm !== false && !(entry.s3Path && !(Array.isArray(entry.urls) && entry.urls.length))
+  return entry.warm !== false && !isS3Only(entry)
 }
 
 export function selectManifestEntries(manifest, group = '', { includeDeferred = false } = {}) {
   const declared = Object.entries(manifest.models || {})
   for (const [name] of declared) validateModelName(name)
   const entries = group
-    ? declared.filter(([, entry]) => entry.group === group)
+    ? declared.filter(([, entry]) => entry.group === group && (includeDeferred || !isS3Only(entry)))
     : includeDeferred
       ? declared
       : declared.filter(([, entry]) => isWarmable(entry))

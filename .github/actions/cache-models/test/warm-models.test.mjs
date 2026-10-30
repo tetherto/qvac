@@ -189,6 +189,18 @@ test('S3-only entries are left to the package workflow but stay in cache paths',
     selectManifestEntries(manifest, '', { includeDeferred: true }).entries.map(([name]) => name),
     ['hf.gguf', 's3.gguf', 'both.gguf']
   )
+
+  const grouped = {
+    models: {
+      'hf.gguf': { group: 'g', urls: ['https://huggingface.co/o/r/resolve/abc/hf.gguf'] },
+      's3.gguf': { group: 'g', s3Path: 'x/s3.gguf' }
+    }
+  }
+  assert.deepEqual(selectManifestEntries(grouped, 'g').entries.map(([name]) => name), ['hf.gguf'])
+  assert.deepEqual(
+    selectManifestEntries(grouped, 'g', { includeDeferred: true }).entries.map(([name]) => name),
+    ['hf.gguf', 's3.gguf']
+  )
 })
 
 test('manifest names must be plain basenames', () => {

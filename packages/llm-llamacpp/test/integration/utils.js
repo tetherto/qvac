@@ -537,7 +537,7 @@ async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, do
   }
 
   // S3-only entries are staged before the run by scripts/stage-s3-models.mjs.
-  if (!urls) {
+  if (!Array.isArray(urls) || urls.length === 0) {
     throw new Error(
       `[download] ${modelName} is S3-only (${entry.s3Path}) and was not staged; run ` +
         'scripts/stage-s3-models.mjs with MODEL_S3_BUCKET and AWS credentials'

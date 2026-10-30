@@ -10,7 +10,9 @@ process.env.S3_BUCKET = 'tether-ai-dev-us'
 process.env.S3_PREFIX = 'qvac_models_compiled/ggml/'
 process.env.OUTPUT_MAP = '/tmp/seed-test-url-map.json'
 
-const { validateModelName, s3Key, parseSourceUrl, verify } = await import('../seed-and-presign.mjs')
+const { validateModelName, s3Key, parseSourceUrl, verify, validateS3Path, sourcesFor } = await import(
+  '../seed-and-presign.mjs'
+)
 
 test('validateModelName accepts a plain model filename', () => {
   assert.equal(validateModelName('model-Q4_0.gguf'), 'model-Q4_0.gguf')
@@ -61,4 +63,23 @@ test('verify fails closed when the manifest omits integrity pins', () => {
     () => verify('/tmp/whatever', { bytes: 10, sha256: 'nothex' }, 'm.gguf'),
     /missing a valid sha256 pin/
   )
+})
+
+test('validateS3Path accepts a registry key and rejects traversal or absolute paths', () => {
+  assert.equal(
+    validateS3Path('qvac_models_compiled/ggml/bitnet/2026-03-05/m.gguf'),
+    'qvac_models_compiled/ggml/bitnet/2026-03-05/m.gguf'
+  )
+  for (const bad of ['/abs/m.gguf', 'a/../m.gguf', 'a//m.gguf', 'a/./m.gguf', 'a b.gguf', '', null]) {
+    assert.throws(() => validateS3Path(bad), /invalid s3Path/)
+  }
+})
+
+test('sourcesFor prefers urls, falls back to the registry, else has no source', () => {
+  const hf = sourcesFor({ urls: ['https://huggingface.co/o/r/resolve/abc/m.gguf'], s3Path: 'x/m.gguf' }, { sourceBucket: 'b' })
+  assert.deepEqual(hf.map((s) => s.label), ['huggingface.co'])
+  const s3 = sourcesFor({ s3Path: 'x/m.gguf' }, { sourceBucket: 'b' })
+  assert.deepEqual(s3.map((s) => s.label), ['registry x/m.gguf'])
+  assert.deepEqual(sourcesFor({ s3Path: 'x/m.gguf' }, { sourceBucket: '' }), [])
+  assert.deepEqual(sourcesFor({}, { sourceBucket: 'b' }), [])
 })

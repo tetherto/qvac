@@ -304,6 +304,32 @@ test('S3-only entry that was not staged fails with a staging hint', async functi
   }
 })
 
+test('S3 entry with an empty urls array also fails with the staging hint', async function (t) {
+  const name = 's3-empty-urls.gguf'
+  const { sha256 } = await buildManifest(name)
+  const manifest = {
+    models: {
+      [name]: { urls: [], s3Path: 'qvac_models_compiled/ggml/x/e.gguf', sha256, bytes: GOOD.length }
+    }
+  }
+  const dir = mkTmpDir()
+  const spy = { calls: 0 }
+  try {
+    await t.exception(
+      ensureModel({
+        modelName: name,
+        modelDir: dir,
+        manifest,
+        download: fakeDownloader(GOOD, spy)
+      }),
+      /S3-only .*stage-s3-models\.mjs/
+    )
+    t.is(spy.calls, 0, 'no download with an empty urls array')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('entry without pinned integrity is rejected before cache use', async function (t) {
   const name = 'unpinned.gguf'
   const manifest = {

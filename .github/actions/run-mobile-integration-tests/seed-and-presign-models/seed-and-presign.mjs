@@ -26,6 +26,8 @@ const AWS_REGION = env('AWS_REGION', 'us-west-2')
 const OUTPUT_MAP = process.env.OUTPUT_MAP || ''
 const EXPIRES_IN = env('EXPIRES_IN', '7200')
 const HF_TOKEN = process.env.HF_TOKEN || ''
+const SOURCE_S3_BUCKET = process.env.SOURCE_S3_BUCKET || ''
+const SOURCE_AWS_REGION = process.env.SOURCE_AWS_REGION || 'eu-central-1'
 // both  = seed missing objects, then presign (default; single-job callers)
 // seed  = only mirror missing objects into S3 (one writer; no map, no presign)
 // presign = only presign already-seeded objects (per matrix leg; fresh URLs)
@@ -165,6 +167,38 @@ function verify(file, entry, name) {
   }
 }
 
+// S3-only manifest entries (no urls) are copied from the QVAC model registry bucket.
+function validateS3Path(s3Path) {
+  if (
+    typeof s3Path !== 'string' ||
+    !/^[\w.-]+(\/[\w.-]+)*$/.test(s3Path) ||
+    s3Path.split('/').some((part) => part === '..' || part === '.')
+  ) {
+    throw new Error(`[seed] invalid s3Path: ${JSON.stringify(s3Path)}`)
+  }
+  return s3Path
+}
+
+function downloadFromRegistry(s3Path, dest) {
+  execFileSync(
+    'aws',
+    ['s3', 'cp', `s3://${SOURCE_S3_BUCKET}/${validateS3Path(s3Path)}`, dest, '--region', SOURCE_AWS_REGION, '--only-show-errors'],
+    { stdio: ['ignore', 'inherit', 'inherit'] }
+  )
+}
+
+// Ordered fetchers for a manifest entry: its HTTP urls, else the registry copy.
+function sourcesFor(entry, { sourceBucket = SOURCE_S3_BUCKET } = {}) {
+  const urls = Array.isArray(entry.urls) ? entry.urls : []
+  if (urls.length > 0) {
+    return urls.map((url) => ({ label: new URL(url).host, fetch: (dest) => download(url, dest) }))
+  }
+  if (entry.s3Path && sourceBucket) {
+    return [{ label: `registry ${validateS3Path(entry.s3Path)}`, fetch: (dest) => downloadFromRegistry(entry.s3Path, dest) }]
+  }
+  return []
+}
+
 function upload(file, key) {
   execFileSync(
     'aws',
@@ -210,7 +244,7 @@ function main(workDir) {
   if (doSeed) {
     for (const name of names) {
       const entry = manifest.models[name]
-      const urls = Array.isArray(entry.urls) ? entry.urls : []
+      const sources = sourcesFor(entry)
       const key = s3Key(name)
 
       const existingSize = headObjectSize(key)
@@ -223,10 +257,9 @@ function main(workDir) {
         continue
       }
 
-      // S3-only entries have no HTTP source to mirror from; copy them in by hand.
-      if (urls.length === 0) {
-        const from = entry.s3Path ? ` (registry path ${entry.s3Path})` : ''
-        throw new Error(`[seed] ${name}: not in US bucket and no urls in manifest${from}`)
+      if (sources.length === 0) {
+        const why = entry.s3Path ? 'source-s3-bucket is not set' : 'no urls in manifest'
+        throw new Error(`[seed] ${name}: not in US bucket and ${why}`)
       }
 
       const tmp = join(workDir, name)
@@ -235,16 +268,16 @@ function main(workDir) {
       try {
         let lastErr = null
         let ok = false
-        for (const url of urls) {
+        for (const source of sources) {
           try {
-            console.log(`[seed] ${name}: downloading from ${new URL(url).host}`)
-            download(url, tmp)
+            console.log(`[seed] ${name}: downloading from ${source.label}`)
+            source.fetch(tmp)
             verify(tmp, entry, name)
             ok = true
             break
           } catch (err) {
             lastErr = err
-            console.log(`[seed] ${name}: source failed (${err.message}); trying next url if any`)
+            console.log(`[seed] ${name}: source failed (${err.message}); trying next source if any`)
           }
         }
         if (!ok) throw lastErr || new Error(`[seed] ${name}: all sources failed`)
@@ -295,4 +328,4 @@ function run() {
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) run()
 
-export { validateModelName, s3Key, parseSourceUrl, verify }
+export { validateModelName, s3Key, parseSourceUrl, verify, validateS3Path, sourcesFor }
