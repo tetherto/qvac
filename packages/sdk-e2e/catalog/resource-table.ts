@@ -357,7 +357,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-moss-sfx': {
-    on: ['desktop'],
+    on: ['desktop-linux'],
     constant: { $const: 'AUDIOGEN_MOSS_SFX_V2_Q8_0' },
     constantSourceOnly: true,
     type: 'tts-ggml',

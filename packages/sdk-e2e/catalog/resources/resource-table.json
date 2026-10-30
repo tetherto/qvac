@@ -502,7 +502,7 @@
   },
   "tts-moss-sfx": {
     "on": [
-      "desktop"
+      "desktop-linux"
     ],
     "constant": {
       "$const": "AUDIOGEN_MOSS_SFX_V2_Q8_0"

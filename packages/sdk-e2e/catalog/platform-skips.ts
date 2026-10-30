@@ -399,6 +399,15 @@ const RULES: Rule[] = [
     }
   },
 
+  {
+    match: /^tts-moss-sfx-/,
+    skip: {
+      reason:
+        'MOSS-SoundEffect runs on the Linux GPU leg only: its 3.25 GiB model has no smaller build',
+      platforms: ['desktop-macos', 'desktop-windows']
+    }
+  },
+
   // ── one mobile OS only ───────────────────────────────────────────────────
   {
     match: ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
