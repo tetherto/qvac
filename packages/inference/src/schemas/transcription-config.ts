@@ -39,12 +39,42 @@ const vadParamsSchema = z
   })
   .optional()
 
+const MAIN_GPU_DESCRIPTION =
+  "GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`."
+
+const mainGpuSelectorSchema = z.union([z.number().int(), z.string()])
+
 const contextParamsSchema = z
   .object({
     model: z.string().optional().describe('Path to the whisper model file (context override).'),
     use_gpu: z.boolean().optional().describe('Enable GPU acceleration. Default false.'),
     flash_attn: z.boolean().optional().describe('Enable flash attention.'),
-    gpu_device: z.number().optional().describe('GPU device index to use.')
+    gpu_device: z
+      .number()
+      .optional()
+      .describe('GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.'),
+    'main-gpu': mainGpuSelectorSchema.optional().describe(MAIN_GPU_DESCRIPTION),
+    main_gpu: mainGpuSelectorSchema
+      .optional()
+      .describe('Alias of `main-gpu`; supply only one spelling.')
+  })
+  .superRefine((params, ctx) => {
+    const hasCanonical = params['main-gpu'] !== undefined
+    const hasAlias = params.main_gpu !== undefined
+    if (hasCanonical && hasAlias) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['main_gpu'],
+        message: 'Use only one of main-gpu and main_gpu'
+      })
+    }
+    if ((hasCanonical || hasAlias) && params.gpu_device !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['gpu_device'],
+        message: 'main-gpu cannot be combined with gpu_device'
+      })
+    }
   })
   .optional()
 
@@ -149,6 +179,12 @@ export const whisperConfigSchema = z.object({
     .string()
     .optional()
     .describe('Initial prompt (context) prepended to the transcription.'),
+  carry_initial_prompt: z
+    .boolean()
+    .optional()
+    .describe(
+      'Prepend `initial_prompt` to every decode window instead of only the first. Default false.'
+    ),
   language: z
     .string()
     .optional()
