@@ -199,8 +199,9 @@ state serves the longest prefix of it, cheapest first on a tie:
 2. on the batch path, the conversation parked in another free slot;
 3. the RAM tier (`cache_ram_mib`);
 4. the `cacheKey` files a request (as `cacheKey` or `baseCacheKey`) or
-   `saveCache()` named in this process (no directory is scanned; a changed
-   file is read again, a deleted one skipped).
+   `saveCache()` named in this process, the 256 named most recently (no
+   directory is scanned; a changed file is read again, a deleted one
+   skipped).
 
 Any prefix longer than what its own sequence serves is used; there is no
 threshold. Memory that cannot be trimmed (full-state models, and another
@@ -227,6 +228,13 @@ a rough figure, on Qwen3-0.6B (Apple Silicon, prefill-only turns of about 27
 tokens) a turn took about 70 ms with 500 tokens of history and 180–260 ms
 with 3,200; the opt-in `KvCacheExtended.RenderCostPerTurn` test reproduces
 the measurement.
+
+**Trust.** Any conversation the model holds can seed another, and a request's
+stats (`CacheTokens`, the prompt tokens it decoded) show how much of its
+prompt was already held. Conversations that must not learn about each other,
+such as different clients of one server, need separate model instances. A
+`cacheKey` or `baseCacheKey` file's state is loaded as written once its ledger
+matches the prompt, so the files must come from a trusted source.
 
 ## Checkpoint lifecycle (full-state and sliding-window models)
 

@@ -45,7 +45,7 @@ conversation](./cache-lifecycle.md#starting-from-another-conversation).
 | --- | --- | --- |
 | `cacheKey` | `string` | Path to the cache file. Omit to disable caching. The conversation stays in memory and is written to this file only by `saveCache()` or when it would otherwise be lost (see [Save the cache to disk](#save-the-cache-to-disk)). |
 | `ephemeral` | `boolean` | `true` keeps the conversation in memory only: whenever it would be written automatically, it is dropped instead. `saveCache()` still writes it. Default `false`. |
-| `baseCacheKey` | `string` | A `cacheKey` file to start from when nothing in memory serves more of the prompt, such as a primed system prompt. Read, never written; skipped when missing or when it shares no prefix with the prompt. Once named, the file stays a source for every later request on this model, as any `cacheKey` file it used does. Text models only. See [Start from a primed file](#start-from-a-primed-file). |
+| `baseCacheKey` | `string` | A `cacheKey` file to start from when nothing in memory serves more of the prompt, such as a primed system prompt. Read, never written; skipped when missing or when it shares no prefix with the prompt. Once named, the file stays a source for later requests on this model, as any `cacheKey` file it used does, until 256 files named more recently push it out. The file must come from a trusted source: its state is loaded as written. Text models only. See [Start from a primed file](#start-from-a-primed-file). |
 | `prefill` | `boolean` | Evaluate prompt without generating a response. On a model loaded with `parallel >= 2`, needs a `cacheKey` — see below. |
 | `generationParams` | `object` | Per-run overrides for temp, top_p, top_k, predict, seed, penalties. |
 
@@ -594,9 +594,11 @@ models. On hybrid, recurrent and sliding-window models the same holds by
 default; `cache_checkpoint_storage: 'disk'` moves their snapshots and
 checkpoints to temp files.
 
-The same rule applies to requests without `cacheKey`. Nothing reuses their
-state, so the only visible difference is `CacheTokens`, which reports the
-tokens actually decoded rather than the pre-request cursor.
+The same rule applies to requests without `cacheKey`. On text models their
+state stays in memory for the prefix the next request shares with it; on
+multimodal models nothing reuses it, so the only visible difference is
+`CacheTokens`, which reports the tokens actually decoded rather than the
+pre-request cursor.
 
 The `cacheKey` file changes only through the writes described in [Save the
 cache to disk](#save-the-cache-to-disk), which also carry the newest

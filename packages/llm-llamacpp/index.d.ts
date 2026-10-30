@@ -561,8 +561,9 @@ declare namespace LlmLlamacpp {
          * the prompt, such as a system prompt and tools primed with `prefill`.
          * It is read, never written: the request's own state goes to its
          * `cacheKey`. A file that is missing or shares no prefix with the prompt
-         * is skipped. Once named, the file stays a source for every later request
-         * on this model, as any `cacheKey` file it used does. Text models only.
+         * is skipped. Once named, the file stays a source for later requests on
+         * this model, as any `cacheKey` file it used does, until 256 files named
+         * more recently push it out. Text models only.
          */
         baseCacheKey?: string;
         /**

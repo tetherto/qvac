@@ -86,7 +86,7 @@ run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>
 interface BatchPrompt {
   id?: string         // caller-supplied; the scheduler assigns one if omitted
   prompt: Message[]
-  runOptions?: RunOptions  // per-item generationParams, cacheKey, ephemeral
+  runOptions?: RunOptions  // per-item generationParams, cacheKey, ephemeral, baseCacheKey
 }
 ```
 
@@ -388,7 +388,7 @@ Streaming works as follows:
 
 ## Cache per slot
 
-Each `BatchPrompt` may carry its own `cacheKey` and `ephemeral`. The scheduler creates one driver per slot, so KV caches are isolated by slot index.
+Each `BatchPrompt` may carry its own `cacheKey`, `ephemeral` and `baseCacheKey`. The scheduler creates one driver per slot, so no slot changes another's KV; a request may start from a copy of another slot's conversation (see **Shared prefixes** under [KV reuse](#kv-reuse-single-prompt-vs-batch)).
 
 **Same-key prompts are serialized.** Multiple prompts, in one batch or in concurrent `run()` calls, may use the same `cacheKey`, but only one runs at a time: a request whose key is held by a running slot waits in `keyDeferred_` until that slot is freed, then continues from its committed state. Prompts on other keys are not held up. Since no request writes the file, there is no write sharing to guard against.
 
