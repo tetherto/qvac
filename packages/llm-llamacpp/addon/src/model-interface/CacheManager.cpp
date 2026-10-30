@@ -439,7 +439,9 @@ bool CacheManager::copyActiveCacheToRamTier(
     const llama_seq_id seq = llmContext_->getSeqId();
     qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry entry;
     const size_t size = llama_state_seq_get_size_ext(ctx, seq, 0);
-    if (size == 0) {
+    // A state larger than the whole budget is refused by `insert`; skip the
+    // copy.
+    if (size == 0 || size > ramTier_->budget()) {
       return false;
     }
     entry.state.resize(size);
