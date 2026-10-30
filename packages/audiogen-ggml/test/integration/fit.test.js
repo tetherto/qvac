@@ -7,6 +7,7 @@ const test = require('brittle')
 
 const { assessFit } = require('../../index.js')
 const { ensureAudiogenModels, getBaseDir } = require('../utils/downloadModel')
+const { NO_GPU } = require('../utils/runAudioGen')
 
 const TEST_TIMEOUT_MS = 1800000
 const VARIANT = 'turbo-q4'
@@ -65,19 +66,29 @@ test('a CPU load is one host row', { timeout: TEST_TIMEOUT_MS }, async (t) => {
   if (dir === null) return
 
   const fit = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 0 })
-  const offloaded = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 99 })
 
   t.ok(isVerdict(fit), 'a verdict')
   t.is(fit.devices.length, 1, 'one row')
   t.ok(fit.devices[0].unified, 'the row is the host')
   t.ok(fit.devices[0].usedBytes > 0, 'the pipeline peak was measured')
-  // The CPU pool is both the device and the host pool, so its peak is counted
-  // once: the staged pipeline needs about what it needs offloaded, never twice.
-  t.ok(
-    fit.devices[0].usedBytes < 1.5 * totalUsed(offloaded),
-    `the pool's peak counts once (${fit.devices[0].usedBytes} < 1.5 × ${totalUsed(offloaded)})`
-  )
 })
+
+test(
+  'a CPU pool peak is counted once compared with an offloaded projection',
+  { timeout: TEST_TIMEOUT_MS, skip: NO_GPU },
+  async (t) => {
+    const dir = await stagedModels(t)
+    if (dir === null) return
+
+    const fit = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 0 })
+    const offloaded = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 99 })
+
+    t.ok(
+      fit.devices[0].usedBytes < 1.5 * totalUsed(offloaded),
+      `the pool's peak counts once (${fit.devices[0].usedBytes} < 1.5 × ${totalUsed(offloaded)})`
+    )
+  }
+)
 
 test('a longer generation costs no less', { timeout: TEST_TIMEOUT_MS }, async (t) => {
   const dir = await stagedModels(t)
