@@ -437,6 +437,8 @@ async function main(family, env) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // Main ran these steps outside pnpm; electron-forge reads pnpm from this and then demands a hoisted node-linker.
+  delete process.env.npm_config_user_agent
   main(process.argv[2], process.env).catch((err) => {
     console.log(`::error::${err.message}`)
     process.exit(1)
