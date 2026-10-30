@@ -44,3 +44,10 @@ Keep event-stream termination and aggregate-promise outcomes compatible, includi
 partial results. Update the plugin declaration, handler, schemas, public surface,
 and focused registry/cancellation tests together. Current source and tests are
 authoritative for supported request kinds and admission lanes.
+
+## Tool callback results
+
+`completionOrchestrate` reads tool callback results as UTF-8 JSON lines. Buffer
+partial lines as bytes and decode each complete line once; transport chunks can
+split a character as well as a JSON frame. The next generation turn must receive
+the original tool result regardless of how the input was chunked.
