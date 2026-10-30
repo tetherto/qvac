@@ -77,6 +77,32 @@ async function promptTokensOfRun(model, prompt) {
   return toNumber(response.stats?.promptTokens)
 }
 
+// The error `fn` rejects with, or null when it resolves.
+async function rejection(fn) {
+  try {
+    await fn()
+    return null
+  } catch (err) {
+    return err
+  }
+}
+
+async function expectTypeError(t, fn, pattern, label) {
+  const err = await rejection(fn)
+  t.ok(
+    err instanceof TypeError && pattern.test(err.message),
+    `${label}: rejects with a TypeError (${err?.message})`
+  )
+}
+
+async function expectInvalidArgument(t, fn, label) {
+  const err = await rejection(fn)
+  t.ok(
+    err !== null && /InvalidArgument/.test(String(err.code)) && /^calcTokens: /.test(err.message),
+    `${label}: rejects with InvalidArgument (${err?.code}: ${err?.message})`
+  )
+}
+
 safeTest('calcTokens | text alone is counted raw', { timeout: 600_000 }, async (t) => {
   const model = await setupModel(t)
 
@@ -140,11 +166,15 @@ safeTest('calcTokens | answers while a run is generating', { timeout: 600_000 },
 
   const response = await model.run(prompt)
   let done = false
+  let chunks = 0
   let firstChunk
   const started = new Promise((resolve) => {
     firstChunk = resolve
   })
-  response.onUpdate(() => firstChunk())
+  response.onUpdate(() => {
+    chunks++
+    firstChunk()
+  })
   const finished = response.await().then(
     () => {
       done = true
@@ -154,7 +184,9 @@ safeTest('calcTokens | answers while a run is generating', { timeout: 600_000 },
     }
   )
 
-  await started
+  // A run that fails or ends without output settles `finished` instead.
+  await Promise.race([started, finished])
+  t.ok(chunks > 0 && !done, `the run is generating (chunks=${chunks}, done=${done})`)
   const during = await model.calcTokens({ history: prompt })
   t.absent(done, 'the count came back before the run finished')
   t.is(during, expected, 'the count does not change while a run decodes')
@@ -174,50 +206,49 @@ safeTest('calcTokens | rejects invalid input', { timeout: 600_000 }, async (t) =
   )
 
   const model = await setupModel(t)
-  await t.exception.all(() => model.calcTokens(null), /requires an object/, 'non-object input')
-  await t.exception.all(
+  await expectTypeError(t, () => model.calcTokens(null), /requires an object/, 'non-object input')
+  await expectTypeError(
+    t,
     () => model.calcTokens({ text: 1 }),
     /text must be a string/,
     'non-string text'
   )
-  await t.exception.all(
+  await expectTypeError(
+    t,
     () => model.calcTokens({ history: '[]' }),
     /history must be a Message\[\]/,
     'history as JSON text'
   )
-  await t.exception.all(
+  await expectTypeError(
+    t,
     () => model.calcTokens({ text: 'Hi', tools: WEATHER_TOOL }),
     /tools must be an array/,
     'tools not in an array'
   )
 
-  await t.exception.all(() => model.calcTokens({}), /calcTokens: /, 'nothing to count')
-  await t.exception.all(
+  await expectInvalidArgument(t, () => model.calcTokens({}), 'nothing to count')
+  await expectInvalidArgument(
+    t,
     () => model.calcTokens({ tools: [WEATHER_TOOL] }),
-    /calcTokens: /,
     'tools with no message to render'
   )
-  await t.exception.all(
-    () => model.calcTokens({ history: [] }),
-    /calcTokens: /,
-    'an empty conversation'
-  )
-  await t.exception.all(
+  await expectInvalidArgument(t, () => model.calcTokens({ history: [] }), 'an empty conversation')
+  await expectInvalidArgument(
+    t,
     () => model.calcTokens({ text: 'Hi', tools: [USER] }),
-    /calcTokens: /,
     'a message among the tool definitions'
   )
-  await t.exception.all(
+  await expectInvalidArgument(
+    t,
     () => model.calcTokens({ text: 'Hi', history: [WEATHER_TOOL], tools: [WEATHER_TOOL] }),
-    /calcTokens: /,
     'the same tool in history and tools'
   )
-  await t.exception.all(
+  await expectInvalidArgument(
+    t,
     () =>
       model.calcTokens({
         history: [{ role: 'user', type: 'media', content: new Uint8Array([1, 2, 3]) }]
       }),
-    /calcTokens: /,
     'a media message'
   )
   t.ok(

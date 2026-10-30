@@ -1211,6 +1211,64 @@ TEST_F(LlamaModelTest, CalcTokensRunsBesideAnInFlightRequest) {
   EXPECT_EQ(during, expected);
 }
 
+// reload() swaps the model state under the exclusive lock, so a count racing
+// it either finishes first or waits for the new state; it never sees a partial
+// one.
+TEST_F(LlamaModelTest, CalcTokensRacingReloadSeesAWholeModel) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const std::string input =
+      R"([{"role": "system", "content": "You are a helpful assistant."},)"
+      R"( {"role": "user", "content": "Hello, world!"}])";
+  const size_t expected = model.calcTokens({.history = input});
+
+  std::atomic<bool> stop{false};
+  std::atomic<size_t> counts{0};
+  std::atomic<size_t> wrongCounts{0};
+  std::exception_ptr countException;
+  std::thread counter([&]() {
+    try {
+      while (!stop.load()) {
+        if (model.calcTokens({.history = input}) != expected) {
+          ++wrongCounts;
+        }
+        ++counts;
+        // Leaves the lock free between counts so reload() can take it.
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+    } catch (...) {
+      countException = std::current_exception();
+    }
+  });
+
+  constexpr int kReloads = 2;
+  for (int i = 0; i < kReloads; ++i) {
+    EXPECT_NO_THROW(model.reload());
+    EXPECT_TRUE(model.isLoaded());
+  }
+  stop.store(true);
+  counter.join();
+
+  if (countException) {
+    try {
+      std::rethrow_exception(countException);
+    } catch (const std::exception& e) {
+      FAIL() << "calcTokens threw while racing reload(): " << e.what();
+    } catch (...) {
+      FAIL() << "calcTokens threw a non-std exception while racing reload()";
+    }
+  }
+  EXPECT_GT(counts.load(), 0U);
+  EXPECT_EQ(wrongCounts.load(), 0U);
+  EXPECT_EQ(model.calcTokens({.history = input}), expected);
+}
+
 TEST_F(LlamaModelTest, CalcTokensRejectsInvalidRequests) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
