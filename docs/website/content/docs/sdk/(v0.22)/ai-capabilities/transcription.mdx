@@ -163,7 +163,7 @@ Its `verbose_json` response includes MOSS speaker labels and Nemotron
 
 - `{ type: "text", text }` — incremental transcript text.
 - `{ type: "segment", segment }` — segment metadata when `metadata: true`, on both engines. Parakeet segments also carry `isEndOfTurn` and `startsWord`.
-- `{ type: "vad", speaking, probability, source }` — voice-activity-detection state (whisper-only; `source` is `"silero"`).
+- `{ type: "vad", speaking, probability, source }` — voice-activity-detection state. `source` is `"silero"` for whisper, `"energy"` for Parakeet's energy detector (`streamingEnergyVad` at load or `emitEnergyVad` per stream, on CTC, TDT, RNN-T, and Nemotron models), or `"sortformer"` for Parakeet speaker activity, which also carries `speakerId`.
 - `{ type: "endOfTurn", source: "whisper", silenceDurationMs }` — turn boundary detected from a measured silence window (whisper).
 - `{ type: "endOfTurn", source: "parakeet" }` — turn boundary detected from the EOU model's `<EOU>` token (parakeet; no silence window — the event is token-driven).
 
@@ -197,7 +197,10 @@ const session = await transcribeStream({
     leftContextMs: 500,       // ASR encoder left-context window
     rightLookaheadMs: 200,    // ASR encoder right-lookahead window
     emitPartials: true,       // emit partial segments before chunk boundaries
-    emitEnergyVad: false,     // CTC/TDT energy-based VAD hint (engine-internal)
+    emitEnergyVad: true,      // emit { type: "vad", source: "energy" } events
+    energyVadThresholdDb: -35, // speech threshold in dBFS RMS
+    energyVadWindowMs: 30,    // RMS window in ms (the engine caps it at 1000)
+    energyVadHangoverMs: 200, // silence before the detector leaves "speaking"
   },
 });
 
@@ -215,6 +218,20 @@ for await (const event of session) {
 ```
 
 The synthetic `{ type: "endOfTurn", source: "parakeet" }` event surfaces whenever the EOU model emits an `<EOU>` token, and is the parakeet equivalent of whisper's silence-window EOU. Pair it with the `PARAKEET_EOU_120M_V1_Q8_0` checkpoint when you need explicit turn boundaries from parakeet.
+
+The energy detector is tuned with the same three knobs at load time as `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, and `streamingEnergyVadHangoverMs` in `parakeetConfig`; the per-stream values above override them for one session. The threshold is a dBFS RMS level (default -35), the window is the RMS span in ms (default 30), and the hangover is how long the audio must stay below the threshold before the state returns to silence (default 200 ms). VAD events reach sessions opened with `parakeetStreamingConfig` or `emitVadEvents: true`.
+
+### Parakeet prewarming
+
+Set `prewarm: true` in `parakeetConfig` to run one synthetic encoder pass while the model loads, so the first `transcribe()` or stream does not pay the GPU shader or kernel compile. `prewarmAudioSeconds` sets the length of that pass in seconds of audio (default 1; it must be greater than 0). Nemotron 3 Diarization also runs one streaming chunk. Both options apply at load time only and have no per-stream counterpart.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+  modelType: "parakeet-transcription",
+  modelConfig: { useGPU: true, prewarm: true, prewarmAudioSeconds: 2 },
+});
+```
 
 ## Examples
 

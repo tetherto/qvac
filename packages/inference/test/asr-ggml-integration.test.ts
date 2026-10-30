@@ -249,6 +249,35 @@ test('ASR event adapters preserve the public engine event contract', (t) => {
   )
 })
 
+test('Parakeet energy-VAD tuning and prewarm reach the addon at load, on reload and per stream', (t) => {
+  const config = {
+    streaming: true,
+    streamingEnergyVad: true,
+    streamingEnergyVadThresholdDb: -40,
+    streamingEnergyVadWindowMs: 50,
+    streamingEnergyVadHangoverMs: 300,
+    prewarm: true,
+    prewarmAudioSeconds: 2
+  }
+  t.alike(buildParakeetEngineConfig(config), { engine: 'parakeet', parakeetConfig: config })
+  t.alike(buildParakeetReloadConfig(config), { parakeetConfig: config })
+
+  const runConfig = {
+    emitEnergyVad: true,
+    energyVadThresholdDb: -40,
+    energyVadWindowMs: 50,
+    energyVadHangoverMs: 300
+  }
+  t.alike(parakeetStreamingRunConfigSchema.parse(runConfig), runConfig)
+  for (const invalid of [
+    { energyVadWindowMs: 0 },
+    { energyVadWindowMs: 12.5 },
+    { energyVadHangoverMs: -1 }
+  ]) {
+    t.absent(parakeetStreamingRunConfigSchema.safeParse(invalid).success, JSON.stringify(invalid))
+  }
+})
+
 test('Nemotron diarization streaming forwards controls and dominant speaker ids', (t) => {
   const config = {
     diarizationThreshold: 0.5,
