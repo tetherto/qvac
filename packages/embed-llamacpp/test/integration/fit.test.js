@@ -23,58 +23,57 @@ function assess(modelPath, config = {}, rest = {}) {
   return EmbedLlamacpp.assessFit({ modelPath, config: { ...GPU, ...config }, ...rest })
 }
 
+const isVerdict = (fit) => fit.status === 'fits' || fit.status === 'does-not-fit'
+const totalUsed = (fit) => fit.devices.reduce((total, row) => total + row.usedBytes, 0)
+
 // The figures depend on what the runner has free, so the assertions are the
 // relationships that hold on any machine.
-test('a projection is internally consistent', { timeout: 600_000 }, async (t) => {
+test('a projection lists every device it uses, the host last', { timeout: 600_000 }, async (t) => {
   const fit = await assess(await modelPath())
 
-  t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
+  t.ok(isVerdict(fit), 'a verdict')
   t.ok(fit.devices.length > 0, 'at least the host row')
-  t.is(fit.devices.at(-1).name, 'host', 'the host row is last')
-
-  const sum = (rows) =>
-    rows.reduce((total, row) => total + row.modelBytes + row.contextBytes + row.computeBytes, 0)
-  t.is(fit.hostBytes, sum(fit.devices.slice(-1)), 'hostBytes is the host row')
-  t.is(fit.deviceBytes, sum(fit.devices.slice(0, -1)), 'deviceBytes is every other row')
+  t.is(fit.devices.at(-1).name, 'CPU', 'the host row is last')
+  t.is(fit.devices.at(-1).unified, true, 'the host row is unified')
+  t.ok(fit.stats.ctxSize > 0, 'the resolved context')
+  t.ok(
+    Number.isInteger(fit.stats.gpuLayers) && fit.stats.gpuLayers >= 0,
+    'the resolved layer count'
+  )
+  for (const row of fit.devices) {
+    t.ok(row.id.length > 0, `${row.name} has an id`)
+    t.ok(row.usedBytes >= 0, `${row.name} has a usage`)
+    t.ok(row.freeBytes <= row.totalBytes, `${row.name} has free within total`)
+  }
+  const ids = fit.devices.map((row) => row.id)
+  t.is(new Set(ids).size, ids.length, 'one row per device')
 })
 
+// An embedding load runs at the trained context: unset, it is pinned there,
+// and larger, it is capped there. Both project the same memory.
 test('the context is pinned to the trained context', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath())
+  const file = await modelPath()
+  const pinned = await assess(file, { 'gpu-layers': '0' })
+  const oversized = await assess(file, { 'gpu-layers': '0', 'ctx-size': '1000000' })
 
-  t.comment(`status=${fit.status} ctxSize=${fit.ctxSize} trainCtxSize=${fit.trainCtxSize}`)
-  if (fit.status !== 'fits') {
-    t.pass('the runner cannot hold this model; the placement assertions do not apply')
-    return
-  }
-  // An embedding load runs at the trained context, so the projection may not
-  // report a reduced one.
-  t.is(fit.ctxSize, fit.trainCtxSize, 'never reduced below what the load will use')
-  t.ok(fit.gpuLayers >= 0, 'a layer count, not llama’s unset default')
-})
-
-test('an oversized context is capped at the trained context', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath(), { 'ctx-size': '1000000' })
-
-  if (fit.status === 'error') {
-    t.pass('this runner could not project the model')
-    return
-  }
-  t.is(fit.ctxSize, fit.trainCtxSize, 'capped, as the load caps it')
+  t.ok(isVerdict(pinned))
+  t.is(oversized.stats.ctxSize, pinned.stats.ctxSize, 'the context is the trained one')
+  t.is(
+    totalUsed(oversized),
+    totalUsed(pinned),
+    'an oversized context is capped as the load caps it'
+  )
 })
 
 test('a pinned layer count survives into the projection', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath(), { 'gpu-layers': '0' })
+  const pinned = await assess(await modelPath(), { 'gpu-layers': '0' })
 
-  t.is(fit.gpuLayers, 0, 'the fitter rewrites defaults, not a value the load pinned')
+  t.ok(isVerdict(pinned))
+  t.is(pinned.stats.gpuLayers, 0, 'the fitter keeps the layer count the load pinned')
 })
 
-test('a model that cannot be read is an outcome, not a throw', async (t) => {
-  const fit = await assess('/nonexistent/model.gguf')
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'model-unreadable')
-  t.ok(fit.message.includes('/nonexistent/model.gguf'), 'the message names the file')
-  t.alike(fit.devices, [])
+test('a model that cannot be read rejects', async (t) => {
+  await t.exception(assess('/nonexistent/model.gguf'), /\/nonexistent\/model\.gguf/)
 })
 
 // A setting the engine accepts is a setting the projection accepts.
@@ -93,62 +92,51 @@ test('every setting a load carries reaches the fitter', { timeout: 600_000 }, as
   const file = await modelPath()
 
   for (const [key, value] of Object.entries(EVERY_SETTING)) {
-    const fit = await assess(file, { [key]: value })
+    const fit = assess(file, { [key]: value })
 
     if (isMobile && MOBILE_REFUSED.includes(key)) {
-      t.is(fit.reason, 'unsupported-config', `${key} is refused on mobile`)
+      await t.exception(fit, `${key} is refused on mobile`)
     } else {
-      t.not(fit.reason, 'unsupported-config', `${key} is a shape the engine accepts`)
+      t.ok(isVerdict(await fit), `${key} is a shape the engine accepts`)
     }
   }
 })
 
-test('a context floor that is not a count is refused', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath(), {}, { minCtxSize: -1 })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config')
-  t.ok(fit.message.includes('minCtxSize'), 'the message names the field')
+test('a context floor that is not a count rejects', { timeout: 600_000 }, async (t) => {
+  await t.exception(assess(await modelPath(), {}, { minCtxSize: -1 }), /minCtxSize/)
 })
 
-test(
-  'a load the engine cannot parse is an outcome, not a throw',
-  { timeout: 600_000 },
-  async (t) => {
-    const fit = await assess(await modelPath(), { 'gpu-layers': 'not-a-number' })
+test('a load the engine cannot parse rejects', { timeout: 600_000 }, async (t) => {
+  await t.exception(assess(await modelPath(), { 'gpu-layers': 'not-a-number' }))
+})
 
-    t.is(fit.status, 'error')
-    t.is(fit.reason, 'unsupported-config')
-    t.ok(fit.message.length > 0, `a message is given: ${fit.message}`)
-  }
-)
-
-test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
+test('a cpu load is unknown', { timeout: 600_000 }, async (t) => {
   const fit = await assess(await modelPath(), { device: 'cpu' })
 
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config')
-  t.ok(fit.message.startsWith('device:'), 'the message names the key')
+  t.is(fit.status, 'unknown')
+  t.alike(fit.devices, [])
+  t.alike(fit.stats, {})
 })
 
 // The fitter does not count a projector, so a multimodal load would be
 // projected as if it were text only.
-test('a multimodal load is refused', { timeout: 600_000 }, async (t) => {
+test('a multimodal load is unknown', { timeout: 600_000 }, async (t) => {
   const model = await modelPath()
 
   const withProjector = await assess(model, {}, { projectionModel: '/models/mmproj.gguf' })
-  t.is(withProjector.status, 'error')
-  t.is(withProjector.reason, 'unsupported-config', 'a projection model is refused')
-  t.ok(withProjector.message.startsWith('projectionModel:'), 'the message names the field')
+  t.is(withProjector.status, 'unknown', 'a projection model is unknown')
+  t.alike(withProjector.devices, [])
 
-  const withOptions = await assess(model, { 'image-max-tokens': '280' })
-  t.is(withOptions.status, 'error')
-  t.is(withOptions.reason, 'unsupported-config', 'projector options are refused')
-  t.ok(withOptions.message.includes('files.projectionModel'), 'the message says what they need')
-
-  const invalid = await assess(model, { 'image-max-tokens': 'many' })
-  t.is(invalid.reason, 'unsupported-config', 'an invalid projector option is refused')
-  t.ok(invalid.message.includes('image-max-tokens'), 'the message names the key')
+  await t.exception(
+    assess(model, { 'image-max-tokens': '280' }),
+    /files\.projectionModel/,
+    'projector options need a projection model, as the load does'
+  )
+  await t.exception(
+    assess(model, { 'image-max-tokens': 'many' }),
+    /image-max-tokens/,
+    'an invalid projector option names the key'
+  )
 })
 
 test('fitting keeps the event loop responsive', { timeout: 600_000 }, async (t) => {
@@ -161,8 +149,7 @@ test('fitting keeps the event loop responsive', { timeout: 600_000 }, async (t) 
   try {
     const fit = await assess(file)
     pending = false
-    t.not(fit.status, 'error', 'a real native projection completed')
-    t.absent(fit.message, 'a verdict carries no message')
+    t.ok(isVerdict(fit), 'a real native projection completed')
     t.ok(ticks > 0, 'timers ran before fitting settled')
     t.comment(`${ticks} timer ticks before completion`)
   } finally {
@@ -180,12 +167,14 @@ test('queued fits retain independent requests and all settle', { timeout: 600_00
   request.config['ctx-size'] = '1024'
   const second = EmbedLlamacpp.assessFit(request)
   const missing = EmbedLlamacpp.assessFit({ modelPath: '/nonexistent/model.gguf' })
-  const [a, b, c] = await Promise.all([first, second, missing])
-  t.not(a.status, 'error')
-  t.not(b.status, 'error')
-  t.is(a.ctxSize, 512, 'the first call owns its original config')
-  t.is(b.ctxSize, 1024, 'the second call owns its changed config')
-  t.is(c.reason, 'model-unreadable', 'an error outcome does not strand queued callers')
+  const [a, b, c] = await Promise.allSettled([first, second, missing])
+  t.is(a.status, 'fulfilled')
+  t.is(b.status, 'fulfilled')
+  t.ok(
+    totalUsed(b.value) > totalUsed(a.value),
+    'each call owns the config it was given, so the larger context costs more'
+  )
+  t.is(c.status, 'rejected', 'a rejection does not strand queued callers')
 })
 
 test('a broken request rejects', async (t) => {
@@ -205,8 +194,8 @@ test('a fit retains the backend while a loaded model unloads', { timeout: 600_00
     const fit = assess(file)
     await model.unload()
     const result = await fit
-    t.not(result.status, 'error', 'unloading the model did not invalidate the fit backend')
-    t.ok(result.devices.length > 0, 'the copied device breakdown survives backend release')
+    t.ok(isVerdict(result), 'unloading the model did not invalidate the fit backend')
+    t.ok(result.devices.length > 0, 'the copied device rows survive backend release')
   } finally {
     await model.unload().catch(() => {})
   }

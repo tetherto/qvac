@@ -57,6 +57,8 @@
     "test:package": "npm run build:ts && brittle test/package/package-contract.test.js",
     "test:node": "node --test scripts/__tests__/*.test.js",
     "test:integration": "npm run build:ts && brittle-bare test/integration/**/*.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target audiogen_ggml_tests",
+    "test:cpp": "npm run test:cpp:build && ./build/audiogen_ggml_tests",
     "test:benchmark:rtf": "npm run build:ts && brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
     "fuzz:build": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target audiogen-config-parse-fuzz",

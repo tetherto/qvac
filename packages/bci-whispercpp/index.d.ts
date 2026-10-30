@@ -204,5 +204,5 @@ export declare class BCIWhispercpp {
 }
 export { computeWER };
 export { assessFit } from "./lib/fit";
-export type { BciFitRequest, BciFitResult, BciFitStatus } from "./lib/fit";
+export type { BciFitRequest, BciFitResult, BciFitStatus, BciFitDevice, BciFitStats, } from "./lib/fit";
 export default BCIWhispercpp;

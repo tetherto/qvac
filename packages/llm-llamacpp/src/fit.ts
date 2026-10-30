@@ -6,42 +6,36 @@ export interface LlamaFitRequest {
   config?: Record<string, string>
   /** Floor the fitter may not reduce an unpinned context below. */
   minCtxSize?: number
-  /** Memory to leave free on every device, held to against the load's own `fit-target`. */
+  /** Memory to leave free on every device. The larger of this and the load's own `fit-target` binds. */
   marginBytes?: number
 }
 
-export type LlamaFitStatus = 'fits' | 'does-not-fit' | 'error'
-
-export type LlamaFitReason =
-  | 'fits'
-  | 'does-not-fit'
-  | 'model-unreadable'
-  | 'no-backend-device'
-  | 'unsupported-config'
+/** `unknown` is a load the fitter cannot project, such as one placed on the CPU. */
+export type LlamaFitStatus = 'fits' | 'does-not-fit' | 'unknown'
 
 export interface LlamaFitDevice {
+  /** The PCI bus ID when the backend reports one, the device name otherwise. */
+  id: string
   name: string
-  totalBytes: number
+  unified: boolean
+  /** Model, context and compute memory the load takes on this device. */
+  usedBytes: number
   freeBytes: number
-  modelBytes: number
-  contextBytes: number
-  computeBytes: number
+  totalBytes: number
 }
+
+/**
+ * The load as the fit resolved it: on `fits` the context and GPU layer count the
+ * fitter settled on, on `does-not-fit` the ones the load asked for. Empty when
+ * `unknown`.
+ */
+export type LlamaFitStats = { ctxSize: number; gpuLayers: number } | Record<string, never>
 
 export interface LlamaFitResult {
   status: LlamaFitStatus
-  reason: LlamaFitReason
-  /** The layer count the placement resolved to. */
-  gpuLayers: number
-  ctxSize: number
-  /** One row per device the model was assigned to, then a `host` row. */
+  /** One row per device the model is assigned to, then the host CPU. Empty when `unknown`. */
   devices: LlamaFitDevice[]
-  /** Model, context and compute summed across the devices, host excluded. */
-  deviceBytes: number
-  /** The same, for the trailing host row. */
-  hostBytes: number
-  trainCtxSize: number
-  expertCount: number
+  stats: LlamaFitStats
 }
 
 interface FitBinding {
@@ -53,8 +47,7 @@ interface FitBinding {
  * and never weight data. The registry's weightless copy of a model answers the
  * same as the model itself, so this can run before anything is downloaded.
  *
- * A model the fitter cannot read resolves to `status: "error"`; only a broken
- * request rejects.
+ * A model the fitter cannot read, or an invalid request, rejects.
  *
  * Builds the model twice without allocating weights. Concurrent calls run one
  * at a time.
