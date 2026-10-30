@@ -121,9 +121,17 @@ jobs:
           TARGET: ${{ matrix.row.target }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
+          SOURCE: ${{ matrix.row.sources[0] && 'published' || '' }}
+          DIR: ${{ matrix.row.dir }}
+        # A package checked in npm's layout installs as a release consumer would, from the committed ranges.
         run: |
-          pnpm install --frozen-lockfile
-          pnpm exec nx run "$PROJECT:$TARGET" --outputStyle=stream
+          if [ -n "$SOURCE" ]; then
+            pnpm install --frozen-lockfile --filter .
+            node scripts/ci/checks-source.mjs check "$SOURCE" "$DIR" "$PROJECT" "$TARGET"
+          else
+            pnpm install --frozen-lockfile
+            pnpm exec nx run "$PROJECT:$TARGET" --outputStyle=stream
+          fi
 
   # Providers build first, once per configuration; a provider's own release builds its rows here.
   providers:
@@ -217,7 +225,7 @@ jobs:
         with:
           changelog-path: ${{ env.WORKDIR }}/CHANGELOG.md
           version: ${{ steps.notes.outputs.version }}
-      # A JavaScript build compiles in a workspace install, against its dependencies' sources at this commit.
+      # A JavaScript build compiles against the committed ranges from npm, as main's release builds did.
       - if: matrix.row.jsBuild
         uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
@@ -231,12 +239,13 @@ jobs:
         working-directory: src
         env:
           PROJECT: ${{ matrix.row.project }}
+          DIR: ${{ matrix.row.dir }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
           NPM_CONFIG_IGNORE_SCRIPTS: "false"
         run: |
-          pnpm install --frozen-lockfile
-          pnpm exec nx run "$PROJECT:build" --outputStyle=stream
+          pnpm install --frozen-lockfile --filter .
+          node scripts/ci/checks-source.mjs check published "$DIR" "$PROJECT" build
       # npm 11.5 or newer for OIDC trusted publishing; the newest Node LTS ships it.
       - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:

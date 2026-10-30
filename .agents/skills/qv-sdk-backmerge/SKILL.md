@@ -24,7 +24,7 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 **On a release train** (`qv-release-train`), run it once for the whole train:
 read `release-train-<train>-<x.y.z>` wherever this skill says
 `release-<pkg>-<x.y.z>`, so the head is `backmerge/release-train-<train>-<x.y.z>`
-and the title names `release-train-<train>-<x.y.z>`. `pr-checks-sdk-pod.yml`
+and the title names `release-train-<train>-<x.y.z>`. `pr-checks.yml`
 recognises that head name and checks the backmerge against the train's
 tarballs, because npm does not have the new versions until the train publishes.
 The source carries several manifests, changelogs and `pnpm-lock.yaml`; that is

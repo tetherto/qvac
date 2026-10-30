@@ -9,9 +9,8 @@ description: >-
 # /Users/actions-runner-*). Per infra, the runners already carry Python, so the
 # venv keeps installs off the system interpreter. Fails loudly below 3.10.
 #
-# Two workflows need this -- the Python e2e leg in test-node-sdk.yml and the
-# package's own suite in on-pr-sdk-python-e2e-full.yml -- so the reason lives
-# here rather than in each of them.
+# The Python e2e leg in test-node-sdk.yml uses it; sdk-python's own e2e makes
+# the same venv in packages/sdk-python/ci/python.mjs.
 
 inputs:
   project-dir:

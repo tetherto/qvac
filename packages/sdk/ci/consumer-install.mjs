@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-// The SDK as an end consumer installs it, from the tarball of this build with the in-repo @qvac/inference:
-//   - npm resolves the SDK's own manifest without peer-dependency errors or warnings;
-//   - a default install and a lean one (--omit=optional) each install without peer warnings, resolve the shared P2P
-//     packages to a single copy, and import('@qvac/sdk') gives the full API.
-// Run by the sdk's test:unit after its build; npm works in temporary directories, never in the workspace's install.
+// The SDK as a consumer installs it, from this build's tarball with the in-repo @qvac/inference: no peer-resolution drift,
+// and a default and a lean (--omit=optional) install with no peer warnings, one copy of each shared P2P package, and the
+// full API on import. Run by the sdk's test:unit after its build, in temporary directories only.
 
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { spawnSync, execFileSync } from 'node:child_process'

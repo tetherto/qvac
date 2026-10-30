@@ -1,6 +1,7 @@
 {
   "name": "@qvac/ai-sdk-provider",
   "root": "packages/ai-sdk-provider",
+  "tags": ["ci:contract"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

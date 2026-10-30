@@ -1,10 +1,7 @@
 #!/usr/bin/env node
-// cli's benchmark target, main's serve OpenAI provider comparison.
-//   benchmark.mjs live     the darwin-arm64-live configuration: BENCHMARK_ARGS is smoke or full; the self-hosted Mac in
-//                          the benchmark-live environment has LM Studio, Ollama and qvac serve set up, and names its runtime
-//                          config and environment manifest in BENCHMARK_CONFIG_PATH and BENCHMARK_ENVIRONMENT_PATH
-//   benchmark.mjs report   the report configuration: the provider-free OpenAI coverage preview
-// Both install the CLI with npm, as main did, so the SDK comes from npm at the committed range.
+// cli's benchmark, main's serve OpenAI provider comparison: `live` sweeps (BENCHMARK_ARGS smoke or full) on the
+// benchmark-live Mac, whose runner-local config and manifest BENCHMARK_CONFIG_PATH and BENCHMARK_ENVIRONMENT_PATH name;
+// `report` writes the provider-free coverage preview. Both install the CLI with npm, as main did.
 
 import {
   copyFileSync,

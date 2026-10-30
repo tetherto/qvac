@@ -44,7 +44,6 @@
       },
       "inputs": [
         "default",
-        "{workspaceRoot}/packages/*/vcpkg.json",
         "{workspaceRoot}/vcpkg-overlays/triplets/**/*"
       ]
     },

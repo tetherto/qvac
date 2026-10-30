@@ -2,13 +2,16 @@ name: Benchmarks
 
 # On-demand benchmarks of packages on the CI contract: each package's benchmark target on desktop, its test:mobile with
 # perf reports on Device Farm, then the benchmark target's report configuration over every result.
+# Weekly, and on dispatch, the perf report aggregates the perf artifacts of recent contract runs.
 on:
+  schedule:
+    - cron: "0 9 * * 1"
   workflow_dispatch:
     inputs:
       packages:
-        description: Comma-separated package names or directories
+        description: Comma-separated package names or directories; empty runs only the perf report
         type: string
-        required: true
+        default: ""
       configs:
         description: Comma-separated desktop configurations to keep, e.g. linux-x64; empty keeps every configuration
         type: string
@@ -46,15 +49,31 @@ on:
         description: Optional mocha --grep over the mobile test names; empty runs what the package's test:mobile selects
         type: string
         default: ""
+      perf_report:
+        description: Perf report of recent runs, for every addon (as weekly) or one
+        type: choice
+        options: [none, all, nmtcpp, llamacpp-llm, vlm, asr-ggml, diffusion-cpp, audiogen-ggml]
+        default: none
+      perf_report_workflow:
+        description: Workflow whose runs a one-addon perf report reads
+        type: choice
+        options: [PR build and test, Mobile tests, Benchmarks]
+        default: PR build and test
+      perf_report_runs:
+        description: Number of recent runs the perf report aggregates
+        type: number
+        default: 6
 
 permissions: {}
 
+# A report-only run joins no benchmark group, so it never cancels a benchmark.
 concurrency:
-  group: benchmarks-${{ github.ref }}
+  group: ${{ inputs.packages && format('benchmarks-{0}', github.ref) || format('perf-report-{0}', github.run_id) }}
   cancel-in-progress: true
 
 jobs:
   select:
+    if: inputs.packages != ''
     permissions:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
@@ -65,7 +84,7 @@ jobs:
 
   # The mobile rows of the one platform asked for.
   select-mobile:
-    if: inputs.run_mobile
+    if: inputs.run_mobile && inputs.packages != ''
     permissions:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
@@ -223,3 +242,44 @@ jobs:
           path: ${{ matrix.project.dir }}/benchmarks/report/
           if-no-files-found: warn
           retention-days: "30"
+
+  perf-report:
+    if: github.event_name == 'schedule' || inputs.perf_report != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PERF_ADDON: ${{ github.event_name == 'schedule' && 'all' || inputs.perf_report }}
+    steps:
+      - uses: tetherto/qvac-actions/checkout@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          node-version: lts/*
+      # COMET scores nmtcpp's translations in the weekly report and in nmtcpp's own.
+      - if: env.PERF_ADDON == 'all' || env.PERF_ADDON == 'nmtcpp'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: scripts/perf-report/run-reports.js
+      - if: env.PERF_ADDON == 'all' || env.PERF_ADDON == 'nmtcpp'
+        uses: tetherto/qvac-actions/cache@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          path: ~/.cache/huggingface/hub
+          key: comet-model-v1-wmt22-comet-da
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PERF_WORKFLOW: ${{ inputs.perf_report_workflow }}
+          PERF_RUNS: ${{ inputs.perf_report_runs }}
+        run: node scripts/perf-report/run-reports.js
+      - if: always()
+        uses: tetherto/qvac-actions/upload-artifact@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        with:
+          name: performance-reports-${{ github.run_number }}
+          path: reports/
+          retention-days: "90"
+          if-no-files-found: ignore

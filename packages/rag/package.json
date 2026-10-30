@@ -108,13 +108,9 @@
     "includedScripts": [
       "format",
       "format:fix",
-      "lint",
       "lint:fix",
-      "typecheck",
-      "build",
       "prepare",
       "build:test",
-      "test:unit",
       "build:hyperdb-spec"
     ]
   }

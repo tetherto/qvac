@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // sdk-kotlin's linux-x64-conformance: the shared cross-client corpus against the workspace worker Python builds, as
-// main's on-pr-sdk-kotlin-e2e.yml ran it; the reports land in build/reports/tests/jvmTest.
+// main ran it; the reports land in build/reports/tests/jvmTest.
 
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'

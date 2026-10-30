@@ -1,6 +1,7 @@
 {
   "name": "@qvac/openclaw-plugin",
   "root": "plugins/openclaw",
+  "tags": ["ci:contract"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // The sdk's publish target: prepares the built package for the registry publish-gpr.yml sends it to. On GitHub
 // Packages, when @qvac/inference publishes in the same run, @qvac/inference becomes an npm alias of that run's
-// @tetherto/inference-mono, so the -mono SDK runs the engine it was compiled against, as main's publish-sdk.yml pinned it.
+// @tetherto/inference-mono, so the -mono SDK runs the engine it was compiled against, as main's dev builds pinned it.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -12,6 +13,8 @@ import { distTag, publishVersion } from '../../../.github/actions/gpr-publish/gp
 const sdk = fileURLToPath(new URL('..', import.meta.url))
 const env = process.env
 if (env.PUBLISH_REGISTRY !== 'gpr') process.exit(0)
+// The committed manifest: sdk-source:workspace, which built this dist, pointed @qvac/inference at the checkout.
+execFileSync('git', ['checkout', 'HEAD', '--', 'package.json'], { cwd: sdk, stdio: 'inherit' })
 
 // Main's dormant rewrites for the -mono name: neither file exists at these paths today.
 const name = '@tetherto/sdk-mono'

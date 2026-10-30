@@ -6,7 +6,7 @@
  * dependency range must share a major and minor. Patch numbers are free on both
  * sides: @qvac/sdk 0.19.4 may depend on @qvac/inference ^0.19.2.
  *
- * The engine at that major.minor is published first (publish-inference.yml), so
+ * The engine at that major.minor is published first (publish-npm.yml), so
  * the range this writes resolves from npm while the SDK release is under review.
  *
  * Run from the monorepo root (prefer /qv-sdk-inference-version for the full

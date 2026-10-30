@@ -1,6 +1,7 @@
 {
   "name": "@qvac/rag",
   "root": "packages/rag",
+  "tags": ["ci:contract"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

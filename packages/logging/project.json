@@ -1,6 +1,7 @@
 {
   "name": "@qvac/logging",
   "root": "packages/logging",
+  "tags": ["ci:contract"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

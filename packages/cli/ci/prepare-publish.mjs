@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 // cli's publish target: on GitHub Packages the CLI runs as @tetherto/cli-mono against @tetherto/sdk-mono, with the
-// tetherto bin and program name, as main's cli-rewrite-sdk-scope-for-gpr action rewrote it before publishing.
+// tetherto bin and program name, rewritten here before publishing.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 if (process.env.PUBLISH_REGISTRY !== 'gpr') process.exit(0)
 const cli = fileURLToPath(new URL('..', import.meta.url))
+// The committed manifest: sdk-source:workspace, which built this dist, pointed @qvac/sdk at the checkout.
+execFileSync('git', ['checkout', 'HEAD', '--', 'package.json'], { cwd: cli, stdio: 'inherit' })
 const SDK = '@tetherto/sdk-mono'
 const CLI = '@tetherto/cli-mono'
 const rewrites = {

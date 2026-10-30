@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// sdk-python's targets, each in the package's .venv, created once from the host's Python 3.10 or newer.
-//   python.mjs generated | format | lint | typecheck | unit     main's pr-checks-sdk-python.yml steps
-//   python.mjs e2e                                             the suite CI_SUITE names: fast, full or wheel
-// fast and full are main's real-worker legs; wheel builds the fat wheel for --platform <tag> and tests it installed.
+// sdk-python's targets in one .venv from the host's Python 3.10 or newer: generated | format | lint | typecheck | unit are
+// main's Python PR check steps; e2e runs the suite CI_SUITE names: fast and full, main's real-worker legs, or
+// wheel, which builds the fat wheel for --platform <tag> and tests it installed.
 
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'

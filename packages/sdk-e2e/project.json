@@ -1,6 +1,7 @@
 {
   "name": "sdk-e2e",
   "root": "packages/sdk-e2e",
+  "tags": ["ci:contract"],
   "implicitDependencies": ["@qvac/sdk"],
   "targets": {
     "lint": {

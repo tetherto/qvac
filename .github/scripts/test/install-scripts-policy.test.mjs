@@ -71,13 +71,6 @@ const ALLOWED = [
     reason: 'Runs on the Device Farm host, inside the same Expo app.',
   },
   {
-    file: '.github/workflows/pr-checks-sdk-pod.yml',
-    match: '"$PM" install',
-    count: 1,
-    reason:
-      'Reached only when a package entry sets pkg_manager to something other than npm; no entry does today. The npm branch above passes the flag explicitly. Kept detectable so a revert to the $PM indirection for npm is caught.',
-  },
-  {
     file: 'packages/sdk-e2e/package.json',
     match: '"install:build"',
     count: 1,
@@ -188,8 +181,8 @@ function logicalLines(source) {
   return out
 }
 
-// `"$PM" install` in pr-checks-sdk-pod.yml is a real site a plain npm regex
-// misses; $PM defaults to npm in .github/sdk-pod-checks.json.
+// `"$PM" install` runs whichever package manager $PM names, a site a plain
+// npm regex misses.
 // `install` before `i` so the longer form wins; `\b` keeps `i` off `init`.
 const INSTALL = /(?:\bnpm\s+(?:install|ci|add|i)\b)|(?:"\$PM"\s+install\b)/
 const GLOBAL = /\s-g\b|--global\b/
@@ -362,18 +355,13 @@ test('the scan sees the sites it is meant to police', () => {
   // Canaries: if a rewrite of the detector stops seeing these, the suite would
   // pass by finding nothing at all.
   for (const expected of [
-    '.github/workflows/trigger-reusable-lib-cli.yml',
-    '.github/workflows/pr-checks-sdk-pod.yml',
+    '.github/workflows/sdk-scheduled-checks.yml',
+    '.github/workflows/test-android-sdk.yml',
     'scripts/ci/openclaw-upstream-compat-smoke.sh',
     'packages/cli/package.json',
   ]) {
     assert.ok(files.has(expected), `detector found no install site in ${expected}`)
   }
-
-  assert.ok(
-    sites.some((site) => site.text.includes('"$PM" install')),
-    'detector no longer sees the $PM indirection in pr-checks-sdk-pod.yml',
-  )
 
   // The cli build job runs `npm run sdk-source:workspace`, whose install lives
   // in the manifest rather than the workflow.

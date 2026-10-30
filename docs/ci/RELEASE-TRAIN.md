@@ -8,8 +8,10 @@ dependents of a package that fails.
 
 `.github/release-trains.json` lists the trains.
 
-A single package can still be released on its own (a hotfix) through its
-per-package workflow. The next train moves it above that version.
+A single package can still be released on its own (a hotfix) from
+`release-<slug>-<x.y.z>` through `publish-npm.yml`, and `tetherto-qvac-sdk`
+through `publish-pypi.yml` from `release-sdk-<x.y.z>`. The next train moves it
+above that version.
 
 ## Configuration
 
@@ -33,8 +35,9 @@ per-package workflow. The next train moves it above that version.
     [Making a release](#making-a-release))
   - `githubRelease`: the one package that gets a GitHub release; the others get
     a `<slug>-v<version>` tag
-  - `checks`: the check jobs in `release-train.yml` that must pass
-  - `packageChecks`: the per-package check config `package-checks` runs
+  - `checks`: the check jobs in `release-train.yml` that must pass;
+    `package-checks` runs each package's `project.json` targets through
+    `pr-checks.yml`
 
 ## Making a release
 
@@ -71,8 +74,8 @@ per-package workflow. The next train moves it above that version.
 5. Write a changelog section for each package (`qv-sdk-changelog`). When the
    train moves `@qvac/sdk`, bring `packages/sdk-python` and
    `packages/sdk-kotlin` to its new version (the `sdk-python` and `sdk-kotlin`
-   syncs of `qv-sdk-inference-version`); `pr-checks-sdk-kotlin.yml` checks the Kotlin
-   version on both PRs.
+   syncs of `qv-sdk-inference-version`); sdk-kotlin's `verify:generated` in
+   `pr-checks.yml` checks the Kotlin version on both PRs.
 
    When the train lists `fromNpm` packages, take them out of the workspace in a
    separate commit. pnpm links a workspace package whenever its version
@@ -109,8 +112,8 @@ per-package workflow. The next train moves it above that version.
 
 ## Checks
 
-On the release PR (`pr-release-guard.yml` and `release-train.yml`) and on every
-push (`release-train.yml`):
+On the release PR (`pr-checks.yml`'s release-guard job and `release-train.yml`)
+and on every push (`release-train.yml`):
 
 - every train package moves, and each anchor package is at the branch version
 - every range between train packages accepts the new version of its target
@@ -124,15 +127,17 @@ push (`release-train.yml`):
 
 Before npm publish:
 
-- **`package-checks`**: each package's checks from the train's `packageChecks`
-  config (install, format, lint, typecheck, build, unit, bare and e2e tests,
-  and the SDK's consumer installs), with every train package installed from a tarball
-  of this commit and everything else from npm. The backmerge PR, from
-  `backmerge/release-train-<train>-<x.y.z>` into `main`, runs the same through
-  `pr-checks-sdk-pod.yml`, except for a train with `fromNpm` packages, whose
-  backmerge installs every package from npm.
+- **`package-checks`**: `pr-checks.yml` with the train, running each package's
+  `build`, `lint`, `typecheck`, `test:unit`, `verify:generated` and
+  `verify:deps` targets (format, unit, Bare and e2e tests, and the SDK's
+  consumer installs), with every train package installed from a tarball of
+  this commit and everything else from npm. The backmerge PR, from
+  `backmerge/release-train-<train>-<x.y.z>` into `main`, runs the same in
+  `pr-checks.yml`, except for a train with `fromNpm` packages, whose backmerge
+  checks the commit npm records as the train's `gitHead`, with every package
+  from npm.
 - **`shared-runtime-libs`**: `check-shared-runtime-libs.mjs` for inference and
-  sdk, as `publish-inference.yml` and `publish-sdk.yml` run it.
+  sdk, as their `verify:deps` targets run it.
 - **`sdk-python`**: the Python contract check, build, version lockstep and
   `twine check`.
 - a workspace package outside the train that the train links must be on npm at
@@ -157,7 +162,8 @@ which requires the build and every check the train lists.
 ## Publishing
 
 - Every version is published as `latest`. A version below npm's `latest` stops
-  the run; an older line is released through its per-package workflow.
+  the run; an older line is released through `publish-npm.yml` from its own
+  `release-<slug>-<x.y.z>` branch.
 - `gitHead` in each published manifest is the commit it was built from. Each
   tag goes on that commit, the GitHub release's tag included.
 - npm's sha of each published tarball must match the tarball the build job
@@ -175,11 +181,12 @@ which requires the build and every check the train lists.
   the others can keep theirs.
 - `workflow_dispatch` with `publish_pypi_only: true` publishes PyPI alone.
 
-## Per-package workflows
+## Per-package releases
 
-The per-package publish workflows of train packages run their merge
-guard on push and on `workflow_dispatch`, with `strict-slug`: a branch other than
-`release-<slug>-x.y.z` fails, so a train branch cannot publish through them.
+`publish-npm.yml` and `publish-pypi.yml` ignore `release-train-*` branches.
+`publish-npm.yml` checks the branch (`release-check-branch`) and runs the
+release merge guard on push, so a release branch publishes only its own
+package at its own version.
 
 ## Before a train's first release
 
@@ -189,9 +196,10 @@ trusted publisher for every package in the train on npm, with environment
 PyPI, with environment `pypi`. A release
 PR runs its own copy of `release-train.yml`; binding the publisher to the
 environment means only a job that passed that environment's approval gets a
-token npm or PyPI accepts. Keep the per-package workflows registered too: npm
-allows up to 10 trusted publishers per package, and a hotfix still publishes
-through them.
+token npm or PyPI accepts. Keep the per-package publishers registered too
+(`publish-npm.yml`, `publish-gpr.yml`, and `publish-pypi.yml` for
+`tetherto-qvac-sdk`): npm allows up to 10 trusted publishers per package, and a
+hotfix still publishes through them.
 
 The `release` ruleset matches `release-train-*` but requires only `Check
 Approvals`. A ruleset on `refs/heads/release-train-*` that requires `Train

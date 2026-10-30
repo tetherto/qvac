@@ -348,5 +348,27 @@
     "tar": "^7.5.22",
     "shell-quote": "^1.10.0",
     "@electron/rebuild": "^4.2.0"
+  },
+  "nx": {
+    "includedScripts": [
+      "format",
+      "format:fix",
+      "lint:fix",
+      "enforce-inference-versions",
+      "postcompile:aliases",
+      "build:pack",
+      "sdk-source:workspace",
+      "watch",
+      "bare:ensureprebuilds:llamacpp",
+      "bare:ensureprebuilds:asr",
+      "bare:ensureprebuilds:embeddings",
+      "bare:ensureprebuilds",
+      "prepare:husky",
+      "contract:export",
+      "contract:check",
+      "check:resource-collectors",
+      "bare-kit-runtimes:generate",
+      "changelog:generate"
+    ]
   }
 }

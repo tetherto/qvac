@@ -87,9 +87,17 @@ jobs:
           TARGET: ${{ matrix.row.target }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
+          SOURCE: ${{ contains(matrix.row.sources, 'workspace') && 'workspace' || matrix.row.sources[0] && 'npm' || '' }}
+          DIR: ${{ matrix.row.dir }}
+        # A package checked in npm's layout installs as its pr-checks do: the sdk-source:workspace script, or npm alone.
         run: |
-          pnpm install --frozen-lockfile
-          pnpm exec nx run "$PROJECT:$TARGET" --outputStyle=stream
+          if [ -n "$SOURCE" ]; then
+            pnpm install --frozen-lockfile --filter .
+            node scripts/ci/checks-source.mjs check "$SOURCE" "$DIR" "$PROJECT" "$TARGET"
+          else
+            pnpm install --frozen-lockfile
+            pnpm exec nx run "$PROJECT:$TARGET" --outputStyle=stream
+          fi
 
   # Providers build first, once per configuration; a provider's own prerelease builds its rows here.
   providers:
@@ -165,8 +173,8 @@ jobs:
       - uses: tetherto/qvac-actions/setup-node@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           node-version: lts/*
-      # A JavaScript build compiles in a workspace install; its publish target then prepares the package for this
-      # registry, for example pinning a dependency published in the same run.
+      # A JavaScript build compiles in its pr-checks install, the in-repo engine for the sdk, as main's dev builds did; its
+      # publish target then prepares the package for this registry, for example pinning a dependency from the same run.
       - if: matrix.row.jsBuild
         uses: tetherto/qvac-actions/setup-pnpm@daeff4f86f799ed3a22e7ef01a3ed75553474940  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
@@ -176,6 +184,8 @@ jobs:
         working-directory: src
         env:
           PROJECT: ${{ matrix.row.project }}
+          DIR: ${{ matrix.row.dir }}
+          SOURCE: ${{ contains(matrix.row.sources, 'workspace') && 'workspace' || 'npm' }}
           PUBLISH_REGISTRY: gpr
           PUBLISH_PROJECTS: ${{ toJSON(fromJSON(needs.select.outputs.matrices).publish.*.project) }}
           PUBLISH_TAG: ${{ needs.logic.outputs.tag }}
@@ -183,9 +193,8 @@ jobs:
           NX_NO_CLOUD: "true"
           NPM_CONFIG_IGNORE_SCRIPTS: "false"
         run: |
-          pnpm install --frozen-lockfile
-          pnpm exec nx run "$PROJECT:build" --outputStyle=stream
-          pnpm exec nx run "$PROJECT:publish" --outputStyle=stream
+          pnpm install --frozen-lockfile --filter .
+          node scripts/ci/checks-source.mjs check "$SOURCE" "$DIR" "$PROJECT" build,publish
       - uses: ./.github/actions/gpr-publish
         with:
           workdir: ${{ env.WORKDIR }}

@@ -1,11 +1,7 @@
 #!/usr/bin/env node
-// pr-checks.yml's dependency sources beside the workspace install.
-//   checks-source.mjs resolve                     the release train a run checks, from the inputs or a backmerge head
-//   checks-source.mjs install <source> <dir> [tarballs]
-//   checks-source.mjs check <source> <dir> <project> <targets> [tarballs]
-// install sets one package up on its own with npm, as main's pod checks did: npm installs it as a consumer would;
-// workspace runs the package's sdk-source:workspace, which links the in-repo engine and installs; train resolves every
-// train package from the tarballs of this commit; published resolves the committed ranges from npm.
+// pr-checks.yml's installs beside the workspace one: resolve finds the release train a run checks; install sets one package
+// up alone with npm as main's pod checks did (npm, its sdk-source:workspace script, the train's tarballs, or npm's ranges);
+// check installs it and runs each target. Usage: resolve | install <source> <dir> [tarballs] | check <source> <dir> <project> <targets> [tarballs]
 
 import { appendFileSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'

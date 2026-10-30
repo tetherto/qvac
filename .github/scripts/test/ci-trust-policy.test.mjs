@@ -324,24 +324,19 @@ test("authorize-pr: external fork with pod label requires label and SHA", () => 
   );
 });
 
-test("sdk-python full e2e: no stale-label synchronize run; checkout pinned to head SHA", () => {
-  const src = read(".github/workflows/on-pr-sdk-python-e2e-full.yml");
-  // Trigger is exactly `types: [labeled]` — no synchronize (a stale
-  // test-e2e-full label must not re-run a new, unreviewed SHA).
+// The SDK's label-routed e2e (sdk-python's test-e2e-full GPU legs among them) runs from pr-build-test.yml.
+test("label-routed e2e: no stale-label synchronize run; checkout pinned to head SHA", () => {
+  // A label routes only on the event that applied it, so a stale label never
+  // re-runs a new, unreviewed SHA on the self-hosted GPU runners.
   assert.match(
-    src,
-    /types:\s*\[labeled\]\s*$/m,
-    "pull_request trigger must be [labeled] only (no synchronize)",
-  );
-  assert.doesNotMatch(
-    src,
-    /action == 'synchronize'/,
-    "run gate must not authorise a synchronize with a stale test-e2e-full label",
+    read(".github/scripts/select-projects.mjs"),
+    /event\.action === 'labeled' && event\.label/,
+    "a PR label must route only on its own labeled event",
   );
   assert.match(
-    src,
-    /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
-    "checkout must pin to the approved head SHA",
+    read(".github/workflows/_desktop.yml"),
+    /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha \|\| github\.sha\s*\}\}/,
+    "checkout must pin to the PR's head SHA",
   );
 });
 
@@ -1440,11 +1435,6 @@ const FORK_CI_EXEMPT = new Map([
     ".github/workflows/on-pr-community-label.yml",
     "No checkout: actions/github-script applies a label via the API only.",
   ],
-  [
-    ".github/workflows/pr-validation-sdk-pod.yml",
-    "Checks out the base branch (no ref: on a pull_request_target checkout) and " +
-      "runs a base-branch validator over PR title/body passed via env. No secrets.",
-  ],
 ]);
 
 function forkCiTargets() {
@@ -2016,7 +2006,6 @@ const GITHUB_RELEASE_REUSABLE = "./.github/workflows/create-github-release.yml";
 // metadata sets githubRelease, which only @qvac/sdk does.
 const ALLOWED_RELEASE_CALLERS = [
   ".github/workflows/publish-npm.yml",
-  ".github/workflows/publish-sdk.yml",
   ".github/workflows/release-train.yml",
 ];
 
@@ -2035,12 +2024,11 @@ test("release policy: only the SDK workflow calls create-github-release.yml", ()
 // Releases page stays SDK-only. Adding an entry is a deliberate policy decision.
 //  - create-github-release.yml: the reusable itself (softprops path); its sole
 //    caller is asserted above.
-//  - build-sdk-python-fat-wheels.yml: attaches the Python SDK fat wheels as
-//    assets to the SDK's own sdk-v<version> release, and (manual backfill only)
-//    drafts that sdk-v* tag if missing. Invoked by publish-sdk.yml.
+//  - publish-pypi.yml: attaches the Python SDK fat wheels as assets to the
+//    SDK's own sdk-v<version> release, and (manual backfill only) drafts that
+//    sdk-v* tag if missing.
 const RELEASE_WRITE_EXEMPT = new Set([
   ".github/workflows/create-github-release.yml",
-  ".github/workflows/build-sdk-python-fat-wheels.yml",
   ".github/workflows/publish-pypi.yml",
 ]);
 

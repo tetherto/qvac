@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// sdk-kotlin's test:unit, main's Kotlin PR checks in one pass: this commit's @qvac/sdk (built by its build target) and
-// @qvac/inference packed into the Kotlin package, then the contract check, the JVM and Android example tests, the
-// debug build checks, the Maven publications and their standalone consumers, and the Kotlin e2e app's unit tests.
-// A PR into a release branch, and a dispatch, build every published runtime profile; other PRs the all-in-one profile.
+// sdk-kotlin's test:unit, main's Kotlin PR checks in one pass, against this commit's built @qvac/sdk and @qvac/inference:
+// the contract check, JVM and Android example tests, debug build checks, Maven publications and consumers, and the Kotlin
+// e2e app's unit tests. PRs into release-* and dispatches build every runtime profile; other PRs the all-in-one one.
 
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'

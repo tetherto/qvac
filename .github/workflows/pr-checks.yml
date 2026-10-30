@@ -1,8 +1,8 @@
 name: PR checks
 
-# Lint, typecheck, unit tests, generated files and dependency checks for the changed packages on the CI contract and their
-# dependents, run through Nx from the PR's own targets with no secrets, so the PR's tree is safe to execute and forks get
-# real results. release-train.yml calls it with a train, whose packages it checks against the train's tarballs or npm.
+# Lint, typecheck, unit tests, generated files and dependency checks for the changed contract packages and dependents,
+# through Nx from the PR's own targets with no secrets, so forks get real results. release-train.yml calls it with a train,
+# whose packages it checks against the train's tarballs or npm, leaving the PR-wide jobs to the PR's own run.
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
@@ -111,7 +111,7 @@ jobs:
   # A range on a workspace package that excludes its workspace version makes pnpm install the npm copy instead, so a
   # bump updates its dependents' ranges in the same pull request.
   workspace-ranges:
-    if: github.event.action != 'edited'
+    if: github.event.action != 'edited' && !inputs.train
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -128,7 +128,7 @@ jobs:
 
   # No git URLs and no dev or tmp prerelease pins in a contract package's dependencies.
   disallowed-deps:
-    if: github.event.action != 'edited'
+    if: github.event.action != 'edited' && !inputs.train
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -150,7 +150,7 @@ jobs:
   # publish metadata sets releaseGuard, its release branch, version bump and CHANGELOG section.
   release-guard:
     needs: select
-    if: github.event_name == 'pull_request' && github.event.action != 'edited' && startsWith(github.base_ref, 'release-')
+    if: github.event_name == 'pull_request' && github.event.action != 'edited' && !inputs.train && startsWith(github.base_ref, 'release-')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -202,7 +202,7 @@ jobs:
 
   # The SDK pod's PR title and description rules, on every PR touching a path the pod owns, edits included.
   pod-rules:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !inputs.train
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// publish-pypi.yml's checks around a tetherto-qvac-sdk release, which ships at @qvac/sdk's version.
-//   release.mjs version [tag]     SDK_VERSION matches packages/sdk/package.json, and the tag sdk-v<version> when given
-//   release.mjs wait-npm          until npm serves @qvac/sdk at that version: publish-npm.yml published it
-//   release.mjs wait-release <tag> until the GitHub release exists: publish-npm.yml created it
+// publish-pypi.yml's checks around a tetherto-qvac-sdk release at @qvac/sdk's version: version [tag] (SDK_VERSION
+// matches the SDK and the sdk-v<version> tag), wait-npm (npm serves @qvac/sdk at it) and wait-release <tag> (the GitHub
+// release exists), the last two being what publish-npm.yml does first.
 
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'

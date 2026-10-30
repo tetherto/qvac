@@ -2,9 +2,8 @@ name: General CI/CD (libs)
 # Consolidated publish workflow for plain-shape libraries: no build step, so
 # `npm publish` ships the committed sources as-is.
 #
-# Excluded: error/logging/rag build a dist before publish (gh#4055), as do
-# test-suite, cli, ai-sdk-provider, infer-base and the plugins. inference
-# publishes via publish-sdk.yml as the sdk lockstep anchor.
+# Excluded: the SDK pod's packages publish through publish-npm.yml and
+# publish-gpr.yml, and infer-base builds a dist before publish.
 
 on:
   push:

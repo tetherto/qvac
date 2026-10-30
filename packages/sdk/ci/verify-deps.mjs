@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The shared runtime libraries resolve to one version in the SDK's tree. A release push checks the published
-// @qvac/inference the release installs, as main's publish-sdk.yml did; anything else replaces it with the in-repo engine,
+// @qvac/inference the release installs, as main's release check did; anything else replaces it with the in-repo engine,
 // which can be ahead of npm, as main's PR check did.
 
 import { execFileSync } from 'node:child_process'

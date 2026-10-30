@@ -1,6 +1,7 @@
 {
   "name": "@qvac/inference",
   "root": "packages/inference",
+  "tags": ["ci:contract"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

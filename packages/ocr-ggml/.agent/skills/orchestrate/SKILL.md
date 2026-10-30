@@ -74,7 +74,7 @@ Run `git diff --name-only main...HEAD` and apply these rules:
 
 1. **Native addon packages** — if changed files match a package in the **CI Package Mapping** table in `.agent/knowledge/ci-validation.md`, CI is needed. Use the short name from that table. If multiple addon packages changed, run CI for each.
 
-2. **SDK / TS packages** (`packages/sdk/**`, `packages/rag/**`, `packages/cli/**`) — SDK CI runs automatically via `pr-checks-sdk-pod` on PR creation. No manual trigger needed.
+2. **SDK / TS packages** (`packages/sdk/**`, `packages/rag/**`, `packages/cli/**`): SDK CI runs automatically via `pr-checks.yml` on PR creation. No manual trigger needed.
 
 3. **Everything else** (simple libraries, docs, workflows, config, markdown) — no CI needed.
 

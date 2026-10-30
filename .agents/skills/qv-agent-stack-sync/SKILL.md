@@ -107,7 +107,7 @@ Then for each `needs_release` package in dependency order, follow [references/pr
 6. Do **not** merge. Do **not** trigger publish (Dima / human).
 
 `@qvac/inference` is the first hop: it releases from `release-inference-<version>` through
-`publish-inference.yml`, and the SDK release PR points at the engine version already on npm. SDK
+`publish-npm.yml`, and the SDK release PR points at the engine version already on npm. SDK
 releases chain `qv-sdk-inference-version` + docs Step 8 from `qv-sdk-changelog`.
 
 ### 3. `--promote <slug>`

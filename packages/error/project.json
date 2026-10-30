@@ -1,6 +1,7 @@
 {
   "name": "@qvac/error",
   "root": "packages/error",
+  "tags": ["ci:contract"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

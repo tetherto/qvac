@@ -73,15 +73,11 @@
   },
   "nx": {
     "includedScripts": [
-      "build",
       "build:watch",
       "format",
       "format:fix",
-      "lint",
       "lint:fix",
-      "typecheck",
       "test",
-      "test:unit",
       "test:e2e",
       "dev:link"
     ]

@@ -160,9 +160,9 @@ npx tsx benchmark.ts full --config "$BENCHMARK_CONFIG_PATH"
 ```
 
 CI: PR / CLI `test:unit` runs harness unit tests. Dispatch
-`.github/workflows/benchmark-cli-serve-openai-providers.yml` with `mode=smoke` or
-`mode=full` for live providers. See "CI dispatch" below for the immutable-SHA and
-`benchmark-live` requirements.
+`.github/workflows/benchmarks.yml` with `packages=cli`, `configs=darwin-arm64-live`
+and `args=smoke` or `args=full` for live providers. See "CI dispatch" below for the
+immutable-SHA and `benchmark-live` requirements.
 
 Smoke is a hard gate: all three providers must return streaming usage, non-empty content, and reasoning-off before `full`.
 
@@ -174,15 +174,15 @@ will fail closed.
 
 ### Immutable target SHA
 
-The workflow's only ref input is `target_sha`, which must be a full
-40-character commit SHA (`^[0-9a-fA-F]{40}$`). Branch names, tags, and short
-SHAs are rejected. A GitHub-hosted `validate-target` job checks the format,
-resolves it to a commit, requires the resolved commit to equal the supplied SHA,
-checks out that exact commit, and runs the harness typecheck + tests before the
-self-hosted job is allowed to start. Resolve the SHA yourself, e.g.:
+A dispatch runs the commit its ref pointed at when it was dispatched
+(`github.sha`). Before installing anything, cli's `ci/benchmark.mjs live` checks
+that `github.sha` is a full 40-character commit SHA and that the checkout is
+exactly that commit. The harness typecheck and tests run in cli's `test:unit` on
+every PR that changes the CLI. To benchmark a reviewed commit, dispatch from a
+branch whose head is that commit, and check it, e.g.:
 
 ```bash
-git rev-parse HEAD        # or the reviewed commit you intend to benchmark
+git rev-parse HEAD        # the reviewed commit you intend to benchmark
 ```
 
 ### `benchmark-live` environment (one-time setup)
@@ -190,7 +190,7 @@ git rev-parse HEAD        # or the reviewed commit you intend to benchmark
 Create a repository **environment** named `benchmark-live` (Settings →
 Environments) and configure:
 
-- **Required reviewers** — at least one trusted maintainer. The `live` job pauses
+- **Required reviewers**: at least one trusted maintainer. The `darwin-arm64-live` job pauses
   for manual approval before it checks out, installs, or runs anything on the
   self-hosted runner. Approval attests to the selected target commit's benchmark
   harness code and dependency install scripts, not only to the protected
@@ -205,8 +205,12 @@ Environments) and configure:
   | `BENCHMARK_CONFIG_PATH`      | Absolute path to the runner-local `benchmark.yaml` (filled model IDs + `gguf_path`) |
   | `BENCHMARK_ENVIRONMENT_PATH` | Absolute path to the runner-local, filled-in copy of this `environment.md`          |
 
+The job also reads the `AWS_OIDC_ROLE_ARN` and `MODEL_S3_BUCKET` secrets that
+every desktop configuration of the contract uses, so the environment needs
+access to them.
+
 Both paths must be **absolute** and must point **outside** `GITHUB_WORKSPACE`.
-The `live` job rejects unset, relative, workspace-contained, missing, or
+The live job rejects unset, relative, workspace-contained, missing, or
 unreadable paths. It resolves the workspace and both files to their canonical
 paths first, so symlinks into the workspace are also rejected. Resolution
 failures stop the job. Keeping the real config off the checked-out tree means

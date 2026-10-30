@@ -288,7 +288,8 @@ export function select({ graph, affected, targets, labels, gate, configs = [], p
       targets: ['build'],
       // A package without a native build has no prebuilds to restore.
       hasBuild: nativeBuild(n),
-      jsBuild: jsBuild(n)
+      jsBuild: jsBuild(n),
+      sources: n.data.targets['test:unit']?.metadata?.sources ?? []
     }
   }
   for (const n of chosen) {
@@ -306,7 +307,6 @@ export function select({ graph, affected, targets, labels, gate, configs = [], p
       checkSetup: [
         ...new Set(CHECK_TARGETS.flatMap((t) => n.data.targets[t]?.metadata?.setup ?? []))
       ],
-      sources: n.data.targets['test:unit']?.metadata?.sources ?? [],
       releaseGuard: Boolean(n.data.targets.publish?.metadata?.publish?.releaseGuard),
       prebuildStatus: PREBUILD_KEYS.includes(c.key),
       cppStatus: CPP_TEST_KEYS.includes(c.key)

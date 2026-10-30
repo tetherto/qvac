@@ -49,5 +49,14 @@
     "dist",
     "LICENSE",
     "NOTICE"
-  ]
+  ],
+  "nx": {
+    "includedScripts": [
+      "format",
+      "format:fix",
+      "lint:fix",
+      "prepare",
+      "build:test"
+    ]
+  }
 }
