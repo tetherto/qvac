@@ -651,15 +651,25 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // sampler, so they travel separately from the `tmpParams` overrides above.
   driver->setRenderOverrides(renderOverridesFrom(request.overrides));
 
-  // Donors are offered under this lock, during `preparePrefill` only.
-  driver->setCacheSourceProvider(
-      [this, seqId = static_cast<llama_seq_id>(seqId)](
-          const cache::Ledger& prompt,
-          bool trimmable,
-          size_t minimum,
-          const cache::DonorAdopter& adopt) {
-        return offerDonorLocked(seqId, prompt, trimmable, minimum, adopt);
-      });
+  // Donors are offered under this lock, during `preparePrefill` only. A
+  // request the generation budget below refuses is offered none: the
+  // sequence keeps its own state for the rollback.
+  driver->setCacheSourceProvider([this,
+                                  seqId = static_cast<llama_seq_id>(seqId),
+                                  nPredict = tmpParams.n_predict,
+                                  prefill = request.prefill](
+                                     const cache::Ledger& prompt,
+                                     llama_pos promptCells,
+                                     bool trimmable,
+                                     size_t minimum,
+                                     const cache::DonorAdopter& adopt) {
+    const auto cells = static_cast<unsigned>(promptCells);
+    if (!prefill &&
+        generationBudgetExceeded(cells, cells, nPredict, perSeqMaxTokens_)) {
+      return false;
+    }
+    return offerDonorLocked(seqId, prompt, trimmable, minimum, adopt);
+  });
   ScopeGuard providerGuard(
       [&driver]() noexcept { driver->setCacheSourceProvider({}); });
   PrefillPlan plan = driver->preparePrefill(

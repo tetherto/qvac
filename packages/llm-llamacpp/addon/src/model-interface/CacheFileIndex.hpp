@@ -60,7 +60,7 @@ public:
 
   /// The file other than `excluded` with the longest `reusablePrefix` of
   /// `prompt`. Files carry no checkpoints here, so on memory that cannot be
-  /// trimmed only a file whose state is a prefix of the prompt serves.
+  /// trimmed only a file whose state is a prefix of `prompt` serves.
   [[nodiscard]] std::optional<Match> longestPrefix(
       const Ledger& prompt, bool trimmable, const std::string& excluded) {
     std::scoped_lock lock(mutex_);

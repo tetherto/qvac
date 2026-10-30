@@ -734,7 +734,8 @@ PrefillPlan TextLlmContext::preparePrefill(
         cache::commonPrefix(residentLedger_, cache::fromTokens(inputTokens));
     throwIfOverflows(static_cast<llama_pos>(shared), fullSize - shared);
     if (cacheSourceProvider_ && sharesCacheAcrossKeys()) {
-      adoptBestCacheSource(cache::fromTokens(inputTokens));
+      adoptBestCacheSource(
+          cache::fromTokens(inputTokens), isPrefillOnlyRequest);
     }
     beginCacheRequest();
     inputTokens = reconcilePrompt(inputTokens, isPrefillOnlyRequest);
@@ -1488,7 +1489,15 @@ void TextLlmContext::rebuildSamplerFromLedger(const cache::Ledger& ledger) {
   }
 }
 
-void TextLlmContext::adoptBestCacheSource(const cache::Ledger& prompt) {
+void TextLlmContext::adoptBestCacheSource(
+    const cache::Ledger& fullPrompt, bool isPrefillOnlyRequest) {
+  // Generation decodes the last prompt token again. Full-state memory backs
+  // up to it only through a checkpoint, so its states are ranked and cut back
+  // up to that token; other memory trims back to it from any state.
+  const cache::Ledger prompt =
+      needsFullStateSnapshot_
+          ? cache::servablePrompt(fullPrompt, isPrefillOnlyRequest)
+          : fullPrompt;
   // What this sequence already serves, measured the way `reconcilePrompt`
   // will reuse it.
   const size_t shared = cache::commonPrefix(residentLedger_, prompt);
@@ -1503,6 +1512,7 @@ void TextLlmContext::adoptBestCacheSource(const cache::Ledger& prompt) {
       !needsFullStateSnapshot_ && !slidingWindowCheckpoints_;
   (void)cacheSourceProvider_(
       prompt,
+      std::max(fullPrompt.positions(), fullPrompt.cacheTokens()),
       donorTrimmable,
       own,
       [this, &prompt](const cache::DonorState& donor) {
@@ -1569,7 +1579,8 @@ bool TextLlmContext::adoptDonorState(
   QLOG_IF(
       Priority::DEBUG,
       string_format(
-          "[TextLlm] starting from %s: %zu of %zu prompt entries resident\n",
+          "[TextLlm] starting from %s: %zu of %zu servable prompt entries "
+          "resident\n",
           donor.source.c_str(),
           cache::commonPrefix(residentLedger_, prompt),
           prompt.entries.size()));

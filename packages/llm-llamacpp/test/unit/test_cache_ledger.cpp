@@ -366,6 +366,37 @@ TEST(CacheSourceSelection, UntrimmableMemoryNeedsAPrefixOrACheckpoint) {
   EXPECT_EQ(cache::reusablePrefix(state, &checkpoints, diverging, false), 2u);
 }
 
+// A generating request decodes its last prompt token again, so a full-state
+// cached state serves it only up to that token, and media after that token
+// goes with it; a prefill-only request is served whole.
+TEST(CacheSourceSelection, GenerationIsServedUpToItsLastPromptToken) {
+  const cache::Ledger text = cache::fromTokens({1, 2, 3});
+  EXPECT_EQ(cache::servablePrompt(text, true).entries, text.entries);
+  EXPECT_EQ(
+      cache::servablePrompt(text, false).entries,
+      cache::fromTokens({1, 2}).entries);
+  EXPECT_TRUE(
+      cache::servablePrompt(cache::fromTokens({1}), false).entries.empty());
+
+  cache::Ledger endsWithMedia = text;
+  endsWithMedia.entries.push_back(
+      {.kind = cache::EntryKind::Media,
+       .identity = 7,
+       .positions = 4,
+       .cacheTokens = 16});
+  EXPECT_EQ(
+      cache::servablePrompt(endsWithMedia, false).entries,
+      cache::fromTokens({1, 2}).entries);
+
+  // Exactly the prompt, on memory that cannot be trimmed: only a checkpoint
+  // before the last token serves it.
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(checkpointOver({1}));
+  const cache::Ledger servable = cache::servablePrompt(text, false);
+  EXPECT_EQ(cache::reusablePrefix(text, nullptr, servable, false), 0u);
+  EXPECT_EQ(cache::reusablePrefix(text, &checkpoints, servable, false), 1u);
+}
+
 // Another request starts from a copy of a RAM-tier entry: the lookup finds the
 // one that serves the most of its prompt, and every entry stays in the tier.
 TEST(CacheSourceSelection, RamTierLendsItsLongestPrefixWithoutGivingItUp) {

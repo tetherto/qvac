@@ -4130,6 +4130,42 @@ TEST(CrossKeyPrefixTest, BatchHybridCopyLeavesThePrimedStateIntact) {
   }
 }
 
+// Generation decodes the last prompt token again, which a hybrid model can
+// only back up to through a checkpoint: a new key generating exactly the
+// prompt another key primed starts from that key's checkpoint, as the primed
+// key itself does, instead of from nothing.
+TEST(CrossKeyPrefixTest, BatchHybridExactPromptStartsFromTheDonorsCheckpoint) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_exact_primed.bin", "cross_batch_exact_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  LlamaModel::Prompt prime;
+  prime.input = fruitQuestion("apple");
+  prime.cacheKey = keys[0];
+  prime.prefill = true;
+  model->processPromptBatch({prime});
+
+  const BatchedTurn onCopy = harness.run(fruitQuestion("apple"), keys[1]);
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_GT(onCopy.reuse, K_SHARED_RULES_TOKENS)
+      << "the new key decoded the whole prompt the donor holds";
+  const BatchedTurn onPrimed = harness.run(fruitQuestion("apple"), keys[0]);
+  EXPECT_EQ(onCopy.reuse, onPrimed.reuse);
+  EXPECT_EQ(onCopy.output, onPrimed.output);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
 // A second key primed with the prompt another parked conversation already
 // holds decodes nothing, so its copy must be complete before it is saved:
 // the copy's file answers like the file of the conversation it came from.
@@ -4282,10 +4318,10 @@ TEST(CrossKeyPrefixTest, AFailedFirstRequestSavesNoOtherConversation) {
   }
 }
 
-// A key with unsaved turns whose donor fails to load starts cold; when its
-// admission then fails, nothing of the key's is left to park, so its file
-// keeps the turns it had instead of an empty state.
-TEST(CrossKeyPrefixTest, AFailedDonorCopyLeavesTheKeysFileAsSaved) {
+// A request its generation budget refuses is refused before any other state
+// is copied in, even one sharing more of the prompt that would not load: the
+// key keeps its unsaved turns, and the unload writes them to its file.
+TEST(CrossKeyPrefixTest, ARefusedBudgetKeepsTheKeysUnsavedTurns) {
   if (!fs::exists(test_common::BaseTestModelPath::get())) {
     GTEST_SKIP() << "base test model not found";
   }
@@ -4294,18 +4330,20 @@ TEST(CrossKeyPrefixTest, AFailedDonorCopyLeavesTheKeysFileAsSaved) {
   fs::remove(key);
   fs::remove(base);
   std::string saved;
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"system", fruitStallRules()}, {"user", "Say one word: apple."}};
+  BatchedTurn banana;
   {
     auto model = loadBatchedModel();
     ASSERT_TRUE(model->isLoaded());
     BatchedCacheHarness harness(*model);
-    std::vector<std::pair<std::string, std::string>> chat = {
-        {"system", fruitStallRules()}, {"user", "Say one word: apple."}};
     chat.emplace_back(
         "assistant", harness.run(chatInput(chat), key, true).output);
     ASSERT_TRUE(fs::exists(key));
     saved = bytesOf(key);
     chat.emplace_back("user", "Say one word: banana.");
-    chat.emplace_back("assistant", harness.run(chatInput(chat), key).output);
+    banana = harness.run(chatInput(chat), key);
+    chat.emplace_back("assistant", banana.output);
     chat.emplace_back("user", "Say one word: cherry.");
     {
       // A single-prompt model writes a state file the batched model cannot
@@ -4328,11 +4366,20 @@ TEST(CrossKeyPrefixTest, AFailedDonorCopyLeavesTheKeysFileAsSaved) {
     next.generationParams.n_predict = 4000;
     EXPECT_ANY_THROW(model->processPromptBatch({next}))
         << "test setup: the generation budget refuses the request";
-    EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u)
-        << "test setup: the primed file loaded into the batched model";
+    EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u);
+    EXPECT_EQ(harness.scheduler().parkedSeqIds().size(), 1u)
+        << "the refused request dropped the key's unsaved turns";
   }
-  EXPECT_EQ(bytesOf(key), saved)
-      << "the unload wrote another state over the key's saved turns";
-  fs::remove(key);
+  EXPECT_NE(bytesOf(key), saved)
+      << "the unload did not write the key's unsaved turns";
   fs::remove(base);
+
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  const BatchedTurn cherry =
+      BatchedCacheHarness(*model).run(chatInput(chat), key);
+  EXPECT_GT(cherry.reuse, banana.reuse)
+      << "the key's file lost the banana turn";
+  model.reset();
+  fs::remove(key);
 }

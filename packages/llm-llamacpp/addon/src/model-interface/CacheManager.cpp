@@ -32,6 +32,7 @@ CacheManager::CacheManager(
     // The active key's own file was loaded already, or there is none.
     llmContext_->setCacheSourceProvider([this](
                                             const cache::Ledger& prompt,
+                                            llama_pos /*promptCells*/,
                                             bool trimmable,
                                             size_t minimum,
                                             const cache::DonorAdopter& adopt) {

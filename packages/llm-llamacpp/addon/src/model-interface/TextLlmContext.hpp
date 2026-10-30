@@ -365,14 +365,15 @@ private:
       const std::vector<llama_token>& fullPrompt, bool isPrefillOnlyRequest);
   void rebuildSamplerFromLedger(
       const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
-  /// Asks `cacheSourceProvider_` for a state that serves more of `prompt`
+  /// Asks `cacheSourceProvider_` for a state that serves more of `fullPrompt`
   /// than this sequence does, and starts the request from a copy of it.
   void adoptBestCacheSource(
-      const qvac_lib_inference_addon_llama::cache::Ledger& prompt);
+      const qvac_lib_inference_addon_llama::cache::Ledger& fullPrompt,
+      bool isPrefillOnlyRequest);
   /// Replaces this sequence's state with a copy of `donor`, cut back to a
-  /// checkpoint within the prefix it shares with `prompt` when the memory
-  /// cannot be trimmed there. False, with the sequence cleared, when the
-  /// copy cannot be used.
+  /// checkpoint within the prefix it shares with `prompt` (on full-state
+  /// memory, the servable prompt) when the memory cannot be trimmed there.
+  /// False, with the sequence cleared, when the copy cannot be used.
   bool adoptDonorState(
       const qvac_lib_inference_addon_llama::cache::DonorState& donor,
       const qvac_lib_inference_addon_llama::cache::Ledger& prompt);

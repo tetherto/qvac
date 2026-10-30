@@ -29,6 +29,24 @@ inline const Checkpoint* longestCheckpointWithin(
   return best;
 }
 
+// The entries of `prompt` a full-state cached state can serve. Generation
+// decodes the last prompt token again for its logits (`reconcilePrompt` backs
+// reuse up to it), which full-state memory reaches only through a checkpoint,
+// so a generating request is served only up to that token; media after it
+// goes with it.
+inline Ledger servablePrompt(const Ledger& prompt, bool isPrefillOnlyRequest) {
+  Ledger servable = prompt;
+  if (isPrefillOnlyRequest) {
+    return servable;
+  }
+  size_t end = servable.entries.size();
+  while (end > 0 && servable.entries[end - 1].kind != EntryKind::Token) {
+    --end;
+  }
+  servable.truncate(end > 0 ? end - 1 : 0);
+  return servable;
+}
+
 // Entries of `prompt` a state described by `state`, with its `checkpoints`,
 // can serve without decoding them again. When the memory can be trimmed back
 // to any position it is the whole shared prefix. Otherwise the whole state
@@ -65,11 +83,13 @@ using DonorAdopter = std::function<bool(const DonorState&)>;
 
 // Hands `adopt` the state kept outside the requesting sequence with the
 // longest `reusablePrefix` of `prompt`, when it exceeds `minimum` (what the
-// sequence already serves). Returns what `adopt` returned, or false when no
-// state qualified. Set by the owner of those states: the single-prompt
+// sequence already serves). On full-state memory `prompt` is the request's
+// `servablePrompt`; `promptCells` is the KV span of the whole prompt either
+// way. Returns what `adopt` returned, or false when no state
+// qualified. Set by the owner of those states: the single-prompt
 // `CacheManager` and the `ContinuousBatchScheduler`.
 using CacheSourceProvider = std::function<bool(
-    const Ledger& prompt, bool trimmable, size_t minimum,
+    const Ledger& prompt, llama_pos promptCells, bool trimmable, size_t minimum,
     const DonorAdopter& adopt)>;
 
 } // namespace qvac_lib_inference_addon_llama::cache

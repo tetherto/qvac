@@ -208,7 +208,13 @@ threshold. Memory that cannot be trimmed (full-state models, and another
 conversation's sliding window) serves only a state that is a prefix of the
 prompt, or its longest checkpoint within the shared prefix; in practice, a
 system prompt and tools primed with `prefill` serve every conversation that
-starts with them.
+starts with them. A generating request decodes its last prompt token again
+for its logits, which full-state memory reaches only through a checkpoint, so
+on full-state models a state is ranked and cut back only up to that token: a
+state holding exactly the prompt serves it through its checkpoint, and a
+`cacheKey` file, which carries none, does not. A prompt too long for the
+context, or on the batch path one whose `n_predict` does not fit, is refused
+before any state is copied in.
 
 The source is copied and never changes: a parked slot through host memory
 (`llama_memory_seq_cp` between KV streams only queues the copy for the next
