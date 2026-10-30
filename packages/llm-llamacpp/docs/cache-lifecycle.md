@@ -120,8 +120,8 @@ stateDiagram-v2
 ```
 
 The rule is the same with or without `cacheKey`. A request without one is
-reconciled like a keyed one, and its state stays in memory for
-the prefix the next request shares with it (see [Starting from another
+reconciled like a keyed one, and its state stays in memory for the prefix the
+next request shares with it (see [Starting from another
 conversation](#starting-from-another-conversation)); it is never written to a
 file.
 
@@ -588,9 +588,9 @@ Each of the `parallel` sequences ("slots") holds at most one conversation.
       otherwise it is dropped.
 
    Then the slot is cleared, except when it was taken for a new request: its
-   cells then stay for the prefix that request shares with
-   them. If it did not go to RAM, its checkpoints are kept in memory per
-   `cacheKey` for its next load.
+   cells then stay for the prefix that request shares with them. If it did not
+   go to RAM, its checkpoints are kept in memory per `cacheKey` for its next
+   load.
 4. **The RAM tier is full.** To fit a new entry, the oldest entries are
    removed; each one with unsaved turns that is not ephemeral is written to
    its file first.
