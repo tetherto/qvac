@@ -15,11 +15,9 @@ const POCKET_FIT = {
 
 test('Pocket preflight reaches its native fitter and validates explicit byte budgets', async (t) => {
   const result = await TTSGgml.assessFit(POCKET_FIT)
-  t.is(result.status, 'error')
-  t.ok(
-    ['measurement-failed', 'invalid-arguments'].includes(result.reason),
-    'Pocket inspected its missing model inputs'
-  )
+  t.is(result.status, 'unknown', 'an unmeasurable native projection stays unknown')
+  t.alike(result.devices, [])
+  t.alike(result.stats, {})
   for (const memoryBudgetBytes of [-1, 1.5, Infinity]) {
     await t.exception(
       TTSGgml.assessFit({ ...POCKET_FIT, memoryBudgetBytes }),

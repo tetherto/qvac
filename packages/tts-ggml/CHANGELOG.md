@@ -7,10 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: the device the load
+  resolves to, then the host CPU. `status` is `fits`, `does-not-fit` or
+  `unknown`. An unreadable model or an invalid request rejects
+  ([#5472](https://github.com/tetherto/qvac/pull/5472)).
+- The `assessFit` request takes no LavaSR paths
+  ([#5472](https://github.com/tetherto/qvac/pull/5472)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5472](https://github.com/tetherto/qvac/pull/5472)).
+
 ### Added
 
 - Pocket GPU selection and metadata-only memory preflight with an optional byte budget.
-- Explicit native backend/device selection, opt-in WebGPU/Hexagon builds and stable accelerator stats.
+- Explicit native backend/device selection, opt-in WebGPU builds and stable accelerator stats.
 - Independent MOSS text/audio sampling and configurable context/generation budgets.
 - Parler decoder Core ML, compute-policy and strict/fallback controls.
 - Supertonic precision, environment, in-memory voice tensors and callable warm-up.
@@ -21,11 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Align shared native dependencies to `ggml-speech` `2026-10-27#1` and
-  `speech-cpp` `2026-10-30#1`, adding opt-in Hexagon build support.
-
-- Update the shared `speech-cpp` native dependency to `2026-10-28`
-  ([#5420](https://github.com/tetherto/qvac/pull/5420)).
+- Update the shared `speech-cpp` native dependency to `2026-10-29`
+  ([#5420](https://github.com/tetherto/qvac/pull/5420),
+  [#5447](https://github.com/tetherto/qvac/pull/5447)).
+- `assessFit` names the device by its ggml device name (`CPU`, `CUDA0`,
+  `MTL0`, `GPUOpenCL`), counts Android's OpenCL GPU as sharing host memory,
+  and gives a device that reports no memory of its own the host's free and
+  total figures ([#5447](https://github.com/tetherto/qvac/pull/5447)).
 
 ### Fixed
 

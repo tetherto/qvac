@@ -10,7 +10,6 @@ option(ENABLE_COVERAGE "Enable coverage" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
 option(ENABLE_CUDA "Enable CUDA GPU acceleration" OFF)
 option(TTS_WEBGPU "Enable opt-in WebGPU acceleration" OFF)
-option(TTS_HEXAGON "Enable opt-in Hexagon NPU acceleration" OFF)
 qvac_addon_fuzz_manifest()
 
 if(BUILD_TESTING)
@@ -29,9 +28,6 @@ if(TTS_WEBGPU)
   list(APPEND VCPKG_MANIFEST_FEATURES "webgpu")
 endif()
 
-if(TTS_HEXAGON)
-  list(APPEND VCPKG_MANIFEST_FEATURES "hexagon")
-endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
@@ -192,10 +188,6 @@ if(APPLE)
 endif()
 
 add_bare_module(tts-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
-if(TTS_HEXAGON)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/TtsHexagon.cmake)
-  tts_stage_hexagon_assets("${VCPKG_INSTALLED_PATH}/lib" "${BACKENDS_SUBDIR_VALUE}")
-endif()
 if(BACKEND_DYLIB_FILES)
   list(REMOVE_DUPLICATES BACKEND_DYLIB_FILES)
   install(FILES ${BACKEND_DYLIB_FILES} DESTINATION ${BACKENDS_SUBDIR_VALUE})
@@ -394,6 +386,7 @@ if(BUILD_TESTING)
   add_executable(
     tts_ggml_tests
       addon/tests/backend_env.cpp
+      addon/tests/test_app_memory_budget.cpp
       addon/tests/test_audio8_config.cpp
       addon/tests/test_backend_utils.cpp
       addon/tests/test_fabric_options.cpp

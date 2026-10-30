@@ -2,6 +2,7 @@
 
 #include <any>
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -99,20 +100,20 @@ public:
     int upscaleRepeats = 1;
   };
 
+  struct FitDevice {
+    std::string id;
+    std::string name;
+    bool unified = false;
+    uint64_t usedBytes = 0;
+    uint64_t freeBytes = 0;
+    uint64_t totalBytes = 0;
+  };
+
   struct FitOutcome {
-    sd_fit_status_t status = SD_FIT_ERROR;
-    /** One of fits, does-not-fit, model-unreadable, unsupported-config. */
-    std::string reason = "model-unreadable";
-    /**
-     * The engine reached a fitting placement only by altering the backend
-     * assignment, so the configuration as given does not fit.
-     */
-    bool changed = false;
-    bool vaeTiling = false;
-    bool streamLayers = false;
-    std::string backend;
-    std::string paramsBackend;
-    std::string report;
+    /** fits, does-not-fit, or unknown when the engine cannot plan the load. */
+    std::string status = "unknown";
+    /** The GPU devices the placement uses, then the host. Empty for unknown. */
+    std::vector<FitDevice> devices;
   };
 
   /**
@@ -121,9 +122,18 @@ public:
    *
    * Choosing the placement is the point, and the engine can only choose it
    * from an unpinned configuration. A `mainGpu` pin, a `device` of cpu or a
-   * module-specific `paramsBackend` is refused with `unsupported-config`.
+   * module-specific `paramsBackend` is `unknown`. A model the engine cannot
+   * read, or an ESRGAN output above the pixel limit, throws.
    */
   [[nodiscard]] FitOutcome assessFit(const FitWorkload& workload) const;
+
+  /**
+   * The outcome of an engine fit result. `changed` marks a placement the
+   * engine reached only by altering the backend assignment, which the
+   * configuration as given does not fit. SD_FIT_ERROR throws.
+   */
+  [[nodiscard]] static FitOutcome fitOutcome(
+      sd_fit_status_t status, const sd_fit_result_t& result, bool changed);
 
   // -- IModel -----------------------------------------------------------------
 

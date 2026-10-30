@@ -392,6 +392,82 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsToolGrammarWhenToolsPresent) {
   EXPECT_EQ(inputs.tools.size(), 1u) << "tools must not be stripped on success";
 }
 
+namespace {
+
+// One token per byte, so a count is the rendered prompt's length.
+std::vector<llama_token> byteTokens(const std::string& text) {
+  return std::vector<llama_token>(text.size(), 0);
+}
+
+} // namespace
+
+TEST_F(ChatTemplateUtilsTest, CountRenderedChatTokensCountsTheRender) {
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const size_t count = countRenderedChatTokens(
+      tmpls.get(), inputs.messages, inputs.tools, true, true, byteTokens);
+
+  EXPECT_EQ(count, getPrompt(tmpls.get(), inputs).prompt.size());
+}
+
+TEST_F(ChatTemplateUtilsTest, CountRenderedChatTokensIncludesTools) {
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  const common_chat_templates_inputs inputs = makeQwenInputs();
+  const size_t withoutTools = countRenderedChatTokens(
+      tmpls.get(), inputs.messages, {}, true, true, byteTokens);
+  const size_t withTools = countRenderedChatTokens(
+      tmpls.get(),
+      inputs.messages,
+      {makeWeatherTool()},
+      true,
+      true,
+      byteTokens);
+
+  EXPECT_GT(withTools, withoutTools);
+}
+
+// No generation prompt after an assistant turn, as in `tokenizeChat`.
+TEST_F(ChatTemplateUtilsTest, CountRenderedChatTokensAfterAnAssistantTurn) {
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  common_chat_msg answer;
+  answer.role = "assistant";
+  answer.content = "Paris.";
+  inputs.messages.push_back(answer);
+  inputs.add_generation_prompt = false;
+  const size_t count = countRenderedChatTokens(
+      tmpls.get(), inputs.messages, {}, true, true, byteTokens);
+
+  EXPECT_EQ(count, getPrompt(tmpls.get(), inputs).prompt.size());
+}
+
+TEST_F(ChatTemplateUtilsTest, CountRenderedChatTokensRejectsInvalidTools) {
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  const common_chat_templates_inputs inputs = makeQwenInputs();
+  EXPECT_THROW(
+      (void)countRenderedChatTokens(
+          tmpls.get(),
+          inputs.messages,
+          {makeWeatherTool(), makeWeatherTool()},
+          true,
+          true,
+          byteTokens),
+      qvac_errors::StatusError);
+}
+
 TEST_F(ChatTemplateUtilsTest, ResolveToolChoicePassesThroughAutoNoneRequired) {
   // Two tools, so "tools are not narrowed" is observable: against a
   // one-element list the size assertion below would hold either way.

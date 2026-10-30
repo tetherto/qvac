@@ -377,7 +377,7 @@ export interface RuntimeStats {
   totalSamples: number;
   /** Active compute device: 0 = CPU, 1 = GPU, 3 = NPU, 99 = other. */
   backendDevice?: number;
-  /** Backend: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 6=Hexagon, 99=other. */
+  /** Backend: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 99=other. */
   backendId?: number;
   /** LavaSR enhancer device. -1 = off, 0 = CPU, 1 = GPU, 2 = Core ML-managed. */
   enhancerBackendDevice?: number;

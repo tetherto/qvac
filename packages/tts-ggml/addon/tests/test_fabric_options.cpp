@@ -50,15 +50,10 @@ private:
   std::filesystem::path path_;
 };
 
-TEST(FabricOptions, WebGpuAndHexagonKeepDistinctRuntimeIdentities) {
+TEST(FabricOptions, WebGpuKeepsItsRuntimeIdentity) {
   using namespace qvac::ttsggml;
   EXPECT_EQ(backendIdFromName("WebGPU0"), 5);
-  EXPECT_EQ(backendIdFromName("HTP0"), 6);
-  EXPECT_EQ(backendIdFromName("Hexagon"), 6);
-  EXPECT_EQ(backendDeviceFromName("HTP0"), kBackendDeviceNpu);
-  EXPECT_EQ(
-      backendDeviceCode(tts_cpp::BackendDevice::CPU, "HTP0"),
-      kBackendDeviceNpu);
+  EXPECT_EQ(backendIdFromName("Hexagon"), 99);
   EXPECT_EQ(
       backendDeviceCode(tts_cpp::BackendDevice::CoreML), kBackendDeviceCoreML);
   EXPECT_EQ(backendDeviceFromName("unknown"), 99);
@@ -106,7 +101,7 @@ TEST(FabricOptions, MossPreservesNativeDefaultsAndMapsIndependentSamplers) {
   EXPECT_EQ(options.context, defaults.context);
   EXPECT_EQ(options.text_temperature, defaults.text_temperature);
   EXPECT_EQ(options.audio_temperature, defaults.audio_temperature);
-  config.backend = "HTP0";
+  config.backend = "Vulkan0";
   config.nCtx = 8192;
   config.maxNewTokens = 4096;
   config.textTemperature = 0.0F;
@@ -117,7 +112,7 @@ TEST(FabricOptions, MossPreservesNativeDefaultsAndMapsIndependentSamplers) {
   config.audioTopP = 0.8F;
   config.audioRepetitionPenalty = 1.1F;
   options = qvac::ttsggml::moss::MossModel::toEngineOptions(config);
-  EXPECT_EQ(options.backend, "HTP0");
+  EXPECT_EQ(options.backend, "Vulkan0");
   EXPECT_EQ(options.context, 8192);
   EXPECT_EQ(options.max_new_tokens, 4096);
   EXPECT_EQ(options.text_temperature, 0.0F);
@@ -188,11 +183,11 @@ TEST(
 
 TEST(FabricOptions, CosyVoicePreservesGreedyFalseAndForcedTrajectoryZeros) {
   qvac::ttsggml::cosyvoice::CosyvoiceConfig config;
-  config.backend = "HTP0";
+  config.backend = "Vulkan0";
   config.greedy = false;
   config.forceSpeechTokens = {0, 2, 4};
   const auto options = qvac::ttsggml::cosyvoice::toEngineOptions(config);
-  EXPECT_EQ(options.backend, "HTP0");
+  EXPECT_EQ(options.backend, "Vulkan0");
   EXPECT_FALSE(options.greedy);
   EXPECT_EQ(options.force_speech_tokens, config.forceSpeechTokens);
 }

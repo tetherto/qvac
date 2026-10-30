@@ -50,3 +50,23 @@ test('the provider catalog has no Core ML bundle components', () => {
     []
   )
 })
+
+test('Core ML source-package components never enter the provider catalog', () => {
+  const components = [
+    'vae-decoder.mlpackage/Manifest.json',
+    'vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel',
+    'vae-decoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin'
+  ]
+  for (const prefix of ['', 'acestep/']) {
+    const paths = components.map((path) => prefix + path)
+    for (const path of paths) assert.equal(isCoremlBundleComponent(path), true, path)
+    const grouped = groupCompanionSets(paths.map(model))
+    assert.ok(grouped.every((entry) => entry.isCompanionOnly))
+    const generated = generateModelsFileContent([...grouped, model(GGUF)])
+    assert.equal(generated.includes('.mlpackage/'), false)
+    assert.equal(generated.includes(GGUF), true)
+  }
+  for (const path of ['encoder.mlmodelc.zip', 'vae-decoder.mlpackage.zip', GGUF]) {
+    assert.equal(isCoremlBundleComponent(path), false, path)
+  }
+})

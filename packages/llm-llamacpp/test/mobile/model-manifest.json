@@ -11,6 +11,12 @@
       "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
     }
   ],
+  "runCalcTokensTest": [
+    {
+      "name": "Qwen3-0.6B-Q8_0.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
+    }
+  ],
   "runBitnetTest": [
     {
       "name": "bitnet_b1_58-large-TQ2_0.gguf",

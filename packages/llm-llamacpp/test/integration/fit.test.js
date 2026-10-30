@@ -30,76 +30,53 @@ function assess(modelPath, config = {}, rest = {}) {
   return LlmLlamacpp.assessFit({ modelPath, config: { ...GPU, ...config }, ...rest })
 }
 
+const isVerdict = (fit) => fit.status === 'fits' || fit.status === 'does-not-fit'
+const sumUsed = (rows) => rows.reduce((total, row) => total + row.usedBytes, 0)
+// Every row but the trailing host row.
+const deviceUsed = (fit) => sumUsed(fit.devices.slice(0, -1))
+const totalUsed = (fit) => sumUsed(fit.devices)
+
 // The figures depend on what the runner has free, so the assertions are the
 // relationships that hold on any machine.
-test('a projection is internally consistent', { timeout: 600_000 }, async (t) => {
+test('a projection lists every device it uses, the host last', { timeout: 600_000 }, async (t) => {
   const fit = await assess(await modelPath())
 
-  t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
+  t.ok(isVerdict(fit), 'a verdict')
   t.ok(fit.devices.length > 0, 'at least the host row')
-  t.is(fit.devices.at(-1).name, 'host', 'the host row is last')
-
-  const sum = (rows) =>
-    rows.reduce((total, row) => total + row.modelBytes + row.contextBytes + row.computeBytes, 0)
-  t.is(fit.hostBytes, sum(fit.devices.slice(-1)), 'hostBytes is the host row')
-  t.is(fit.deviceBytes, sum(fit.devices.slice(0, -1)), 'deviceBytes is every other row')
-})
-
-test('a fitting projection resolves a usable context', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath())
-
-  t.comment(`status=${fit.status} ctxSize=${fit.ctxSize} gpuLayers=${fit.gpuLayers}`)
-  if (fit.status !== 'fits') {
-    t.pass('the runner cannot hold this model; the placement assertions do not apply')
-    return
+  t.is(fit.devices.at(-1).name, 'CPU', 'the host row is last')
+  t.is(fit.devices.at(-1).unified, true, 'the host row is unified')
+  t.ok(fit.stats.ctxSize > 0, 'the resolved context')
+  t.ok(
+    Number.isInteger(fit.stats.gpuLayers) && fit.stats.gpuLayers >= 0,
+    'the resolved layer count'
+  )
+  for (const row of fit.devices) {
+    t.ok(row.id.length > 0, `${row.name} has an id`)
+    t.ok(row.usedBytes >= 0, `${row.name} has a usage`)
+    t.ok(row.freeBytes <= row.totalBytes, `${row.name} has free within total`)
   }
-  t.ok(fit.ctxSize > 0, 'a context was resolved')
-  t.ok(fit.ctxSize <= fit.trainCtxSize, 'never above the trained context')
-  t.ok(fit.gpuLayers >= 0, 'a layer count, not llama’s unset default')
+  const ids = fit.devices.map((row) => row.id)
+  t.is(new Set(ids).size, ids.length, 'one row per device')
 })
 
 test('a pinned layer count survives into the projection', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath(), { 'gpu-layers': '0' })
+  const pinned = await assess(await modelPath(), { 'gpu-layers': '0' })
 
-  t.is(fit.gpuLayers, 0, 'the fitter rewrites defaults, not a value the load pinned')
+  t.ok(isVerdict(pinned))
+  t.is(pinned.stats.gpuLayers, 0, 'the fitter keeps the layer count the load pinned')
 })
 
 test('a pinned context survives into the projection', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath(), { 'ctx-size': '4096' })
+  const file = await modelPath()
+  const small = await assess(file, { 'gpu-layers': '0', 'ctx-size': '4096' })
+  const large = await assess(file, { 'gpu-layers': '0', 'ctx-size': '8192' })
 
-  t.is(fit.ctxSize, 4096, 'the fitter reports the context the load asked for')
+  t.is(small.stats.ctxSize, 4096, 'the fitter keeps the context the load pinned')
+  t.ok(totalUsed(large) > totalUsed(small), 'the larger context the load asked for costs more')
 })
 
-test('a full offload counts the output layer', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath())
-
-  // A device row is listed even when its free memory holds no layer.
-  if (fit.status !== 'fits' || fit.gpuLayers === 0) {
-    t.pass('this runner placed nothing on a device')
-    return
-  }
-  // llama resolves an unset layer count to every layer plus the output layer.
-  const placed = fit.devices.slice(0, -1).filter((row) => row.modelBytes > 0)
-  t.ok(placed.length > 0, 'a device holds weights')
-  t.ok(fit.gpuLayers > 1, 'more than the output layer alone')
-})
-
-test('the context floor is honoured', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath(), {}, { minCtxSize: 4096 })
-
-  if (fit.status !== 'fits') {
-    t.pass('the runner cannot hold this model at the floor')
-    return
-  }
-  t.ok(fit.ctxSize >= 4096, 'not reduced below the floor')
-})
-
-test('a model that cannot be read is an outcome, not a throw', async (t) => {
-  const fit = await assess('/nonexistent/model.gguf')
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'model-unreadable')
-  t.alike(fit.devices, [])
+test('a model that cannot be read rejects', async (t) => {
+  await t.exception(assess('/nonexistent/model.gguf'))
 })
 
 // A setting the engine accepts is a setting the projection accepts.
@@ -137,39 +114,30 @@ test('every setting a load carries reaches the fitter', { timeout: 600_000 }, as
       continue
     }
 
-    const fit = await assess(file, { [key]: value })
+    const fit = assess(file, { [key]: value })
 
     if (isMobile && MOBILE_REFUSED.includes(key)) {
-      t.is(fit.reason, 'unsupported-config', `${key} is refused on mobile`)
+      await t.exception(fit, `${key} is refused on mobile`)
     } else {
-      t.not(fit.reason, 'unsupported-config', `${key} is a shape the engine accepts`)
+      t.ok(isVerdict(await fit), `${key} is a shape the engine accepts`)
     }
   }
 })
 
-test('a context floor that is not a count is refused', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath(), {}, { minCtxSize: -1 })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config')
+test('a context floor that is not a count rejects', { timeout: 600_000 }, async (t) => {
+  await t.exception(assess(await modelPath(), {}, { minCtxSize: -1 }))
 })
 
-test(
-  'a load the engine cannot parse is an outcome, not a throw',
-  { timeout: 600_000 },
-  async (t) => {
-    const fit = await assess(await modelPath(), { 'ctx-size': 'not-a-number' })
+test('a load the engine cannot parse rejects', { timeout: 600_000 }, async (t) => {
+  await t.exception(assess(await modelPath(), { 'ctx-size': 'not-a-number' }))
+})
 
-    t.is(fit.status, 'error')
-    t.is(fit.reason, 'unsupported-config')
-  }
-)
-
-test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
+test('a cpu load is unknown', { timeout: 600_000 }, async (t) => {
   const fit = await assess(await modelPath(), { device: 'cpu' })
 
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config')
+  t.is(fit.status, 'unknown')
+  t.alike(fit.devices, [])
+  t.alike(fit.stats, {})
 })
 
 // ggml-org's quant keeps the MTP layers; unsloth's strips them, so the
@@ -186,8 +154,6 @@ async function localModel(modelName) {
   return path.join(dir, name)
 }
 
-const totalOf = (fit, field) => fit.devices.reduce((total, row) => total + row[field], 0)
-
 test(
   'the MTP draft context is counted in the projection',
   { timeout: 600_000, skip: isMobile },
@@ -196,18 +162,16 @@ test(
     const plain = await assess(file, PINNED)
     const mtp = await assess(file, { ...PINNED, 'spec-type': 'draft-mtp' })
 
-    t.ok(mtp.status === 'fits' || mtp.status === 'does-not-fit', 'a verdict, not an error')
-    const context = (fit) => totalOf(fit, 'contextBytes')
+    t.ok(isVerdict(mtp), 'a verdict')
     t.ok(
-      context(mtp) > context(plain),
-      `the draft context's memory is in the figures (${context(mtp)} > ${context(plain)})`
+      totalUsed(mtp) > totalUsed(plain),
+      `the draft context's memory is in the figures (${totalUsed(mtp)} > ${totalUsed(plain)})`
     )
     // The MTP layers add a few percent to the target; counting the shared
     // weights again would double them.
-    const weights = (fit) => totalOf(fit, 'modelBytes')
     t.ok(
-      weights(mtp) < 1.5 * weights(plain),
-      `the shared weights count once (${weights(mtp)} < 1.5 × ${weights(plain)})`
+      totalUsed(mtp) < 1.5 * totalUsed(plain),
+      `the shared weights count once (${totalUsed(mtp)} < 1.5 × ${totalUsed(plain)})`
     )
   }
 )
@@ -224,95 +188,94 @@ test(
       'spec-draft-model': await localModel(MTP_MODEL)
     })
 
-    t.ok(mtp.status === 'fits' || mtp.status === 'does-not-fit', 'a verdict, not an error')
-    for (const field of ['modelBytes', 'contextBytes']) {
-      t.ok(
-        totalOf(mtp, field) > totalOf(plain, field),
-        `the head's ${field} are in the figures (${totalOf(mtp, field)} > ${totalOf(plain, field)})`
-      )
-    }
+    t.ok(isVerdict(mtp), 'a verdict')
+    t.ok(
+      totalUsed(mtp) > totalUsed(plain),
+      `the head is in the figures (${totalUsed(mtp)} > ${totalUsed(plain)})`
+    )
   }
 )
 
 test(
-  'an external head without MTP layers is refused',
+  'an external head without MTP layers rejects',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
     const file = await localModel(NO_MTP_MODEL)
-    const fit = await assess(file, { 'spec-type': 'draft-mtp', 'spec-draft-model': file })
-
-    t.is(fit.status, 'error')
-    t.is(fit.reason, 'unsupported-config', 'the load fails the same way')
+    await t.exception(
+      assess(file, { 'spec-type': 'draft-mtp', 'spec-draft-model': file }),
+      'the load fails the same way'
+    )
   }
 )
 
 test(
-  'an external head for another model is refused',
+  'an external head for another model rejects',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
     // Qwen3's vocabulary differs from the Qwen3.5 head's.
-    const fit = await assess(await modelPath(), {
-      'spec-type': 'draft-mtp',
-      'spec-draft-model': await localModel(MTP_MODEL)
-    })
-
-    t.is(fit.status, 'error')
-    t.is(fit.reason, 'unsupported-config', 'the load fails the same way')
+    await t.exception(
+      assess(await modelPath(), {
+        'spec-type': 'draft-mtp',
+        'spec-draft-model': await localModel(MTP_MODEL)
+      }),
+      'the load fails the same way'
+    )
   }
 )
 
-test('draft-mtp on a model without MTP layers is refused', { timeout: 600_000 }, async (t) => {
+test('draft-mtp on a model without MTP layers rejects', { timeout: 600_000 }, async (t) => {
   // Qwen3 has no MTP layers, so the load cannot create the MTP context.
-  const fit = await assess(await modelPath(), { 'spec-type': 'draft-mtp' })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config', 'the load fails the same way')
+  await t.exception(
+    assess(await modelPath(), { 'spec-type': 'draft-mtp' }),
+    'the load fails the same way'
+  )
 })
 
-test('an invalid speculative config is refused', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath(), {
-    'spec-type': 'none',
-    'spec-draft-model': path.join(os.tmpdir(), 'draft.gguf')
-  })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config', 'a draft model needs a speculative type')
+test('an invalid speculative config rejects', { timeout: 600_000 }, async (t) => {
+  await t.exception(
+    assess(await modelPath(), {
+      'spec-type': 'none',
+      'spec-draft-model': path.join(os.tmpdir(), 'draft.gguf')
+    }),
+    'a draft model needs a speculative type'
+  )
 })
 
-test('a draft model that is not a file is unreadable', { timeout: 600_000 }, async (t) => {
-  const fit = await assess(await modelPath(), {
-    'spec-type': 'draft-dflash',
-    'spec-draft-model': os.tmpdir()
-  })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'model-unreadable', 'the load requires a regular file too')
+test('a draft model that is not a file rejects', { timeout: 600_000 }, async (t) => {
+  await t.exception(
+    assess(await modelPath(), {
+      'spec-type': 'draft-dflash',
+      'spec-draft-model': os.tmpdir()
+    }),
+    'the load requires a regular file too'
+  )
 })
 
 // A margin is free memory the projection may not place into, so one as large
-// as the device leaves no room to offload. Each projection reads free memory
-// again, and another job on a shared GPU moves it between calls, so the
-// margin is sized from the device's total, which free never exceeds.
+// as the device leaves no room to offload, and the placement matches a load
+// that pins no layers. Each projection reads free memory again, and another
+// job on a shared GPU moves it between calls, so the margin is sized from the
+// device's total, which free never exceeds.
 test('the stricter of the two margins binds', { timeout: 600_000 }, async (t) => {
   const file = await modelPath()
   const base = await assess(file)
+  const noOffload = await assess(file, { 'gpu-layers': '0' })
 
-  if (base.status !== 'fits' || base.gpuLayers === 0) {
+  if (base.status !== 'fits' || deviceUsed(base) === deviceUsed(noOffload)) {
     t.pass('this runner offloads nothing, so no margin can reduce the placement')
     return
   }
 
   // A margin applies to every device, so the largest one sets it.
-  const all = Math.max(
-    ...base.devices.filter((device) => device.name !== 'host').map((device) => device.totalBytes)
-  )
+  const all = Math.max(...base.devices.slice(0, -1).map((device) => device.totalBytes))
   const allMib = `${Math.ceil(all / (1024 * 1024))}`
+  const placed = deviceUsed(noOffload)
 
-  t.is((await assess(file, {}, { marginBytes: all })).gpuLayers, 0, 'the caller margin binds')
-  t.is((await assess(file, { 'fit-target': allMib })).gpuLayers, 0, 'the load target binds')
+  t.is(deviceUsed(await assess(file, {}, { marginBytes: all })), placed, 'the caller margin binds')
+  t.is(deviceUsed(await assess(file, { 'fit-target': allMib })), placed, 'the load target binds')
   t.is(
-    (await assess(file, { 'fit-target': allMib }, { marginBytes: 0 })).gpuLayers,
-    0,
+    deviceUsed(await assess(file, { 'fit-target': allMib }, { marginBytes: 0 })),
+    placed,
     'a slack caller margin does not loosen the load target'
   )
 })
@@ -341,7 +304,7 @@ test('fitting keeps the event loop and logger responsive', { timeout: 600_000 },
     }, 1)
     const fit = await assess(file)
     pending = false
-    t.not(fit.status, 'error', 'a real native projection completed')
+    t.ok(isVerdict(fit), 'a real native projection completed')
     t.ok(ticks > 0, 'timers ran before fitting settled')
     t.ok(logs > 0, 'native logs drained before fitting settled')
     t.comment(`${ticks} timer ticks and ${logs} native logs before completion`)
@@ -373,7 +336,7 @@ test(
       ...fit,
       devices: fit.devices.map(({ freeBytes, ...row }) => row)
     })
-    t.not(first.status, 'error', 'the pinned projection is measured')
+    t.ok(isVerdict(first), 'the pinned projection is measured')
     t.alike(projection(second), projection(first), 'serialised fits do not disturb each other')
   }
 )
@@ -387,12 +350,14 @@ test('queued fits retain independent requests and all settle', { timeout: 600_00
   request.config['ctx-size'] = '8192'
   const second = LlmLlamacpp.assessFit(request)
   const missing = assess('/nonexistent/model.gguf')
-  const [a, b, c] = await Promise.all([first, second, missing])
-  t.not(a.status, 'error')
-  t.not(b.status, 'error')
-  t.is(a.ctxSize, 4096, 'the first call owns its original config')
-  t.is(b.ctxSize, 8192, 'the second call owns its changed config')
-  t.is(c.reason, 'model-unreadable', 'an error outcome does not strand queued callers')
+  const [a, b, c] = await Promise.allSettled([first, second, missing])
+  t.is(a.status, 'fulfilled')
+  t.is(b.status, 'fulfilled')
+  t.ok(
+    totalUsed(b.value) > totalUsed(a.value),
+    'each call owns the config it was given, so the larger context costs more'
+  )
+  t.is(c.status, 'rejected', 'a rejection does not strand queued callers')
 })
 
 test('a broken request rejects', async (t) => {
@@ -412,8 +377,8 @@ test('a fit retains the backend while a loaded model unloads', { timeout: 600_00
     const fit = assess(file)
     await model.unload()
     const result = await fit
-    t.not(result.status, 'error', 'unloading the model did not invalidate the fit backend')
-    t.ok(result.devices.length > 0, 'the copied device breakdown survives backend release')
+    t.ok(isVerdict(result), 'unloading the model did not invalidate the fit backend')
+    t.ok(result.devices.length > 0, 'the copied device rows survive backend release')
   } finally {
     await model.unload()
   }
@@ -426,13 +391,12 @@ test('a fit retains the backend while a loaded model unloads', { timeout: 600_00
 // prestage-ignore: google_gemma-4-E2B-it-Q4_K_M.gguf — desktop-only, skipped on mobile
 const INPUT_PATH_MODELS = ['Qwen3.5-0.8B-Q8_0.gguf', 'google_gemma-4-E2B-it-Q4_K_M.gguf']
 
-const computeBytes = (fit) => fit.devices.reduce((sum, row) => sum + row.computeBytes, 0)
-const computeMib = (fit) =>
-  fit.devices.map((row) => `${row.name}=${(row.computeBytes / 1048576).toFixed(2)}`).join(' ')
+const usedMib = (fit) =>
+  fit.devices.map((row) => `${row.name}=${(row.usedBytes / 1048576).toFixed(2)}`).join(' ')
 
 for (const name of INPUT_PATH_MODELS) {
   test(
-    `the compute projection grows with the ubatch [${name}]`,
+    `the projection grows with the ubatch [${name}]`,
     { timeout: 600_000, skip: isMobile },
     async (t) => {
       const [file, dir] = await ensureModel({ modelName: name })
@@ -450,11 +414,11 @@ for (const name of INPUT_PATH_MODELS) {
         ['128', small],
         ['512', large]
       ]) {
-        t.not(fit.status, 'error', `ubatch ${ubatch} is measured`)
-        t.comment(`compute-projection ${name} ctx=4096 ubatch=${ubatch} MiB: ${computeMib(fit)}`)
+        t.ok(isVerdict(fit), `ubatch ${ubatch} is measured`)
+        t.comment(`projection ${name} ctx=4096 ubatch=${ubatch} MiB: ${usedMib(fit)}`)
       }
-      t.ok(computeBytes(small) > 0, 'a compute buffer is projected')
-      t.ok(computeBytes(large) >= computeBytes(small), 'a larger ubatch never needs less compute')
+      t.ok(totalUsed(small) > 0, 'memory is projected')
+      t.ok(totalUsed(large) >= totalUsed(small), 'a larger ubatch never needs less memory')
     }
   )
 }

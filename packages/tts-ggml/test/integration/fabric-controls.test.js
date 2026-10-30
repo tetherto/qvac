@@ -111,12 +111,13 @@ test(
     }
     const result = await TTSGgml.assessFit(request)
     t.is(result.status, 'fits', 'native metadata-only projection fits')
-    t.ok(result.weightsBytes > 0, 'metadata accounts for weights')
+    t.is(result.devices.length, 1, 'a CPU projection has one host pool')
+    t.ok(result.devices[0].usedBytes > 0, 'metadata accounts for the load')
     const constrained = await TTSGgml.assessFit({ ...request, memoryBudgetBytes: 1 })
     t.is(constrained.status, 'does-not-fit', 'application memory budget affects the projection')
     t.is(
-      constrained.weightsBytes,
-      result.weightsBytes,
+      constrained.devices[0].usedBytes,
+      result.devices[0].usedBytes,
       'the same metadata is used for both budgets'
     )
   }

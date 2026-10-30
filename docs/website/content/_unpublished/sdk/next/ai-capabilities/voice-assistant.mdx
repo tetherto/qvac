@@ -118,9 +118,65 @@ The following script implements the full loop with VAD tuning, mic gating during
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/voice_assistant.py title="voice_assistant.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 Speak into the mic; transcriptions and the assistant's spoken responses will follow. Press `Ctrl+C` to quit. Models are downloaded on first run (~1 GB total) and cached locally; subsequent runs work fully offline.
+
+### Helpers
+
+The JS and TS versions import two helpers: `mic-input` from `../audio/` and `utils` from `../tts/`, relative to the script. The Python example includes them inline.
+
+#### mic-input
+
+Captures microphone audio through `ffmpeg`:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/audio/mic-input.js title="mic-input.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/audio/mic-input.ts title="mic-input.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+#### utils
+
+Builds a WAV from the PCM samples and plays it through `ffplay`:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/utils.js title="utils.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/utils.ts title="utils.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 ### Tuning
 
@@ -162,10 +218,6 @@ If you're running with headphones (mic cannot hear the speaker), you can loosen 
 - **Different LLM:** swap `LLAMA_3_2_1B_INST_Q4_0` for any LLM constant from `@qvac/sdk`. Larger models give better answers at the cost of latency.
 - **Different voice:** replace the Supertonic constants with another TTS model (e.g. Chatterbox — see [Text-to-Speech](/sdk/ai-capabilities/text-to-speech)).
 - **System prompt:** edit `SYSTEM_PROMPT` at the top of the script. The default instructs the LLM to be concise and avoid markdown so responses are pleasant to listen to.
-
-<Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
-</Callout>
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).

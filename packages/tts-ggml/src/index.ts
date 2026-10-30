@@ -559,6 +559,8 @@ namespace TTSGgml {
   export type PocketFitRequest = Fit.PocketFitRequest;
   export type TtsFitResult = Fit.TtsFitResult;
   export type TtsFitStatus = Fit.TtsFitStatus;
+  export type TtsFitDevice = Fit.TtsFitDevice;
+  export type TtsFitStats = Fit.TtsFitStats;
   export type SupertonicFitRequest = Fit.SupertonicFitRequest;
   export type ParlerFitRequest = Fit.ParlerFitRequest;
   export type ChatterboxFitRequest = Fit.ChatterboxFitRequest;

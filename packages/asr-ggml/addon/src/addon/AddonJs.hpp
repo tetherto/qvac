@@ -9,6 +9,7 @@
 
 #include <any>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -19,6 +20,14 @@
 #include <variant>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#include <os/proc.h>
+#endif
+#endif
+
+#include <ggml-backend.h>
 #include <ggml.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
@@ -33,6 +42,7 @@
 #include <parakeet/moss_transcribe_fit.h>
 #include <whisper.h>
 
+#include "addon/AppMemoryBudget.hpp"
 #include "addon/AsrErrors.hpp"
 #include "addon/GgmlLogForwarding.hpp"
 #include "addon/StreamingSessionRegistry.hpp"
@@ -522,9 +532,10 @@ JSCATCH
 
 // ── assessFit ────────────────────────────────────────────────────────────
 //
-// `engine` picks the fitter, the same value createInstance takes. A model the
-// fitter cannot read is an "error" status carrying the engine's own reason;
-// only a broken request rejects.
+// `engine` picks the fitter, the same value createInstance takes. Resolves to
+// "fits" or "does-not-fit" with the memory the load takes on each device, or
+// "unknown" for a load the fitter cannot size. A broken request, and a model
+// the fitter cannot read, reject with the reason.
 //
 // Takes no instance and returns a Promise. The request is read into plain
 // values on the JS thread, the fitter runs on a worker thread that makes no
@@ -551,7 +562,183 @@ struct MossFitRequest {
 
 using FitRequest =
     std::variant<ParakeetFitRequest, WhisperFitRequest, MossFitRequest>;
-using FitResult = std::variant<::parakeet::FitResult, whisper_fit_result>;
+
+struct FitDevice {
+  std::string id;
+  std::string name;
+  bool unified;
+  double usedBytes;
+  double freeBytes;
+  double totalBytes;
+};
+
+struct FitResult {
+  std::string status;
+  std::vector<FitDevice> devices;
+};
+
+// What both fitters report, before it becomes rows.
+struct EngineFit {
+  bool fits;
+  std::string deviceName;
+  bool deviceIsCpu;
+  bool deviceSharesHostMemory;
+  uint64_t deviceFreeBytes;
+  uint64_t deviceTotalBytes;
+  uint64_t deviceBytes;
+  uint64_t hostBytes;
+};
+
+// The PCI bus ID when the backend reports one, so the same GPU matches across
+// addons built on different backends; the device name otherwise.
+//
+// Unified marks memory the host owns: the CPU, an integrated GPU, a GPU that
+// shares host memory, Android's OpenCL GPU, and a device that reports no
+// memory of its own. A unified device that reports none takes the CPU's
+// figures.
+inline FitDevice fitDevice(
+    ggml_backend_dev_t device, const std::string& name, bool sharesHostMemory,
+    double usedBytes, double freeBytes, double totalBytes) {
+  std::string id = name;
+  std::string deviceName = name;
+  const bool reportsNoMemory = totalBytes == 0;
+  bool unified = sharesHostMemory || reportsNoMemory;
+  if (device != nullptr) {
+    ggml_backend_dev_props props{};
+    ggml_backend_dev_get_props(device, &props);
+    id = props.device_id != nullptr ? props.device_id : props.name;
+    deviceName = props.name;
+    unified = unified || props.memory_unified ||
+              props.type == GGML_BACKEND_DEVICE_TYPE_IGPU ||
+              props.type == GGML_BACKEND_DEVICE_TYPE_CPU;
+#if defined(__ANDROID__)
+    const char* registry =
+        ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+    unified = unified ||
+              (registry != nullptr && std::strcmp(registry, "OpenCL") == 0);
+#endif
+  }
+  if (unified && reportsNoMemory) {
+    if (ggml_backend_dev_t host =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      size_t hostFree = 0;
+      size_t hostTotal = 0;
+      ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+      freeBytes = static_cast<double>(hostFree);
+      totalBytes = static_cast<double>(hostTotal);
+    }
+  }
+  return {id, deviceName, unified, usedBytes, freeBytes, totalBytes};
+}
+
+// The margin the fitter held back on the device is held back from the app's
+// limit too.
+inline FitResult
+withAppMemoryBudget(FitResult result, [[maybe_unused]] uint64_t marginBytes) {
+#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+  result.status = applyAppMemoryBudget(
+      result.status,
+      result.devices,
+      static_cast<double>(os_proc_available_memory()),
+      static_cast<double>(marginBytes));
+#endif
+  return result;
+}
+
+// One row for the device the load resolved to, then the host CPU, which holds
+// the host-side buffers. A load on the CPU is one row holding both.
+inline FitResult toFitResult(const EngineFit& fit) {
+  ggml_backend_dev_t host =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  FitResult result;
+  result.status = fit.fits ? "fits" : "does-not-fit";
+
+  if (fit.deviceIsCpu) {
+    result.devices.push_back(fitDevice(
+        host,
+        fit.deviceName,
+        true,
+        static_cast<double>(fit.deviceBytes + fit.hostBytes),
+        static_cast<double>(fit.deviceFreeBytes),
+        static_cast<double>(fit.deviceTotalBytes)));
+    return result;
+  }
+
+  result.devices.push_back(fitDevice(
+      ggml_backend_dev_by_name(fit.deviceName.c_str()),
+      fit.deviceName,
+      fit.deviceSharesHostMemory,
+      static_cast<double>(fit.deviceBytes),
+      static_cast<double>(fit.deviceFreeBytes),
+      static_cast<double>(fit.deviceTotalBytes)));
+
+  size_t hostFree = 0;
+  size_t hostTotal = 0;
+  if (host != nullptr) {
+    ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+  }
+  result.devices.push_back(fitDevice(
+      host,
+      "CPU",
+      true,
+      static_cast<double>(fit.hostBytes),
+      static_cast<double>(hostFree),
+      static_cast<double>(hostTotal)));
+  return result;
+}
+
+// A load the fitter could not measure would still start, so it is unknown. A
+// request or model file the fitter refuses rejects as an invalid argument, and
+// any other failure as an internal one.
+inline FitResult unsizedOrThrow(const std::string& reason) {
+  if (reason == "measurement-failed" ||
+      reason == "memory-capacity-unavailable" ||
+      reason == "backend-memory-unavailable") {
+    return FitResult{"unknown", {}};
+  }
+  const bool invalid =
+      reason == "invalid-arguments" || reason == "workload-too-large" ||
+      reason == "model-unreadable" || reason == "vad-model-unreadable";
+  throw qvac_errors::StatusError(
+      invalid ? qvac_errors::general_error::InvalidArgument
+              : qvac_errors::general_error::InternalError,
+      "assessFit: " + reason);
+}
+
+// The Core ML diarizer sidecars a workload can load are system RAM beside
+// everything else the load keeps there, so they are part of the host row.
+inline FitResult toFitResult(const ::parakeet::FitResult& fit) {
+  if (fit.status != ::parakeet::FitStatus::Success &&
+      fit.status != ::parakeet::FitStatus::Failure) {
+    return unsizedOrThrow(fit.reason);
+  }
+  return toFitResult(
+      EngineFit{
+          fit.status == ::parakeet::FitStatus::Success,
+          fit.device_name,
+          fit.device_is_cpu,
+          fit.device_shares_host_memory,
+          fit.device_free_bytes,
+          fit.device_total_bytes,
+          fit.device.total_bytes,
+          fit.host_bytes + fit.coreml_bytes});
+}
+
+inline FitResult toFitResult(const whisper_fit_result& fit) {
+  if (fit.status != WHISPER_FIT_SUCCESS && fit.status != WHISPER_FIT_FAILURE) {
+    return unsizedOrThrow(fit.reason);
+  }
+  return toFitResult(
+      EngineFit{
+          fit.status == WHISPER_FIT_SUCCESS,
+          fit.device_name,
+          fit.device_is_cpu,
+          fit.device_shares_host_memory,
+          fit.device_free_bytes,
+          fit.device_total_bytes,
+          fit.device.total_bytes,
+          fit.host_bytes});
+}
 
 inline std::optional<double>
 readFitCount(js_env_t* env, js::Object request, const char* name) {
@@ -567,49 +754,6 @@ readFitCount(js_env_t* env, js::Object request, const char* name) {
         std::string("assessFit: ") + name + " must be a non-negative count");
   }
   return raw;
-}
-
-inline js_value_t*
-asrFitResultToJs(js_env_t* env, const ::parakeet::FitResult& fit) {
-  const char* status = "error";
-  if (fit.status == ::parakeet::FitStatus::Success) {
-    status = "fits";
-  } else if (fit.status == ::parakeet::FitStatus::Failure) {
-    status = "does-not-fit";
-  }
-
-  auto result = js::Object::create(env);
-  auto text = [&](const char* name, const std::string& value) {
-    result.setProperty(env, name, js::String::create(env, value));
-  };
-  auto bytes = [&](const char* name, uint64_t value) {
-    result.setProperty(
-        env, name, js::Number::create(env, static_cast<double>(value)));
-  };
-
-  text("status", status);
-  text("reason", fit.reason);
-  text("modelType", fit.model_type);
-  text("modelVariant", fit.model_variant);
-  text("deviceName", fit.device_name);
-  text("report", fit.report);
-  result.setProperty(
-      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
-  result.setProperty(
-      env,
-      "deviceSharesHostMemory",
-      js::Boolean::create(env, fit.device_shares_host_memory));
-  bytes("deviceFreeBytes", fit.device_free_bytes);
-  bytes("deviceTotalBytes", fit.device_total_bytes);
-  bytes("deviceBytes", fit.device.total_bytes);
-  bytes("weightsBytes", fit.device.weights_bytes);
-  bytes("encoderComputeBytes", fit.device.encoder_compute_bytes);
-  bytes("decoderStateBytes", fit.device.decoder_state_bytes);
-  bytes("decoderComputeBytes", fit.device.decoder_compute_bytes);
-  bytes("hostBytes", fit.host_bytes);
-  bytes("coremlBytes", fit.coreml_bytes);
-
-  return result;
 }
 
 inline double readMossFitNumber(
@@ -784,7 +928,9 @@ inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
 }
 
 inline FitResult runEngineFit(ParakeetFitRequest& request) {
-  return ::parakeet::fit_params(request.options);
+  return withAppMemoryBudget(
+      toFitResult(::parakeet::fit_params(request.options)),
+      request.options.margin_bytes);
 }
 
 inline FitResult runEngineFit(WhisperFitRequest& request) {
@@ -798,14 +944,17 @@ inline FitResult runEngineFit(WhisperFitRequest& request) {
       request.vadModelPath.empty() ? nullptr : request.vadModelPath.c_str();
   whisper_fit_result fit{};
   whisper_fit_params(&request.options, &fit);
-  return fit;
+  return withAppMemoryBudget(toFitResult(fit), request.options.margin_bytes);
 }
 
 inline FitResult runEngineFit(MossFitRequest& request) {
-  return ::parakeet::moss::fit_params(
-      moss::MossTranscribeModel::toEngineOptions(request.config),
-      moss::MossTranscribeModel::toEngineRequest(request.call),
-      request.audioSeconds,
+  return withAppMemoryBudget(
+      toFitResult(
+          ::parakeet::moss::fit_params(
+              moss::MossTranscribeModel::toEngineOptions(request.config),
+              moss::MossTranscribeModel::toEngineRequest(request.call),
+              request.audioSeconds,
+              request.marginBytes)),
       request.marginBytes);
 }
 
@@ -822,54 +971,25 @@ inline FitResult runFit(FitRequest request) {
       [](auto& engineRequest) { return runEngineFit(engineRequest); }, request);
 }
 
-inline js_value_t*
-whisperFitResultToJs(js_env_t* env, const whisper_fit_result& fit) {
-  const char* status = "error";
-  if (fit.status == WHISPER_FIT_SUCCESS) {
-    status = "fits";
-  } else if (fit.status == WHISPER_FIT_FAILURE) {
-    status = "does-not-fit";
-  }
-
-  auto result = js::Object::create(env);
-  auto text = [&](const char* name, const char* value) {
-    result.setProperty(env, name, js::String::create(env, std::string(value)));
-  };
-  auto bytes = [&](const char* name, uint64_t value) {
-    result.setProperty(
-        env, name, js::Number::create(env, static_cast<double>(value)));
-  };
-
-  text("status", status);
-  text("reason", fit.reason);
-  text("modelType", fit.model_type);
-  text("modelVariant", "");
-  text("deviceName", fit.device_name);
-  text("report", fit.report);
-  result.setProperty(
-      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
-  result.setProperty(
-      env,
-      "deviceSharesHostMemory",
-      js::Boolean::create(env, fit.device_shares_host_memory));
-  bytes("deviceFreeBytes", fit.device_free_bytes);
-  bytes("deviceTotalBytes", fit.device_total_bytes);
-  bytes("deviceBytes", fit.device.total_bytes);
-  bytes("weightsBytes", fit.device.weights_bytes);
-  bytes("kvBytes", fit.device.kv_bytes);
-  bytes("computeBytes", fit.device.compute_bytes);
-  bytes("vadBytes", fit.device.vad_bytes);
-  bytes("hostOverflowBytes", fit.device.host_overflow_bytes);
-  bytes("hostBytes", fit.host_bytes);
-
-  return result;
-}
-
 inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
-  if (const auto* whisperFit = std::get_if<whisper_fit_result>(&fit)) {
-    return whisperFitResultToJs(env, *whisperFit);
+  auto result = js::Object::create(env);
+  result.setProperty(env, "status", js::String::create(env, fit.status));
+  auto devices = js::Array::create(env);
+  for (size_t i = 0; i < fit.devices.size(); ++i) {
+    const auto& row = fit.devices[i];
+    auto entry = js::Object::create(env);
+    entry.setProperty(env, "id", js::String::create(env, row.id));
+    entry.setProperty(env, "name", js::String::create(env, row.name));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", js::Number::create(env, row.usedBytes));
+    entry.setProperty(env, "freeBytes", js::Number::create(env, row.freeBytes));
+    entry.setProperty(
+        env, "totalBytes", js::Number::create(env, row.totalBytes));
+    devices.set(env, i, entry);
   }
-  return asrFitResultToJs(env, std::get<::parakeet::FitResult>(fit));
+  result.setProperty(env, "devices", devices);
+  result.setProperty(env, "stats", js::Object::create(env));
+  return result;
 }
 
 inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {

@@ -29,8 +29,8 @@ The LM, flow frontend/decoder, F0 predictor and HiFT vocoder use resident
 sidecars when present and fall back to ggml when unavailable. HiFT exports
 use FP32 for waveform parity. Core ML chooses operation placement, so a
 sidecar does not guarantee ANE execution or a speed improvement.
-When a sidecar is present, `assessFit` returns an error with reason
-`coreml-memory-estimate-unavailable`; its memory usage is not projected.
+When a sidecar is present, `assessFit` answers `unknown`, since the sidecar's
+memory usage is not projected.
 
 
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
@@ -745,8 +745,8 @@ for export and compilation commands. A runnable addon example is
 ## Backends & GPU acceleration
 
 `config.backend` selects the native backend explicitly. Accepted selectors
-include `auto`, `cpu`, `opencl`, `webgpu`, `hexagon`, and exact registered
-device names such as `MTL0`, `CUDA0`, `Vulkan0` or `HTP0`. Exact device names
+include `auto`, `cpu`, `opencl`, `webgpu`, and exact registered
+device names such as `MTL0`, `CUDA0`, `Vulkan0`. Exact device names
 depend on the host. Native selection reports an unavailable explicit backend
 as an error; omitting this option preserves the existing `useGPU` policy.
 The same selector is accepted as top-level `backend` by `assessFit()`.
@@ -770,7 +770,7 @@ On hosts where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
 and fails loudly when that backend cannot be resolved; unset (or empty)
 keeps the automatic preference above.
 
-### Optional WebGPU and Hexagon builds
+### Optional WebGPU builds
 
 Build with `bare-make generate -D TTS_WEBGPU=ON`, followed by
 `bare-make build` and `bare-make install`, to include the Dawn backend.
@@ -779,18 +779,9 @@ Supertonic **3**, Parler, CosyVoice3 and Audio8. Explicit WebGPU requests
 for other families, including Supertonic 1/2, fail before loading weights.
 The manifest pins the compatible Dawn version; default builds stay unchanged.
 
-Build with `bare-make generate -D TTS_HEXAGON=ON` and a compatible Qualcomm
-SDK/toolchain (`HEXAGON_SDK_ROOT`, `HEXAGON_TOOLS_ROOT`) to include Hexagon.
-The install stages every matching `libggml-htp-v*.so` DSP skeleton alongside
-the addon backends, retaining the ABI-specific filenames. A requested build
-fails if those assets are missing. Select `config.backend: 'hexagon'` or
-an exact `HTP` device on supported hardware. Building the backend does not
-establish that a given model works on that hardware; runtime validation is
-still required for each model/device combination.
-
-Stats preserve existing codes and add `backendId: 5` for WebGPU and `6` for
-Hexagon. `backendDevice: 3` identifies an NPU. LavaSR's existing
-`backendDevice: 2` continues to mean Core ML-managed placement.
+Hexagon is not included in JavaScript package builds. Stats add `backendId: 5`
+for WebGPU. LavaSR's existing `backendDevice: 2` continues to mean Core ML-managed
+placement.
 
 ## Native engine controls
 
@@ -1495,7 +1486,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `config.backend` | string | unset | Native backend selector or exact registered device name; see [Backends](#backends--gpu-acceleration) |
 | `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / CUDA / Vulkan / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal, linux CUDA, and Android/ARM Mali Vulkan; CosyVoice3 and Audio8 offload on Apple/Metal, desktop linux CUDA/Vulkan, Windows Vulkan, and Android OpenCL/Adreno; MOSS, MOSS-SoundEffect and MOSS-Speech GPU offload is validated on Apple/Metal. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
 | `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic / Parler / Audio8 44.1 kHz, CosyVoice3 24 kHz, MOSS 24 kHz, MOSS-SoundEffect 48 kHz, MOSS-Speech 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active; MOSS, MOSS-SoundEffect and MOSS-Speech accept only their native rate |
-| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU, 3=NPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 6=Hexagon, 99=other), `enhancerBackendDevice` / `enhancerBackendId` and `denoiserBackendDevice` / `denoiserBackendId` (`-1` when that LavaSR stage is off; device `2` and id `99` for Core ML-managed placement), and the engine's own stage stats: Chatterbox `t3Ms` / `s3genMs` / `t3Tokens`; CosyVoice3 per-stage ms (`lmPrefillMs` … `hiftDecodeMs`, `stageTotalMs`) and work counters (`speechTokens`, `decodeSteps`, …); Audio8 per-stage ms (`prefillMs`, `fastDecodeMs`, `codecSynthMs`, …, `stageTotalMs`) |
+| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 99=other), `enhancerBackendDevice` / `enhancerBackendId` and `denoiserBackendDevice` / `denoiserBackendId` (`-1` when that LavaSR stage is off; device `2` and id `99` for Core ML-managed placement), and the engine's own stage stats: Chatterbox `t3Ms` / `s3genMs` / `t3Tokens`; CosyVoice3 per-stage ms (`lmPrefillMs` … `hiftDecodeMs`, `stageTotalMs`) and work counters (`speechTokens`, `decodeSteps`, …); Audio8 per-stage ms (`prefillMs`, `fastDecodeMs`, `codecSynthMs`, …, `stageTotalMs`) |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
 ### Methods
@@ -1561,8 +1552,8 @@ response.stats.tokensPerSecond   // Audio8 and MOSS count codec frames, the othe
 response.stats.generatedFrames   // Audio8 and MOSS only: codec frames (Audio8 every 46 ms, MOSS every 80 ms)
 response.stats.codecSidecarLoaded // Audio8 only, macOS / iOS: 1 while the Apple Core ML codec sidecar is attached
 response.stats.codecOnCoreml     // Audio8 only: 1 when this synthesis ran the codec on that sidecar, 0 when on the ggml backend
-response.stats.backendDevice     // 0=CPU, 1=GPU, 3=NPU
-response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 6=Hexagon, 99=other
+response.stats.backendDevice     // 0=CPU, 1=GPU
+response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 99=other
 // present when a LavaSR enhancer is active:
 response.stats.enhancerBackendDevice // -1 none, 0 CPU, 1 GPU
 response.stats.enhancerBackendId
@@ -1625,19 +1616,16 @@ const fit = await TTSGgml.assessFit({
   audioSeconds: 30
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
-fit.modelVariant // which pipeline was projected, e.g. 'chatterbox-t3-turbo'
-fit.deviceName
-fit.deviceBytes
-fit.weightsBytes
-fit.stateBytes
-fit.lmComputeBytes // 0 for a pipeline with no language-model stage, such as supertonic
-fit.codecComputeBytes // 0 for a pipeline with no separate codec stage
-fit.hostBytes
-fit.lavasrFileBytes // the LavaSR stages' size on disk, 0 when none was named
-fit.report
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
 ```
+
+`devices` holds the device the load resolves to, then the host CPU, which holds the host-side buffers. A load on the CPU is one row. `id` is the PCI bus ID when the backend reports one, so the same GPU matches across addons built on different backends, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. `usedBytes` is what the load takes on that device.
+
+On an iOS device every unified row shares the app's own memory limit, `os_proc_available_memory()`. Each such row's free memory is capped at that limit, and a load whose unified rows together take more than the limit less the margin does not fit. A limit of 0 means the app has none left.
+
+`unknown` is a load the fitter cannot size, and it carries no rows: supertonic outside the fused graph path it models, which is a validated GPU, or a CPU without the Accelerate pointwise kernels; a CosyVoice3 or Parler load with Core ML sidecars; or a load whose memory the engine fails to measure.
 
 `engineType` picks the fitter, the same key a load uses, and is required: a fit request carries none of the file keys a load is inferred from. Each engine takes the load's own file keys, plus a workload the fit adds:
 
@@ -1654,11 +1642,9 @@ fit.report
 
 Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the offload intent, `nCtx` and `kvCacheType` size the chatterbox cache, `steps` takes the GGUF's own default at 0, and `vulkanDevice` and `backendsDir` place the backend. Supplying `audio8CodecEncoderPath` projects voice cloning, which the decoder alone cannot do. `marginBytes` sets the free memory that must remain for the projection to count as fitting.
 
-`lavasrEnhancerPath` and `lavasrDenoiserPath` are reported as `lavasrFileBytes`, their size on disk. Those stages have no fitter, so the figure is a size on disk. It is counted in neither `deviceBytes` nor `hostBytes`.
+The LavaSR enhancer and denoiser have no fitter, and the request takes no LavaSR paths. The estimate for a load with LavaSR stages leaves those stages out.
 
-`deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
-
-A model the engine cannot read resolves to `status: "error"`, as does a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, rejects.
+A model the engine cannot read, a workload it cannot project, a voice with no fitter, or a broken request rejects with an `InvalidArgument` error, and a host with no native binding rejects as well. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no fitter.
 
 MOSS-TTS and MOSS-TTSD share the `moss` fitter. `promptRows` is the complete
 native prompt length, including special tokens, encoded speaker references and
@@ -1686,8 +1672,6 @@ as a conservative upper bound, including the reference encoder when requested;
 this may reject a workload whose actual peak is smaller. The fit follows the
 load's generation settings and does not change synthesis behavior.
 
-The supertonic fitter covers the fused graph path: a validated GPU, or a CPU without the Accelerate pointwise kernels. Elsewhere it answers `compute-path-not-supported` and projects nothing.
-
 ### MOSS-SoundEffect fit
 
 ```js
@@ -1698,7 +1682,7 @@ const fit = await TTSGgml.assessFit({
   seconds: 8,
   useGPU: false
 })
-console.log(fit.report)
+console.log(fit.devices)
 ```
 
 The fitter uses generation's tokenizer, request validation and graph builders,
@@ -1706,8 +1690,8 @@ without loading weights or generating audio. It supports full and metadata-only
 GGUF files. `negativePrompt`, `steps`, `guidance` and `shift` keep their generation
 semantics; `marginBytes` keeps the shared 256 MiB default. DiT processes the model's
 full latent duration even for a short output. Requested seconds size decoder
-windows and audio buffers. The shared compute arena is counted at its peak:
-`lmComputeBytes` covers text/DiT, `codecComputeBytes` any additional VAE demand.
+windows and audio buffers. The shared compute arena for text/DiT and any
+additional VAE demand is counted at its peak.
 Host memory includes conditioning, temporary arrays and CPU fallback buffers.
 
 Run `bare examples/moss-sfx-fit.js ./moss-sfx-v2-q8_0.gguf "Rain on a roof." 8`.

@@ -554,7 +554,7 @@ void ChatterboxModel::loadLocked() {
   }
 
   backendName_   = engine_->backend_name();
-  backendDevice_ = backendDeviceCode(engine_->backend_device(), backendName_);
+  backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_     = backendIdFromName(backendName_);
 
   // tts-cpp now admits Chatterbox onto ARM Mali/Immortalis Vulkan

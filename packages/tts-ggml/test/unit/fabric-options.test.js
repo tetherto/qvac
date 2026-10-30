@@ -31,8 +31,10 @@ test('Pocket accepts GPU intent and retains the CPU default', (t) => {
 
 test('explicit backend requests survive native parameter construction', (t) => {
   for (const engine of Object.keys(FILES)) {
-    const params = model(engine, { config: { backend: 'HTP0', useGPU: false } })._buildTtsParams()
-    t.is(params.backend, 'HTP0', engine)
+    const params = model(engine, {
+      config: { backend: 'Vulkan0', useGPU: false }
+    })._buildTtsParams()
+    t.is(params.backend, 'Vulkan0', engine)
     t.is(params.useGPU, false, 'the explicit request does not rewrite legacy intent')
   }
   t.exception(() => model('moss', { config: { backend: 1 } }), /backend/)
@@ -135,18 +137,18 @@ test('reload applies native controls together and rolls back rejected budgets', 
     nCtx: 8192,
     durationTokens: 3000,
     textTemperature: 0,
-    backend: 'HTP0'
+    backend: 'Vulkan0'
   })
   t.is(params.maxNewTokens, 4096)
   t.is(params.durationTokens, 3000)
   t.is(params.textTemperature, 0)
-  t.is(params.backend, 'HTP0')
+  t.is(params.backend, 'Vulkan0')
   t.exception(
     () => applyReloadableConfig(setup, { maxNewTokens: 100, backend: 'cpu' }),
     /durationTokens/
   )
   t.is(setup.settings.maxNewTokens, 4096)
-  t.is(setup.config.backend, 'HTP0')
+  t.is(setup.config.backend, 'Vulkan0')
 })
 
 class WarmUpBinding extends MockedBinding {

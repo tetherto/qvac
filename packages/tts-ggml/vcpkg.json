@@ -104,18 +104,6 @@
         }
       ]
     },
-    "hexagon": {
-      "description": "Enable opt-in Qualcomm Hexagon NPU acceleration",
-      "dependencies": [
-        {
-          "name": "speech-cpp",
-          "default-features": false,
-          "features": [
-            "hexagon"
-          ]
-        }
-      ]
-    },
     "webgpu": {
       "description": "Enable opt-in WebGPU (Dawn) GPU acceleration",
       "dependencies": [
@@ -136,13 +124,12 @@
   "overrides": [
     {
       "name": "ggml-speech",
-      "version": "2026-10-27",
-      "port-version": 1
+      "version": "2026-10-27"
     },
     {
       "name": "speech-cpp",
-      "version": "2026-10-30",
-      "port-version": 1
+      "version": "2026-10-29",
+      "port-version": 0
     },
     {
       "name": "dawn",

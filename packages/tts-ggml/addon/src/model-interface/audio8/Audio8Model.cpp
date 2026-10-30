@@ -254,7 +254,7 @@ void Audio8Model::loadLocked() {
 
   sampleRate_ = engine_->sample_rate();
   backendName_ = engine_->backend_name();
-  backendDevice_ = backendDeviceCode(engine_->backend_device(), backendName_);
+  backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_ = backendIdFromName(backendName_);
   codecSidecarLoaded_ = engine_->codec_on_coreml();
   codecOnCoreml_ = false;
