@@ -11,6 +11,7 @@
 
 #include "audiogen-cpp/acestep/engine.h"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/EngineOptions.hpp"
 
 namespace qvac::audiogenggml::acestep {
 
@@ -38,22 +39,6 @@ int16_t f32ToI16(float x, bool preserveInt16Scale = false) {
 
 constexpr int64_t BACKEND_DEVICE_CPU = 0;
 constexpr int64_t BACKEND_DEVICE_GPU = 1;
-
-// Mirrors tts-ggml's BackendUtils.hpp mapping so the codes the two addons
-// report cannot drift apart. Metal registers as "MTL" on newer ggml.
-int64_t backendIdFromName(const std::string& name) {
-  if (name == "CPU")
-    return 0;
-  if (name.rfind("Metal", 0) == 0 || name.rfind("MTL", 0) == 0)
-    return 1;
-  if (name.rfind("CUDA", 0) == 0)
-    return 2;
-  if (name.rfind("Vulkan", 0) == 0)
-    return 3;
-  if (name.rfind("OpenCL", 0) == 0)
-    return 4;
-  return 99;
-}
 
 int64_t backendDeviceFromName(const std::string& name) {
   return name == "CPU" ? BACKEND_DEVICE_CPU : BACKEND_DEVICE_GPU;
@@ -110,16 +95,7 @@ void AcestepModel::loadLocked() {
   if (engine_)
     return;
 
-  tts_cpp::acestep::EngineOptions opts;
-  opts.models_dir = cfg_.modelDir;
-  opts.text_enc_model_path = cfg_.textEncModelPath;
-  opts.lm_model_path = cfg_.lmModelPath;
-  opts.dit_model_path = cfg_.ditModelPath;
-  opts.vae_model_path = cfg_.vaeModelPath;
-  opts.n_threads = cfg_.threads;
-  // useGpu gates offloading: when off, no layers go to the GPU regardless of
-  // nGpuLayers. JS supplies both values (no C++ default).
-  opts.n_gpu_layers = cfg_.useGpu ? cfg_.nGpuLayers : 0;
+  auto opts = engineOptions(cfg_);
   if (const char* vb = std::getenv("AUDIOGEN_VERBOSE")) {
     opts.verbose =
         (vb[0] == '1' || vb[0] == 't' || vb[0] == 'T' || vb[0] == 'y' ||

@@ -10,26 +10,29 @@ namespace qvac::audiogenggml::acestep {
 //
 // The numeric/bool fields are REQUIRED: C++ carries no defaults. JS (index.js)
 // is the single place that decides default values and always sends every field;
-// JSAdapter throws if any is missing. `0` for inferenceSteps/shift/threads means
-// "auto" (the value JS chose), not a C++ fallback.
+// JSAdapter throws if any is missing. `0` for inferenceSteps/shift/threads
+// means "auto" (the value JS chose), not a C++ fallback.
 struct AcestepConfig {
   std::string modelDir;
 
-  std::string textEncModelPath;  // Qwen3-Embedding-*.gguf
-  std::string lmModelPath;       // acestep-5Hz-lm-*.gguf
-  std::string ditModelPath;      // acestep-v15-*.gguf
-  std::string vaeModelPath;      // vae-*.gguf
+  std::string textEncModelPath; // Qwen3-Embedding-*.gguf
+  std::string lmModelPath;      // acestep-5Hz-lm-*.gguf
+  std::string ditModelPath;     // acestep-v15-*.gguf
+  std::string vaeModelPath;     // vae-*.gguf
 
-  int   inferenceSteps;  // 0 = auto (turbo 8, base/sft 50)
-  float shift;           // 0 = auto (turbo 3.0, base/sft 1.0)
-  int   threads;         // 0 = auto
-  bool  useGpu;
-  int   nGpuLayers;      // GPU layers to offload when useGpu is set
+  int inferenceSteps; // 0 = auto (turbo 8, base/sft 50)
+  float shift;        // 0 = auto (turbo 3.0, base/sft 1.0)
+  int threads;        // 0 = auto
+  bool useGpu;
+  int nGpuLayers; // GPU layers to offload when useGpu is set
 
   // Directory scanned, as given, for the dlopen'd ggml backend modules --
   // required on arm64, where the CPU backend ships as per-microarch MODULE .so
   // files. Empty scans the addon's own, next to the `.bare`.
   std::string backendsDir;
+  std::string backend;
+  std::string lmBackend;
+  std::string dumpStagesDir;
 };
 
-}  // namespace qvac::audiogenggml::acestep
+} // namespace qvac::audiogenggml::acestep

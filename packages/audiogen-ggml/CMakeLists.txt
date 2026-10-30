@@ -6,12 +6,17 @@ cmake_minimum_required(VERSION 3.25)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
 
 option(BUILD_TESTING "Build tests" OFF)
+option(AUDIOGEN_WEBGPU "Enable opt-in WebGPU acceleration" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
 option(ENABLE_CUDA "Enable CUDA GPU acceleration (needs nvcc on the build host)" OFF)
 qvac_addon_fuzz_manifest()
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
+if(AUDIOGEN_WEBGPU)
+  list(APPEND VCPKG_MANIFEST_FEATURES "webgpu")
 endif()
 
 if(ENABLE_VULKAN)
@@ -207,11 +212,18 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   enable_testing()
 
-  add_executable(audiogen_ggml_tests addon/tests/test_app_memory_budget.cpp)
+  add_executable(audiogen_ggml_tests
+    addon/tests/test_app_memory_budget.cpp
+    addon/tests/test_runtime_options.cpp
+    addon/tests/test_fit_result.cpp)
+  target_compile_definitions(audiogen_ggml_tests PRIVATE
+    QVAC_ADDON_MODULE_NAME="${module_name}")
   target_include_directories(audiogen_ggml_tests PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src
+    ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
   )
-  target_link_libraries(audiogen_ggml_tests PRIVATE GTest::gtest_main)
+  target_link_libraries(audiogen_ggml_tests PRIVATE
+    GTest::gtest_main audiogen-cpp::audiogen-cpp ggml::ggml)
   add_test(NAME audiogen_ggml_tests COMMAND audiogen_ggml_tests)
 endif()
 

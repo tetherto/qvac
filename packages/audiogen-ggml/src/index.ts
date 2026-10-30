@@ -109,6 +109,14 @@ export interface AudioGenRuntimeConfig {
   coremlProfileDir?: string
   /** MiniMax only: explicit Core ML device policy; requires coremlProfileDir. */
   coremlComputeUnits?: AudiogenMinimaxCoreMLComputeUnits
+  /** MiniMax only: compiled conditioner .mlmodelc; the remaining stages use device/useGPU. */
+  coremlConditionerPath?: string
+  /** ACE-Step primary backend name or device name; empty/auto preserves native selection. */
+  backend?: string
+  /** ACE-Step LM backend, selected independently from the primary backend. */
+  lmBackend?: string
+  /** ACE-Step diagnostics: existing directory receiving native intermediate tensor dumps. */
+  dumpStagesDir?: string
   /** ACE-Step only: GPU layers to offload when `useGPU` is set (99 = all). */
   nGpuLayers?: number
   /** 0 = engine auto-picks. */
@@ -521,7 +529,8 @@ export interface UnderstandOptions {
 }
 
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
-export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'other'
+export type AudiogenBackendName =
+  'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'webgpu' | 'other'
 
 /** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
 export const AUDIOGEN_BACKEND_NAMES: Readonly<Record<number, AudiogenBackendName>> = {
@@ -530,6 +539,7 @@ export const AUDIOGEN_BACKEND_NAMES: Readonly<Record<number, AudiogenBackendName
   2: 'cuda',
   3: 'vulkan',
   4: 'opencl',
+  5: 'webgpu',
   99: 'other'
 }
 
@@ -928,8 +938,24 @@ function validateAcestepOptions(files: AudioGenFiles, config: AudioGenRuntimeCon
   if (config.device !== undefined) {
     throw invalidInput('ACE-Step does not accept device (use useGPU and nGpuLayers)')
   }
-  if (config.coremlProfileDir !== undefined || config.coremlComputeUnits !== undefined) {
-    throw invalidInput('coremlProfileDir and coremlComputeUnits are MiniMax-only options')
+  validateRuntimeStrings(config)
+  if (
+    config.coremlConditionerPath !== undefined ||
+    config.coremlProfileDir !== undefined ||
+    config.coremlComputeUnits !== undefined
+  ) {
+    throw invalidInput(
+      'coremlConditionerPath, coremlProfileDir and coremlComputeUnits are MiniMax-only options'
+    )
+  }
+}
+
+function validateRuntimeStrings(config: AudioGenRuntimeConfig): void {
+  for (const key of ['backend', 'lmBackend', 'dumpStagesDir', 'coremlConditionerPath'] as const) {
+    const value = config[key]
+    if (value !== undefined && (typeof value !== 'string' || value.includes('\0'))) {
+      throw invalidInput(`${key} must be a string without NUL characters`)
+    }
   }
 }
 
@@ -952,6 +978,14 @@ function validateMinimaxCoreMLConfig(config: AudioGenRuntimeConfig): void {
 }
 
 function validateMinimaxConfig(config: AudioGenRuntimeConfig): void {
+  validateRuntimeStrings(config)
+  if (
+    config.backend !== undefined ||
+    config.lmBackend !== undefined ||
+    config.dumpStagesDir !== undefined
+  ) {
+    throw invalidInput('MiniMax does not accept backend, lmBackend or dumpStagesDir')
+  }
   validateMinimaxCoreMLConfig(config)
   if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
     throw invalidInput('useGPU must be a boolean')
@@ -1216,6 +1250,7 @@ export class AudioGen {
         threads,
         useGPU: config.useGPU ?? false,
         device: config.device,
+        coremlConditionerPath: config.coremlConditionerPath,
         coremlProfileDir: config.coremlProfileDir,
         coremlComputeUnits: config.coremlComputeUnits,
         backendsDir
@@ -1239,6 +1274,9 @@ export class AudioGen {
         inferenceSteps: this._defaultInferenceSteps,
         shift: requireAcestepShift(config.shift ?? 0),
         useGPU: config.useGPU ?? false,
+        backend: config.backend,
+        lmBackend: config.lmBackend,
+        dumpStagesDir: config.dumpStagesDir,
         nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
         threads,
         backendsDir

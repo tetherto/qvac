@@ -17,7 +17,8 @@
       "default-features": false,
       "features": [
         "audiogen",
-        "metal"
+        "metal",
+        "coreml"
       ],
       "platform": "osx | ios"
     },
@@ -102,6 +103,22 @@
           "platform": "!(osx | ios)"
         }
       ]
+    },
+    "webgpu": {
+      "description": "Opt-in native WebGPU (Dawn). Build with AUDIOGEN_WEBGPU=ON.",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "default-features": false,
+          "features": [
+            "webgpu"
+          ]
+        },
+        {
+          "name": "dawn",
+          "default-features": false
+        }
+      ]
     }
   },
   "overrides": [
@@ -113,6 +130,10 @@
       "name": "speech-cpp",
       "version": "2026-10-29",
       "port-version": 0
+    },
+    {
+      "name": "dawn",
+      "version": "20260410.140140"
     }
   ]
 }

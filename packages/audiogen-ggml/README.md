@@ -165,6 +165,50 @@ the engine time into `arMs`, `conditionMs`, `flowMs` and `vocoderMs`, and
 the song ended on its own. See
 [`examples/generate-music-minimax.js`](examples/generate-music-minimax.js).
 
+### ACE-Step backend selection and diagnostics
+
+`config.backend` selects the primary native backend by name or device name,
+for example `cpu`, `MTL0`, `CUDA0`, or `WebGPU`. `config.lmBackend` selects
+an independent LM backend. Empty or `auto` keeps native automatic placement
+and the existing `useGPU`/`nGpuLayers` behavior. An explicit unavailable
+backend fails instead of silently selecting another one. Use the same
+`backend` and `lmBackend` values in `assessFit()` to project that placement.
+The returned device rows include the independent LM pool even when the
+primary backend is CPU; the host CPU remains the last row and appears once.
+
+`config.dumpStagesDir` enables native intermediate tensor dumps in an existing
+directory. It is disabled when omitted or empty. The directory is not created
+by the addon. See
+[`examples/generate-with-backends.js`](examples/generate-with-backends.js).
+
+WebGPU is an opt-in native Dawn backend. Build from source with
+`bare-make generate -D AUDIOGEN_WEBGPU=ON`, then `bare-make build` and
+`bare-make install`. It is not included in the default prebuilds. Select it
+with `backend: 'webgpu'` after building; `backendId: 5` maps to `webgpu`.
+Native WebGPU support is unmeasured; its automatic placement keeps the LM
+and detokenizer on CPU. Independent backend selection does not override
+native operation or model compatibility checks. JavaScript packages do not
+include Hexagon.
+
+### Apple Core ML sidecars
+
+Apple builds enable the native Core ML sidecar support. An ACE-Step VAE
+sidecar is discovered next to its GGUF: `vae-BF16.gguf` uses
+`vae-decoder.mlmodelc` (the native resolver removes the quantization suffix). Absent
+sidecars retain the native VAE route. Its existing native failure/fallback
+policy is unchanged. ACE-Step preflight sizes the native ggml VAE route;
+it does not include the additional Core ML sidecar allocations.
+
+MiniMax can instead receive `config.coremlConditionerPath`, the absolute path
+to a compiled conditioner `.mlmodelc` on the inference host. Only its
+conditioner convolution uses Core ML with CPU and ANE allowed; the native
+layer mix and resampling remain on CPU, while the other stages retain
+`device`/`useGPU` placement. This option alone does not enable the full Core ML
+profile. An explicit invalid or unsupported conditioner fails to load.
+Forward the same `coremlConditionerPath` to `assessFit()`; it returns
+`{ status: 'unknown', devices: [], stats: {} }` because Core ML resident
+memory cannot be projected.
+
 ### MiniMax full Core ML on macOS
 
 On macOS 15+, `speech-cpp[audiogen]` includes the full Core ML runtime. Use
@@ -192,7 +236,9 @@ must accommodate the prompt and generation; no request is truncated to fit it.
 The programs stay resident between generations and are released on unload.
 Core ML returns `backendId: 99` (`other`); native-only `backendDevice` and
 `gpuFallbackReason` are omitted. Memory preflight returns
-`coreml-memory-estimate-unavailable` for this route.
+`{ status: 'unknown', devices: [], stats: {} }` for this route. The full
+Core ML route remains experimental; exposing its controls does not establish
+audio parity or a performance improvement for a profile.
 
 CPU/ANE initial-logit parity against the native reference is still under
 validation; the measured device policies are not a claim of identical sampled
@@ -663,6 +709,9 @@ runnable end-to-end script (`npm run example`).
 | `inferenceSteps` / `shift`                | Advanced; leave unset to auto-tune per DiT. `run()` can override both per call.                                                                                                                 |
 | `cfgScale`                                | Default MiniMax flow guidance scale; `0` uses the model default.                                                                                                                                |
 | `nGpuLayers`                              | GPU layers to offload when `useGPU` is set (99 = all).                                                                                                                                          |
+| `backend`, `lmBackend` | ACE-Step primary and independent LM backend names; empty/auto preserves native selection. |
+| `dumpStagesDir` | ACE-Step existing directory for intermediate tensor dumps; omitted/empty disables dumps. |
+| `coremlConditionerPath` | MiniMax compiled conditioner `.mlmodelc`; leaves other stages on the selected native device. |
 | `threads`                                 | CPU thread count (0 / unset = hardware default).                                                                                                                                                |
 | `backendsDir`                             | Advanced; directory scanned, as given, for dlopen'd ggml backend modules. Unset scans the addon's own, next to its native module, which is where the platform package and `bare-link` put them. |
 
@@ -799,6 +848,8 @@ and `vaePath` name them individually and win over it.
 | `withSourceAudio`             | Projects the extra VAE-encoder phase a cover or reference request loads.                  |
 | `keepStages`                  | `-1` mirrors the engine, `0` forces the staged projection, `1` all-resident.              |
 | `gpuLayers`                   | Greater than 0 requests the GPU stack, with the fallbacks a real load applies.            |
+| `backend`, `lmBackend` | ACE-Step placement selectors, as the generation config takes them. |
+| `coremlConditionerPath` | MiniMax conditioner path; projects as `unknown` with no device rows. |
 | `threads`, `backendsDir`      | As the load takes them.                                                                   |
 | `marginBytes`                 | Free memory that must remain for the projection to count as fitting. Defaults to 256 MiB. |
 
