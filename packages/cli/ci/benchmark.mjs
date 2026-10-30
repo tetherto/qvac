@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // cli's benchmark, main's serve OpenAI provider comparison: `live` sweeps (BENCHMARK_ARGS smoke or full) on the
-// benchmark-live Mac, whose runner-local config and manifest BENCHMARK_CONFIG_PATH and BENCHMARK_ENVIRONMENT_PATH name;
+// self-hosted GPU Mac, whose runner-local config and manifest BENCHMARK_CONFIG_PATH and BENCHMARK_ENVIRONMENT_PATH name;
 // `report` writes the provider-free coverage preview. Both install the CLI with npm, as main did.
 
 import {
@@ -31,11 +31,11 @@ if (process.env.GITHUB_ACTIONS) {
   if (head !== sha) throw new Error(`checked out SHA ${head} does not match the run's ${sha}`)
 }
 
-// Runner-local files only: a protected environment variable naming an absolute path outside the workspace.
+// Runner-local files only: a release environment variable naming an absolute path outside the workspace.
 function external(name) {
   const value = process.env[name] ?? ''
   if (!value) {
-    throw new Error(`${name} is unset. Define it as a benchmark-live environment variable.`)
+    throw new Error(`${name} is unset. Define it as a release environment variable.`)
   }
   if (!isAbsolute(value)) throw new Error(`${name} must be an absolute path.`)
   if (/[\r\n]/.test(value)) throw new Error(`${name} must not contain line breaks.`)

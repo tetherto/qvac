@@ -37,16 +37,14 @@ coverage denominator.
 | ------------------------------------------------------------------------------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | PR changing the CLI                                                            | cli `test:unit` in `pr-checks.yml`                | `tsx` harness typecheck and unit tests (no models, no live servers), via `npm run test:bench-serve-openai-providers` |
 | `benchmarks.yml` dispatch, `packages=cli`                                      | cli `benchmark` `report` configuration            | provider-free coverage JSON + Markdown preview on GitHub-hosted infra                                                |
-| `benchmarks.yml` dispatch, `configs=darwin-arm64-live`, `args=smoke` or `full` | cli `benchmark` `darwin-arm64-live` configuration | live providers on the self-hosted GPU runner, gated by `benchmark-live`                                              |
+| `benchmarks.yml` dispatch, `configs=darwin-arm64-live`, `args=smoke` or `full` | cli `benchmark` `darwin-arm64-live` configuration | live providers on the self-hosted GPU runner, in the `release` environment                                           |
 
 A dispatch runs the commit its ref pointed at when dispatched. The live job
 checks that the checkout is exactly that full 40-character commit SHA before it
-installs anything, and runs in the protected `benchmark-live` environment (see
-[`environment.md`](./environment.md)). The environment requires review from
-`tether-devops` and prevents self-review; repository administrators can use
-GitHub's configured admin bypass. Approval attests to the selected commit's
-benchmark harness code and dependency install scripts as well as the protected
-external configuration. Checkouts do not persist GitHub credentials. Network
+installs anything, and runs in the `release` environment (see
+[`environment.md`](./environment.md)), whose branch policy limits the refs that
+can reach it; no reviewer approves the run. Checkouts do not persist GitHub
+credentials. Network
 monitoring for the self-hosted bare-metal live runner must be provisioned as a
 runner-level service rather than a workflow action.
 
@@ -59,9 +57,9 @@ not commit package-level npm lockfiles.
 
 The full three-provider sweep is **not** part of the CLI's PR checks. It needs local
 LM Studio / Ollama / `qvac serve` and the shared GGUF on a `qvac-macos*-gpu`
-runner, with the runtime config and environment manifest supplied by protected
-`benchmark-live` environment variables (never from the checked-out tree).
-The protected job checks the immutable target before it installs anything and rejects
+runner, with the runtime config and environment manifest supplied by `release`
+environment variables (never from the checked-out tree).
+The job checks the immutable target before it installs anything and rejects
 runtime files that are missing, relative, inside the checkout, or reachable
 through a symlink into it.
 

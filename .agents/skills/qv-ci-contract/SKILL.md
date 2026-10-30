@@ -22,7 +22,6 @@ Pick the task:
    - a step that differs on one platform: that configuration's `commands`;
    - a runner: the configuration's `ci.runner` key from `reusable-runner-names.yml`;
    - a toolkit: the configuration's `ci.setup`, or a check target's `metadata.setup` for `pr-checks.yml`;
-   - a deployment environment other than `release`: the configuration's `ci.environment`;
    - a configuration that runs on its own PR labels or a release base instead of `run-desktop-addon-tests`: the `test:integration` configuration's `ci.labels`;
    - checks in npm's layout instead of the pnpm workspace: `test:unit`'s `metadata.sources`;
    - a timeout, mobile setting, release tag prefix or release check: the target's `metadata`;

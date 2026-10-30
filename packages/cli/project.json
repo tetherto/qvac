@@ -58,8 +58,7 @@
       "configurations": {
         "darwin-arm64-live": {
           "ci": {
-            "runner": "macos_arm64_gpu",
-            "environment": "benchmark-live"
+            "runner": "macos_arm64_gpu"
           }
         },
         "report": {

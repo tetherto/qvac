@@ -29,7 +29,7 @@ jobs:
     if: inputs.rows != '[]'
     name: ${{ matrix.row.slug }} ${{ matrix.row.target }} ${{ matrix.row.config }}
     runs-on: ${{ matrix.row.runner }}
-    environment: ${{ matrix.row.environment || 'release' }}
+    environment: release
     timeout-minutes: ${{ matrix.row.timeout || 180 }}
     permissions:
       contents: read
@@ -161,7 +161,7 @@ jobs:
           # Variables, not secrets: GitHub masks a short secret such as a port inside other values.
           MQTT_PROTOCOL: ${{ contains(matrix.row.meta.secrets, 'MQTT_HOST') && vars.MQTT_PROTOCOL || '' }}
           MQTT_PORT: ${{ contains(matrix.row.meta.secrets, 'MQTT_HOST') && vars.MQTT_PORT || '' }}
-          # The live benchmark host's runner-local files, named by its environment's variables.
+          # The live benchmark host's runner-local files, named by the release environment's variables.
           BENCHMARK_CONFIG_PATH: ${{ matrix.row.target == 'benchmark' && vars.BENCHMARK_CONFIG_PATH || '' }}
           BENCHMARK_ENVIRONMENT_PATH: ${{ matrix.row.target == 'benchmark' && vars.BENCHMARK_ENVIRONMENT_PATH || '' }}
           # A configuration selected by a label, with the suite that label passes; see ci.labels.

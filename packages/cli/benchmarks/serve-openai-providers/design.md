@@ -38,10 +38,10 @@ It does not cover:
 - **`benchmarks.yml` `report` configuration**: provider-free coverage capture on a
   GitHub-hosted runner after each cli benchmark dispatch; fetches the OpenAI
   specification and writes `coverage.json` plus a Markdown preview without
-  protected configuration or environment approval
+  runner-local configuration
 - **`benchmarks.yml` `darwin-arm64-live` configuration** (`args` `smoke` or `full`):
   live run on the self-hosted `qvac-macos26-arm64-gpu` runner in the
-  `benchmark-live` environment when providers and the shared GGUF are already
+  `release` environment when providers and the shared GGUF are already
   configured; the job does not persist checkout credentials, and network
   monitoring must be provisioned as a runner-level service for the self-hosted
   bare-metal host

@@ -35,10 +35,10 @@ export const TARGETS = [
 ]
 
 // A configuration is named <platform>-<arch>[-<variant>] and holds only args or commands and a ci
-// object with its runner, any extra host setup, its deployment environment and the labels that select it.
+// object with its runner, any extra host setup and the labels that select it.
 export const CONFIG_NAME = /^(linux|android|ios|darwin|win32)-(x64|arm64)(-[a-z0-9]+)?$/
 const CONFIG_KEYS = ['args', 'commands', 'ci']
-const CI_KEYS = ['runner', 'setup', 'environment', 'labels']
+const CI_KEYS = ['runner', 'setup', 'labels']
 // A labels key is a PR label, base:<branch> with an optional trailing * for a PR into that branch, or dispatch:<name>
 // for a configuration that only a dispatch naming <name> runs.
 const LABEL_KEY = /^(base:[a-z0-9._-]+\*?|dispatch:[a-z0-9-]+|[a-z0-9-]+)$/
@@ -156,7 +156,6 @@ export function configurations(project, target) {
       arch: m[2],
       tags: m[3] ?? '',
       setup,
-      environment: cfg.ci.environment ?? '',
       labels
     }
   })
@@ -231,7 +230,6 @@ export function rows(project, target, labels) {
     arch: '',
     tags: '',
     setup: [],
-    environment: '',
     labels: null,
     runner: ''
   }

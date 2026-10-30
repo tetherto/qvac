@@ -162,15 +162,14 @@ npx tsx benchmark.ts full --config "$BENCHMARK_CONFIG_PATH"
 CI: PR / CLI `test:unit` runs harness unit tests. Dispatch
 `.github/workflows/benchmarks.yml` with `packages=cli`, `configs=darwin-arm64-live`
 and `args=smoke` or `args=full` for live providers. See "CI dispatch" below for the
-immutable-SHA and `benchmark-live` requirements.
+immutable-SHA and environment requirements.
 
 Smoke is a hard gate: all three providers must return streaming usage, non-empty content, and reasoning-off before `full`.
 
-## CI dispatch (`benchmark-live`)
+## CI dispatch (`release`)
 
-The live sweep runs on the self-hosted `qvac-macos26-arm64-gpu` runner and is
-protected end to end. Configure the following **before** dispatching, or the run
-will fail closed.
+The live sweep runs on the self-hosted `qvac-macos26-arm64-gpu` runner.
+Configure the following **before** dispatching, or the run will fail closed.
 
 ### Immutable target SHA
 
@@ -185,29 +184,20 @@ branch whose head is that commit, and check it, e.g.:
 git rev-parse HEAD        # the reviewed commit you intend to benchmark
 ```
 
-### `benchmark-live` environment (one-time setup)
+### `release` environment variables (one-time setup)
 
-Create a repository **environment** named `benchmark-live` (Settings →
-Environments) and configure:
+The live job runs in the repository's `release` environment, like every
+desktop configuration of the contract. Its deployment branch rule limits the
+branches a dispatch can run from; no reviewer approves the run. Set these
+**environment variables** (not secrets) on `release`:
 
-- **Required reviewers**: at least one trusted maintainer. The `darwin-arm64-live` job pauses
-  for manual approval before it checks out, installs, or runs anything on the
-  self-hosted runner. Approval attests to the selected target commit's benchmark
-  harness code and dependency install scripts, not only to the protected
-  external config. This replaces the former label gate.
-- **Deployment branch rule** — restrict the environment to the branches that are
-  allowed to dispatch it (e.g. `main`, `release-*`). Dispatches from other
-  branches cannot access the environment's variables and are blocked.
-- **Environment variables** (not secrets — plain environment variables):
-
-  | Variable                     | Value                                                                               |
-  | ---------------------------- | ----------------------------------------------------------------------------------- |
-  | `BENCHMARK_CONFIG_PATH`      | Absolute path to the runner-local `benchmark.yaml` (filled model IDs + `gguf_path`) |
-  | `BENCHMARK_ENVIRONMENT_PATH` | Absolute path to the runner-local, filled-in copy of this `environment.md`          |
+| Variable                     | Value                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| `BENCHMARK_CONFIG_PATH`      | Absolute path to the runner-local `benchmark.yaml` (filled model IDs + `gguf_path`) |
+| `BENCHMARK_ENVIRONMENT_PATH` | Absolute path to the runner-local, filled-in copy of this `environment.md`          |
 
 The job also reads the `AWS_OIDC_ROLE_ARN` and `MODEL_S3_BUCKET` secrets that
-every desktop configuration of the contract uses, so the environment needs
-access to them.
+every desktop configuration of the contract uses.
 
 Both paths must be **absolute** and must point **outside** `GITHUB_WORKSPACE`.
 The live job rejects unset, relative, workspace-contained, missing, or
