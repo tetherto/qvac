@@ -608,7 +608,10 @@ class VlaModel {
       return;
     }
     if (outputData && typeof outputData === "object") {
-      const stats = outputData;
+      const stats = {
+        ...outputData,
+        ...(this._backendName !== null && { backendName: this._backendName }),
+      };
       const actions = this._pending ? this._pending.actions : null;
       this._pending = null;
       this._job.end(this.opts.stats ? stats : null, { actions, stats });
@@ -1071,6 +1074,8 @@ namespace VlaModel {
     total_ms: number;
     /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
     backendDevice: number;
+    /** Selected backend name, matching `model.backendName`. Older addons omit it. */
+    backendName?: string;
   }
 
   export interface VlaRunResult {

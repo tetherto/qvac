@@ -171,6 +171,10 @@ robot state as text inside the prompt (`Task: …, State: …;\nAction:`) before
 tokenising (see [Models](#models)). Check `hparams.numCameras` /
 `hparams.stateInputMode` after `load()` rather than hard-coding the input shape.
 
+Run stats include an optional `backendName` matching `model.backendName`, such as
+`"CPU"`, `"Metal"`, or `"CUDA0"`. It reports the selected backend after fallback,
+while `load({ backend })` specifies a priority list. Older addons omit the field.
+
 ## JavaScript API
 
 | Export | What |
