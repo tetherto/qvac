@@ -398,10 +398,16 @@ jobs:
             default { Write-Host "Unknown arch '$env:INPUT_ARCH'; CMAKE_GENERATOR_PLATFORM left unset" }
           }
 
-      - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@ef3d614873ab1ed71aaa07c3df7b23d2760fb12b
+      # What setup-bare-tooling does, except the toolchain comes from the
+      # checkout's lock further down: a pinned action installs the lock from its
+      # own commit, so a lock bump would not be what the prebuilds build with.
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
+          node-version: lts/*
+
+      - name: Install the Bare runtime
+        run: npm install -g --force bare-runtime
 
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
@@ -464,17 +470,12 @@ jobs:
         shell: bash
         run: npm install
 
-      # Local install, not `npm install -g`. The global pin is bare-make
-      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
-      # is prepended so generate and the vcpkg toolchain's
-      # find_program(bare-make) both use the current package.
-      - name: Install current bare-make locally
-        working-directory: ${{ env.WORKDIR }}
+      # After the SDK setup steps, so nothing they add to PATH shadows the locked
+      # toolchain that generate and the vcpkg toolchain's find_program(bare-make)
+      # use.
+      - name: Install the locked bare toolchain
         shell: bash
-        run: |
-          npm install --no-save --ignore-scripts bare-make
-          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          ./node_modules/.bin/bare-make --version
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - if: ${{ inputs.fabric-overlay-artifact != '' }}
         name: Download fabric-prebuilds for overlay

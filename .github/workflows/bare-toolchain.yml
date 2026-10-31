@@ -1,0 +1,131 @@
+name: Bare toolchain
+
+# Watches the bare toolchain CI builds with, which .github/bare-toolchain pins.
+#
+# On a pull request that moves the lock, every OS installs it and checks that
+# bare-make, clang and llvm-profdata on PATH come from it. The builds
+# run from On PR Trigger (Fabric), which lists the lockfile in its paths, and
+# On PR Trigger (nx), where the lockfile is an on-pr input of llm-llamacpp.
+#
+# Daily, it compares the lock with npm. A newer release opens or updates one
+# issue labelled toolchain-drift, and the issue closes once the lock catches up.
+# Closing it by hand puts that release off until a newer one appears.
+# Nothing here fails on drift: CI keeps building with the locked versions until
+# a pull request moves them.
+
+on:
+  pull_request:
+    paths:
+      - ".github/bare-toolchain/**"
+      - ".github/scripts/check-bare-toolchain.mjs"
+      - ".github/scripts/lib/bare-toolchain.mjs"
+      - ".github/scripts/test/bare-toolchain.test.mjs"
+      - ".github/workflows/bare-toolchain.yml"
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: Install the locked toolchain (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Unit tests
+        run: node --test .github/scripts/test/bare-toolchain.test.mjs
+
+      - name: Install the locked bare toolchain
+        run: node .github/bare-toolchain/install.mjs
+
+      - name: Check the tools on PATH come from the lock
+        run: node .github/scripts/check-bare-toolchain.mjs verify-path
+
+  drift:
+    name: Compare the lock with npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      drift: ${{ steps.check.outputs.drift }}
+      key: ${{ steps.check.outputs.key }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Check for newer releases
+        id: check
+        run: node .github/scripts/check-bare-toolchain.mjs drift --report "$RUNNER_TEMP/drift.md"
+
+      - name: Upload the issue body
+        if: steps.check.outputs.drift == 'true'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: bare-toolchain-drift
+          path: ${{ runner.temp }}/drift.md
+          if-no-files-found: error
+
+  track:
+    name: Open, update or close the tracking issue
+    needs: drift
+    # Pull requests only report; the issue follows main's lock.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts/lib
+
+      - name: Download the issue body
+        if: needs.drift.outputs.drift == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: bare-toolchain-drift
+          path: ${{ runner.temp }}/drift
+
+      - name: Sync the tracking issue
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          DRIFT: ${{ needs.drift.outputs.drift }}
+          DRIFT_KEY: ${{ needs.drift.outputs.key }}
+          BODY_FILE: ${{ runner.temp }}/drift/drift.md
+        with:
+          script: |
+            const fs = require('node:fs');
+            const { pathToFileURL } = require('node:url');
+            const { syncDriftIssue } = await import(
+              pathToFileURL(`${process.env.GITHUB_WORKSPACE}/.github/scripts/lib/bare-toolchain.mjs`).href
+            );
+            const { owner, repo } = context.repo;
+            const drift = process.env.DRIFT === 'true';
+            await syncDriftIssue({
+              github, owner, repo,
+              runUrl: `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+              drift,
+              key: process.env.DRIFT_KEY,
+              body: drift ? fs.readFileSync(process.env.BODY_FILE, 'utf8') : '',
+              log: (message) => core.info(message),
+            });

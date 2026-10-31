@@ -93,7 +93,10 @@ jobs:
           node-version: lts/*
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}

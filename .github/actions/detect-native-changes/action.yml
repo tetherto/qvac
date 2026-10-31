@@ -3,7 +3,8 @@ description: >
   Shared native-change detection for the addon prebuild-caching workflows.
   Computes native_changed (did THIS event's delta touch native files) and
   native_hash (sha256 of the HEAD native tree, the addon's @qvac/fabric
-  dependency ranges and global vcpkg overlays) for a given addon workdir.
+  dependency ranges, global vcpkg overlays and the bare toolchain lock) for a
+  given addon workdir.
   Read-only: fetches the PR head by SHA/ref and uses git diff + ls-tree, never
   checks out or runs PR code. The repo (base branch) must already be checked
   out by the caller. Single source of truth — do NOT inline per workflow.
@@ -18,7 +19,7 @@ outputs:
     description: 'true if this event''s delta touched native files (or a safe-fallback trigger)'
     value: ${{ steps.detect.outputs.native_changed }}
   native_hash:
-    description: 'sha256 (first 16 hex) of the HEAD native tree, the addon''s @qvac/fabric dependency ranges and global vcpkg overlays — the cache key component'
+    description: 'sha256 (first 16 hex) of the HEAD native tree, the addon''s @qvac/fabric dependency ranges, global vcpkg overlays and the bare toolchain lock — the cache key component'
     value: ${{ steps.detect.outputs.native_hash }}
 
 runs:
@@ -138,6 +139,8 @@ runs:
                 # lines, exported symbols and build-time assertions, so an edit
                 # there changes the binary exactly as a CMakeLists.txt edit does.
                 cmake/qvac-addon/*) CHANGED=true; break ;;
+                # The locked compiler and cmake-toolchains every native build uses.
+                .github/bare-toolchain/package-lock.json) CHANGED=true; break ;;
                 ${WORKDIR}/package.json)
                   if [ "$(fabric_deps "$DIFF_FROM")" != "$(fabric_deps "$HEAD_SHA")" ]; then
                     CHANGED=true; break
@@ -155,8 +158,8 @@ runs:
         # git ls-tree reads the tree object without checkout — secure and
         # correct. Fabric deps are appended only when declared, so packages
         # without them keep their existing key.
-        NATIVE_TREE=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" "cmake/qvac-addon" 2>/dev/null \
-          | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/')
+        NATIVE_TREE=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" "cmake/qvac-addon" ".github/bare-toolchain/package-lock.json" 2>/dev/null \
+          | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/|\.github/bare-toolchain/package-lock\.json$')
         FABRIC_DEPS=$(fabric_deps "$HEAD_SHA")
         NATIVE_HASH=$({
           printf '%s\n' "$NATIVE_TREE"

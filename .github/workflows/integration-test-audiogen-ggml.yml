@@ -158,7 +158,10 @@ jobs:
         run: npm install
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - run: mkdir -p "${{ runner.temp }}/audiogen-ggml"
         shell: bash

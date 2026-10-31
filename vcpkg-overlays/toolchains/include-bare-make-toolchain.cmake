@@ -30,6 +30,42 @@ endif()
 set(QVAC_BARE_MAKE_TOOLCHAIN_FILE "${_qvac_bare_make_toolchain}" CACHE FILEPATH
   "bare-make toolchain forwarded to ExternalProject host tools" FORCE)
 
+# Warn when the resolved toolchain is not the one CI locks, which is usually a
+# stale global bare-make ahead of .github/bare-toolchain on PATH. The packages
+# sit beside cmake-toolchains in both a local and a global install; a global
+# bare-make is the directory above.
+set(_qvac_bare_lockfile "${CMAKE_CURRENT_LIST_DIR}/../../.github/bare-toolchain/package-lock.json")
+get_property(_qvac_bare_lock_checked GLOBAL PROPERTY _QVAC_BARE_LOCK_CHECKED)
+get_property(_qvac_bare_in_try_compile GLOBAL PROPERTY IN_TRY_COMPILE)
+if(EXISTS "${_qvac_bare_lockfile}" AND NOT _qvac_bare_lock_checked AND NOT _qvac_bare_in_try_compile)
+  set_property(GLOBAL PROPERTY _QVAC_BARE_LOCK_CHECKED TRUE)
+  file(READ "${_qvac_bare_lockfile}" _qvac_bare_lock)
+  get_filename_component(_qvac_bare_modules "${QVAC_BARE_MAKE_TOOLCHAIN_FILE}" DIRECTORY)
+  get_filename_component(_qvac_bare_modules "${_qvac_bare_modules}" DIRECTORY)
+  foreach(_qvac_bare_package IN ITEMS bare-make cmake-toolchains llvm-runtime)
+    string(JSON _qvac_bare_locked ERROR_VARIABLE _qvac_bare_error
+      GET "${_qvac_bare_lock}" packages "node_modules/${_qvac_bare_package}" version)
+    unset(_qvac_bare_installed)
+    foreach(_qvac_bare_manifest IN ITEMS
+        "${_qvac_bare_modules}/${_qvac_bare_package}/package.json"
+        "${_qvac_bare_modules}/../package.json")
+      if(EXISTS "${_qvac_bare_manifest}")
+        file(READ "${_qvac_bare_manifest}" _qvac_bare_json)
+        string(JSON _qvac_bare_name ERROR_VARIABLE _qvac_bare_error GET "${_qvac_bare_json}" name)
+        if(_qvac_bare_name STREQUAL _qvac_bare_package)
+          string(JSON _qvac_bare_installed ERROR_VARIABLE _qvac_bare_error GET "${_qvac_bare_json}" version)
+          break()
+        endif()
+      endif()
+    endforeach()
+    if(_qvac_bare_installed AND _qvac_bare_locked AND NOT _qvac_bare_installed STREQUAL _qvac_bare_locked)
+      message(WARNING "qvac: building with ${_qvac_bare_package} ${_qvac_bare_installed}, but CI locks "
+        "${_qvac_bare_locked}. Run node .github/bare-toolchain/install.mjs and put its node_modules/.bin "
+        "first on PATH to build what CI builds.")
+    endif()
+  endforeach()
+endif()
+
 include("${QVAC_BARE_MAKE_TOOLCHAIN_FILE}")
 
 # CMAKE_LINKER_TYPE applies to every language enabled later. bare-make sets
@@ -61,3 +97,15 @@ unset(_qvac_bare_make_bin)
 unset(_qvac_bare_make_real)
 unset(_qvac_bare_make_root)
 unset(_qvac_bare_make_candidate)
+unset(_qvac_bare_lockfile)
+unset(_qvac_bare_lock_checked)
+unset(_qvac_bare_in_try_compile)
+unset(_qvac_bare_lock)
+unset(_qvac_bare_modules)
+unset(_qvac_bare_package)
+unset(_qvac_bare_locked)
+unset(_qvac_bare_installed)
+unset(_qvac_bare_manifest)
+unset(_qvac_bare_json)
+unset(_qvac_bare_name)
+unset(_qvac_bare_error)

@@ -249,7 +249,11 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
+
       - name: Build and test on host
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
@@ -320,7 +324,10 @@ jobs:
           package-manager-cache: false
 
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - name: Build Android prebuild
         working-directory: ${{ env.ADDON_WORKDIR }}
@@ -370,7 +377,10 @@ jobs:
           package-manager-cache: false
 
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       # No CMake install step on purpose: bare-make spawns its OWN bundled CMake
       # (lib/generate.js -> require('cmake-runtime/spawn') -> cmake-runtime-darwin-universal)

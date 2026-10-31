@@ -6,4 +6,8 @@ runs:
   steps:
     - name: Install Bare
       shell: bash
-      run: npm install -g --force bare-runtime bare-make@1.8.0
+      run: npm install -g --force bare-runtime
+
+    - name: Install the locked bare toolchain
+      shell: bash
+      run: node "${{ github.action_path }}/../../bare-toolchain/install.mjs"

@@ -157,20 +157,12 @@ jobs:
         run: |
           npm install
 
-      # Local install, not `npm install -g`. The global pin is bare-make
-      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
-      # is prepended so generate and the vcpkg toolchain's
-      # find_program(bare-make) both use the current package. It runs before
-      # the overlay: npm reconciles node_modules on every install and prunes
-      # the PR platform package the overlay nests inside @qvac/fabric, so the
-      # build would silently link the released runtime from npm instead.
-      - name: Install current bare-make locally
-        working-directory: ${{ env.WORKDIR }}
+      # Its bin directory goes first on PATH, so generate, the vcpkg toolchain's
+      # find_program(bare-make) and the coverage report's llvm-profdata and
+      # llvm-cov all come from the same LLVM.
+      - name: Install the locked bare toolchain
         shell: bash
-        run: |
-          npm install --no-save --ignore-scripts bare-make
-          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          ./node_modules/.bin/bare-make --version
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - name: Download fabric-prebuilds for overlay
         if: ${{ inputs.fabric-overlay-artifact != '' }}

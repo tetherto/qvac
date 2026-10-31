@@ -138,7 +138,10 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path on Windows Server 2025

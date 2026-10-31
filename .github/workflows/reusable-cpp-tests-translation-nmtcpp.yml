@@ -95,7 +95,10 @@ jobs:
           arch: x64
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV

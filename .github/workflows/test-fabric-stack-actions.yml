@@ -136,12 +136,21 @@ jobs:
           MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
           MOCK_GIT_DIFF_FILES: packages/fabric/vcpkg-configuration.json
 
-      - name: Verify both build-affecting diffs are fabric-stack PRs
+      - name: Run detection with a bare toolchain lock bump
+        id: toolchain-lock
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+          MOCK_GIT_DIFF_FILES: .github/bare-toolchain/package-lock.json
+
+      - name: Verify the build-affecting diffs are fabric-stack PRs
         if: github.event_name == 'pull_request'
         shell: bash
         env:
           FABRIC_LAST: ${{ steps.fabric-last.outputs.fabric_stack }}
           REGISTRY_BASELINE: ${{ steps.registry-baseline.outputs.fabric_stack }}
+          TOOLCHAIN_LOCK: ${{ steps.toolchain-lock.outputs.fabric_stack }}
         run: |
           set -euo pipefail
           if [ "$FABRIC_LAST" != "true" ]; then
@@ -150,6 +159,10 @@ jobs:
           fi
           if [ "$REGISTRY_BASELINE" != "true" ]; then
             echo "::error::Expected a qvac-fabric registry baseline bump to report true, got $REGISTRY_BASELINE"
+            exit 1
+          fi
+          if [ "$TOOLCHAIN_LOCK" != "true" ]; then
+            echo "::error::Expected a bare toolchain lock bump to report true, got $TOOLCHAIN_LOCK"
             exit 1
           fi
 
