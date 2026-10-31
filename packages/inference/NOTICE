@@ -10,6 +10,10 @@ listed below.
 Required Attribution Notices
 =========================================================================
 
+bare-dgram
+Copyright 2024 Holepunch Inc
+Licensed under the Apache License, Version 2.0.
+
 Gemma is provided under and subject to the Gemma Terms of Use found
 at ai.google.dev/gemma/terms
 
@@ -815,6 +819,8 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-cpu-info
   bare-crypto@1.15.4
     https://github.com/holepunchto/bare-crypto
+  bare-dgram@1.1.1
+    https://github.com/holepunchto/bare-dgram
   bare-dns@2.3.0
     https://github.com/holepunchto/bare-dns
   bare-env@3.0.1
