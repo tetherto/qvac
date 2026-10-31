@@ -153,6 +153,10 @@
     "./llamacpp-rerank/plugin": {
       "types": "./dist/plugins/builtin/llamacpp-rerank/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-rerank/plugin.js"
+    },
+    "./ggml-image-embedding/plugin": {
+      "types": "./dist/plugins/builtin/ggml-image-embedding/plugin.d.ts",
+      "import": "./dist/plugins/builtin/ggml-image-embedding/plugin.js"
     }
   },
   "files": [

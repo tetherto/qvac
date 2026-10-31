@@ -20,6 +20,7 @@ export type RequestKind =
   | 'completion'
   | 'batchCompletion'
   | 'embeddings'
+  | 'imageEmbedding'
   | 'decision'
   | 'rerank'
   | 'transcribe'
@@ -99,6 +100,12 @@ let registry: RequestRegistry | null = null
 const LLAMACPP_COMPLETION_SLOT_GROUP = 'llamacppCompletion'
 
 function installDefaultPolicies(r: RequestRegistry): void {
+  r.policy({
+    kind: 'imageEmbedding',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
   // Laya owns one active job per model. Wait in the registry so cancelling a
   // queued request never reaches the addon or interrupts the active job.
   r.policy({

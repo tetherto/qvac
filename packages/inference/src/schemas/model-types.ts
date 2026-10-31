@@ -22,6 +22,7 @@ export const ModelType = {
   sdcppGeneration: 'sdcpp-generation',
   audiogenGgml: 'audiogen-ggml',
   ggmlVla: 'ggml-vla',
+  ggmlImageEmbedding: 'ggml-image-embedding',
   ggmlClassification: 'ggml-classification'
 } as const
 

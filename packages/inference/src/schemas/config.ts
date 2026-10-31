@@ -1,3 +1,4 @@
+import { imageEmbeddingConfigSchema } from '@/schemas/image-embedding'
 import { z } from 'zod'
 import { logLevelSchema } from '@/schemas/logging-stream'
 import { decisionConfigBaseSchema } from '@/schemas/decision'
@@ -57,6 +58,7 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.llamacppEmbedding]: embedConfigBaseSchema.optional(),
     [ModelType.llamacppDecision]: decisionConfigBaseSchema.optional(),
     [ModelType.llamacppRerank]: rerankConfigBaseSchema.optional(),
+    [ModelType.ggmlImageEmbedding]: imageEmbeddingConfigSchema.optional(),
     [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
     [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
     [ModelType.mossTranscribe]: mossTranscribeConfigSchema.optional(),

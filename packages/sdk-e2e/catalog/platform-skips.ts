@@ -14,6 +14,14 @@ type Rule = {
 
 const RULES: Rule[] = [
   {
+    match: /^image-embedding-input-/,
+    skip: {
+      reason:
+        'Checks the JS client Uint8Array input validation before RPC. Python and Kotlin use generated requests with base64 image strings.',
+      platforms: ['desktop-python', 'kotlin-android']
+    }
+  },
+  {
     match: /^tts-moss-/,
     skip: {
       reason:

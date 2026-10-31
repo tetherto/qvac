@@ -61,3 +61,5 @@ export { startRpcServer, stopRpcServer, discoverRpcServers } from './rpc-server'
 
 export { decide } from './decide'
 export { rerank } from './rerank'
+
+export { embedImage } from './embed-image'

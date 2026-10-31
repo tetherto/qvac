@@ -15,6 +15,7 @@
     "@qvac/sdk/audiogen-ggml/plugin",
     "@qvac/sdk/ggml-vla/plugin",
     "@qvac/sdk/ggml-classification/plugin",
+    "@qvac/sdk/ggml-image-embedding/plugin",
     "custom-echo-plugin/plugin"
   ],
   "registryDownloadMaxRetries": 10,

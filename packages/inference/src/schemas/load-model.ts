@@ -1,3 +1,4 @@
+import { imageEmbeddingConfigSchema } from '@/schemas/image-embedding'
 import { z } from 'zod'
 import type { Logger } from '@/logging'
 import {
@@ -111,6 +112,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
   [ModelType.llamacppDecision, configKeys(decisionConfigBaseSchema)],
   [ModelType.llamacppRerank, configKeys(rerankConfigBaseSchema)],
+  [ModelType.ggmlImageEmbedding, configKeys(imageEmbeddingConfigSchema)],
   [ModelType.nmtcppTranslation, configKeys(...nmtConfigBaseSchema.options)],
   [
     ModelType.ttsGgml,
@@ -277,6 +279,13 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
       modelSrc: modelSrcInputSchema.optional().describe(MODEL_SRC_DESCRIPTION),
       modelType: classificationModelTypeSchema,
       modelConfig: classificationConfigSchema.strict().optional()
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: z.literal(ModelType.ggmlImageEmbedding),
+      modelConfig: imageEmbeddingConfigSchema.strict().optional()
     })
     .strict()
 ])
@@ -593,6 +602,23 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       ...optionalRequestFields(data)
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
+      modelType: z.literal(ModelType.ggmlImageEmbedding),
+      modelConfig: imageEmbeddingConfigSchema.strict().optional()
+    })
+    .strict()
+    .transform((data) => ({
+      type: 'loadModel' as const,
+      modelType: ModelType.ggmlImageEmbedding,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig ?? {},
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      ...optionalRequestFields(data)
     }))
 ])
 
@@ -763,6 +789,13 @@ export const loadVlaModelRequestSchema = commonModelConfigSchema
   })
   .strict()
 
+export const loadImageEmbeddingModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.ggmlImageEmbedding),
+    modelConfig: imageEmbeddingConfigSchema.strict().optional()
+  })
+  .strict()
+
 export const loadClassificationModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.ggmlClassification),
@@ -791,6 +824,7 @@ export const loadModelSrcRequestSchema = z
     loadEmbeddingsModelRequestSchema,
     loadDecisionModelRequestSchema,
     loadRerankModelRequestSchema,
+    loadImageEmbeddingModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,
@@ -965,7 +999,9 @@ export type InferredConfig<S> = S extends {
                       ? z.input<typeof audioGenConfigSchema>
                       : S extends { engine: typeof ModelType.ggmlVla }
                         ? z.input<typeof vlaConfigSchema>
-                        : Record<string, unknown>
+                        : S extends { engine: typeof ModelType.ggmlImageEmbedding }
+                          ? z.input<typeof imageEmbeddingConfigSchema>
+                          : Record<string, unknown>
 
 /**
  * `loadModel` options for descriptors that preserve a literal `engine`.
