@@ -50,6 +50,21 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 * Batch processing: run multiple prompts through a single loaded model in one call with `batchCompletion()` — optimizes resources and reduces total run time. See [Batch processing](/sdk/ai-capabilities/batch-processing).
 * Speculative decoding: load with `modelConfig.spec_type` to draft several tokens per step and verify them in one decode, with multi-token-prediction (MTP) layers, the model's own or an external head, or with a separate DFlash draft model. Output keeps the distribution of plain decoding. See [Speculative decoding](#speculative-decoding).
 
+## Backend reporting
+
+Read `backendName` from `await run.stats`, `final.stats`, or a `completionStats` event. It identifies the backend used by the primary model after loading and fitting, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, or `"opencl"`. `backendDevice` remains `"cpu"` or `"gpu"`. The reported backend can differ from the requested `modelConfig.backend` priority list after fallback.
+
+```ts
+const run = completion({
+  modelId,
+  history: [{ role: "user", content: "Hello" }],
+});
+const final = await run.final;
+console.log(final.stats?.backendName);
+```
+
+If placement spans several backend families, `backendName` contains their distinct names in sorted, comma-separated order, such as `"cuda,vulkan"`. It describes the primary model and does not include a separately configured multimodal projector or draft model. Older addons can omit this field. For `batchCompletion()`, read the field from the batch-level `run.stats`.
+
 ## Examples
 
 ### Usage

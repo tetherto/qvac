@@ -300,6 +300,15 @@ test('vlaStatsSchema: accepts architecture-neutral prefill_* timings', (t) => {
   t.is(result.success, true)
 })
 
+test('vlaStatsSchema: preserves optional backendName and rejects invalid types', (t) => {
+  for (const backendName of ['CPU', 'Metal', 'CUDA0']) {
+    t.alike(vlaStatsSchema.parse({ backendName }), { backendName })
+  }
+  for (const backendName of [1, null, ['Metal']]) {
+    t.is(vlaStatsSchema.safeParse({ backendName }).success, false)
+  }
+})
+
 test('vlaStatsSchema: accepts empty stats', (t) => {
   const result = vlaStatsSchema.safeParse({})
   t.is(result.success, true)
@@ -761,7 +770,7 @@ test('vla plugin: dispatches vlaHparams', async function (t) {
 async function withRegisteredVlaModel<T>(
   options: {
     runImpl: (input: unknown) => Promise<{
-      await(): Promise<{ actions: Float32Array; stats?: Record<string, number> }>
+      await(): Promise<{ actions: Float32Array; stats?: Record<string, unknown> }>
     }>
     hparams: { actionDim: number; chunkSize: number }
   },
@@ -798,7 +807,7 @@ test('vlaRun op: decodes base64 inputs and forwards typed arrays to model.run', 
         return {
           await: async () => ({
             actions: expectedActions,
-            stats: { total_ms: 100 }
+            stats: { total_ms: 100, backendName: 'Metal' }
           })
         }
       },
@@ -836,6 +845,7 @@ test('vlaRun op: decodes base64 inputs and forwards typed arrays to model.run', 
       t.is(result.actionDim, 3)
       t.is(result.chunkSize, 1)
       t.is(result.stats?.total_ms, 100)
+      t.is(result.stats?.backendName, 'Metal')
       // Round-trip the actions base64 by decoding here (mirrors what the
       // client does).
       const actionsB64 = result.actions

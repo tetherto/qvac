@@ -16,6 +16,7 @@ The same `vla()` interface drives multiple policy families that differ in (i) ho
 - `"patches"`: each `images[]` entry is a pre-patchified buffer of `vlaHparams().imagePatchElems` floats, not a `3·w·h` pixel plane. A real consumer patchifies each camera frame the way `Gr00tPolicy` does, and the model's learned patch-embed runs inside the addon.
 
 `vla()` returns the produced action chunk together with per-stage timing stats.
+The optional `stats.backendName` matches `vlaHparams().backendName` and reports the selected backend after fallback. `modelConfig.backend` sets the priority order. Older addons omit the stats field.
 
 ## Functions
 
