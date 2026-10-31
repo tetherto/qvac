@@ -4,7 +4,7 @@ description: A local AI SDK for building cross-platform, P2P applications and sy
 ogImage: /og-home.png
 ---
 
-import { MessagesSquare, Hash, Languages, Mic, Music, Speech, Volume2, ScanText, Image as ImageIcon, Video, Rotate3d, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Brain, DoorOpen, Server, MonitorPlay, ListChecks, ArrowDownWideNarrow } from 'lucide-react'
+import { MessagesSquare, Hash, Languages, Mic, Music, Speech, Volume2, ScanText, Image as ImageIcon, Video, Rotate3d, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Brain, DoorOpen, Server, MonitorPlay, ListChecks, ArrowDownWideNarrow, ScanEye } from 'lucide-react'
 import { SiKotlin, SiPython, SiTypescript } from '@icons-pack/react-simple-icons'
 
 ## Why QVAC?
@@ -78,6 +78,11 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   <Card href="/sdk/ai-capabilities/reranking" title={<span className="inline-flex items-center gap-2"><ArrowDownWideNarrow className="size-4 text-[var(--color-fd-primary)]" />Reranking</span>}>
     Score documents by relevance to a query to reorder search and retrieval results via a cross-encoder reranker.
   </Card>
+  {/* Parked until the cutoff publishes the line that carries the page.
+  <Card href="/sdk/ai-capabilities/image-embeddings" title={<span className="inline-flex items-center gap-2"><ScanEye className="size-4 text-[var(--color-fd-primary)]" />Image embeddings</span>}>
+    Generate image descriptors for visual place recognition and retrieval via MegaLoc on GGML.
+  </Card>
+  */}
 </Cards>
 
 ## System overview

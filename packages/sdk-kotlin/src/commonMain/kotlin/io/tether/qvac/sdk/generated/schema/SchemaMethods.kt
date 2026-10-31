@@ -44,6 +44,8 @@ fun QvacClient.downloadAssetWithProgress(request: io.tether.qvac.sdk.generated.s
 
 suspend fun QvacClient.`embed`(request: io.tether.qvac.sdk.generated.schema.EmbedRequest): io.tether.qvac.sdk.generated.schema.EmbedResponse = callTyped(request)
 
+suspend fun QvacClient.`embedImage`(request: io.tether.qvac.sdk.generated.schema.EmbedImageRequest): io.tether.qvac.sdk.generated.schema.EmbedImageResponse = callTyped(request)
+
 suspend fun QvacClient.`finetune`(request: io.tether.qvac.sdk.generated.schema.FinetuneRequest): io.tether.qvac.sdk.generated.schema.FinetuneResponse = callTyped(request)
 fun QvacClient.finetuneWithProgress(request: io.tether.qvac.sdk.generated.schema.FinetuneRequest): Flow<QvacProgressEvent<io.tether.qvac.sdk.generated.schema.FinetuneProgressResponse, io.tether.qvac.sdk.generated.schema.FinetuneResponse>> = progressTyped(request, progressType = "finetune:progress")
 

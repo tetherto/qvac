@@ -107,6 +107,12 @@
       "responseSchema": "schema.json#/$defs/embed.response"
     },
     {
+      "name": "embedImage",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/embedImage.request",
+      "responseSchema": "schema.json#/$defs/embedImage.response"
+    },
+    {
       "name": "finetune",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/finetune.request",
