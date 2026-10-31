@@ -177,6 +177,8 @@ declare namespace VlaModel {
         total_ms: number;
         /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
         backendDevice: number;
+        /** Selected backend name, matching `model.backendName`. Older addons omit it. */
+        backendName?: string;
     }
     interface VlaRunResult {
         actions: Float32Array;

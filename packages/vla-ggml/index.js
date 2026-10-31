@@ -456,7 +456,10 @@ class VlaModel {
             return;
         }
         if (outputData && typeof outputData === "object") {
-            const stats = outputData;
+            const stats = {
+                ...outputData,
+                ...(this._backendName !== null && { backendName: this._backendName }),
+            };
             const actions = this._pending ? this._pending.actions : null;
             this._pending = null;
             this._job.end(this.opts.stats ? stats : null, { actions, stats });

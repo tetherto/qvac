@@ -51,6 +51,8 @@ async function exerciseRun(): Promise<VlaModel.VlaRunResult> {
   const result: VlaModel.VlaRunResult = await response.await();
   const stats: VlaModel.VlaRunStats = result.stats;
   void stats;
+  const backendName: string | undefined = stats.backendName;
+  void backendName;
   return result;
 }
 void exerciseRun;
