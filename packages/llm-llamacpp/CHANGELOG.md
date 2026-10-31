@@ -30,7 +30,7 @@
   OpenAI content-parts request, instead of the split turns the one-message-per-
   part workaround produces. Media parts on non-user messages and unknown part
   types are rejected with `InvalidInputFormat`
-  ([#5479](https://github.com/tetherto/qvac/pull/5504)).
+  ([#5504](https://github.com/tetherto/qvac/pull/5504)).
 
 ## [0.65.1] - 2026-10-29
 
