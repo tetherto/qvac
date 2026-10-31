@@ -9,7 +9,7 @@
   can interleave text and images. Use it when the position of an image inside
   the text matters — options, captions or steps that are pictures — which
   `attachments` cannot express because it sends every image before the text
-  ([#5480](https://github.com/tetherto/qvac/pull/5480)).
+  ([#5480](https://github.com/tetherto/qvac/pull/5505)).
 
 ## [0.22.0]
 
