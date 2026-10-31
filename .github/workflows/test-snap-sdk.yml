@@ -137,7 +137,7 @@ jobs:
       comment-ids: ${{ steps.report.outputs.comment-ids }}
       platform-keys: ${{ steps.keys.outputs.platforms }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: .github/actions/sdk-e2e-report-start
           sparse-checkout-cone-mode: false
@@ -204,7 +204,7 @@ jobs:
         shell: bash
         working-directory: .
         if: runner.environment != 'github-hosted'
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -221,7 +221,7 @@ jobs:
       # older test-version, still has to run the workflow it was given. Actions
       # they call by ./.github/actions/... still resolve in the checkout above.
       - name: Check out the shared e2e actions
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.workflow_sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -233,7 +233,7 @@ jobs:
             .github/actions/sdk-e2e-node-results
             .github/actions/sdk-e2e-node-run
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # 7.1.0
         with:
           node-version: 22
 
@@ -385,7 +385,7 @@ jobs:
       - name: Restore Snap models cache
         id: snap-models-cache
         if: steps.snap-model-requirements.outputs.required == 'true' && inputs.cache-models != false
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           path: ~/snap/qvac-sdk-e2e/common/.qvac/models
           key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
@@ -401,7 +401,7 @@ jobs:
 
       - name: Save Snap models cache
         if: steps.snap-model-requirements.outputs.required == 'true' && steps.snap-models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           path: ~/snap/qvac-sdk-e2e/common/.qvac/models
           key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
@@ -425,7 +425,7 @@ jobs:
       # Snap is Linux-only, so the artifact name does not wait on the leg.
       - name: Upload Snap artifacts
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: snap-artifacts-linux
           path: ${{ inputs.working-directory }}/snap/dist/*.snap
@@ -472,7 +472,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: .github/actions/sdk-e2e-report-finalize
           sparse-checkout-cone-mode: false

@@ -87,14 +87,14 @@ jobs:
     steps:
       # fetch-depth: 0 is load-bearing: shallow, dorny cannot resolve
       # github.event.before and reports every file as added, selecting all addons.
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
 
       - name: Filter changed packages
         id: filter
         if: github.event_name == 'push'
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # 4.0.3
         with:
           # base == this branch so dorny diffs the push delta, not against main
           # (where these project.json don't exist yet, so all 14 would match).
@@ -236,7 +236,7 @@ jobs:
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
       - id: logic
-        uses: tetherto/qvac-actions/npm-publish-logic@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        uses: tetherto/qvac-actions/npm-publish-logic@be92c8789aa507dd3d94c8c3cd9cede99ca3b069 # 0.5.0
 
   release-merge-guard:
     name: Release Merge Guard (${{ matrix.package }})
@@ -254,7 +254,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
@@ -366,7 +366,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Not left in .git/config while the publish steps run, as on main.
@@ -467,7 +467,7 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Not left in .git/config while the publish steps run, as on main.
@@ -512,7 +512,7 @@ jobs:
 
       - name: Determine dist-tag
         id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@be92c8789aa507dd3d94c8c3cd9cede99ca3b069 # 0.5.0
         with:
           workdir: ${{ matrix.workdir }}
           # `|| 'latest'` restores the five packages that forced it on a push;
@@ -532,7 +532,7 @@ jobs:
 
       - name: Set up Node.js for platform package publish
         if: matrix.slicePlatformPackages
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # 7.1.0
         with:
           node-version: "24.14.1"
           registry-url: https://registry.npmjs.org/
@@ -602,7 +602,7 @@ jobs:
 
       - name: Publish to npm
         id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@be92c8789aa507dd3d94c8c3cd9cede99ca3b069 # 0.5.0
         with:
           workdir: ${{ matrix.workdir }}
           tag: ${{ steps.dist-tag.outputs.tag }}
