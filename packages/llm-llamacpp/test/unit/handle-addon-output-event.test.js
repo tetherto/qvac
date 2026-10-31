@@ -25,11 +25,12 @@ function createStub(defaultImpl = () => {}) {
 
 // parallel: 4 puts the model on the tagged multi-job path (_maxConcurrency > 1);
 // inference routing goes solely through _jobSinks at every parallel value.
-function createModel() {
+function createModel(opts = {}) {
   const model = new LlmLlamacpp({
     files: { model: ['/tmp/test.gguf'] },
     config: { device: 'cpu', ctx_size: '256', parallel: '4' },
-    logger: { info() {}, warn() {}, error() {}, debug() {} }
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    opts
   })
   model.addon = { runJob: createStub(), activeJobs: () => 0 }
   return model
@@ -62,6 +63,32 @@ test('two concurrent jobs receive only their own output', async (t) => {
   t.absent(out1.includes('BBB'), 'job 1 must not see job 2 output')
   t.ok(out2.includes('BBB'), 'job 2 gets its own token')
   t.absent(out2.includes('AAA'), 'job 2 must not see job 1 output')
+})
+
+test('native backend names reach single responses only when stats are enabled', async (t) => {
+  for (const stats of [true, false]) {
+    const model = createModel({ stats })
+    model.addon.runJob.callsFake(() => ({ accepted: true, id: 1 }))
+    const response = await model._runInternal([{ role: 'user', content: 'a' }])
+    const updates = []
+    response.on('stats', (value) => updates.push(value))
+    model._addonOutputCallback(
+      null,
+      'Stats',
+      { TPS: 1, backendDevice: 1, backendName: 'vulkan' },
+      null,
+      1
+    )
+    await response.await()
+    if (stats) {
+      t.is(response.stats.backendName, 'vulkan')
+      t.is(response.stats.backendDevice, 'gpu')
+      t.is(updates[0].backendName, 'vulkan', 'the stats event includes the native name')
+    } else {
+      t.alike(response.stats, {}, 'disabled stats do not expose the backend name')
+      t.alike(updates, [], 'disabled stats emit no stats event')
+    }
+  }
 })
 
 test('a throwing stats listener cannot strand a completed job', async (t) => {
@@ -152,9 +179,21 @@ test('two concurrent batch groups route chunks, results and stats independently'
 
   // Terminal events are tagged with the group's native job id.
   model._handleAddonOutputEvent('BatchResult', ['outA1', 'outA2'], null, 11)
-  model._handleAddonOutputEvent('JobEnded', { TPS: 5, generatedTokens: 7 }, null, 11)
+  model._addonOutputCallback(
+    null,
+    'Stats',
+    { TPS: 5, generatedTokens: 7, backendDevice: 1, backendName: 'cuda,vulkan' },
+    null,
+    11
+  )
   model._handleAddonOutputEvent('BatchResult', ['outB1', 'outB2'], null, 12)
-  model._handleAddonOutputEvent('JobEnded', { TPS: 9, generatedTokens: 3 }, null, 12)
+  model._addonOutputCallback(
+    null,
+    'Stats',
+    { TPS: 9, generatedTokens: 3, backendDevice: 1, backendName: 'cuda,vulkan' },
+    null,
+    12
+  )
 
   const resultsA = await groupA.await()
   const resultsB = await groupB.await()
@@ -179,6 +218,8 @@ test('two concurrent batch groups route chunks, results and stats independently'
   )
   t.is(groupA.stats.TPS, 5, 'group A carries its own per-group stats')
   t.is(groupB.stats.TPS, 9, 'group B carries its own per-group stats')
+  t.is(groupA.stats.backendName, 'cuda,vulkan', 'group A retains the native backend families')
+  t.is(groupB.stats.backendName, 'cuda,vulkan', 'group B retains the native backend families')
 })
 
 test('a tagged batch Error fails only its group; the peer group still completes', async (t) => {

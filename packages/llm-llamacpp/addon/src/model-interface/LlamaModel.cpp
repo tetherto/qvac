@@ -41,6 +41,7 @@
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/JsonDepth.hpp"
+#include "utils/LlamaRuntimeBackend.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
 #include "utils/ScopeGuard.hpp"
@@ -387,6 +388,15 @@ void LlamaModel::init(bool acquireLock) {
 
   if (!snap.promoteToWrite()) {
     return;
+  }
+
+  if (llamaInit && llamaInit->context() != nullptr) {
+    const auto backendName = qvac_lib_inference_addon_llama::backend_reporting::
+        runtimeModelBackendName(llamaInit->context());
+    runtimeBackendName_->set(backendName);
+    if (!backendName.empty()) {
+      runtimeBackendDevice_ = backendName == "cpu" ? 0 : 1;
+    }
   }
 
   std::unique_ptr<

@@ -184,6 +184,13 @@ const stats: LlmLlamacpp.RuntimeStats = {
   draftAcceptedTokens: 6,
 };
 void stats;
+const backendName: string | undefined = stats.backendName;
+void backendName;
+const namedStats: LlmLlamacpp.RuntimeStats = { ...stats, backendName: "cuda,vulkan" };
+void namedStats;
+// @ts-expect-error - backendName is a string, unlike the native device enum
+const numericBackendName: LlmLlamacpp.RuntimeStats = { ...stats, backendName: 1 };
+void numericBackendName;
 const numericLike: LlmLlamacpp.NumericLike = "42";
 void numericLike;
 

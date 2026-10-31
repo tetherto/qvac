@@ -1629,6 +1629,11 @@ namespace LlmLlamacpp {
     avgConcurrentSeq: number;
     backendDevice: "cpu" | "gpu";
     /**
+     * Lowercase backend family used by the primary model, such as `cpu` or `cuda`.
+     * Mixed families are distinct, sorted, and comma-separated. Older addons omit it.
+     */
+    backendName?: string;
+    /**
      * Draft tokens proposed by speculative decoding, and how many of them
      * the model accepted (llama-server's `draft_n` / `draft_n_accepted`).
      * Present only when the model was loaded with `spec_type`.
