@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "offset": 0,
+  "schema": [
+    {
+      "name": "spaces",
+      "namespace": "rag",
+      "id": 0,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/spaces",
+      "derived": false,
+      "key": [
+        "spaceId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "namespaces",
+      "namespace": "rag",
+      "id": 1,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/namespaces",
+      "derived": false,
+      "key": [
+        "name"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "documents",
+      "namespace": "rag",
+      "id": 2,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/documents",
+      "derived": false,
+      "key": [
+        "namespace",
+        "documentId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "chunks",
+      "namespace": "rag",
+      "id": 3,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/chunks",
+      "derived": false,
+      "key": [
+        "namespace",
+        "documentId",
+        "generation",
+        "ordinal"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "nativeIds",
+      "namespace": "rag",
+      "id": 4,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/nativeIds",
+      "derived": false,
+      "key": [
+        "namespace",
+        "nativeId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "mutations",
+      "namespace": "rag",
+      "id": 5,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/mutations",
+      "derived": false,
+      "key": [
+        "namespace",
+        "revision"
+      ],
+      "trigger": null
+    }
+  ]
+}

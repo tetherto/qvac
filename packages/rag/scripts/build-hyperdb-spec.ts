@@ -7,139 +7,131 @@ import Hyperschema from 'hyperschema'
 const scriptDir = path.dirname(url.fileURLToPath(import.meta.url))
 const packageRoot = path.join(scriptDir, '..')
 
-const SCHEMA_DIR = path.join(packageRoot, 'src', 'adapters', 'database', 'hyperspec', 'hyperschema')
-const DB_DIR = path.join(packageRoot, 'src', 'adapters', 'database', 'hyperspec', 'hyperdb')
+const SCHEMA_DIR = path.join(packageRoot, 'src', 'db', 'hyperspec', 'hyperschema')
+const DB_DIR = path.join(packageRoot, 'src', 'db', 'hyperspec', 'hyperdb')
 
 buildRAGSchema()
 buildRAGDatabase()
 
-// Builds the RAG schema specification using hyperschema.
+// Native IDs are u64 values stored as 8 big-endian bytes, since HyperDB keys
+// cannot hold a BigInt and big-endian bytes sort in numeric order.
 function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
   const schema = Hyperschema.from(schemaDir)
   const rag = schema.namespace('rag')
 
-  // Register the Document type
+  rag.register({
+    name: 'spaces',
+    fields: [
+      { name: 'spaceId', type: 'string', required: true },
+      { name: 'model', type: 'string', required: true },
+      { name: 'revision', type: 'string', required: true },
+      { name: 'dimensions', type: 'uint', required: true },
+      { name: 'metric', type: 'string', required: true },
+      { name: 'normalized', type: 'bool', required: true },
+      { name: 'documentEncoding', type: 'string', required: true },
+      { name: 'queryEncoding', type: 'string', required: true },
+      { name: 'preprocessing', type: 'string', required: true }
+    ]
+  })
+
+  rag.register({
+    name: 'namespaces',
+    fields: [
+      { name: 'name', type: 'string', required: true },
+      { name: 'spaceId', type: 'string', required: true },
+      { name: 'revision', type: 'uint', required: true },
+      { name: 'nextNativeId', type: 'buffer', required: true },
+      { name: 'createdAt', type: 'date', required: true }
+    ]
+  })
+
   rag.register({
     name: 'documents',
     fields: [
-      { name: 'id', type: 'string', required: true },
-      { name: 'content', type: 'string', required: true },
+      { name: 'namespace', type: 'string', required: true },
+      { name: 'documentId', type: 'string', required: true },
+      { name: 'generation', type: 'uint', required: true },
+      { name: 'chunkCount', type: 'uint', required: true },
       { name: 'contentHash', type: 'string', required: true },
-      { name: 'createdAt', type: 'date', required: true },
-      { name: 'updatedAt', type: 'date', required: true },
-      { name: 'metadata', type: 'json', required: false }
-    ]
-  })
-
-  // Register the Vector type
-  rag.register({
-    name: 'vectors',
-    fields: [
-      { name: 'docId', type: 'string', required: true },
-      { name: 'vector', type: 'json', required: true },
-      { name: 'createdAt', type: 'date', required: true }
-    ]
-  })
-
-  // Register the Centroid type
-  rag.register({
-    name: 'centroids',
-    fields: [
-      { name: 'id', type: 'string', required: true },
-      { name: 'vector', type: 'json', required: true },
-      { name: 'index', type: 'uint32', required: true },
-      { name: 'createdAt', type: 'date', required: true }
-    ]
-  })
-
-  // Register the IVF Bucket type
-  rag.register({
-    name: 'ivfBuckets',
-    fields: [
-      { name: 'centroidId', type: 'string', required: true },
-      { name: 'documentIds', type: 'json', required: true },
-      { name: 'capacity', type: 'uint32', required: true },
-      { name: 'createdAt', type: 'date', required: true },
-      { name: 'updatedAt', type: 'date', required: true }
-    ]
-  })
-
-  // Register the Config type
-  rag.register({
-    name: 'config',
-    fields: [
-      { name: 'key', type: 'string', required: true },
-      { name: 'embeddingModelId', type: 'string', required: true },
-      { name: 'dimension', type: 'uint32', required: true },
-      { name: 'NUM_CENTROIDS', type: 'uint32', required: true },
-      { name: 'BUCKET_SIZE', type: 'uint32', required: true },
-      { name: 'BATCH_SIZE', type: 'uint32', required: true },
-      { name: 'createdAt', type: 'date', required: true }
-    ]
-  })
-
-  rag.register({
-    name: 'workspaceState',
-    fields: [
-      { name: 'key', type: 'string', required: true },
-      { name: 'revision', type: 'uint32', required: true },
+      { name: 'metadata', type: 'json', required: false },
       { name: 'updatedAt', type: 'date', required: true }
     ]
   })
 
   rag.register({
-    name: 'mutations',
+    name: 'chunks',
     fields: [
-      { name: 'revision', type: 'uint32', required: true },
-      { name: 'operation', type: 'string', required: true },
-      { name: 'documentIds', type: 'json', required: true },
-      { name: 'createdAt', type: 'date', required: true }
+      { name: 'namespace', type: 'string', required: true },
+      { name: 'documentId', type: 'string', required: true },
+      { name: 'generation', type: 'uint', required: true },
+      { name: 'ordinal', type: 'uint', required: true },
+      { name: 'chunkId', type: 'string', required: true },
+      { name: 'content', type: 'string', required: true },
+      { name: 'metadataJson', type: 'string', required: false },
+      { name: 'nativeId', type: 'buffer', required: true },
+      { name: 'vector', type: 'buffer', required: true }
     ]
   })
 
   rag.register({
     name: 'nativeIds',
     fields: [
-      { name: 'nativeId', type: 'string', required: true },
+      { name: 'namespace', type: 'string', required: true },
+      { name: 'nativeId', type: 'buffer', required: true },
       { name: 'documentId', type: 'string', required: true },
-      { name: 'mappingVersion', type: 'uint32', required: true },
+      { name: 'generation', type: 'uint', required: true },
+      { name: 'ordinal', type: 'uint', required: true }
+    ]
+  })
+
+  // `added` and `removed` hold packed native IDs, 8 big-endian bytes each.
+  rag.register({
+    name: 'mutations',
+    fields: [
+      { name: 'namespace', type: 'string', required: true },
+      { name: 'revision', type: 'uint', required: true },
+      { name: 'added', type: 'buffer', required: true },
+      { name: 'removed', type: 'buffer', required: true },
       { name: 'createdAt', type: 'date', required: true }
     ]
   })
 
   Hyperschema.toDisk(schema, { esm: false })
 
-  console.log('✅ RAG HyperDB schema generated successfully!')
+  console.log('RAG HyperDB schema generated')
 }
 
-// Builds the RAG database specification using hyperschema and the hyperdb builder.
 function buildRAGDatabase(schemaDir: string = SCHEMA_DIR, dbDir: string = DB_DIR) {
   const db = HyperDB.from(schemaDir, dbDir)
   const dbNs = db.namespace('rag')
 
-  // Register collections
-  dbNs.collections.register({ name: 'documents', schema: '@rag/documents', key: ['id'] })
-  dbNs.collections.register({ name: 'vectors', schema: '@rag/vectors', key: ['docId'] })
-  dbNs.collections.register({ name: 'centroids', schema: '@rag/centroids', key: ['id'] })
-  dbNs.collections.register({ name: 'ivfBuckets', schema: '@rag/ivfBuckets', key: ['centroidId'] })
-  dbNs.collections.register({ name: 'config', schema: '@rag/config', key: ['key'] })
-  dbNs.collections.register({ name: 'workspaceState', schema: '@rag/workspaceState', key: ['key'] })
-  dbNs.collections.register({ name: 'mutations', schema: '@rag/mutations', key: ['revision'] })
-  dbNs.collections.register({ name: 'nativeIds', schema: '@rag/nativeIds', key: ['nativeId'] })
-
-  // Register indexes
-  dbNs.indexes.register({
-    name: 'doc-by-content-hash',
-    collection: '@rag/documents',
-    key: ['contentHash']
+  dbNs.collections.register({ name: 'spaces', schema: '@rag/spaces', key: ['spaceId'] })
+  dbNs.collections.register({ name: 'namespaces', schema: '@rag/namespaces', key: ['name'] })
+  dbNs.collections.register({
+    name: 'documents',
+    schema: '@rag/documents',
+    key: ['namespace', 'documentId']
+  })
+  dbNs.collections.register({
+    name: 'chunks',
+    schema: '@rag/chunks',
+    key: ['namespace', 'documentId', 'generation', 'ordinal']
+  })
+  dbNs.collections.register({
+    name: 'nativeIds',
+    schema: '@rag/nativeIds',
+    key: ['namespace', 'nativeId']
+  })
+  dbNs.collections.register({
+    name: 'mutations',
+    schema: '@rag/mutations',
+    key: ['namespace', 'revision']
   })
 
   HyperDB.toDisk(db, { esm: false })
   removeUnusedRuntimeImport(path.join(dbDir, 'index.js'))
 
-  console.log('✅ RAG HyperDB specification built successfully!')
-  console.log(`📁 Schema saved to: ${schemaDir}`)
-  console.log(`📁 Database files saved to: ${dbDir}`)
+  console.log(`RAG HyperDB spec written to ${dbDir}`)
 }
 
 // The hyperdb builder emits an unused `c` binding in its runtime import; drop it
