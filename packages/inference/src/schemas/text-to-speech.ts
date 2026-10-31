@@ -1503,6 +1503,12 @@ export interface TextToSpeechStreamResult {
   /** MOSS-Speech reply text; resolved when the run finishes. */
   text: Promise<string | undefined>
   bufferStream: AsyncGenerator<number>
+  /**
+   * The PCM of `bufferStream` as one `Float32Array` per response frame.
+   * Shares the run with `bufferStream` in plain streaming mode, so iterate one
+   * of the two. Empty when `stream: false`.
+   */
+  chunkStream: AsyncGenerator<Float32Array>
   chunkUpdates?: AsyncGenerator<TtsSentenceChunkUpdate>
   buffer: Promise<number[]>
   done: Promise<boolean>
