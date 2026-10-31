@@ -25,6 +25,7 @@ export const methodShapes = {
   diffusionStream: 'stream',
   downloadAsset: 'reply',
   embed: 'reply',
+  embedImage: 'reply',
   decide: 'reply',
   rerank: 'reply',
   finetune: 'reply',

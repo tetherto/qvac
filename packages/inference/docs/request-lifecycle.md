@@ -25,6 +25,13 @@ Cancellation capability is explicit:
 - soft cancellation stops observing or yielding a result when the addon cannot be
   interrupted safely.
 
+MegaLoc's `embedImage` handler uses the `imageEmbedding` request kind. Calls wait
+in a bounded FIFO queue per model, with one active call and at most 64 waiting.
+Cancelling a queued call removes it before native inference starts. MegaLoc has
+no public cancel method, so cancelling an active call discards its result after
+native inference finishes. The model slot stays occupied until that point. Its
+plugin declares `cancel: { scope: 'none' }`.
+
 ## Caller-ended streams
 
 A stream that waits on a source outside the registry, such as a log subscription,
