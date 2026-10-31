@@ -177,8 +177,11 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
           }
         }
       )
-      const initialResult = await initialHandle.result
-      const initialProgress = await initialProgressPromise
+      // A failed run rejects both; an unawaited rejection kills the consumer.
+      const [initialResult, initialProgress] = await Promise.all([
+        initialHandle.result,
+        initialProgressPromise
+      ])
       let pauseResult: FinetuneResult | null = null
       if (pausePromise !== null) {
         pauseResult = await pausePromise

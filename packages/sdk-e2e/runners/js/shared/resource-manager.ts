@@ -1,4 +1,11 @@
-import { loadModel, downloadAsset, unloadModel, cancel } from '@qvac/sdk'
+import {
+  loadModel,
+  downloadAsset,
+  unloadModel,
+  cancel,
+  getLoadedModelInfo,
+  SDK_SERVER_ERROR_CODES
+} from '@qvac/sdk'
 import type { ModelConstant } from '@qvac/sdk'
 import {
   resolveBootstrapDownloadConcurrency,
@@ -102,6 +109,8 @@ export interface ResourceManagerOptions {
    */
   unloadSettleMs?: number
   downloadTarget?: BootstrapDownloadTarget
+  /** Keys never kept loaded between tests (`singleUseResources` in catalog/platform-policy.ts). */
+  singleUseResources?: readonly string[]
 }
 
 export class ResourceManager {
@@ -112,10 +121,12 @@ export class ResourceManager {
   private downloaded = false
   private readonly unloadSettleMs: number
   private readonly downloadTarget: BootstrapDownloadTarget
+  private readonly singleUseResources: readonly string[]
 
   constructor(options: ResourceManagerOptions = {}) {
     this.unloadSettleMs = options.unloadSettleMs ?? 0
     this.downloadTarget = options.downloadTarget ?? 'desktop'
+    this.singleUseResources = options.singleUseResources ?? []
   }
 
   private async resolveConfig(dep: string, def: ModelDefinition): Promise<ModelConfig | undefined> {
@@ -305,6 +316,28 @@ export class ResourceManager {
     return this.models.get(dep)?.modelId ?? null
   }
 
+  /**
+   * Drops tracked models the worker no longer holds. A crashed worker is respawned empty, and
+   * its old ids would fail every later test with MODEL_NOT_FOUND.
+   */
+  async forgetLostModels(): Promise<void> {
+    const lost: string[] = []
+    for (const [dep, entry] of this.models) {
+      try {
+        await getLoadedModelInfo({ modelId: entry.modelId })
+      } catch (error) {
+        const code = (error as { code?: unknown } | null)?.code
+        if (code === SDK_SERVER_ERROR_CODES.MODEL_NOT_FOUND) lost.push(dep)
+      }
+    }
+    for (const dep of lost) {
+      this.models.delete(dep)
+    }
+    if (lost.length > 0) {
+      console.warn(`♻️  Worker lost ${lost.join(', ')}; reloading on next use`)
+    }
+  }
+
   async evictExcept(keep: string[]): Promise<string[]> {
     const keepSet = new Set(keep)
     const evicted: string[] = []
@@ -356,6 +389,13 @@ export class ResourceManager {
       }
 
       this.models.delete(dep)
+    }
+  }
+
+  /** Unloads the keys this platform never keeps between tests. */
+  async evictSingleUse(): Promise<void> {
+    for (const dep of this.singleUseResources) {
+      await this.evict(dep)
     }
   }
 

@@ -61,7 +61,7 @@ class InterpreterTest {
 
     private fun interpreter(transport: FakeTransport, table: Map<String, Any?> = emptyMap()): Interpreter {
         val client = QvacClient(transport)
-        val resources = Resources(client, table, "mobile-android", noHost, {}, unloadSettleMs = 0)
+        val resources = Resources(client, table, "mobile-android", noHost, {}, unloadSettleMs = 0, singleUseResources = emptyList())
         val calls = Calls(Wire(client), resources, Files.createTempDirectory("scratch").toFile())
         return Interpreter(resources, calls, Files.createTempDirectory("fixtures").toFile(), {})
     }
@@ -333,6 +333,32 @@ class InterpreterTest {
         val missing = interpreter.run("""{"steps": [{"useModel": {"deps": ["desktop-only"]}}]}""")
         assertTrue(missing.incomplete, missing.output)
         assertEquals("unloadModel", transport.requests.last()["type"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `only single-use resources are unloaded when a test ends`() = runTest {
+        var next = 0
+        val transport = FakeTransport(
+            replies = mapOf(
+                "loadModel" to { json("""{"type":"loadModel","success":true,"modelId":"id-${++next}"}""") },
+                "unloadModel" to { json("""{"type":"unloadModel","success":true}""") },
+                "cancel" to { json("""{"type":"cancel","success":true}""") },
+            ),
+        )
+        val table = mapOf<String, Any?>(
+            "ocr" to mapOf("modelSrc" to "ocr", "type" to "llm"),
+            "llm" to mapOf("modelSrc" to "llm", "type" to "llm"),
+        )
+        val resources = Resources(QvacClient(transport), table, "mobile-android", noHost, {}, unloadSettleMs = 0, singleUseResources = listOf("ocr"))
+        resources.ensureLoaded("ocr")
+        val llm = resources.ensureLoaded("llm")
+
+        resources.evictSingleUse()
+
+        val unloads = transport.requests.filter { it["type"]!!.jsonPrimitive.content == "unloadModel" }
+        assertEquals(listOf("id-1"), unloads.map { it["modelId"]!!.jsonPrimitive.content })
+        assertEquals(llm, resources.ensureLoaded("llm"), "a key outside the policy stays loaded")
+        assertEquals("id-3", resources.ensureLoaded("ocr"), "the next test loads a fresh model")
     }
 }
 
