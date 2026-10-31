@@ -156,12 +156,15 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
   ): Promise<TestResult> {
     try {
       const modelId = await this.ensureModel(dep)
-      const { hparams } = await vlaHparams({ modelId })
+      const { hparams, backendName } = await vlaHparams({ modelId })
       const inputs = this.buildSyntheticInputs(hparams)
       const { actions, actionDim, chunkSize, stats } = await vla({
         modelId,
         ...inputs
       })
+      if (!backendName || stats?.backendName !== backendName) {
+        return { passed: false, output: 'VLA run stats disagree with the selected backend' }
+      }
       // Surface a flat result shape to the test's `fn` so the assertions
       // in vla-tests.ts can stay framework-agnostic.
       return ValidationHelpers.validate(

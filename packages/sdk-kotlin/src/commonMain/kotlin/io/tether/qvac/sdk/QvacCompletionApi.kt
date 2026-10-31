@@ -198,6 +198,7 @@ data class QvacCompletionStats(
     val averageConcurrentSequences: Double? = null,
     val backendDevice: String? = null,
     val raw: JsonObject,
+    val backendName: String? = null,
 )
 
 data class QvacToolCall(
@@ -526,6 +527,7 @@ private fun CompletionStreamResponseEventsItemCompletionStatsStats.toCompletionS
         emittedTokens = emittedTokens,
         averageConcurrentSequences = avgConcurrentSeq,
         backendDevice = backendDevice?.let { json.wireName(it) },
+        backendName = backendName,
         raw = raw,
     )
 

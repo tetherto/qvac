@@ -20,6 +20,7 @@ import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor
 import { HttpEmbeddingExecutor } from '../shared/executors/http-embedding-executor.js'
 import { SpeculativeDecodingExecutor } from '../shared/executors/speculative-decoding-executor.js'
 import { KvCacheExecutor } from '../shared/executors/kv-cache-executor.js'
+import { BackendNameExecutor } from '../shared/executors/backend-name-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { TranscriptionExecutor } from '../shared/executors/node/transcription-executor.js'
 import { TranscribeStreamEventsExecutor } from '../shared/executors/node/transcribe-stream-events-executor.js'
@@ -146,6 +147,7 @@ export const executor = createExecutor({
     new TranscriptionExecutor(resources),
     new TranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
+    new BackendNameExecutor(resources),
     new RagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
