@@ -14,6 +14,7 @@
 #include "LlamaLazyInitializeBackend.hpp"
 #include "ModelMetadata.hpp"
 #include "inference-addon-cpp/InitLoader.hpp"
+#include "utils/ModelBackendName.hpp"
 
 struct LlamaCommonInitResult {
   common_params params;
@@ -107,6 +108,11 @@ public:
   [[nodiscard]] int64_t runtimeBackendDevice() const {
     return runtimeBackendDevice_;
   }
+  [[nodiscard]] std::shared_ptr<const qvac_lib_inference_addon_embed::
+                                    backend_reporting::RuntimeBackendName>
+  runtimeBackendName() const {
+    return runtimeBackendName_;
+  }
 
 private:
   void init(
@@ -124,5 +130,10 @@ private:
   InitLoader initLoader_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
   int64_t runtimeBackendDevice_ = 0;
+  std::shared_ptr<
+      qvac_lib_inference_addon_embed::backend_reporting::RuntimeBackendName>
+      runtimeBackendName_ =
+          std::make_shared<qvac_lib_inference_addon_embed::backend_reporting::
+                               RuntimeBackendName>();
   ModelMetaData metadata_;
 };

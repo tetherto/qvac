@@ -31,10 +31,19 @@ test('malformed output JSON throws', function (t) {
 })
 
 test('stats payload maps to JobEnded with backendDevice names', function (t) {
-  const gpu = mapLayaEvent('Stats', { forward_passes: 1, total_tokens: 10, backendDevice: 1 }, null)
+  const gpu = mapLayaEvent(
+    'Stats',
+    { forward_passes: 1, total_tokens: 10, backendDevice: 1, backendName: 'metal' },
+    null
+  )
   t.is(gpu.type, 'JobEnded')
   t.is(gpu.data.backendDevice, 'gpu')
   t.is(gpu.data.forward_passes, 1)
+  t.is(gpu.data.backendName, 'metal')
+  t.absent(
+    'backendName' in mapLayaEvent('Stats', { forward_passes: 1, backendDevice: 1 }, null).data,
+    'older addons do not gain an inferred name'
+  )
   t.is(
     mapLayaEvent('Stats', { forward_passes: 1, backendDevice: 0 }, null).data.backendDevice,
     'cpu'
