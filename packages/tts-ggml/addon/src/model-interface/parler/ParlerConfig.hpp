@@ -5,6 +5,8 @@
 
 #include <tts-cpp/lavasr/coreml.h>
 
+#include "inference-addon-cpp/Errors.hpp"
+
 namespace qvac::ttsggml::parler {
 
 // The parler engine's native output rate. Un-enhanced output is tagged with it
@@ -33,6 +35,15 @@ struct ParlerDescriptionFields {
   std::string reverb;       // close | distant
   std::string quality;      // basic | high | very high
 };
+
+inline void validateCoremlComputeUnits(const std::string& units) {
+  if (!units.empty() && units != "all" && units != "cpu_and_ane" &&
+      units != "cpu_and_gpu" && units != "cpu_only") {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "coremlComputeUnits must be all, cpu_and_ane, cpu_and_gpu or cpu_only");
+  }
+}
 
 struct ParlerConfig {
   std::string modelGgufPath;
@@ -70,6 +81,11 @@ struct ParlerConfig {
   std::optional<int> nGpuLayers;
   std::optional<bool> useGpu;
   std::string backendsDir;
+  // Unset preserves EngineOptions defaults. Empty compute units and unset
+  // strict mode inherit the engine's environment/default policy.
+  std::optional<bool> coremlDecoder;
+  std::string coremlComputeUnits;
+  std::optional<bool> coremlStrict;
 
   // LavaSR neural speech enhancement. A non-empty `enhancerGgufPath` is the
   // single switch: when set, the model loads the enhancer GGUF and

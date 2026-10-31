@@ -61,6 +61,74 @@ export type ParlerDescFields = Partial<Record<ParlerFieldKey, string>>;
 // plus the cross-engine conditioning that Parler also renders.
 export type ParlerJobSource = ParlerDescriptionFields & TTSConditioningFields;
 
+export const PARLER_COREML_KEYS = [
+  "coremlDecoder",
+  "coremlComputeUnits",
+  "coremlStrict",
+] as const;
+export const PARLER_COREML_COMPUTE_UNITS = [
+  "all",
+  "cpu_and_ane",
+  "cpu_and_gpu",
+  "cpu_only",
+] as const;
+
+/** Parler-only load/reload controls; never accepted per synthesis job. */
+export interface ParlerCoremlFields {
+  /** Enable the optional decoder sidecar. Omit to keep the engine default. */
+  coremlDecoder?: boolean;
+  /** Omit to inherit the engine's environment/default compute-unit policy. */
+  coremlComputeUnits?: (typeof PARLER_COREML_COMPUTE_UNITS)[number];
+  /** Omit to inherit strict mode; false explicitly permits fallback. */
+  coremlStrict?: boolean;
+}
+
+export function assertParlerCoremlOptions(
+  engine: string,
+  source: object | null | undefined,
+  where: string,
+): void {
+  if (!source) return;
+  const values = source as Record<string, unknown>;
+  const keys = PARLER_COREML_KEYS.filter((key) => values[key] !== undefined);
+  if (keys.length === 0) return;
+  if (engine !== ENGINE_PARLER) {
+    throw new Error(
+      `tts-ggml: ${where}: ${keys.join(", ")} are parler-only options ` +
+        `(engine is ${engine})`,
+    );
+  }
+  for (const key of ["coremlDecoder", "coremlStrict"] as const) {
+    if (values[key] !== undefined && typeof values[key] !== "boolean") {
+      throw new Error(`tts-ggml: ${where}: ${key} must be a boolean`);
+    }
+  }
+  if (
+    values.coremlComputeUnits !== undefined &&
+    !PARLER_COREML_COMPUTE_UNITS.some((value) => value === values.coremlComputeUnits)
+  ) {
+    throw new Error(
+      `tts-ggml: ${where}: coremlComputeUnits must be one of ` +
+        PARLER_COREML_COMPUTE_UNITS.join(", "),
+    );
+  }
+}
+
+export function assertNoPerCallParlerCoreml(
+  source: object | null | undefined,
+  where: string,
+): void {
+  if (!source) return;
+  const values = source as Record<string, unknown>;
+  const keys = PARLER_COREML_KEYS.filter((key) => values[key] !== undefined);
+  if (keys.length > 0) {
+    throw new Error(
+      `tts-ggml: ${where}: ${keys.join(", ")} must be set in the ` +
+        "constructor or reload(), not per call",
+    );
+  }
+}
+
 /**
  * Parler voice-description inputs. Either a free-text `description` (alias
  * `voiceDescription`) or the template fields, rendered natively through
@@ -177,6 +245,7 @@ export function resolveParlerModelPaths(
  * rejected by name.
  */
 export function assertParlerOptions(setup: EngineSetup): void {
+  assertParlerCoremlOptions(setup.engineType, setup.settings, "constructor");
   if (setup.engineType === ENGINE_PARLER) {
     assertParlerDescFieldsConsistent(
       pickParlerDescFields({
@@ -251,6 +320,7 @@ export function resolveParlerJobFields(
 export function buildParlerParams(
   setup: EngineSetup,
 ): TTSConfigurationParams {
+  assertParlerCoremlOptions(setup.engineType, setup.settings, "configuration");
   // Re-checked here (not only in the constructor) so reload({...}) cannot
   // smuggle in a description/template conflict.
   if (setup.settings.description != null) {
@@ -306,6 +376,9 @@ export function buildParlerParams(
   if (setup.settings.normalizeNumbers != null) {
     parameters.normalizeNumbers = !!setup.settings.normalizeNumbers;
   }
+  for (const key of PARLER_COREML_KEYS) {
+    if (setup.settings[key] !== undefined) parameters[key] = setup.settings[key];
+  }
   assignBackendParams(setup, parameters);
   return parameters;
 }
@@ -324,6 +397,7 @@ const PARLER_RELOADABLE_KEYS = [
   "maxFrames",
   "minNewTokens",
   "normalizeNumbers",
+  ...PARLER_COREML_KEYS,
   "seed",
 ] as const;
 
@@ -340,6 +414,7 @@ export function applyParlerReload(
   setup: EngineSetup,
   newConfig: Record<string, unknown>,
 ): void {
+  assertParlerCoremlOptions(setup.engineType, newConfig, "reload");
   if (setup.engineType !== ENGINE_PARLER) return;
   const config = newConfig as ParlerReloadConfig;
   if (

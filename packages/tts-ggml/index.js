@@ -197,6 +197,7 @@ class TTSGgml {
         await this._pocket?.waitCancel();
         this._pocket?.checkReload();
         const normalized = options == null || typeof options !== "object" ? {} : options;
+        (0, parler_1.assertNoPerCallParlerCoreml)(normalized, "runStream");
         if (this._setup.engineType === engineIds_1.ENGINE_POCKET) {
             return this._startStream(() => this._runStreamOrchestrator(text, normalized, (0, jobFields_1.resolveJobFields)(this._setup, normalized, "runStream")));
         }
