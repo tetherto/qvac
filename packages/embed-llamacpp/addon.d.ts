@@ -104,6 +104,11 @@ export interface RuntimeStats {
     trained_context_size: number;
     context_size: number;
     backendDevice: "cpu" | "gpu";
+    /**
+     * Lowercase backend family used by the primary model, such as `cpu` or `cuda`.
+     * Mixed families are distinct, sorted, and comma-separated. Older addons omit it.
+     */
+    backendName?: string;
 }
 export type AddonOutputCallback = (addon: unknown, event: string, data: unknown, error?: Error) => void;
 export interface BertBinding {
