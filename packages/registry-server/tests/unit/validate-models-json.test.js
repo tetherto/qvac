@@ -64,6 +64,19 @@ test('supported engines remain valid for every checked-in registry submission', 
   }
 })
 
+test('MegaLoc submissions use the dedicated image embedding engine', (t) => {
+  const rows = require('../../data/models.prod.json').filter((row) =>
+    row.source.includes('/megaloc/')
+  )
+  t.is(rows.length, 2)
+  t.alike(rows.map((row) => row.quantization).sort(), ['f16', 'f16-q6_k'])
+  for (const row of rows) {
+    t.is(row.engine, 'ggml-image-embedding')
+    t.is(engineToAddon[row.engine], 'classification')
+    t.ok(schema.safeParse(row).success, row.source)
+  }
+})
+
 test('validation runs from the registry package without a sibling SDK directory', (t) => {
   const isolated = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-registry-validation-'))
   t.teardown(() => fs.rmSync(isolated, { recursive: true, force: true }))
