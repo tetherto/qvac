@@ -142,12 +142,13 @@ test('outputs resolve the response, with stats only when asked', async function 
     const response = await runner.run('q')
     t.ok(binding.calls.includes('runJob:encoded:q'), 'the encoded request reaches the binding')
     binding.emit('Output', [1, 2])
-    binding.emit('Stats', { documents: 2 })
+    binding.emit('Stats', { documents: 2, backendDevice: 'gpu', backendName: 'metal' })
     t.alike(await response.await(), [[1, 2]])
     if (stats) {
-      t.alike(response.stats, { documents: 2 })
+      t.alike(response.stats, { documents: 2, backendDevice: 'gpu', backendName: 'metal' })
     } else {
       t.absent(response.stats && response.stats.documents, 'no stats without opts.stats')
+      t.absent(response.stats && response.stats.backendName, 'no backend name without opts.stats')
     }
   }
 })

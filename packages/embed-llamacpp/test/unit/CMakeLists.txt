@@ -10,6 +10,7 @@ add_executable(
   test_app_memory_budget.cpp
   test_async_weights_loader.cpp
   test_backend_selection.cpp
+  test_model_backend_name.cpp
   test_cancel_stale_flag.cpp
   test_bert_model.cpp
   test_laya_model.cpp

@@ -183,6 +183,12 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final;
 
+  [[nodiscard]] std::shared_ptr<const qvac_lib_inference_addon_embed::
+                                    backend_reporting::RuntimeBackendName>
+  runtimeBackendName() const {
+    return loader_.runtimeBackendName();
+  }
+
   bool isLoaded() const;
 
   const common_params& getCommonParams() const;

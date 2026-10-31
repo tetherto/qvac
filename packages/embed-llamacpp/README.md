@@ -230,7 +230,9 @@ const response = await model.run(query)
 const embeddings = await response.await()
 ```
 
-When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `total_tokens`, `total_time_ms`, `tokens_per_second`, `context_size`, `trained_context_size`, and `backendDevice` (`"cpu"` or `"gpu"`). `context_size` is the active runtime llama context size, while `trained_context_size` is the model's trained context size. `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `total_tokens`, `total_time_ms`, `tokens_per_second`, `context_size`, `trained_context_size`, `backendDevice`, and `backendName`. `context_size` is the active runtime llama context size, while `trained_context_size` is the model's trained context size.
+
+The backend fields describe the primary model's final placement after backend selection and fitting. `backendDevice` is `"cpu"` or `"gpu"`. `backendName` is the lowercase backend family, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, `"opencl"`, or `"rpc"`. It reports `"cpu"` when no layers are offloaded. A model split across different backend families reports their distinct names in sorted, comma-separated order, such as `"cuda,vulkan"`. CPU work that accompanies GPU offload and a separately configured projector do not add names. Older native addons omit `backendName`. It is available in terminal stats and the `stats` event.
 
 #### Embed images and audio
 
@@ -383,7 +385,7 @@ Only these keys are accepted, multi-word ones in either spelling (`batch_size` o
 | `main-gpu`, `split-mode`, `tensor-split` | | | GPU selection and multi-GPU split, as in [`config`](#3-create-config) |
 | `verbosity`, `openclCacheDir` | | | As in [`config`](#3-create-config) |
 
-With `opts: { stats: true }`, `response.stats` holds `total_tokens`, `total_time_ms`, `sequences` (one per question and state), `forward_passes`, `batch_size`, `context_size` and `backendDevice`.
+With `opts: { stats: true }`, `response.stats` holds `total_tokens`, `total_time_ms`, `sequences` (one per question and state), `forward_passes`, `batch_size`, `context_size`, `backendDevice`, and `backendName`. The backend fields follow the embedding stats contract above.
 
 ### Errors
 
@@ -473,7 +475,7 @@ Only these keys are accepted, multi-word ones in either spelling; anything else 
 | `backend`, `main-gpu`, `split-mode`, `tensor-split` | | | GPU selection and multi-GPU split, as in [`config`](#3-create-config) |
 | `verbosity`, `openclCacheDir` | | | As in [`config`](#3-create-config) |
 
-With `opts: { stats: true }`, `response.stats` holds `total_tokens`, `total_time_ms`, `documents`, `forward_passes`, `batch_size`, `context_size` and `backendDevice`.
+With `opts: { stats: true }`, `response.stats` holds `total_tokens`, `total_time_ms`, `documents`, `forward_passes`, `batch_size`, `context_size`, `backendDevice`, and `backendName`. The backend fields follow the embedding stats contract above.
 
 ### Errors
 

@@ -1,4 +1,5 @@
 #pragma once
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -33,6 +34,7 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "JsBackendRuntimeStatsOutputHandler.hpp"
 #include "model-interface/BertModel.hpp"
 #include "model-interface/LayaModel.hpp"
 #include "model-interface/LlamaLazyInitializeBackend.hpp"
@@ -541,6 +543,10 @@ js_value_t* createModelInstance(js_env_t* env, js_callback_info_t* info) {
   }
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+  outHandlers.add(
+      make_shared<qvac_lib_inference_addon_embed::backend_reporting::
+                      JsBackendRuntimeStatsOutputHandler>(
+          model->runtimeBackendName()));
   outHandlers.add(make_shared<OutputHandlerT>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,

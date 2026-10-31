@@ -25,6 +25,7 @@
 #include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "logging.hpp"
 #include "utils.hpp"
+#include "utils/LlamaRuntimeBackend.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
 using namespace qvac_lib_infer_llamacpp_embed::logging;
@@ -617,6 +618,12 @@ void LlamaModelLoader::init(LlamaModelSetup& setup) {
         ADDON_ID,
         toString(UnableToLoadModel),
         "model initialization returned a null model/context");
+  }
+  const auto backendName = qvac_lib_inference_addon_embed::backend_reporting::
+      runtimeModelBackendName(ctx_);
+  runtimeBackendName_->set(backendName);
+  if (!backendName.empty()) {
+    runtimeBackendDevice_ = backendName == "cpu" ? 0 : 1;
   }
   if (hooks_.onLoaded) {
     hooks_.onLoaded(model_, ctx_);
