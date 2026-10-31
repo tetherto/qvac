@@ -1,0 +1,147 @@
+name: "SDK Device Farm - Schedule Run"
+description: >-
+  Schedules an SDK e2e Device Farm run. An UNMETERED run waits for a free
+  unmetered slot; if none frees up in time, it is stopped and rescheduled as
+  METERED (pay-as-you-go).
+
+inputs:
+  project-arn:
+    description: "Device Farm project ARN."
+    required: true
+  device-pool-arn:
+    description: "Device pool ARN."
+    required: true
+  pool-name:
+    description: "Device pool name, for logs and the step summary."
+    required: true
+  app-arn:
+    description: "Uploaded app ARN."
+    required: true
+  test-package-arn:
+    description: "Uploaded Appium Node test package ARN."
+    required: true
+  test-spec-arn:
+    description: "Uploaded test spec ARN."
+    required: true
+  run-name:
+    description: "Device Farm run name."
+    required: true
+  job-timeout-minutes:
+    description: "Device Farm job timeout in minutes."
+    required: true
+  billing-method:
+    description: "UNMETERED (shared slots, falls back to METERED) or METERED."
+    required: false
+    default: UNMETERED
+  unmetered-wait-minutes:
+    description: "Minutes to wait for a free unmetered slot before switching to METERED."
+    required: false
+    default: "15"
+  poll-interval-seconds:
+    description: "Seconds between status checks while waiting for a slot."
+    required: false
+    default: "30"
+
+outputs:
+  run-arn:
+    description: "ARN of the scheduled run."
+    value: ${{ steps.schedule.outputs.run-arn }}
+  billing-method:
+    description: "Billing method of the scheduled run (METERED after a fallback)."
+    value: ${{ steps.schedule.outputs.billing-method }}
+
+runs:
+  using: composite
+  steps:
+    - name: Schedule Device Farm run
+      id: schedule
+      shell: bash
+      env:
+        PROJECT_ARN: ${{ inputs.project-arn }}
+        DEVICE_POOL_ARN: ${{ inputs.device-pool-arn }}
+        POOL_NAME: ${{ inputs.pool-name }}
+        APP_ARN: ${{ inputs.app-arn }}
+        TEST_PACKAGE_ARN: ${{ inputs.test-package-arn }}
+        TEST_SPEC_ARN: ${{ inputs.test-spec-arn }}
+        RUN_NAME: ${{ inputs.run-name }}
+        JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
+        BILLING_METHOD_INPUT: ${{ inputs.billing-method }}
+        UNMETERED_WAIT_MINUTES: ${{ inputs.unmetered-wait-minutes }}
+        POLL_INTERVAL_SECONDS: ${{ inputs.poll-interval-seconds }}
+      run: |
+        set -euo pipefail
+
+        BILLING_METHOD="${BILLING_METHOD_INPUT^^}"
+        case "$BILLING_METHOD" in
+          UNMETERED|METERED) ;;
+          *) echo "::error::billing-method must be UNMETERED or METERED, got '$BILLING_METHOD_INPUT'"; exit 1 ;;
+        esac
+
+        RUN_ARN=""
+
+        schedule_run() {
+          echo "Scheduling $BILLING_METHOD Device Farm run on $POOL_NAME..."
+          RUN_ARN=$(aws devicefarm schedule-run \
+            --project-arn "$PROJECT_ARN" \
+            --device-pool-arn "$DEVICE_POOL_ARN" \
+            --app-arn "$APP_ARN" \
+            --name "$RUN_NAME" \
+            --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$TEST_SPEC_ARN" \
+            --execution-configuration "jobTimeoutMinutes=$JOB_TIMEOUT_MINUTES" \
+            --configuration "billingMethod=$BILLING_METHOD" \
+            --query 'run.arn' --output text)
+          echo "Device Farm run scheduled: $RUN_ARN"
+        }
+
+        stop_run() {
+          for _ in 1 2 3; do
+            aws devicefarm stop-run --arn "$RUN_ARN" > /dev/null && return 0
+            sleep 5
+          done
+          return 1
+        }
+
+        # The ARN is saved only after this step, so a cancelled job must stop the run here.
+        trap 'if [ -n "$RUN_ARN" ]; then stop_run || true; fi; exit 130' INT TERM
+
+        schedule_run
+
+        if [ "$BILLING_METHOD" = UNMETERED ]; then
+          DEADLINE=$(( SECONDS + UNMETERED_WAIT_MINUTES * 60 ))
+          while true; do
+            STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo UNKNOWN)
+            case "$STATUS" in
+              PENDING|PENDING_CONCURRENCY|UNKNOWN) ;;
+              *) echo "Unmetered slot taken: status=$STATUS"; break ;;
+            esac
+
+            if [ "$SECONDS" -ge "$DEADLINE" ]; then
+              echo "::warning::No unmetered slot freed up in ${UNMETERED_WAIT_MINUTES}m (status=$STATUS); switching to METERED."
+              # Never leave a second run in the queue: keep waiting on this one if it cannot be stopped.
+              if ! stop_run; then
+                echo "::warning::Could not stop the UNMETERED run; keeping it."
+                break
+              fi
+              BILLING_METHOD=METERED
+              schedule_run
+              break
+            fi
+
+            echo "Waiting for an unmetered slot: status=$STATUS"
+            # Background sleep so a cancel triggers the trap at once.
+            sleep "$POLL_INTERVAL_SECONDS" & wait $!
+          done
+        fi
+
+        trap - INT TERM
+
+        echo "run-arn=$RUN_ARN" >> "$GITHUB_OUTPUT"
+        echo "billing-method=$BILLING_METHOD" >> "$GITHUB_OUTPUT"
+
+        PROJECT_ID=$(echo "$PROJECT_ARN" | sed -n 's/.*:project:\(.*\)/\1/p')
+        RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+        DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+        echo "Device Farm Console ($POOL_NAME): $DF_URL"
+
+        echo "### Device Farm: $POOL_NAME ($BILLING_METHOD)" >> "$GITHUB_STEP_SUMMARY"
+        echo "[Open Device Farm Console]($DF_URL)" >> "$GITHUB_STEP_SUMMARY"

@@ -104,10 +104,14 @@ on:
         description: "Desktop/Electron/Snap connection timeout (seconds)"
         type: number
         default: 60
-      device-farm-start-timeout:
-        description: "Wait for Device Farm run to start (minutes)"
-        type: number
-        default: 15
+      # Replaced device-farm-start-timeout: dispatch is at the 25-input limit.
+      device-farm-billing-method:
+        description: "Device Farm billing (UNMETERED falls back to METERED after 15 min in queue)"
+        type: choice
+        options:
+          - UNMETERED
+          - METERED
+        default: UNMETERED
       android-device-pool:
         description: "Android device pool (blank = random configured pool)"
         type: string
@@ -163,6 +167,10 @@ on:
       device-farm-timeout:
         type: number
         default: 120
+      device-farm-billing-method:
+        description: "Device Farm billing: UNMETERED or METERED"
+        type: string
+        default: UNMETERED
       device-farm-start-timeout:
         type: number
         default: 15
@@ -736,6 +744,7 @@ jobs:
       include: ${{ inputs.include }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
+      device-farm-billing-method: ${{ inputs.device-farm-billing-method || 'UNMETERED' }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
       device-pool-name: ${{ inputs.android-device-pool }}
@@ -773,6 +782,7 @@ jobs:
       include: ${{ inputs.include }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
+      device-farm-billing-method: ${{ inputs.device-farm-billing-method || 'UNMETERED' }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
       device-pool-name: ${{ inputs.android-device-pool }}
@@ -807,6 +817,7 @@ jobs:
       include: ${{ inputs.include }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
+      device-farm-billing-method: ${{ inputs.device-farm-billing-method || 'UNMETERED' }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
       device-pool-name: ${{ inputs.ios-device-pool }}
