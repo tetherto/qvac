@@ -8,7 +8,7 @@ name: PR Validation and Staging Sync (Registry-server)
 on:
   pull_request_target:
     branches: [main, release-*, feature-*, tmp-*]
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "packages/registry-server/**"
   push:
@@ -36,11 +36,15 @@ permissions:
 # so two runs can never roll the staging cluster at the same time — max-parallel
 # only serializes nodes within a single run. The group name is shared with
 # fill-fit-blobs-registry-server.yml, which writes to the same cluster.
-# PR-validation runs stay grouped per-ref so different PRs still run in
-# parallel. Never cancel an in-flight deploy.
+# Never cancel an in-flight deploy.
+# PR-validation runs never deploy, so they are grouped per PR number and a new
+# push cancels the superseded run. github.ref is the base branch under
+# pull_request_target, so a per-ref group would put every PR against the same
+# base branch into one group and let a run waiting on fork-ci approval block
+# all of them.
 concurrency:
-  group: ${{ github.event_name == 'pull_request_target' && format('{0}-{1}', github.workflow, github.ref) || 'registry-server-staging-write' }}
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request_target' && format('{0}-pr-{1}', github.workflow, github.event.pull_request.number) || 'registry-server-staging-write' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 jobs:
   fork-approval:
