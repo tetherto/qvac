@@ -3,8 +3,10 @@ generated stub. Private until the public shape settles."""
 
 from __future__ import annotations
 
+import array
 import asyncio
 import base64
+import sys
 from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
@@ -166,6 +168,19 @@ def _is_done(chunk: Any) -> bool:
 def _data(chunk: Any) -> Iterable[bytes]:
     data = getattr(chunk, "data", None)
     return [base64.b64decode(data)] if data else []
+
+
+def tts_samples(chunk: Any) -> list[int] | list[float]:
+    """The PCM of a TTS frame: the worker sends it as base64 little-endian
+    int16 bytes in `pcm` (with `buffer` empty); older frames carry `buffer`."""
+    pcm = getattr(chunk, "pcm", None)
+    if pcm:
+        samples = array.array("h")
+        samples.frombytes(base64.b64decode(pcm))
+        if sys.byteorder != "little":
+            samples.byteswap()
+        return samples.tolist()
+    return list(chunk.buffer or ())
 
 
 def _tick(chunk: Any) -> Iterable[dict[str, Any]]:
@@ -398,7 +413,7 @@ def text_to_speech(
         transport,
         request,
         _methods.text_to_speech,
-        items_of=lambda chunk: chunk.buffer or (),
+        items_of=tts_samples,
         side_of=rate,
         fold=lambda samples, side: TtsAudio(samples, side.get("sample_rate")),
     )

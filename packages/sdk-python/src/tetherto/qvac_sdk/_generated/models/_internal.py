@@ -23772,6 +23772,12 @@ class TextToSpeechResponse(GeneratedBaseModel):
         Field(description="MOSS-Speech reply text, including text-only replies."),
     ] = None
     buffer: list[float]
+    pcm: Annotated[
+        str | None,
+        Field(
+            description="Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`."
+        ),
+    ] = None
     done: bool
     sample_rate: Annotated[
         int | None,
@@ -23966,6 +23972,12 @@ class TextToSpeechStreamResponse(GeneratedBaseModel):
     )
     type: Literal["textToSpeechStream"] = "textToSpeechStream"
     buffer: list[float]
+    pcm: Annotated[
+        str | None,
+        Field(
+            description="Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`."
+        ),
+    ] = None
     done: bool
     sample_rate: Annotated[
         int | None,

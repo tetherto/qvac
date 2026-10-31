@@ -23702,6 +23702,10 @@
             "type": "number"
           }
         },
+        "pcm": {
+          "description": "Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`.",
+          "type": "string"
+        },
         "done": {
           "default": false,
           "type": "boolean"
@@ -23898,6 +23902,10 @@
           "items": {
             "type": "number"
           }
+        },
+        "pcm": {
+          "description": "Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`.",
+          "type": "string"
         },
         "done": {
           "default": false,

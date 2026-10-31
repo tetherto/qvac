@@ -1,4 +1,8 @@
 import test from 'brittle'
+import { withDecodedTtsPcm } from '@/schemas/tts-pcm'
+
+const decodedPcm = (frame: unknown) =>
+  withDecodedTtsPcm(frame as { buffer: number[]; pcm?: string | undefined })
 import Buffer from 'bare-buffer'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
@@ -26,9 +30,9 @@ type FakeTtsModel = {
 function fakeTtsModel(engine: string): FakeTtsModel {
   // Three native chunks, the way MOSS reports `streamChunkTokens` output.
   const iterate = async function* () {
-    yield { outputArray: [1, 2], sampleRate: 24000, chunkIndex: 0 }
-    yield { outputArray: [3, 4], sampleRate: 24000, chunkIndex: 1 }
-    yield { outputArray: [5], sampleRate: 24000, chunkIndex: 2, isLast: true }
+    yield { outputArray: Int16Array.from([1, 2]), sampleRate: 24000, chunkIndex: 0 }
+    yield { outputArray: Int16Array.from([3, 4]), sampleRate: 24000, chunkIndex: 1 }
+    yield { outputArray: Int16Array.from([5]), sampleRate: 24000, chunkIndex: 2, isLast: true }
   }
 
   const model: FakeTtsModel = {
@@ -97,7 +101,7 @@ test('MOSS stream: true runs the whole text natively and forwards every chunk', 
       'no streamOutput reaches the addon'
     )
     t.is(model.runStreamCalls.length, 0)
-    t.alike(frames, [
+    t.alike(frames.map(decodedPcm), [
       { buffer: [1, 2], sampleRate: 24000, chunkIndex: 0 },
       { buffer: [3, 4], sampleRate: 24000, chunkIndex: 1 },
       { buffer: [5], sampleRate: 24000, chunkIndex: 2, isLast: true }
@@ -146,7 +150,7 @@ test('MOSS stream: false collects the native chunks into one buffer', async (t) 
       input: '[S1] Reference one. [S2] Reference two. [S1] Did the build finish?',
       type: 'text'
     })
-    t.alike(frames, [{ buffer: [1, 2, 3, 4, 5], sampleRate: 24000 }])
+    t.alike(frames.map(decodedPcm), [{ buffer: [1, 2, 3, 4, 5], sampleRate: 24000 }])
   } finally {
     unregisterModel(modelId)
   }

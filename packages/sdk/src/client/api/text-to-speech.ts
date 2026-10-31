@@ -13,7 +13,8 @@ import {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResult,
   type TtsSentenceChunkUpdate,
-  type TtsStats
+  type TtsStats,
+  withDecodedTtsPcm
 } from '@qvac/inference/surface'
 import { stream as streamRpc, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
 import { getClientLogger } from '@/logging'
@@ -272,8 +273,9 @@ async function* ttsResponseSource(
   side: TtsSideChannel
 ): AsyncGenerator<TtsResponse> {
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
+      const response = withDecodedTtsPcm(raw)
       side.observe(response)
       yield response
     }
@@ -447,10 +449,11 @@ async function* plainTtsBufferStream(
 ): AsyncGenerator<number> {
   let settled = false
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
       // See TtsMulticast.pump — skip per-frame Zod validation; the server is
       // the source of truth for this wire shape.
+      const response = withDecodedTtsPcm(raw)
       side.observe(response)
       if (response.buffer.length > 0) {
         yield* response.buffer
@@ -513,8 +516,9 @@ async function collectTtsBuffer(
 ): Promise<number[]> {
   let buffer: number[] = []
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
+      const response = withDecodedTtsPcm(raw)
       side.observe(response)
       buffer = buffer.concat(response.buffer)
       if (response.done) {
@@ -657,5 +661,5 @@ function processTextToSpeechStreamLine(line: string): TextToSpeechStreamResponse
     throw new TextToSpeechStreamFailedError((obj['message'] as string) ?? 'Unknown server error')
   }
 
-  return textToSpeechStreamResponseSchema.parse(parsed)
+  return withDecodedTtsPcm(textToSpeechStreamResponseSchema.parse(parsed))
 }

@@ -173,6 +173,25 @@ class QvacFeatureApisTest {
         }
     }
 
+    @Test
+    fun pcmFramesDecodeToTheSameSamplesAsBufferFrames() = runTest {
+        val transport = FeatureTransport()
+        val client = QvacClient(transport)
+        // little-endian int16 for [1, -1, 32767, -32768]
+        transport.responses = flowOf(buildJsonObject {
+            put("type", "textToSpeech")
+            put("buffer", buildJsonArray { })
+            put("pcm", "AQD///9/AIA=")
+            put("done", true)
+        })
+        try {
+            val result = client.speech.synthesize("tts", "hi")
+            assertEquals(listOf(1.0, -1.0, 32767.0, -32768.0), result.samples)
+        } finally {
+            client.close()
+        }
+    }
+
     private class FeatureTransport : QvacTransport {
         var responses: Flow<JsonObject> = flowOf()
         var lastPayload: JsonObject? = null

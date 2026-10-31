@@ -1390,6 +1390,12 @@ export const ttsResponseSchema = z.object({
   type: z.literal('textToSpeech'),
   text: z.string().optional().describe('MOSS-Speech reply text, including text-only replies.'),
   buffer: z.array(z.number()),
+  pcm: z
+    .string()
+    .optional()
+    .describe(
+      'Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`.'
+    ),
   done: z.boolean().default(false),
   sampleRate: ttsResponseSampleRateSchema,
   stats: ttsStatsSchema.optional(),
@@ -1430,6 +1436,12 @@ export const textToSpeechStreamRequestSchema = z
 export const textToSpeechStreamResponseSchema = z.object({
   type: z.literal('textToSpeechStream'),
   buffer: z.array(z.number()),
+  pcm: z
+    .string()
+    .optional()
+    .describe(
+      'Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`.'
+    ),
   done: z.boolean().default(false),
   sampleRate: ttsResponseSampleRateSchema,
   stats: ttsStatsSchema.optional(),

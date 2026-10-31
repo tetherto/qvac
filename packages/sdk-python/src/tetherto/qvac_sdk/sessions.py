@@ -20,6 +20,7 @@ from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
+from ._streams import tts_samples
 from ._transport import Transport
 from .errors import QvacError, TextToSpeechStreamFailedError, TranscriptionFailedError
 from .schemas import (
@@ -377,7 +378,10 @@ def _tts_process(chunk: dict[str, Any]) -> Any:
     transcription sessions, which swallow the done frame. Matches JS. The
     wire shape has no per-frame `error` field; in-band error envelopes are
     raised as typed errors by the transport itself."""
-    return TextToSpeechStreamResponse.model_validate(chunk)
+    frame = TextToSpeechStreamResponse.model_validate(chunk)
+    if frame.pcm:
+        return frame.model_copy(update={"buffer": tts_samples(frame), "pcm": None})
+    return frame
 
 
 def text_to_speech_stream_session(

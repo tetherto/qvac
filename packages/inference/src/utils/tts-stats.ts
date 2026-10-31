@@ -1,3 +1,4 @@
+import { encodeTtsPcm } from '@/schemas/tts-pcm'
 import type { TtsStats } from '@/schemas/index'
 import type { TtsStats as AddonTtsStats, TtsOutputChunk } from '@/utils/addon-responses'
 
@@ -11,6 +12,8 @@ export type TtsStreamChunk = TtsOutputChunk
 export type TtsOpYield = {
   text?: string
   buffer: number[]
+  /** Base64 int16 LE PCM; set instead of `buffer` by the ops (see `encodeTtsPcm`). */
+  pcm?: string
   sampleRate?: number
   chunkIndex?: number
   sentenceChunk?: string
@@ -41,6 +44,37 @@ export function chunkMetadata(chunk: TtsStreamChunk) {
  */
 export function appendPcm(target: number[], samples: ArrayLike<number>) {
   for (let i = 0; i < samples.length; i++) target.push(samples[i]!)
+}
+
+/**
+ * One contiguous buffer from the engine's per-chunk output arrays: an
+ * `Int16Array` when every part is one (the engines' PCM), else a plain array.
+ */
+export function concatPcm(parts: readonly ArrayLike<number>[]): Int16Array | number[] {
+  if (parts.length === 1 && parts[0] instanceof Int16Array) return parts[0]
+  if (!parts.every((p) => p instanceof Int16Array)) {
+    const out: number[] = []
+    for (const p of parts) appendPcm(out, p)
+    return out
+  }
+  let total = 0
+  for (const p of parts) total += p.length
+  const out = new Int16Array(total)
+  let offset = 0
+  for (const p of parts) {
+    out.set(p, offset)
+    offset += p.length
+  }
+  return out
+}
+
+/**
+ * The audio fields of a frame: int16 engine output rides the wire as base64
+ * `pcm`; anything else (test doubles, non-int16 engines) stays a `buffer`.
+ */
+export function pcmFrame(samples: ArrayLike<number>): { buffer: number[]; pcm?: string } {
+  if (samples instanceof Int16Array) return { buffer: [], pcm: encodeTtsPcm(samples) }
+  return { buffer: Array.from(samples) }
 }
 
 // Field-for-field, apart from `audioDurationMs` -> `audioDuration`, which keeps
