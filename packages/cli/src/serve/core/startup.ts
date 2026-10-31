@@ -70,3 +70,20 @@ export function checkNetworkExposure(options: NetworkExposureOptions): string | 
       'Pass --api-key <key> or --api-key-file <path> to require authentication, or --allow-unauthenticated to accept the risk.'
   )
 }
+
+export interface AdminExposureOptions {
+  readonly host: string
+  readonly apiKey?: string | undefined
+  readonly enableAdmin: boolean
+}
+
+// Unlike the plain exposure check, --allow-unauthenticated does not lift this:
+// admin routes act on the whole server, not on one request.
+export function checkAdminExposure(options: AdminExposureOptions): void {
+  if (!options.enableAdmin || isLoopbackHost(options.host) || options.apiKey) return
+  throw new ServeOptionsError(
+    '--enable-admin',
+    `--enable-admin on non-loopback host "${options.host}" requires --api-key or --api-key-file, ` +
+      'even with --allow-unauthenticated.'
+  )
+}

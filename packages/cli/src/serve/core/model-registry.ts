@@ -27,6 +27,7 @@ export interface ModelEntry {
 export interface ModelRegistry {
   STATES: typeof STATES
   getEntry: (modelId: string) => ModelEntry | null
+  entries: () => ModelEntry[]
   register: (
     alias: string,
     opts: {
@@ -48,6 +49,10 @@ export function createModelRegistry(): ModelRegistry {
 
   function getEntry(modelId: string): ModelEntry | null {
     return models.get(modelId) ?? null
+  }
+
+  function entries(): ModelEntry[] {
+    return [...models.values()]
   }
 
   function register(
@@ -119,6 +124,7 @@ export function createModelRegistry(): ModelRegistry {
   return {
     STATES,
     getEntry,
+    entries,
     register,
     setLoading,
     setReady,
