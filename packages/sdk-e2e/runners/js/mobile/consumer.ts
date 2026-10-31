@@ -1,3 +1,4 @@
+import { ImageEmbeddingInputExecutor } from '../shared/executors/image-embedding-input-executor.js'
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
 import { RerankExecutor } from '../shared/executors/rerank-executor.js'
 import { MobileSpeakerAwareExecutor } from './executors/speaker-aware-executor.js'
@@ -207,6 +208,7 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    new ImageEmbeddingInputExecutor(resources),
     new MobileSpeakerAwareExecutor(resources),
     // Mobile platform policy -- which suites are off, and on which OS -- is declared in the catalog
     // now; see catalog/platform-skips.ts.

@@ -112,6 +112,7 @@ import {
 } from '@/schemas/lifecycle'
 import { decideRequestSchema, decideResponseSchema } from '@/schemas/decision'
 import { rerankRequestSchema, rerankResponseSchema } from '@/schemas/rerank'
+import { embedImageRequestSchema, embedImageResponseSchema } from '@/schemas/image-embedding'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
 import {
   audioEditStreamRequestSchema,
@@ -170,7 +171,8 @@ export const requestSchema = z.union([
   stateRequestSchema,
   classifyRequestSchema,
   decideRequestSchema,
-  rerankRequestSchema
+  rerankRequestSchema,
+  embedImageRequestSchema
 ])
 
 export const responseSchema = z.discriminatedUnion('type', [
@@ -225,7 +227,8 @@ export const responseSchema = z.discriminatedUnion('type', [
   stateResponseSchema,
   classifyResponseSchema,
   decideResponseSchema,
-  rerankResponseSchema
+  rerankResponseSchema,
+  embedImageResponseSchema
 ])
 
 /** Structural `AbortSignal`: fits the global one and bare-abort-controller's. */

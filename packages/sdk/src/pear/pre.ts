@@ -53,6 +53,7 @@ const CONFIG_CANDIDATES = [
 const BUILTIN_PLUGINS = [
   '@qvac/sdk/llamacpp-completion/plugin',
   '@qvac/sdk/llamacpp-embedding/plugin',
+  '@qvac/sdk/ggml-image-embedding/plugin',
   '@qvac/sdk/llamacpp-decision/plugin',
   '@qvac/sdk/llamacpp-rerank/plugin',
   '@qvac/sdk/whispercpp-transcription/plugin',
@@ -69,6 +70,7 @@ const BUILTIN_PLUGINS = [
 const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
   'llamacpp-completion': 'llmPlugin',
   'llamacpp-embedding': 'embeddingsPlugin',
+  'ggml-image-embedding': 'imageEmbeddingPlugin',
   'llamacpp-decision': 'decisionPlugin',
   'llamacpp-rerank': 'rerankPlugin',
   'whispercpp-transcription': 'whisperPlugin',

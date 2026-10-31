@@ -1,3 +1,4 @@
+import { imageEmbeddingConfigSchema } from '@/schemas/image-embedding'
 import { z } from 'zod'
 import { llmConfigBaseSchema, embedConfigBaseSchema } from '@/schemas/llamacpp-config'
 import {
@@ -35,6 +36,7 @@ export const MODEL_CONFIG_SCHEMA_BY_TYPE = {
   [ModelType.bciWhispercppTranscription]: bciConfigSchema,
   [ModelType.llamacppDecision]: decisionConfigBaseSchema,
   [ModelType.llamacppRerank]: rerankConfigBaseSchema,
+  [ModelType.ggmlImageEmbedding]: imageEmbeddingConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigBaseSchema,
   [ModelType.nmtcppTranslation]: nmtConfigBaseSchema,
   [ModelType.ttsGgml]: ttsLoadConfigSchema,

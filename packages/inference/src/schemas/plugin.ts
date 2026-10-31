@@ -372,6 +372,9 @@ export const PLUGIN_RERANK = '@qvac/inference/llamacpp-rerank/plugin' as const
  */
 export const PLUGIN_EMBEDDING = '@qvac/inference/llamacpp-embedding/plugin' as const
 
+/** Image descriptors for visual place recognition and retrieval with MegaLoc. */
+export const PLUGIN_IMAGE_EMBEDDING = '@qvac/inference/ggml-image-embedding/plugin' as const
+
 /**
  * Speech-to-text transcription plugin (whisper.cpp).
  * Provides: audio transcription, language detection.
@@ -445,6 +448,7 @@ export const PLUGIN_CLASSIFICATION = '@qvac/inference/ggml-classification/plugin
 export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_IMAGE_EMBEDDING,
   PLUGIN_DECISION,
   PLUGIN_RERANK,
   PLUGIN_WHISPER,
