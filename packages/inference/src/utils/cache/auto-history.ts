@@ -3,7 +3,9 @@ import type { CacheMessage } from '@/utils/cache/types'
 
 export function normalizeCacheMessage(message: CacheMessage): CacheMessage {
   const { attachments, ...normalized } = message
-  if (message.role === 'assistant') {
+  // Content parts are a user-turn shape (the schema rejects them elsewhere);
+  // assistant text is always a plain string.
+  if (message.role === 'assistant' && typeof message.content === 'string') {
     normalized.content = normalizeAssistantCacheContent(message.content)
   }
   return {
