@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { InvalidOptionError } from '../src/errors.ts'
-import { resolveManagedServeHostConfig } from '../src/managed-serve-config.ts'
+import { managedServeOptions, resolveManagedServeHostConfig } from '../src/managed-serve-config.ts'
 import {
   DEFAULT_OPTIONS,
   hostEnv,
@@ -40,9 +40,25 @@ test('mergeOptions rejects a non-boolean boolean option', () => {
   assert.throws(() => mergeOptions({ tools: 'maybe' }), InvalidOptionError)
 })
 
+test('mergeOptions rejects a non-string or relative serveBinPath', () => {
+  assert.throws(() => mergeOptions({ serveBinPath: 42 }), InvalidOptionError)
+  assert.throws(() => mergeOptions({ serveBinPath: 'bin/qvac' }), InvalidOptionError)
+})
+
+test('an empty serveBinPath counts as unset', () => {
+  const out = mergeOptions({ serveBinPath: '/opt/qvac-wrapper.sh' }, { serveBinPath: '' })
+  assert.equal(out.serveBinPath, undefined)
+  assert.equal('QVAC_SERVE_BIN_PATH' in hostEnv(out), false)
+})
+
 test('optionsFromEnv maps only the set QVAC_* vars', () => {
   const raw = optionsFromEnv({ QVAC_MODEL: 'qwen3.5-4b', QVAC_DEBUG: '1' })
   assert.deepEqual(raw, { model: 'qwen3.5-4b', debug: '1' })
+})
+
+test('optionsFromEnv maps QVAC_SERVE_BIN_PATH to serveBinPath', () => {
+  const raw = optionsFromEnv({ QVAC_SERVE_BIN_PATH: '/opt/qvac-wrapper.sh' })
+  assert.deepEqual(raw, { serveBinPath: '/opt/qvac-wrapper.sh' })
 })
 
 test('resolveOptions precedence: env over plugin options over qvac.json', () => {
@@ -91,6 +107,19 @@ test('hostEnv carries the resolved model-loading subset as strings', () => {
   assert.equal(env['QVAC_SHIM'], 'false')
 })
 
+// Unset must stay absent, not become the string "undefined".
+test('hostEnv carries serveBinPath only when it is set', () => {
+  assert.equal('QVAC_SERVE_BIN_PATH' in hostEnv(mergeOptions()), false)
+  const env = hostEnv(mergeOptions({ serveBinPath: '/opt/qvac-wrapper.sh' }))
+  assert.equal(env['QVAC_SERVE_BIN_PATH'], '/opt/qvac-wrapper.sh')
+})
+
+test('a resolved serveBinPath reaches the host config through hostEnv', () => {
+  const options = mergeOptions({ serveBinPath: '/opt/qvac-wrapper.sh' })
+  const config = resolveManagedServeHostConfig(hostEnv(options))
+  assert.equal(config.serveBinPath, '/opt/qvac-wrapper.sh')
+})
+
 test('resolveManagedServeHostConfig is derived from the host env', () => {
   const config = resolveManagedServeHostConfig({
     QVAC_MODEL: 'qwen3.5-4b',
@@ -112,4 +141,13 @@ test('resolveManagedServeHostConfig is derived from the host env', () => {
   assert.equal(config.readyTimeoutMs, 1234)
   assert.equal(config.upstreamTimeoutMs, 5678)
   assert.equal(config.logFile, '/tmp/qvac-host.log')
+  assert.equal(config.serveBinPath, undefined)
+})
+
+test('managedServeOptions passes serveBinPath to the provider only when set', () => {
+  const config = resolveManagedServeHostConfig({ QVAC_MODEL: 'qwen3.5-0.8b' })
+  assert.equal('serveBinPath' in managedServeOptions(config), false)
+  const wrapped = managedServeOptions({ ...config, serveBinPath: '/opt/qvac-wrapper.sh' })
+  assert.equal(wrapped.serveBinPath, '/opt/qvac-wrapper.sh')
+  assert.equal(wrapped.mode, 'managed')
 })

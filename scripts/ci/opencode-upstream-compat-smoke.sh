@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 VERIFY_RUN_OUTPUT="$SCRIPT_DIR/verify-opencode-run-output.cjs"
+REPORT_PROMPT_SURFACE="$SCRIPT_DIR/report-opencode-prompt-surface.cjs"
 
 SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
@@ -99,6 +100,29 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   cat "$ARTIFACT_DIR/versions.md" >> "$GITHUB_STEP_SUMMARY"
 fi
 
+QVAC_REAL_BIN="$SMOKE_DIR/node_modules/.bin/qvac"
+if [[ ! -x "$QVAC_REAL_BIN" ]]; then
+  echo "QVAC CLI not installed at $QVAC_REAL_BIN; @qvac/opencode-plugin should bring @qvac/cli" >&2
+  exit 1
+fi
+
+# The managed runner swallows serve output, so wrap the binary to tee it to
+# disk. `exec` keeps the PID and the ready fd. Plugins without `serveBinPath`
+# ignore it and run the serve unwrapped.
+QVAC_SERVE_WRAPPER="$SMOKE_DIR/qvac-serve-wrapper.sh"
+cat > "$QVAC_SERVE_WRAPPER" <<WRAPPER
+#!/usr/bin/env bash
+exec "$QVAC_REAL_BIN" "\$@" \
+  > >(tee -a "$ARTIFACT_DIR/qvac-serve.stdout") \
+  2> >(tee -a "$ARTIFACT_DIR/qvac-serve.stderr" >&2)
+WRAPPER
+chmod +x "$QVAC_SERVE_WRAPPER"
+
+echo "QVAC CLI version:" | tee "$ARTIFACT_DIR/qvac-version.txt"
+if ! "$QVAC_REAL_BIN" --version | tee -a "$ARTIFACT_DIR/qvac-version.txt"; then
+  echo "Unable to read QVAC CLI version from $QVAC_REAL_BIN" | tee -a "$ARTIFACT_DIR/qvac-version.txt"
+fi
+
 cat > opencode.json <<JSON
 {
   "\$schema": "https://opencode.ai/config.json",
@@ -109,7 +133,8 @@ cat > opencode.json <<JSON
         "model": "${QVAC_MODEL}",
         "ctxSize": 32768,
         "reasoningBudget": 0,
-        "tools": true
+        "tools": true,
+        "serveBinPath": "${QVAC_SERVE_WRAPPER}"
       }
     ]
   ]
@@ -142,14 +167,29 @@ run_opencode=(
   "Reply with only the word qvac-ok."
 )
 
+run_status=0
 if command -v timeout > /dev/null 2>&1; then
   timeout "$OPENCODE_TIMEOUT" "${run_opencode[@]}" \
     > "$ARTIFACT_DIR/opencode-run.jsonl" \
-    2> "$ARTIFACT_DIR/opencode-run.stderr"
+    2> "$ARTIFACT_DIR/opencode-run.stderr" || run_status=$?
 else
   "${run_opencode[@]}" \
     > "$ARTIFACT_DIR/opencode-run.jsonl" \
-    2> "$ARTIFACT_DIR/opencode-run.stderr"
+    2> "$ARTIFACT_DIR/opencode-run.stderr" || run_status=$?
+fi
+
+# Report tool count, prompt size and TTFT even when the run failed.
+node "$REPORT_PROMPT_SURFACE" \
+  "$ARTIFACT_DIR/qvac-serve.stdout" \
+  "$ARTIFACT_DIR/prompt-surface.md" || true
+
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" && -f "$ARTIFACT_DIR/prompt-surface.md" ]]; then
+  cat "$ARTIFACT_DIR/prompt-surface.md" >> "$GITHUB_STEP_SUMMARY"
+fi
+
+if (( run_status != 0 )); then
+  echo "OpenCode exited ${run_status}; see opencode-run.stderr and qvac-serve.stderr" >&2
+  exit "$run_status"
 fi
 
 node "$VERIFY_RUN_OUTPUT" "$ARTIFACT_DIR/opencode-run.jsonl"
