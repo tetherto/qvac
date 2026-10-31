@@ -21,6 +21,17 @@ test('TPS-shaped data maps backendDevice 2 to "npu"', function (t) {
   t.is(result.data.backendDevice, 'npu')
 })
 
+test('runtime stats preserve the native backend name without guessing from the device', function (t) {
+  for (const backendName of ['cpu', 'cuda', 'vulkan', 'metal', 'opencl', 'rpc', 'cuda,vulkan']) {
+    const raw = { TPS: 50, backendDevice: backendName === 'cpu' ? 0 : 1, backendName }
+    const result = mapAddonEvent('Stats', raw, null)
+    t.is(result.data.backendName, backendName)
+    t.is(raw.backendDevice, backendName === 'cpu' ? 0 : 1, 'the native payload stays unchanged')
+  }
+  const legacy = mapAddonEvent('Stats', { TPS: 1, backendDevice: 1 }, null)
+  t.absent('backendName' in legacy.data, 'older addons do not gain an inferred name')
+})
+
 test('TPS-shaped data preserves unknown backendDevice values as-is', function (t) {
   const result = mapAddonEvent('anything', { TPS: 1, backendDevice: 3 }, null)
   t.is(result.data.backendDevice, 3)
