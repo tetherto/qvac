@@ -10176,5 +10176,27 @@
     "tags": ["classification", "mobilenetv3"],
     "notes": "",
     "link": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+    "engine": "ggml-image-embedding",
+    "description": "MegaLoc image embeddings, F16 weights, 8448-dimensional L2-normalized visual place descriptors",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
+    "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
+    "link": "https://huggingface.co/gberton/MegaLoc"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+    "engine": "ggml-image-embedding",
+    "description": "MegaLoc image embeddings, F16 body with a Q6_K final projection, 8448-dimensional L2-normalized visual place descriptors",
+    "quantization": "f16-q6_k",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
+    "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
+    "link": "https://huggingface.co/gberton/MegaLoc"
   }
 ]
