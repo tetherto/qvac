@@ -71,11 +71,13 @@ test('audioGen client collects progress, PCM, stats, and requestId', async (t) =
           totalTimeMs: 5,
           realTimeFactor: 0.5,
           backendDevice: 0,
-          backendId: 0
+          backendId: 0,
+          gpuFallbackReason: 2
         },
         diagnostics: {
           selectedBackend: 'cpu',
-          selectedDevice: 'cpu'
+          selectedDevice: 'cpu',
+          fallback: { requestedDevice: 'gpu', reason: 'no-devices' }
         }
       }
     ],
@@ -95,17 +97,27 @@ test('audioGen client collects progress, PCM, stats, and requestId', async (t) =
   t.is(audio.sampleRate, 44100)
   t.is(audio.channels, 2)
   t.is(audio.bitsPerSample, 16)
-  t.alike(stats, {
-    audioDurationMs: 10,
-    totalTimeMs: 5,
-    realTimeFactor: 0.5,
-    backendDevice: 0,
-    backendId: 0
-  })
-  t.alike(diagnostics, {
-    selectedBackend: 'cpu',
-    selectedDevice: 'cpu'
-  })
+  t.alike(
+    stats,
+    {
+      audioDurationMs: 10,
+      totalTimeMs: 5,
+      realTimeFactor: 0.5,
+      backendDevice: 0,
+      backendId: 0,
+      gpuFallbackReason: 2
+    },
+    'the raw fallback code rides on the stats'
+  )
+  t.alike(
+    diagnostics,
+    {
+      selectedBackend: 'cpu',
+      selectedDevice: 'cpu',
+      fallback: { requestedDevice: 'gpu', reason: 'no-devices' }
+    },
+    'the named reason rides on the diagnostics'
+  )
   t.is(capturedRequest?.requestId, run.requestId)
 })
 

@@ -860,6 +860,13 @@ class AudioEditStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_fallback_reason: Annotated[
+        float | None,
+        Field(
+            alias="gpuFallbackReason",
+            description="Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+        ),
+    ] = None
     emitted_frames: Annotated[
         float | None,
         Field(
@@ -1469,6 +1476,13 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_fallback_reason: Annotated[
+        float | None,
+        Field(
+            alias="gpuFallbackReason",
+            description="Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+        ),
+    ] = None
     emitted_frames: Annotated[
         float | None,
         Field(
@@ -1887,6 +1901,13 @@ class AudioUnderstandResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_fallback_reason: Annotated[
+        float | None,
+        Field(
+            alias="gpuFallbackReason",
+            description="Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+        ),
+    ] = None
     emitted_frames: Annotated[
         float | None,
         Field(

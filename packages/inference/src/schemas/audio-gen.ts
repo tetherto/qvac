@@ -884,6 +884,12 @@ export const audioGenStatsSchema = z.object({
   realTimeFactor: z.number().optional(),
   backendDevice: z.number().optional(),
   backendId: z.number().optional(),
+  gpuFallbackReason: z
+    .number()
+    .optional()
+    .describe(
+      'Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.'
+    ),
   emittedFrames: z
     .number()
     .optional()

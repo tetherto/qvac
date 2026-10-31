@@ -127,6 +127,8 @@ const modelId = await loadModel({
 
 `useGPU: true` runs on a GPU when one is usable and falls back to the CPU otherwise. To fail the load instead of falling back, set `device: "gpu"` in place of `useGPU`. `device` takes `"gpu"`, `"auto"` (what `useGPU: true` means) or `"cpu"`, and the SDK rejects a config that sets both `device` and `useGPU`.
 
+Every run reports where it ran: `stats.backendDevice` (0 CPU, 1 GPU) and `stats.backendId` (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL) describe the backend the engine used, not the one requested, and `stats.gpuFallbackReason` carries the engine's code for a GPU request that landed on the CPU (0 none, 1 not requested, 2 no devices, 3 init failed). The run's `diagnostics` promise names the same backend, and `diagnostics.fallback.reason` names a lost GPU (`"no-devices"` or `"init-failed"`), so a Metal fallback is distinguishable from a slow run.
+
 ## Generate audio
 
 `caption` is required and cannot be empty. Everything else is engine-specific.

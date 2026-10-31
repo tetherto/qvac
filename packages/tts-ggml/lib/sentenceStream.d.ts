@@ -7,14 +7,19 @@ export interface ChunkResolver {
     resolve(): void;
     reject(error: unknown): void;
 }
-export interface StreamAccumulator {
+/**
+ * Stats a stream keeps from the last chunk that reported them instead of
+ * summing: where the synthesis ran, and whether the Audio8 codec used its
+ * Core ML sidecar.
+ */
+export declare const LAST_REPORTED_STREAM_STATS: readonly ["backendDevice", "backendId", "gpuUnsupported", "enhancerBackendDevice", "enhancerBackendId", "denoiserBackendDevice", "denoiserBackendId", "codecSidecarLoaded", "codecOnCoreml"];
+export type LastReportedStreamStat = (typeof LAST_REPORTED_STREAM_STATS)[number];
+export interface StreamAccumulator extends Partial<Pick<RuntimeStats, LastReportedStreamStat>> {
     firstAudioMs?: number;
     totalTime: number;
     audioDurationMs: number;
     totalSamples: number;
     generatedFrames: number;
-    codecSidecarLoaded?: number;
-    codecOnCoreml?: number;
 }
 export interface SentenceStreamContext {
     textStreamMode?: boolean;

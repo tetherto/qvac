@@ -1,7 +1,7 @@
 import { AudioGen, audiogenBackendName, audiogenGpuFallbackReason } from '@qvac/audiogen-ggml'
-import { z } from 'zod'
 import {
   audioGenStatsSchema,
+  type AudioGenStats,
   type AudioGenStreamResponse,
   type AudioGenUnderstandResult,
   type AudioUnderstandResponse
@@ -168,7 +168,7 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
     ? { ...raw, understand: streamedUnderstand ?? toUnderstandResult(raw.understand) }
     : raw
   const stats = audioGenStatsSchema.parse(normalized)
-  const diagnostics = buildBackendDiagnostics(audiogenStats.parse(normalized))
+  const diagnostics = buildBackendDiagnostics(stats)
   const terminal = {
     type,
     done: true,
@@ -178,14 +178,6 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   } as AudioGenRunFrame<TType>
   yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
 }
-
-// The addon reports gpuFallbackReason, which the wire shape deliberately does
-// not carry: it reaches callers named, on diagnostics.fallback.reason.
-const audiogenStats = audioGenStatsSchema.extend({
-  gpuFallbackReason: z.number().optional()
-})
-
-type AudiogenStats = z.infer<typeof audiogenStats>
 
 /**
  * Normalizes the addon's understand result for the wire: `audioCodes` arrives
@@ -205,7 +197,7 @@ function toUnderstandResult(result: {
 }
 
 /** An unrecognized GPU id yields no diagnostics rather than a guessed backend name. */
-function buildBackendDiagnostics(stats: AudiogenStats): InferenceBackendDiagnostics | undefined {
+function buildBackendDiagnostics(stats: AudioGenStats): InferenceBackendDiagnostics | undefined {
   if (stats.backendDevice === undefined) return undefined
   if (stats.backendDevice !== 1) {
     const fallback = gpuFallbackDetail(stats)
@@ -226,7 +218,7 @@ function buildBackendDiagnostics(stats: AudiogenStats): InferenceBackendDiagnost
 
 // `none` and `not-requested` describe a run that never lost a GPU, and an
 // unmapped code must not become a guessed reason.
-function gpuFallbackDetail(stats: AudiogenStats): BackendFallback | undefined {
+function gpuFallbackDetail(stats: AudioGenStats): BackendFallback | undefined {
   const reason = audiogenGpuFallbackReason(stats.gpuFallbackReason)
   if (reason === undefined || reason === 'none' || reason === 'not-requested') return undefined
   return { requestedDevice: 'gpu', reason }

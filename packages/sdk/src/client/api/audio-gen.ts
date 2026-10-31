@@ -37,7 +37,7 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * @param params.taskType - `"text2music"` (default), `"cover-nofsq"`, or `"lego"`.
  * @param params.audioCoverStrength - Source-context strength for cover tasks (0..1).
  * @param params.coverNoiseStrength - Initial source/noise blend for cover tasks (0..1).
- * @returns A run with a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise describing the backend the run resolved to. An ACE-Step run's stats carry `metadata`: the caption, lyrics and musical metadata it rendered and the seed it used. A MiniMax run's stats carry its stage timings and `emittedFrames`.
+ * @returns A run with a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise describing the backend the run resolved to. The stats carry the backend the engine used (`backendDevice`, `backendId`) and `gpuFallbackReason`, the engine's code for a GPU request that landed on the CPU, which `diagnostics.fallback.reason` names. An ACE-Step run's stats carry `metadata`: the caption, lyrics and musical metadata it rendered and the seed it used. A MiniMax run's stats carry its stage timings and `emittedFrames`.
  *
  * @example
  * ```typescript

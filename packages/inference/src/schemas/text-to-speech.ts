@@ -1338,11 +1338,12 @@ export const ttsRequestSchema = z
 // `realTimeFactor` = `totalTime` * 1000 / `audioDuration`.
 //
 // The chunked paths (`stream: true`, `sentenceStream`, and the duplex session)
-// run one native job per sentence and the addon's aggregate carries only the
-// four summable fields (totalTime, audioDuration, totalSamples,
-// generatedFrames) and Audio8's two Core ML flags, which keep the value of the
-// last sentence that reported them; the five backend fields below are
-// reported by batch synthesis (`stream: false`) only.
+// run one native job per sentence. The addon's aggregate sums the four
+// summable fields (totalTime, audioDuration, totalSamples, generatedFrames)
+// and keeps the backend fields below and Audio8's two Core ML flags from the
+// last sentence that reported them, so a chunked run reports where it ran
+// just as batch synthesis (`stream: false`) does. A field no sentence
+// reported stays absent.
 export const ttsStatsSchema = z.object({
   audioDuration: z.number().optional(),
   totalTime: z.number().optional(),

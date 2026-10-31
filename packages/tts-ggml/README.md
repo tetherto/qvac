@@ -1495,8 +1495,10 @@ response.stats.enhancerBackendDevice // -1 none, 0 CPU, 1 GPU
 response.stats.enhancerBackendId
 ```
 
-For `runStream()` and `runStreaming()`, `codecSidecarLoaded` and
-`codecOnCoreml` retain the last chunk that reported each field, including zero
+For `runStream()` and `runStreaming()`, the backend fields (`backendDevice`,
+`backendId`, `gpuUnsupported`, and the LavaSR `enhancerBackend*` and
+`denoiserBackend*` pairs) and the Audio8 codec fields (`codecSidecarLoaded`,
+`codecOnCoreml`) retain the last chunk that reported each field, including zero
 when a sidecar is retired or synthesis falls back to ggml. They are not summed;
 if no chunk reports a field, it remains absent.
 

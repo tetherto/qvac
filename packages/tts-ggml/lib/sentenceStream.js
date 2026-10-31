@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SentenceStreamer = void 0;
+exports.SentenceStreamer = exports.LAST_REPORTED_STREAM_STATS = void 0;
 exports.normalizeError = normalizeError;
 exports.ttsOutputDebugString = ttsOutputDebugString;
 exports.isAudioOutputEvent = isAudioOutputEvent;
@@ -14,6 +14,22 @@ exports.splitSentenceChunks = splitSentenceChunks;
 const error_1 = require("./error");
 const textChunker_1 = require("./textChunker");
 const textStreamAccumulator_1 = require("./textStreamAccumulator");
+/**
+ * Stats a stream keeps from the last chunk that reported them instead of
+ * summing: where the synthesis ran, and whether the Audio8 codec used its
+ * Core ML sidecar.
+ */
+exports.LAST_REPORTED_STREAM_STATS = [
+    "backendDevice",
+    "backendId",
+    "gpuUnsupported",
+    "enhancerBackendDevice",
+    "enhancerBackendId",
+    "denoiserBackendDevice",
+    "denoiserBackendId",
+    "codecSidecarLoaded",
+    "codecOnCoreml",
+];
 function normalizeError(error) {
     return typeof error === "string"
         ? error
@@ -209,11 +225,13 @@ function mergeSentenceStreamStats(accumulator, data) {
         typeof data.totalSamples === "number" ? data.totalSamples : 0;
     accumulator.generatedFrames +=
         typeof data.generatedFrames === "number" ? data.generatedFrames : 0;
-    if (typeof data.codecSidecarLoaded === "number") {
-        accumulator.codecSidecarLoaded = data.codecSidecarLoaded;
-    }
-    if (typeof data.codecOnCoreml === "number") {
-        accumulator.codecOnCoreml = data.codecOnCoreml;
+    retainLastReportedStats(accumulator, data);
+}
+function retainLastReportedStats(accumulator, data) {
+    for (const field of exports.LAST_REPORTED_STREAM_STATS) {
+        const value = data[field];
+        if (typeof value === "number")
+            accumulator[field] = value;
     }
 }
 /**
