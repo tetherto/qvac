@@ -17,6 +17,7 @@ export interface LlmStats {
   draftTokens?: number
   draftAcceptedTokens?: number
   backendDevice?: 'cpu' | 'gpu' | 'npu'
+  backendName?: string
   stopReason?:
     'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'
 }
@@ -126,6 +127,7 @@ export interface EmbedStats {
   tokens_per_second?: number
   total_tokens?: number
   backendDevice?: 'cpu' | 'gpu'
+  backendName?: string
   context_size?: number
 }
 

@@ -128,7 +128,7 @@ async def test_vla_encodes_tensors_and_decodes_actions():
                 "actions": base64.b64encode(actions.tobytes()).decode(),
                 "actionDim": 2,
                 "chunkSize": 2,
-                "stats": {"total_ms": 12.5},
+                "stats": {"total_ms": 12.5, "backendName": "Metal"},
             },
         }
     )
@@ -146,7 +146,7 @@ async def test_vla_encodes_tensors_and_decodes_actions():
     )
     assert np.array_equal(result.actions, actions)
     assert (result.action_dim, result.chunk_size) == (2, 2)
-    assert result.stats == {"total_ms": 12.5}
+    assert result.stats == {"total_ms": 12.5, "backendName": "Metal"}
 
     sent = transport.sent
     assert sent["handler"] == "vlaRun"

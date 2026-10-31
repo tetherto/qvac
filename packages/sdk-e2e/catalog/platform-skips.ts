@@ -22,6 +22,14 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: /^backend-name-/,
+    skip: {
+      reason:
+        'Backend-name runtime checks use the shared JavaScript executor; Python and Kotlin contracts have separate tests.',
+      platforms: ['desktop-python', 'kotlin-android', 'desktop-kotlin']
+    }
+  },
+  {
     match: /^tts-moss-/,
     skip: {
       reason:

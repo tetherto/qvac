@@ -24,6 +24,7 @@ class QvacVlaApiTest {
                     put("actions", "AADAPwAAAMA=")
                     put("actionDim", 1)
                     put("chunkSize", 2)
+                    put("stats", buildJsonObject { put("backendName", "Metal") })
                 })
             },
         )
@@ -38,6 +39,7 @@ class QvacVlaApiTest {
         )
 
         assertContentEquals(floatArrayOf(1.5f, -2f), result.actions)
+        assertEquals("Metal", result.stats?.get("backendName")?.jsonPrimitive?.content)
         assertEquals("vlaRun", transport.request?.get("handler")?.jsonPrimitive?.content)
         val params = transport.request?.get("params")?.jsonObject
         assertEquals("AACAPw==", params?.get("images")?.jsonArray?.single()?.jsonPrimitive?.content)

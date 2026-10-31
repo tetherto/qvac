@@ -30,7 +30,8 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
     ...(toolDefinitionsDropped !== undefined && { toolDefinitionsDropped }),
     ...(draftTokens !== undefined && { draftTokens }),
     ...(draftAcceptedTokens !== undefined && { draftAcceptedTokens }),
-    ...(stats.backendDevice !== undefined && { backendDevice: stats.backendDevice })
+    ...(stats.backendDevice !== undefined && { backendDevice: stats.backendDevice }),
+    ...(stats.backendName !== undefined && { backendName: stats.backendName })
   }
 
   if (
@@ -44,7 +45,8 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
     toolDefinitionsDropped === undefined &&
     draftTokens === undefined &&
     draftAcceptedTokens === undefined &&
-    stats.backendDevice === undefined
+    stats.backendDevice === undefined &&
+    stats.backendName === undefined
   ) {
     return undefined
   }
