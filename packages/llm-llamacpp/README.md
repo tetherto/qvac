@@ -321,7 +321,9 @@ try {
 }
 ```
 
-When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, `backendDevice`, and `backendName`.
+
+The backend fields describe the primary model's final placement after backend selection and fitting. `backendDevice` is `"cpu"` or `"gpu"`. `backendName` is the lowercase backend family, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, `"opencl"`, or `"rpc"`. It reports `"cpu"` when no layers are offloaded. A model split across different backend families reports their distinct names in sorted, comma-separated order, such as `"cuda,vulkan"`. CPU work that accompanies GPU offload and separately configured projector or draft models do not add names. Older native addons omit `backendName`. Both single and batch responses expose it through the terminal stats and the `stats` event.
 
 #### Tool calling
 

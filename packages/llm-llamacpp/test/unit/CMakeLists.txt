@@ -21,6 +21,7 @@ add_executable(
   test_cancel_stale_flag.cpp
   test_reload_cancel_state.cpp
   test_backend_selection.cpp
+  test_model_backend_name.cpp
   test_load_fit_normalization.cpp
   test_tune_config_map.cpp
   test_generation_params_apply.cpp
