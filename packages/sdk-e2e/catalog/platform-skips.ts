@@ -14,6 +14,14 @@ type Rule = {
 
 const RULES: Rule[] = [
   {
+    match: /^backend-name-/,
+    skip: {
+      reason:
+        'Backend-name runtime checks use the shared JavaScript executor; Python and Kotlin contracts have separate tests.',
+      platforms: ['desktop-python', 'kotlin-android']
+    }
+  },
+  {
     match: /^tts-moss-/,
     skip: {
       reason:

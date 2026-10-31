@@ -224,7 +224,13 @@ export const vlaStatsSchema = z.object({
   backendDevice: z
     .number()
     .optional()
-    .describe('0 = CPU backend, 1 = GPU backend, including CUDA, ROCm, Vulkan, Metal, or OpenCL.')
+    .describe('0 = CPU backend, 1 = GPU backend, including CUDA, ROCm, Vulkan, Metal, or OpenCL.'),
+  backendName: z
+    .string()
+    .optional()
+    .describe(
+      'Selected backend name, matching vlaHparams().backendName. Optional with older addons.'
+    )
 })
 
 export type VlaStats = z.infer<typeof vlaStatsSchema>

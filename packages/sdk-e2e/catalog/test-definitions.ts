@@ -5,6 +5,7 @@ import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { Step, TestDefinition } from '@qvac/test-suite'
 import { applyPlatformSkips } from './platform-skips.js'
+import { backendNameTests } from './backend-name-tests.js'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
@@ -557,6 +558,7 @@ const catalog: TestDefinition[] = [
 
   // Completion tests
   ...completionTests,
+  ...backendNameTests,
   ...batchCompletionTests,
 
   // Transcription tests

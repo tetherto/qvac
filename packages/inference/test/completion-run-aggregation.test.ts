@@ -329,3 +329,15 @@ test('buildFinalFromEvents: carries toolErrors, omits the field when there are n
   )
   t.absent('toolErrors' in clean.final)
 })
+
+test('completion backendName survives event aggregation and the final result', (t) => {
+  const events: CompletionEvent[] = [
+    { type: 'contentDelta', seq: 0, text: 'APPLE' },
+    { type: 'completionStats', seq: 1, stats: { backendDevice: 'gpu', backendName: 'metal' } },
+    { type: 'completionDone', seq: 2, stopReason: 'eos' }
+  ]
+  t.is(aggregateEvents(events).stats?.backendName, 'metal')
+  const { final } = buildFinalFromEvents(events, new Map())
+  t.is(final.stats?.backendName, 'metal')
+  t.is(final.contentText, 'APPLE')
+})

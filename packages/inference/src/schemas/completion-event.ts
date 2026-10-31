@@ -25,7 +25,13 @@ export const completionStatsSchema = z.object({
   // Speculative decoding (`spec_type`): draft tokens proposed, and accepted.
   draftTokens: z.number().optional(),
   draftAcceptedTokens: z.number().optional(),
-  backendDevice: z.enum(['cpu', 'gpu']).optional()
+  backendDevice: z.enum(['cpu', 'gpu']).optional(),
+  backendName: z
+    .string()
+    .optional()
+    .describe(
+      'Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.'
+    )
 })
 
 export type CompletionStats = z.infer<typeof completionStatsSchema>

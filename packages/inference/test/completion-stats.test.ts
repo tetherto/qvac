@@ -138,3 +138,16 @@ test('normalizeCompletionStats: carries toolDefinitionsDropped through', (t) => 
   t.alike(normalized, { generatedTokens: 3, toolDefinitionsDropped: 1 })
   t.is(completionStatsSchema.safeParse(normalized).success, true)
 })
+
+test('normalizeCompletionStats: preserves the reported backend family without inferring it', (t) => {
+  for (const backendName of ['cpu', 'cuda', 'metal', 'cuda,vulkan']) {
+    t.alike(normalizeCompletionStats({ backendName }), { backendName })
+    t.alike(normalizeCompletionStats({ TPS: 30, backendDevice: 'gpu', backendName }), {
+      tokensPerSecond: 30,
+      backendDevice: 'gpu',
+      backendName
+    })
+  }
+  t.alike(normalizeCompletionStats({ backendDevice: 'gpu' }), { backendDevice: 'gpu' })
+  t.is(normalizeCompletionStats({}), undefined)
+})
