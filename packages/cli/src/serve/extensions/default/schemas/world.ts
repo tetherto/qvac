@@ -1,0 +1,115 @@
+import { z } from 'zod'
+import { binaryInput } from '@/serve/lib/binary-input'
+import { formBoolean, formNumber } from '@/serve/lib/form-fields'
+
+// The SDK's scene limits: each side a multiple of 32 up to 4096, and the area
+// within 1920x1088. The SDK enforces them too; checking here keeps the 400 off
+// the model load.
+export const SCENE_DIMENSION_STEP = 32
+export const MAX_SCENE_DIMENSION = 4096
+export const MAX_SCENE_PIXELS = 1920 * 1088
+export const MAX_SCENE_IMAGE_BYTES = 3 * 1024 * 1024
+export const DEFAULT_SCENE_WIDTH = 832
+export const DEFAULT_SCENE_HEIGHT = 480
+
+export const WALK_KEYS = ['W', 'A', 'S', 'D', 'I', 'J', 'K', 'L'] as const
+
+function sceneDimension(axis: string, fallback: number) {
+  return formNumber(
+    z.number().int().positive().multipleOf(SCENE_DIMENSION_STEP).max(MAX_SCENE_DIMENSION)
+  )
+    .optional()
+    .describe(
+      `Scene ${axis} in pixels, a multiple of ${SCENE_DIMENSION_STEP} up to ` +
+        `${MAX_SCENE_DIMENSION}. Default ${fallback}. width x height must stay within ` +
+        `${MAX_SCENE_PIXELS} pixels (1920x1088).`
+    )
+}
+
+/** Mirrors the SDK's `worldCreateScene()` arguments. */
+export const worldSceneBody = z
+  .strictObject({
+    model: z.string().min(1),
+    prompt: z
+      .string()
+      .min(1)
+      .describe(
+        'Scene prompt, encoded verbatim. The reference pipeline prefixes prompts with "| unknown | ".'
+      ),
+    image: binaryInput(
+      `The first frame: PNG or JPEG, up to ${MAX_SCENE_IMAGE_BYTES / (1024 * 1024)} MB. It is ` +
+        'cover-scaled and center-cropped to width x height.'
+    ),
+    width: sceneDimension('width', DEFAULT_SCENE_WIDTH),
+    height: sceneDimension('height', DEFAULT_SCENE_HEIGHT),
+    returnPack: formBoolean()
+      .optional()
+      .describe('Return the scene pack (10+ MB) base64 in `pack`. Default false.')
+  })
+  .superRefine((body, ctx) => {
+    // The SDK fills a missing side with its default before checking the area.
+    const width = body.width ?? DEFAULT_SCENE_WIDTH
+    const height = body.height ?? DEFAULT_SCENE_HEIGHT
+    if (width * height > MAX_SCENE_PIXELS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [body.width === undefined ? 'height' : 'width'],
+        message: `${width}x${height} is over the ${MAX_SCENE_PIXELS}-pixel ceiling.`
+      })
+    }
+  })
+
+export const worldStepBody = z.strictObject({
+  keys: z
+    .array(z.enum(WALK_KEYS))
+    .optional()
+    .describe('Keys held for this block. WASD move, IJKL steer the camera. Omit to idle.'),
+  stream: z
+    .boolean()
+    .optional()
+    .describe('Send each frame as a server-sent event as it is decoded. Default false.')
+})
+
+export const sceneIdParams = z.strictObject({ id: z.string().min(1) })
+
+export const worldScene = z.object({
+  id: z.string(),
+  object: z.literal('world.scene'),
+  created: z.number().int(),
+  model: z.string(),
+  status: z
+    .enum(['active', 'replaced'])
+    .describe(
+      '`replaced` once a newer scene was created on the same model, or the model reloaded.'
+    ),
+  width: z.number().int().optional(),
+  height: z.number().int().optional(),
+  scene_create_ms: z.number().optional(),
+  pack: z.string().optional().describe('Base64 scene pack, when `returnPack` was set.')
+})
+
+const stepStats = z.object({
+  step_ms: z.number().optional(),
+  total_steps: z.number().int().optional(),
+  total_frames: z.number().int().optional(),
+  width: z.number().int().optional(),
+  height: z.number().int().optional()
+})
+
+export const worldStep = z.object({
+  object: z.literal('world.step'),
+  scene_id: z.string(),
+  output_format: z.enum(['png', 'jpeg']),
+  data: z.array(z.object({ b64_json: z.string() })),
+  stats: stepStats
+})
+
+export type WorldStepStatsResponse = z.infer<typeof stepStats>
+
+export const WORLD_FIELD_CODES: Record<string, string> = {
+  prompt: 'missing_prompt',
+  image: 'missing_image',
+  width: 'invalid_dimensions',
+  height: 'invalid_dimensions',
+  keys: 'invalid_keys'
+}

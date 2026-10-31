@@ -19,5 +19,7 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   Upscale:
     'Image upscaling via SDK `upscale()` backed by an ESRGAN model loaded with `config.mode: "upscale"`. Returns the `/v1/images` response shape.',
   Music:
-    'Music generation, editing and description via SDK `audioGen()`, `audioEdit()` and `audioUnderstand()`, backed by an `audiogen` model. Generations and edits run as async jobs, like `/v1/videos`.'
+    'Music generation, editing and description via SDK `audioGen()`, `audioEdit()` and `audioUnderstand()`, backed by an `audiogen` model. Generations and edits run as async jobs, like `/v1/videos`.',
+  World:
+    'Experimental. Interactive world generation via SDK `worldCreateScene()` and `worldStep()`, backed by an ABot-World model loaded with `config.mode: "world"`. A model holds one live scene; creating one replaces the last.'
 }
