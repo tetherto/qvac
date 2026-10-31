@@ -437,9 +437,30 @@ declare namespace LlmLlamacpp {
             rejectWhenBusy?: boolean;
         };
     }
+    /**
+     * One ordered piece of a message's `content`. Media parts keep their place in
+     * the turn: a single user message can interleave text and media, which a
+     * string `content` plus separate `type: "media"` messages cannot express
+     * without splitting the turn.
+     */
+    type UserContentPart = {
+        type: "text";
+        text: string;
+    } | {
+        type: "media";
+        /**
+         * Either an absolute path to the media file (`string`) or its raw bytes
+         * (`Uint8Array`), the same two forms a `type: "media"` message accepts.
+         */
+        content: string | Uint8Array;
+    };
     interface UserTextMessage {
         role: "system" | "assistant" | "user" | "tool" | "session" | string;
-        content: string;
+        /**
+         * Plain text, or ordered text/media parts rendered as one turn. Media parts
+         * are only valid on user messages.
+         */
+        content: string | UserContentPart[];
         /**
          * An assistant turn's reasoning, separate from its answer in `content`, as
          * in OpenAI-compatible APIs. Optional: an answer sent back with its

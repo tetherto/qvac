@@ -165,6 +165,16 @@
       "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
     }
   ],
+  "runOrderedMediaPartsTest": [
+    {
+      "name": "visionpsy-nano-460m-q8_0.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf"
+    },
+    {
+      "name": "mmproj-visionpsy-nano-460m-q8.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf"
+    }
+  ],
   "runImageFruitPlateTest": [
     {
       "name": "visionpsy-nano-460m-q8_0.gguf",

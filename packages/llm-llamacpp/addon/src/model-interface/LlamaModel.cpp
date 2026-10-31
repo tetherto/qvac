@@ -1829,6 +1829,73 @@ std::string optionalString(
   return it->second.get<std::string>();
 }
 
+[[noreturn]] void throwInvalidContentPart(const std::string& what) {
+  throwInvalidToolTurn(what.c_str());
+}
+
+// Expands an OpenAI-shaped `content` array into one turn's text. Text parts are
+// concatenated; each media part leaves an `<__media__>` marker at its own
+// position and records its source in the media plan, in marker order. This is
+// what lets a single message interleave text and images, which separate
+// `type: "media"` messages cannot express without splitting the turn.
+void appendContentParts(
+    const picojson::array& parts, const std::string& role, bool isTextLlm,
+    std::string& content, std::vector<PlannedMedia>& mediaPlan,
+    std::vector<std::string>& mediaPaths) {
+  for (const auto& partValue : parts) {
+    if (!partValue.is<picojson::object>()) {
+      throwInvalidContentPart("content parts must be objects");
+    }
+    const picojson::object& part = partValue.get<picojson::object>();
+    auto typeIt = part.find("type");
+    if (typeIt == part.end() || !typeIt->second.is<std::string>()) {
+      throwInvalidContentPart("content parts require a string type");
+    }
+    const std::string& type = typeIt->second.get<std::string>();
+    if (type == "text") {
+      auto textIt = part.find("text");
+      if (textIt == part.end() || !textIt->second.is<std::string>()) {
+        throwInvalidContentPart("text content parts require a string text");
+      }
+      content += textIt->second.get<std::string>();
+      continue;
+    }
+    if (type != "media") {
+      throwInvalidContentPart(
+          string_format("unsupported content part type: %s", type.c_str()));
+    }
+    if (role != "user") {
+      throwInvalidContentPart(
+          "media content parts are only valid on user messages");
+    }
+    if (isTextLlm) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(MediaNotSupported),
+          "Media not supported by text-only models");
+    }
+    const auto partContentIt = part.find("content");
+    if (partContentIt != part.end() && !partContentIt->second.is<picojson::null>()) {
+      if (!partContentIt->second.is<std::string>()) {
+        throwInvalidContentPart(
+            "media content parts require a string path or a byte buffer");
+      }
+      const std::string path = partContentIt->second.get<std::string>();
+      if (!path.empty()) {
+        mediaPaths.push_back(path);
+        mediaPlan.push_back({MediaSource::Path, path});
+        content += mtmd_default_marker();
+        continue;
+      }
+    }
+    // The JS layer hoists byte buffers into the leading media messages and
+    // leaves the part path-less, the same placeholder a path-less media
+    // message uses.
+    mediaPlan.push_back({MediaSource::ByteBuffer, ""});
+    content += mtmd_default_marker();
+  }
+}
+
 using qvac_lib_inference_addon_llama::utils::K_MAX_JSON_DEPTH;
 using qvac_lib_inference_addon_llama::utils::nestsTooDeep;
 
@@ -2056,15 +2123,35 @@ ParsedPromptPayload parsePromptPayload(
           throw qvac_errors::StatusError(
               ADDON_ID, toString(NoContentProvided), errorMsg);
         }
-        if (!contentMissing && !contentIt->second.is<std::string>()) {
-          std::string errorMsg =
-              string_format("%s: content must be a string\n", parseTag);
+        std::string content;
+        if (contentMissing) {
+          content = std::string();
+        } else if (contentIt->second.is<std::string>()) {
+          content = contentIt->second.get<std::string>();
+        } else if (contentIt->second.is<picojson::array>()) {
+          if (type == "media") {
+            resetMedia();
+            throwInvalidContentPart("media messages require string content");
+          }
+          try {
+            appendContentParts(
+                contentIt->second.get<picojson::array>(),
+                newMsg.role,
+                isTextLlm,
+                content,
+                parsed.mediaPlan,
+                parsed.mediaPaths);
+          } catch (...) {
+            resetMedia();
+            throw;
+          }
+        } else {
+          std::string errorMsg = string_format(
+              "%s: content must be a string or an array of content parts\n",
+              parseTag);
           throw qvac_errors::StatusError(
               ADDON_ID, toString(InvalidInputFormat), errorMsg);
         }
-        std::string content = contentMissing
-                                  ? std::string()
-                                  : contentIt->second.get<std::string>();
 
         if (type == "media") {
           if (isTextLlm) {
