@@ -253,9 +253,10 @@ test('a draft model that is not a file rejects', { timeout: 600_000 }, async (t)
 
 // A margin is free memory the projection may not place into, so one as large
 // as the device leaves no room to offload, and the placement matches a load
-// that pins no layers. Each projection reads free memory again, and another
-// job on a shared GPU moves it between calls, so the margin is sized from the
-// device's total, which free never exceeds.
+// that pins no layers at the context floor the fitter falls back to; a device's
+// compute buffer grows with the context. Each projection reads free memory
+// again, and another job on a shared GPU moves it between calls, so the margin
+// is sized from the device's total, which free never exceeds.
 test('the stricter of the two margins binds', { timeout: 600_000 }, async (t) => {
   const file = await modelPath()
   const base = await assess(file)
@@ -269,7 +270,7 @@ test('the stricter of the two margins binds', { timeout: 600_000 }, async (t) =>
   // A margin applies to every device, so the largest one sets it.
   const all = Math.max(...base.devices.slice(0, -1).map((device) => device.totalBytes))
   const allMib = `${Math.ceil(all / (1024 * 1024))}`
-  const placed = deviceUsed(noOffload)
+  const placed = deviceUsed(await assess(file, PINNED))
 
   t.is(deviceUsed(await assess(file, {}, { marginBytes: all })), placed, 'the caller margin binds')
   t.is(deviceUsed(await assess(file, { 'fit-target': allMib })), placed, 'the load target binds')

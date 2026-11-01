@@ -20,6 +20,9 @@
 // QVAC_SPECULATIVE_TOLERATE_DIVERGENCE=1 lets greedy output differ from plain
 // decoding and between runs, for GPU backends (e.g. RADV Vulkan) whose batched
 // verification flips near-ties. Off by default: CI requires identical output.
+// Always on for Android: with quantized weights, a single token decodes through
+// the GPU's integer-dot matrix-vector path and a verify batch through the
+// matrix-matrix path, and their logits differ by more than a near-tie's margin.
 //
 // prestage-ignore: Qwen3-4B-Q4_K_M.gguf — opt-in via QVAC_RUN_SPECULATIVE_DFLASH=1, desktop-only
 // prestage-ignore: Qwen3-4B-DFlash-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_DFLASH=1, desktop-only
@@ -71,7 +74,8 @@ const LARGE_TARGET = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
 const skipDflash = optIn('QVAC_RUN_SPECULATIVE_DFLASH', 'DFlash on Qwen3-4B')
 const skipLarge = optIn('QVAC_RUN_SPECULATIVE_27B', 'Speculative decoding on Qwen3.8-27B')
 const skipMtpHeads = optIn('QVAC_RUN_SPECULATIVE_MTP_HEADS', 'External MTP heads')
-const tolerateDivergence = readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '1'
+const tolerateDivergence =
+  platform === 'android' || readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '1'
 
 // `draft` is the `spec-draft-model`. The 27B variants download their models
 // on first use, so their tests get room for that.
@@ -255,16 +259,25 @@ for (const variant of VARIANTS) {
       const plain = await run(baseConfig({ 'spec-type': 'none', reverse_prompt: stopWord }))
       const speculative = await run(await variantConfig(variant, { reverse_prompt: stopWord }))
       t.is(plain.stats.stopReason, 'antiprompt', 'plain decoding stopped on the stop word')
-      t.is(
-        speculative.stats.stopReason,
-        'antiprompt',
-        'speculative decoding stopped on the stop word'
-      )
       if (tolerateDivergence) {
-        // Outputs may diverge before the stop; each must still stop at its own
+        // Outputs may diverge before the stop, and the speculative text may then
+        // never contain the stop word. Each output that does must stop at its own
         // first match, and where one contains the other they must be equal.
         assertStopsAtFirstMatch(t, plain.output, stopWord, 'plain')
-        assertStopsAtFirstMatch(t, speculative.output, stopWord, 'speculative')
+        if (speculative.output.toLowerCase().includes(stopWord)) {
+          t.is(
+            speculative.stats.stopReason,
+            'antiprompt',
+            'speculative decoding stopped on the stop word'
+          )
+          assertStopsAtFirstMatch(t, speculative.output, stopWord, 'speculative')
+        } else {
+          t.is(
+            speculative.stats.stopReason,
+            'predictionLimit',
+            'speculative text without the stop word ran to the prediction limit'
+          )
+        }
         const a = speculative.output
         const b = plain.output
         t.ok(
@@ -277,6 +290,11 @@ for (const variant of VARIANTS) {
           t.comment(`outputs diverged at character ${commonPrefixLength(a, b)} before the stop`)
         }
       } else {
+        t.is(
+          speculative.stats.stopReason,
+          'antiprompt',
+          'speculative decoding stopped on the stop word'
+        )
         t.is(
           speculative.output,
           plain.output,
