@@ -254,6 +254,7 @@ new LlmLlamacpp({
 - `files.projectionModel`, when present, is forwarded as `projectionPath` for multimodal models.
 - `load()` takes no arguments. It constructs the native addon with the first shard-matching entry of `files.model` (via `pickPrimaryGgufPath`) as the primary model path, streams all entries via `bare-fs` + `loadWeights`, and finally calls `activate()`.
 - `run(messages, runOptions?)` forwards `prefill`, normalized `generationParams` (`grammar` and `json_schema` are mutually exclusive), optional `cacheKey`, and `ephemeral` into the native request path. `saveCache(cacheKey)` writes a cached conversation to its file through the native `saveCache` binding, off the JS thread.
+- `calcTokens({ text?, history?, tools? })` serializes `history` and `tools` to JSON and calls the native `calcTokens` binding, which counts off the JS thread. It takes the shared state lock and reads only load-time state, so it never enters the job scheduler and runs beside in-flight requests.
 
 </details>
 

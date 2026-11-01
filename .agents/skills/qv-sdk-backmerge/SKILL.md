@@ -271,5 +271,5 @@ Before completing:
 - `.agents/skills/qv-sdk-changelog/SKILL.md` — changelog regeneration used during conflict resolution
 - `docs/gitflow.md` — title format and `[skiplog]` semantics
 - `.github/teams/sdk.json` — packages this skill applies to
-- `docs/gitflow.md` — release flow and "Keep main aligned" rules (still documents fork-first contribution; prefer org-branch heads per this skill until DevOps updates gitflow)
+- `docs/gitflow.md` — release flow, "Keep main aligned" rules, and org-branch preference with personal-fork fallback
 - Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)

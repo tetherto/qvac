@@ -121,6 +121,8 @@ void MtmdLlmContext::initializeCommonState() {
   historyReasoningTags_ =
       qvac_lib_inference_addon_llama::utils::historyReasoningTags(
           tmpls_.get(), modelCtx_.model, params_.use_jinja);
+  loadUseJinja_ = params_.use_jinja;
+  loadEnableThinking_ = params_.reasoning_budget != 0;
 
   smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
   if (!smpl_) {
@@ -539,6 +541,20 @@ void MtmdLlmContext::tokenizeChat(
         rendered.generationPrompt,
         std::vector<llama_token>(tokens, tokens + count));
   }
+}
+
+size_t MtmdLlmContext::countChatTokens(
+    const std::vector<common_chat_msg>& chatMsgs,
+    const std::vector<common_chat_tool>& tools) const {
+  return countRenderedChatTokens(
+      tmpls_.get(),
+      chatMsgs,
+      tools,
+      loadUseJinja_,
+      loadEnableThinking_,
+      [this](const std::string& text) {
+        return ::common_tokenize(modelCtx_.vocab, text, true, true);
+      });
 }
 
 LlmContext::EvalMessageResult MtmdLlmContext::evalMessage(

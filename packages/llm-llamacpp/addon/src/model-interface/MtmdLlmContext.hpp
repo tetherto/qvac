@@ -194,6 +194,9 @@ public:
   historyReasoningTags() const override {
     return historyReasoningTags_;
   }
+  [[nodiscard]] size_t countChatTokens(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools) const override;
 
   /// Entries the last prompt reconciliation kept resident (0 = cold).
   /// Makes the next media chunk fail before it is encoded, as an image
@@ -532,6 +535,9 @@ private:
   // load; see `historyReasoningTags`.
   std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>
       historyReasoningTags_;
+  // See TextLlmContext: load-time render settings for `countChatTokens`.
+  bool loadUseJinja_ = false;
+  bool loadEnableThinking_ = false;
 
   // True when this model requires full-state snapshots for request rollback
   // and divergent-history checkpoints. Decided once by
