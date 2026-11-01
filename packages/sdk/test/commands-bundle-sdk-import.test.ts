@@ -356,9 +356,9 @@ describe('isBarePackNodeSupported', () => {
     }
   })
 
-  it('matches the engines.node of @qvac/cli, which qvac doctor reports', () => {
+  it('matches the engines.node of @qvac/sdk-tools, which qvac-sdk doctor reports', () => {
     const cliManifest = JSON.parse(
-      fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'cli', 'package.json'), 'utf8')
+      fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'sdk-tools', 'package.json'), 'utf8')
     ) as { engines: { node: string } }
     assert.equal(cliManifest.engines.node, BARE_PACK_NODE_ENGINES)
   })

@@ -85,7 +85,7 @@ const ALLOWED = [
       'Same consumer tree as the SDK e2e workflow installs: electron and react-native both install through postinstall.',
   },
   ...[
-    'packages/cli/package.json',
+    'packages/sdk-tools/package.json',
     'plugins/openclaw/package.json',
     'plugins/opencode/package.json',
   ].map((file) => ({
@@ -392,10 +392,10 @@ test('the scan sees the sites it is meant to police', () => {
   // Canaries: if a rewrite of the detector stops seeing these, the suite would
   // pass by finding nothing at all.
   for (const expected of [
-    '.github/workflows/trigger-reusable-lib-cli.yml',
+    '.github/workflows/trigger-reusable-lib-sdk-tools.yml',
     '.github/workflows/pr-checks-sdk-pod.yml',
     'scripts/ci/openclaw-upstream-compat-smoke.sh',
-    'packages/cli/package.json',
+    'packages/sdk-tools/package.json',
   ]) {
     assert.ok(files.has(expected), `detector found no install site in ${expected}`)
   }
@@ -405,12 +405,12 @@ test('the scan sees the sites it is meant to police', () => {
     'detector no longer sees the $PM indirection in pr-checks-sdk-pod.yml',
   )
 
-  // The cli build job runs `npm run sdk-source:workspace`, whose install lives
+  // The sdk-tools build job runs `npm run sdk-source:workspace`, whose install lives
   // in the manifest rather than the workflow.
   assert.ok(
     sites.some(
       (site) =>
-        site.file === 'packages/cli/package.json' &&
+        site.file === 'packages/sdk-tools/package.json' &&
         site.text.includes('"sdk-source:workspace"'),
     ),
     'detector no longer sees installs inside package.json scripts',

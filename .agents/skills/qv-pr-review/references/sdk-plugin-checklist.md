@@ -152,4 +152,4 @@ Rules for this section:
 See `packages/sdk/AGENTS.md`. Native addon-only PRs skip this section.
 
 - User-facing inference change updates `@qvac/cli` in this PR, or the PR body says library-only.
-- Missing `packages/cli` diff with no library-only note is a gap (Medium).
+- Missing `packages/sdk-tools` diff with no library-only note is a gap (Medium).

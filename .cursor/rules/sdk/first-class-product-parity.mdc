@@ -4,8 +4,8 @@ globs:
   - packages/sdk/server/bare/plugins/**
   - packages/sdk/client/api/**
   - packages/sdk/schemas/**
-  - packages/cli/src/serve/**
-  - packages/cli/src/configure/**
+  - packages/sdk-tools/src/serve/**
+  - packages/sdk-tools/src/configure/**
   - docs/website/content/docs/cli/http-server/**
 alwaysApply: false
 ---

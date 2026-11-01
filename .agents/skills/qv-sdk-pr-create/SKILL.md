@@ -78,7 +78,7 @@ Consequences for release changelog / metadata PRs:
 7. Validate tag requirements ([bc]/[api]/[mod])
 8. **If the diff exposes or changes a user-facing SDK capability**, apply first-class product parity (see below) before outputting the description
 9. **If diff touches the `version` of `packages/sdk` or its `@qvac/inference` range, or sdk's dep blocks**, chain into the `qv-sdk-inference-version` skill (see "SDK @qvac/inference Version Trigger" below)
-10. **If the diff touches user-facing paths under `packages/sdk`, `packages/cli`, or `packages/sdk-python` and `docs/website/content/docs` is not already in the diff**, apply the docs website trigger (see "Docs Website Trigger" below) before outputting the description
+10. **If the diff touches user-facing paths under `packages/sdk`, `packages/sdk-tools`, or `packages/sdk-python` and `docs/website/content/docs` is not already in the diff**, apply the docs website trigger (see "Docs Website Trigger" below) before outputting the description
 11. Output complete PR description
 12. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
 
@@ -125,7 +125,7 @@ Fill template sections based on the diff analysis. Delete sections that don't ap
 
 See `packages/sdk/AGENTS.md`.
 
-If triggered and `packages/cli` is unchanged:
+If triggered and `packages/sdk-tools` is unchanged:
 
 1. ASK: "CLI not updated. Add CLI in this PR, mark library-only in the body, or skip?"
 2. Add CLI: stop until the CLI diff is present. Library-only: one-line why in the body. Skip: reminder at the end.
@@ -215,7 +215,7 @@ To skip this sync for a single run, the user can invoke `/qv-sdk-pr-create --no-
 
 ## Docs Website Trigger
 
-**Trigger:** diff touches user-facing paths under `packages/sdk`, `packages/cli`, or `packages/sdk-python`, and `docs/website/content/docs` is not already in the diff.
+**Trigger:** diff touches user-facing paths under `packages/sdk`, `packages/sdk-tools`, or `packages/sdk-python`, and `docs/website/content/docs` is not already in the diff.
 
 ### Steps (after Step 9 of Workflow above)
 

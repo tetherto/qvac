@@ -55,7 +55,7 @@ fi
 SOURCE_PATHS=(
   "packages/sdk"
   "packages/sdk-python"
-  "packages/cli"
+  "packages/sdk-tools"
 )
 
 # ---------------------------------------------------------------------------
@@ -166,14 +166,14 @@ bucket_for() {
 
     # CLI: infra before commands, because src/cli/ is the command framework
     # and would otherwise match the command glob.
-    packages/cli/src/cli/*) echo "cli-infra"; return ;;
-    packages/cli/src/config.ts|packages/cli/src/errors.ts|packages/cli/src/logger.ts|packages/cli/src/index.ts) echo "cli-infra"; return ;;
+    packages/sdk-tools/src/cli/*) echo "cli-infra"; return ;;
+    packages/sdk-tools/src/config.ts|packages/sdk-tools/src/errors.ts|packages/sdk-tools/src/logger.ts|packages/sdk-tools/src/index.ts) echo "cli-infra"; return ;;
     # Any command folder, not a closed list of the commands that exist today. A
     # NEW command has to reach R4, which routes it to the `## Reference` section
     # of the CLI index page. A closed list bucketed it `internal`, and a run
     # that is internal-only stops at NO_DOCS_IMPACT — an entire new command
     # disappearing without a word (acceptance scenario Q).
-    packages/cli/src/*/*) echo "cli-command"; return ;;
+    packages/sdk-tools/src/*/*) echo "cli-command"; return ;;
 
     packages/sdk-python/*) echo "python-surface"; return ;;
   esac

@@ -49,4 +49,4 @@ Fill in the template based on the combined change set. Return the completed PR d
 
 Do NOT create or modify any additional files when producing the PR description.
 
-Do not add `packages/cli` to a native addon PR. If a follow-up SDK exposure PR is expected, remind the author that CLI belongs there (see `packages/sdk/AGENTS.md`).
+Do not add `packages/sdk-tools` to a native addon PR. If a follow-up SDK exposure PR is expected, remind the author that CLI belongs there (see `packages/sdk/AGENTS.md`).

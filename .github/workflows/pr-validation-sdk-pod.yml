@@ -14,7 +14,7 @@ on:
       - "packages/sdk/**"
       - "packages/sdk-e2e/**"
       - "packages/sdk-kotlin/**"
-      - "packages/cli/**"
+      - "packages/sdk-tools/**"
       - "packages/rag/**"
       - "packages/logging/**"
       - "packages/error/**"

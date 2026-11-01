@@ -12,9 +12,9 @@ name: Benchmark CLI — OpenAI serve provider compare
 on:
   pull_request:
     paths:
-      - "packages/cli/benchmarks/serve-openai-providers/**"
-      - "packages/cli/package.json"
-      - "packages/cli/tsconfig.benchmark.json"
+      - "packages/sdk-tools/benchmarks/serve-openai-providers/**"
+      - "packages/sdk-tools/package.json"
+      - "packages/sdk-tools/tsconfig.benchmark.json"
       - ".github/workflows/benchmark-cli-serve-openai-providers.yml"
     branches:
       - main
@@ -46,8 +46,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BENCH_DIR: packages/cli/benchmarks/serve-openai-providers
-  CLI_DIR: packages/cli
+  BENCH_DIR: packages/sdk-tools/benchmarks/serve-openai-providers
+  CLI_DIR: packages/sdk-tools
 
 jobs:
   # A release-train PR and its backmerge bump the CLI's @qvac/sdk to a version

@@ -26,10 +26,10 @@ const LEXER_PACKAGE = 'bare-module-lexer'
 // on, so the lexer has to be the one that bare-pack resolves. Reading it out of
 // an ambient `node_modules` picks up whatever version happens to be hoisted
 // nearby, and the desync this check hunts for differs between lexer releases.
-// @qvac/cli's engines.node is the Node floor that lexer's native addon needs;
+// @qvac/sdk-tools' engines.node is the Node floor that lexer's native addon needs;
 // below it the addon aborts the process instead of throwing.
 const SDK_MANIFEST_PATH = fileURLToPath(new URL('../../packages/sdk/package.json', import.meta.url))
-const CLI_MANIFEST_PATH = fileURLToPath(new URL('../../packages/cli/package.json', import.meta.url))
+const CLI_MANIFEST_PATH = fileURLToPath(new URL('../../packages/sdk-tools/package.json', import.meta.url))
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
 // A require-family call whose first argument is not a plain string literal.
 // Template literals count as computed: the lexer does not follow them. The

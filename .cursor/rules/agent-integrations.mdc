@@ -3,8 +3,8 @@ description: Load the canonical architecture for QVAC coding-agent integrations
 globs:
   - packages/ai-sdk-provider/**
   - plugins/opencode/**
-  - packages/cli/src/serve/**
-  - packages/cli/docs/serve-openai.md
+  - packages/sdk-tools/src/serve/**
+  - packages/sdk-tools/docs/serve-openai.md
   - docs/website/content/docs/cli/http-server/**
   - docs/architecture/AGENT-INTEGRATIONS.md
 alwaysApply: false

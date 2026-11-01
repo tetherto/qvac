@@ -85,17 +85,17 @@
 # the command folders are absent from this map on purpose.
 # ---------------------------------------------------------------------------
 
-- source: packages/cli/src/cli/**
+- source: packages/sdk-tools/src/cli/**
   pages: []          # command framework (option parsing, registration) — no user-facing surface
 
-- source: packages/cli/src/logger.ts
+- source: packages/sdk-tools/src/logger.ts
   pages: []          # log formatting internals; a change to visible output is caught by the Phase 3 impact check, not by routing
 
-- source: packages/cli/src/errors.ts
+- source: packages/sdk-tools/src/errors.ts
   pages: []          # error class plumbing; user-visible message changes route via the command's own heading
 
 # One key can be documented in both collections, each at its own current line.
-- source: packages/cli/src/config.ts
+- source: packages/sdk-tools/src/config.ts
   pages: [sdk/<line>/configuration/index.mdx, cli/<line>/index.mdx]
 
 # DECIDED: `qvac verify` is intentionally undocumented on the site.
@@ -104,7 +104,7 @@
 # tooling, not SDK application development, which is what the site addresses.
 # Without this entry the skill raises HUMAN_INPUT_REQUIRED on every touch of
 # src/verify/. Revisit if the command is ever pointed at end users.
-- source: packages/cli/src/verify/**
+- source: packages/sdk-tools/src/verify/**
   pages: []
 
 # ---------------------------------------------------------------------------

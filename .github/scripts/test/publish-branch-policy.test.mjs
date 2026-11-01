@@ -47,12 +47,12 @@ const LIBRARY_PUBLISHERS = new Set([
   'publish-sdk.yml',
   'trigger-reusable-infer-base.yml',
   'trigger-reusable-lib-ai-sdk-provider.yml',
-  'trigger-reusable-lib-cli.yml',
   'trigger-reusable-lib-error.yml',
   'trigger-reusable-lib-logging.yml',
   'trigger-reusable-lib-openclaw-plugin.yml',
   'trigger-reusable-lib-opencode-plugin.yml',
   'trigger-reusable-lib-rag.yml',
+  'trigger-reusable-lib-sdk-tools.yml',
   'trigger-reusable-lib-test-suite.yml',
   'trigger-reusable-lib.yml',
 ])

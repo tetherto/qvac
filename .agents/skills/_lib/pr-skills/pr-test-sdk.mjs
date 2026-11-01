@@ -6,7 +6,7 @@ import { commandCwd } from "./pr-test-generic.mjs";
 export const SDK_POD_PACKAGE_PATHS = new Set([
   "packages/sdk",
   "packages/sdk-e2e",
-  "packages/cli",
+  "packages/sdk-tools",
   "packages/rag",
   "packages/logging",
   "packages/error",
