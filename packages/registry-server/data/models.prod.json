@@ -802,7 +802,21 @@
     "params": "300M",
     "licenseId": "gemma",
     "tags": ["embedding", "embed", "embeddinggemma"],
-    "notes": ""
+    "notes": "",
+    "deprecated": true,
+    "replacedBy": "https://huggingface.co/ggml-org/embeddinggemma-300M-GGUF/resolve/0f741b5a6585bd53aeb15cd1372c56f2a0f65e12/embeddinggemma-300M-Q8_0.gguf",
+    "deprecationReason": "Converted without the sentence-transformers Dense layers (no dense_2/dense_3 tensors), so it returns mean-pooled hidden states instead of EmbeddingGemma embeddings"
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/embeddinggemma-300M-GGUF/resolve/0f741b5a6585bd53aeb15cd1372c56f2a0f65e12/embeddinggemma-300M-Q8_0.gguf",
+    "engine": "llamacpp-embedding",
+    "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
+    "quantization": "q8_0",
+    "params": "300M",
+    "licenseId": "gemma",
+    "tags": ["embedding", "embed", "embeddinggemma"],
+    "notes": "Includes the sentence-transformers Dense layers (dense_2, dense_3). Vectors differ from the unsloth conversion it replaces, so re-embed existing indexes.",
+    "link": "https://huggingface.co/ggml-org/embeddinggemma-300M-GGUF"
   },
   {
     "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-BF16.gguf",
