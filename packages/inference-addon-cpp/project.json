@@ -119,22 +119,26 @@
         "linux-x64-asan": {
           "args": "--asan",
           "ci": {
-            "runner": "linux_ubuntu2204_x64"
+            "runner": "linux_ubuntu2204_x64",
+            "setup": ["node22"]
           }
         },
         "darwin-arm64": {
           "ci": {
-            "runner": "macos_arm64_gpu"
+            "runner": "macos_arm64_gpu",
+            "setup": ["node22"]
           }
         },
         "darwin-x64": {
           "ci": {
-            "runner": "macos_15_large"
+            "runner": "macos_15_large",
+            "setup": ["node22"]
           }
         },
         "win32-x64": {
           "ci": {
-            "runner": "win_2025_x64"
+            "runner": "win_2025_x64",
+            "setup": ["node22"]
           }
         }
       },
@@ -151,12 +155,14 @@
       "configurations": {
         "android-arm64": {
           "ci": {
-            "runner": "ubuntu_2404"
+            "runner": "ubuntu_2404",
+            "setup": ["node22"]
           }
         },
         "ios-arm64": {
           "ci": {
-            "runner": "macos_ios"
+            "runner": "macos_ios",
+            "setup": ["node22"]
           }
         }
       },

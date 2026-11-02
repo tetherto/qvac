@@ -166,7 +166,7 @@ jobs:
           keep-android: "true"
       - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
-          node-version: lts/*
+          node-version: ${{ contains(matrix.row.setup, 'node22') && '22' || 'lts/*' }}
       - uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
         with:
           package-json-file: src/package.json
