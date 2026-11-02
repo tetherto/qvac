@@ -67,7 +67,7 @@ jobs:
           arch: ${{ env.ARCH }}
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@ef3d614873ab1ed71aaa07c3df7b23d2760fb12b
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@9c7bdfde26137357159de1cf31d8b9b14d39c3a7
 
       - name: Set Vulkan SDK Path on Linux
         shell: bash
