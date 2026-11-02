@@ -37,6 +37,7 @@ type LlmLlamacppArgs = LlmLlamacpp.LlmLlamacppArgs;
 type Message = LlmLlamacpp.Message;
 type RunOptions = LlmLlamacpp.RunOptions;
 type UserMediaMessage = LlmLlamacpp.UserMediaMessage;
+type UserTextMessage = LlmLlamacpp.UserTextMessage;
 
 /** `exclusiveRunQueue()` is published as `Promise<any>`; keep it generic here. */
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
@@ -132,6 +133,20 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
   };
 }
 
+// Malformed parts (null, non-objects) are not byte media: they pass through
+// untouched so the native validator rejects them with `InvalidInputFormat`.
+function isByteMediaPart(
+  part: unknown,
+): part is { type: "media"; content: Uint8Array } {
+  const candidate = part as { type?: unknown; content?: unknown } | null;
+  return (
+    candidate !== null &&
+    typeof candidate === "object" &&
+    candidate.type === "media" &&
+    candidate.content instanceof Uint8Array
+  );
+}
+
 function promptToAddonMessages(
   prompt: Message[],
   runOptions?: RunOptions,
@@ -143,7 +158,10 @@ function promptToAddonMessages(
   const { prefill, generationParams, cacheKey, ephemeral, baseCacheKey } =
     normalizeRunOptions(runOptions);
 
-  const textMessages: Message[] = [];
+  // Only ever JSON-serialized into the addon's text message: a byte-buffer
+  // media part reaches the native side path-less, bound to the hoisted buffer
+  // by position, so the wire shape is wider than the public `Message` type.
+  const textMessages: unknown[] = [];
   const mediaItems: Uint8Array[] = [];
 
   for (const message of prompt) {
@@ -151,9 +169,28 @@ function promptToAddonMessages(
     if (media.role === "user" && media.type === "media" && media.content instanceof Uint8Array) {
       mediaItems.push(media.content);
       textMessages.push({ ...media, content: "" });
-    } else {
-      textMessages.push(message);
+      continue;
     }
+
+    // Ordered parts: hoist each media part's bytes next to the other media
+    // messages and leave a path-less part behind. The native side records the
+    // plan in marker order, so the bytes still bind to the right markers.
+    const text = message as UserTextMessage;
+    if (Array.isArray(text.content)) {
+      textMessages.push({
+        ...text,
+        content: text.content.map((part) => {
+          if (isByteMediaPart(part)) {
+            mediaItems.push(part.content);
+            return { type: "media" };
+          }
+          return part;
+        }),
+      });
+      continue;
+    }
+
+    textMessages.push(message);
   }
 
   const promptMessages: AddonModule.AddonRunJobMessage[] = [];
@@ -383,6 +420,17 @@ function sanitizePromptForLog(prompt: Message[]): unknown {
     const media = msg as UserMediaMessage;
     if (media && media.type === "media" && media.content instanceof Uint8Array) {
       return { ...media, content: `[Uint8Array byteLength=${media.content.byteLength}]` };
+    }
+    const text = msg as UserTextMessage;
+    if (Array.isArray(text?.content)) {
+      return {
+        ...text,
+        content: text.content.map((part) =>
+          isByteMediaPart(part)
+            ? { ...part, content: `[Uint8Array byteLength=${part.content.byteLength}]` }
+            : part,
+        ),
+      };
     }
     return msg;
   });
@@ -1112,12 +1160,22 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     const params: AddonModule.AddonCalcTokensParams = {};
     if (text !== undefined) params.text = text;
     // Media bytes are dropped rather than serialized: the native side rejects
-    // any media message by its type.
+    // any media message or ordered media part by its type.
     if (history !== undefined) {
       params.history = JSON.stringify(
-        history.map((message) =>
-          (message as UserMediaMessage)?.type === "media" ? { ...message, content: "" } : message,
-        ),
+        history.map((message) => {
+          if ((message as UserMediaMessage)?.type === "media") return { ...message, content: "" };
+          const textMessage = message as UserTextMessage;
+          if (Array.isArray(textMessage?.content)) {
+            return {
+              ...message,
+              content: textMessage.content.map((part) =>
+                isByteMediaPart(part) ? { type: "media" } : part,
+              ),
+            };
+          }
+          return message;
+        }),
       );
     }
     if (tools !== undefined) params.tools = JSON.stringify(tools);
@@ -1481,10 +1539,31 @@ namespace LlmLlamacpp {
     opts?: { stats?: boolean; rejectWhenBusy?: boolean };
   }
 
+  /**
+   * One ordered piece of a message's `content`. Media parts keep their place in
+   * the turn: a single user message can interleave text and media, which a
+   * string `content` plus separate `type: "media"` messages cannot express
+   * without splitting the turn.
+   */
+  export type UserContentPart =
+    | { type: "text"; text: string }
+    | {
+        type: "media";
+        /**
+         * Either an absolute path to the media file (`string`) or its raw bytes
+         * (`Uint8Array`), the same two forms a `type: "media"` message accepts.
+         */
+        content: string | Uint8Array;
+      };
+
   export interface UserTextMessage {
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- the literals document the known roles; any string is accepted.
     role: "system" | "assistant" | "user" | "tool" | "session" | string;
-    content: string;
+    /**
+     * Plain text, or ordered text/media parts rendered as one turn. Media parts
+     * are only valid on user messages.
+     */
+    content: string | UserContentPart[];
     /**
      * An assistant turn's reasoning, separate from its answer in `content`, as
      * in OpenAI-compatible APIs. Optional: an answer sent back with its

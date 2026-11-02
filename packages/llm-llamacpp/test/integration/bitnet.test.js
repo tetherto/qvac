@@ -10,8 +10,7 @@ const os = require('bare-os')
 const isAndroid = os.platform() === 'android'
 
 const BITNET_MODEL = {
-  name: 'bitnet_b1_58-large-TQ2_0.gguf',
-  url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf'
+  name: 'bitnet_b1_58-large-TQ2_0.gguf'
 }
 
 const PROMPT = [{ role: 'user', content: 'What is 2 + 2?' }]
@@ -77,8 +76,7 @@ safeTest(
   { timeout: 900_000, skip: !isAndroid },
   async (t) => {
     const [modelName, dirPath] = await ensureModel({
-      modelName: BITNET_MODEL.name,
-      downloadUrl: BITNET_MODEL.url
+      modelName: BITNET_MODEL.name
     })
 
     const modelPath = path.join(dirPath, modelName)
