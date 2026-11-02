@@ -12372,7 +12372,32 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         bool | None,
         Field(
             alias="streamingEnergyVad",
-            description="CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
+            description="Run the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron streaming sessions and emit `{ type: 'vad', source: 'energy' }` events on each speech/silence transition. Tune it with `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, and `streamingEnergyVadHangoverMs`. Default false.",
+        ),
+    ] = None
+    streaming_energy_vad_threshold_db: Annotated[
+        float | None,
+        Field(
+            alias="streamingEnergyVadThresholdDb",
+            description="Energy-VAD speech threshold in dBFS RMS; audio above it counts as speech. Default -35.",
+        ),
+    ] = None
+    streaming_energy_vad_window_ms: Annotated[
+        int | None,
+        Field(
+            alias="streamingEnergyVadWindowMs",
+            description="Energy-VAD RMS window in ms; the engine caps it at 1000. Default 30.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    streaming_energy_vad_hangover_ms: Annotated[
+        int | None,
+        Field(
+            alias="streamingEnergyVadHangoverMs",
+            description="Silence the energy VAD requires before leaving the speaking state, in ms. Default 200.",
+            ge=0,
+            le=9007199254740991,
         ),
     ] = None
     streaming_left_context_ms: Annotated[
@@ -12475,6 +12500,20 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
             description="AOSC: FIFO-overflow pop-out count. Default 144.",
             gt=0,
             le=9007199254740991,
+        ),
+    ] = None
+    prewarm: Annotated[
+        bool | None,
+        Field(
+            description="Run one synthetic encoder pass while loading so the first request does not pay the GPU shader or kernel compile; Nemotron 3 Diarization also runs one streaming chunk. Default false."
+        ),
+    ] = None
+    prewarm_audio_seconds: Annotated[
+        float | None,
+        Field(
+            alias="prewarmAudioSeconds",
+            description="Length of the prewarm pass in seconds of audio; must be greater than 0. Default 1.",
+            gt=0.0,
         ),
     ] = None
     long_form_window_frames: Annotated[
@@ -24389,6 +24428,15 @@ class TranscribeStreamRequestParakeetStreamingConfig(GeneratedBaseModel):
     ] = None
     emit_partials: Annotated[bool | None, Field(alias="emitPartials")] = None
     emit_energy_vad: Annotated[bool | None, Field(alias="emitEnergyVad")] = None
+    energy_vad_threshold_db: Annotated[
+        float | None, Field(alias="energyVadThresholdDb")
+    ] = None
+    energy_vad_window_ms: Annotated[
+        int | None, Field(alias="energyVadWindowMs", gt=0, le=9007199254740991)
+    ] = None
+    energy_vad_hangover_ms: Annotated[
+        int | None, Field(alias="energyVadHangoverMs", ge=0, le=9007199254740991)
+    ] = None
     emit_speaker_vad: Annotated[bool | None, Field(alias="emitSpeakerVad")] = None
     diarization_threshold: Annotated[
         float | None, Field(alias="diarizationThreshold", ge=0.0, le=1.0)
