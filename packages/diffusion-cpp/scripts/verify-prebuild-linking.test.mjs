@@ -94,8 +94,9 @@ function fixture(
   fs.writeFileSync(path.join(backends, 'libqvac-diffusion-ggml-vulkan.so'), elf(['libvulkan.so.1']))
   if (cuda)
     fs.writeFileSync(path.join(backends, 'libqvac-diffusion-ggml-cuda.so'), elf(cuda, symbols))
-  const result = spawnSync(process.execPath, [checker, '--partial', directory], {
-    encoding: 'utf8'
+  const result = spawnSync(process.execPath, [checker, directory], {
+    encoding: 'utf8',
+    env: { ...process.env, BUILD_PLATFORM: 'linux' }
   })
   return { status: result.status, output: result.stdout + result.stderr }
 }
@@ -162,11 +163,10 @@ test('split publication retains CUDA and Vulkan in both Linux platform packages'
     const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'))
     assert.equal(manifest.name, `@qvac/diffusion-cpp-linux-${arch}`)
     assert.equal(manifest.version, meta.version)
-    const result = spawnSync(
-      process.execPath,
-      [checker, '--partial', path.join(directory, 'prebuilds')],
-      { encoding: 'utf8' }
-    )
+    const result = spawnSync(process.execPath, [checker, path.join(directory, 'prebuilds')], {
+      encoding: 'utf8',
+      env: { ...process.env, BUILD_PLATFORM: 'linux' }
+    })
     assert.equal(result.status, 0, result.stdout + result.stderr)
   }
 })
@@ -404,8 +404,9 @@ function mergedFixture(t, { linux = ['x64', 'arm64'], win32 = true, addonImports
       pe(['vulkan-1.dll', 'kernel32.dll'])
     )
   }
-  return (...flags) => {
-    const result = spawnSync(process.execPath, [checker, ...flags, directory], { encoding: 'utf8' })
+  return (buildPlatform) => {
+    const env = { ...process.env, BUILD_PLATFORM: buildPlatform ?? '' }
+    const result = spawnSync(process.execPath, [checker, directory], { encoding: 'utf8', env })
     return { status: result.status, output: result.stdout + result.stderr }
   }
 }
@@ -421,8 +422,8 @@ test('merged artifact fails when the win32 prebuild is missing', (t) => {
   assert.match(result.output, /win32-x64: no prebuild/)
 })
 
-test('a single-host directory skips the missing win32 prebuild with --partial', (t) => {
-  const result = mergedFixture(t, { linux: ['x64'], win32: false })('--partial')
+test('a prebuild job directory skips the missing win32 prebuild', (t) => {
+  const result = mergedFixture(t, { linux: ['x64'], win32: false })('linux')
   assert.equal(result.status, 0, result.output)
   assert.match(result.output, /SKIP win32-x64/)
 })

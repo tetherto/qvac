@@ -18,11 +18,11 @@
 // The prebuild workflow also runs it before merging release artifacts.
 // Plain Node, no dependencies.
 //
-// Usage: node verify-prebuild-linking.mjs [--partial] <prebuilds-dir>
+// Usage: node verify-prebuild-linking.mjs <prebuilds-dir>
 //
-// --partial is for a directory that holds only some hosts (one prebuild job,
-// one platform package): a missing win32 prebuild is skipped instead of
-// failing. The merged artifact is checked without it.
+// A prebuild job's post-artifact step sets BUILD_PLATFORM and its directory
+// holds only that job's host, so a missing win32 prebuild is skipped there
+// instead of failing. The merged artifact is checked without it.
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -193,10 +193,10 @@ const FORBIDDEN_WIN_IMPORTS = [
 ]
 const FORBIDDEN_WIN_RUNTIME = ['vcruntime', 'msvcp', 'ucrtbase.dll', 'api-ms-win-crt-']
 
-const prebuildsDir = process.argv.slice(2).find((arg) => !arg.startsWith('--'))
-const partial = process.argv.slice(2).includes('--partial')
+const prebuildsDir = process.argv[2]
+const partial = Boolean(process.env.BUILD_PLATFORM)
 if (!prebuildsDir) {
-  console.error('usage: verify-prebuild-linking.mjs [--partial] <prebuilds-dir>')
+  console.error('usage: verify-prebuild-linking.mjs <prebuilds-dir>')
   process.exit(2)
 }
 
