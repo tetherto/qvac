@@ -172,3 +172,140 @@ test('Supertonic warmUp dispatches native work without generating output', async
   await t.exception(model('pocket').warmUp('Unsupported'), /Supertonic/)
   await t.exception(model('supertonic').warmUp(1), /string/)
 })
+
+class PendingWarmUpBinding extends WarmUpBinding {
+  runJob(handle, data) {
+    if (data.type === 'warmUp') return super.runJob(handle, data)
+    this.pendingText = data.input
+    return true
+  }
+
+  finishSpeech(error) {
+    if (error) {
+      this._callCallbacks('Error', null, error)
+      return
+    }
+    this._callCallbacks('AudioResult', { outputArray: new Int16Array([1, 2]) }, null)
+    this._callCallbacks('RuntimeStats', { totalTime: 1 }, null)
+  }
+}
+
+for (const exclusiveRun of [false, true]) {
+  for (const method of ['run', 'runStream']) {
+    test(`Supertonic warmUp waits for unfinished ${method} (exclusiveRun: ${exclusiveRun})`, async (t) => {
+      const instance = model('supertonic', { exclusiveRun })
+      const binding = new PendingWarmUpBinding()
+      instance._createAddon = (params, callback) => new TTSInterface(binding, params, callback)
+      await instance.load()
+      try {
+        const response =
+          method === 'run'
+            ? await instance.run({ input: 'Unfinished speech.' })
+            : await instance.runStream('Unfinished speech.')
+        const speech = response.await().then(
+          () => 'completed',
+          (error) => error.message
+        )
+        const warming = instance.warmUp('Warm this text.')
+        await new Promise(setImmediate)
+        t.is(binding.pendingText, 'Unfinished speech.')
+        t.absent(binding.lastWarmUp, 'warm-up has not replaced the speech job')
+        binding.finishSpeech()
+        t.is(await speech, 'completed', 'the original speech response succeeds')
+        await warming
+        t.is(binding.lastWarmUp, 'Warm this text.')
+        t.absent(instance._job.active)
+      } finally {
+        await instance.destroy()
+      }
+    })
+  }
+}
+
+test('Supertonic warmUp can proceed after the active speech fails', async (t) => {
+  const instance = model('supertonic', { exclusiveRun: true })
+  const binding = new PendingWarmUpBinding()
+  instance._createAddon = (params, callback) => new TTSInterface(binding, params, callback)
+  await instance.load()
+  try {
+    const response = await instance.run({ input: 'Unfinished speech.' })
+    const speech = response.await().catch((error) => error.message)
+    const warming = instance.warmUp('Warm after failure.')
+    await new Promise(setImmediate)
+    t.absent(binding.lastWarmUp)
+    binding.finishSpeech('Speech failed')
+    t.is(await speech, 'Speech failed')
+    await warming
+    t.is(binding.lastWarmUp, 'Warm after failure.')
+    t.absent(instance._job.active)
+  } finally {
+    await instance.destroy()
+  }
+})
+
+class SpeechTokenBinding extends MockedBinding {
+  constructor(streaming) {
+    super()
+    this.streaming = streaming
+  }
+
+  runJob() {
+    setImmediate(() => {
+      if (this.streaming) {
+        this._callCallbacks(
+          'AudioResult',
+          {
+            outputArray: new Int16Array([1, 2]),
+            sampleRate: 24000,
+            isLast: false
+          },
+          null
+        )
+      }
+      this._callCallbacks(
+        'AudioResult',
+        {
+          outputArray: this.streaming ? new Int16Array(0) : new Int16Array([1, 2]),
+          sampleRate: 24000,
+          isLast: true,
+          speechTokenIds: [0, 2, 4]
+        },
+        null
+      )
+      this._callCallbacks('RuntimeStats', { totalTime: 1 }, null)
+    })
+    return true
+  }
+}
+
+for (const streaming of [false, true]) {
+  for (const method of ['runStream', 'runStreaming', 'streamOutput']) {
+    test(`CosyVoice ${method} preserves speech tokens (native streaming: ${streaming})`, async (t) => {
+      const instance = model('cosyvoice3', { streamChunkTokens: streaming ? 25 : 0 })
+      const binding = new SpeechTokenBinding(streaming)
+      instance._createAddon = (params, callback) => new TTSInterface(binding, params, callback)
+      await instance.load()
+      try {
+        const response =
+          method === 'runStream'
+            ? await instance.runStream('Replay this sentence.')
+            : method === 'runStreaming'
+              ? await instance.runStreaming(['Replay this sentence.'])
+              : await instance.run({ input: 'Replay this sentence.', streamOutput: true })
+        const chunks = []
+        for await (const chunk of response.iterate()) chunks.push(chunk)
+        await response.await()
+        t.is(chunks.length, streaming ? 2 : 1)
+        t.is(
+          chunks.reduce((samples, chunk) => samples + chunk.outputArray.length, 0),
+          2
+        )
+        t.alike(chunks[chunks.length - 1].speechTokenIds, [0, 2, 4])
+        t.is(chunks[chunks.length - 1].sentenceChunk, 'Replay this sentence.')
+        if (streaming) t.absent(chunks[0].speechTokenIds, 'audio chunks do not invent tokens')
+      } finally {
+        await instance.destroy()
+      }
+    })
+  }
+}

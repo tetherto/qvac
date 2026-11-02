@@ -353,6 +353,7 @@ class TTSGgml {
         if (typeof text !== "string")
             throw new Error("warmUp text must be a string");
         await this._runExclusive(async () => {
+            await this._job.active?.await().catch(() => { });
             const response = await this._runInternal({ input: text, type: "warmUp" });
             await response.await();
         });
