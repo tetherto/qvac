@@ -172,6 +172,29 @@ def build_fixture(seed: int) -> dict[str, np.ndarray]:
     }
 
 
+def lerobot_install_source() -> str:
+    """Where the installed lerobot came from, for oracle_fixtures.json.
+
+    A git install reports the pyproject version of that commit, which can be
+    a version never released on PyPI (main said 0.5.2 between v0.5.1 and
+    v0.6.0), so the version alone does not identify the code. pip records
+    the URL and commit of a direct install in direct_url.json (PEP 610).
+    """
+    from importlib.metadata import PackageNotFoundError, distribution
+
+    try:
+        dist = distribution("lerobot")
+    except PackageNotFoundError:
+        return "unknown"
+    raw = dist.read_text("direct_url.json")
+    if not raw:
+        return f"PyPI lerobot=={dist.version}"
+    info = json.loads(raw)
+    commit = info.get("vcs_info", {}).get("commit_id")
+    url = info.get("url", "unknown")
+    return f"{url}@{commit}" if commit else url
+
+
 def to_numpy(t: torch.Tensor) -> np.ndarray:
     return t.detach().to(torch.float32).cpu().numpy()
 
@@ -838,9 +861,7 @@ def main() -> int:
         "checkpoint": args.checkpoint,
         "checkpoint_revision": ckpt_revision,
         "lerobot_version": getattr(_lr, "__version__", "unknown"),
-        "lerobot_commit": "n/a (installed from PyPI lerobot=="
-                          + getattr(_lr, "__version__", "unknown")
-                          + ")",
+        "lerobot_commit": lerobot_install_source(),
         "torch_version": _t.__version__,
         "transformers_version": _tr.__version__,
         "seed": args.seed,
