@@ -620,6 +620,40 @@ export const embedConfigBaseSchema = z.object({
 
 export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>
 
+function refineEmbedLoadConfig(config: EmbedConfigInput, ctx: z.RefinementCtx) {
+  if (
+    config.imageMinTokens !== undefined &&
+    config.imageMaxTokens !== undefined &&
+    config.imageMinTokens > config.imageMaxTokens
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['imageMinTokens'],
+      message: 'imageMinTokens must not exceed imageMaxTokens.'
+    })
+  }
+
+  if (config.projectionModelSrc) return
+  for (const key of [
+    'imageMinTokens',
+    'imageMaxTokens',
+    'imageMaxMegapixels',
+    'audioMaxSeconds',
+    'mmprojNoAudio',
+    'mmprojUseGpu'
+  ] as const) {
+    if (config[key] !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [key],
+        message: `${key} requires projectionModelSrc.`
+      })
+    }
+  }
+}
+
+export const embedLoadConfigSchema = embedConfigBaseSchema.superRefine(refineEmbedLoadConfig)
+
 // Default values - typed as partial of the config
 export const EMBED_CONFIG_DEFAULTS = {
   gpuLayers: 99,

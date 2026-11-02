@@ -6,7 +6,7 @@ import {
   embedRequestSchema,
   embedResponseSchema,
   ModelType,
-  embedConfigBaseSchema,
+  embedLoadConfigSchema,
   ADDON_EMBEDDING,
   type CreateModelParams,
   type PluginModelResult,
@@ -81,7 +81,7 @@ export const embeddingsPlugin = definePlugin({
   modelType: ModelType.llamacppEmbedding,
   displayName: 'Embeddings (llama.cpp)',
   addonPackage: ADDON_EMBEDDING,
-  loadConfigSchema: embedConfigBaseSchema,
+  loadConfigSchema: embedLoadConfigSchema,
   assessFit: embedAssessFit,
 
   async resolveConfig(cfg: EmbedConfigInput, ctx: ResolveContext) {

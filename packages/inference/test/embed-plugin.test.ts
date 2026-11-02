@@ -1,13 +1,51 @@
 import test from 'brittle'
 import { unregisterAddonLogger } from '@/logging/index'
+import { handleLoadModel } from '@/handlers/load-model/handler'
+import { registerPlugin, unregisterPlugin } from '@/plugins/registry'
 import { embeddingsPlugin } from '@/plugins/builtin/llamacpp-embedding/plugin'
-import type { ResolveContext } from '@/schemas/index'
+import { embedConfigSchema, type ResolveContext } from '@/schemas/index'
 
 const ctx: ResolveContext = {
   resolveModelPath: async (src) => `/cache/${String(src)}`,
   modelSrc: '/model.gguf',
   modelType: 'llamacpp-embedding'
 }
+
+test('embedding plugin: rejects invalid load config before resolving models', async (t) => {
+  let resolveCalls = 0
+  registerPlugin({
+    ...embeddingsPlugin,
+    async resolveConfig() {
+      resolveCalls++
+      throw new Error('Projector resolution must not run')
+    }
+  })
+  t.teardown(() => unregisterPlugin(embeddingsPlugin.modelType))
+
+  for (const modelConfig of [
+    { projectionModelSrc: '/mmproj.gguf', imageMinTokens: 300, imageMaxTokens: 280 },
+    { imageMaxTokens: 280 }
+  ]) {
+    const response = await handleLoadModel({
+      type: 'loadModel',
+      modelType: 'llamacpp-embedding',
+      modelSrc: '/missing-embedding-model.gguf',
+      modelConfig,
+      seed: false,
+      withProgress: false
+    })
+    t.absent(response.success)
+    t.ok(
+      response.error?.includes(
+        modelConfig.projectionModelSrc
+          ? 'imageMinTokens must not exceed imageMaxTokens.'
+          : 'imageMaxTokens requires projectionModelSrc.'
+      ),
+      'config validation takes precedence over the missing primary model'
+    )
+  }
+  t.is(resolveCalls, 0, 'the projector resolver never runs')
+})
 
 test('embedding plugin: resolves the projector through the model lifecycle', async (t) => {
   const resolved = await embeddingsPlugin.resolveConfig!(
