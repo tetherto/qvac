@@ -32,6 +32,7 @@ TEST(RuntimeOptions, AcestepUnsetOptionsPreserveNativeDefaults) {
   EXPECT_EQ(options.n_gpu_layers, 7);
 }
 
+#ifdef AUDIOGEN_HAS_MINIMAX
 TEST(RuntimeOptions, MinimaxConditionerKeepsGgmlDeviceSelection) {
   minimax::MinimaxConfig config;
   config.coremlConditionerPath = "/models/conditioner.mlmodelc";
@@ -56,6 +57,7 @@ TEST(RuntimeOptions, MinimaxRetainsFullCoreMLAndUseGpuBehavior) {
   config.useGpu = false;
   EXPECT_EQ(engineOptions(config).device, "cpu");
 }
+#endif
 
 TEST(RuntimeOptions, BackendIdsMatchPublicNames) {
   EXPECT_EQ(backendIdFromName("CPU"), 0);

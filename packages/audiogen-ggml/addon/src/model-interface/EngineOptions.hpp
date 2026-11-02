@@ -1,10 +1,14 @@
 #pragma once
 
 #include <audiogen-cpp/acestep/engine.h>
+#ifdef AUDIOGEN_HAS_MINIMAX
 #include <audiogen-cpp/minimax/engine.h>
+#endif
 
 #include "model-interface/acestep/AcestepConfig.hpp"
+#ifdef AUDIOGEN_HAS_MINIMAX
 #include "model-interface/minimax/MinimaxConfig.hpp"
+#endif
 
 namespace qvac::audiogenggml {
 
@@ -28,6 +32,7 @@ engineOptions(const acestep::AcestepConfig& config) {
   return options;
 }
 
+#ifdef AUDIOGEN_HAS_MINIMAX
 inline tts_cpp::minimax::EngineOptions
 engineOptions(const minimax::MinimaxConfig& config) {
   tts_cpp::minimax::EngineOptions options;
@@ -42,5 +47,6 @@ engineOptions(const minimax::MinimaxConfig& config) {
       config.device.empty() ? (config.useGpu ? "auto" : "cpu") : config.device;
   return options;
 }
+#endif
 
 } // namespace qvac::audiogenggml
