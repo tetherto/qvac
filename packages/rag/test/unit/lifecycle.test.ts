@@ -53,6 +53,41 @@ test('ready can be retried after the corestore fails to open', async (t) => {
   t.pass('second ready() opened the database')
 })
 
+interface FailableCore {
+  closed: boolean
+  snapshot(...args: unknown[]): { ready(): Promise<void> }
+}
+
+test('a HyperDB that fails to open is closed before ready() retries', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close())
+  const failed: FailableCore[] = []
+  const flaky = {
+    ready: () => store.ready(),
+    close: () => store.close(),
+    get: (options: { name: string }) => {
+      const core = store.get(options) as unknown as FailableCore
+      if (failed.length === 0) {
+        const snapshot = core.snapshot.bind(core)
+        core.snapshot = (...args) => {
+          const session = snapshot(...args)
+          session.ready = () => Promise.reject(new Error('bad core'))
+          return session
+        }
+        failed.push(core)
+      }
+      return core as never
+    }
+  }
+  const rag = createRag({ corestore: flaky })
+
+  await t.exception(rag.ready(), /bad core/, 'first open fails inside HyperDB')
+  t.ok(failed[0].closed, 'the failed instance released its core')
+  await rag.ready()
+  await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.close()
+})
+
 test('close leaves the caller-owned corestore open', async (t) => {
   const store = new Corestore(await tmp(t))
   t.teardown(() => store.close())

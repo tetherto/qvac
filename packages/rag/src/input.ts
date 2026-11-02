@@ -66,8 +66,9 @@ function invalidInput(error: z.ZodError): QvacErrorRAG {
   return new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: reason })
 }
 
+// Always copies, so a caller reusing its buffer can't change a pending call.
 export function toVector(value: Float32Array | number[], label: string): Float32Array {
-  const vector = value instanceof Float32Array ? value : Float32Array.from(value)
+  const vector = Float32Array.from(value)
   if (vector.length === 0) {
     throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: `${label} is empty` })
   }

@@ -81,7 +81,12 @@ export function createRag(options: CreateRagOptions): Rag {
   async function open(): Promise<void> {
     await corestore.ready()
     const instance = HyperDB.bee(corestore.get({ name: CORE_NAME }), dbSpec, { autoUpdate: true })
-    await instance.ready()
+    try {
+      await instance.ready()
+    } catch (error) {
+      await instance.close().catch(() => {})
+      throw error
+    }
     db = instance
   }
 

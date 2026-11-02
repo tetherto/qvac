@@ -196,3 +196,20 @@ test('hits carry chunk metadataJson only when it was given', async (t) => {
   t.is(withMeta.metadataJson, '{"page":2}')
   t.absent('metadataJson' in withoutMeta, 'no metadataJson key')
 })
+
+test('reusing an input buffer after the call does not change what was stored', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  const buffer = new Float32Array([1, 0, 0])
+  const pending = rag.ingest({
+    namespace: 'ns',
+    documents: [{ id: 'a', chunks: [{ content: 'a', embedding: buffer, spaceId }] }]
+  })
+  buffer.fill(0)
+  await pending
+
+  const query = new Float32Array([1, 0, 0])
+  const searching = rag.search({ scope: { namespace: 'ns' }, vector: query, k: 1 })
+  query.fill(0)
+  const [hit] = await searching
+  t.is(hit.score, 1, 'both the stored vector and the query kept their values')
+})
