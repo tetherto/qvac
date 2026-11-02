@@ -52,6 +52,12 @@ addon's loader and its `.wasm` as assets.
 
 Supported:
 
+- `loadModel` from a registry model constant (such as `QWEN3_1_7B_INST_Q4`) when
+  the registry lists Hugging Face as its origin. The file downloads from Hugging
+  Face over HTTPS and is checked against the registry's SHA-256 once.
+- `loadModel` from a path in the origin private file system (OPFS), such as
+  `/.qvac/local/model.gguf`. A page can copy a file the user picks into OPFS and
+  load it from there.
 - `loadModel` from `http(s)` URLs. Downloads resume, and the cache in OPFS
   survives reloads.
 - `completion`: streaming, events, reasoning, tool calls and generation
@@ -66,7 +72,11 @@ Not available in the browser, each failing with an error that says so:
 
 - Model types other than `llamacpp-completion`.
 - Media (image or audio) messages.
-- Registry (`registry://`) and peer-to-peer (`pear://`) model sources.
+- Registry models stored in S3. Clients receive them only through the
+  registry's peer-to-peer network (Hypercore over Hyperswarm), which cannot run
+  in a browser: Hypercore's storage is a native RocksDB addon, and the DHT needs
+  UDP.
+- Peer-to-peer (`pear://`) model sources.
 - Sharded models.
 - RAG.
 - Delegated inference.
@@ -74,5 +84,6 @@ Not available in the browser, each failing with an error that says so:
 - Model-fit assessment.
 - Config files. The browser worker uses the SDK defaults.
 
-Downloads from Hugging Face are not checked against the Hub's SHA-256: the
-browser hides the redirect response that carries it.
+Plain Hugging Face URLs are not checked against the Hub's SHA-256, because the
+browser hides the redirect response that carries it. Registry models are
+checked against the registry's own SHA-256 instead.
