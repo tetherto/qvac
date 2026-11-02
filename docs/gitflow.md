@@ -1,25 +1,25 @@
-# GitFlow for QVAC Public SDKs & Model Packages (Fork-first Monorepo)
+# GitFlow for QVAC Public SDKs & Model Packages
 
-This repository uses a **main-first GitFlow** optimized for **public SDK/model packages** inside a monorepo **with a fork-first contribution model**.
+This repository uses a **main-first GitFlow** for **public SDK/model packages**. Internal work prefers org branches and same-repo PRs when write access permits; personal forks are supported when org push is unavailable or the contributor chooses that path.
 
 ## The rules that matter (TL;DR)
 
 - **All development merges into `main`.**
-- **All contributor work comes from forks** (no pushing branches in the upstream org repo).
+- **Prefer org working branches and same-repo PRs when write access permits.** Use a personal fork otherwise, or when explicitly chosen.
 - **Releases are published from versioned `release-<package>-<x.y.z>` branches** that exist in the upstream org repo.
-- **Release/patch changes land via fork PRs into `release-*`**, not via upstream branch-to-branch merges.
-- **Changes are done as two PRs**: (1) fork → `main` (dev fix), (2) fork → `release-*` (patch release).
+- **Release/patch changes land via working-branch PRs into `release-*`**, not direct merges between integration and release branches.
+- **Patch fixes use two PRs**: (1) working branch → `main` (dev fix), (2) separate working branch → `release-*` (patch release). Either head may be in the org repo or a personal fork.
 - **`feature-*` and `tmp-*` are non-release streams** (GitHub Packages only), used to share dev builds safely.
 - CI/CD is **path-scoped** so only the impacted package(s) build/publish.
 
-> **Why this exists:** predictable releases across many packages, fast day-to-day development on `main`, and safe CI/CD in a public repo with forks.
+> **Why this exists:** predictable releases across many packages, fast day-to-day development on `main`, and safe CI/CD for same-repo and external-fork contributions.
 
 ---
 
 ## Table of contents
 
 - [Repo conventions](#repo-conventions)
-- [Working with forks](#working-with-forks)
+- [Choosing the PR source repository](#choosing-the-pr-source-repository)
 - [Branch types](#branch-types-naming-purpose-publishing)
 - [Branch retention & deletion](#branch-retention--deletion)
 - [Release flow](#release-flow-new-version-xyz)
@@ -46,37 +46,59 @@ This repository uses a **main-first GitFlow** optimized for **public SDK/model p
 
 ---
 
-## Working with forks
+## Choosing the PR source repository
 
-This repo assumes a **fork-first** workflow:
+The upstream org repo (`tetherto/qvac`) owns `main`, versioned release branches,
+and shared `feature-*` / `tmp-*` publishing streams. A PR's working branch may
+live in the org repo or a personal fork.
 
-- **Contributors do not push branches to the upstream org repo** (the “Tether” repo).
-- The **upstream org repo is the source of truth** for:
-  - `main`
-  - all `release-*` branches (NPM publishing lines)
-  - any upstream `feature-*` / `tmp-*` branches (when we need a shared dev stream that publishes)
-- Contributors create branches in **their fork**, then open PRs **into upstream target branches**.
-- Maintainers can create branches within the org if they chose to, while updates to the release branch must come from the fork.
+### Check access and resolve remotes
 
-### Roles
+Before pushing a working branch, inspect the authenticated account and its
+repository permission:
 
-- **Maintainers (upstream write access)**:
-  - Create upstream `release-*` branches (and optional upstream `feature-*` / `tmp-*` branches when needed)
-  - Approve/merge PRs
-  - Own CI/CD + publishing permissions
-- **Contributors (fork-only by default)**:
-  - Create branches in their fork
-  - Open PRs into upstream
-  - Never merge upstream branches into other upstream branches
+```bash
+gh api user --jq .login
+gh repo view tetherto/qvac --json viewerPermission --jq .viewerPermission
+git remote -v
+```
+
+- `WRITE`, `MAINTAIN`, or `ADMIN`: prefer an org working branch and same-repo PR.
+- `READ` or `TRIAGE`: use a personal fork, or ask for the required access.
+- If the lookup fails, resolve the authentication or connectivity problem before
+  choosing a push target; a failed lookup does not establish lack of write access.
+- Identify the org remote by its URL, not its name. It may be named `origin` or
+  `upstream`. A remote pointing at a personal fork does not imply the account
+  lacks org write access. Git and `gh` can use different credentials, so confirm
+  the Git identity as well if a push is unexpectedly denied.
+
+Repository write permission does not override branch rules. If an org push is
+rejected, inspect the reason before choosing a fork; do not bypass protection or
+retry authentication and network failures as though they were permission denials.
+A contributor may also explicitly choose the fork path despite having org access.
+
+### CI trust follows the PR source
+
+Same-repo PRs skip the `fork-ci` environment approval gate. A personal-fork PR
+counts as external even when its author has org write access. Privileged fork CI
+requires merge/release-team approval for each workflow run on the current head
+SHA; each new push requires fresh approval. See [LABELS.md](ci/LABELS.md) for
+labels and fork trust, and [TEAMS.md](ci/TEAMS.md) for approval ownership.
 
 ### Golden rules
 
-1) **Upstream branches are targets, not workspaces**  
-   You don’t “work on” upstream `main`/`release-*`/`feature-*`/`tmp-*` directly. You PR into them from your fork.
+1) **Integration and publishing branches are PR targets**
+   Make changes on a separate working branch and open a PR into `main`,
+   `release-*`, or a shared `feature-*` / `tmp-*` stream. Use ordinary purpose-based
+   names such as `feat/<package>-<description>`, `fix/<package>-<description>`, or
+   `chore/<package>-<version>-changelog`. Do not prefix an org working branch with
+   `release-`: pushes to that family can trigger publishing workflows. Maintainers
+   create release and shared publishing branches as deliberate operations.
 
-2) **No cross-merging inside upstream**  
-   No PRs like `main -> release-*` or `release-* -> main` created from upstream branches.  
-   If you need commits from `main` in a release line, you **cherry-pick locally in your fork** and PR into the release branch.
+2) **No direct integration/release cross-merges**
+   Do not open `main` → `release-*` or `release-*` → `main` PRs. Cherry-pick the
+   intended commits onto a separate working branch and PR into the target. That
+   working branch may live in the org repo or a personal fork.
 
 3) **Publishing happens on merge to upstream**  
    - Merge to `release-*` can publish to **NPM** for that package/version.
@@ -94,34 +116,37 @@ This repo assumes a **fork-first** workflow:
      nothing publishes. Start it with
      `gh workflow run on-merge-nx.yml --ref release-<package>-<x.y.z> -f package=<package>`.
 
-### One-time fork setup (recommended)
+### Daily dev loop (preferred: org branch → org main)
+
+The examples use `upstream` for the org remote and `origin` for a personal fork.
+Substitute the remote names resolved above. Start from a clean worktree.
 
 ```bash
-# Fork in GitHub UI, then:
-git clone https://github.com/<you>/<repo>.git
-cd <repo>
-
-git remote add upstream https://github.com/tetherto/<repo>.git
-
-# Sync your local main to upstream main
-git fetch upstream
-git checkout main
-git reset --hard upstream/main
-git push origin main --force-with-lease
+git fetch upstream main
+git switch -c feat/<package>-<short-desc> upstream/main
+# make changes, run package checks, and commit
+git push -u upstream feat/<package>-<short-desc>
+gh pr create --repo tetherto/qvac --base main --head feat/<package>-<short-desc>
 ```
 
-### Daily dev loop (fork → upstream main)
+### Personal-fork fallback
+
+Fork `tetherto/qvac` on GitHub and configure both remotes:
 
 ```bash
-git fetch upstream
-git checkout main
-git reset --hard upstream/main
+git clone https://github.com/<you>/qvac.git
+cd qvac
+git remote add upstream https://github.com/tetherto/qvac.git
+```
 
-git checkout -b feature-<package>-<short-desc>
-# make changes...
-git push -u origin feature-<package>-<short-desc>
+Create the same working branch from the org's `main`, then push to the fork:
 
-# Open PR: <your-fork>:feature-...  ->  upstream:main
+```bash
+git fetch upstream main
+git switch -c feat/<package>-<short-desc> upstream/main
+# make changes, run package checks, and commit
+git push -u origin feat/<package>-<short-desc>
+gh pr create --repo tetherto/qvac --base main --head <you>:feat/<package>-<short-desc>
 ```
 
 ---
@@ -171,7 +196,7 @@ the branch is recut under the right name.
 
 ---
 
-![Branch types and publishing](.github/docs/gitflow/images/branch-types-and-publishing.png)
+![Branch types and publishing](../.github/docs/gitflow/images/branch-types-and-publishing.png)
 
 ---
 
@@ -197,7 +222,7 @@ how to adopt the automation in another repo.
 
 ## Release flow (new version x.y.z)
 
-![Release flow](.github/docs/gitflow/images/release-flow.png)
+![Release flow](../.github/docs/gitflow/images/release-flow.png)
 
 ### 1) Maintainer creates the upstream release branch from `main`
 
@@ -208,16 +233,18 @@ Release branches are created **in the upstream org repo** and are named per pack
 git checkout main
 git pull
 git checkout -b release-<package>-<x.y.z>
-git push -u origin release-<package>-<x.y.z>
+git push -u upstream release-<package>-<x.y.z>
 ```
 
-> Contributors: do not create `release-*` branches in upstream. You will PR into them from your fork.
+> Maintainers create release targets. Contributors open PRs from separate working branches in the org repo or a personal fork.
 
 **Cut the documentation line at the same time**, for a package the documentation site versions — `@qvac/sdk` and `@qvac/cli` today. Run `qv-docs-cutoff` with the version being released, that one collection, and the release branch — the branch is what gives it the release base, since the cutoff publishes the tree the release was cut from and not `main`'s tip. It opens one PR into `main` that publishes the line written for this release and leaves the next one open; the documentation engineer reviews and merges it. Do not approve or merge it yourself, and do not promote it to production yet — that waits for step 3. The release train runs this same step for every collection it moves ([`docs/ci/RELEASE-TRAIN.md`](ci/RELEASE-TRAIN.md) step 6).
 
-### 2) Contributor opens a “Release PR” from their fork into the upstream release branch
+### 2) Contributor opens a release PR into the upstream release branch
 
-PR source: `<your-fork>:<branch>` → target: `upstream:release-<package>-<x.y.z>`
+PR source: a separate working branch in the org repo (preferred with write access)
+or a personal fork → target: `upstream:release-<package>-<x.y.z>`. Use a head such
+as `chore/<package>-<x.y.z>-changelog`; an org head must not start with `release-`.
 
 The PR **must** include:
 - **Version bump** in `packages/<package>/package.json` → `x.y.z`
@@ -239,14 +266,14 @@ On merge to the upstream `release-*` branch, CI should:
 
 Once NPM serves the version, promote the documentation: verify that tree on staging, then run `promote-docs-production.yml` on the merge commit of step 1's documentation PR. Name that commit, never `main`'s tip — earlier would publish documentation for a version nobody can install, and later would publish whatever else merged meanwhile. The procedure is in [`docs/website/docs-workflow.md`](website/docs-workflow.md), "Production (manual promotion)".
 
-### 4) Keep `main` aligned with what shipped (fork-based, no upstream cross-merge)
+### 4) Keep `main` aligned with what shipped (separate backmerge PR)
 
 We do **not** merge upstream `release-*` back into upstream `main` directly.
 
 Instead, ensure `main` reflects the shipped version + changelog via one of these patterns:
 
 - **Preferred (planning discipline):** the release branch is cut from a `main` that already contains the intended changelog/version context (often true when release prep happens on `main` first).
-- **Otherwise (common):** open a follow-up PR from a fork into upstream `main` that applies the same version/changelog changes.
+- **Otherwise (common):** open a follow-up PR from a separate org working branch (or personal fork) into upstream `main` that applies the same version/changelog changes.
 
 > Goal: `main` remains the single source of truth for current development state, while release lines are controlled targets for NPM publishing.
 
@@ -283,11 +310,11 @@ approval. See `docs/ci/RELEASE-TRAIN.md`.
 
 ## Patch flow (x.y.z → x.y.(z+1))
 
-![Patch flow](.github/docs/gitflow/images/patch-flow.png)
+![Patch flow](../.github/docs/gitflow/images/patch-flow.png)
 
-### 1) Implement the fix on `main` (fork PR #1)
+### 1) Implement the fix on `main` (PR #1)
 
-- Do the work in your fork branch.
+- Do the work on a separate org working branch, or use a personal fork.
 - Open PR into upstream `main`.
 - Merge into upstream `main`.
 
@@ -302,19 +329,19 @@ If patching the currently released line, create a new patch branch from the prev
 git checkout release-<package>-<x.y.z>
 git pull
 git checkout -b release-<package>-<x.y.(z+1)>
-git push -u origin release-<package>-<x.y.(z+1)>
+git push -u upstream release-<package>-<x.y.(z+1)>
 ```
 
-> Contributors: do not branch in upstream; you will PR into `release-<package>-<x.y.(z+1)>` from your fork.
+> Open the patch PR from a separate org working branch or personal fork into `release-<package>-<x.y.(z+1)>`.
 
-### 3) Cherry-pick the fix commit(s) into your fork branch (fork PR #2)
+### 3) Cherry-pick the fix commit(s) onto a separate working branch (PR #2)
 
-You will pull the upstream release branch into your local repo, then cherry-pick the fix commit(s) that already landed in upstream `main`.
+Fetch the upstream release branch into your local repo, then cherry-pick the fix commit(s) that already landed in upstream `main`.
 
 ```bash
 git fetch upstream
 
-# create a branch in your fork based on the upstream patch branch
+# create a separate working branch based on the upstream patch branch
 git checkout -b patch-<package>-<x.y.(z+1)> upstream/release-<package>-<x.y.(z+1)>
 
 # cherry-pick the fix commit(s) from upstream main
@@ -324,12 +351,13 @@ git cherry-pick <commit_sha_from_upstream_main>
 # - bump packages/<package>/package.json to x.y.(z+1)
 # - update packages/<package>/CHANGELOG.md
 
-git push -u origin patch-<package>-<x.y.(z+1)>
+# preferred: org working branch; use origin instead for a personal fork
+git push -u upstream patch-<package>-<x.y.(z+1)>
 ```
 
 ### 4) Open PR into the upstream patch release branch
 
-PR source: `<your-fork>:patch-...` → target: `upstream:release-<package>-<x.y.(z+1)>`
+PR source: `patch-...` in the org repo (or `<your-fork>:patch-...`) → target: `upstream:release-<package>-<x.y.(z+1)>`
 
 The PR **must** include:
 - Version bump to `x.y.(z+1)`
@@ -350,7 +378,7 @@ Only the release-line version/changelog metadata may require a follow-up PR back
 
 ## Feature & temp branches (non-release publishing)
 
-![Feature/temp flow](.github/docs/gitflow/images/feature-temp-flow.png)
+![Feature/temp flow](../.github/docs/gitflow/images/feature-temp-flow.png)
 
 These branches are used to produce **shareable dev builds** without entering the immediate release train.
 
@@ -360,7 +388,7 @@ Use for a larger change where you need a **development package** to share with o
 
 **Branch location**
 - If we need a persistent shared stream that publishes reliably, a maintainer may create a `feature-*` branch in upstream.
-- Contributors PR into that upstream `feature-*` branch from forks.
+- Contributors PR into that upstream `feature-*` branch from separate org working branches or personal forks.
 
 CI behavior (on merge/push to upstream `feature-*`):
 - Build on changes scoped to the package path
@@ -375,7 +403,7 @@ Use for QA previews and experiments.
 
 Branch location + PR rules are the same as feature branches:
 - Upstream `tmp-*` exists only when we need upstream workflows/publishing.
-- Contributors PR from forks into upstream `tmp-*`.
+- Contributors PR from separate org working branches or personal forks into upstream `tmp-*`.
 
 CI behavior (on merge/push to upstream `tmp-*`):
 - Publish to GitHub Packages with dist-tag `temp`
@@ -443,16 +471,16 @@ To reflect branch intent correctly and keep fork PRs safe:
 ### New release (x.y.z)
 
 - Maintainer: create upstream `release-<package>-<x.y.z>` from `main`
-- Contributor: fork PR into upstream `release-<package>-<x.y.z>` with:
+- Contributor: PR from a separate org working branch or personal fork into upstream `release-<package>-<x.y.z>` with:
   - `package.json` bumped to `x.y.z`
   - changelog updated
 - Merge → CI publishes to NPM and tags `<package>-v<x.y.z>`
 
 ### Patch release (x.y.z → x.y.(z+1))
 
-- PR #1: fork → upstream `main` (the fix)
+- PR #1: working branch → upstream `main` (the fix)
 - Maintainer: create upstream `release-<package>-<x.y.(z+1)>` from previous release branch
-- PR #2: cherry-pick fix commit(s) into fork branch → PR into upstream patch branch with:
+- PR #2: cherry-pick fix commit(s) onto a separate working branch → PR into upstream patch branch with:
   - version bump `x.y.(z+1)`
   - changelog updated
 - Merge → CI publishes patch to NPM and tags `<package>-v<x.y.(z+1)>`
@@ -460,7 +488,7 @@ To reflect branch intent correctly and keep fork PRs safe:
 ### Dev sharing (non-NPM)
 
 - Upstream `feature-*` / `tmp-*` exist only when we need a shared publishing stream.
-- Contributors PR from forks into those upstream branches.
+- Contributors PR from separate org working branches or personal forks into those upstream branches.
 - CI publishes to GitHub Packages with dist-tags `feature`/`temp` and run-id traceability.
 
 ---
