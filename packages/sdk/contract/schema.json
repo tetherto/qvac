@@ -23785,6 +23785,14 @@
             "enhancerBackendId": {
               "type": "number"
             },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
+              "type": "number"
+            },
             "codecSidecarLoaded": {
               "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
               "type": "number"
@@ -23980,6 +23988,14 @@
               "type": "number"
             },
             "enhancerBackendId": {
+              "type": "number"
+            },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
               "type": "number"
             },
             "codecSidecarLoaded": {

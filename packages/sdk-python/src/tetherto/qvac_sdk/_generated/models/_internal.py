@@ -23801,6 +23801,20 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    denoiser_backend_device: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendDevice",
+            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU.",
+        ),
+    ] = None
+    denoiser_backend_id: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendId",
+            description="LavaSR denoiser backend family, same codes as `backendId`.",
+        ),
+    ] = None
     codec_sidecar_loaded: Annotated[
         float | None,
         Field(
@@ -23999,6 +24013,20 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    denoiser_backend_device: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendDevice",
+            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU.",
+        ),
+    ] = None
+    denoiser_backend_id: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendId",
+            description="LavaSR denoiser backend family, same codes as `backendId`.",
+        ),
+    ] = None
     codec_sidecar_loaded: Annotated[
         float | None,
         Field(

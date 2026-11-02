@@ -87,8 +87,8 @@ statistics from the final frame (`undefined` if the run reported none).
   The chunked paths — `stream: true` (the default), `sentenceStream: true`,
   and `textToSpeechStream()` — run one native job per sentence. Their `stats`
   aggregate the timing and sample counts across sentences, while the backend
-  fields (`backendDevice`, `backendId`, `gpuUnsupported`,
-  `enhancerBackendDevice`, `enhancerBackendId`) and Audio8's two Core ML
+  fields (`backendDevice`, `backendId`, `gpuUnsupported`, and the LavaSR
+  `enhancerBackend*` and `denoiserBackend*` pairs) and Audio8's two Core ML
   fields keep the value of the last sentence that reported them, so a chunked
   run reports where it ran just as batch synthesis (`stream: false`) does. A
   field no sentence reported stays absent.
@@ -107,6 +107,8 @@ statistics from the final frame (`undefined` if the run reported none).
 | `gpuUnsupported` | `1` when a GPU is present but unusable by engine policy, so the run fell back to CPU. |
 | `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU. |
 | `enhancerBackendId` | LavaSR enhancer backend family, same codes as `backendId`. |
+| `denoiserBackendDevice` | LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU. |
+| `denoiserBackendId` | LavaSR denoiser backend family, same codes as `backendId`. |
 | `codecSidecarLoaded` | Audio8 on macOS/iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired. |
 | `codecOnCoreml` | Audio8: `1` when the synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` names. |
 
