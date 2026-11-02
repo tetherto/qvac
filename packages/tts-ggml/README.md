@@ -773,7 +773,8 @@ keeps the automatic preference above.
 ### Optional WebGPU builds
 
 Build with `bare-make generate -D TTS_WEBGPU=ON`, followed by
-`bare-make build` and `bare-make install`, to include the Dawn backend.
+`bare-make build`, `bare-make install`, and `npm run link:platform` to include
+and load the local Dawn backend.
 WebGPU is exposed only for the native library's established model families:
 Supertonic **3**, Parler, CosyVoice3 and Audio8. Explicit WebGPU requests
 for other families, including Supertonic 1/2, fail before loading weights.
