@@ -11,10 +11,23 @@ qvac_addon_project_setup()
 # Header-only JS<->C++ marshalling helpers (JsArgsParser / jsu / JSCATCH).
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
+# Fuzz-only configure (BUILD_FUZZING without BUILD_TESTING): build just the fuzz
+# targets. parseInteger / canonicalKey are header-only and need no fabric, so
+# this configure skips the .bare module and keeps full ASan + LSan.
+# See docs/architecture/ADDON-FUZZING.md.
+if(BUILD_FUZZING AND NOT BUILD_TESTING)
+  enable_testing()
+  add_subdirectory(test/fuzz)
+  return()
+endif()
+
 # llama.cpp + ggml are supplied by @qvac/fabric's shared bare runtime, which
 # also loads its ggml backends (qvac_fabric_load_backends).
 qvac_addon_use_fabric()
 
+# The production .bare module is skipped in the combined tests+fuzz configure
+# (BUILD_TESTING + BUILD_FUZZING): that build only wants the test executables.
+if(NOT BUILD_FUZZING)
 add_bare_module(model-fit EXPORTS)
 
 set(ADDON_SOURCES
@@ -38,6 +51,7 @@ target_include_directories(
 # ABI, so compile against Fabric headers and dynamically link its one runtime.
 qvac_addon_link_fabric(${model-fit} ${qvac_fabric_target})
 qvac_addon_finalize(${model-fit})
+endif()
 
 if(BUILD_TESTING)
   enable_testing()
@@ -103,6 +117,10 @@ if(BUILD_TESTING)
     target_link_options(model-fit-llama-load-config-test PRIVATE -fuse-ld=/usr/bin/ld)
   endif()
   add_test(NAME ModelFitLlamaLoadConfigUnit COMMAND model-fit-llama-load-config-test)
+endif()
+
+if(BUILD_FUZZING)
+  add_subdirectory(test/fuzz)
 endif()
 
 # NOTE: do not link msvcrt.lib here. It is the *dynamic* CRT import library, and

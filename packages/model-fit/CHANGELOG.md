@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Bounded FuzzTest coverage for the llama config integer and key parsers
+  (`parseInteger`, `canonicalKey`). Linux C++ CI runs the suite after unit
+  tests. The parsers are header-only, so ASan and LeakSanitizer stay at full
+  strength. No public addon API changes.
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.24.0`, which carries

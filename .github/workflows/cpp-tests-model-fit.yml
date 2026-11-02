@@ -287,3 +287,19 @@ jobs:
         run: |
           set -euo pipefail
           npm run test:cpp:run
+
+      # Linux only, after ctest. fuzz:build reconfigures the build/ tree
+      # (BUILD_FUZZING=ON, BUILD_TESTING=OFF), so running it earlier would
+      # drop the unit-test binaries. Fuzzing is Linux-only (libFuzzer + ASan).
+      # This step is part of the job on-pr-nx publishes as
+      # qvac/cpp-tests-model-fit, so a fuzz failure fails the required
+      # merge-guard C++ check. No ASAN_OPTIONS here; the fuzz runner sets
+      # its own posture.
+      - name: Build and run bounded fuzz targets
+        if: matrix.platform == 'linux'
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run fuzz:build
+          npm run fuzz:run

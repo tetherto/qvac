@@ -586,8 +586,9 @@ families that protect several addons at once.
   `asr-ggml` fuzzes the s16le PCM decoder, `bci-whispercpp` fuzzes the
   length-prefixed neural-signal parser, `embed-llamacpp` fuzzes the
   header-only main-gpu and device parsers, `diffusion-cpp` fuzzes the
-  GGUF video-capability inspector, and `llm-llamacpp` fuzzes the
-  header-only stop-string and log sanitizers. Prefer the no-fabric link;
+  GGUF video-capability inspector, `llm-llamacpp` fuzzes the
+  header-only stop-string and log sanitizers, and `model-fit` fuzzes the
+  header-only llama config integer and key parsers. Prefer the no-fabric link;
   reserve `LINK_FABRIC` for header loaders that actually call ggml/gguf. Factor
   shared parsing helpers so one target covers multiple consumers where the code
   is genuinely shared.
