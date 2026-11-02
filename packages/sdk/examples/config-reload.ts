@@ -4,7 +4,7 @@ import { WHISPER_TINY, loadModel, transcribe, unloadModel } from '@qvac/sdk'
 const args = process.argv.slice(2)
 
 if (!args[0]) {
-  console.error('✖ Usage: bun run examples/config-reload.ts <audio-file-path>')
+  console.error('✖ Usage: npx tsx examples/config-reload.ts <audio-file-path>')
   process.exit(1)
 }
 

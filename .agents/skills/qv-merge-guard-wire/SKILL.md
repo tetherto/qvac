@@ -27,7 +27,7 @@ Must return **only** `pr-gate-merge.yml`. If any other file has a job id `qvac-m
 
 Read `.github/workflows/pr-gate-merge.yml`, specifically the final `qvac-merge-guard` job's `needs:` list and the three `with:` booleans it passes to `public-pr.yml`. Read `docs/ci/MERGE-GUARD.md` for the diagram and worked examples.
 
-Note: `sdk-pod-checks` reports under two check-context strings (`SDK Pod Checks` and `sdk-pod-checks / SDK Pod Checks`) — branch-coverage artifact, not a ruleset requirement. See the doc's "Gotcha" section.
+Note: `sdk-pod-checks` reports as `sdk-pod-checks / SDK Pod Checks` on PRs into `main` and as `SDK Pod Checks` on PRs into `release-*`/`feature-*`/`tmp-*`. See the doc's "Gotcha" section.
 
 ## Step 2 — Ask the user which of the three patterns fits — do not silently infer it
 
@@ -45,7 +45,7 @@ Note: `sdk-pod-checks` reports under two check-context strings (`SDK Pod Checks`
 
 ## Step 3 — Wire it, following the exact code shape in `docs/ci/MERGE-GUARD.md`
 
-Copy the relevant snippet from the doc verbatim, substituting names. Do not invent a different `needs:`/`if:` shape from what's already established. If your new job's checks also need to run on branches Merge Guard doesn't cover (`pr-gate-merge.yml` is `main`-only), consider the two-trigger shape (own `pull_request`/`pull_request_target` + `workflow_call`) used by `pr-checks-sdk-pod.yml` — but understand upfront that produces two check-context strings for one piece of logic on `main`, and document both wherever the check is referenced by name.
+Copy the relevant snippet from the doc verbatim, substituting names. Do not invent a different `needs:`/`if:` shape from what's already established. If your new job's checks also need to run on branches Merge Guard doesn't cover (`pr-gate-merge.yml` is `main`-only), consider the two-trigger shape used by `pr-checks-sdk-pod.yml`: `workflow_call` for `main`, plus its own `pull_request`/`pull_request_target` trigger limited to the other branches so `main` PRs do not run it twice. It reports under a different check-context string on each path; document both wherever the check is referenced by name.
 
 ## Step 4 — Validate
 

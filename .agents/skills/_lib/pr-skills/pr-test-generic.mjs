@@ -163,7 +163,6 @@ export function readPackageJson(root, packagePath) {
 }
 
 function packageManager(packagePath, packageJson) {
-  if (packagePath === "packages/sdk") return "bun";
   if (typeof packageJson.packageManager === "string") {
     if (packageJson.packageManager.startsWith("bun")) return "bun";
     if (packageJson.packageManager.startsWith("npm")) return "npm";

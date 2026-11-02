@@ -7,8 +7,10 @@
   ],
   "features": {
     "tests": {
-      "description": "Enable native test configuration",
-      "dependencies": []
+      "description": "Build and run unit tests",
+      "dependencies": [
+        "gtest"
+      ]
     }
   }
 }

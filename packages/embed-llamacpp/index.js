@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GGMLBert = exports.assessFit = exports.BertInterface = void 0;
-exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+exports.GGMLBert = exports.assessFit = exports.mapRerankEvent = exports.RerankInterface = exports.Reranker = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.pickPrimaryGgufPath = exports.BertInterface = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
@@ -10,24 +9,22 @@ const fit_1 = require("./fit");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const addon_1 = require("./addon");
+const laya_1 = require("./laya");
+const rerank_1 = require("./rerank");
 var addon_2 = require("./addon");
 Object.defineProperty(exports, "BertInterface", { enumerable: true, get: function () { return addon_2.BertInterface; } });
+Object.defineProperty(exports, "pickPrimaryGgufPath", { enumerable: true, get: function () { return addon_2.pickPrimaryGgufPath; } });
+var laya_2 = require("./laya");
+Object.defineProperty(exports, "LayaDecisions", { enumerable: true, get: function () { return laya_2.LayaDecisions; } });
+Object.defineProperty(exports, "LayaInterface", { enumerable: true, get: function () { return laya_2.LayaInterface; } });
+Object.defineProperty(exports, "mapLayaEvent", { enumerable: true, get: function () { return laya_2.mapLayaEvent; } });
+var rerank_2 = require("./rerank");
+Object.defineProperty(exports, "Reranker", { enumerable: true, get: function () { return rerank_2.Reranker; } });
+Object.defineProperty(exports, "RerankInterface", { enumerable: true, get: function () { return rerank_2.RerankInterface; } });
+Object.defineProperty(exports, "mapRerankEvent", { enumerable: true, get: function () { return rerank_2.mapRerankEvent; } });
 var fit_2 = require("./fit");
 Object.defineProperty(exports, "assessFit", { enumerable: true, get: function () { return fit_2.assessFit; } });
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
-function loadIdMapIndex() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
-    return require("./idMapIndex");
-}
-/**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
- */
-function pickPrimaryGgufPath(files) {
-    const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
-    return files.find((p) => SHARD_REGEX.test(p)) || files[0];
-}
 /** BERT client wrapping the native BertInterface for embedding generation. */
 class GGMLBert {
     addon;
@@ -35,6 +32,7 @@ class GGMLBert {
     opts;
     state;
     _files;
+    _projectionModelPath;
     _config;
     _job;
     _run;
@@ -51,7 +49,16 @@ class GGMLBert {
                 throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
             }
         }
+        if (files.projectionModel !== undefined) {
+            if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
+                throw new TypeError("files.projectionModel must be an absolute path string");
+            }
+            if (!path.isAbsolute(files.projectionModel)) {
+                throw new TypeError(`files.projectionModel must be an absolute path (got: ${files.projectionModel})`);
+            }
+        }
         this._files = files.model;
+        this._projectionModelPath = files.projectionModel ?? "";
         this._config = config;
         this.logger = new QvacLogger(logger);
         this.opts = opts;
@@ -72,10 +79,11 @@ class GGMLBert {
     }
     async _load() {
         this.logger.info("Starting model load");
-        const primaryGgufPath = pickPrimaryGgufPath(this._files);
+        const primaryGgufPath = (0, addon_1.pickPrimaryGgufPath)(this._files);
         const configurationParams = {
             path: primaryGgufPath,
             config: this._config,
+            projectionPath: this._projectionModelPath,
         };
         this.logger.info("Creating addon with configuration:", configurationParams);
         try {
@@ -109,21 +117,30 @@ class GGMLBert {
             this.logger.info(`Streamed weights for ${filename}`);
         }
     }
+    /**
+     * Embed text, or text mixed with images and audio when the model was given
+     * `files.projectionModel`. See {@link EmbedRunInput} for the input shapes.
+     */
     async run(input) {
         return this._run(() => this._runInternal(input));
     }
-    async _runInternal(text) {
+    async _runInternal(input) {
         if (!this.addon) {
             throw new Error("Addon not initialized. Call load() first.");
         }
         if (this._hasActiveResponse) {
             throw new Error(RUN_BUSY_ERROR_MESSAGE);
         }
-        this.logger.info("Starting inference embeddings for text:", text);
-        // Array input → type: 'sequences' (batched pass); string input → type: 'text'.
-        const inputData = Array.isArray(text)
-            ? { type: "sequences", input: text }
-            : { type: "text", input: text };
+        const inputData = (0, addon_1.toBertJobInput)(input);
+        if (inputData.type === "multimodal") {
+            if (!this._projectionModelPath) {
+                throw new TypeError("media input needs files.projectionModel");
+            }
+            this.logger.info(`Starting inference embeddings for ${inputData.input?.length ?? 0} multimodal input(s)`);
+        }
+        else {
+            this.logger.info("Starting inference embeddings for text:", input);
+        }
         const response = this._job.start();
         // addon-cpp guarantees no output events until runJob is fully accepted.
         // If runJob throws or returns false, no events will fire for this job.
@@ -214,18 +231,14 @@ exports.GGMLBert = GGMLBert;
 exports.default = GGMLBert;
 const cjsExports = GGMLBert;
 cjsExports.default = GGMLBert;
-cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+cjsExports.pickPrimaryGgufPath = addon_1.pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = addon_1.BertInterface;
+cjsExports.LayaDecisions = laya_1.LayaDecisions;
+cjsExports.LayaInterface = laya_1.LayaInterface;
+cjsExports.mapLayaEvent = laya_1.mapLayaEvent;
+cjsExports.Reranker = rerank_1.Reranker;
+cjsExports.RerankInterface = rerank_1.RerankInterface;
+cjsExports.mapRerankEvent = rerank_1.mapRerankEvent;
 cjsExports.assessFit = fit_1.assessFit;
-Object.defineProperties(cjsExports, {
-    IdMapIndex: {
-        enumerable: true,
-        get: loadIdMapIndex,
-    },
-    IdMapIndexFilter: {
-        enumerable: true,
-        get: () => loadIdMapIndex().IdMapIndexFilter,
-    },
-});
 module.exports = cjsExports;

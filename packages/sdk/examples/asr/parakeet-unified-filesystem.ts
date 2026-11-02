@@ -2,7 +2,7 @@
  * Parakeet Unified transcription from a WAV file.
  *
  * Usage:
- *   bun run examples/asr/parakeet-unified-filesystem.ts <wav-file> [parakeet-unified-gguf]
+ *   npx tsx examples/asr/parakeet-unified-filesystem.ts <wav-file> [parakeet-unified-gguf]
  *
  * Loads a single GGUF checkpoint (`PARAKEET_UNIFIED_0_6B_Q8_0` by default) and
  * transcribes the file with the batch `transcribe` API. The Unified RNN-T
@@ -18,7 +18,7 @@ const args = process.argv.slice(2)
 
 if (!args[0]) {
   console.error(
-    'Usage: bun run examples/asr/parakeet-unified-filesystem.ts <wav-file-path> ' +
+    'Usage: npx tsx examples/asr/parakeet-unified-filesystem.ts <wav-file-path> ' +
       '[parakeet-unified-gguf]'
   )
   console.error('\nIf the model path is omitted, defaults to the registry model.')

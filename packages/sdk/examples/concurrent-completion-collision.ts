@@ -19,7 +19,7 @@
  *          distinct models never block each other).
  *
  * Run from packages/sdk:
- *   bun run examples/concurrent-completion-collision.ts
+ *   npx tsx examples/concurrent-completion-collision.ts
  */
 import {
   completion,

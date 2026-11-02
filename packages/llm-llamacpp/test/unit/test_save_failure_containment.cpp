@@ -1,8 +1,9 @@
-// One job's terminal cache-save failure must stay that job's failure. The
-// drain-time save throw (e.g. a cacheKey under a missing directory) fails
-// only the offending slot's group: a failed file write corrupts nothing
-// shared, so a concurrent job on another slot keeps decoding to completion
-// and the scheduler keeps admitting new work — no whole-scheduler teardown.
+// A failed explicit `saveCache` must stay the caller's failure. The write runs
+// on the batch worker between decode steps; when it throws (e.g. a cacheKey
+// under a missing directory) only the caller sees the error: a failed file
+// write corrupts nothing shared, so a concurrent job on another slot keeps
+// decoding to completion, the scheduler keeps admitting new work, and the
+// conversation stays in memory so the save can be retried.
 
 #include <atomic>
 #include <chrono>
@@ -73,11 +74,12 @@ protected:
 
 } // namespace
 
-/// Job A finishes and its terminal cache save throws (cacheKey parent
-/// directory does not exist). Job B, mid-generation on another slot, must
-/// run to completion with its own output, and the scheduler must admit new
-/// work afterwards. Only A's caller sees UnableToSaveSessionFile.
-TEST_F(SaveFailureContainmentTest, SaveFailureFailsOnlyOffendingJob) {
+/// Job A finishes; the explicit save of its conversation throws (cacheKey
+/// parent directory does not exist). Job B, mid-generation on another slot,
+/// must run to completion with its own output, and the scheduler must admit
+/// new work afterwards. Only the save's caller sees UnableToSaveSessionFile,
+/// and once the directory exists the same save succeeds.
+TEST_F(SaveFailureContainmentTest, SaveFailureFailsOnlyTheSaveCaller) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
@@ -110,14 +112,16 @@ TEST_F(SaveFailureContainmentTest, SaveFailureFailsOnlyOffendingJob) {
 
   auto failing = makePrompt("Say hi.");
   failing.cacheKey = badCachePath.string();
-  failing.saveCacheToDisk = true;
   // A 4-token run drains (and its save throws) roughly 250 tokens before
   // the survivor's essay can finish.
   failing.generationParams.n_predict = 4;
+  const auto failingOutputs =
+      model->processPromptBatch(std::vector<LlamaModel::Prompt>{failing});
+  ASSERT_EQ(failingOutputs.size(), 1u);
 
   try {
-    model->processPromptBatch(std::vector<LlamaModel::Prompt>{failing});
-    FAIL() << "expected UnableToSaveSessionFile for the failing job";
+    model->saveCache(badCachePath.string());
+    FAIL() << "expected UnableToSaveSessionFile for the save";
   } catch (const qvac_errors::StatusError& e) {
     EXPECT_NE(
         std::string(e.codeString()).find("UnableToSaveSessionFile"),
@@ -135,8 +139,7 @@ TEST_F(SaveFailureContainmentTest, SaveFailureFailsOnlyOffendingJob) {
   try {
     survivorOutputs = survivorFuture.get();
   } catch (const std::exception& e) {
-    FAIL() << "concurrent job was torn down by the failing job's save error: "
-           << e.what();
+    FAIL() << "concurrent job was torn down by the failed save: " << e.what();
   }
   ASSERT_EQ(survivorOutputs.size(), 1u);
   EXPECT_FALSE(survivorOutputs[0].empty())
@@ -151,4 +154,10 @@ TEST_F(SaveFailureContainmentTest, SaveFailureFailsOnlyOffendingJob) {
 
   EXPECT_FALSE(fs::exists(badCacheDir))
       << "failed save must not create the missing parent directory";
+
+  // The conversation stayed in memory, still unsaved: the retry writes it.
+  fs::create_directories(badCacheDir);
+  EXPECT_NO_THROW(model->saveCache(badCachePath.string()));
+  EXPECT_TRUE(fs::exists(badCachePath));
+  fs::remove_all(badCacheDir);
 }

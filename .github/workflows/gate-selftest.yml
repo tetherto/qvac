@@ -59,19 +59,19 @@ jobs:
         run: |
           set -euo pipefail
           # Reproduce the shared-runtime (@qvac/fabric) case: an addon .bare with an
-          # UND ggml_* symbol + DT_NEEDED on qvac__fabric@0.bare, whose provider lives
+          # UND ggml_* symbol + DT_NEEDED on qvac__fabric-linux-x64@0.bare, whose provider lives
           # OUTSIDE the scanned prebuilds/ tree (it ships in node_modules and is
           # pre-loaded at runtime, not co-located beside the addon). Critically, the
-          # provider FILE on disk is the unversioned `qvac__fabric.bare` while the
-          # addon's DT_NEEDED is the ABI-versioned SONAME `qvac__fabric@0.bare` -- the
+          # provider FILE on disk is the unversioned `qvac__fabric-linux-x64.bare` while the
+          # addon's DT_NEEDED is the ABI-versioned SONAME `qvac__fabric-linux-x64@0.bare` -- the
           # real fabric layout. The gate must index the provider by its DT_SONAME (not
           # its basename) to match the DT_NEEDED across this divergence.
           rm -rf /tmp/prov
           mkdir -p /tmp/prov/prebuilds/linux-x64 /tmp/prov/providers/linux-x64
           printf 'int ggml_test_symbol(void){return 42;}\n' > /tmp/prov/provider.c
           printf 'extern int ggml_test_symbol(void);\nint addon_entry(void){return ggml_test_symbol();}\n' > /tmp/prov/addon.c
-          cc -shared -fPIC -Wl,-soname,qvac__fabric@0.bare -o /tmp/prov/providers/linux-x64/qvac__fabric.bare /tmp/prov/provider.c
-          cc -shared -fPIC -o /tmp/prov/prebuilds/linux-x64/qvac__addon.bare /tmp/prov/addon.c -L/tmp/prov/providers/linux-x64 -l:qvac__fabric.bare -Wl,--no-as-needed
+          cc -shared -fPIC -Wl,-soname,qvac__fabric-linux-x64@0.bare -o /tmp/prov/providers/linux-x64/qvac__fabric-linux-x64.bare /tmp/prov/provider.c
+          cc -shared -fPIC -o /tmp/prov/prebuilds/linux-x64/qvac__addon.bare /tmp/prov/addon.c -L/tmp/prov/providers/linux-x64 -l:qvac__fabric-linux-x64.bare -Wl,--no-as-needed
           # Without the provider dir the engine symbol is unresolved -> MUST hard-fail
           # (proves --provider-dir did not neuter the real UND check).
           if node .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs --dir /tmp/prov/prebuilds --platform linux; then
@@ -95,7 +95,7 @@ jobs:
           mkdir -p /tmp/mask/prebuilds/linux-x64 /tmp/mask/providers/linux-x64
           printf 'int ggml_test_symbol(void){return 42;}\n' > /tmp/mask/provider.c
           printf 'extern int ggml_test_symbol(void);\nint addon_entry(void){return ggml_test_symbol();}\n' > /tmp/mask/addon.c
-          cc -shared -fPIC -Wl,-soname,qvac__fabric@0.bare -o /tmp/mask/providers/linux-x64/qvac__fabric.bare /tmp/mask/provider.c
+          cc -shared -fPIC -Wl,-soname,qvac__fabric-linux-x64@0.bare -o /tmp/mask/providers/linux-x64/qvac__fabric-linux-x64.bare /tmp/mask/provider.c
           cc -shared -fPIC -o /tmp/mask/prebuilds/linux-x64/qvac__static.bare /tmp/mask/addon.c
           if node .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs --dir /tmp/mask/prebuilds --provider-dir /tmp/mask/providers --platform linux; then
             echo "::error::Gate PASSED on an addon without a matching DT_NEEDED -- the provider index would mask a genuine dlopen-crash UND."

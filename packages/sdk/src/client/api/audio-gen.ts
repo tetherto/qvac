@@ -25,7 +25,10 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * @param params.track - ACE-Step only: the instrument layer the `"lego"` task regenerates.
  *   Required when `taskType` is `"lego"` and rejected otherwise.
  * @param params.maxFrames - MiniMax semantic-frame cap; mutually exclusive with `duration`.
- * @param params.inferenceSteps - MiniMax flow steps for this run.
+ * @param params.inferenceSteps - Diffusion steps for this run (0..1000), on either engine; omit to
+ *   keep the load-time value.
+ * @param params.shift - ACE-Step only: DiT timestep shift for this run; omit to keep the load-time
+ *   value.
  * @param params.cfgScale - MiniMax flow classifier-free guidance scale for this run.
  * @param params.referenceAudio - Optional timbre reference: a file path (decoded server-side)
  *   or raw interleaved stereo 48 kHz Float32 LE PCM bytes.
@@ -34,7 +37,7 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * @param params.taskType - `"text2music"` (default), `"cover-nofsq"`, or `"lego"`.
  * @param params.audioCoverStrength - Source-context strength for cover tasks (0..1).
  * @param params.coverNoiseStrength - Initial source/noise blend for cover tasks (0..1).
- * @returns A run with a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise describing the backend the run resolved to.
+ * @returns A run with a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise describing the backend the run resolved to. An ACE-Step run's stats carry `metadata`: the caption, lyrics and musical metadata it rendered and the seed it used. A MiniMax run's stats carry its stage timings and `emittedFrames`.
  *
  * @example
  * ```typescript
@@ -62,6 +65,7 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  *     engine: "minimax",
  *     lmModelSrc: "/models/mm3-lm-q8.gguf",
  *     synthModelSrc: "/models/mm3-synth-q8.gguf",
+ *     device: "gpu", // fail the load instead of falling back to the CPU
  *   },
  * });
  * const minimaxRun = audioGen({
@@ -91,6 +95,10 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  *   computeQualityScore: true,
  * });
  * const { lrc, lyricsScore, qualityScore } = (await assisted.stats) ?? {};
+ *
+ * // What the LM composed, and the seed that replays the take:
+ * const rendered = (await assisted.stats)?.metadata;
+ * console.log(rendered?.caption, rendered?.lyrics, rendered?.bpm, rendered?.seed);
  *
  * // Rebuild one layer of an existing song:
  * const newDrums = audioGen({

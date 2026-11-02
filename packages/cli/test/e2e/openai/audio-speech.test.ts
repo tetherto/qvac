@@ -80,6 +80,30 @@ describe('serve: speech validation', () => {
     assertStatusAndError(res, 400, 'input_too_long')
   })
 
+  it('unknown stream_format returns 400 invalid_stream_format', async () => {
+    const res = await server().inject({
+      method: 'POST',
+      url: '/v1/audio/speech',
+      payload: { model: 'test', voice: 'alloy', input: 'hi', stream_format: 'websocket' }
+    })
+    assertStatusAndError(res, 400, 'invalid_stream_format')
+  })
+
+  it('sse with an encoded format returns 400 unsupported_response_format', async () => {
+    const res = await server().inject({
+      method: 'POST',
+      url: '/v1/audio/speech',
+      payload: {
+        model: 'test',
+        voice: 'alloy',
+        input: 'hi',
+        response_format: 'mp3',
+        stream_format: 'sse'
+      }
+    })
+    assertStatusAndError(res, 400, 'unsupported_response_format')
+  })
+
   it('unknown model returns 404', async () => {
     const res = await server().inject({
       method: 'POST',

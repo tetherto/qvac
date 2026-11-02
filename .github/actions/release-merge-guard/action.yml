@@ -18,6 +18,10 @@ inputs:
     required: true
   changelog-path:
     required: true
+  strict-slug:
+    required: false
+    default: "false"
+    description: "Fail, instead of warn, when the branch names a package other than package-slug."
 
 runs:
   using: node20

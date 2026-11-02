@@ -33,7 +33,6 @@ function tinyPng16x16() {
 }
 
 const JOB_TIMEOUT_MS = isAndroid ? 300000 : 120000
-const BACKENDS_DIR = path.join(__dirname, '../../prebuilds')
 
 function logPhase(phase, configDevice, expected, actual) {
   let line =
@@ -58,7 +57,7 @@ function queryExpectedBackendDevice(configDevice) {
   if (typeof binding.getExpectedEsrganBackendDevice !== 'function') {
     throw new Error('binding.getExpectedEsrganBackendDevice is required for backend policy tests')
   }
-  return binding.getExpectedEsrganBackendDevice(configDevice, BACKENDS_DIR)
+  return binding.getExpectedEsrganBackendDevice(configDevice)
 }
 
 async function ensureEsrganModelPath() {
@@ -92,8 +91,7 @@ test(
       files: { esrgan: esrganPath },
       config: {
         device: configDevice,
-        upscaler_tile_size: 64,
-        backendsDir: BACKENDS_DIR
+        upscaler_tile_size: 64
       },
       opts: { stats: true },
       logger: console
@@ -150,8 +148,7 @@ test(
       files: { esrgan: esrganPath },
       config: {
         device: configDevice,
-        upscaler_tile_size: 64,
-        backendsDir: BACKENDS_DIR
+        upscaler_tile_size: 64
       },
       opts: { stats: true },
       logger: console

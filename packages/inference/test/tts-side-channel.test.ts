@@ -59,3 +59,13 @@ test('settle() is idempotent and a late observe() cannot change a settled value'
   t.is(await side.sampleRate, 24000)
   t.is(await side.stats, undefined)
 })
+
+test('MOSS-Speech reply text settles even when no PCM was emitted', async (t) => {
+  const side = createTtsSideChannel()
+  side.observe(frame({ text: 'Hello.' }))
+  side.settle()
+  t.is(await side.text, 'Hello.')
+  const empty = createTtsSideChannel()
+  empty.settle()
+  t.is(await empty.text, undefined)
+})

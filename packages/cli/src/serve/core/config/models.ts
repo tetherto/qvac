@@ -1,7 +1,8 @@
 import type { ModelConstant } from '@qvac/sdk'
+import { modelFitPolicySchema, type ModelFitPolicy } from '@qvac/sdk/schemas'
 import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from '@/serve/core/config/aliases/sdcpp-video'
-import { normalizeEndpointCategory } from '@/serve/core/config/endpoint-category'
+import { endpointCategoryFor } from '@/serve/core/config/endpoint-category'
 import { loadModelConstants } from '@/serve/core/config/constants'
 import { resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
 
@@ -10,14 +11,16 @@ export interface ConstantModelEntry {
   type?: string
   default?: boolean
   preload?: boolean
+  modelFitPolicy?: string
   config?: Record<string, unknown>
 }
 
 export interface ExplicitModelEntry {
-  src: string
+  src?: string
   type: string
   default?: boolean
   preload?: boolean
+  modelFitPolicy?: string
   config?: Record<string, unknown>
 }
 
@@ -64,7 +67,7 @@ export function resolveExplicitServeModel(
   if (type !== VIRTUAL_SDK_WHISPER_AUDIO_TRANSLATION) {
     return {
       sdkType: type,
-      endpointCategory: normalizeEndpointCategory(type),
+      endpointCategory: endpointCategoryFor(type, config),
       config: { ...config }
     }
   }
@@ -92,6 +95,19 @@ export function resolveExplicitServeModel(
   }
 }
 
+function resolveForAlias(
+  alias: string,
+  type: string,
+  config: Record<string, unknown>
+): ReturnType<typeof resolveExplicitServeModel> {
+  try {
+    return resolveExplicitServeModel(type, config)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`serve.models.${alias}.${message}`)
+  }
+}
+
 function isConstantModelEntry(entry: unknown): entry is ConstantModelEntry {
   return (
     entry !== null &&
@@ -111,13 +127,7 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
   }
 
   const rawConfig = entry.config ?? {}
-  const resolved = entry.type
-    ? resolveExplicitServeModel(entry.type, rawConfig)
-    : {
-        sdkType: model.addon,
-        endpointCategory: normalizeEndpointCategory(model.addon),
-        config: rawConfig
-      }
+  const resolved = resolveForAlias(alias, entry.type || model.engine || model.addon, rawConfig)
 
   return {
     alias,
@@ -126,26 +136,32 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
     endpointCategory: resolved.endpointCategory,
     isDefault: entry.default === true,
     preload: entry.preload !== false,
+    ...modelFitPolicyOf(alias, entry.modelFitPolicy),
     config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
   }
 }
 
+// The classification addon ships its own weights; the SDK loads them for an empty src.
+const BUNDLED_WEIGHTS_CATEGORIES = new Set(['classification'])
+
 function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedModelEntry {
-  if (!entry.src) {
-    throw new Error(`serve.models.${alias}: "src" is required`)
-  }
   if (!entry.type) {
     throw new Error(`serve.models.${alias}: "type" is required`)
   }
 
   const rawConfig = entry.config ?? {}
-  const resolved = resolveExplicitServeModel(entry.type, rawConfig)
+  const resolved = resolveForAlias(alias, entry.type, rawConfig)
+
+  if (!entry.src && !BUNDLED_WEIGHTS_CATEGORIES.has(resolved.endpointCategory)) {
+    throw new Error(`serve.models.${alias}: "src" is required`)
+  }
+  const src = entry.src ?? ''
 
   // Allow `entry.src` to be either a path or a known SDK model-constant name.
   // Constant names look like `WAN2_1_T2V_1_3B_FP16`; paths contain `/` or
   // start with `.`. If the string is a registered constant, swap in the
   // ModelConstant object so the P2P registry resolves it.
-  const modelSrc: string | ModelConstant = loadModelConstants().get(entry.src) ?? entry.src
+  const modelSrc: string | ModelConstant = loadModelConstants().get(src) ?? src
 
   return {
     alias,
@@ -154,8 +170,25 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
     endpointCategory: resolved.endpointCategory,
     isDefault: entry.default === true,
     preload: entry.preload === true,
+    ...modelFitPolicyOf(alias, entry.modelFitPolicy),
     config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
   }
+}
+
+function modelFitPolicyOf(
+  alias: string,
+  value: string | undefined
+): { modelFitPolicy?: ModelFitPolicy } {
+  if (value === undefined) return {}
+  const parsed = modelFitPolicySchema.safeParse(value)
+  if (!parsed.success) {
+    throw new Error(
+      `serve.models.${alias}.modelFitPolicy: expected one of ${modelFitPolicySchema.options
+        .map((option) => `"${option}"`)
+        .join(', ')}, got "${value}"`
+    )
+  }
+  return { modelFitPolicy: parsed.data }
 }
 
 export function resolveDefaults(models: Map<string, ResolvedModelEntry>): Map<string, string> {

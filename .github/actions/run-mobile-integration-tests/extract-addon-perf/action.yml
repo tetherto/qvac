@@ -16,7 +16,7 @@ inputs:
     required: false
     default: 'devicefarm-logs'
   output-dir-name:
-    description: 'Root directory for extracted perf results (relative to workspace)'
+    description: 'Root directory for extracted perf results (relative to workspace). Its platform subdirectory is recreated on every call, so a report left by an earlier job on a self-hosted runner is never re-uploaded.'
     required: false
     default: 'perf-results-mobile'
   filter:
@@ -78,6 +78,7 @@ runs:
         LOG_DIR="${GITHUB_WORKSPACE}/${LOG_DIR_NAME}/${PLATFORM}"
         OUTPUT_DIR="${GITHUB_WORKSPACE}/${OUTPUT_DIR_NAME}/${PLATFORM}"
         SCRIPTS_DIR="${GITHUB_WORKSPACE}/addon/scripts/perf-report"
+        rm -rf "$OUTPUT_DIR"
         mkdir -p "$OUTPUT_DIR"
         echo "output_dir=$OUTPUT_DIR" >> "$GITHUB_OUTPUT"
 

@@ -764,19 +764,17 @@ function getTestPaths(modelsDir = null) {
 }
 
 /**
- * Absolute path to the package prebuilds directory.
+ * Absolute path to the host's ggml backends in a source build:
+ * prebuilds/<host>/qvac__asr-ggml-<suffix>/, the directory the addon finds on
+ * its own when backendsDir is unset. Tests that pass it exercise an explicit
+ * backendsDir, which the addon scans as given.
  *
- * On linux-arm64 and Android the native addon ships ggml with GGML_BACKEND_DL,
- * so it loads its CPU/GPU backends from configurationParams.backendsDir before
- * whisper_init; without it, model activation aborts on a NULL CPU device. The
- * high-level ASRGgml class passes this same directory, so tests that construct
- * WhisperInterface directly must pass it too. Mirrors PREBUILDS_DIR in
- * src/engines/whisper/driver.ts.
- *
- * @returns {string} Absolute path to the package prebuilds directory
+ * @returns {string} Absolute path to the host's backends directory
  */
 function getBackendsDir() {
-  return path.resolve(__dirname, '../../prebuilds')
+  const host = require.addon.host
+  const suffix = host.startsWith('ios-') ? 'ios' : host
+  return path.resolve(__dirname, '../../prebuilds', host, 'qvac__asr-ggml-' + suffix)
 }
 
 /**

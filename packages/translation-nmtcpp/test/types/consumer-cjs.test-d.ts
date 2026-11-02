@@ -62,6 +62,19 @@ const modelTypes: TranslationNmtcpp.TranslationNmtcppModelTypes =
   TranslationNmtcpp.ModelTypes;
 void modelTypes;
 
+const fit: Promise<TranslationNmtcpp.FitResult> = TranslationNmtcpp.assessFit({
+  files: { model: "/abs/model.bin" },
+  config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
+  marginBytes: 1024,
+});
+void fit.then((result) => result.status);
+void fit.then((result) => {
+  const rows: TranslationNmtcpp.FitDevice[] = result.devices;
+  const fitStats: TranslationNmtcpp.FitStats = result.stats;
+  const status: TranslationNmtcpp.FitStatus = result.status;
+  return [rows, fitStats, status];
+});
+
 const state: TranslationNmtcpp.InferenceClientState = model.getState();
 void state;
 

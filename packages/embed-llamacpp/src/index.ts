@@ -13,14 +13,16 @@ import {
 import {
   BertInterface,
   mapAddonEvent,
+  pickPrimaryGgufPath,
+  toBertJobInput,
   type Addon,
   type AddonConfigurationParams,
   type BertBinding,
-  type BertJobInput,
+  type EmbedRunInput,
   type GGMLConfig,
 } from "./addon";
-import type ActualIdMapIndex from "./idMapIndex";
-import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
+import { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
+import { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
 
 export type {
   GGMLConfig,
@@ -28,19 +30,47 @@ export type {
   AddonConfigurationParams,
   RuntimeStats,
   Addon,
+  EmbedMediaPart,
+  EmbedInputPart,
+  EmbedMultimodalInput,
+  EmbedBatchInput,
+  EmbedRunInput,
 } from "./addon";
+export { BertInterface, pickPrimaryGgufPath } from "./addon";
+export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type {
-  IdMapIndexBitWidth,
-  IdMapIndexOptions,
-  IdMapIndexSearchResult,
-  IdMapIndexStorage,
-} from "./idMapIndex";
-export { BertInterface } from "./addon";
+  LayaConfig,
+  LayaRequest,
+  LayaSingleRequest,
+  LayaBatchRequest,
+  LayaQuestion,
+  LayaChoiceQuestion,
+  LayaScoreQuestion,
+  LayaNoulQuestion,
+  LayaState,
+  LayaCriterion,
+  LayaResponse,
+  LayaResult,
+  LayaAnswer,
+  LayaChoiceAnswer,
+  LayaScoreAnswer,
+  LayaNoulAnswer,
+  LayaUsage,
+  LayaDecisionsArgs,
+} from "./laya";
+export { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
+export type {
+  RerankConfig,
+  RerankRequest,
+  RerankScores,
+  RerankerArgs,
+} from "./rerank";
 export { assessFit } from "./fit";
 export type {
   EmbedFitDevice,
   EmbedFitRequest,
   EmbedFitResult,
+  EmbedFitStats,
   EmbedFitStatus
 } from "./fit";
 export type { QvacResponse };
@@ -49,30 +79,19 @@ type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
 
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
 
-function loadIdMapIndex() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
-  return require("./idMapIndex") as typeof ActualIdMapIndex;
-}
-
-export declare const IdMapIndex: typeof ActualIdMapIndex;
-export declare const IdMapIndexFilter: typeof ActualIdMapIndexFilter;
-
 export interface GGMLBertArgs {
-  files: { model: string[] };
+  /**
+   * `model`: the GGUF file, or all shards of a sharded GGUF.
+   * `projectionModel`: optional projection model (mmproj) that lets `run()`
+   * embed images and audio, for multimodal embedding models such as
+   * EmbeddingGemma 2.
+   */
+  files: { model: string[]; projectionModel?: string };
   config?: GGMLConfig;
   logger?: QvacLogger | Console | null;
   opts?: { stats?: boolean };
 }
 
-/**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
- */
-export function pickPrimaryGgufPath(files: string[]): string {
-  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
-  return files.find((p) => SHARD_REGEX.test(p)) || files[0];
-}
 
 /** BERT client wrapping the native BertInterface for embedding generation. */
 export class GGMLBert {
@@ -82,6 +101,7 @@ export class GGMLBert {
   state: { configLoaded: boolean };
 
   private readonly _files: string[];
+  private readonly _projectionModelPath: string;
   private readonly _config: GGMLConfig;
   private readonly _job: JobHandler;
   private readonly _run: RunExclusive;
@@ -99,7 +119,18 @@ export class GGMLBert {
         throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
       }
     }
+    if (files.projectionModel !== undefined) {
+      if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
+        throw new TypeError("files.projectionModel must be an absolute path string");
+      }
+      if (!path.isAbsolute(files.projectionModel)) {
+        throw new TypeError(
+          `files.projectionModel must be an absolute path (got: ${files.projectionModel})`,
+        );
+      }
+    }
     this._files = files.model;
+    this._projectionModelPath = files.projectionModel ?? "";
     this._config = config;
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
     this.opts = opts;
@@ -125,6 +156,7 @@ export class GGMLBert {
     const configurationParams: AddonConfigurationParams = {
       path: primaryGgufPath,
       config: this._config,
+      projectionPath: this._projectionModelPath,
     };
 
     this.logger.info("Creating addon with configuration:", configurationParams);
@@ -160,11 +192,15 @@ export class GGMLBert {
     }
   }
 
-  async run(input: string | string[]): Promise<QvacResponse> {
+  /**
+   * Embed text, or text mixed with images and audio when the model was given
+   * `files.projectionModel`. See {@link EmbedRunInput} for the input shapes.
+   */
+  async run(input: EmbedRunInput): Promise<QvacResponse> {
     return this._run(() => this._runInternal(input));
   }
 
-  private async _runInternal(text: string | string[]): Promise<QvacResponse> {
+  private async _runInternal(input: EmbedRunInput): Promise<QvacResponse> {
     if (!this.addon) {
       throw new Error("Addon not initialized. Call load() first.");
     }
@@ -172,11 +208,17 @@ export class GGMLBert {
       throw new Error(RUN_BUSY_ERROR_MESSAGE);
     }
 
-    this.logger.info("Starting inference embeddings for text:", text);
-    // Array input → type: 'sequences' (batched pass); string input → type: 'text'.
-    const inputData: BertJobInput = Array.isArray(text)
-      ? { type: "sequences", input: text }
-      : { type: "text", input: text };
+    const inputData = toBertJobInput(input);
+    if (inputData.type === "multimodal") {
+      if (!this._projectionModelPath) {
+        throw new TypeError("media input needs files.projectionModel");
+      }
+      this.logger.info(
+        `Starting inference embeddings for ${inputData.input?.length ?? 0} multimodal input(s)`,
+      );
+    } else {
+      this.logger.info("Starting inference embeddings for text:", input);
+    }
 
     const response = this._job.start();
 
@@ -287,23 +329,23 @@ const cjsExports = GGMLBert as typeof GGMLBert & {
   pickPrimaryGgufPath?: typeof pickPrimaryGgufPath;
   GGMLBert?: typeof GGMLBert;
   BertInterface?: typeof BertInterface;
+  LayaDecisions?: typeof LayaDecisions;
+  LayaInterface?: typeof LayaInterface;
+  mapLayaEvent?: typeof mapLayaEvent;
+  Reranker?: typeof Reranker;
+  RerankInterface?: typeof RerankInterface;
+  mapRerankEvent?: typeof mapRerankEvent;
   assessFit?: typeof assessFitImpl;
-  readonly IdMapIndex?: typeof IdMapIndex;
-  readonly IdMapIndexFilter?: typeof IdMapIndexFilter;
 };
 cjsExports.default = GGMLBert;
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = BertInterface;
+cjsExports.LayaDecisions = LayaDecisions;
+cjsExports.LayaInterface = LayaInterface;
+cjsExports.mapLayaEvent = mapLayaEvent;
+cjsExports.Reranker = Reranker;
+cjsExports.RerankInterface = RerankInterface;
+cjsExports.mapRerankEvent = mapRerankEvent;
 cjsExports.assessFit = assessFitImpl;
-Object.defineProperties(cjsExports, {
-  IdMapIndex: {
-    enumerable: true,
-    get: loadIdMapIndex,
-  },
-  IdMapIndexFilter: {
-    enumerable: true,
-    get: () => loadIdMapIndex().IdMapIndexFilter,
-  },
-});
 module.exports = cjsExports;

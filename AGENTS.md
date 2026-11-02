@@ -37,6 +37,13 @@ or other volatile facts into agent instructions. Link to their owning source.
 - Do not commit, push, post reviews or comments, publish, or otherwise mutate remote
   systems unless the user explicitly requests it.
 
+## Restricted Asana access
+
+- Do not access Asana, including read-only lookups or task updates, through MCP
+  tools, APIs, CLI helpers, or browsers.
+- Do not read or request Asana credentials, configure Asana integrations, or
+  bypass disabled tools through another access method.
+
 ## Maintaining the repository
 
 - Rewrite documentation in place: replace obsolete or corrected prose instead of

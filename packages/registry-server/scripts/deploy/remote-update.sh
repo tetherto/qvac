@@ -54,6 +54,14 @@ command -v npm >/dev/null || fail "npm not found on node"
 command -v pm2 >/dev/null || fail "pm2 not found on node"
 command -v curl >/dev/null || fail "curl not found on node"
 
+# CVE-2026-111497: refuse Node.js releases with the unpatched Brotli decoder.
+# Keep in step with engines.node in package.json.
+node -e '
+  const [a, b, c] = process.versions.node.split(".").map(Number)
+  const f = { 22: [23, 4], 24: [22, 1], 26: [12, 1] }[a]
+  process.exit(a > 26 || (f && (b > f[0] || (b === f[0] && c >= f[1]))) ? 0 : 1)
+' || fail "node $(node -v) lacks the CVE-2026-111497 fix; install 22.23.4, 24.22.1 or 26.12.1+ and run 'pm2 update'"
+
 [ -d "$REPO_PATH/.git" ] || fail "REPO_PATH '$REPO_PATH' is not a git checkout"
 cd "$REPO_PATH"
 

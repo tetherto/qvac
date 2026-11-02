@@ -8,11 +8,15 @@
  * so unit tests can point them at fixtures without monkey-patching `cwd`.
  */
 
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { execSync } from "child_process";
 import { fileURLToPath } from "node:url";
+import {
+  getCurrentLine,
+  getDocumentedSoftware,
+} from "../../src/lib/versions.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -20,21 +24,109 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..", "..");
 
 /**
- * Absolute path to the versioned-content root. Both `api/` and
- * `release-notes/` live directly under here.
+ * The folder holding the line a collection is still writing: the version under
+ * development, outside the site, where nothing builds it and no URL reaches
+ * it.
+ *
+ * It is addressed by a fixed name rather than by its number, which is what
+ * keeps the path a feature PR writes to stable across a cutoff. A cut copies
+ * this folder into the collection and leaves it in place, so a feature PR
+ * opened before the cutoff and merged after it lands in the path it was
+ * written to, with no rename for git to replay it through.
+ *
+ * That holds for this folder only. The outgoing group is renamed by the cut,
+ * so a PR writing anywhere under `content/docs/` is still exposed to rename
+ * detection — which is what the `Documentation lines` job fails on.
  */
-export const CONTENT_REFERENCE = path.join(
+export const DEVELOPMENT_LINE = "next";
+
+export function developmentLineDir(
+  slug: string,
+  root: string = DOCS_WEBSITE_DIR,
+): string {
+  return path.join(root, "content", "_unpublished", slug, DEVELOPMENT_LINE);
+}
+
+/**
+ * The reference folder a version's generated pages belong in: the reference
+ * folder of the SDK's development line, and only for a version whose line has
+ * not been cut yet.
+ *
+ * The destination is read rather than named on the command line, which is why
+ * it has to be checked. Regenerating into a line that has been cut would
+ * overwrite the record of a release — a full render replaces the page — and
+ * the tree that results still builds and still tests clean. Refusing here is
+ * what enforces the rule that a cut line is never regenerated.
+ */
+export function referenceDirFor(
+  version: string | SemVer,
+  root: string = DOCS_WEBSITE_DIR,
+): string {
+  const wanted = typeof version === "string" ? parseVersion(version) : version;
+  const sdk = getDocumentedSoftware("/sdk");
+  const current = sdk && getCurrentLine(sdk);
+  if (!current) {
+    throw new Error(
+      "The version manifest declares no current line for /sdk, so there is " +
+        "nowhere to write generated pages.",
+    );
+  }
+
+  const line = `v${wanted.major}.${wanted.minor}`;
+  const ahead =
+    line.localeCompare(current.version, undefined, { numeric: true }) > 0;
+  const development = developmentLineDir("sdk", root);
+
+  if (!existsSync(development)) {
+    throw new Error(
+      `/sdk has no development line at ${development}, so there is nowhere ` +
+        `to write generated pages.`,
+    );
+  }
+
+  if (!ahead) {
+    throw new Error(
+      `Refusing to write ${line} pages into the development line of /sdk.\n` +
+        `  ${current.version} is the line last cut, so ${line} has shipped. A ` +
+        `cut line is what the site serves and is never regenerated. Edit\n` +
+        `  content/docs/sdk/${current.folder}/ directly to correct it.\n`,
+    );
+  }
+
+  return path.join(development, "reference");
+}
+
+/** Absolute path to the API summary page of `version`'s line. */
+export function apiPageFor(
+  version: string | SemVer,
+  root: string = DOCS_WEBSITE_DIR,
+): string {
+  return path.join(referenceDirFor(version, root), "api.mdx");
+}
+
+/** Absolute path to the release notes page of `version`'s line. */
+export function releaseNotesPageFor(
+  version: string | SemVer,
+  root: string = DOCS_WEBSITE_DIR,
+): string {
+  return path.join(referenceDirFor(version, root), "release-notes.mdx");
+}
+
+/**
+ * The directories the patch-series scheme wrote its per-series pages into,
+ * before the SDK was cut into documentation lines. Nothing writes here: the
+ * pages moved into the lines and the scripts that addressed them are
+ * retired. Kept only so those scripts still compile.
+ */
+const RETIRED_REFERENCE = path.join(
   DOCS_WEBSITE_DIR,
   "content",
   "docs",
+  "sdk",
   "reference",
 );
-
-/** Absolute path to the API summary section directory. */
-export const API_DIR = path.join(CONTENT_REFERENCE, "api");
-
-/** Absolute path to the release notes section directory. */
-export const RELEASE_NOTES_DIR = path.join(CONTENT_REFERENCE, "release-notes");
+export const API_DIR = path.join(RETIRED_REFERENCE, "api");
+export const RELEASE_NOTES_DIR = path.join(RETIRED_REFERENCE, "release-notes");
 
 /** Absolute path to the version manifest the SPA reads at runtime. */
 export const VERSIONS_TS = path.join(

@@ -7,9 +7,10 @@ import { assertError, multipart, collectSSE, assertStatusAndError } from '../hel
 import { MODEL_CONFIG, E2E } from '../helpers/config.js'
 import { silenceWav, tinyPng, textFile } from '../helpers/fixtures.js'
 import { openaiState } from '@/serve/extensions/openai/state'
+import type { DecisionsResult } from '@/serve/extensions/openai/schemas/decisions'
 
-// One shared in-process server preloads the small models (LLM, embedding,
-// Whisper ×2). test-video stays preload:false so its requests reach the model check.
+// One shared in-process server preloads the LLM, embedding, decision, and two Whisper models.
+// test-video stays preload:false so its requests reach the model check.
 const server = useModelServer(MODEL_CONFIG)
 
 function post(url: string, payload: unknown) {
@@ -26,7 +27,7 @@ const wavField = {
 }
 function timedWavField() {
   const fixturePath = fileURLToPath(
-    new URL('../../../../sdk/e2e/assets/audio/transcription-short-wav.wav', import.meta.url)
+    new URL('../../../../sdk-e2e/assets/audio/transcription-short-wav.wav', import.meta.url)
   )
   assert.ok(existsSync(fixturePath), `Timed transcription fixture is missing: ${fixturePath}`)
   return {
@@ -49,6 +50,7 @@ describe('models', () => {
     // All configured aliases appear, including the preload:false ones
     // (test-embed-lazy, test-video) that are not loaded yet.
     assert.deepEqual([...body.data.map((m) => m.id)].sort(), [
+      'test-decision',
       'test-embed',
       'test-embed-lazy',
       'test-llm',
@@ -357,12 +359,11 @@ describe('chat completions (tools / structured output)', () => {
     }
   })
 
-  // A follow-up turn replays a prior assistant tool call as history. The server
-  // re-renders it in the model's own dialect (resolved via getLoadedModelInfo);
-  // rendering it in a foreign dialect made the model emit a malformed tool frame
-  // that failed to parse and leaked raw `<tool_call>`/`<function=` markup into
-  // `content`. A structured `tool_calls` reply is the correct channel; raw markup
-  // in `content` is the regression this guards.
+  // A follow-up turn replays a prior assistant tool call as history, which the
+  // model's chat template renders in its own format. A call replayed in a foreign
+  // format made the model emit a malformed tool frame that failed to parse and
+  // leaked raw `<tool_call>`/`<function=` markup into `content`; that leak is the
+  // regression this guards.
   it('replays a prior tool call without leaking raw tool markup into content', async () => {
     const res = await post('/v1/chat/completions', {
       model: E2E.llm,
@@ -483,6 +484,87 @@ describe('embeddings', () => {
     assert.equal(body.data[1].index, 1)
     assert.ok(body.data[0].embedding.length > 0)
     assert.equal(body.data[0].embedding.length, body.data[1].embedding.length)
+  })
+})
+
+describe('decisions', () => {
+  function assertProbability(value: number): void {
+    assert.ok(Number.isFinite(value) && value >= 0 && value <= 1, `Invalid probability: ${value}`)
+  }
+
+  function assertDistribution(options: { probability: number }[]): void {
+    for (const option of options) assertProbability(option.probability)
+    const total = options.reduce((sum, option) => sum + option.probability, 0)
+    assert.ok(Math.abs(total - 1) <= 1e-3, `Probabilities sum to ${total}`)
+  }
+
+  it('answers predicate, choice, and score questions through the HTTP endpoint', async () => {
+    const choices = [{ value: 'billing' }, { value: 'technical' }]
+    const levels = [{ label: 'Low' }, { label: 'Medium' }, { label: 'High' }]
+    const res = await post('/v1/decisions', {
+      model: E2E.decision,
+      input: 'My payment failed twice and I was charged both times. Please refund the duplicate.',
+      questions: [
+        {
+          type: 'predicate',
+          name: 'refund',
+          instructions: 'The customer asks for a refund.'
+        },
+        {
+          type: 'choice',
+          name: 'department',
+          instructions: 'Which team should handle this ticket?',
+          choices
+        },
+        { type: 'score', instructions: 'How urgent is this?', levels }
+      ]
+    })
+    assert.equal(res.statusCode, 200, res.body)
+    assert.match(String(res.headers['content-type']), /application\/json/)
+
+    const body = res.json() as DecisionsResult
+    assert.equal(body.model, E2E.decision)
+    assert.deepEqual(
+      body.answers.map(({ type, name }) => ({ type, name })),
+      [
+        { type: 'predicate', name: 'refund' },
+        { type: 'choice', name: 'department' },
+        { type: 'score', name: null }
+      ]
+    )
+    const [predicate, choice, score] = body.answers
+    assert.ok(predicate?.type === 'predicate')
+    assertProbability(predicate.probability)
+
+    assert.ok(choice?.type === 'choice')
+    assert.ok(choices.some(({ value }) => value === choice.choice))
+    assertProbability(choice.confidence)
+    assert.deepEqual(
+      choice.probabilities.map(({ value }) => ({ value })),
+      choices
+    )
+    assertDistribution(choice.probabilities)
+
+    assert.ok(score?.type === 'score')
+    assert.ok(Number.isFinite(score.score) && score.score >= 0 && score.score <= levels.length - 1)
+    assertProbability(score.confidence)
+    assert.deepEqual(
+      score.probabilities.map(({ value, label }) => ({ value, label })),
+      levels.map(({ label }, value) => ({ value, label }))
+    )
+    assertDistribution(score.probabilities)
+    const weightedScore = score.probabilities.reduce(
+      (sum, { value, probability }) => sum + value * probability,
+      0
+    )
+    assert.ok(Math.abs(score.score - weightedScore) <= 1e-3)
+
+    const { usage } = body
+    assert.ok(Number.isInteger(usage.input_tokens) && usage.input_tokens > 0)
+    assert.ok(Number.isInteger(usage.output_tokens) && usage.output_tokens >= 0)
+    assert.equal(usage.total_tokens, usage.input_tokens + usage.output_tokens)
+    assert.deepEqual(usage.input_tokens_details, { cached_tokens: 0, cache_write_tokens: 0 })
+    assert.deepEqual(usage.output_tokens_details, { reasoning_tokens: 0 })
   })
 })
 
@@ -1063,7 +1145,7 @@ describe('videos (HTTP layer only; lazy-load stubbed to fail)', () => {
       await post('/v1/videos', {
         model: E2E.video,
         prompt: 'subject turns',
-        input_reference: { image_url: 'http://127.0.0.1:1/v1/models' }
+        input_reference: { image_url: 'https://example.com/reference.png' }
       }),
       'model_load_failed'
     )

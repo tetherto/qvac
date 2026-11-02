@@ -19,30 +19,31 @@ import { Sanitizer } from './sanitizer.js'
  *   4. Write flat test files: test/unit/<name>-index.test.js, test/unit/<name>-helpers.test.js
  */
 export class Command {
-  constructor ({ name, description, secrets = [], sanitizer = new Sanitizer() }) {
+  constructor({ name, description, secrets = [], sanitizer = new Sanitizer() }) {
     this.name = name
     this.description = description
     this.secrets = secrets
     this.sanitizer = sanitizer
   }
 
-  toCommand () {
+  toCommand() {
     throw new Error(this.name + ': toCommand() must be implemented')
   }
 
-  async run (flags) {
-    validateRequiredEnv(this.secrets.map(s => s.envVar))
+  async run(flags) {
+    validateRequiredEnv(this.secrets.map((s) => s.envVar))
     return this._run(flags)
   }
 
-  async _run (flags) { // eslint-disable-line no-unused-vars
+  async _run(flags) {
+    // eslint-disable-line no-unused-vars
     throw new Error(this.name + ': _run() must be implemented')
   }
 
-  _secretsFooter () {
+  _secretsFooter() {
     if (this.secrets.length === 0) return ''
-    const maxLen = Math.max(...this.secrets.map(s => s.envVar.length))
-    const lines = this.secrets.map(s => {
+    const maxLen = Math.max(...this.secrets.map((s) => s.envVar.length))
+    const lines = this.secrets.map((s) => {
       const pad = ' '.repeat(maxLen - s.envVar.length + 2)
       return '  ' + s.envVar + pad + s.description
     })

@@ -29,6 +29,69 @@
       "sha256": "0ad885ffd4bb022fc4f0d33a3308fa108ef8613159d3b3a67e23abca056b7a6c",
       "bytes": 811843840
     },
+    "Qwen3.5-0.8B-MTP-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/8fea620810c4afa23dd6443f999a48574c1611a3/Qwen3.5-0.8B-Q8_0.gguf"
+      ],
+      "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
+      "bytes": 833592096
+    },
+    "Qwen3-4B-Q4_K_M.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf"
+      ],
+      "sha256": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
+      "bytes": 2497281312,
+      "warm": false
+    },
+    "Qwen3-4B-DFlash-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/AtomicChat/Qwen3-4B-DFlash-GGUF/resolve/cc408166a3558bc96f42be453ea097231bb9e666/Qwen3-4B-DFlash.Q8_0.gguf"
+      ],
+      "sha256": "2913a8a5619b30233c0745ccd58de8fbe144b831b54770eb04d4a371221ca273",
+      "bytes": 577047008,
+      "warm": false
+    },
+    "Qwen3.8-27B-UD-Q4_K_XL.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4ca720788d1e01f1bff70c033e0d0028fd02e502/Qwen3.8-27B-UD-Q4_K_XL.gguf"
+      ],
+      "sha256": "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e",
+      "bytes": 17559178144,
+      "warm": false
+    },
+    "mtp-Qwen3.8-27B-Q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4ca720788d1e01f1bff70c033e0d0028fd02e502/MTP/mtp-Qwen3.8-27B-Q4_0.gguf"
+      ],
+      "sha256": "50d9ce5a6da381bbcfb31061cf73df94a90e6faf8efeddee379a9cb8f1501c6e",
+      "bytes": 1369590656,
+      "warm": false
+    },
+    "Qwen3.8-27B-DFlash2-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf"
+      ],
+      "sha256": "651a1b2930c9825080480f79cf38057e681c9b175d580a357c14f67cf77ccf49",
+      "bytes": 2056414816,
+      "warm": false
+    },
+    "gemma-4-E2B-it-assistant-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/AtomicChat/gemma-4-E2B-it-assistant-GGUF/resolve/5ba029771ba4efc3488835c4a137b30bd1f80b03/gemma-4-E2B-it-assistant.Q8_0.gguf"
+      ],
+      "sha256": "bbb29c822cad3df242fd0f75fc0928a29e90bdd52aa1625b2d6bff476b739095",
+      "bytes": 97817696,
+      "warm": false
+    },
+    "Qwen3.5-2B-MTP-Q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/Qwen3.5-2B-Q4_0.gguf"
+      ],
+      "sha256": "5865aef7b9983e463901ad0683c7f11cde89c86420d239c7fb5f051ded7b070e",
+      "bytes": 1256787360,
+      "warm": false
+    },
     "Qwen3.5-0.8B-Q4_0.gguf": {
       "urls": [
         "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_0.gguf"

@@ -12,7 +12,7 @@ import { createAudioUnderstandResult } from '@/client/api/audio-gen-result'
  *   interleaved stereo 48 kHz Float32 LE PCM bytes in `[-1, 1]`.
  * @param params.vocalLanguage - Language hint forced into the result instead of the LM's guess.
  * @param params.seed - Seeds the LM decode; omit for a random seed.
- * @returns A synchronous request ID, a progress stream, the `description` promise, and the stats and diagnostics promises.
+ * @returns A synchronous request ID, a progress stream, the `description` promise, and the stats and diagnostics promises. `description.seed` is the seed the decode used, so an unseeded description can be reproduced.
  *
  * @example
  * ```typescript

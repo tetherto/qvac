@@ -6,15 +6,24 @@ import { createAudioEditResult } from '@/client/api/audio-gen-result'
  * Edits a source recording with a loaded ACE-Step AudioGen model: an ordered
  * pipeline of `flow-edit` and `repaint` operations, executed in array order.
  *
- * @param params - Loaded model ID, the source audio, the ordered `operations`, and an optional `seed`.
+ * @param params - Loaded model ID, the source audio, the ordered `operations`, and optional
+ *   run controls that apply to every operation.
  * @param params.sourceAudio - The recording to edit: a file path (decoded server-side) or raw
  *   interleaved stereo 48 kHz Float32 LE PCM bytes in `[-1, 1]`.
+ * @param params.referenceAudio - Optional timbre reference for every operation, in the same forms
+ *   as `sourceAudio` (samples need only be finite).
+ * @param params.vocalLanguage - Prompt metadata for every operation, as on a generation; so are
+ *   `bpm`, `keyscale`, `timesignature` and `augmentCaptionWithMetadata`.
+ * @param params.dcwEnabled - Repaint only: the Haar DCW sampler correction, tuned by `dcwScaler` and
+ *   `dcwHighScaler`.
+ * @param params.inferenceSteps - DiT steps for every operation (0..1000); omit to keep the load-time
+ *   value. `shift` overrides the load-time timestep shift the same way.
  * @param params.operations - `flow-edit` re-conditions the whole clip from a `from` prompt to a
  *   `to` prompt over an optional `nMin`/`nMax` diffusion window (turbo DiT variants only);
  *   `repaint` regenerates the `start`..`end` range (seconds) against a new `caption`, keeping the
  *   rest of the clip. Operations may repeat or mix.
  * @param params.seed - Seeds the first operation; each following operation uses `seed + index`.
- * @returns The same run shape as `audioGen()`: a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise.
+ * @returns The same run shape as `audioGen()`: a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise. `stats.metadata.seed` reports the base seed the edit used.
  *
  * @example
  * ```typescript
@@ -30,6 +39,9 @@ import { createAudioEditResult } from '@/client/api/audio-gen-result'
  *     { type: "repaint", caption: "analog synth solo", start: 10, end: 20, mode: "balanced" },
  *   ],
  *   seed: 22883,
+ *   referenceAudio: "/path/to/reference.wav",
+ *   bpm: 120,
+ *   keyscale: "C minor",
  * });
  * stopButton.onclick = () => cancel({ requestId: run.requestId });
  * const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;

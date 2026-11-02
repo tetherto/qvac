@@ -1,5 +1,6 @@
 // NOLINTBEGIN
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdint>
 #include <cstring>
@@ -30,7 +31,26 @@ std::string sanitizePrintableAscii(const std::string& input) {
   return out;
 }
 
+#ifdef QVAC_TRANSLATION_NMTCPP_TESTING
+namespace {
+std::atomic<int>& threadCountForTesting() {
+  static std::atomic<int> threadCount{0};
+  return threadCount;
+}
+} // namespace
+
+void nmtSetThreadCountForTesting(int threadCount) {
+  threadCountForTesting().store(threadCount);
+}
+#endif
+
 int get_optimal_thread_count() {
+#ifdef QVAC_TRANSLATION_NMTCPP_TESTING
+  const int testThreadCount = threadCountForTesting().load();
+  if (testThreadCount > 0) {
+    return testThreadCount;
+  }
+#endif
   unsigned int hw_threads = std::thread::hardware_concurrency();
   if (hw_threads == 0) {
     return 2;

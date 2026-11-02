@@ -11,49 +11,40 @@ import { getEngineLogger } from '@/logging/index'
 import { PathTraversalError } from '@/errors/index'
 import { Buffer } from 'bare-buffer'
 import { markAutoCacheKey } from '@/plugins/ops/kv-cache-retention'
+import type { Tool } from '@/schemas/tools'
 
 const logger = getEngineLogger()
 
-// In-memory KV-cache state lives in `KvCacheSession` (the single
-// mutation point for all three KV-cache bookkeeping layers). This
-// module keeps only the pure path / hash utilities that don't touch
-// in-memory state.
+// In-memory KV-cache state lives in `KvCacheSession`, its single mutation
+// point. This module keeps only the pure path / hash utilities that don't
+// touch in-memory state.
 
 export function extractSystemPrompt(messages: CacheMessage[]): string | null {
   const systemMessage = messages.find((msg) => msg.role === 'system')
   return systemMessage ? systemMessage.content : null
 }
 
-// Cache hash based on the system prompt + complete tool definitions.
-// Callers pass tools only when the tool block is written into the cache and
-// left there, so a different tool set gets its own cache instead of reusing a
-// prefix that holds the old block. Every prompt-affecting field participates,
-// not just the name: canonical serialization avoids cache misses caused only
-// by object-key insertion order, while tool-array order is preserved because
-// that is the order sent to the model.
-function canonicalizeHashInput(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalizeHashInput)
-  if (typeof value !== 'object' || value === null) return value
-
-  const canonical: Record<string, unknown> = {}
-  for (const key of Object.keys(value).sort()) {
-    canonical[key] = canonicalizeHashInput((value as Record<string, unknown>)[key])
-  }
-  return canonical
-}
-
-export function generateConfigHash(systemPrompt: string | null, tools?: unknown): string {
+// Names the cache file by system prompt only. Tools stay out on purpose: the
+// addon compares the rendered prompt against the tokens the file holds, so a
+// changed tool set on the same key must reach the same file to be trimmed there.
+// The empty `tools` keeps the path earlier releases gave a tool-less cache, so
+// an upgrade overwrites those files instead of orphaning them.
+export function generateConfigHash(systemPrompt: string | null): string {
   const hash = crypto.createHash('sha-256')
-  const canonicalConfig = JSON.stringify(
-    canonicalizeHashInput({ systemPrompt, tools: Array.isArray(tools) ? tools : [] })
-  )
-  hash.update(Buffer.from(canonicalConfig, 'utf8'))
+  hash.update(Buffer.from(JSON.stringify({ systemPrompt, tools: [] }), 'utf8'))
   return hash.digest('hex').substring(0, 16)
 }
 
-export function generateCacheKey(messages: CacheMessage[]): string {
+export function generateCacheKey(messages: CacheMessage[], tools?: readonly Tool[]): string {
   const hash = crypto.createHash('sha-256')
-  const historyString = JSON.stringify(messages)
+  // Before the first assistant reply, the rendered tools are part of the
+  // reusable prefix. Keep those primes isolated; established conversations
+  // retain history-only keys so the addon can trim a changed tool block.
+  const historyString = JSON.stringify(
+    tools?.length && !messages.some((message) => message.role === 'assistant')
+      ? { messages, tools }
+      : messages
+  )
   const historyBuffer = Buffer.from(historyString, 'utf8')
   hash.update(historyBuffer)
   const hashString = hash.digest('hex')
@@ -88,14 +79,16 @@ export async function getCacheFilePath(
 export async function findMatchingCache(
   modelId: string,
   configHash: string,
-  currentHistory: CacheMessage[]
+  currentHistory: CacheMessage[],
+  tools?: readonly Tool[]
 ): Promise<{ cacheKey: string; cachePath: string } | null> {
-  if (currentHistory.length <= 1) {
+  if (currentHistory.length === 0) {
     return null
   }
 
   const previousHistory = getAutoCacheLookupHistory(currentHistory)
-  const cacheKey = generateCacheKey(previousHistory)
+  if (previousHistory.length === 0 && !tools?.length) return null
+  const cacheKey = generateCacheKey(previousHistory, tools)
   const cachePath = resolveCacheFilePath(modelId, configHash, cacheKey)
 
   try {
@@ -110,12 +103,13 @@ export async function findMatchingCache(
 export async function getCurrentCacheInfo(
   modelId: string,
   configHash: string,
-  currentHistory: CacheMessage[]
+  currentHistory: CacheMessage[],
+  tools?: readonly Tool[]
 ): Promise<{
   cacheKey: string
   cachePath: string
 }> {
-  const cacheKey = generateCacheKey(currentHistory)
+  const cacheKey = generateCacheKey(currentHistory, tools)
   await markAutoCacheKey(cacheKey)
   const cachePath = await getCacheFilePath(modelId, configHash, cacheKey)
   return { cacheKey, cachePath }

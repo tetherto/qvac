@@ -14,6 +14,27 @@
       ],
       "sha256": "939f1fb3fcc70f2a250a7e7ad7c2fbdc1397d46f9a8055d053e451829c5293fb",
       "bytes": 669603712
+    },
+    "jina-reranker-v1-tiny-en-f16.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf"
+      ],
+      "sha256": "ad9f450c1053a431e2e3746d1f9f7768fb9183cf0796e046983a3449dca093c2",
+      "bytes": 67504480
+    },
+    "embeddinggemma-2-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf"
+      ],
+      "sha256": "2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135",
+      "bytes": 309855456
+    },
+    "mmproj-embeddinggemma-2-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf"
+      ],
+      "sha256": "c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f",
+      "bytes": 554821024
     }
   }
 }

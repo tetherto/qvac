@@ -27,167 +27,175 @@ const backendsDir = getBackendsDir()
 const activationRunnerPath = path.resolve(__dirname, 'activate-without-backends-dir.runner.js')
 const ACTIVATION_TIMEOUT_MS = 120000
 
-test('[low level] Real C++ addon bindings work correctly', async (t) => {
-  await ensureWhisperModel(modelPath)
+test(
+  '[low level] Real C++ addon bindings work correctly',
+  { timeout: ACTIVATION_TIMEOUT_MS },
+  async (t) => {
+    await ensureWhisperModel(modelPath)
 
-  let resolveJobEnded
-  const jobEndedPromise = new Promise((resolve) => {
-    resolveJobEnded = resolve
-  })
-
-  const onOutput = (addon, event, jobId, output, error) => {
-    console.log(`Event: ${event}, JobId: ${jobId}, Output:`, output, 'Error:', error)
-    if (event === 'JobEnded') {
-      resolveJobEnded()
-    }
-  }
-
-  const config = {
-    contextParams: {
-      model: modelPath
-    },
-    whisperConfig: {
-      language: 'en',
-      duration_ms: 0,
-      temperature: 0.0,
-      vadParams: {
-        threshold: 0.6
-      }
-    },
-    miscConfig: {
-      caption_enabled: false
-    },
-    backendsDir
-  }
-
-  let model
-  try {
-    // Test 1: Can create WhisperInterface
-    console.log('Creating WhisperInterface...')
-    model = new WhisperInterface(binding, config, onOutput)
-    t.ok(model, 'WhisperInterface should be created')
-
-    // Test 2: Can get status
-    console.log('Getting status...')
-    const status = await model.status()
-    t.ok(status, 'Status should be returned')
-    console.log('Status:', status)
-
-    // Test 3: Can activate
-    console.log('Activating model...')
-    await model.activate()
-    const status2 = await model.status()
-    console.log('Status after activate:', status2)
-    t.ok(status2, 'Status should be returned after activation')
-    t.pass('Model should activate')
-
-    console.log('Appending test data...')
-    const testData = new Uint8Array([1, 2, 3, 4, 5, 6])
-    const jobId = await model.append({
-      type: 'audio',
-      input: testData
+    let resolveJobEnded
+    const jobEndedPromise = new Promise((resolve) => {
+      resolveJobEnded = resolve
     })
-    t.ok(jobId !== undefined, 'Should return a job ID')
-    console.log('Job ID:', jobId)
 
-    // Test 4: Can append end-of-job signal
-    console.log('Appending end-of-job...')
-    const endJobId = await model.append({ type: 'end of job' })
-    t.ok(endJobId !== undefined, 'Should return a job ID for end-of-job')
-
-    // Test 5: Can get updated status
-    const newStatus = await model.status()
-    t.ok(newStatus, 'Should get updated status')
-    console.log('Updated status:', newStatus)
-
-    const sawJobEnded = await Promise.race([
-      jobEndedPromise.then(() => true),
-      new Promise((resolve) => setTimeout(() => resolve(false), 5000))
-    ])
-    t.ok(sawJobEnded, 'JobEnded should be emitted for low-level run')
-
-    // destroyInstance() performs native cancellation/cleanup internally.
-    try {
-      await model.destroyInstance()
-    } catch {}
-
-    console.log('All tests passed!')
-  } catch (error) {
-    console.error('Unexpected error in addon bindings test:', error.message)
-    throw error
-  } finally {
-    try {
-      if (model) await model.destroyInstance()
-    } catch {}
-  }
-})
-
-test('[low level] Real addon state transitions work correctly', async (t) => {
-  const onOutput = (addon, event, jobId, output, error) => {
-    // Event handler for state transitions test
-  }
-  await ensureWhisperModel(modelPath)
-
-  const config = {
-    contextParams: {
-      model: modelPath
-    },
-    whisperConfig: {
-      language: 'en',
-      duration_ms: 0,
-      temperature: 0.0,
-      vadParams: {
-        threshold: 0.6
+    const onOutput = (addon, event, jobId, output, error) => {
+      console.log(`Event: ${event}, JobId: ${jobId}, Output:`, output, 'Error:', error)
+      if (event === 'JobEnded') {
+        resolveJobEnded()
       }
-    },
-    miscConfig: {
-      caption_enabled: false
-    },
-    backendsDir
-  }
-
-  let model
-  try {
-    model = new WhisperInterface(binding, config, onOutput)
-
-    let status = await model.status()
-    t.ok(status, 'Should have initial status')
-
-    await model.activate()
-    status = await model.status()
-    t.ok(status === 'listening', 'Should be listening after activation')
-
-    try {
-      await model.pause()
-      t.fail('Pause should be rejected in runJob mode')
-    } catch (error) {
-      t.ok(
-        error.message.includes('pause is not supported in runJob mode'),
-        'Pause should be explicitly unsupported'
-      )
     }
 
-    try {
-      await model.stop()
-      t.fail('Stop should be rejected in runJob mode')
-    } catch (error) {
-      t.ok(
-        error.message.includes('stop is not supported in runJob mode'),
-        'Stop should be explicitly unsupported'
-      )
+    const config = {
+      contextParams: {
+        model: modelPath
+      },
+      whisperConfig: {
+        language: 'en',
+        duration_ms: 0,
+        temperature: 0.0,
+        vadParams: {
+          threshold: 0.6
+        }
+      },
+      miscConfig: {
+        caption_enabled: false
+      },
+      backendsDir
     }
 
-    status = await model.status()
-    t.ok(status === 'listening', 'Status should remain listening after unsupported stop')
-
-    await model.destroyInstance()
-    t.pass('State transitions test completed')
-  } finally {
+    let model
     try {
-      if (model) await model.destroyInstance()
-    } catch {}
+      // Test 1: Can create WhisperInterface
+      console.log('Creating WhisperInterface...')
+      model = new WhisperInterface(binding, config, onOutput)
+      t.ok(model, 'WhisperInterface should be created')
+
+      // Test 2: Can get status
+      console.log('Getting status...')
+      const status = await model.status()
+      t.ok(status, 'Status should be returned')
+      console.log('Status:', status)
+
+      // Test 3: Can activate
+      console.log('Activating model...')
+      await model.activate()
+      const status2 = await model.status()
+      console.log('Status after activate:', status2)
+      t.ok(status2, 'Status should be returned after activation')
+      t.pass('Model should activate')
+
+      console.log('Appending test data...')
+      const testData = new Uint8Array([1, 2, 3, 4, 5, 6])
+      const jobId = await model.append({
+        type: 'audio',
+        input: testData
+      })
+      t.ok(jobId !== undefined, 'Should return a job ID')
+      console.log('Job ID:', jobId)
+
+      // Test 4: Can append end-of-job signal
+      console.log('Appending end-of-job...')
+      const endJobId = await model.append({ type: 'end of job' })
+      t.ok(endJobId !== undefined, 'Should return a job ID for end-of-job')
+
+      // Test 5: Can get updated status
+      const newStatus = await model.status()
+      t.ok(newStatus, 'Should get updated status')
+      console.log('Updated status:', newStatus)
+
+      const sawJobEnded = await Promise.race([
+        jobEndedPromise.then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), 5000))
+      ])
+      t.ok(sawJobEnded, 'JobEnded should be emitted for low-level run')
+
+      // destroyInstance() performs native cancellation/cleanup internally.
+      try {
+        await model.destroyInstance()
+      } catch {}
+
+      console.log('All tests passed!')
+    } catch (error) {
+      console.error('Unexpected error in addon bindings test:', error.message)
+      throw error
+    } finally {
+      try {
+        if (model) await model.destroyInstance()
+      } catch {}
+    }
   }
-})
+)
+
+test(
+  '[low level] Real addon state transitions work correctly',
+  { timeout: ACTIVATION_TIMEOUT_MS },
+  async (t) => {
+    const onOutput = (addon, event, jobId, output, error) => {
+      // Event handler for state transitions test
+    }
+    await ensureWhisperModel(modelPath)
+
+    const config = {
+      contextParams: {
+        model: modelPath
+      },
+      whisperConfig: {
+        language: 'en',
+        duration_ms: 0,
+        temperature: 0.0,
+        vadParams: {
+          threshold: 0.6
+        }
+      },
+      miscConfig: {
+        caption_enabled: false
+      },
+      backendsDir
+    }
+
+    let model
+    try {
+      model = new WhisperInterface(binding, config, onOutput)
+
+      let status = await model.status()
+      t.ok(status, 'Should have initial status')
+
+      await model.activate()
+      status = await model.status()
+      t.ok(status === 'listening', 'Should be listening after activation')
+
+      try {
+        await model.pause()
+        t.fail('Pause should be rejected in runJob mode')
+      } catch (error) {
+        t.ok(
+          error.message.includes('pause is not supported in runJob mode'),
+          'Pause should be explicitly unsupported'
+        )
+      }
+
+      try {
+        await model.stop()
+        t.fail('Stop should be rejected in runJob mode')
+      } catch (error) {
+        t.ok(
+          error.message.includes('stop is not supported in runJob mode'),
+          'Stop should be explicitly unsupported'
+        )
+      }
+
+      status = await model.status()
+      t.ok(status === 'listening', 'Status should remain listening after unsupported stop')
+
+      await model.destroyInstance()
+      t.pass('State transitions test completed')
+    } finally {
+      try {
+        if (model) await model.destroyInstance()
+      } catch {}
+    }
+  }
+)
 
 function runActivationWithoutBackendsDir() {
   return spawnSync(process.execPath, [activationRunnerPath, modelPath], {

@@ -22,14 +22,18 @@ struct AddonInstance {
 
 /// @brief Creates a pure C++ Addon (no Js dependencies). Can be used on CLI or
 /// C++ tests.
+/// @param projectionPath Optional projection model (mmproj) for media inputs.
 inline AddonInstance createInstance(
     std::string&& path, std::unordered_map<std::string, std::string>&& config,
-    std::string&& backendsDir) {
+    std::string&& backendsDir, const std::string& projectionPath = "") {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
   auto model = make_unique<BertModel>(
-      std::move(path), std::move(config), std::move(backendsDir));
+      std::move(path),
+      std::move(config),
+      std::move(backendsDir),
+      projectionPath);
 
   auto outHandler =
       make_shared<out_handl::CppQueuedOutputHandler<BertEmbeddings>>();

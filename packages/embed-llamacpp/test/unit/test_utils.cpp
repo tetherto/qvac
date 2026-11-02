@@ -1,10 +1,42 @@
+#include <atomic>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
+#include <common/common.h>
 #include <gtest/gtest.h>
 
 #include "model-interface/utils.hpp"
+
+namespace {
+common_params paramsWith(int32_t nBatch, int32_t nCtx) {
+  common_params params;
+  params.n_batch = nBatch;
+  params.n_ctx = nCtx;
+  return params;
+}
+} // namespace
+
+TEST(UnifiedSequenceLimitTest, LargeBatchAdmitsLlamaMaximum) {
+  EXPECT_EQ(
+      unifiedSequenceLimit(paramsWith(4096, 0)),
+      static_cast<int32_t>(llama_max_parallel_sequences()));
+}
+
+TEST(UnifiedSequenceLimitTest, SmallBatchCapsTheLimit) {
+  EXPECT_EQ(unifiedSequenceLimit(paramsWith(64, 2048)), 64);
+}
+
+TEST(UnifiedSequenceLimitTest, ShortContextCapsTheLimit) {
+  EXPECT_EQ(unifiedSequenceLimit(paramsWith(1024, 128)), 128);
+}
+
+TEST(UnifiedSequenceLimitTest, NeverBelowOne) {
+  EXPECT_EQ(unifiedSequenceLimit(paramsWith(0, 0)), 1);
+}
 
 TEST(SplitLinesTest, BasicSplit) {
   std::string input = "line1\nline2\nline3";
@@ -211,4 +243,51 @@ TEST(ExtractVerbosityConfigTest, VerbosityWithTrailingText) {
   ASSERT_EQ(result.size(), 1);
   EXPECT_EQ(result["verbosity"], "2");
   EXPECT_EQ(config, "extra\nline1");
+}
+
+TEST(DeprecatedLoadFlagModeTest, MapsEachFlagAndPolarity) {
+  EXPECT_EQ(deprecatedLoadFlagMode("mmap", ""), LLAMA_LOAD_MODE_MMAP);
+  EXPECT_EQ(deprecatedLoadFlagMode("mmap", "off"), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(deprecatedLoadFlagMode("no-mmap", ""), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(deprecatedLoadFlagMode("no-mmap", "false"), LLAMA_LOAD_MODE_MMAP);
+  EXPECT_EQ(
+      deprecatedLoadFlagMode("direct-io", "on"), LLAMA_LOAD_MODE_DIRECT_IO);
+  EXPECT_EQ(deprecatedLoadFlagMode("no-direct-io", ""), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(deprecatedLoadFlagMode("mlock", "1"), LLAMA_LOAD_MODE_MLOCK);
+  EXPECT_EQ(deprecatedLoadFlagMode("load-mode", "mmap"), std::nullopt);
+}
+
+TEST(DeprecatedLoadFlagModeTest, RejectsValuesTheFlagDoesNotTake) {
+  EXPECT_THROW(
+      static_cast<void>(deprecatedLoadFlagMode("mmap", "maybe")),
+      std::invalid_argument);
+  // mlock is valueless in llama, so it cannot be turned off.
+  EXPECT_THROW(
+      static_cast<void>(deprecatedLoadFlagMode("mlock", "off")),
+      std::invalid_argument);
+}
+
+TEST(LoadModeNameTest, NamesMatchLoadModeValues) {
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_AUTO), "auto");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_NONE), "none");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_MMAP), "mmap");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_MLOCK), "mlock");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_MMAP_MLOCK), "mmap+mlock");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_DIRECT_IO), "dio");
+}
+
+namespace {
+template <typename Flag>
+constexpr bool kAbortAcceptsFlag = requires(llama_context* ctx, Flag&& flag) {
+  abortDecodeWhen(ctx, std::forward<Flag>(flag));
+};
+} // namespace
+
+// The abort callback keeps the flag's address, so a temporary flag would
+// dangle once the call returns.
+TEST(UtilsTest, AbortDecodeWhenRejectsATemporaryFlag) {
+  static_assert(kAbortAcceptsFlag<std::atomic<bool>&>);
+  static_assert(kAbortAcceptsFlag<const std::atomic<bool>&>);
+  static_assert(!kAbortAcceptsFlag<std::atomic<bool>>);
+  SUCCEED();
 }

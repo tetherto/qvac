@@ -1,0 +1,2 @@
+-keep class to.holepunch.bare.kit.** { *; }
+-keep class io.tether.qvac.sdk.barekit.** { *; }

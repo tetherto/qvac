@@ -1,0 +1,64 @@
+name: On PR Trigger (Speech ggml lockstep)
+
+# Fails unless asr-ggml, audiogen-ggml, bci-whispercpp and tts-ggml pin the
+# same ggml-speech and speech-cpp, record that ggml-speech in package.json, and
+# plan the same ggml-speech version and features for every prebuild triplet, or
+# when another package depends on either port without being listed with them.
+# They ship their ggml backends under the same file names, so an app with two
+# of them keeps one copy of each for both.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+    paths:
+      - "packages/*/vcpkg.json"
+      - "packages/asr-ggml/package.json"
+      - "packages/asr-ggml/vcpkg-configuration.json"
+      - "packages/asr-ggml/vcpkg/triplets/**"
+      - "packages/audiogen-ggml/package.json"
+      - "packages/audiogen-ggml/vcpkg-configuration.json"
+      - "packages/bci-whispercpp/package.json"
+      - "packages/bci-whispercpp/vcpkg-configuration.json"
+      - "packages/tts-ggml/package.json"
+      - "packages/tts-ggml/vcpkg-configuration.json"
+      - "vcpkg-overlays/triplets/**"
+      - ".github/workflows/on-pr-speech-ggml-lockstep.yml"
+      - ".github/scripts/check-speech-ggml-lockstep.mjs"
+      - ".github/scripts/lib/speech-ggml.mjs"
+      - ".github/scripts/test/speech-ggml.test.mjs"
+      - ".github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.mjs"
+      - ".github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.test.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  speech-ggml-lockstep:
+    name: Speech addons share one ggml-speech build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Run unit tests
+        run: >-
+          node --test
+          .github/scripts/test/speech-ggml.test.mjs
+          .github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.test.mjs
+
+      # The runner image's vcpkg is enough: the plans are dry runs with
+      # compiler tracking off, so nothing is built.
+      - name: Compare pins and vcpkg install plans
+        run: node .github/scripts/check-speech-ggml-lockstep.mjs --vcpkg "$VCPKG_INSTALLATION_ROOT/vcpkg"

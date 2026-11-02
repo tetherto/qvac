@@ -2,6 +2,7 @@ import type { LoadConfig, ServeConfig, ServeExtensionConfig } from '@/serve/core
 import { resolveDefaults, resolveServeModels, type RawModelEntry } from '@/serve/core/config/models'
 import type { ServeExtension } from '@/serve/core/extensions'
 import { normalizeCorsOrigin } from '@/serve/core/cors'
+import { normalizeAllowedHost } from '@/serve/core/host-check'
 
 interface RawServeConfig {
   serve?: {
@@ -10,6 +11,7 @@ interface RawServeConfig {
     cors?: {
       origins?: unknown
     }
+    allowedHosts?: unknown
     load?: RawLoadConfig
     /** `serve.<extension>` blocks; each extension parses its own. */
     [extension: string]: unknown
@@ -27,6 +29,8 @@ interface CLIServeOptions {
   model?: string | string[] | undefined
   publicBaseUrl?: string | undefined
   corsOrigins?: string[] | undefined
+  allowedHosts?: string[] | undefined
+  allowAnyHost?: boolean | undefined
   lazyLoad?: boolean | undefined
   loadConcurrency?: number | undefined
   loadTimeoutMs?: number | null | undefined
@@ -57,11 +61,12 @@ export function parseServeConfig(
     load: parseLoadConfig(serve.load, cliOptions),
     publicBaseUrl: normalizePublicBaseUrl(cliOptions.publicBaseUrl ?? serve.publicBaseUrl),
     cors: { origins: parseCorsOrigins(serve.cors?.origins, cliOptions.corsOrigins) },
+    allowedHosts: parseAllowedHosts(serve.allowedHosts, cliOptions),
     extensions: parseExtensionConfigs(serve, extensions)
   }
 }
 
-const CORE_SERVE_KEYS = ['models', 'publicBaseUrl', 'cors', 'load']
+const CORE_SERVE_KEYS = ['models', 'publicBaseUrl', 'cors', 'allowedHosts', 'load']
 
 /** `serve.*` keys that belong to neither core nor a registered extension. */
 export function unknownServeKeys(
@@ -140,6 +145,19 @@ function parseCorsOrigins(configured: unknown, cliOrigins: string[] | undefined)
     return normalizeCorsOrigin(origin)
   })
 
+  return [...new Set(normalized)]
+}
+
+function parseAllowedHosts(configured: unknown, cli: CLIServeOptions): string[] | true {
+  if (cli.allowAnyHost === true || configured === true) return true
+  if (configured !== undefined && !Array.isArray(configured)) {
+    throw new Error('serve.allowedHosts must be an array of hostnames, or true to allow any host')
+  }
+  const hosts = [...(configured ?? []), ...(cli.allowedHosts ?? [])] as unknown[]
+  const normalized = hosts.map((host, index) => {
+    if (typeof host !== 'string') throw new Error(`serve.allowedHosts[${index}] must be a string`)
+    return normalizeAllowedHost(host)
+  })
   return [...new Set(normalized)]
 }
 

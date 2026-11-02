@@ -38,8 +38,10 @@ const configRegistry: QvacConfig = {
   httpDownloadConcurrency: undefined,
   requireHttpChecksum: undefined,
   requireSecureTransport: undefined,
+  modelFitPolicy: undefined,
   registryDownloadMaxRetries: undefined,
   registryStreamTimeoutMs: undefined,
+  fitStubBudgetMs: undefined,
   deviceDefaults: undefined,
   ragTurbovec: undefined
 }
@@ -116,6 +118,11 @@ export function setConfig(config: QvacConfig) {
     logger.info(`Require secure transport: ${config.requireSecureTransport}`)
   }
 
+  if (config.modelFitPolicy !== undefined && config.modelFitPolicy !== null) {
+    configRegistry.modelFitPolicy = config.modelFitPolicy
+    logger.info(`Model fit policy: ${config.modelFitPolicy}`)
+  }
+
   if (
     config.registryDownloadMaxRetries !== undefined &&
     config.registryDownloadMaxRetries !== null
@@ -127,6 +134,11 @@ export function setConfig(config: QvacConfig) {
   if (config.registryStreamTimeoutMs !== undefined && config.registryStreamTimeoutMs !== null) {
     configRegistry.registryStreamTimeoutMs = config.registryStreamTimeoutMs
     logger.info(`✅ Registry stream timeout set to: ${config.registryStreamTimeoutMs}ms`)
+  }
+
+  if (config.fitStubBudgetMs !== undefined && config.fitStubBudgetMs !== null) {
+    configRegistry.fitStubBudgetMs = config.fitStubBudgetMs
+    logger.info(`✅ Fit stub budget set to: ${config.fitStubBudgetMs}ms`)
   }
 
   if (config.deviceDefaults !== undefined && config.deviceDefaults !== null) {

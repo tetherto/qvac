@@ -57,6 +57,28 @@ function modelsFromManifest(manifest) {
   return models
 }
 
+// Optional PRESTAGE_S3_MODELS: JSON of { <model>: <presigned-url> } for models
+// with no Hugging Face source, so not in the manifest (the Laya GGUF, from
+// scripts/generate-laya-presigned-url.sh). Staged after the manifest models,
+// and checked on device against the size and sha256 its test pins.
+function modelsFromS3Map(manifest) {
+  const mapPath = process.env.PRESTAGE_S3_MODELS
+  if (!mapPath) return []
+  const raw = JSON.parse(fs.readFileSync(mapPath, 'utf8'))
+  if (!raw || typeof raw !== 'object') {
+    throw new Error(`[prestage] PRESTAGE_S3_MODELS ${mapPath} is not a JSON object`)
+  }
+  return Object.entries(raw).map(([name, url]) => {
+    if (manifest.models[name]) {
+      throw new Error(`[prestage] ${name} is in the manifest; stage it from there`)
+    }
+    if (typeof url !== 'string' || !url.startsWith('https://')) {
+      throw new Error(`[prestage] ${name} has no https URL in PRESTAGE_S3_MODELS`)
+    }
+    return { name, url }
+  })
+}
+
 // Host script. POSIX-sh friendly; adb + curl are available in the pre_test phase.
 function buildAndroidScript(models) {
   const stageCalls = models
@@ -122,7 +144,7 @@ function buildScript(models, platform = 'android') {
 function main() {
   const platform = process.argv[2] || 'android'
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-  const models = modelsFromManifest(manifest)
+  const models = [...modelsFromManifest(manifest), ...modelsFromS3Map(manifest)]
   if (models.length === 0) {
     console.error('[prestage] no models found in models.manifest.json')
     process.exit(1)
@@ -141,4 +163,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { modelsFromManifest, buildScript, IOS_BUNDLE_ID }
+module.exports = { modelsFromManifest, modelsFromS3Map, buildScript, IOS_BUNDLE_ID }

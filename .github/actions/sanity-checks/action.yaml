@@ -100,7 +100,7 @@ runs:
         bundler_requires_rc=0
         node scripts/ci/check-bundler-requires.mjs "$WORKDIR" || bundler_requires_rc=$?
         if [ "$bundler_requires_rc" = "1" ]; then
-          echo "::error::Step - A relative require is hidden from bare-pack, so the mobile app bundle would omit it"
+          echo "::error::Step - A require is hidden from bare-pack (lexer desync or computed specifier), so the mobile app bundle would omit it"
           count=$((count + 1))
         elif [ "$bundler_requires_rc" != "0" ]; then
           echo "::error::Step - check-bundler-requires could not run (infrastructure failure, not a hidden require)"

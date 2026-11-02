@@ -10,6 +10,7 @@ validated -- same as the JS client.
 
 from __future__ import annotations
 
+import base64
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
@@ -122,6 +123,34 @@ def model_src_to_wire(model_src: Any) -> Any:
     return model_src
 
 
+def model_src_to_fit_wire(model_src: Any) -> Any:
+    """The `assessModelFit` wire takes the whole descriptor, so a ModelConstant
+    becomes its field dict and a dict or string passes through."""
+    descriptor = _descriptor_fields(model_src)
+    return descriptor if descriptor is not None else model_src
+
+
+_BYTES = (bytes, bytearray, memoryview)
+
+
+def to_wire_base64(value: Any) -> str:
+    """Bytes as bare base64, as JS's `encodeBase64`; a `str` is base64 already."""
+    if isinstance(value, _BYTES):
+        return base64.b64encode(bytes(value)).decode()
+    if isinstance(value, str):
+        return value
+    raise TypeError(f"expected bytes or a base64 string, got {type(value).__name__}")
+
+
+def to_source_union(value: Any) -> Any:
+    """A path or bytes as the wire's `filePath` / `base64` source union."""
+    if isinstance(value, str):
+        return {"type": "filePath", "value": value}
+    if isinstance(value, _BYTES):
+        return {"type": "base64", "value": base64.b64encode(bytes(value)).decode()}
+    return value
+
+
 __all__ = [
     "CANONICAL_MODEL_TYPES",
     "MODEL_TYPE_ALIASES",
@@ -133,4 +162,6 @@ __all__ = [
     "infer_model_type_from_model_src",
     "assert_model_src_matches_model_type",
     "model_src_to_wire",
+    "to_wire_base64",
+    "to_source_union",
 ]

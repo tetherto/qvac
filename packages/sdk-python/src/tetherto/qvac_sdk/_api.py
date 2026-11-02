@@ -6,13 +6,9 @@ JS convenience functions do on top of the raw generated stubs
 
 Asyncio-native, matching the JS SDK and tetherto.qvac_sdk._transport.Transport.
 
-Only the wrappers whose entire behavior is reproducible from the wire
-request/response schemas are here (cancel, unload_model, invoke_plugin(_stream),
-model_registry_*, delete_cache). Wrappers with real client-side state or
-logic beyond the wire contract (completion's tool/MCP orchestration,
-loadModel's type inference, translate's language detection, vla's tensor
-marshaling, the duplex streaming session model, ...) are tracked separately
-and intentionally not ported here.
+The wrappers with larger client-side machinery live in their own modules:
+completion's tool/MCP orchestration in `_completion`, vla's tensor marshaling
+in `vla`, and the duplex streaming sessions in `sessions`.
 """
 
 from __future__ import annotations
@@ -21,10 +17,13 @@ import asyncio
 import uuid
 import warnings
 from collections.abc import AsyncIterator, Callable
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, RootModel, ValidationError
 
 from ._generated import methods as _methods
 from ._generated.models import (
+    AssessModelFitRequestModelsItemModelSrc,
     ModelRegistryGetModelResponseModel,
     ModelRegistryListResponseModelsItem,
     ModelRegistrySearchResponseModelsItem,
@@ -42,6 +41,7 @@ from .errors import (  # noqa: F401
     ModelRegistryQueryFailedError,
     ModelTypeRequiredError,
     ModelUnloadFailedError,
+    RequestValidationError,
     StreamEndedError,
 )
 from .logging_streams import (
@@ -52,12 +52,17 @@ from .model_types import (
     assert_model_src_matches_model_type,
     infer_model_type_from_model_src,
     is_model_type_alias,
+    model_src_to_fit_wire,
     model_src_to_wire,
     normalize_model_type,
+    to_wire_base64,
 )
 from .schemas import (
+    AssessModelFitRequest,
+    AssessModelFitResponse,
     CancelRequest,
     CancelResponse,
+    ClassifyRequest,
     DeleteCacheRequest,
     DeleteCacheResponse,
     LoadModelRequest,
@@ -77,6 +82,11 @@ from .schemas import (
     UnloadModelRequest,
     UnloadModelResponse,
 )
+
+# Contract enum values; tests/test_api_literals.py holds them to the generated models.
+ModelFitPolicy = Literal["log", "refuse", "off"]
+ModelFitExecution = Literal["sequential", "concurrent"]
+ModelFitHeadroomPolicy = Literal["interactive-v1"]
 
 
 def _dump(model: Any) -> dict[str, Any]:
@@ -103,6 +113,94 @@ def _start_model_logging(transport: Transport, model_id: str, logger: Any) -> No
         )
 
 
+def _config_srcs_to_wire(value: Any) -> Any:
+    """Reduce every model descriptor inside a config to its `src` string."""
+    if isinstance(value, list):
+        return [_config_srcs_to_wire(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _config_srcs_to_wire(item) for key, item in value.items()}
+    return model_src_to_wire(value)
+
+
+def _fit_config_to_wire(value: Any) -> Any:
+    """Turn every model descriptor inside a config into the full camelCase
+    descriptor the assessModelFit wire takes."""
+    if isinstance(value, list):
+        return [_fit_config_to_wire(item) for item in value]
+    descriptor = model_src_to_fit_wire(value)
+    if isinstance(descriptor, dict) and isinstance(descriptor.get("src"), str):
+        return AssessModelFitRequestModelsItemModelSrc.model_validate(
+            descriptor
+        ).model_dump(mode="json", by_alias=True, exclude_none=True)
+    if isinstance(value, dict):
+        return {key: _fit_config_to_wire(item) for key, item in value.items()}
+    return value
+
+
+def _canonical_model_type(model_type: str, stacklevel: int) -> str:
+    """The canonical form of `model_type`, warning when it is an alias.
+    `stacklevel` counts from the caller of this function."""
+    if is_model_type_alias(model_type):
+        canonical = normalize_model_type(model_type)
+        warnings.warn(
+            f'Model type "{model_type}" is an alias and will be '
+            f'deprecated. Use "{canonical}" instead.',
+            DeprecationWarning,
+            stacklevel=stacklevel + 1,
+        )
+    return normalize_model_type(model_type)
+
+
+def _first_validation_problem(error: ValidationError, method: str) -> str:
+    """One line describing why a request was refused."""
+    problems = error.errors()
+    if not problems:
+        return f"{method} request failed validation"
+    problem = problems[0]
+    where = ".".join(str(part) for part in problem.get("loc", ()))
+    return f"{method} request failed validation: {where}: {problem.get('msg')}"
+
+
+def _unwrap_root(value: Any) -> Any:
+    while isinstance(value, RootModel):
+        value = value.root
+    return value
+
+
+def _reject_unknown_config_keys(payload: dict[str, Any], request: Any) -> None:
+    """Refuse a `modelConfig` key the model type does not define, by alias or
+    by Python name, since the generated models accept both."""
+    sent = payload.get("modelConfig")
+    if not isinstance(sent, dict) or not sent:
+        return
+    matched = _unwrap_root(request)
+    config = next(
+        (
+            _unwrap_root(getattr(matched, name))
+            for name, field in type(matched).model_fields.items()
+            if field.alias == "modelConfig"
+        ),
+        None,
+    )
+    if (
+        not isinstance(config, BaseModel)
+        or type(config).model_config.get("extra") == "allow"
+    ):
+        return
+    legal = {
+        key
+        for name, field in type(config).model_fields.items()
+        for key in (name, field.alias)
+        if key is not None
+    }
+    unknown = sorted(set(sent) - legal)
+    if unknown:
+        named = ", ".join(repr(key) for key in unknown)
+        raise RequestValidationError(
+            f"modelConfig has no {named} for modelType " f"{payload.get('modelType')!r}"
+        )
+
+
 async def load_model(
     transport: Transport,
     *,
@@ -114,6 +212,7 @@ async def load_model(
     on_progress: Callable[[ModelProgressResponse], None] | None = None,
     request_id: str | None = None,
     seed: bool | None = None,
+    model_fit_policy: ModelFitPolicy | None = None,
     logger: Any = None,
 ) -> str:
     """Ergonomic loadModel mirroring JS's `client/api/load-model.ts`:
@@ -131,6 +230,10 @@ async def load_model(
     - `request_id` is client-generated when omitted and threaded onto the
       wire so `cancel(request_id=...)` can target this load; pass your own
       to hold the id before awaiting.
+    - `model_fit_policy` overrides, for this load, what the engine fitter's
+      verdict does: "log" reports it and loads anyway, "refuse" rejects a load
+      the fitter projects will not fit, "off" skips the check. Unset uses the
+      engine config ("log").
     - `on_progress` switches to the streaming call shape and receives each
       ModelProgressResponse.
     - `logger` (anything stdlib-logging-shaped) starts a background logging
@@ -141,22 +244,14 @@ async def load_model(
 
     resolved_type = model_type
     if not is_reload_config:
-        if resolved_type is not None:
+        if resolved_type is not None and model_src is not None:
             assert_model_src_matches_model_type(model_src, resolved_type)
-        else:
+        elif resolved_type is None:
             resolved_type = infer_model_type_from_model_src(model_src)
             if not resolved_type:
                 raise ModelTypeRequiredError()
 
-        if is_model_type_alias(resolved_type):
-            canonical = normalize_model_type(resolved_type)
-            warnings.warn(
-                f'Model type "{resolved_type}" is an alias and will be '
-                f'deprecated. Use "{canonical}" instead.',
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        resolved_type = normalize_model_type(resolved_type)
+        resolved_type = _canonical_model_type(resolved_type, stacklevel=2)
 
     payload: dict[str, Any] = {"type": "loadModel"}
     if is_reload_config:
@@ -164,7 +259,11 @@ async def load_model(
         if model_type is not None:
             payload["modelType"] = model_type
     else:
-        payload["modelSrc"] = model_src_to_wire(model_src)
+        # An addon that ships its own weights is loaded by type alone -- `ggml-
+        # classification`, `audiogen-ggml`.
+        payload["modelSrc"] = (
+            model_src_to_wire(model_src) if model_src is not None else ""
+        )
         payload["modelType"] = resolved_type
         payload["requestId"] = (
             request_id if request_id is not None else generate_client_request_id()
@@ -173,10 +272,20 @@ async def load_model(
             payload["modelName"] = model_name
         if seed is not None:
             payload["seed"] = seed
+        if model_fit_policy is not None:
+            payload["modelFitPolicy"] = model_fit_policy
     if model_config is not None:
-        payload["modelConfig"] = model_config
+        payload["modelConfig"] = _config_srcs_to_wire(model_config)
 
-    request = LoadModelRequest.model_validate(payload)
+    try:
+        request = LoadModelRequest.model_validate(payload)
+    except ValidationError as error:
+        # JS validates load parameters against its own schema and refuses with
+        # REQUEST_VALIDATION_FAILED, so the caller gets an SDK error carrying a code.
+        raise RequestValidationError(
+            _first_validation_problem(error, "loadModel")
+        ) from error
+    _reject_unknown_config_keys(payload, request)
 
     if on_progress is not None:
         async for event in _methods.load_model_with_progress(transport, request):
@@ -200,10 +309,91 @@ async def load_model(
     return response.model_id
 
 
+_FIT_CANDIDATE_KEYS = {
+    "model_src": "modelSrc",
+    "model_type": "modelType",
+    "model_config": "modelConfig",
+    "transcription_workload": "transcriptionWorkload",
+    "tts_workload": "ttsWorkload",
+}
+
+
+def _fit_candidate_to_wire(candidate: dict[str, Any]) -> dict[str, Any]:
+    unknown = sorted(set(candidate) - set(_FIT_CANDIDATE_KEYS))
+    if unknown:
+        named = ", ".join(repr(key) for key in unknown)
+        raise RequestValidationError(f"assessModelFit candidate has no {named}")
+
+    model_src = candidate.get("model_src")
+    model_type = candidate.get("model_type")
+    if model_type is None:
+        model_type = infer_model_type_from_model_src(model_src)
+        if not model_type:
+            raise ModelTypeRequiredError()
+
+    wire: dict[str, Any] = {
+        "modelType": _canonical_model_type(model_type, stacklevel=3)
+    }
+    if model_src is not None:
+        wire["modelSrc"] = model_src_to_fit_wire(model_src)
+    if candidate.get("model_config") is not None:
+        wire["modelConfig"] = _fit_config_to_wire(candidate["model_config"])
+    for key in ("transcription_workload", "tts_workload"):
+        if candidate.get(key) is not None:
+            wire[_FIT_CANDIDATE_KEYS[key]] = candidate[key]
+    return wire
+
+
+async def assess_model_fit(
+    transport: Transport,
+    *,
+    models: list[dict[str, Any]],
+    execution: ModelFitExecution | None = None,
+    policy: ModelFitHeadroomPolicy | None = None,
+) -> AssessModelFitResponse:
+    """Ergonomic assessModelFit mirroring JS's `client/api/assess-model-fit.ts`:
+    whether the given models are likely to fit in this device's memory, judged
+    before anything is downloaded.
+
+    - `models` holds one dict per candidate, keyed like `load_model`'s own
+      arguments: `model_src`, `model_type`, `model_config`, plus the fit-only
+      `transcription_workload` and `tts_workload`. Any other key raises
+      RequestValidationError.
+    - `model_src` accepts a plain string, a ModelConstant, or a descriptor
+      dict. `model_type` may be omitted when the descriptor names its engine
+      (raises ModelTypeRequiredError otherwise).
+    - `execution` is "sequential" (the default) or "concurrent": whether the
+      models are assumed to run one at a time or all at once.
+    - `policy` names the headroom policy, how much of the free memory is held
+      back. Unset uses the worker's default, "interactive-v1".
+
+    Advisory only: nothing is downloaded, reserved, or blocked. An `unknown`
+    verdict means the evidence supports no answer either way.
+    """
+    try:
+        # A loop, so the alias warning's stacklevel sees no comprehension frame.
+        candidates = []
+        for candidate in models:
+            candidates.append(_fit_candidate_to_wire(candidate))
+        payload: dict[str, Any] = {"type": "assessModelFit", "models": candidates}
+        if execution is not None:
+            payload["execution"] = execution
+        if policy is not None:
+            payload["policy"] = policy
+        request = AssessModelFitRequest.model_validate(payload)
+    except ValidationError as error:
+        raise RequestValidationError(
+            _first_validation_problem(error, "assessModelFit")
+        ) from error
+
+    return await _methods.assess_model_fit(transport, request)
+
+
 class TranslateRun:
     """Handles for one translate() call, mirroring the JS return shape:
     `token_stream` (live tokens; empty in non-stream mode), `text` (awaitable
-    full text; resolves to "" in stream mode), and `stats` (awaitable,
+    full text; resolves to "" in stream mode), `translations` (one entry per
+    input when `text` was a list, one entry otherwise), and `stats` (awaitable,
     resolved when the terminal done chunk arrives -- in stream mode that
     means once `token_stream` has been consumed to the end). `request_id` is the
     client-generated id threaded on the wire, exposed for `cancel(request_id=...)`,
@@ -215,11 +405,17 @@ class TranslateRun:
         text: asyncio.Future[str],
         stats: asyncio.Future[Any],
         request_id: str,
+        translations: asyncio.Future[list[str]] | None = None,
     ) -> None:
         self.token_stream = token_stream
         self.text = text
         self.stats = stats
         self.request_id = request_id
+        if translations is None:
+            loop = asyncio.get_running_loop()
+            translations = loop.create_future()
+            translations.set_result([])
+        self.translations = translations
 
 
 def translate(
@@ -298,25 +494,73 @@ def translate(
         return
         yield  # pragma: no cover -- makes this an (empty) async generator
 
-    async def collect_text() -> str:
-        buffer = ""
+    # A batch sends a list and gets one token per input back; a single input gets its
+    # text in pieces.
+    batched = isinstance(text, list)
+
+    async def collect_translations() -> list[str]:
+        collected: list[str] = [] if batched else [""]
         async for chunk in transport.call_stream(wire):
             if chunk.get("type") != "translate":
                 continue
             response = TranslateResponse.model_validate(chunk)
-            buffer += response.token
             if response.done:
                 _finish_stats(response)
-        return buffer
+            elif batched:
+                collected.append(response.token)
+            else:
+                collected[0] += response.token
+        return collected
 
     # Eager task, matching the JS promise: the wire call starts now, not
     # when `text` is first awaited.
+    translations_task = loop.create_task(collect_translations())
+
+    async def joined() -> str:
+        return "\n".join(await translations_task)
+
     return TranslateRun(
         empty_stream(),
-        loop.create_task(collect_text()),
+        loop.create_task(joined()),
         stats_future,
         resolved_request_id,
+        translations_task,
     )
+
+
+async def classify(
+    transport: Transport,
+    *,
+    model_id: str,
+    image: Any,
+    top_k: int | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    channels: int | None = None,
+    request_id: str | None = None,
+) -> list[Any]:
+    """Classify an image. Mirrors JS's `classify()`."""
+    payload: dict[str, Any] = {
+        "type": "classify",
+        "modelId": model_id,
+        "image": to_wire_base64(image),
+    }
+    if top_k is not None:
+        payload["topK"] = top_k
+    if width is not None:
+        payload["width"] = width
+    if height is not None:
+        payload["height"] = height
+    if channels is not None:
+        payload["channels"] = channels
+    if request_id is not None:
+        payload["requestId"] = request_id
+
+    request = ClassifyRequest.model_validate(payload)
+    async for response in _methods.classify(transport, request):
+        if response.done:
+            return [_dump(item) for item in response.results]
+    return []
 
 
 async def cancel(

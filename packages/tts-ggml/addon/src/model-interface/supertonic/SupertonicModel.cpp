@@ -97,21 +97,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
         enhancerActive ? 0 : cfg.outputSampleRate.value_or(0);
   }
 
-  // Mirrors ChatterboxModel::toEngineOptions; see that file for the
-  // detailed rationale. Compose `cfg.backendsDir / BACKENDS_SUBDIR`
-  // before forwarding so a host that already passes
-  // `path.join(__dirname, 'prebuilds')` (the qvac
-  // llm-llamacpp / transcription-parakeet convention) gets the
-  // expected `<bare-target>/qvac__tts-ggml/` scan dir without
-  // knowing the per-arch shape.
-  if (!cfg.backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath =
-        (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-    opts.backends_dir = backendsDirPath.string();
-  }
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   opts.opencl_cache_dir = cfg.openclCacheDir;
 
   detail::applyVulkanPipelineCache(opts, cfg);
@@ -268,35 +254,37 @@ void SupertonicModel::loadLocked() {
   backendId_     = backendIdFromName(backendName_);
   gpuUnsupported_ = engine_->gpu_unsupported();
 
-  // LavaSR enhancer: load when a GGUF path is set (empty path = disabled).
-  // Neural post-process; the ConvNeXt backbone + spec head run on the GPU when
-  // the engine does (Vulkan/Metal/CUDA/OpenCL), else on the scalar CPU core.
-  // Pass the engine's *resolved* device, not the requested switch: if the
-  // engine fell back to CPU, keep the enhancer on CPU too instead of forcing it
-  // onto the GPU. Shared with the other engines via loadEnhancer so the loaders
-  // can't drift.
-  LoadedEnhancer loaded = loadEnhancer(
-      cfg_.enhancerGgufPath,
-      backendDevice_ == kBackendDeviceGpu,
-      "SupertonicModel::load: lavasr enhancer: ",
-      cfg_.vulkanDevice.value_or(0));
-  enhancer_ = std::move(loaded.enhancer);
-  enhancerBackendDevice_ = loaded.backendDevice;
-  enhancerBackendId_ = loaded.backendId;
+  try {
+    LoadedEnhancer loaded = loadEnhancer(
+        cfg_.enhancerGgufPath,
+        backendDevice_ == kBackendDeviceGpu,
+        "SupertonicModel::load: lavasr enhancer: ",
+        cfg_.vulkanDevice.value_or(0),
+        cfg_.enhancerCoreml);
+    enhancer_ = std::move(loaded.enhancer);
+    enhancerBackendDevice_ = loaded.backendDevice;
+    enhancerBackendId_ = loaded.backendId;
 
-  LoadedDenoiser denoiser = loadDenoiser(
-      cfg_.denoiserGgufPath,
-      backendDevice_ == kBackendDeviceGpu,
-      "SupertonicModel::load: lavasr denoiser: ");
-  denoiser_ = std::move(denoiser.denoiser);
-  denoiserBackendDevice_ = denoiser.backendDevice;
-  denoiserBackendId_ = denoiser.backendId;
+    LoadedDenoiser denoiser = loadDenoiser(
+        cfg_.denoiserGgufPath,
+        backendDevice_ == kBackendDeviceGpu,
+        "SupertonicModel::load: lavasr denoiser: ",
+        cfg_.denoiserCoreml);
+    denoiser_ = std::move(denoiser.denoiser);
+    denoiserBackendDevice_ = denoiser.backendDevice;
+    denoiserBackendId_ = denoiser.backendId;
+  } catch (...) {
+    unloadLocked();
+    throw;
+  }
 }
 
 void SupertonicModel::unloadLocked() {
   engine_.reset();
   enhancer_.reset();
   denoiser_.reset();
+  enhancerBackendDevice_ = kBackendDeviceNone;
+  enhancerBackendId_ = kBackendIdNone;
   denoiserBackendDevice_ = -1;
   denoiserBackendId_ = -1;
 }

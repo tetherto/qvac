@@ -1,0 +1,3 @@
+# The Linux GPU/Vulkan system probe leaves a DBus reply allocated at exit.
+# Reproduces in a pre-H3 addon build; keep all other leak detection enabled.
+leak:_dbus_message_loader_queue_messages

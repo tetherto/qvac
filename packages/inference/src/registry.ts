@@ -1,3 +1,8 @@
+import {
+  handleStartRpcServer,
+  handleStopRpcServer,
+  handleDiscoverRpcServers
+} from '@/handlers/rpc-server'
 import { type Request } from '@/schemas/index'
 import { dispatchPluginReply, dispatchPluginStream } from '@/handlers/plugin-dispatch'
 import { handleLoadModel } from '@/handlers/load-model/index'
@@ -58,6 +63,9 @@ function finetuneSupportsProgress(request: Request): boolean {
 }
 
 export const registry: Record<string, HandlerEntry> = {
+  startRpcServer: { type: 'reply', handler: handleStartRpcServer },
+  stopRpcServer: { type: 'reply', handler: handleStopRpcServer },
+  discoverRpcServers: { type: 'reply', handler: handleDiscoverRpcServers },
   // Reply
   heartbeat: {
     type: 'reply',
@@ -68,6 +76,8 @@ export const registry: Record<string, HandlerEntry> = {
     handler: handleUnloadModel
   },
   embed: { type: 'reply', pluginOp: true, handler: pluginReply('embed') },
+  decide: { type: 'reply', pluginOp: true, handler: pluginReply('decide') },
+  rerank: { type: 'reply', pluginOp: true, handler: pluginReply('rerank') },
   cancel: {
     type: 'reply',
     handler: cancelHandler
@@ -122,7 +132,7 @@ export const registry: Record<string, HandlerEntry> = {
   worldStepStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldStepStream') },
   worldSceneStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldSceneStream') },
   classify: { type: 'stream', pluginOp: true, handler: pluginStream('classify') },
-  loggingStream: { type: 'stream', handler: handleLoggingStream },
+  loggingStream: { type: 'stream', handler: handleLoggingStream, endsOnAbort: true },
   pluginInvokeStream: { type: 'stream', handler: handlePluginInvokeStream },
 
   // Duplex

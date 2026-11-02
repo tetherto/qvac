@@ -1,7 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and native bindings expose CommonJS export shapes. */
 import net = require('bare-net')
-import path = require('bare-path')
-import fabricBackends = require('@qvac/fabric/backends')
 
 const binding = require('./binding') as RpcServerBinding
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -12,9 +10,12 @@ const TRUSTED_LAN_WARNING_CODE = 'QVAC_GGML_RPC_SERVER_TRUSTED_LAN'
 // Keep native handles alive until an explicit stop finishes. Otherwise their
 // finalizer can synchronously stop and join a live server during garbage collection.
 const activeServerHandles = new Set<object>()
-// Fabric never unloads its RPC module, so its RDMA build cannot change within a
-// process. Cache the native check, which reads the module from disk.
-const rdmaSupportByBackendsDir = new Map<string, boolean>()
+
+interface NativeServer {
+  readonly handle: object
+  readonly port: number
+  readonly rdmaCapable: boolean
+}
 
 interface RpcServerBinding {
   startServer(options: {
@@ -22,10 +23,9 @@ interface RpcServerBinding {
     readonly device?: string
     readonly cache: boolean
     readonly threads?: number
-    readonly backendsDir: string
-  }): Promise<object>
+    readonly expectRdma: boolean
+  }): Promise<NativeServer>
   stopServer(handle: object): Promise<void>
-  rpcBackendSupportsRdma(options: { readonly backendsDir: string }): boolean
 }
 
 export class RpcServerPortAllocationError extends Error {
@@ -37,7 +37,9 @@ export class RpcServerPortAllocationError extends Error {
 
 export class RpcServerNonLoopbackHostError extends Error {
   constructor(host: string) {
-    super(`ggml-rpc-server only supports loopback hosts in this package: ${host}`)
+    super(
+      `${host} is not a loopback host; pass allowNonLoopbackHost: true to bind it on a trusted network`
+    )
     this.name = 'RpcServerNonLoopbackHostError'
   }
 }
@@ -50,12 +52,92 @@ export class RpcServerInvalidHostError extends Error {
 }
 
 export class RpcServerRdmaUnavailableError extends Error {
-  readonly output: string
-
-  constructor(output: string) {
-    super('RDMA is not available in the installed @qvac/fabric RPC backend')
+  constructor(cause?: unknown) {
+    super(
+      'RDMA is not available: the @qvac/fabric RPC backend lacks it, libibverbs.so.1 ' +
+        'could not be loaded, the host has no RDMA device, or GGML_RPC_NO_RDMA is set',
+      { cause }
+    )
     this.name = 'RpcServerRdmaUnavailableError'
-    this.output = output
+  }
+}
+
+/**
+ * A failure reported by the native server. The addon raises plain errors with a
+ * `code`; these classes let callers branch on `name` or `instanceof` as they do
+ * for the errors above. `code` equals `name`, and `cause` is the native error.
+ */
+export abstract class RpcServerNativeError extends Error {
+  readonly code: string
+
+  // Names are literals, not new.target.name, so they survive minification.
+  constructor(name: string, message: string, cause: unknown) {
+    super(message, { cause })
+    this.name = name
+    this.code = name
+  }
+}
+
+/** No requested device exists, or no device is available. */
+export class RpcServerDeviceError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerDeviceError', message, cause)
+  }
+}
+
+/** The RPC cache directory could not be resolved or created. */
+export class RpcServerCacheError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerCacheError', message, cause)
+  }
+}
+
+/** The server could not be created or bound, or the RPC backend is missing. */
+export class RpcServerStartError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerStartError', message, cause)
+  }
+}
+
+/** The Fabric backends directory is invalid or could not be inspected. */
+export class RpcServerBackendError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerBackendError', message, cause)
+  }
+}
+
+/** The server did not stop cleanly. */
+export class RpcServerStopError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerStopError', message, cause)
+  }
+}
+
+const nativeErrorClasses = new Map<
+  string,
+  new (message: string, cause: unknown) => RpcServerNativeError
+>([
+  ['RpcServerDeviceError', RpcServerDeviceError],
+  ['RpcServerCacheError', RpcServerCacheError],
+  ['RpcServerStartError', RpcServerStartError],
+  ['RpcServerBackendError', RpcServerBackendError],
+  ['RpcServerStopError', RpcServerStopError]
+])
+
+function toTypedError(error: unknown): unknown {
+  const code = (error as { code?: unknown } | null)?.code
+  if (code === 'RpcServerRdmaUnavailableError') {
+    return new RpcServerRdmaUnavailableError(error)
+  }
+  const ErrorClass = typeof code === 'string' ? nativeErrorClasses.get(code) : undefined
+  return ErrorClass === undefined ? error : new ErrorClass((error as Error).message, error)
+}
+
+async function callNative<T>(call: () => T | Promise<T>): Promise<T> {
+  try {
+    return await call()
+  } catch (error) {
+    throw toTypedError(error)
   }
 }
 
@@ -69,18 +151,18 @@ export interface StartRpcServerOptions {
   readonly allowNonLoopbackHost?: boolean
 }
 
-export interface RpcServerProcess {
-  readonly runtime: 'in-process'
+export interface RpcServer {
   readonly host: string
   readonly port: number
   readonly url: string
   readonly device?: string
   /**
-   * Whether the loaded Fabric RPC backend was built with RDMA. Such a backend
-   * negotiates RDMA with each RDMA-capable client and falls back to TCP otherwise.
+   * Whether new connections will try RDMA: the Fabric RPC backend was built
+   * with it, loaded libibverbs, found an RDMA device, and `GGML_RPC_NO_RDMA` is
+   * unset. Each connection still falls back to TCP when the client or the link
+   * cannot use RDMA.
    */
   readonly rdmaCapable: boolean
-  logs(): string
   stop(): Promise<void>
 }
 
@@ -130,8 +212,17 @@ function warnForTrustedLanHost(host: string, allowNonLoopbackHost = false): void
 }
 
 function normalizeDevice(device: string | readonly string[] | undefined): string | undefined {
-  if (typeof device === 'string' || device === undefined) return device
-  return device.join(',')
+  if (device === undefined) return undefined
+  // The native side splits on ',' or '/' and matches names exactly, so trim
+  // each name: 'Vulkan0, CPU' would otherwise look up ' CPU'.
+  const names = typeof device === 'string' ? device.split(/[,/]/) : device
+  const trimmed = names.map((name) => name.trim())
+  // A blank-only value must not collapse to '', which means "default devices".
+  // Pass it through untouched so the native side rejects it as unknown.
+  if (trimmed.every((name) => name === '') && names.some((name) => name !== '')) {
+    return names.join(',')
+  }
+  return trimmed.join(',')
 }
 
 function validatePort(port: number): void {
@@ -146,15 +237,10 @@ function validateThreads(threads: number | undefined): void {
   }
 }
 
-function rpcBackendSupportsRdma(backendsDir: string): boolean {
-  let supported = rdmaSupportByBackendsDir.get(backendsDir)
-  if (supported === undefined) {
-    supported = binding.rpcBackendSupportsRdma({ backendsDir })
-    rdmaSupportByBackendsDir.set(backendsDir, supported)
-  }
-  return supported
-}
-
+/**
+ * Finds a port that is free now. Another process can take it before you bind
+ * it, so `startRpcServer()` without a `port` lets the server bind one itself.
+ */
 export function allocateFreePort(
   host = DEFAULT_RPC_SERVER_HOST,
   options: AllocateFreePortOptions = {}
@@ -176,47 +262,36 @@ export function allocateFreePort(
   })
 }
 
-export async function startRpcServer(options: StartRpcServerOptions = {}): Promise<RpcServerProcess> {
+export async function startRpcServer(options: StartRpcServerOptions = {}): Promise<RpcServer> {
   const host = normalizeHost(options.host ?? DEFAULT_RPC_SERVER_HOST)
   assertSupportedHost(host)
   assertLoopbackHost(host, options.allowNonLoopbackHost)
   warnForTrustedLanHost(host, options.allowNonLoopbackHost)
   validateThreads(options.threads)
-  // Packed mobile bundles do not retain a resolvable node_modules tree. Their
-  // packagers stage Fabric's backends beside this addon instead.
-  const backendsDir =
-    fabricBackends.resolveBackendsDir() ?? path.join(__dirname, 'prebuilds')
-  const rdmaCapable = rpcBackendSupportsRdma(backendsDir)
-  if (options.expectRdma === true && !rdmaCapable) {
-    throw new RpcServerRdmaUnavailableError('')
-  }
-  const port =
-    options.port ??
-    (await allocateFreePort(host, {
-      allowNonLoopbackHost: options.allowNonLoopbackHost
-    }))
-  validatePort(port)
+  if (options.port !== undefined) validatePort(options.port)
   const device = normalizeDevice(options.device)
-  const handle = await binding.startServer({
-    endpoint: `${host}:${port}`,
-    device,
-    cache: options.cache ?? false,
-    threads: options.threads,
-    backendsDir
-  })
+  // Without a port the server binds port 0 itself and reports the port it got,
+  // so no other process can take the port between choosing and binding it.
+  const { handle, port, rdmaCapable } = await callNative(() =>
+    binding.startServer({
+      endpoint: `${host}:${options.port ?? 0}`,
+      device,
+      cache: options.cache ?? false,
+      threads: options.threads,
+      expectRdma: options.expectRdma === true
+    })
+  )
   activeServerHandles.add(handle)
   let stopPromise: Promise<void> | undefined
 
   return {
-    runtime: 'in-process',
     host,
     port,
     url: `${host}:${port}`,
     device,
     rdmaCapable,
-    logs: () => '',
     stop: () => {
-      stopPromise ??= binding.stopServer(handle).then(
+      stopPromise ??= callNative(() => binding.stopServer(handle)).then(
         () => {
           activeServerHandles.delete(handle)
         },

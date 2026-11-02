@@ -1,0 +1,10 @@
+import type { TTSConfigurationParams } from "../../tts";
+import type { EngineSetup, ModelPaths } from "../engineSetup";
+import { type NormalizedFiles } from "../modelFiles";
+export declare const CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
+export declare const CHATTERBOX_T3_MTL = "chatterbox-t3-mtl.gguf";
+export declare const CHATTERBOX_S3GEN_DEFAULT = "chatterbox-s3gen.gguf";
+export declare const CHATTERBOX_S3GEN_MTL = "chatterbox-s3gen-mtl.gguf";
+export declare function hasChatterboxModelDir(modelDir: string): boolean;
+export declare function resolveChatterboxModelPaths(files: NormalizedFiles): Pick<ModelPaths, "t3ModelPath" | "s3genModelPath">;
+export declare function buildChatterboxParams(setup: EngineSetup): TTSConfigurationParams;

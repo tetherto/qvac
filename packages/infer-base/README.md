@@ -64,7 +64,7 @@ const finalOutput = await r.await()
 Response object returned from inference jobs.
 
 ```javascript
-new QvacResponse({ cancelHandler, signal })
+new QvacResponse({ cancelHandler, signal, retainOutput })
 ```
 
 - `cancelHandler`: `() => Promise<void>` invoked when `cancel()` is called.
@@ -80,6 +80,30 @@ Listeners and lifecycle:
 - `iterate()` — async iterator over output chunks; wakes up immediately on output/end/error events instead of polling out the remaining `pollInterval` window. A single pair of EventEmitter listeners is attached for the lifetime of the iterator, so high-frequency token streams do not churn listener registrations.
 - `getLatest()` — most recent output chunk
 - `cancel()` — invokes `cancelHandler` and emits cancellation
+
+Output is retained by default, including when `retainOutput` is omitted. Set
+`retainOutput: false` when processing chunks through `onUpdate()` without needing
+saved history:
+
+```javascript
+const response = jobs.start({ retainOutput: false })
+response.onUpdate(chunk => { /* process each chunk */ })
+await response.await() // [] unless the job supplies an explicit terminal result
+```
+
+The same option is accepted by `new QvacResponse({ cancelHandler, retainOutput: false })`.
+
+| Method | Default retention | `retainOutput: false` |
+| --- | --- | --- |
+| `onUpdate()` | Delivers every chunk | Delivers every chunk |
+| `await()` / `onFinish()` | Collected outputs by default | `[]` by default |
+| Explicit terminal result | Passed through unchanged | Passed through unchanged |
+| `getLatest()` | Latest output, or `null` | `null` |
+| `iterate()` | Streams and replays saved outputs | Rejects; use `onUpdate()` |
+
+Disabling retention does not make the producer wait for the consumer. Callers
+remain responsible for their own buffering and processing rate. Errors, aborts,
+cancellation and statistics keep their existing behavior.
 
 Terminal settlement (`failed()` / `ended()`) is idempotent — repeated calls after the response has already settled are no-ops, so the abort-signal wiring can race with the addon's own settlement without producing double-rejects or double-emits.
 
@@ -102,6 +126,7 @@ Single-job lifecycle helper that replaces the per-addon `_jobToResponse` Map / `
 
 - `start(runOpts?)` — creates a new `QvacResponse` and registers it as active; fails any stale active response. `runOpts.signal` is forwarded into the response (see [`QvacResponse`](#qvacresponse)) so the per-call abort signal from `model.run(input, { signal })` settles the job without polling
 - `startWith(response)` — registers a pre-built response (e.g. a custom subclass) as active
+- `runOpts.retainOutput` — forwards the response retention setting; defaults to enabled
 - `output(data)` — routes output data to the active response (no-op if idle)
 - `end(stats?, result?)` — ends the active response, optionally forwarding stats first
 - `fail(error)` — fails the active response with an error

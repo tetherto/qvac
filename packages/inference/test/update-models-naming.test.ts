@@ -865,6 +865,43 @@ test('tts: Piper config file — _CONFIG suffix', (t) => {
 })
 
 // ---------------------------------------------------------------------------
+// TTS: registry variant tag distinguishes fused CosyVoice3 weights
+// ---------------------------------------------------------------------------
+
+test('tts: CosyVoice3 fused Q8 model uses its registry tag in the export name', (t) => {
+  const usedNames = new Set<string>()
+  const common = {
+    engine: 'tts-ggml' as const,
+    name: 'ggml',
+    quantization: 'q8_0',
+    params: '0.5B'
+  }
+
+  const original = generateExportName({
+    ...common,
+    path: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf',
+    tags: ['tts', 'cosyvoice', 'cosyvoice3', 'llm', 'multilingual', 'gguf'],
+    usedNames
+  })
+  const fused = generateExportName({
+    ...common,
+    path: 'qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf',
+    tags: ['tts', 'cosyvoice', 'cosyvoice3', 'llm', 'fused', 'multilingual', 'gguf'],
+    usedNames
+  })
+  const filenameWithoutTag = generateExportName({
+    ...common,
+    path: 'qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf',
+    tags: ['tts', 'cosyvoice', 'cosyvoice3', 'llm', 'multilingual', 'gguf'],
+    usedNames: new Set<string>()
+  })
+
+  t.is(original, 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0')
+  t.is(fused, 'TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0')
+  t.is(filenameWithoutTag, original, 'the registry tag, rather than the filename, selects FUSED')
+})
+
+// ---------------------------------------------------------------------------
 // OCR: Recognizer English
 // ---------------------------------------------------------------------------
 
@@ -1774,6 +1811,95 @@ test('parakeet: Unified RNN-T GGUF keeps PARAKEET_UNIFIED_<params>_<quant>', (t)
   t.is(exportName, 'PARAKEET_UNIFIED_0_6B_Q8_0')
 })
 
+test('parakeet: Mosaic GGUF names include the model and compact variant', (t) => {
+  const cases = [
+    {
+      filename: 'parakeet-mosaic.gguf',
+      quantization: 'q4_0/q8_0',
+      expected: 'PARAKEET_MOSAIC_Q4_0_Q8_0'
+    },
+    {
+      filename: 'parakeet-mosaic-compact.gguf',
+      quantization: 'q4_0/q8_0/q3_k/iq3_s',
+      expected: 'PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S'
+    }
+  ]
+
+  for (const { filename, quantization, expected } of cases) {
+    t.is(
+      generateExportName({
+        path: `qvac_models_compiled/ggml/parakeet/2026-10-23/${filename}`,
+        engine: 'parakeet-transcription',
+        name: '',
+        quantization,
+        params: '0.6B',
+        tags: [],
+        usedNames: new Set()
+      }),
+      expected
+    )
+  }
+})
+
+test('parakeet: Mosaic directory names do not rename Core ML components', (t) => {
+  const components = [
+    { path: 'analytics/coremldata.bin', expected: 'PARAKEET_COREMLDATA' },
+    { path: 'coremldata.bin', expected: 'PARAKEET_COREMLDATA' },
+    { path: 'model.mil', expected: 'PARAKEET_MODEL' },
+    { path: 'weights/weight.bin', expected: 'PARAKEET_WEIGHT' }
+  ]
+
+  for (const stem of ['parakeet-mosaic', 'parakeet-mosaic-compact']) {
+    for (const { path, expected } of components) {
+      t.is(
+        generateExportName({
+          path: `qvac_models_compiled/ggml/parakeet/2026-10-23/${stem}-encoder.mlmodelc/${path}`,
+          engine: 'parakeet-transcription',
+          name: '',
+          quantization: '',
+          params: '0.6B',
+          tags: [],
+          usedNames: new Set()
+        }),
+        expected
+      )
+    }
+  }
+})
+
+test('parakeet: TranscribePsy GGUF names the model and keeps the Core ML build distinct', (t) => {
+  const coreKey = Buffer.from('dd'.repeat(32), 'hex')
+  const entry = (path: string, tags: string[]) => ({
+    path,
+    source: 'hf',
+    engine: 'parakeet-transcription',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 300000000,
+    sha256: 'dd'.repeat(32),
+    quantization: 'q8_0',
+    params: '250M',
+    tags,
+    blobBinding: { coreKey, blockOffset: 1, blockLength: 1, byteOffset: 1, byteLength: 300000000 }
+  })
+
+  const plain = processAndName(
+    entry(
+      'qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf',
+      ['transcription', 'parakeet', 'transcribepsy', 'ggml', 'multilingual']
+    )
+  )
+  const coreml = processAndName(
+    entry(
+      'qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf',
+      ['transcription', 'parakeet', 'transcribepsy', 'ggml', 'coreml', 'multilingual']
+    )
+  )
+
+  t.is(plain.exportName, 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0')
+  t.is(coreml.exportName, 'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0')
+})
+
 test('parakeet: Nemotron GGUF includes NEMOTRON in the name', (t) => {
   const coreKey = Buffer.from('dd'.repeat(32), 'hex')
 
@@ -1798,6 +1924,32 @@ test('parakeet: Nemotron GGUF includes NEMOTRON in the name', (t) => {
   })
 
   t.is(exportName, 'PARAKEET_NEMOTRON_0_6B_Q4_0')
+})
+
+test('parakeet: Nemotron 3 diarization has a distinct model constant', (t) => {
+  const coreKey = Buffer.from('dd'.repeat(32), 'hex')
+
+  const { exportName } = processAndName({
+    path: 'qvac_models_compiled/ggml/nemotron/2026-10-09/Nemotron-3-Diarization.q8_0.gguf',
+    source: 's3',
+    engine: 'parakeet-transcription',
+    license: 'openmdw-1.1',
+    name: '',
+    sizeBytes: 107012128,
+    sha256: 'dd'.repeat(32),
+    quantization: 'q8_0',
+    params: '99.2M',
+    tags: ['transcription', 'parakeet', 'nemotron', 'streaming'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 1,
+      blockLength: 1,
+      byteOffset: 1,
+      byteLength: 107012128
+    }
+  })
+
+  t.is(exportName, 'PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0')
 })
 
 // ---------------------------------------------------------------------------

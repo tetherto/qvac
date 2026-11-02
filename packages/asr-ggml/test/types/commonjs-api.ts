@@ -31,8 +31,17 @@ const whisperConfig: WhisperConfig = {
 };
 const parakeetConfig: ParakeetConfig = {
   maxThreads: 4,
+  backend: "CUDA1",
   streamingChunkMs: 2000,
 };
+const speakerAttribution: ASRGgml.ParakeetSpeakerAttributionConfig = {
+  modelPath: "/models/diarizer.gguf",
+  mergeSameSpeaker: false,
+  minSegmentMs: 0,
+  padSegmentMs: 100,
+};
+const attributedConfig: ParakeetConfig = { backend: "cpu", speakerAttribution };
+void attributedConfig;
 const namespacedWhisperConfig: ASRGgml.WhisperConfig = whisperConfig;
 const namespacedParakeetConfig: ASRGgml.ParakeetConfig = parakeetConfig;
 const vadParams: ASRGgml.VadParams = { threshold: 0.6 };
@@ -82,6 +91,10 @@ const segment: ASRGgml.TranscriptionSegment = {
   start: 0,
   end: 1,
   isEndOfTurn: true,
+  tokenIds: [1, 2],
+  isFinal: false,
+  chunkIndex: 0,
+  eotConfidence: 0.5,
 };
 // Segment payloads stay bare arrays on onUpdate (no {type:'segment'} wrapper).
 const runOutput: ASRGgml.ASRRunOutput = [segment];
@@ -90,10 +103,14 @@ const vadEvent: ASRGgml.VadEvent = {
   speaking: true,
   score: 0.9,
   source: "silero",
+  chunkIndex: 0,
 };
 const endOfTurnEvent: ASRGgml.EndOfTurnEvent = {
   type: "endOfTurn",
   source: "model-eou",
+  timestamp: 1.23456789,
+  chunkIndex: 0,
+  confidence: 0.5,
 };
 const streamOutput: ASRGgml.ASRStreamOutput = vadEvent;
 const audioInput: ASRGgml.AudioInput = new Float32Array(16);
@@ -204,3 +221,27 @@ void [
   managerConfig,
   modelKey,
 ];
+
+const mossConfig: ASRGgml.MossTranscribeConfig = { backend: "cuda", useGPU: false };
+void mossConfig;
+
+const mossFit: ASRGgml.MossTranscribeFitRequest = {
+  engine: "moss-transcribe",
+  modelPath: "/models/moss-transcribe.gguf",
+  audioSeconds: 30,
+  backend: "vulkan",
+  hotwords: ["QVAC"],
+  maxNewTokens: 1024,
+  threads: 4,
+  gpuLayers: 1,
+  marginBytes: 0,
+};
+const mossFitResult: Promise<ASRGgml.AsrFitResult> = ASRGgml.assessFit(mossFit);
+void mossFitResult;
+// @ts-expect-error The fit result arrives through a Promise.
+const syncFitResult: ASRGgml.AsrFitResult = ASRGgml.assessFit(mossFit);
+void syncFitResult;
+// @ts-expect-error MOSS requires an explicit workload duration.
+void ASRGgml.assessFit({ engine: "moss-transcribe", modelPath: "/models/moss.gguf" });
+// @ts-expect-error MOSS requires a model path.
+void ASRGgml.assessFit({ engine: "moss-transcribe", audioSeconds: 30 });

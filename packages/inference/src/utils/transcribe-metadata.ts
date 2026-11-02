@@ -2,13 +2,16 @@ import { ModelType, type TranscribeSegment } from '@/schemas/index'
 import { TranscriptionFailedError } from '@/errors/index'
 
 /**
- * A native transcript segment, as emitted by either engine of
+ * A native transcript segment, as emitted by the engines of
  * `@qvac/asr-ggml` and by `@qvac/bci-whispercpp`. `text` plus the timing
  * fields are shared; `isEndOfTurn` and `startsWord` are parakeet-only, and
  * `windowStartTimestep` is BCI delta-streaming-only.
  */
 export interface AsrAddonSegment {
   text: string
+  speakerId?: number
+  speaker?: string
+  speakerSegments?: { speakerId: number; start: number; end: number }[]
   start?: number
   end?: number
   toAppend?: boolean
@@ -33,6 +36,15 @@ export function toTranscribeSegment(
 ): TranscribeSegment & { windowStartTimestep?: number } {
   return {
     text: chunk.text,
+    ...(chunk.speakerId !== undefined && { speakerId: chunk.speakerId }),
+    ...(chunk.speaker !== undefined && { speaker: chunk.speaker }),
+    ...(chunk.speakerSegments !== undefined && {
+      speakerSegments: chunk.speakerSegments.map((turn) => ({
+        speakerId: turn.speakerId,
+        startMs: turn.start * 1000,
+        endMs: turn.end * 1000
+      }))
+    }),
     startMs: (chunk.start ?? 0) * 1000,
     endMs: (chunk.end ?? 0) * 1000,
     append: chunk.toAppend ?? false,
@@ -46,14 +58,15 @@ export function toTranscribeSegment(
 }
 
 /**
- * Engines whose native layer emits per-segment metadata. Both `@qvac/asr-ggml`
- * engines do: the parakeet output serializer sends `start`, `end`, `id`,
+ * Engines whose native layer emits per-segment metadata. MOSS supplies speaker
+ * labels alongside timestamps; the parakeet output serializer sends `start`, `end`, `id`,
  * `toAppend`, `isEndOfTurn` and `startsWord` for every segment, and
  * `timestampsEnabled` defaults to true.
  */
 const METADATA_CAPABLE_ENGINES: readonly string[] = [
   ModelType.whispercppTranscription,
-  ModelType.parakeetTranscription
+  ModelType.parakeetTranscription,
+  ModelType.mossTranscribe
 ]
 
 /**

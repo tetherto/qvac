@@ -18,7 +18,7 @@ if(BUILD_FUZZING AND NOT BUILD_TESTING)
 endif()
 
 # ggml runtime is the shared @qvac/fabric prebuild (dynamically linked, loaded
-# once per process); sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE.
+# once per process); sets qvac_fabric_target.
 qvac_addon_use_fabric()
 
 if(NOT BUILD_FUZZING)
@@ -50,7 +50,7 @@ target_include_directories(
 
 qvac_addon_link_fabric(${qvac-lib-infer-vla} ${qvac_fabric_target})
 
-qvac_addon_finalize(${qvac-lib-infer-vla} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+qvac_addon_finalize(${qvac-lib-infer-vla})
 endif()
 
 if(BUILD_TESTING OR BUILD_FUZZING)

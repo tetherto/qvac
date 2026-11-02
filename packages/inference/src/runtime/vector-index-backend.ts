@@ -22,6 +22,6 @@ export interface OpenVectorIndex {
 }
 
 export interface VectorIndexBackend {
-  create(dim: number, storage: VectorIndexStorage): OpenVectorIndex
-  load(path: string): OpenVectorIndex
+  create(dim: number, storage: VectorIndexStorage): OpenVectorIndex | Promise<OpenVectorIndex>
+  load(path: string): OpenVectorIndex | Promise<OpenVectorIndex>
 }

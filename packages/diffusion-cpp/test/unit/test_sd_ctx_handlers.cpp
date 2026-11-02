@@ -68,6 +68,21 @@ TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
       StatusError);
 }
 
+TEST(SdCtxHandlers_ImageLimits, DefaultsOverridesAndInvalidValues) {
+  const SdCtxConfig defaults;
+  EXPECT_EQ(defaults.maxImagePixels, 64ULL * 1024 * 1024);
+  EXPECT_EQ(defaults.maxJobPixels, 128ULL * 1024 * 1024);
+  EXPECT_EQ(
+      applyOne("max_image_pixels", "268435456").maxImagePixels, 268435456U);
+  EXPECT_EQ(applyOne("max_job_pixels", "268435456").maxJobPixels, 268435456U);
+  for (const auto* value : {"0", "-1", "12x", "268435457"}) {
+    EXPECT_THROW(applyOne("max_image_pixels", value), StatusError);
+  }
+  for (const auto* value : {"0", "-1", "12x", "2147483648"}) {
+    EXPECT_THROW(applyOne("max_job_pixels", value), StatusError);
+  }
+}
+
 TEST(SdCtxHandlers_Type, SupportedValuesMapAndUnknownThrows) {
   EXPECT_EQ(applyOne("type", "").wtype, SD_TYPE_COUNT);
   EXPECT_EQ(applyOne("type", "auto").wtype, SD_TYPE_COUNT);

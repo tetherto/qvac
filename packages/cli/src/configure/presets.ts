@@ -3,7 +3,10 @@
 // no SDK RPCs here — this is the testable core the interactive layer (and, later,
 // an LLM advisor) feeds.
 
-export type Modality = 'chat' | 'embedding' | 'transcription' | 'speech' | 'image'
+import type { TtsEngine } from '@qvac/sdk'
+import { AUDIOGEN_MOSS_SFX_V2_Q8_0 } from '@qvac/sdk/models'
+
+export type Modality = 'chat' | 'embedding' | 'transcription' | 'speech' | 'image' | 'decision'
 
 export interface ServeModelEntry {
   model?: string
@@ -35,6 +38,13 @@ export const MODALITIES: ModalityInfo[] = [
   { id: 'chat', label: 'Chat (LLM)', role: 'chat', addon: 'llm', pick: true },
   { id: 'embedding', label: 'Embedding', role: 'embedding', addon: 'embeddings', pick: true },
   {
+    id: 'decision',
+    label: 'Decision',
+    role: 'decision',
+    addon: 'llamacpp-decision',
+    pick: true
+  },
+  {
     id: 'transcription',
     label: 'Speech-to-text (transcription)',
     role: 'transcription',
@@ -55,6 +65,7 @@ export function modalityInfo(id: Modality): ModalityInfo {
 export const RECOMMENDED: Partial<Record<Modality, string>> = {
   chat: 'QWEN3_600M_INST_Q4',
   embedding: 'EMBEDDINGGEMMA_300M_Q4_0',
+  decision: 'LAYA_MULTILINGUAL_322M_Q8_0',
   transcription: 'WHISPER_TINY_Q8_0',
   image: 'SD_V2_1_1B_Q8_0'
 }
@@ -67,7 +78,10 @@ export const DEFAULT_STARTER: Modality[] = ['chat', 'transcription']
 // and relies on the docs link to finish. Not guaranteed to run untouched.
 export const TTS_VOICE_PLACEHOLDER = '/path/to/voice.wav'
 
-export type TtsEngine = 'chatterbox' | 'supertonic' | 'parler' | 'cosyvoice3' | 'audio8'
+// The SDK's engine list rather than a copy of it: an engine added there
+// without a starter below fails the `Record<TtsEngine, …>` typecheck instead of
+// reaching `configure` with none.
+export type { TtsEngine }
 
 interface TtsEngineTemplate {
   label: string
@@ -82,8 +96,9 @@ interface TtsEngineTemplate {
 // One starter per TTS engine, mirroring the runnable examples in
 // packages/sdk/examples/tts. TTS is a multi-part assembly, so each template
 // pre-populates the engine's required auxiliary sources (schema-optional but
-// needed to actually run) — chatterbox's S3Gen, audio8's codec decoder — that a
-// bare model pick can't supply. Voice cloning stays a user asset (placeholder).
+// needed to actually run) — chatterbox's S3Gen, audio8's and moss's codec
+// decoders — that a bare model pick can't supply. Voice cloning stays a user
+// asset (placeholder).
 export const TTS_ENGINE_TEMPLATES: Record<TtsEngine, TtsEngineTemplate> = {
   chatterbox: {
     label: 'Chatterbox (English, voice cloning)',
@@ -122,6 +137,28 @@ export const TTS_ENGINE_TEMPLATES: Record<TtsEngine, TtsEngineTemplate> = {
       ttsEngine: 'audio8',
       audio8CodecDecoderModelSrc: 'TTS_CODEC_DECODER_AUDIO8_Q8_0'
     }
+  },
+  'moss-sfx': {
+    label: 'MOSS-SoundEffect (desktop sound effects)',
+    hint: 'Single GGUF; generation controls are available through the SDK.',
+    model: 'AUDIOGEN_MOSS_SFX_V2_Q8_0',
+    config: { ttsEngine: 'moss-sfx' }
+  },
+  'moss-speech': {
+    label: 'MOSS-Speech (desktop spoken replies)',
+    hint: 'Language model + codec; conversation controls are available through the SDK.',
+    model: 'TTS_MOSS_SPEECH_Q8_0',
+    config: { ttsEngine: 'moss-speech', mossSpeechCodecModelSrc: 'TTS_CODEC_MOSS_SPEECH_F16' }
+  },
+  moss: {
+    label: 'MOSS (multilingual, directable, 8B desktop)',
+    hint: 'Delay backbone + codec decoder; add the encoder to clone a voice.',
+    model: 'TTS_DELAY_LLM_MOSS_TTS_F16',
+    config: {
+      ttsEngine: 'moss',
+      language: 'en',
+      mossCodecDecoderModelSrc: 'TTS_CODEC_DECODER_MOSS_TTS_F16'
+    }
   }
 }
 
@@ -132,7 +169,12 @@ function ttsTemplate(engine: TtsEngine): BuiltEntry {
   return {
     aliasBase: t.model,
     addon: 'tts',
-    entry: { type: 'tts', src: t.model, preload: false, config: { ...t.config } }
+    entry: {
+      type: 'tts',
+      src: engine === 'moss-sfx' ? AUDIOGEN_MOSS_SFX_V2_Q8_0.src : t.model,
+      preload: false,
+      config: { ...t.config }
+    }
   }
 }
 
@@ -151,6 +193,7 @@ export function buildEntry(modality: Modality, constantName?: string): BuiltEntr
 
   const entry: ServeModelEntry = { model: name, preload: false }
   if (modality === 'image') entry.config = { prediction: 'v' }
+  if (modality === 'decision') entry.type = 'llamacpp-decision'
   return { aliasBase: name, entry, addon: info.addon }
 }
 

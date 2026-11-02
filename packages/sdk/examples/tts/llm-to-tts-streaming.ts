@@ -6,11 +6,11 @@
  * Each synthesized phrase is played as soon as PCM arrives (`playPcmInt16Chunk`). A combined WAV
  * is written at the end for inspection.
  *
- * Prerequisites: Bun, QVAC worker, registry access, macOS `afplay` / Linux `aplay` (or Windows
+ * Prerequisites: Node.js, QVAC worker, registry access, macOS `afplay` / Linux `aplay` (or Windows
  * PowerShell player) for chunk playback.
  *
  * Usage:
- *   bun run examples/tts/llm-to-tts-streaming.ts
+ *   npx tsx examples/tts/llm-to-tts-streaming.ts
  */
 
 import {
@@ -22,7 +22,7 @@ import {
   LLAMA_3_2_1B_INST_Q4_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q8_0
 } from '@qvac/sdk'
-import { createWav, playPcmInt16Chunk } from './utils'
+import { createWav, playPcmInt16Chunk } from './utils.js'
 
 // Only a fallback, for the case where no frame ever reports a rate: each
 // audio frame carries the rate the engine actually produced, and

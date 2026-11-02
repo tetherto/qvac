@@ -8,6 +8,9 @@
 #include <chrono>
 #include <mutex>
 #include <condition_variable>
+#include <functional>
+#include <memory>
+#include <stdexcept>
 
 namespace qvac_lib_inference_addon_cpp::js_utils {
 
@@ -77,6 +80,165 @@ TEST(JsUtilsTest, JsAsyncTaskRun) {
   std::unique_lock<std::mutex> lock(mtx);
   cv.wait(lock, [&workCompleted]() { return workCompleted; });
   EXPECT_TRUE(workCompleted);
+}
+
+namespace {
+
+js_deferred_t* runAndWaitSettled(const std::function<js_value_t*()>& run) {
+  mock_js::lastCreatedDeferred = nullptr;
+  js_value_t* promise = run();
+  EXPECT_NE(promise, nullptr);
+  js_deferred_t* deferred = mock_js::lastCreatedDeferred;
+  if (deferred == nullptr) {
+    return nullptr;
+  }
+  for (int i = 0; i != 1000 && !deferred->settled.load(); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  return deferred;
+}
+
+js_value_t* toNumber(js_env_t* env, const int& value) {
+  return js::Number::create(env, static_cast<double>(value));
+}
+
+} // namespace
+
+TEST(JsUtilsTest, JsAsyncTaskResolvesWithMarshalledResult) {
+  js_env_t env;
+
+  js_deferred_t* deferred = runAndWaitSettled([&env]() {
+    return js::JsAsyncTask::run(&env, []() { return 42; }, toNumber);
+  });
+
+  ASSERT_NE(deferred, nullptr);
+  ASSERT_TRUE(deferred->settled.load());
+  EXPECT_FALSE(deferred->rejected);
+  ASSERT_NE(deferred->settlement, nullptr);
+  EXPECT_EQ(deferred->settlement->numberValue, 42.0);
+}
+
+TEST(JsUtilsTest, JsAsyncTaskRejectsStatusErrorWithItsCode) {
+  js_env_t env;
+  const qvac_errors::StatusError expected(
+      qvac_errors::general_error::InvalidArgument, "bad model");
+
+  js_deferred_t* deferred = runAndWaitSettled([&env, &expected]() {
+    return js::JsAsyncTask::run(
+        &env, [&expected]() -> int { throw expected; }, toNumber);
+  });
+
+  ASSERT_NE(deferred, nullptr);
+  ASSERT_TRUE(deferred->settled.load());
+  EXPECT_TRUE(deferred->rejected);
+  ASSERT_NE(deferred->settlement, nullptr);
+  EXPECT_EQ(deferred->settlement->errorCode, expected.codeString());
+  EXPECT_EQ(deferred->settlement->errorMessage, "bad model");
+}
+
+TEST(JsUtilsTest, JsAsyncTaskRejectsOtherExceptionsAsInternalError) {
+  js_env_t env;
+
+  js_deferred_t* deferred = runAndWaitSettled([&env]() {
+    return js::JsAsyncTask::run(
+        &env, []() { throw std::runtime_error("worker failed"); });
+  });
+
+  ASSERT_NE(deferred, nullptr);
+  ASSERT_TRUE(deferred->settled.load());
+  EXPECT_TRUE(deferred->rejected);
+  ASSERT_NE(deferred->settlement, nullptr);
+  EXPECT_EQ(deferred->settlement->errorCode, "INTERNAL_ERROR");
+  EXPECT_EQ(deferred->settlement->errorMessage, "worker failed");
+}
+
+TEST(JsUtilsTest, JsAsyncTaskRejectsWhenMarshalThrows) {
+  js_env_t env;
+
+  js_deferred_t* deferred = runAndWaitSettled([&env]() {
+    return js::JsAsyncTask::run(
+        &env,
+        []() { return 1; },
+        [](js_env_t*, const int&) -> js_value_t* {
+          throw std::runtime_error("cannot marshal");
+        });
+  });
+
+  ASSERT_NE(deferred, nullptr);
+  ASSERT_TRUE(deferred->settled.load());
+  EXPECT_TRUE(deferred->rejected);
+  ASSERT_NE(deferred->settlement, nullptr);
+  EXPECT_EQ(deferred->settlement->errorCode, "INTERNAL_ERROR");
+  EXPECT_EQ(deferred->settlement->errorMessage, "cannot marshal");
+}
+
+// libjs reports a failed call on an empty JavaScript stack as
+// js_uncaught_exception.
+static int failAsUncaught() { return -2; }
+
+TEST(JsUtilsTest, JsAsyncTaskRejectsAFailedJsCallInMarshalWithAMessage) {
+  js_env_t env;
+
+  js_deferred_t* deferred = runAndWaitSettled([&env]() {
+    return js::JsAsyncTask::run(
+        &env,
+        []() { return 1; },
+        [](js_env_t*, const int&) -> js_value_t* {
+          JS(failAsUncaught());
+          return nullptr;
+        });
+  });
+
+  ASSERT_NE(deferred, nullptr);
+  ASSERT_TRUE(deferred->settled.load());
+  EXPECT_TRUE(deferred->rejected);
+  ASSERT_NE(deferred->settlement, nullptr);
+  EXPECT_EQ(
+      deferred->settlement->errorCode,
+      qvac_errors::StatusError(qvac_errors::general_error::JSLibraryError, "")
+          .codeString());
+  EXPECT_EQ(
+      deferred->settlement->errorMessage,
+      "a JavaScript call failed and its exception was reported as uncaught");
+}
+
+// The result can own heavy native state, so like the work it is released on
+// the loop before the promise settles.
+TEST(JsUtilsTest, JsAsyncTaskReleasesResultBeforeSettlement) {
+  js_env_t env;
+
+  std::atomic<bool> resultDestroyed{false};
+  std::atomic<bool> settledFirst{false};
+  struct Probe {
+    std::atomic<bool>* destroyed;
+    std::atomic<bool>* settledFirst;
+    ~Probe() {
+      settledFirst->store(
+          mock_js::lastCreatedDeferred != nullptr &&
+          mock_js::lastCreatedDeferred->settled.load());
+      destroyed->store(true);
+    }
+  };
+
+  js_deferred_t* deferred =
+      runAndWaitSettled([&env, &resultDestroyed, &settledFirst]() {
+        return js::JsAsyncTask::run(
+            &env,
+            [&resultDestroyed, &settledFirst]() {
+              return std::shared_ptr<Probe>(
+                  new Probe{&resultDestroyed, &settledFirst});
+            },
+            [](js_env_t* env, const std::shared_ptr<Probe>&) {
+              return js::Number::create(env, 1.0);
+            });
+      });
+
+  ASSERT_NE(deferred, nullptr);
+  ASSERT_TRUE(deferred->settled.load());
+  EXPECT_FALSE(deferred->rejected);
+  EXPECT_TRUE(resultDestroyed.load()) << "the result was never released";
+  EXPECT_FALSE(settledFirst.load())
+      << "the result was released after the promise settled";
 }
 
 TEST(JsUtilsTest, UniqueJsRefConstructorWithDeleter) {
@@ -195,6 +357,57 @@ TEST(JsUtilsTest, JsAsyncTaskEnvTeardownDuringBlockedWorker) {
          "worker and completion uses freed JS state";
   EXPECT_TRUE(teardown->finished.load())
       << "completion must finish the deferred teardown so env teardown ends";
+  EXPECT_FALSE(deferred->settled.load())
+      << "no promise/JS operation may run once env teardown has begun";
+}
+
+TEST(JsUtilsTest, JsAsyncTaskWithResultEnvTeardownDuringBlockedWorker) {
+  js_env_t env;
+
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool release = false;
+  std::atomic<bool> marshalled{false};
+
+  mock_js::lastCreatedDeferred = nullptr;
+  mock_js::lastDeferredTeardownCb = nullptr;
+  mock_js::lastDeferredTeardownData = nullptr;
+  mock_js::lastDeferredTeardownHandle = nullptr;
+
+  js_value_t* promise = js::JsAsyncTask::run(
+      &env,
+      [&mtx, &cv, &release]() {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&release]() { return release; });
+        return 7;
+      },
+      [&marshalled](js_env_t* env, const int& value) {
+        marshalled = true;
+        return toNumber(env, value);
+      });
+  EXPECT_NE(promise, nullptr);
+
+  js_deferred_t* deferred = mock_js::lastCreatedDeferred;
+  ASSERT_NE(deferred, nullptr);
+  js_deferred_teardown_t* teardown = mock_js::lastDeferredTeardownHandle;
+  ASSERT_NE(teardown, nullptr);
+  ASSERT_NE(mock_js::lastDeferredTeardownCb, nullptr);
+
+  mock_js::lastDeferredTeardownCb(teardown, mock_js::lastDeferredTeardownData);
+
+  {
+    std::lock_guard<std::mutex> lock(mtx);
+    release = true;
+  }
+  cv.notify_one();
+
+  for (int i = 0; i != 1000 && !teardown->finished.load(); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ASSERT_TRUE(teardown->finished.load())
+      << "completion must finish the deferred teardown so env teardown ends";
+  EXPECT_FALSE(marshalled.load())
+      << "the result may not be marshalled once env teardown has begun";
   EXPECT_FALSE(deferred->settled.load())
       << "no promise/JS operation may run once env teardown has begun";
 }

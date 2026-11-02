@@ -20,6 +20,24 @@ const options: TTSGgmlOptions = {
   opts: new Date()
 }
 const namespaceOptions: TTSGgml.TTSGgmlOptions = options
+const coremlPolicy: TTSGgml.LavaSRCoreMLComputeUnits = 'CPU_AND_NE'
+const lavasrCoreml: TTSGgml.TTSGgmlOptions = {
+  enhancer: {
+    type: 'lavasr',
+    enhancerPath: '/enhancer.gguf',
+    coremlModelPath: '/enhancer.mlmodelc',
+    coremlComputeUnits: coremlPolicy
+  },
+  denoiser: {
+    type: 'lavasr',
+    denoiserPath: '/denoiser.gguf',
+    coremlModelPath: '/denoiser.mlmodelc',
+    coremlComputeUnits: 'CPU_AND_GPU'
+  }
+}
+// @ts-expect-error Apple does not expose a GPU_ONLY Core ML policy
+const invalidLavasrPolicy: TTSGgml.LavaSRCoreMLComputeUnits = 'GPU_ONLY'
+void [lavasrCoreml, invalidLavasrPolicy]
 const requireConstructor: typeof TTSGgml = TTSGgml
 const defaultConstructor: typeof TTSGgml = DefaultTTSGgml
 const model = new TTSGgml(namespaceOptions)
@@ -92,3 +110,54 @@ async function pocketCompletionMetadata(pocket: TTSGgml): Promise<void> {
   }
 }
 void [firstAudioMs, pocketOutput, pocketCompletionMetadata]
+
+const mossFitWithoutDecoder = {
+  engineType: 'moss' as const,
+  mossBackbonePath: './moss-tts-delay-f16.gguf',
+  promptRows: 128,
+  referenceSamples: 0,
+  streaming: false
+}
+const mossFitRequest: TTSGgml.MossFitRequest = {
+  ...mossFitWithoutDecoder,
+  mossCodecDecoderPath: './moss-codec-decoder-f16.gguf'
+}
+const mossFitResult: Promise<TTSGgml.TtsFitResult> = TTSGgml.assessFit(mossFitRequest)
+// @ts-expect-error assessFit returns a Promise of the result
+const mossFitSync: TTSGgml.TtsFitResult = TTSGgml.assessFit(mossFitRequest)
+// @ts-expect-error MOSS fit requires a decoder even without reference audio
+void TTSGgml.assessFit(mossFitWithoutDecoder)
+void [mossFitResult, mossFitSync]
+
+async function readFitRows(): Promise<void> {
+  const fit = await TTSGgml.assessFit(mossFitRequest)
+  const status: TTSGgml.TtsFitStatus = fit.status
+  const rows: TTSGgml.TtsFitDevice[] = fit.devices
+  const stats: TTSGgml.TtsFitStats = fit.stats
+  void [status, rows, stats]
+}
+void readFitRows
+
+const mossSfxWorkload = {
+  engineType: 'moss-sfx' as const,
+  prompt: 'Rain on a tin roof.',
+  seconds: 8
+}
+const mossSfxFitRequest: TTSGgml.MossSoundEffectFitRequest = {
+  ...mossSfxWorkload,
+  mossSoundEffectPath: './moss-sfx-v2-q8_0.gguf',
+  negativePrompt: 'music',
+  guidance: 4,
+  steps: 20,
+  shift: 5
+}
+const mossSfxFitResult: Promise<TTSGgml.TtsFitResult> = TTSGgml.assessFit(mossSfxFitRequest)
+// @ts-expect-error MOSS sound-effect fit requires a model path
+void TTSGgml.assessFit(mossSfxWorkload)
+const { prompt, ...mossSfxWithoutPrompt } = mossSfxFitRequest
+// @ts-expect-error MOSS sound-effect fit requires a prompt
+void TTSGgml.assessFit(mossSfxWithoutPrompt)
+const { seconds, ...mossSfxWithoutSeconds } = mossSfxFitRequest
+// @ts-expect-error MOSS sound-effect fit requires seconds
+void TTSGgml.assessFit(mossSfxWithoutSeconds)
+void [mossSfxFitResult, prompt, seconds]

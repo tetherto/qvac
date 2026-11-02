@@ -252,7 +252,7 @@ npm install
 export GH_TOKEN=<your PAT>
 
 # 2. build with CUDA (~10 min cold: vcpkg fetches + compiles the engine)
-npm run build:cuda       # ends with: prebuilds/linux-x64/qvac__diffusion-cpp.bare
+npm run build:cuda       # ends with: prebuilds/linux-x64/qvac__diffusion-cpp-linux-x64.bare
 
 # 3. models from the P2P registry (~13.3 GB total, no credentials)
 npm install -g @qvac/registry-client   # EACCES without sudo? see the note in "Getting the models"
@@ -424,6 +424,16 @@ buys for that price: ~27x faster startup, 14x less host RAM, half the CPU,
 embeds in bare/Node apps.
 
 ## Validation
+
+Linux x64 CI defaults to `cuda0` for the three
+resident-versus-CPU-streamed/disk parity cases (KV off/on). Their shared scene
+creation, fit assessments and walks use this explicit backend so a broken
+CUDA module fails instead of silently falling back to Vulkan. The original
+frame comparisons and tolerance still apply. The intermittent CUDA parity
+failure tracked in [diagnostic PR #5264](https://github.com/tetherto/qvac/pull/5264)
+remains under investigation; these CI cases exercise CUDA and can expose that
+failure. Local runs default to `gpu`. Set `ABOT_PARITY_BACKEND` to override
+either default, for example `ABOT_PARITY_BACKEND=vulkan0` for Vulkan parity.
 
 The `test/integration/abot-world.test.js` lanes (guard, fixed-scene walk,
 world generation, variations) run on the Linux x64 GPU pool in CI, and

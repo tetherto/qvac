@@ -12,6 +12,10 @@ export interface LlmStats {
   // Renders in this request that provably left the supplied tool definitions
   // out; 0 when no tools were sent.
   toolDefinitionsDropped?: number
+  // Speculative decoding: draft tokens proposed and accepted; set only when
+  // the model was loaded with `spec_type`.
+  draftTokens?: number
+  draftAcceptedTokens?: number
   backendDevice?: 'cpu' | 'gpu'
   stopReason?:
     'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'
@@ -36,13 +40,17 @@ export interface TtsStats {
   realTimeFactor?: number
   tokensPerSecond?: number
   totalSamples?: number
-  /** Audio8 only: codec frames generated, on a fixed 46 ms grid. */
+  /** Audio8 and MOSS only: codec frames generated (Audio8 on a 46 ms grid, MOSS at 12.5/s). */
   generatedFrames?: number
   backendDevice?: number
   backendId?: number
   gpuUnsupported?: number
   enhancerBackendDevice?: number
   enhancerBackendId?: number
+  /** Audio8 only, macOS / iOS: 1 while the Core ML codec sidecar is attached. */
+  codecSidecarLoaded?: number
+  /** Audio8 only: 1 when the synthesis ran its codec on that sidecar, 0 on ggml. */
+  codecOnCoreml?: number
 }
 
 /**
@@ -51,6 +59,7 @@ export interface TtsStats {
  * fields are populated on both paths.
  */
 export interface TtsOutputChunk {
+  text?: string
   outputArray: ArrayLike<number>
   /** Rate of `outputArray`; moves with `outputSampleRate` and the enhancer. */
   sampleRate?: number

@@ -1,6 +1,6 @@
 // Type-level consumer test mirroring the SDK's import shapes, compiled with
 // the SDK's module settings. Type-checked only — never executed.
-import LlmLlamacpp, { pickPrimaryGgufPath } from "../../index";
+import LlmLlamacpp, { pickPrimaryGgufPath, assessFit } from "../../index";
 import type { GenerationParams, RunOptions, Message, BatchPrompt, QvacResponse } from "../../index";
 import llmAddonLogging, {
   setLogger,
@@ -78,3 +78,6 @@ interface AnyModel {
 }
 const anyModel: AnyModel = model;
 void anyModel;
+
+const fit: Promise<LlmLlamacpp.FitResult> = assessFit({ modelPath: "/abs/model.gguf" });
+void fit;

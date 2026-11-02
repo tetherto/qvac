@@ -44,7 +44,7 @@ function walk(
   return out
 }
 
-function isModelSrcKey(key: string): boolean {
+export function isModelSrcKey(key: string): boolean {
   return key.endsWith('ModelSrc') || key === 'model_src'
 }
 

@@ -22,7 +22,7 @@ let langNameMap = null
  * @param {string} text The text to analyze.
  * @returns {Object} The detected language or `Undetermined` if no language is detected.
  */
-function detectOne (text) {
+function detectOne(text) {
   if (typeof text !== 'string' || text.trim().length === 0) {
     return {
       code: 'und',
@@ -51,13 +51,15 @@ function detectOne (text) {
  * @param {number} topK Number of top probable languages to return.
  * @returns {Array} A list of probable languages with probabilities.
  */
-function detectMultiple (text, topK = 3) {
+function detectMultiple(text, topK = 3) {
   if (typeof text !== 'string' || text.trim().length === 0) {
-    return [{
-      code: 'und',
-      language: 'Undetermined',
-      probability: 1
-    }]
+    return [
+      {
+        code: 'und',
+        language: 'Undetermined',
+        probability: 1
+      }
+    ]
   }
 
   if (typeof topK !== 'number' || topK <= 0) {
@@ -66,11 +68,13 @@ function detectMultiple (text, topK = 3) {
 
   const results = detectAll(text)
   if (results.length === 0) {
-    return [{
-      code: 'und',
-      language: 'Undetermined',
-      probability: 1
-    }]
+    return [
+      {
+        code: 'und',
+        language: 'Undetermined',
+        probability: 1
+      }
+    ]
   }
   return results.slice(0, topK).map(({ lang, accuracy }) => {
     const code = lang
@@ -83,7 +87,7 @@ function detectMultiple (text, topK = 3) {
  * @param {string} code The ISO2 or ISO3 language code.
  * @returns {string | null} The language name or null if code is not found.
  */
-function getLangName (code) {
+function getLangName(code) {
   if (typeof code !== 'string' || code.trim().length === 0) {
     return null
   }
@@ -102,7 +106,7 @@ function getLangName (code) {
       result = langName(normalizedCode)
     }
 
-    return (result && result.trim().length > 0) ? result : null
+    return result && result.trim().length > 0 ? result : null
   } catch (error) {
     return null
   }
@@ -113,14 +117,14 @@ function getLangName (code) {
  * @param {string} languageName The language name.
  * @returns {string | null} The ISO2 code or null if language name is not found.
  */
-function getISO2FromName (languageName) {
+function getISO2FromName(languageName) {
   if (typeof languageName !== 'string' || languageName.trim().length === 0) {
     return null
   }
 
   if (langNameMap === null) {
     langNameMap = {}
-    supportedLanguages.forEach(iso3 => {
+    supportedLanguages.forEach((iso3) => {
       const name = langName(iso3).toLowerCase()
       const iso2 = toISO2(iso3)
       langNameMap[name] = { iso2, iso3 }

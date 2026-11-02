@@ -81,9 +81,8 @@ struct OcrConfig {
   int recognizerBatchSize{0};
   // <0 leave GGML default, 0 auto-detect physical cores, >0 explicit override.
   int nThreads{0};
-  // Directory that holds dynamic ggml backend shared libraries (libggml-*.so).
-  // Default empty -> ggml_backend_load_all() picks up backends via env / dl
-  // path.
+  // Directory that holds dynamic ggml backend shared libraries, overriding
+  // the ones @qvac/fabric ships. Default empty -> qvac_fabric_load_backends().
   std::string backendsDir;
   // Requested ggml backend device. CPU is the default and is always available;
   // VULKAN / METAL opt in to GPU inference and transparently fall back to CPU

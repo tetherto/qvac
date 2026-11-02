@@ -1,6 +1,6 @@
 # Generate a Windows module-definition (.def) file that exports the qvac-fabric
 # runtime surface (llama / ggml / common / mtmd) from the static libraries that
-# are linked into qvac__fabric.bare. This mirrors the symbol allow-list applied
+# are linked into qvac__fabric-<host>.bare. This mirrors the symbol allow-list applied
 # by symbols.map (ELF version script) and exports.txt (Mach-O exported list) so
 # consumer addons resolve the same llama/ggml/common API against the single
 # shared runtime on every platform.

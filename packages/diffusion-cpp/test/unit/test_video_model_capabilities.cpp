@@ -77,6 +77,17 @@ makeMiniMaxH3Gguf(bool includeAudio = true, bool includeVideo = true) {
   return path;
 }
 
+std::filesystem::path makeMiniMaxH3Safetensors(const std::string& header) {
+  const auto path = std::filesystem::temp_directory_path() /
+                    "qvac-minimax-h3-capabilities.safetensors";
+  std::ofstream output(path, std::ios::binary | std::ios::trunc);
+  EXPECT_TRUE(output.good());
+  write(output, static_cast<uint64_t>(header.size()));
+  output.write(header.data(), static_cast<std::streamsize>(header.size()));
+  output.close();
+  return path;
+}
+
 } // namespace
 
 TEST(VideoModelCapabilities, DetectsWan22Ti2vFromRenamedGgufContents) {
@@ -110,6 +121,33 @@ TEST(VideoModelCapabilities, DoesNotMisidentifySingleH3PatchProjector) {
     std::filesystem::remove(path);
     EXPECT_FALSE(capabilities.isMiniMaxH3);
   }
+}
+
+TEST(VideoModelCapabilities, DetectsMiniMaxH3FromRenamedSafetensorsContents) {
+  const auto path = makeMiniMaxH3Safetensors(
+      R"({"audio_patch_proj.weight":{"dtype":"F16"},"video_patch_proj.weight":{"dtype":"F16"}})");
+  const auto capabilities =
+      qvac_lib_inference_addon_sd::inspectVideoModelCapabilities(path.string());
+  std::filesystem::remove(path);
+
+  EXPECT_TRUE(capabilities.isMiniMaxH3);
+  EXPECT_EQ(capabilities.spatialAlignment, 32);
+  EXPECT_EQ(capabilities.frameCountStride, 17);
+  EXPECT_EQ(capabilities.frameCountOffset, 5);
+}
+
+TEST(VideoModelCapabilities, RejectsIncompleteSafetensorsHeader) {
+  const auto path = makeMiniMaxH3Safetensors(
+      R"({"audio_patch_proj.weight":{},"video_patch_proj.weight":{})");
+  {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    write(output, uint64_t{1024});
+    output << "{}";
+  }
+  const auto capabilities =
+      qvac_lib_inference_addon_sd::inspectVideoModelCapabilities(path.string());
+  std::filesystem::remove(path);
+  EXPECT_FALSE(capabilities.isMiniMaxH3);
 }
 
 TEST(VideoModelCapabilities, FallsBackToWan21CompatibleAlignment) {

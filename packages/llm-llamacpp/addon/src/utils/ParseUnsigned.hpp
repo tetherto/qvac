@@ -1,5 +1,6 @@
 #pragma once
 #include <charconv>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 
@@ -20,6 +21,27 @@ inline unsigned parseUnsignedInRange(
   };
 
   unsigned value = 0;
+  const char* first = raw.data();
+  const char* last = raw.data() + raw.size();
+  auto [ptr, ec] = std::from_chars(first, last, value);
+  if (ec != std::errc{} || ptr != last)
+    return fail();
+  if (value < min || value > max)
+    return fail();
+  return value;
+}
+
+/// 64-bit variant of `parseUnsignedInRange` for byte counts.
+inline uint64_t parseUnsigned64InRange(
+    const std::string& raw, uint64_t min, uint64_t max,
+    const std::string& option) {
+  const auto fail = [&]() -> uint64_t {
+    throw std::invalid_argument(
+        option + " must be an integer between " + std::to_string(min) +
+        " and " + std::to_string(max) + ", got: \"" + raw + "\"");
+  };
+
+  uint64_t value = 0;
   const char* first = raw.data();
   const char* last = raw.data() + raw.size();
   auto [ptr, ec] = std::from_chars(first, last, value);

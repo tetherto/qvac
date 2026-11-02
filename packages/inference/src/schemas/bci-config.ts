@@ -112,7 +112,7 @@ export const bciConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Android only: override the default ggml backend prebuilds directory. Defaults to `<addon>/prebuilds`.'
+      'Android and Linux: the directory scanned, as given, for the ggml backend modules. Defaults to the directory next to the loaded addon module.'
     ),
   embedderModelSrc: modelSrcInputSchema
     .optional()

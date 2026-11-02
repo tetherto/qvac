@@ -23,7 +23,7 @@ if(BUILD_FUZZING AND NOT BUILD_TESTING)
 endif()
 
 # ggml runtime is the shared @qvac/fabric prebuild (dynamically linked, loaded
-# once per process); sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE. Needed here
+# once per process); sets qvac_fabric_target. Needed here
 # for the production module AND to stage fabric next to the unit-test binary.
 qvac_addon_use_fabric()
 
@@ -36,9 +36,11 @@ if(NOT BUILD_FUZZING)
 
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ClassificationModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/mobilenet/ClassificationModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePreprocessor.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MobileNetGraph.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/mobilenet/MobileNetGraph.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp
   )
 
   target_sources(
@@ -57,7 +59,7 @@ if(NOT BUILD_FUZZING)
 
   qvac_addon_link_fabric(${classification-ggml} ${qvac_fabric_target})
 
-  qvac_addon_finalize(${classification-ggml} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+  qvac_addon_finalize(${classification-ggml})
 endif()
 
 if(BUILD_TESTING OR BUILD_FUZZING)

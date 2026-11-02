@@ -7,7 +7,8 @@ const ImageClassifier = require('..')
 async function main() {
   const imagePath = path.join(__dirname, '..', 'test', 'images', 'meal_1.jpg')
   const image = fs.readFileSync(imagePath)
-  const classifier = new ImageClassifier()
+  const modelPath = path.join(__dirname, '..', 'weights', 'mobilenetv3_3class_v3_fp16.gguf')
+  const classifier = new ImageClassifier({ modelPath })
 
   try {
     await classifier.load()

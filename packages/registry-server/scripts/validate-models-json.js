@@ -7,7 +7,25 @@ const { z } = require('zod')
 const { parseCanonicalSource } = require('../lib/source-helpers')
 const { baseModelFields } = require('../lib/model-schema')
 
-const ENGINE_PATTERN = /^@qvac\/[a-z][a-z0-9-]*$/
+// Generated from the canonical engine definitions; shipped with this package.
+const {
+  engineToAddon,
+  legacyEngineToCanonical,
+  legacyRegistryEngineRules
+} = require('../lib/generated/engine-manifest.json')
+
+function hasSupportedEngine(model) {
+  if (Object.hasOwn(engineToAddon, model.engine)) return true
+  if (Object.hasOwn(legacyEngineToCanonical, model.engine)) return true
+  if (!Object.hasOwn(legacyRegistryEngineRules, model.engine)) return false
+  const matches = new Set(
+    legacyRegistryEngineRules[model.engine]
+      .filter((rule) => model.tags?.includes(rule.tag))
+      .map((rule) => rule.engine)
+  )
+  return matches.size === 1
+}
+
 const S3_DATE_FOLDER_PATTERN = /\/\d{4}-\d{2}-\d{2}\//
 const HF_COMMIT_HASH_PATTERN = /huggingface\.co\/.+\/(resolve|blob)\/([a-f0-9]{40})\//
 
@@ -76,11 +94,6 @@ const ciFields = {
         'HuggingFace source URLs must pin to a specific commit hash, not a branch name. Use https://huggingface.co/<org>/<repo>/resolve/<full-commit-sha>/<file>'
     }),
 
-  engine: baseModelFields.engine.regex(
-    ENGINE_PATTERN,
-    'Invalid engine format (expected @qvac/<engine-name>)'
-  ),
-
   replacedBy: z
     .string()
     .refine(SOURCE_REFINE, { message: 'replacedBy must be a valid source URL' })
@@ -88,17 +101,27 @@ const ciFields = {
 }
 
 function createModelSchema(validLicenses) {
-  return z.object({
-    ...ciFields,
-    licenseId: ciFields.licenseId.refine(
-      (val) => validLicenses.has(val),
-      (val) => ({ message: `Unknown license: "${val}" (not found in licenses.json)` })
-    )
-  })
+  return z
+    .object({
+      ...ciFields,
+      licenseId: ciFields.licenseId.refine(
+        (val) => validLicenses.has(val),
+        (val) => ({ message: `Unknown license: "${val}" (not found in licenses.json)` })
+      )
+    })
+    .refine(hasSupportedEngine, {
+      path: ['engine'],
+      message:
+        'Unsupported engine: use a supported canonical engine or recognized legacy package identifier'
+    })
 }
 
 function createDeprecatedModelSchema() {
-  return z.object(ciFields)
+  return z.object(ciFields).refine(hasSupportedEngine, {
+    path: ['engine'],
+    message:
+      'Unsupported engine: use a supported canonical engine or recognized legacy package identifier'
+  })
 }
 
 async function loadValidLicenses() {

@@ -75,7 +75,7 @@ This matters most for `tensor`. qvac-fabric's tensor path does no filtering of i
 
 **`'tensor'` is not selectable through the SDK.** `@qvac/inference`'s `llamacppCompletionConfigSchema` does not yet include `'tensor'`, so an SDK `loadModel` call with `'tensor'` fails Zod validation before it reaches the addon. For now the mode is reachable only through direct addon `loadModel`. Widening the SDK schema is separate SDK-pod work.
 
-qvac-fabric documents `LLAMA_SPLIT_MODE_TENSOR` as **EXPERIMENTAL** and expects good performance primarily on multi-GPU CUDA. No backend qvac-fabric currently builds provides a tuned all-reduce, so they use the meta backend's generic fallback reduction. It is correct, but do not assume it is faster than `layer` without measuring.
+qvac-fabric documents `LLAMA_SPLIT_MODE_TENSOR` as **EXPERIMENTAL** and expects good performance primarily on multi-GPU CUDA. CUDA is the only backend here with its own all-reduce. The shipped CUDA build has no NCCL, so it uses fabric's internal CUDA all-reduce for two GPUs and the meta backend's generic reduction for any other count. Every other backend always takes the generic reduction. It is correct, but do not assume it is faster than `layer` without measuring.
 
 The second column is the backend allowlist: whether this package will run on a device from that family at all, independent of whether qvac-fabric builds it today.
 
@@ -84,16 +84,16 @@ The second column is the backend allowlist: whether this package will run on a d
 | Vulkan  | Yes | Meta device, generic all-reduce |
 | Metal / MTL | Yes | Meta device, generic all-reduce |
 | OpenCL  | Yes, the Adreno path | Meta device, generic all-reduce |
-| CUDA    | Yes, but qvac-fabric does not build it yet | Backend-specific all-reduce, the tuned path upstream vouches for |
+| CUDA    | Yes | Backend-specific all-reduce for two GPUs, generic otherwise. No NCCL in the shipped build |
 | RPC     | Yes, but qvac-fabric does not build it yet | Meta device, generic all-reduce |
 | HIP / ROCm | **No**, rejected by the allowlist | n/a |
 | SYCL    | **No**, rejected by the allowlist | n/a |
 | MUSA    | **No**, rejected by the allowlist | n/a |
 | anything unrecognised | **No**, rejected by the allowlist | n/a |
 
-"Generic all-reduce" means the meta backend reduces with ordinary ggml graph ops rather than a backend-native collective. Every backend currently reachable here takes that path.
+"Generic all-reduce" means the meta backend reduces with ordinary ggml graph ops rather than a backend-native collective. Every backend reachable here takes that path except CUDA with two GPUs.
 
-CUDA and RPC are admitted ahead of the qvac-fabric builds that will ship them, so that arrival needs no change in this package. Until then they simply never appear in the registry. HIP/ROCm is rejected deliberately: `vla-ggml` prefers ROCm on purpose for its own reasons, but this package has never been validated on it, and qvac-fabric can now ship it.
+CUDA is built by qvac-fabric on supported Linux and Windows targets. RPC is admitted ahead of a qvac-fabric build that ships it, so it simply does not appear in the registry today. HIP/ROCm is rejected deliberately: `vla-ggml` prefers ROCm on purpose for its own reasons, but this package has never been validated on it, and qvac-fabric can now ship it.
 
 ### `tensor-split`
 

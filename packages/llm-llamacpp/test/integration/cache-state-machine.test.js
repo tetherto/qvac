@@ -86,9 +86,28 @@ function normalizeStats(rawStats = {}, extra = {}) {
   }
 }
 
+// Cached turns resend the whole conversation: the base prompt, the answer it
+// got, then the follow-up.
 function buildPrompt(options = {}) {
-  if (options.followUp) return [FOLLOW_UP_MESSAGE]
+  if (options.followUp) {
+    return [...BASE_PROMPT, { role: 'assistant', content: options.answer || '' }, FOLLOW_UP_MESSAGE]
+  }
   return [...BASE_PROMPT]
+}
+
+// A full-history follow-up decodes only what follows the prefix it shares with
+// the cache, so what it reused is what the cache holds beyond that.
+function assertFollowUpReusesCache(t, firstStats, followUpStats) {
+  const reused =
+    followUpStats.CacheTokens - followUpStats.promptTokens - followUpStats.generatedTokens
+  t.ok(
+    reused > 0 && reused <= firstStats.CacheTokens,
+    `follow-up reused ${reused} cached tokens of ${firstStats.CacheTokens} (cache=${followUpStats.CacheTokens}, prompt=${followUpStats.promptTokens}, generated=${followUpStats.generatedTokens})`
+  )
+  t.ok(
+    followUpStats.CacheTokens > firstStats.CacheTokens,
+    'the cache now holds the whole conversation'
+  )
 }
 
 function buildLongPrefillPrompt() {
@@ -154,9 +173,11 @@ async function runAndCollectStats(model, prompt, runOptions) {
   cleanupRunOptionsCache(runOptions)
   const response = await model.run(prompt, runOptions)
   let chunkCount = 0
+  const chunks = []
 
-  let chain = response.onUpdate(() => {
+  let chain = response.onUpdate((data) => {
     chunkCount++
+    chunks.push(data)
   })
 
   if (typeof response.onError === 'function') {
@@ -166,7 +187,7 @@ async function runAndCollectStats(model, prompt, runOptions) {
   }
 
   await chain.await()
-  return normalizeStats(response.stats, { _chunkCount: chunkCount })
+  return normalizeStats(response.stats, { _chunkCount: chunkCount, _output: chunks.join('') })
 }
 
 async function runAndCancelAfterFirstToken(model, prompt, runOptions) {
@@ -231,15 +252,13 @@ safeTest('cacheKey stores tokens but stays under n_predict', { timeout: 600_000 
   const firstStats = await runAndCollectStats(model, buildPrompt(), cacheOpts(sessionName))
   const secondStats = await runAndCollectStats(
     model,
-    buildPrompt({ followUp: true }),
+    buildPrompt({ followUp: true, answer: firstStats._output }),
     cacheOpts(sessionName)
   )
-  const delta = toNumber(secondStats.CacheTokens) - toNumber(firstStats.CacheTokens)
   t.ok(firstStats.CacheTokens > 0, 'session usage records cache tokens')
   assertCacheMatchesTokens(t, firstStats, 'session run caches prompt + generated tokens')
   t.ok(firstStats.ppTPS > 0, 'ppTPS reported on completed run')
-  const expectedDelta = secondStats.promptTokens + secondStats.generatedTokens
-  t.is(delta, expectedDelta, 'cache delta equals follow-up prompt + generations')
+  assertFollowUpReusesCache(t, firstStats, secondStats)
   t.ok(
     secondStats.generatedTokens <= Number(config.n_predict),
     'generated tokens respect n_predict limit'
@@ -247,19 +266,27 @@ safeTest('cacheKey stores tokens but stays under n_predict', { timeout: 600_000 
 })
 
 safeTest(
-  'Cancelling after first token keeps cache growth bounded',
+  'Cancelling after first token commits the streamed prefix',
   { timeout: 600_000 },
   async (t) => {
     const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
     const sessionName = path.join(dirPath, 'cache-cancel.bin')
-    const warmStats = await runAndCollectStats(model, buildPrompt(), cacheOpts(sessionName))
+    // Warm with a prefill-only turn so the baseline holds exactly the prompt.
+    const warmStats = await runAndCollectStats(model, buildPrompt(), {
+      ...cacheOpts(sessionName),
+      prefill: true
+    })
     const stats = await runAndCancelAfterFirstToken(model, buildPrompt(), cacheOpts(sessionName))
     const delta = toNumber(stats.CacheTokens) - toNumber(warmStats.CacheTokens)
-    // Cancel = "request never happened": cache is rolled back to the
-    // pre-request cursor, so delta versus the warm baseline must be ~0
-    // (allow ±1 for BOS/EOS bookkeeping). Prompt / generated counters
-    // still reflect work the model performed.
-    t.ok(Math.abs(delta) <= 1, `cache delta (${delta}) ~0 after cancel rollback`)
+    // Cancel commits what the caller received: the streamed tokens stay
+    // resident on top of the warm prompt, like a prediction-limit stop.
+    // Allow ±1 for the final prompt token the addon re-decodes to refresh
+    // logits on a fully cached prompt.
+    t.ok(delta > 0, `cache grew by ${delta} after a cancelled generation`)
+    t.ok(
+      Math.abs(delta - stats.generatedTokens) <= 1,
+      `cache delta (${delta}) matches the streamed tokens (${stats.generatedTokens})`
+    )
     const threshold = 20
     t.ok(
       stats.generatedTokens > 0,
@@ -318,13 +345,15 @@ safeTest(
     const stats = await runWithPrefillCancellation(
       model,
       buildLongPrefillPrompt(),
-      cacheOpts(sessionName, { saveCacheToDisk: true })
+      cacheOpts(sessionName)
     )
     t.ok(stats._cancelRequested, 'cancel requested while prefill response was still active')
     t.is(stats._chunkCount, 0, 'prefill-only cancellation emits no chunks')
     t.is(stats.generatedTokens, 0, 'prefill-only cancellation generates no tokens')
     t.is(stats.TTFT, 0, 'prefill-only cancellation has no time-to-first-token')
     t.is(stats.TPS, 0, 'prefill-only cancellation has no generation TPS')
+    // A cancel during prefill rolls back to the state before the prompt was
+    // sent: the caller received nothing, so nothing is kept or persisted.
     t.is(stats.CacheTokens, 0, 'cancelled prefill rolls cache back to the pre-request cursor')
     t.absent(fs.existsSync(sessionName), 'cancelled prefill does not persist cache to disk')
   }
@@ -343,7 +372,7 @@ safeTest(
     const stats = await runWithPrefillCancellation(
       model,
       buildLongPrefillPrompt(),
-      cacheOpts(sessionName, { saveCacheToDisk: true }),
+      cacheOpts(sessionName),
       true
     )
     t.ok(stats._cancelRequested, 'cancel requested while prefill response was still active')
@@ -351,6 +380,8 @@ safeTest(
     t.is(stats.generatedTokens, 0, 'prefill-only cancellation generates no tokens')
     t.is(stats.TTFT, 0, 'prefill-only cancellation has no time-to-first-token')
     t.is(stats.TPS, 0, 'prefill-only cancellation has no generation TPS')
+    // A cancel during prefill rolls back to the state before the prompt was
+    // sent: the caller received nothing, so nothing is kept or persisted.
     t.is(stats.CacheTokens, 0, 'cancelled prefill rolls cache back to the pre-request cursor')
     t.absent(fs.existsSync(sessionName), 'cancelled prefill does not persist cache to disk')
   }
@@ -378,16 +409,11 @@ safeTest(
 
     const reCachedStats = await runAndCollectStats(
       model,
-      buildPrompt({ followUp: true }),
+      buildPrompt({ followUp: true, answer: cachedStats._output }),
       cacheOpts(sessionName)
     )
     t.ok(reCachedStats.CacheTokens > 0, 'cache can be re-enabled with cacheKey')
-    const delta = toNumber(reCachedStats.CacheTokens) - toNumber(initialCacheTokens)
-    const expectedDelta = reCachedStats.promptTokens + reCachedStats.generatedTokens
-    t.ok(
-      Math.abs(delta - expectedDelta) <= 1,
-      `cache delta (${delta}) approximately equals follow-up tokens (${expectedDelta})`
-    )
+    assertFollowUpReusesCache(t, { CacheTokens: initialCacheTokens }, reCachedStats)
   }
 )
 
@@ -405,16 +431,11 @@ safeTest('Cache cleared when switching to different cacheKey', { timeout: 600_00
 
   const backToFirstStats = await runAndCollectStats(
     model,
-    buildPrompt({ followUp: true }),
+    buildPrompt({ followUp: true, answer: firstStats._output }),
     cacheOpts(session1)
   )
   t.ok(backToFirstStats.CacheTokens > 0, 'switching back to first cache works')
-  const delta = toNumber(backToFirstStats.CacheTokens) - toNumber(firstCacheInitial)
-  const expectedDelta = backToFirstStats.promptTokens + backToFirstStats.generatedTokens
-  t.ok(
-    Math.abs(delta - expectedDelta) <= 1,
-    `cache delta (${delta}) approximately equals follow-up tokens (${expectedDelta})`
-  )
+  assertFollowUpReusesCache(t, { CacheTokens: firstCacheInitial }, backToFirstStats)
 })
 
 safeTest(
@@ -454,16 +475,11 @@ safeTest(
 
     const reCachedStats = await runAndCollectStats(
       model,
-      buildPrompt({ followUp: true }),
+      buildPrompt({ followUp: true, answer: cachedStats._output }),
       cacheOpts(sessionName)
     )
     t.ok(reCachedStats.CacheTokens > 0, 'cache can be re-enabled after being cleared')
-    const delta = toNumber(reCachedStats.CacheTokens) - toNumber(initialCacheTokens)
-    const expectedDelta = reCachedStats.promptTokens + reCachedStats.generatedTokens
-    t.ok(
-      Math.abs(delta - expectedDelta) <= 1,
-      `cache delta (${delta}) approximately equals follow-up tokens (${expectedDelta})`
-    )
+    assertFollowUpReusesCache(t, { CacheTokens: initialCacheTokens }, reCachedStats)
   }
 )
 
@@ -509,10 +525,7 @@ safeTest(
   async (t) => {
     const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
     const sessionName = path.join(dirPath, 'opts-cache-basic.bin')
-    const stats = await runAndCollectStats(model, [...BASE_PROMPT], {
-      cacheKey: sessionName,
-      saveCacheToDisk: true
-    })
+    const stats = await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: sessionName })
     t.ok(stats.CacheTokens > 0, `CacheTokens (${stats.CacheTokens}) > 0 with cacheKey option`)
     t.ok(stats.promptTokens > 0, 'prompt tokens tracked')
     t.ok(stats.generatedTokens > 0, 'generated tokens tracked')
@@ -523,19 +536,15 @@ safeTest('Options: follow-up with same cacheKey reuses cache', { timeout: 600_00
   const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'opts-cache-followup.bin')
 
-  const firstStats = await runAndCollectStats(model, [...BASE_PROMPT], {
-    cacheKey: sessionName,
-    saveCacheToDisk: true
-  })
+  const firstStats = await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: sessionName })
   t.ok(firstStats.CacheTokens > 0, 'first run has CacheTokens')
 
-  const secondStats = await runAndCollectStats(model, [FOLLOW_UP_MESSAGE], {
-    cacheKey: sessionName,
-    saveCacheToDisk: true
-  })
-  const delta = toNumber(secondStats.CacheTokens) - toNumber(firstStats.CacheTokens)
-  const expectedDelta = secondStats.promptTokens + secondStats.generatedTokens
-  t.is(delta, expectedDelta, `cache delta (${delta}) equals follow-up tokens (${expectedDelta})`)
+  const secondStats = await runAndCollectStats(
+    model,
+    buildPrompt({ followUp: true, answer: firstStats._output }),
+    { cacheKey: sessionName }
+  )
+  assertFollowUpReusesCache(t, firstStats, secondStats)
 })
 
 safeTest(
@@ -546,13 +555,15 @@ safeTest(
     const session1 = path.join(dirPath, 'opts-switch-1.bin')
     const session2 = path.join(dirPath, 'opts-switch-2.bin')
 
-    await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: session1, saveCacheToDisk: true })
+    await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: session1 })
+    t.absent(fs.existsSync(session1), 'nothing is written while the session is active')
 
     const secondStats = await runAndCollectStats(model, [{ role: 'user', content: 'New topic.' }], {
-      cacheKey: session2,
-      saveCacheToDisk: true
+      cacheKey: session2
     })
     t.ok(secondStats.CacheTokens > 0, 'second cache session has CacheTokens')
+    t.ok(fs.existsSync(session1), 'the switch wrote the previous session to its file')
+    t.absent(fs.existsSync(session2), 'the active session is not written')
   }
 )
 
@@ -572,50 +583,69 @@ safeTest('Validation: cacheKey must be a string', { timeout: 600_000 }, async (t
   }
 })
 
-safeTest('Validation: saveCacheToDisk must be a boolean', { timeout: 600_000 }, async (t) => {
+safeTest('Validation: removed saveCacheToDisk is rejected', { timeout: 600_000 }, async (t) => {
   const { model } = await setupModel(t)
-  const cases = [123, 'path.bin', [], {}]
-  for (const bad of cases) {
+  for (const value of [true, false]) {
     try {
-      await model.run([...BASE_PROMPT], { saveCacheToDisk: bad })
-      t.fail('should have thrown for saveCacheToDisk: ' + JSON.stringify(bad))
+      await model.run([...BASE_PROMPT], { saveCacheToDisk: value })
+      t.fail('should have thrown for saveCacheToDisk: ' + value)
     } catch (err) {
       t.ok(
-        /saveCacheToDisk must be a boolean/.test(err.message),
-        'rejects saveCacheToDisk: ' + JSON.stringify(bad)
+        /saveCacheToDisk was removed/.test(err.message) &&
+          /saveCache\(cacheKey\)/.test(err.message),
+        'rejects saveCacheToDisk: ' + value + ' and points to saveCache()'
+      )
+    }
+  }
+})
+
+safeTest('Validation: ephemeral must be a boolean', { timeout: 600_000 }, async (t) => {
+  const { model } = await setupModel(t)
+  for (const bad of [1, 'yes', [], {}]) {
+    try {
+      await model.run([...BASE_PROMPT], { ephemeral: bad })
+      t.fail('should have thrown for ephemeral: ' + JSON.stringify(bad))
+    } catch (err) {
+      t.ok(
+        /ephemeral must be a boolean/.test(err.message),
+        'rejects ephemeral: ' + JSON.stringify(bad)
       )
     }
   }
 })
 
 safeTest(
-  'Options: saveCacheToDisk false does not write to disk',
+  'Options: a cached run writes no file until saveCache()',
   { timeout: 600_000 },
   async (t) => {
     const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
-    const sessionName = path.join(dirPath, 'opts-saveCacheToDisk-false.bin')
+    const sessionName = path.join(dirPath, 'opts-save-cache-explicit.bin')
 
-    const stats = await runAndCollectStats(model, [...BASE_PROMPT], {
-      cacheKey: sessionName,
-      saveCacheToDisk: false
-    })
+    const stats = await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: sessionName })
     t.ok(stats.CacheTokens > 0, 'cache active in RAM')
-    t.absent(fs.existsSync(sessionName), 'saveCacheToDisk: false does not write file')
+    t.absent(fs.existsSync(sessionName), 'a cached run does not write its file')
+
+    await model.saveCache(sessionName)
+    t.ok(fs.existsSync(sessionName), 'saveCache() writes the file')
+    t.ok(fs.statSync(sessionName).size > 0, 'the written file is non-empty')
+    const written = fs.statSync(sessionName).mtimeMs
+    await model.saveCache(sessionName)
+    t.is(fs.statSync(sessionName).mtimeMs, written, 'a current file is not written again')
   }
 )
 
-safeTest(
-  'Options: saveCacheToDisk true with no cacheKey is a no-op',
-  { timeout: 600_000 },
-  async (t) => {
-    const { model } = await setupModel(t)
-    const stats = await runAndCollectStats(model, [...BASE_PROMPT], { saveCacheToDisk: true })
-    t.is(stats.CacheTokens, 0, 'no cacheKey means no cache even with saveCacheToDisk: true')
-  }
-)
+safeTest('saveCache() rejects a key nothing is cached under', { timeout: 600_000 }, async (t) => {
+  const { model, dirPath } = await setupModel(t)
+  await t.exception(
+    model.saveCache(path.join(dirPath, 'never-cached.bin')),
+    /no conversation is cached/
+  )
+  // TypeError is a native error, which plain t.exception rethrows.
+  await t.exception.all(model.saveCache(''), /non-empty string/)
+})
 
 safeTest(
-  'Options: prefill with saveCacheToDisk persists cache file',
+  'Options: prefill then saveCache() persists cache file',
   { timeout: 600_000 },
   async (t) => {
     const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
@@ -623,36 +653,58 @@ safeTest(
 
     const stats = await runAndCollectStats(model, [SYSTEM_MESSAGE], {
       cacheKey: sessionName,
-      saveCacheToDisk: true,
       prefill: true
     })
+    await model.saveCache(sessionName)
 
     t.is(stats.generatedTokens, 0, 'prefill reports zero generated tokens')
     t.ok(stats.CacheTokens > 0, 'prefill ingests prompt into cache')
-    t.ok(fs.existsSync(sessionName), 'prefill + saveCacheToDisk writes cache file to disk')
+    t.ok(fs.existsSync(sessionName), 'saveCache() after a prefill writes the cache file')
     t.ok(fs.statSync(sessionName).size > 0, 'persisted prefill cache file is non-empty')
   }
 )
 
 safeTest(
-  'saveCacheToDisk to unwritable path rejects with UnableToSaveSessionFile',
+  'saveCache() to an unwritable path rejects and keeps the conversation',
   { timeout: 600_000 },
   async (t) => {
     const { model } = await setupModel(t)
-    const badPath = path.join(os.tmpdir(), 'qvac-nonexistent-dir-' + Date.now(), 'session.bin')
-    try {
-      const response = await model.run([...BASE_PROMPT], {
-        cacheKey: badPath,
-        saveCacheToDisk: true
-      })
-      await response.await()
-      t.fail('should have thrown on unwritable cache path')
-    } catch (err) {
-      t.ok(
-        /failed to save session file|failed to promote tmp file/.test(err.message),
-        'rejection message identifies the save failure'
-      )
-    }
+    const badDir = path.join(os.tmpdir(), 'qvac-nonexistent-dir-' + Date.now())
+    const badPath = path.join(badDir, 'session.bin')
+    t.teardown(() => fs.rmSync(badDir, { recursive: true, force: true }))
+    const stats = await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: badPath })
+    t.ok(stats.CacheTokens > 0, 'the run itself succeeds')
+    await t.exception(
+      model.saveCache(badPath),
+      /failed to save session file|failed to promote tmp file/,
+      'rejection message identifies the save failure'
+    )
+    fs.mkdirSync(badDir, { recursive: true })
+    await model.saveCache(badPath)
+    t.ok(fs.existsSync(badPath), 'the retry writes the conversation kept in memory')
+  }
+)
+
+safeTest(
+  'Options: ephemeral conversation is never written automatically',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, dirPath } = await setupModel(t, { n_predict: '64', ctx_size: '4096' })
+    const session1 = path.join(dirPath, 'opts-ephemeral-1.bin')
+    const session2 = path.join(dirPath, 'opts-ephemeral-2.bin')
+
+    await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: session1, ephemeral: true })
+    await runAndCollectStats(model, [{ role: 'user', content: 'New topic.' }], {
+      cacheKey: session2
+    })
+    t.absent(
+      fs.existsSync(session1),
+      'the switch dropped the ephemeral session instead of writing it'
+    )
+
+    await model.unload()
+    t.ok(fs.existsSync(session2), 'the unload wrote the non-ephemeral session')
+    t.absent(fs.existsSync(session1), 'the ephemeral session was never written')
   }
 )
 
@@ -667,17 +719,13 @@ safeTest(
     // performed once per session before any user turns.
     const primeStats = await runAndCollectStats(model, [SYSTEM_MESSAGE], {
       cacheKey: sessionName,
-      saveCacheToDisk: true,
       prefill: true
     })
 
     // Real-world turn: send the full conversation, system prompt included.
     // The addon should prefix-match against the primed cache and only evaluate
     // the new user message.
-    const turnStats = await runAndCollectStats(model, [...BASE_PROMPT], {
-      cacheKey: sessionName,
-      saveCacheToDisk: true
-    })
+    const turnStats = await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: sessionName })
 
     const delta = toNumber(turnStats.CacheTokens) - toNumber(primeStats.CacheTokens)
     const expectedDelta = turnStats.promptTokens + turnStats.generatedTokens

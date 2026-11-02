@@ -1,0 +1,30 @@
+schema: spec-driven
+
+# Project context. Shown to the AI when creating any artifact.
+# Kept as a pointer, not a copy: the project context is owned by the package's
+# agent guidance and duplicating it here would let the two drift apart.
+context: |
+  This OpenSpec project is rooted at `docs/website` inside the QVAC monorepo. The repo root is two
+  levels up from this file's project root.
+
+  Before generating any artifact, read `AGENTS.md` and `README.md` in this project root. Together
+  they are the single source of truth for this project's context — authoring rules, repository
+  layout, framework, build, and deployment behavior — and it is maintained there rather than here.
+
+  Restated inline, because these are the constraints most costly to miss:
+  - All generated text MUST be written in English, including when the source task is written in
+    another language.
+  - The site is a 100% static export: every HTML page is built into `docs/website/out/` and served
+    from a CDN. There is no server-side runtime, so no artifact may assume one.
+  - Content lives in MDX under `docs/website/content/`. Everything else under `docs/website/` is
+    website source code.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

@@ -31,6 +31,11 @@ function hasEngineType(model: unknown): model is EngineAwareModel {
   )
 }
 
+/** The loaded addon's engine (`TTSGgml#getEngineType()`), when it reports one. */
+export function getTtsEngineType(model: unknown): string | undefined {
+  return hasEngineType(model) ? model.getEngineType() : undefined
+}
+
 export function getParlerJobOptions(request: ParlerJobOptionsRequest): ParlerJobOptions {
   return {
     ...(request.description !== undefined ? { description: request.description } : {}),
@@ -61,7 +66,7 @@ export function assertParlerJobOptionsSupported(
   const setKeys = Object.keys(options)
   if (setKeys.length === 0) return
 
-  const engine = hasEngineType(model) ? model.getEngineType() : undefined
+  const engine = getTtsEngineType(model)
   if (engine === 'parler') return
 
   if (engine === 'cosyvoice3') {

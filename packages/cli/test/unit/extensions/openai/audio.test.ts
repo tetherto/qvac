@@ -8,6 +8,7 @@ import {
   resolveSampleRate,
   int16SamplesToBuffer,
   buildWavHeader,
+  buildStreamingWavHeader,
   buildWavBuffer,
   speechAliasKey
 } from '@/serve/extensions/openai/audio'
@@ -181,6 +182,16 @@ describe('buildWavHeader', () => {
     assert.equal(header.readUInt32LE(40), 1000)
     assert.equal(header.readUInt32LE(4), 36 + 1000)
     assert.equal(header.readUInt32LE(28), 44100 * 2)
+  })
+})
+
+describe('buildStreamingWavHeader', () => {
+  it('marks both size fields as unknown length', () => {
+    const header = buildStreamingWavHeader(24000)
+    assert.equal(header.length, 44)
+    assert.equal(header.readUInt32LE(4), 0xffffffff)
+    assert.equal(header.readUInt32LE(40), 0xffffffff)
+    assert.equal(header.readUInt32LE(24), 24000)
   })
 })
 

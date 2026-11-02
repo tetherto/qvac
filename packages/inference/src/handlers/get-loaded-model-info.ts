@@ -5,7 +5,7 @@ import type {
 } from '@/schemas/index'
 import { getModelEntry } from '@/runtime/model-registry'
 import { getPlugin } from '@/plugins/registry'
-import { detectToolDialectFromName } from '@/utils/tools/index'
+import { detectToolDialect } from '@/utils/tool-integration'
 import { ModelNotFoundError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 
@@ -31,7 +31,6 @@ export function handleGetLoadedModelInfo(
   const handlers = plugin ? Object.keys(plugin.handlers) : []
 
   const fitProbe = entry.local.fitProbe
-  const probeRan = fitProbe !== undefined && fitProbe.reason !== 'disabled'
 
   const info: LoadedModelInfo = {
     modelId: entry.id,
@@ -42,11 +41,10 @@ export function handleGetLoadedModelInfo(
     ...(plugin && { addonPackage: plugin.addonPackage }),
     ...(entry.local.name && { name: entry.local.name }),
     ...(entry.local.path && { path: entry.local.path }),
-    // Same detection the completion normalizer uses, so callers see the dialect it parses.
     ...(handlers.includes('completionStream') && {
-      toolDialect: detectToolDialectFromName(entry.local.name, entry.local.path)
+      toolDialect: detectToolDialect(modelId)
     }),
-    ...(probeRan && { fitProbe })
+    ...(fitProbe !== undefined && { fitProbe })
   }
 
   return { type: 'getLoadedModelInfo', info }

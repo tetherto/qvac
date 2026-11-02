@@ -2,18 +2,18 @@
 
 Text-to-speech with Supertonic 3 (GGML). `text_to_speech` is a server-stream;
 in non-stream mode it yields the full audio as one frame. Samples come back as
-int16 PCM values, written here to a WAV with the stdlib `wave` module (the JS
-example's `createWav`/`playAudio` helpers).
+int16 PCM values. The helpers below, ported from the JS example's `utils`, save
+them to a WAV and play it through ffplay.
 
 RUN: python examples/text_to_speech.py
 """
 
 from __future__ import annotations
 
-import array
 import asyncio
+import struct
+import subprocess
 import sys
-import wave
 
 from tetherto.qvac_sdk import (
     Client,
@@ -24,6 +24,8 @@ from tetherto.qvac_sdk import (
 )
 from tetherto.qvac_sdk.models import TTS_MULTILINGUAL_SUPERTONIC3_Q8_0
 
+# Only a fallback: the engine reports the rate it actually produced, and
+# `outputSampleRate` (plus the LavaSR enhancer) can move it off this default.
 SUPERTONIC_SAMPLE_RATE = 44100
 
 
@@ -38,13 +40,58 @@ def print_progress(p) -> None:
         print(file=sys.stderr)
 
 
-def write_wav(samples, sample_rate, path) -> None:
-    pcm = array.array("h", (max(-32768, min(32767, int(s))) for s in samples))
-    with wave.open(path, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(sample_rate)
-        w.writeframes(pcm.tobytes())
+def create_wav_header(data_length: int, sample_rate: int) -> bytes:
+    """Create a WAV header for 16-bit mono PCM audio."""
+    return (
+        b"RIFF"
+        + struct.pack("<I", 36 + data_length)
+        + b"WAVE"
+        + b"fmt "
+        + struct.pack("<IHHIIHH", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16)
+        + b"data"
+        + struct.pack("<I", data_length)
+    )
+
+
+def int16_array_to_buffer(samples) -> bytes:
+    """Convert int16 PCM samples to little-endian bytes."""
+    return struct.pack(
+        f"<{len(samples)}h",
+        *(max(-32768, min(32767, round(s))) for s in samples),
+    )
+
+
+def create_wav(audio_buffer, sample_rate: int, filename: str) -> None:
+    """Create and save a WAV file."""
+    audio_data = int16_array_to_buffer(audio_buffer)
+    with open(filename, "wb") as f:
+        f.write(create_wav_header(len(audio_data), sample_rate) + audio_data)
+    print(f"▸ WAV file saved as: {filename}")
+
+
+def play_audio(audio_buffer: bytes) -> None:
+    """Play a WAV buffer by streaming it into ffplay over stdin."""
+    try:
+        result = subprocess.run(
+            [
+                "ffplay",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-autoexit",
+                "-nodisp",
+                "-i",
+                "pipe:0",
+            ],
+            input=audio_buffer,
+            check=False,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "ffplay not found on PATH. Install ffmpeg (ffplay ships with it) and retry."
+        ) from None
+    if result.returncode != 0:
+        raise RuntimeError(f"ffplay exited with code {result.returncode}")
 
 
 async def main() -> int:
@@ -71,8 +118,12 @@ async def main() -> int:
                     "type": "textToSpeech",
                     "modelId": model_id,
                     "text": (
-                        "QVAC SDK is the canonical entry point to QVAC. It provides all "
-                        "QVAC capabilities through a unified interface."
+                        "QVAC SDK is the canonical entry point to QVAC. Written in "
+                        "TypeScript, it provides all QVAC capabilities through a "
+                        "unified interface while also abstracting away the "
+                        "complexity of running your application in a JS environment "
+                        "other than Bare. Supported JS environments include Bare, "
+                        "Node.js, Expo and Bun."
                     ),
                     "inputType": "text",
                     "stream": False,
@@ -80,13 +131,21 @@ async def main() -> int:
             )
 
             samples: list[float] = []
+            sample_rate = None
             async for response in text_to_speech(t, request):
                 samples.extend(response.buffer)
+                if response.sample_rate is not None:
+                    sample_rate = response.sample_rate
+            sample_rate = int(sample_rate or SUPERTONIC_SAMPLE_RATE)
             print(f"▸ TTS complete. Total samples: {len(samples)}")
 
-            out = "supertonic-output.wav"
-            write_wav(samples, SUPERTONIC_SAMPLE_RATE, out)
-            print(f"▸ Audio saved to {out}")
+            print("▸ Saving audio to file...")
+            create_wav(samples, sample_rate, "supertonic-output.wav")
+            print("▸ Audio saved to supertonic-output.wav")
+
+            print("▸ Playing audio...")
+            audio_data = int16_array_to_buffer(samples)
+            play_audio(create_wav_header(len(audio_data), sample_rate) + audio_data)
 
             await unload_model(t, model_id)
             print("▸ Model unloaded")

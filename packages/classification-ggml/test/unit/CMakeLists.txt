@@ -10,9 +10,12 @@ set(TEST_SOURCES
   classification_model_test.cpp
   preprocessor_test.cpp
   backend_env.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ClassificationModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/mobilenet/ClassificationModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ImagePreprocessor.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MobileNetGraph.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/mobilenet/MobileNetGraph.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp
+  megaloc_test.cpp
 )
 
 add_executable(addon-test ${TEST_SOURCES})
@@ -20,12 +23,6 @@ target_compile_features(addon-test PRIVATE cxx_std_20)
 
 target_compile_options(addon-test PRIVATE -Wall -Wextra -Wfatal-errors -g)
 target_compile_definitions(addon-test PRIVATE GTEST_HAS_POSIX_RE=0)
-
-# ClassificationModel.cpp references BACKENDS_SUBDIR on its DL load path. The
-# addon target defines it, but addon-test compiles that TU separately. The test
-# passes an empty backendsDir (backends are preloaded by backend_env), so the
-# value is never used at runtime — a placeholder just lets the TU compile.
-target_compile_definitions(addon-test PRIVATE BACKENDS_SUBDIR="classification-ggml")
 
 if(NOT WIN32)
   target_compile_options(addon-test PRIVATE -fno-omit-frame-pointer)
@@ -48,7 +45,7 @@ target_link_libraries(
     GTest::gtest_main
 )
 
-# GGML_BACKEND_DL/DIR, copy qvac__fabric@0.bare + backends next to the binary,
+# GGML_BACKEND_DL/DIR, copy qvac__fabric-<host>@0.bare + backends next to the binary,
 # rpath, and the win32 delay-load helper. See qvac-addon.cmake for the details.
 qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 
@@ -61,7 +58,7 @@ endif()
 
 # AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
 # addon-test dynamically links the shared @qvac/fabric runtime
-# (qvac__fabric@0.bare), and the npm prebuild of it is not ASan-instrumented, so
+# (qvac__fabric-<host>@0.bare), and the npm prebuild of it is not ASan-instrumented, so
 # nothing fabric does internally is checked and its long-lived runtime globals
 # plus its dlopen'd ggml backends look like leaks at exit. A fully ASan-clean
 # link would need an ASan-instrumented fabric (QVAC_FABRIC_ASAN=1), which the

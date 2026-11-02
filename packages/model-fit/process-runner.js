@@ -1,34 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-const fs = require("bare-fs");
-const path = require("bare-path");
-const fabricBackends = require("@qvac/fabric/backends");
 const processModule = require("bare-process");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const process_internal_1 = require("./process-internal");
 const process_1 = require("./process");
 const process = processModule;
-// Duplicate of index.ts resolveBackendsDir: this runner must not import
-// `./index` at load time because that would load the native binding. The v2
-// llamaConfigFit path also cannot go through fitParams().
-function resolveBackendsDir() {
-    // fabric's resolver only checks that the platform package resolves, not that
-    // its prebuilds are on disk.
-    const fabricRoot = fabricBackends.resolveBackendsDir();
-    if (fabricRoot !== null && isDirectory(fabricRoot))
-        return fabricRoot;
-    const packaged = path.join(__dirname, 'prebuilds');
-    return isDirectory(packaged) ? packaged : undefined;
-}
-function isDirectory(dir) {
-    try {
-        return fs.statSync(dir).isDirectory();
-    }
-    catch {
-        return false;
-    }
-}
 function exitAfterWriteError(error) {
     process.stderr.write(`model-fit process runner failed to write its response: ${error.message}\n`, () => {
         process.exit(2);
@@ -59,14 +36,7 @@ function fitLlama(...args) {
     // public API, and `./binding.js` is a public export.
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is disposable here.
     const binding = require('./binding-internal');
-    let resolved = config;
-    if (config.backendsDir === undefined) {
-        const packaged = resolveBackendsDir();
-        if (packaged !== undefined) {
-            resolved = { ...config, backendsDir: packaged };
-        }
-    }
-    return binding.llamaConfigFit({ loadKind, ...resolved });
+    return binding.llamaConfigFit({ loadKind, ...config });
 }
 function finish(line) {
     writeOutcome((0, process_internal_1.runFitProcessLine)(line, fit, fitLlama));

@@ -137,6 +137,8 @@ safeTest(
     const results = await response.await()
     for (const result of results) {
       t.comment(`${result.id}: ${result.output.trim()}`)
+      t.ok(result.output.length > 0, 'batch prompt produces output')
+      t.is(chunksById[result.id], result.output, 'batch stream matches its final result once')
     }
     t.comment(`avgConcurrentSeq: ${toNumber(response?.stats?.avgConcurrentSeq)}`)
 
@@ -159,6 +161,52 @@ safeTest(
     )
   }
 )
+
+for (const parallel of ['1', '2', '4']) {
+  safeTest(
+    `idle | run: streams output once with parallel ${parallel}`,
+    { timeout: 600_000 },
+    async (t) => {
+      const { model } = await setupModel(t, { parallel, temp: '0' })
+      const prompt = [{ role: 'user', content: 'Reply with stream-once.' }]
+      const runOptions = {
+        generationParams: {
+          grammar: 'root ::= "stream-once"',
+          reasoning_budget: 0,
+          predict: 32
+        }
+      }
+
+      for (const mode of ['onUpdate', 'iterate']) {
+        const response = await model.run(prompt, runOptions)
+        const chunks = []
+        if (mode === 'onUpdate') {
+          await response.onUpdate((chunk) => chunks.push(chunk)).await()
+        } else {
+          for await (const chunk of response.iterate()) chunks.push(chunk)
+        }
+
+        t.is(chunks.join(''), 'stream-once', `${mode} delivers the answer exactly once`)
+        t.is(chunks.at(-1), '', `${mode} has no repeated terminal output`)
+        t.alike(await response.await(), chunks, `${mode} retains the same output history`)
+        t.ok(toNumber(response.stats.generatedTokens) > 0, `${mode} preserves terminal stats`)
+      }
+
+      if (parallel !== '1') {
+        const response = await model.run([{ prompt, runOptions }])
+        const chunks = []
+        response.onUpdate(({ chunk }) => chunks.push(chunk))
+        const results = await response.await()
+        t.is(chunks.join(''), 'stream-once', 'one-item batch streams the answer once')
+        t.alike(
+          results,
+          [{ id: response.ids[0], output: 'stream-once' }],
+          'one-item batch preserves its separate final result'
+        )
+      }
+    }
+  )
+}
 
 safeTest(
   'idle | run batch: provided falsy runOptions are rejected, not silently defaulted',
@@ -314,8 +362,11 @@ safeTest(
 )
 
 // The other prefill guard. This one is only reachable with a non-zero `nPast_`,
-// so a cached turn has to fill the window first: the follow-up prompt would fit
-// in an empty context and is refused only because of what is already resident.
+// so a committed turn has to fill most of the window first: a prefill-only
+// turn, since a generation that runs into the full context rolls back and
+// caches nothing. The follow-up resends that turn, as every cached request
+// does; the cache reuses it, and the new turn, which would fit in an empty
+// window, is refused only because of what is already resident.
 // The two guards report different quantities and the SDK's overflow parser
 // matches each wording separately, so a change to either has to fail here.
 safeTest(
@@ -330,13 +381,13 @@ safeTest(
     cleanupIntegrationCacheFiles(cachePath)
     t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
 
-    // First turn fills the window and leaves it cached under `cachePath`.
+    // First turn fills most of the window and leaves it cached under
+    // `cachePath`.
     const first = await model.run([{ role: 'user', content: overflow.fillerPrompt() }], {
       cacheKey: cachePath,
-      saveCacheToDisk: true,
-      generationParams: { reasoning_budget: 0, predict: overflow.PREDICT }
+      prefill: true
     })
-    await collectResponse(first)
+    await first.await()
     t.ok(
       toNumber(first?.stats?.CacheTokens) > 0,
       `first turn leaves tokens in cache (stats=${JSON.stringify(first?.stats)})`
@@ -344,9 +395,12 @@ safeTest(
 
     let followUpError = null
     try {
-      const rejected = await model.run([{ role: 'user', content: overflow.CACHED_FOLLOW_UP }], {
+      const history = [
+        { role: 'user', content: overflow.fillerPrompt() },
+        { role: 'user', content: overflow.cachedFollowUp() }
+      ]
+      const rejected = await model.run(history, {
         cacheKey: cachePath,
-        saveCacheToDisk: true,
         generationParams: { reasoning_budget: 0 }
       })
       await rejected.await()

@@ -24,6 +24,7 @@ const singleCopy = lockfile({
   'node_modules/@qvac/infer-base': { version: '0.6.2' },
   'node_modules/@qvac/logging': { version: '0.1.1' },
   'node_modules/@qvac/error': { version: '0.1.1' },
+  'node_modules/@qvac/fabric': { version: '0.16.1' },
 })
 
 const nestedInferBase = lockfile({
@@ -35,8 +36,8 @@ const nestedInferBase = lockfile({
   'node_modules/@qvac/error': { version: '0.1.1' },
 })
 
-test('checks infer-base, logging and error', () => {
-  assert.deepEqual(SHARED_RUNTIME_LIBS, ['@qvac/infer-base', '@qvac/logging', '@qvac/error'])
+test('checks infer-base, logging, error and fabric', () => {
+  assert.deepEqual(SHARED_RUNTIME_LIBS, ['@qvac/infer-base', '@qvac/logging', '@qvac/error', '@qvac/fabric'])
 })
 
 test('consumer manifest installs the package and every peer', () => {
@@ -78,6 +79,7 @@ test('one copy of each lib passes', () => {
     '@qvac/infer-base: 0.6.2',
     '@qvac/logging: 0.1.1',
     '@qvac/error: 0.1.1',
+    '@qvac/fabric: 0.16.1',
   ])
 })
 
@@ -88,6 +90,21 @@ test('a nested second copy fails and names the peer that pulls it', () => {
   assert.equal(duplicates[0].lib, '@qvac/infer-base')
   assert.deepEqual(formatDuplicates(duplicates), [
     '@qvac/infer-base resolves to 2 versions: 0.4.2 (@qvac/decoder-audio@0.5.0); 0.6.2 (hoisted)',
+  ])
+})
+
+test('a fabric copy pulled in through model-fit is caught', () => {
+  const duplicates = findDuplicates(
+    collectResolvedVersions(
+      lockfile({
+        'node_modules/@qvac/fabric': { version: '0.16.1' },
+        'node_modules/@qvac/model-fit': { version: '0.14.0' },
+        'node_modules/@qvac/model-fit/node_modules/@qvac/fabric': { version: '0.18.1' },
+      }),
+    ),
+  )
+  assert.deepEqual(formatDuplicates(duplicates), [
+    '@qvac/fabric resolves to 2 versions: 0.16.1 (hoisted); 0.18.1 (@qvac/model-fit@0.14.0)',
   ])
 })
 

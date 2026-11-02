@@ -126,8 +126,11 @@ describe('foldToolSearch', () => {
     assert.equal(extended.length, 3)
     assert.deepEqual(extended[1], { role: 'assistant', content: '<call tool_search>' })
     assert.equal(extended[2]!.role, 'tool')
-    assert.ok(extended[2]!.content.includes('"create_issue"'))
-    assert.ok(extended[2]!.content.includes('"title"'), 'the full schema is loaded')
+    assert.deepEqual(
+      JSON.parse(extended[2]!.content).tool_search.loaded,
+      ['create_issue'],
+      'the search loads the deferred tool'
+    )
   })
 })
 

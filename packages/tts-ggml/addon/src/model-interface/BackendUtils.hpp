@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <string>
 
+#include "ModuleBackendsDir.hpp"
 #include "ggml-backend.h"
 #include "tts-cpp/backend.h"
 
@@ -15,6 +16,7 @@ namespace qvac::ttsggml {
 inline constexpr int kBackendDeviceNone = -1;
 inline constexpr int kBackendDeviceCpu = 0;
 inline constexpr int kBackendDeviceGpu = 1;
+inline constexpr int kBackendDeviceCoreML = 2;
 
 // runtimeStats backend *id* "none" sentinel. The live id map is owned by
 // backendIdFromName below (0=CPU, 1=Metal, ...); -1 means "no component
@@ -28,14 +30,6 @@ inline constexpr int kBackendIdNone = -1;
 // so the useGpu->layers mapping can't drift between them.
 inline constexpr int kOffloadAllGpuLayers = 99;
 
-inline std::filesystem::path resolveBackendsDir(const std::string& configured) {
-  std::filesystem::path dir(configured);
-#ifdef BACKENDS_SUBDIR
-  dir = (dir / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-  return dir;
-}
-
 inline int backendIdFromName(const std::string& name) {
   if (name == "CPU") return 0;
   if (name.rfind("Metal",  0) == 0 || name.rfind("MTL", 0) == 0) return 1;
@@ -46,6 +40,8 @@ inline int backendIdFromName(const std::string& name) {
 }
 
 inline int backendDeviceCode(tts_cpp::BackendDevice d) {
+  if (d == tts_cpp::BackendDevice::CoreML)
+    return kBackendDeviceCoreML;
   return d == tts_cpp::BackendDevice::GPU ? kBackendDeviceGpu
                                           : kBackendDeviceCpu;
 }

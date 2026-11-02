@@ -1,4 +1,8 @@
-export { detectToolDialectFromName } from '@/utils/tools/dialect'
+export {
+  matchToolDialectFromArchitecture,
+  matchToolDialectFromName,
+  resolveToolDialect
+} from '@/utils/tools/dialect'
 export { parseToolCalls } from '@/utils/tools/parser'
 export {
   TOOL_SEARCH_NAME,

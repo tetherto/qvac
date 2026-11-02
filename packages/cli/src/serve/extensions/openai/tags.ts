@@ -5,6 +5,8 @@
  */
 export const TAG_DESCRIPTIONS: Record<string, string> = {
   Chat: 'OpenAI-compatible chat completions backed by SDK `completion()`. Supports streaming SSE, tool calls, and JSON-schema response format.',
+  Decisions:
+    'Typed predicate, choice, and score answers via SDK `decide()`. Local decision models accept text only.',
   Completions:
     'Legacy text completions endpoint. Multi-prompt + streaming combinations are rejected.',
   Embeddings: 'Text embeddings via SDK `embed()`. Single string or array of strings.',

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <numeric>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -11,8 +12,10 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "CacheLedger.hpp"
 #include "MediaLoadOrder.hpp"
 #include "RenderOverrides.hpp"
+#include "SpeculativeSequence.hpp"
 #include "addon/LlmErrors.hpp"
 
 class LlamaBatch;
@@ -52,14 +55,44 @@ stopReasonAfterRequestRollback(GenerationStopReason reason) {
                                             : GenerationStopReason::None;
 }
 
+/// Whether a generation that ended for `reason` commits its cache request.
+/// A request commits when the caller received a completed answer: the model
+/// stopped on its own (EOS or antiprompt) or the caller's own `n_predict`
+/// budget ran out. The resident state is consistent in all three cases, and
+/// the next full-history render will extend it, so discarding it would only
+/// re-prefill the answer the model just produced. Cancellation commits too,
+/// through `onCancel`, since the caller received every streamed token.
+/// Everything that reaches `onGenerationFinished` with another reason
+/// (`None` here means a decode error; `ContextOverflow` means the sequence
+/// hit its window) rolls the request back so the cache never holds a turn
+/// the caller did not get.
+[[nodiscard]] constexpr bool commitsCacheRequest(GenerationStopReason reason) {
+  return reason == GenerationStopReason::Eos ||
+         reason == GenerationStopReason::Antiprompt ||
+         reason == GenerationStopReason::PredictionLimit;
+}
+
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
-/// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
-/// example to flush a forced follow-up token) without bouncing through
-/// the scheduler's main batch.
 struct SequenceStepResult {
   llama_token token = LLAMA_TOKEN_NULL;
   bool finished = false;
-  bool decodedInline = false;
+  bool contextOverflow = false;
+  GenerationStopReason stopReason = GenerationStopReason::None;
+};
+
+/// Outcome of verifying a speculative draft under the scheduler
+/// (`SequenceDriver::onDraftLogitsReady`).
+struct DraftStepResult {
+  /// The draft could not be rolled back by trimming: the sequence was
+  /// restored to `newPos` and the next step feeds the sampled token and
+  /// `speculativeDraft()` again. Nothing was streamed.
+  bool replay = false;
+  /// Live memory of the sequence ends here after the step.
+  llama_pos newPos = 0;
+  /// Tokens streamed to the caller, in order. Unless the sequence finished,
+  /// the last one is the new unfed sample.
+  std::vector<llama_token> tokens;
+  bool finished = false;
   bool contextOverflow = false;
   GenerationStopReason stopReason = GenerationStopReason::None;
 };
@@ -88,6 +121,12 @@ struct MediaBarrier {
 struct PrefillPlan {
   std::vector<llama_token> tokens;
   std::vector<MediaBarrier> mediaBarriers;
+  /// Text-token index at which the driver wants its state checkpointed
+  /// before the rest of the plan is fed: the end of the chat history, in
+  /// front of the generation prompt. The scheduler stops feeding there,
+  /// calls `captureHistoryCheckpoint`, then resumes. Always after the last
+  /// media barrier and before the final token.
+  std::optional<size_t> checkpointAtTextTokens;
 
   /// Total positional span of the staged prompt (text + media).
   [[nodiscard]] llama_pos totalPositions() const {
@@ -144,8 +183,8 @@ struct PrefillPlan {
 ///   `loadCache` -> `preparePrefill`
 ///   -> `snapshotPreRequestCursor` -> `snapshotPreRequestRollbackAnchor`
 ///   -> `onPrefillComplete` -> N x `onLogitsReady`
-///   -> (`onGenerationFinished` | `onCancel`) -> `onSequenceEnd` ->
-///   `saveCache`
+///   -> (`onGenerationFinished` | `onCancel` | `onFailure`) -> `onSequenceEnd`
+///   -> `saveCache`
 class SequenceDriver {
 public:
   SequenceDriver() = default;
@@ -164,8 +203,6 @@ public:
   /// from this value rather than `getNPast()`.
   [[nodiscard]] virtual llama_pos getKvCellsUsed() const { return getNPast(); }
 
-  [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
-
   /// Renders where the template rejected the tool definitions (see
   /// `LlmContext::getToolDefinitionsDropped`).
   [[nodiscard]] virtual int32_t getToolDefinitionsDropped() const { return 0; }
@@ -181,19 +218,19 @@ public:
     return GenerationStopReason::None;
   }
 
-  // Apply the per-request `remove_thinking_from_context` toggle to the
-  // driver. The single-prompt path goes through `applyGenerationParams`
-  // (which restores on scope exit); the batch path uses this setter
-  // directly because each slot has a fresh driver per request, so no
-  // restore is needed. Default no-op for drivers without compaction
-  // support.
-
-  virtual void setRemoveThinkingFromContext(bool value) { (void)value; }
   /// Per-request `json_schema` / `tool_choice` for the chat-template render;
   /// see `LlmContext::setRenderOverrides`. The scheduler sets it before
   /// `preparePrefill`; the driver is destroyed with its slot, so no clear.
   virtual void setRenderOverrides(RenderOverrides overrides) {
     (void)overrides;
+  }
+
+  virtual void setCacheReconciliationEnabled(bool enabled) { (void)enabled; }
+  /// See `LlmContext::setCacheCheckpointPolicy`; the scheduler applies the
+  /// model-wide policy to every driver it creates.
+  virtual void setCacheCheckpointPolicy(
+      const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy) {
+    (void)policy;
   }
 
   /// Tokenize the prompt and stage it for prefill (without running
@@ -227,6 +264,45 @@ public:
         "SequenceDriver::evalMediaSegment: driver stages no media segments");
   }
 
+  /// Hands the driver the process-local checkpoints kept for this request's
+  /// `cacheKey` by an earlier request's driver. Called after `loadCache`,
+  /// before `preparePrefill`. Drivers without checkpoints drop them.
+  virtual void adoptCheckpoints(
+      qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) {
+    (void)checkpoints;
+  }
+
+  /// Gives up the driver's checkpoints when its request ends, so the next
+  /// request with the same `cacheKey` can reuse them.
+  virtual qvac_lib_inference_addon_llama::cache::Checkpoints
+  releaseCheckpoints() {
+    return {};
+  }
+
+  /// Appends the driver's newest checkpoint to the cacheKey file being
+  /// written at `path`, after its sequence state
+  /// (`cache::appendCheckpointSection`), so a later process can restore it.
+  /// Best effort: a failure leaves the file with the state only. Drivers
+  /// without checkpoints write nothing.
+  virtual void appendCheckpointsToCacheFile(const std::string& path) const {
+    (void)path;
+  }
+
+  /// Adopts the checkpoint kept in the cacheKey file at `path`, whose
+  /// sequence state ends at `offset`, after that state was loaded and
+  /// accepted (`cache::readCheckpointSection`). Drivers without checkpoints
+  /// ignore them.
+  virtual void
+  adoptCheckpointsFromCacheFile(const std::string& path, uint64_t offset) {
+    (void)path;
+    (void)offset;
+  }
+
+  /// The scheduler fed the plan up to `checkpointAtTextTokens` and decoded
+  /// it; live memory for this sequence ends at `pos`. Drivers without
+  /// checkpoints ignore it.
+  virtual void captureHistoryCheckpoint(llama_pos pos) { (void)pos; }
+
   /// Notify the driver that the scheduler has finished prefill-decoding
   /// `prefillTokenCount` tokens up to absolute position `currentPos`.
   virtual void
@@ -241,13 +317,52 @@ public:
   /// Driven by the scheduler once `llama_decode` has produced logits for
   /// this sequence's last batch entry. Implementations sample the next
   /// token, run any driver-specific bookkeeping, and report back via
-  /// `SequenceStepResult`. `inlineDecodeBatch`, when non-null, may be
-  /// used to piggy-back a forced follow-up `llama_decode` outside of the
-  /// scheduler's main batch.
+  /// `SequenceStepResult`. `inlineDecodeBatch` is non-null on the
+  /// single-prompt path, which decodes the sampled token itself, and null
+  /// under the scheduler, which decodes it in its next batch.
   virtual SequenceStepResult onLogitsReady(
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch = nullptr) = 0;
+
+  /// Speculative decoding under the scheduler, one step per generating
+  /// sequence (see `speculative::SpeculativeSequence`): before the batch is
+  /// filled, `prepareSpeculativeDraft` asks for a draft continuing the unfed
+  /// `sampled` token at `pos`; the scheduler drafts for every sequence that
+  /// asked at once, then calls `finishSpeculativeDraft` on them. The batch
+  /// then carries `sampled` followed by `speculativeDraft()` with logits on
+  /// every entry, and `onDraftLogitsReady` verifies it. A draft the batch
+  /// had no room for is dropped with `discardSpeculativeDraft`. Drivers
+  /// without speculative decoding keep the defaults.
+  [[nodiscard]] virtual bool speculativeEnabled() const { return false; }
+  virtual bool prepareSpeculativeDraft(
+      llama_pos pos, llama_token sampled, unsigned generatedTokens) {
+    (void)pos;
+    (void)sampled;
+    (void)generatedTokens;
+    return false;
+  }
+  virtual void finishSpeculativeDraft() {}
+  [[nodiscard]] virtual std::vector<llama_token> speculativeDraft() const {
+    return {};
+  }
+  virtual void discardSpeculativeDraft() {}
+  /// `firstLogitIdx` is the batch index of the sampled token, `posBefore`
+  /// its position, `generatedBefore` the tokens streamed before this step.
+  virtual DraftStepResult onDraftLogitsReady(
+      int firstLogitIdx, llama_pos posBefore, unsigned generatedBefore,
+      const std::function<void(const std::string&)>& outputCallback) {
+    (void)firstLogitIdx;
+    (void)generatedBefore;
+    (void)outputCallback;
+    return {.newPos = posBefore};
+  }
+  /// Speculative counters of the sequence's current request.
+  [[nodiscard]] virtual qvac_lib_inference_addon_llama::speculative::
+      SpeculativeStats
+      speculativeStats() const {
+    return {};
+  }
 
   /// Final-token / clean-shutdown hook. Implementations should flush any
   /// pending UTF-8 buffer state and close streams. Called exactly once
@@ -267,30 +382,63 @@ public:
       const std::function<void(const std::string&)>& outputCallback,
       GenerationStopReason terminalReason = GenerationStopReason::None) = 0;
 
-  /// Fired when the sequence is cancelled (user-requested or fatal error).
-  /// Returns `true` when internal rollback (metadata + live KV / recurrent
-  /// state) is coherent with the pre-request cursor and callers may persist
-  /// the driver's state via `saveCache`. Returns `false` when the
-  /// rollback could not be completed (e.g. recurrent full-state restore
-  /// refused): live state may not match `getNPast()` and callers MUST skip
-  /// cache persistence for this request to preserve the last
-  /// known-good on-disk cache. Implementations that need no rollback
-  /// (single hook) may simply return `true`.
+  /// Fired when the caller cancels the sequence. Once prefill completed the
+  /// request keeps what the caller received, exactly like a prediction-limit
+  /// stop: the prompt and every streamed token stay resident (and a cache
+  /// transaction commits), so the next full-history turn extends them.
+  /// Cancelled during prefill it rolls back, dropping everything the request
+  /// added, since the caller received nothing. The rule is the same with
+  /// or without `cacheKey`. Returns `true` when live memory
+  /// matches the driver's metadata and callers may persist it via
+  /// `saveCache`; `false` when a rollback could not be completed (e.g. a
+  /// recurrent full-state restore was refused), in which case callers MUST
+  /// skip cache persistence to preserve the last known-good on-disk cache.
   [[nodiscard]] virtual bool
   onCancel(const std::function<void(const std::string&)>& outputCallback) = 0;
+
+  /// Fired when the sequence dies of a fatal error (decode failure). Unlike
+  /// `onCancel`, a cached request rolls back to its pre-request state: the
+  /// caller got no usable answer and live memory may be inconsistent. Same
+  /// return contract as `onCancel`. Drivers without a transaction may treat
+  /// it as a cancel.
+  [[nodiscard]] virtual bool
+  onFailure(const std::function<void(const std::string&)>& outputCallback) {
+    return onCancel(outputCallback);
+  }
 
   /// Try to populate this sequence's KV-cache from a previously
   /// persisted cache. Returns true when the cache was loaded
   /// successfully; the scheduler then skips the corresponding prefix
-  /// tokens at admit time.
-  [[nodiscard]] virtual bool loadCache(const std::string& cacheKey) = 0;
+  /// tokens at admit time. With `adoptFileCheckpoints` the checkpoint kept
+  /// in the file is adopted too (`adoptCheckpointsFromCacheFile`); the
+  /// scheduler passes false when it holds checkpoints for the key that would
+  /// replace it anyway.
+  [[nodiscard]] virtual bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) = 0;
+
+  /// The sequence memory already holds a state whose ledger is `stateTokens`
+  /// (a slot kept resident across requests, or one just restored from the
+  /// scheduler's RAM tier). Validates it like a file load and adopts the
+  /// ledger. On a mismatch it clears the sequence and returns false.
+  [[nodiscard]] virtual bool
+  adoptResidentState(const std::vector<llama_token>& stateTokens) {
+    (void)stateTokens;
+    return false;
+  }
+
+  /// The ledger words describing the committed state, in the format
+  /// `adoptResidentState` and the cache file use.
+  [[nodiscard]] virtual std::vector<llama_token> residentStateTokens() const {
+    return {};
+  }
 
   virtual void saveCache(const std::string& cacheKey) const = 0;
 
-  /// Capture the post-`preparePrefill` cursor for `onCancel` rollback. The
-  /// scheduler calls this after `preparePrefill` because prefill preparation
-  /// may mutate existing KV state; anchoring earlier would roll cancellation
-  /// back to a stale cursor. Cheap: bookkeeping only, no I/O.
+  /// Capture the cursor for a rollback outside a cache request. The scheduler
+  /// calls this once after adopting kept state, so a failure before
+  /// `preparePrefill` begins its cache request rolls back to that state, and
+  /// again after `preparePrefill`, which may mutate existing KV state. No-op
+  /// while a cache request is active. Cheap: bookkeeping only, no I/O.
   /// Default no-op for drivers whose cancel does not need it.
   virtual void snapshotPreRequestCursor() {}
 
@@ -299,10 +447,12 @@ public:
   /// Writes a full sequence-state snapshot to disk, so it is expensive
   /// and gated: pure-attention drivers no-op, and single-prompt drivers
   /// keep their own capture site rather than paying this cost twice.
-  /// This is cancel-path bookkeeping, unrelated to the
-  /// `remove_thinking_from_context` hard-fail contract, so overrides
-  /// that fail the capture must log a warning and continue rather than
-  /// throwing (a silent no-op would leak the peak `nPast` back into
-  /// user-visible `CacheTokens` on a subsequent cancel).
+  /// This is generic cancel-path bookkeeping. Overrides that fail the capture
+  /// must log a warning and continue rather than throwing.
   virtual void snapshotPreRequestRollbackAnchor() {}
+
+  /// False after a request was transactionally rolled back. The previous
+  /// cache file already represents that state and must not be overwritten by
+  /// a failed/cancelled slot.
+  [[nodiscard]] virtual bool shouldPersistAfterFinalize() const { return true; }
 };

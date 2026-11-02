@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
+import { appendPcm, collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
 
 test('collectTtsStats: maps LavaSR enhancer backend stats', (t) => {
   const stats = collectTtsStats({
@@ -59,6 +59,18 @@ test('collectTtsStats: preserves zero-valued backend codes', (t) => {
   t.alike(stats, { backendDevice: 0, backendId: 0, gpuUnsupported: 0 })
 })
 
+test('collectTtsStats: forwards the Audio8 Core ML codec flags, zero included', (t) => {
+  // 0 is a real report (no sidecar, or this call fell back to ggml), not absence.
+  t.alike(collectTtsStats({ stats: { codecSidecarLoaded: 1, codecOnCoreml: 1 } }), {
+    codecSidecarLoaded: 1,
+    codecOnCoreml: 1
+  })
+  t.alike(collectTtsStats({ stats: { codecSidecarLoaded: 1, codecOnCoreml: 0 } }), {
+    codecSidecarLoaded: 1,
+    codecOnCoreml: 0
+  })
+})
+
 test('collectTtsStats: returns an empty object when the addon reported nothing', (t) => {
   t.alike(collectTtsStats({}), {})
 })
@@ -83,4 +95,12 @@ test('chunkMetadata: omits absent fields and empty sentence text', (t) => {
     { chunkIndex: 0 },
     'chunkIndex 0 is real; an empty sentenceChunk is not'
   )
+})
+
+test('appendPcm: appends each chunk in place, in order', (t) => {
+  const buffer: number[] = []
+  appendPcm(buffer, new Int16Array([1, -2, 3]))
+  appendPcm(buffer, [])
+  appendPcm(buffer, new Int16Array([32767, -32768]))
+  t.alike(buffer, [1, -2, 3, 32767, -32768])
 })

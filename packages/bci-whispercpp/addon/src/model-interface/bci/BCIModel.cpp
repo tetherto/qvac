@@ -14,10 +14,12 @@
 #include <ggml-backend.h>
 
 #include "BCIConfig.hpp"
+#include "EmbedderFit.hpp"
 #include "addon/BCIErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "model-interface/BCITypes.hpp"
+#include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/WhisperGpuSelection.hpp"
 
 namespace qvac_lib_inference_addon_bci {
@@ -56,32 +58,26 @@ static bool shouldAbortWhisper(void* userData) {
 // the per-arch CPU + GPU `.so` modules once per process; otherwise
 // whisper_init aborts on a NULL CPU device. On static linux-x64 builds the
 // scan finds no modules and the statically registered backends stay in
-// charge, so calling this unconditionally on Linux is safe.
+// charge, so calling this unconditionally on Linux is safe. A configured
+// backendsDir is scanned as given; otherwise the addon's own backends
+// directory.
 void ensureBackendsLoaded(const std::string& backendsDir) {
   static std::once_flag flag;
   std::call_once(flag, [&]() {
-    if (backendsDir.empty()) {
+    const std::filesystem::path dir = resolveBackendsDir(backendsDir);
+    if (dir.empty()) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "configurationParams.backendsDir not set; falling back to "
-          "ggml_backend_load_all() (default search path). Backend "
-          "registration may fail on hybrid GGML_BACKEND_DL builds, whose "
-          "modules live next to the addon, not the host executable.");
+          "the addon could not locate itself; falling back to "
+          "ggml_backend_load_all() (default search path), which misses the "
+          "renamed qvac-speech-ggml-* modules.");
       ggml_backend_load_all();
       return;
     }
-#ifdef BACKENDS_SUBDIR
-    const std::filesystem::path variantsDir =
-        (std::filesystem::path(backendsDir) /
-         std::filesystem::path(BACKENDS_SUBDIR))
-            .lexically_normal();
-#else
-    const std::filesystem::path variantsDir = backendsDir;
-#endif
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        std::string("loading ggml backends from: ") + variantsDir.string());
-    ggml_backend_load_all_from_path(variantsDir.string().c_str());
+        std::string("loading ggml backends from: ") + dir.string());
+    ggml_backend_load_all_from_path(dir.string().c_str());
   });
 }
 #endif // __ANDROID__ || __linux__
@@ -111,12 +107,8 @@ void BCIModel::loadEmbedderIfNeeded() {
     if (modelPathIt == cfg_.whisperContextCfg.end()) {
       return;
     }
-    const auto modelPath = std::get<std::string>(modelPathIt->second);
-
-    auto lastSep = modelPath.find_last_of("/\\");
-    auto dir =
-        (lastSep != std::string::npos) ? modelPath.substr(0, lastSep) : ".";
-    embedderPath = dir + "/bci-embedder.bin";
+    embedderPath =
+        colocatedEmbedderPath(std::get<std::string>(modelPathIt->second));
   }
 
   if (neuralProcessor_.loadEmbedderWeights(embedderPath)) {

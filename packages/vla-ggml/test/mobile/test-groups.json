@@ -7,5 +7,5 @@
     "smolvla": ["runAddonTest", "runEsmNamedExportsTest"],
     "groot":   ["runGrootTest"]
   },
-  "deferred": ["runPi05Test"]
+  "deferred": ["runPi05Test", "runBackendSelectionTest"]
 }

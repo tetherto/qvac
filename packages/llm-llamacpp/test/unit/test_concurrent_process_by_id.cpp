@@ -120,6 +120,30 @@ protected:
 
 } // namespace
 
+TEST_F(ConcurrentProcessByIdTest, SingleStreamDoesNotReturnDeliveredText) {
+  REQUIRE_MODEL(model_);
+  for (const char* parallel : {"1", "2", "4"}) {
+    SCOPED_TRACE(parallel);
+    config_["parallel"] = parallel;
+    config_["n_predict"] = "32";
+    auto model = loadModel();
+    auto prompt = makePrompt("Reply with stream-once.");
+    prompt.generationParams.grammar = R"(root ::= "stream-once")";
+    std::string streamed;
+    prompt.outputCallback = [&streamed](const std::string& piece) {
+      streamed += piece;
+    };
+
+    const auto terminal = model->process(std::any(prompt), JobId{1});
+    EXPECT_EQ(streamed, "stream-once");
+    EXPECT_EQ(std::any_cast<std::string>(terminal), "");
+
+    prompt.outputCallback = {};
+    const auto returned = model->process(std::any(prompt), JobId{2});
+    EXPECT_EQ(std::any_cast<std::string>(returned), "stream-once");
+  }
+}
+
 /// Two concurrent process() calls must each produce their own
 /// concrete answer with no cross-talk, AND actually overlap on the scheduler
 /// (avgConcurrentSeq > 1). The per-job outputCallback proves the two streams
@@ -158,13 +182,13 @@ TEST_F(ConcurrentProcessByIdTest, TwoConcurrentJobsRunIsolatedAndOverlap) {
   const std::string outA = futureA.get();
   const std::string outB = futureB.get();
 
-  EXPECT_FALSE(outA.empty());
-  EXPECT_FALSE(outB.empty());
-  EXPECT_NE(outA, outB);
-  EXPECT_EQ(streamedA, outA) << "job 1 stream must match its own return value";
-  EXPECT_EQ(streamedB, outB) << "job 2 stream must match its own return value";
-  EXPECT_TRUE(containsCaseInsensitive(outA, "Paris")) << outA;
-  EXPECT_TRUE(containsCaseInsensitive(outB, "Moon")) << outB;
+  EXPECT_EQ(outA, "");
+  EXPECT_EQ(outB, "");
+  EXPECT_FALSE(streamedA.empty());
+  EXPECT_FALSE(streamedB.empty());
+  EXPECT_NE(streamedA, streamedB);
+  EXPECT_TRUE(containsCaseInsensitive(streamedA, "Paris")) << streamedA;
+  EXPECT_TRUE(containsCaseInsensitive(streamedB, "Moon")) << streamedB;
 
   const auto stats = model->runtimeStats();
   const double avgConcurrentSeq =
@@ -282,7 +306,6 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsLeavesLlamaPerfCountersAlone) {
         "CacheTokens",
         "generatedTokens",
         "promptTokens",
-        "thinkingBlockDiscards",
         "avgConcurrentSeq",
         "backendDevice"}) {
     const bool present =
@@ -451,20 +474,25 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
 
   std::atomic<bool> cancelFired = false;
   std::atomic<size_t> keepPieces = 0;
+  std::string cancelled;
+  std::string kept;
 
   auto cancelPrompt = makePrompt(
       "Write a long, detailed, multi-paragraph essay about the history of "
       "astronomy.");
-  cancelPrompt.outputCallback = [&model, &cancelFired](const std::string&) {
-    bool expected = false;
-    if (cancelFired.compare_exchange_strong(expected, true)) {
-      model->cancelById(kCancelId);
-    }
-  };
+  cancelPrompt.outputCallback =
+      [&model, &cancelFired, &cancelled](const std::string& piece) {
+        cancelled += piece;
+        bool expected = false;
+        if (cancelFired.compare_exchange_strong(expected, true)) {
+          model->cancelById(kCancelId);
+        }
+      };
 
   auto keepPrompt = makePrompt(
       "Write a long, detailed, multi-paragraph essay about ocean currents.");
-  keepPrompt.outputCallback = [&keepPieces](const std::string&) {
+  keepPrompt.outputCallback = [&keepPieces, &kept](const std::string& piece) {
+    kept += piece;
     keepPieces.fetch_add(1);
   };
 
@@ -486,8 +514,8 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
                     "too slow to judge cancellation targeting (seen on "
                     "loaded CI runners)";
   }
-  const std::string cancelled = cancelFuture.get();
-  const std::string kept = keepFuture.get();
+  EXPECT_EQ(cancelFuture.get(), "");
+  EXPECT_EQ(keepFuture.get(), "");
 
   ASSERT_TRUE(cancelFired.load())
       << "test setup: cancelled job never emitted a token";

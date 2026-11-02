@@ -23,6 +23,11 @@ When editing workflows or composite actions:
   untrusted pull-request execution.
 - Quote shell inputs and pass untrusted values through environment variables rather
   than interpolating them into scripts.
+- Make a job that publishes, tags or releases succeed when re-run after it
+  already succeeded. Skip what exists only when it records this run's source
+  (npm `gitHead`, a tag's commit), and fail when it records another. If the
+  thing records no source, say in the workflow why skipping or overwriting it
+  is safe.
 - Preserve the repository's merge-guard architecture when adding a gating job.
 - Follow the documented cleanup pattern for persistent self-hosted runners.
 - Run the narrowest relevant workflow linter and script tests before handoff.

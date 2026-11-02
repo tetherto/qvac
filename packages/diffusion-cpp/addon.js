@@ -3,8 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WorldSessionInterface = exports.ActionFlag = exports.EsrganUpscalerInterface = exports.SdInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
 exports.readImageDimensions = readImageDimensions;
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
-const path = require("bare-path");
 /**
  * Normalize a raw native event into `Output` (image bytes or progress
  * tick), `Error`, or `JobEnded`. Returns `null` for unknown shapes
@@ -94,9 +92,6 @@ class SdInterface {
         this._spatialAlign = configurationParams.embeddingsConnectorsPath ? 32 : 16;
         if (!configurationParams.config) {
             configurationParams.config = {};
-        }
-        if (!configurationParams.config.backendsDir) {
-            configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds');
         }
         configurationParams.config = Object.fromEntries(Object.entries(configurationParams.config)
             .filter(([, value]) => value !== undefined)
@@ -206,9 +201,6 @@ class EsrganUpscalerInterface {
         if (!configurationParams.config) {
             configurationParams.config = {};
         }
-        if (!configurationParams.config.backendsDir) {
-            configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds');
-        }
         configurationParams.config = Object.fromEntries(Object.entries(configurationParams.config)
             .filter(([, value]) => value !== undefined)
             .map(([key, value]) => [key, String(value)]));
@@ -271,9 +263,6 @@ class WorldSessionInterface {
         this._binding = binding;
         if (!configurationParams.config) {
             configurationParams.config = {};
-        }
-        if (!configurationParams.config.backendsDir) {
-            configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds');
         }
         configurationParams.config = Object.fromEntries(Object.entries(configurationParams.config)
             .filter(([, value]) => value !== undefined)

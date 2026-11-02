@@ -661,7 +661,7 @@ int main() {
 
   {
     // The flash-attn rejection above is thrown by this addon. This one is
-    // thrown by qvac__fabric@0.bare: nothing here validates KV cache type
+    // thrown by qvac__fabric-<host>@0.bare: nothing here validates KV cache type
     // names, so an unknown one reaches llama's `--cache-type-k` handler inside
     // the fabric module, which rejects it. `parseGenericConfig` catches that as
     // `std::exception` and rethrows it as `std::invalid_argument` naming the

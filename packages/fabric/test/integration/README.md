@@ -2,7 +2,7 @@
 
 These tests run **real inference** through the two migrated consumers
 (`@qvac/llm-llamacpp` and `@qvac/embed-llamacpp`) in a single Bare process to
-prove that the shared `qvac__fabric.bare` runtime resolves, loads once, and
+prove that the shared `qvac__fabric-<host>.bare` runtime resolves, loads once, and
 serves both addons.
 
 ## What is covered
@@ -13,8 +13,8 @@ serves both addons.
   model and produces an embedding of the expected dimension.
 - `llm + embed share a single @qvac/fabric runtime in one process` — runs both
   consumers and (on Linux) asserts via `/proc/self/maps` that exactly one
-  `qvac__fabric.bare` is memory-mapped. `dlopen` dedups by `SONAME`
-  (`qvac__fabric@0.bare`), so a correctly shared runtime appears once even
+  `qvac__fabric-<host>.bare` is memory-mapped. `dlopen` dedups by `SONAME`
+  (`qvac__fabric-<host>@0.bare`), so a correctly shared runtime appears once even
   though two addons declared the dependency.
 
 Test models are downloaded on first run into `model/` (git-ignored). They are
@@ -45,6 +45,17 @@ asserts.
 The consumers' own transitive dependencies (`@qvac/infer-base`, `@qvac/logging`,
 `bare-*`) are still resolved normally. On CI (where the private `@qvac` registry
 token is configured) `npm install` pulls them automatically.
+
+## nx project graph
+
+nx attributes the imports in this directory to `@qvac/fabric`, so requiring a
+consumer here would make fabric depend on it. Every consumer already depends on
+fabric, and the resulting cycle makes any change to that consumer select every
+fabric consumer in PR CI. `packages/fabric/project.json` therefore negates each
+imported consumer under `implicitDependencies` (`"!@qvac/llm-llamacpp"`,
+`"!@qvac/embed-llamacpp"`). If you require another consumer here, add its
+negation too; `.github/scripts/test/nx-fabric-graph-policy.test.mjs` fails until
+you do.
 
 ## Running
 

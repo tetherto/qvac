@@ -28,6 +28,8 @@ class QvacResponse<Output = any> extends EventEmitter {
   /** @internal */
   declare private readonly _pollInterval: number
   /** @internal */
+  declare private readonly _retainOutput: boolean
+  /** @internal */
   declare private _abortSignal: QvacResponse.AbortSignalLike | null
   /** @internal */
   declare private _onAbort: (() => void) | null
@@ -52,16 +54,24 @@ class QvacResponse<Output = any> extends EventEmitter {
        * `model.run(input, { signal })` straight into the response.
        */
       signal?: QvacResponse.AbortSignalLike
+      /**
+       * Retain output history (default: true). When false, consume chunks through
+       * onUpdate(); getLatest() returns null and iterate() rejects. Completion
+       * resolves to [] unless ended() receives an explicit terminal result.
+       */
+      retainOutput?: boolean
     },
     pollInterval?: number
   )
   constructor(
     {
       cancelHandler,
-      signal
+      signal,
+      retainOutput
     }: Partial<{
       cancelHandler: () => Promise<void>
       signal: QvacResponse.AbortSignalLike
+      retainOutput: boolean
     }> = {},
     pollInterval = 100
   ) {
@@ -70,6 +80,7 @@ class QvacResponse<Output = any> extends EventEmitter {
     this.stats = {}
     this._cancelHandler = cancelHandler as () => Promise<void>
     this._pollInterval = pollInterval
+    this._retainOutput = retainOutput !== false
     this._abortSignal = null
     this._onAbort = null
 
@@ -129,7 +140,7 @@ class QvacResponse<Output = any> extends EventEmitter {
    * Adds an output update and emits an 'output' event.
    */
   updateOutput(output: Output): void {
-    this.output.push(output)
+    if (this._retainOutput) this.output.push(output)
     this.emit('output', output)
   }
 
@@ -190,8 +201,12 @@ class QvacResponse<Output = any> extends EventEmitter {
    * listeners is attached for the lifetime of the iterator (not per
    * yielded chunk), so high-frequency token streams don't churn
    * listener registrations.
+   * Requires output retention; use onUpdate() when retention is disabled.
    */
   async *iterate(): AsyncIterableIterator<Output> {
+    if (!this._retainOutput) {
+      throw new Error('iterate() requires output retention; use onUpdate() instead')
+    }
     if (this._status === statuses.ERRORED) {
       throw this._error!
     }

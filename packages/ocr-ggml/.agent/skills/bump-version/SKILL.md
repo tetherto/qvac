@@ -192,7 +192,7 @@ Addons get a **git tag only, no GitHub Release** — `on-merge-nx.yml` calls `cr
 since #2602. Do not promise a Releases-page entry; only the SDK publishes one.
 
 Then tell the user the next step is `/release <pkg>`, which cuts `release-<pkg>-<version>`, dispatches
-`on-merge-nx.yml` with `package=<pkg>` (or `on-merge-model-fit.yml` for `model-fit`), and pauses at
+`on-merge-nx.yml` with `package=<pkg>`, and pauses at
 the human-only `npm` approval gate.
 
 ## Step 7 — Verify before committing

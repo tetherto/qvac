@@ -5,6 +5,7 @@ import { writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { useModelServer } from '../helpers/server.js'
+import { collectSSE } from '../helpers/http.js'
 
 // The encoded formats (mp3/opus/aac/flac) shell out to ffmpeg/ffprobe, so they
 // skip where those aren't on PATH and run where they are.
@@ -95,6 +96,27 @@ describe('tts (local): discovery + speech encoding', () => {
     const res = await speak('pcm')
     assert.equal(res.statusCode, 200)
     assert.match(String(res.headers['content-type']), /^audio\/L16; rate=\d+; channels=1$/)
+  })
+
+  it('speech: stream_format=sse streams pcm deltas then done', async () => {
+    const res = await server().inject({
+      method: 'POST',
+      url: '/v1/audio/speech',
+      payload: {
+        model: 'test-tts',
+        input: 'Hello from QVAC. This is streamed.',
+        response_format: 'pcm',
+        stream_format: 'sse'
+      }
+    })
+    assert.equal(res.statusCode, 200, res.payload)
+    assert.equal(res.headers['content-type'], 'text/event-stream')
+    const events = collectSSE(res.payload).map((e) => e.data as { type: string; audio?: string })
+    const deltas = events.filter((e) => e.type === 'speech.audio.delta')
+    assert.ok(deltas.length > 0)
+    const bytes = deltas.reduce((n, e) => n + Buffer.from(e.audio ?? '', 'base64').length, 0)
+    assert.ok(bytes > 0 && bytes % 2 === 0, `expected 16-bit PCM, got ${bytes} bytes`)
+    assert.equal(events.at(-1)?.type, 'speech.audio.done')
   })
 
   const encoded: Array<[string, string, string]> = [

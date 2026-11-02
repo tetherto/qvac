@@ -31,7 +31,8 @@ export type ServerLogHandler = (log: LoggingStreamResponse) => void
  * ```
  */
 export function subscribeServerLogs(handler: ServerLogHandler) {
-  const streamIterator = loggingStream({ id: SDK_ALL_LOG_ID })
+  const controller = new AbortController()
+  const streamIterator = loggingStream({ id: SDK_ALL_LOG_ID }, { signal: controller.signal })
 
   void (async () => {
     try {
@@ -44,6 +45,6 @@ export function subscribeServerLogs(handler: ServerLogHandler) {
   })()
 
   return () => {
-    void streamIterator.return(undefined)
+    controller.abort()
   }
 }

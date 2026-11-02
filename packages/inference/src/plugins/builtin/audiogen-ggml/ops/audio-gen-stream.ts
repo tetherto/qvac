@@ -1,6 +1,5 @@
 import type { AudioGenStreamRequest, AudioGenStreamResponse } from '@/schemas/audio-gen'
-import type { Logger } from '@/logging/index'
-import { resolveAudioGenPcm } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
+import { resolveAudioGenInputs } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
 import { streamAudioGenRun } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-run'
 
 export function audioGenStream(
@@ -12,7 +11,10 @@ export function audioGenStream(
     async start(model, ctx, logger) {
       // Reference/source audio is decoded before the run is admitted so the
       // model slot is never held by a request that fails on input decoding.
-      const { referenceAudio, sourceAudio } = await resolveAudioInputs(request, logger)
+      const { referenceAudio, sourceAudio } = await resolveAudioGenInputs(request, {
+        modelId: request.modelId,
+        logger
+      })
       if (ctx.signal.aborted) return undefined
       return model.run(request.caption, {
         ...(request.lyrics !== undefined && { lyrics: request.lyrics }),
@@ -38,6 +40,7 @@ export function audioGenStream(
         ...(request.duration !== undefined && { duration: request.duration }),
         ...(request.maxFrames !== undefined && { maxFrames: request.maxFrames }),
         ...(request.inferenceSteps !== undefined && { inferenceSteps: request.inferenceSteps }),
+        ...(request.shift !== undefined && { shift: request.shift }),
         ...(request.cfgScale !== undefined && { cfgScale: request.cfgScale }),
         ...(request.lmTemperature !== undefined && { lmTemperature: request.lmTemperature }),
         ...(request.lmTopP !== undefined && { lmTopP: request.lmTopP }),
@@ -62,36 +65,4 @@ export function audioGenStream(
       })
     }
   })
-}
-
-/**
- * Decode both optional audio inputs concurrently. When both fail, the first
- * failure is thrown and the second is logged so neither diagnostic is lost.
- */
-async function resolveAudioInputs(request: AudioGenStreamRequest, logger: Logger) {
-  const [reference, source] = await Promise.allSettled([
-    request.referenceAudio
-      ? resolveAudioGenPcm(request.referenceAudio, 'referenceAudio')
-      : Promise.resolve(undefined),
-    request.sourceAudio
-      ? resolveAudioGenPcm(request.sourceAudio, 'sourceAudio')
-      : Promise.resolve(undefined)
-  ])
-  const failures = [reference, source].filter(
-    (result): result is PromiseRejectedResult => result.status === 'rejected'
-  )
-  if (failures.length > 0) {
-    for (const extra of failures.slice(1)) {
-      logger.warn(
-        `[audiogen] additional audio input failure for modelId=${request.modelId}: ${
-          extra.reason instanceof Error ? extra.reason.message : String(extra.reason)
-        }`
-      )
-    }
-    throw failures[0]!.reason
-  }
-  return {
-    referenceAudio: reference.status === 'fulfilled' ? reference.value : undefined,
-    sourceAudio: source.status === 'fulfilled' ? source.value : undefined
-  }
 }

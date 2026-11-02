@@ -5,6 +5,7 @@ import { commandCwd } from "./pr-test-generic.mjs";
 
 export const SDK_POD_PACKAGE_PATHS = new Set([
   "packages/sdk",
+  "packages/sdk-e2e",
   "packages/cli",
   "packages/rag",
   "packages/logging",
@@ -60,9 +61,14 @@ export function isSdkPackage(packagePath) {
   return SDK_POD_PACKAGE_PATHS.has(packagePath);
 }
 
+const SDK_E2E_CATALOG = "packages/sdk-e2e/catalog";
+const SDK_E2E_JS_RUNNER = "packages/sdk-e2e/runners/js";
+
 export function isSdkE2eTestPath(filePath) {
   return (
-    filePath.startsWith("packages/sdk/e2e/tests/") && filePath.endsWith(".ts")
+    [SDK_E2E_CATALOG, SDK_E2E_JS_RUNNER].some((root) =>
+      filePath.startsWith(`${root}/`),
+    ) && filePath.endsWith(".ts")
   );
 }
 
@@ -77,7 +83,7 @@ export function sdkExampleCommand(packagePath, filePath) {
   const localPath = filePath.slice(`${packagePath}/`.length);
   return {
     cwd: packagePath,
-    command: `bun run ${localPath}`,
+    command: `npx tsx ${localPath}`,
     reason: "Changed SDK example",
   };
 }
@@ -226,13 +232,13 @@ export function relatedSdkTests({
   changedTests,
   changedExamples,
 }) {
-  const testsRoot = join(root, packagePath, "e2e", "tests");
+  const testsRoot = join(root, SDK_E2E_CATALOG);
   const topics = topicTokens(changedPaths);
   const changed = new Set(changedTests);
   const exampleGroups = changedExampleGroups(packagePath, changedExamples);
   const candidates = walkFiles(testsRoot)
     .filter((rel) => rel.endsWith("-tests.ts"))
-    .map((rel) => `${packagePath}/e2e/tests/${rel}`)
+    .map((rel) => `${SDK_E2E_CATALOG}/${rel}`)
     .filter((path) => !changed.has(path))
     .map((path) => {
       const filter = basename(path).replace(/-tests\.ts$/, "");
@@ -259,21 +265,20 @@ export function sdkE2eSetup(touchedPaths) {
   const touchesInference = touchedPaths.some((path) =>
     path.startsWith("packages/inference/"),
   );
-  const touchesSdkOutsideE2e = touchedPaths.some(
-    (path) =>
-      path.startsWith("packages/sdk/") && !path.startsWith("packages/sdk/e2e/"),
+  const touchesSdk = touchedPaths.some((path) =>
+    path.startsWith("packages/sdk/"),
   );
-  if (touchesInference || touchesSdkOutsideE2e) {
+  if (touchesInference || touchesSdk) {
     return {
       command: "npm run install:build:full",
       reason: touchesInference
         ? "Committed PR files touch packages/inference"
-        : "Committed PR files touch packages/sdk outside e2e",
+        : "Committed PR files touch packages/sdk",
     };
   }
   return {
     command: "npm run install:build",
-    reason: "Committed SDK e2e changes are limited to packages/sdk/e2e",
+    reason: "Committed SDK e2e changes are limited to packages/sdk-e2e",
   };
 }
 

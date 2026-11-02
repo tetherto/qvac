@@ -1,31 +1,21 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
-const bare_path_1 = __importDefault(require("bare-path"));
-/** Where the CMake build stages the per-arch backends, as `index.ts` resolves it. */
-const PREBUILDS_DIR = bare_path_1.default.join(__dirname, '..', 'prebuilds');
 /**
  * Projects a BCI load against the memory free right now, reading model
  * metadata and never weight data.
  *
- * Covers the whisper half of the load. A model the fitter cannot read comes
- * back as `status: "error"`; a broken request, or a host with no native
- * binding, throws.
+ * Covers the whisper model and the embedder, from the files or from the
+ * registry's weightless descriptions of them. A model or embedder the fitter
+ * cannot read, a broken request, or a host with no native binding rejects.
+ * Concurrent calls run one at a time.
  *
- * The backend directory defaults to the one a real load uses. The native side
- * registers backends once per process, so a fit that let it fall back to the
- * default search path would fix that path for every later load too.
+ * Unset, the backend directory is the one a real load uses, next to the loaded
+ * module. The native side registers backends once per process, so the
+ * directory a fit scans is the one every later load gets too.
  */
-function assessFit(request) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+async function assessFit(request) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
     const binding = require('../binding.js');
-    return binding.assessFit({
-        ...request,
-        backendsDir: typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-            ? request.backendsDir
-            : PREBUILDS_DIR
-    });
+    return await binding.assessFit(request);
 }

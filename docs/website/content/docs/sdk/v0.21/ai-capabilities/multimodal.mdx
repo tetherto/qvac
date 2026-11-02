@@ -1,0 +1,81 @@
+---
+title: Multimodal
+icon: GalleryHorizontal
+description: LLM inference over text, images, and other media within a single conversation context.
+schemaType: HowTo
+---
+
+## Overview
+
+[Text generation](/sdk/ai-capabilities/text-generation) supports multimodal prompts. Multimodal lets you attach media files to inputs for [`completion()`](/sdk/reference/api#completion). You can include multiple attachments in the same request (e.g., to compare two images).
+
+Compared to text-only completion inference, the key differences are:
+- You must load a multimodal-capable LLM **and** its matching `projectionModelSrc` via [`loadModel()`](/sdk/reference/api#loadmodel).
+- Your `history` messages can include `attachments: [{ path: "/path/to/image.jpg" }]` (the file must exist on disk).
+- Aside from attachments, you still call `completion({ modelId, history, stream })` the same way and consume the same streaming output.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`completion()`](/sdk/reference/api#completion)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+You should load two models:
+- a `llama.cpp`-compatible multimodal-capable LLM. Model file format: `*.gguf`; and
+- a matching projection model (`mmproj-*.gguf`). Model file format: `*.gguf`.
+
+Recommended pairs:
+- VisionPsy Nano — one weights + `mmproj` pair per variant (choose the pair for the variant you want):
+  - Flash: `VISIONPSY_NANO_460M_MULTIMODAL_Q8_0` (or `..._Q4_K_M`) + `MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0`.
+  - Base: `VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1` (or `..._Q4_K_M_1`) + `MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1`.
+  - Note: the un-suffixed constants are Flash; the `_1`-suffixed constants are base.
+- Qwen2.5-Omni + mmproj-* (or Qwen3-VL + mmproj-*)
+- SmolVLM2 + mmproj-*
+
+For models available as constants, see [SDK — Models](/sdk#models).
+
+### VisionPsy Nano: base vs. Flash
+
+VisionPsy Nano ships in two variants — base and Flash — as separate weights + `mmproj` pairs (see the constants above). Pick a variant by loading its matching pair; the flag `modelConfig.image_no_upscale` supplies the preprocessing rule the two mmprojs cannot express through their (identical) metadata, so you must set it to match the pair you loaded:
+- Base pair: leave `image_no_upscale` unset (the field is optional; unset defers to the mmproj's own value).
+- Flash pair: set `image_no_upscale: 'on'`.
+
+Loading Flash weights with `image_no_upscale` unset — or base weights with `image_no_upscale: 'on'` — passes load validation (both mmprojs declare the same `preproc_image_size`), but silently uses the wrong preprocessing rule and degrades quality.
+
+`image_no_upscale` is read only by the idefics3-style preprocessor, and it takes effect only when the loaded `mmproj` declares `clip.vision.preproc_image_size`. In practice, that means the VisionPsy pairs above — on the other recommended pairs the flag either warns and is ignored (Qwen2.5-Omni / Qwen3-VL) or is accepted but inert (SmolVLM2, whose published `mmproj` declares no `preproc_image_size`). Treat `image_no_upscale` as a VisionPsy-only key.
+
+## Example
+
+The following script shows an example of multimodal completion with one image (and optionally two):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-multimodal.js title="multimodal.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-multimodal.ts title="multimodal.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>
+

@@ -8,6 +8,7 @@
 
 #include "js-interface/NumberConversion.hpp"
 
+using qvac::ttsggml::finiteFloatFromJsNumber;
 using qvac::ttsggml::floatFromJsNumber;
 using qvac::ttsggml::intFromJsNumber;
 
@@ -49,6 +50,15 @@ TEST(NumberConversion, FloatKeepsRepresentableValues) {
 TEST(NumberConversion, FloatRejectsFiniteValuesBeyondTheFloatRange) {
   EXPECT_FALSE(floatFromJsNumber(1e300).has_value());
   EXPECT_FALSE(floatFromJsNumber(-1e40).has_value());
+}
+
+TEST(NumberConversion, FiniteFloatRejectsNonFiniteAndOutOfRangeValues) {
+  EXPECT_FLOAT_EQ(*finiteFloatFromJsNumber(4.5), 4.5f);
+  EXPECT_FALSE(finiteFloatFromJsNumber(std::numeric_limits<double>::quiet_NaN())
+                   .has_value());
+  EXPECT_FALSE(finiteFloatFromJsNumber(std::numeric_limits<double>::infinity())
+                   .has_value());
+  EXPECT_FALSE(finiteFloatFromJsNumber(1e300).has_value());
 }
 
 // NaN and infinity convert exactly; the option range checks reject them.

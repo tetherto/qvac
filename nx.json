@@ -6,6 +6,24 @@
       "dependsOn": ["^build"]
     }
   },
+  "release": {
+    "groups": {
+      "engine": {
+        "projects": ["@qvac/inference", "@qvac/sdk"],
+        "projectsRelationship": "fixed"
+      },
+      "agentstack": {
+        "projects": ["@qvac/cli", "@qvac/ai-sdk-provider", "@qvac/opencode-plugin", "@qvac/openclaw-plugin"],
+        "projectsRelationship": "independent"
+      }
+    },
+    "versionPlans": true,
+    "version": {
+      "updateDependents": "auto",
+      "preserveMatchingDependencyRanges": false,
+      "adjustSemverBumpsForZeroMajorVersion": false
+    }
+  },
   "pluginsConfig": {
     "@nx/js": {
       "projectsAffectedByDependencyUpdates": []

@@ -2,6 +2,7 @@ import fs from 'fs'
 import { execSync } from 'child_process'
 import { fileURLToPath } from 'url'
 
+import { isCoremlBundleComponent } from './companions.ts'
 import { generateModelsFileContent } from './codegen.ts'
 import {
   assignNames,
@@ -22,7 +23,11 @@ const OUTPUT_FILE = fileURLToPath(new URL('../../src/models/constants.ts', impor
 const HISTORY_DIR = fileURLToPath(new URL('../history', import.meta.url))
 
 function toOpenAIEndpointModels(models: ProcessedModel[]): ProcessedModel[] {
-  return models.filter((model) => getEndpointCategoryFromAddon(model.addon) !== null)
+  return models.filter(
+    (model) =>
+      getEndpointCategoryFromAddon(model.addon) !== null &&
+      !isCoremlBundleComponent(model.registryPath)
+  )
 }
 
 async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<void> {
@@ -33,7 +38,7 @@ async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<v
     setTimeout(() => {
       timedOut = true
       console.log('⏱️  Model check timed out')
-      console.log("   Run 'bun check-models' manually to retry")
+      console.log("   Run 'npm run check-models' manually to retry")
       resolve(null)
     }, timeoutMs)
   })
@@ -102,7 +107,7 @@ async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<v
     }
 
     console.log('')
-    console.log(`💡 Run 'bun update-models' to sync changes`)
+    console.log(`💡 Run 'npm run update-models' to sync changes`)
     console.log('')
     if (nonBlocking) {
       console.log('💡 Commit will proceed - update models when ready')

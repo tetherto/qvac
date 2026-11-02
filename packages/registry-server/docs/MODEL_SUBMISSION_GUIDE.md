@@ -7,7 +7,7 @@
    ```json
    {
      "source": "https://huggingface.co/<org>/<repo>/resolve/<commit>/<file>",
-     "engine": "@qvac/<engine-name>",
+     "engine": "<canonical-engine-id>",
      "licenseId": "MIT",
      "quantization": "q4_0",
      "params": "1B",
@@ -21,6 +21,31 @@
 2. If the model uses a license not already in `data/licenses.json`, add a new entry there and place the full license text at `data/licenses/<license-id>/LICENSE.txt`.
 3. Run validation: `npm run validate:models`
 4. Submit PR targeting `main`
+
+### Engine classification
+
+Use the canonical `engine-usecase` identifier of the plugin that loads the model,
+such as `llamacpp-completion`, `llamacpp-embedding`, or `moss-transcribe`.
+Supported identifiers come from the generated manifest at
+`lib/generated/engine-manifest.json`, which is included in the registry package.
+Validation does not require a sibling SDK directory. Unknown identifiers are
+rejected, even if they have the right spelling format.
+
+When adding an engine, run `npm run contract:export` in `packages/sdk` to regenerate
+both the SDK contract and the registry manifest from the same canonical definitions.
+`npm run contract:check` checks both artifacts for freshness. Manifest-only edits
+also trigger the required SDK checks in CI. Do not edit the manifest by hand.
+
+An addon package can implement several plugins. Classify each model by the plugin
+that loads it, rather than inferring its capability from the shared package.
+Legacy `@qvac/<package>` engine values remain accepted for existing submissions;
+do not infer a new model's capability from its addon package. Shared legacy
+package IDs require their existing discriminator tags, such as `moss-transcribe`
+for `@qvac/asr-ggml`. Generation and live queries use the same classification
+rules, so both paths return the same engine.
+
+Coordinate registry metadata sync with client releases that recognize the canonical
+engine. Older clients may skip entries with an engine they do not recognize.
 
 ### Source URL Formats
 
@@ -73,13 +98,15 @@ How sync works:
 
 ### Weightless Descriptions
 
-Ingest stores a weightless description of GGUF and safetensors artifacts holding
-their tensor list, and points the record at it through `fitBlobBinding`. Clients
-fetch it to project memory use before downloading a model. Nothing is required of
-a submission for this to happen.
+Ingest stores a weightless description of GGUF and safetensors artifacts, and of
+the `.bin` and `.spm` artifacts of the whisper.cpp, BCI and nmt.cpp engines,
+holding their settings and tensor list, and points the record at it through
+`fitBlobBinding`. Clients fetch it to project memory use before downloading a
+model. Nothing is required of a submission for this to happen beyond the right
+`engine`, which picks the reader for a `.bin`.
 
-Formats that interleave tensor data with their descriptions get none, so a
-whisper `.bin` submission will have no `fitBlobBinding`. That is expected and
+Other formats get none, and so does a file that does not parse as its engine's
+format, so such a submission will have no `fitBlobBinding`. That is expected and
 does not affect anything else about the record.
 
 Replacing a corrupt artifact regenerates the description along with the weights:

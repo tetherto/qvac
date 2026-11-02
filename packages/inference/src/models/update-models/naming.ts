@@ -153,6 +153,8 @@ function generateBaseName(input: BaseNameInput): string {
       return generateTtsName(input)
     case 'ocr':
       return generateOcrName(input)
+    case 'moss-transcribe':
+      return cleanPart(input.filename.replace(/\.gguf$/, ''))
     case 'parakeet':
       return generateParakeetName(input)
     case 'diffusion':
@@ -394,12 +396,14 @@ function generateTtsName({
   modelName,
   tagExtra,
   tagType,
-  quantization
+  quantization,
+  tags
 }: BaseNameInput): string {
   const name = tagName || modelName || ''
   const language = tagExtra || ''
   const type = tagType || ''
-  const nameParts = [name, language, type, quantization].filter((p) => p && p !== '')
+  const variant = tags.includes('fused') ? 'fused' : ''
+  const nameParts = [name, language, type, variant, quantization].filter((p) => p && p !== '')
   let exportName = `TTS_${nameParts.map(cleanPart).join('_')}`
   if (filename.endsWith('.onnx.json') || filename.includes('config.json')) {
     exportName = exportName + '_CONFIG'
@@ -474,8 +478,16 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
   const lower = filename.toLowerCase()
   const family = isIndicConformer(filename, lowerPath) ? 'INDIC_CONFORMER' : ''
 
+  if (lower.includes('nemotron-3-diarization') && lower.endsWith('.gguf')) {
+    return `PARAKEET_NEMOTRON_3_DIARIZATION_${cleanPart(quantization)}`
+  }
+
   let variant = ''
-  if (lower.includes('sortformer') || lower.includes('diar_streaming')) {
+  if (lower.includes('transcribepsy') || lowerPath.includes('transcribepsy')) {
+    variant = 'TRANSCRIBEPSY'
+  } else if (lower.includes('mosaic')) {
+    variant = 'MOSAIC'
+  } else if (lower.includes('sortformer') || lower.includes('diar_streaming')) {
     variant = 'SORTFORMER'
   } else if (lower.includes('nemotron') || lowerPath.includes('nemotron')) {
     variant = 'NEMOTRON'
@@ -496,10 +508,19 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
     const paramsHint = paramsMatch ? paramsMatch[1]! : ''
     const versionHint = versionMatch ? `V${versionMatch[1]!}` : ''
     const speakerHint = speakerMatch ? speakerMatch[1]! : ''
+    const coremlHint = lower.includes('coreml') ? 'COREML' : ''
+    const compactHint = variant === 'MOSAIC' && lower.includes('compact') ? 'COMPACT' : ''
 
-    const nameParts = [family, variant, paramsHint, speakerHint, versionHint, quantization].filter(
-      (p) => p && p !== ''
-    )
+    const nameParts = [
+      family,
+      variant,
+      compactHint,
+      paramsHint,
+      speakerHint,
+      versionHint,
+      coremlHint,
+      quantization
+    ].filter((p) => p && p !== '')
     return `PARAKEET_${nameParts.map(cleanPart).join('_')}`
   }
 

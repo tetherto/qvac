@@ -85,3 +85,72 @@ describe('serve: auth', () => {
     assert.equal(res.statusCode, 200)
   })
 })
+
+describe('serve: Host header check', () => {
+  const server = useServer({})
+
+  it('rejects a foreign Host, including on /openapi.json', async () => {
+    for (const url of ['/openapi.json', '/v1/models', '/qvac/v1/kv_cache']) {
+      const res = await server().inject({
+        method: 'GET',
+        url,
+        headers: { host: 'attacker.example:11434' }
+      })
+      assertStatusAndError(res, 403, 'host_not_allowed')
+    }
+  })
+
+  it('rejects a foreign Host before a state-changing route runs', async () => {
+    const res = await server().inject({
+      method: 'DELETE',
+      url: '/qvac/v1/kv_cache',
+      headers: { host: 'attacker.example' }
+    })
+    assertStatusAndError(res, 403, 'host_not_allowed')
+  })
+
+  it('serves loopback and IP Hosts with or without the port', async () => {
+    for (const host of [
+      'localhost',
+      'localhost:11434',
+      '127.0.0.1:11434',
+      '[::1]',
+      '10.0.0.5:11434'
+    ]) {
+      const res = await server().inject({ method: 'GET', url: '/openapi.json', headers: { host } })
+      assert.equal(res.statusCode, 200, host)
+    }
+  })
+})
+
+describe('serve: Host header check with allowed hosts', () => {
+  const server = useServer({ allowedHosts: ['qvac.internal'] })
+
+  it('serves a listed host and still rejects others', async () => {
+    const ok = await server().inject({
+      method: 'GET',
+      url: '/openapi.json',
+      headers: { host: 'qvac.internal:11434' }
+    })
+    assert.equal(ok.statusCode, 200)
+    const blocked = await server().inject({
+      method: 'GET',
+      url: '/openapi.json',
+      headers: { host: 'attacker.example' }
+    })
+    assertStatusAndError(blocked, 403, 'host_not_allowed')
+  })
+})
+
+describe('serve: Host header check opted out', () => {
+  const server = useServer({ allowAnyHost: true })
+
+  it('serves any Host', async () => {
+    const res = await server().inject({
+      method: 'GET',
+      url: '/openapi.json',
+      headers: { host: 'attacker.example' }
+    })
+    assert.equal(res.statusCode, 200)
+  })
+})

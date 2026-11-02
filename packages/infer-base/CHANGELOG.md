@@ -1,3 +1,14 @@
+## [0.8.0] - 2026-10-14
+
+### Added
+
+- Optional `retainOutput: false` on `QvacResponse` and `createJobHandler().start()` for processing output events without saving chunk history. Retention remains enabled by default.
+- With retention disabled, `onUpdate()` still delivers every chunk, `getLatest()` returns `null`, completion resolves to `[]` unless an explicit terminal result is supplied, and `iterate()` rejects with guidance to use `onUpdate()`. Explicit terminal results and existing lifecycle behavior are preserved.
+
+### Pull Requests
+
+- [#5028](https://github.com/tetherto/qvac/pull/5028) - Allow responses to disable output retention.
+
 ## [0.7.0] - 2026-07-31
 
 TypeScript is now the source of truth for `@qvac/infer-base`. `index.ts` and `src/**/*.ts` are compiled with `tsc` into the `index.js` / `src/**/*.js` runtime and the `.d.ts` declarations that ship on npm, so the published types can no longer drift from the implementation. The runtime behaviour and the CommonJS export shape are intentionally unchanged — the only consumer-visible difference is in the declarations.

@@ -1,13 +1,15 @@
 import {
   ModelTypeAliases,
   ENGINE_TO_ADDON,
-  LEGACY_ENGINE_TO_CANONICAL
+  LEGACY_ENGINE_TO_CANONICAL,
+  LEGACY_REGISTRY_ENGINE_RULES
 } from '@qvac/inference/surface'
 
 /**
  * JSON export of the model-type resolution maps that `loadModel`'s
  * client-side type-inference reads: alias → canonical model type, canonical
- * engine → addon, and legacy engine string → canonical engine.
+ * engine → addon, legacy engine string → canonical engine, and tagged rules
+ * for shared legacy registry packages.
  *
  * Inference itself stays in each client (a plain string `modelSrc` carries no
  * engine to infer from, so it can't move server-side), but the *data* it reads
@@ -23,9 +25,10 @@ export interface ModelTypeMaps {
   aliasToCanonical: Record<string, string>
   engineToAddon: Record<string, string>
   legacyEngineToCanonical: Record<string, string>
+  legacyRegistryEngineRules: Record<string, readonly { tag: string; engine: string }[]>
 }
 
-function sortedEntries(record: Record<string, string>): Record<string, string> {
+function sortedEntries<T>(record: Record<string, T>): Record<string, T> {
   const entries = Object.entries(record)
   entries.sort(function (a, b) {
     return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0
@@ -37,6 +40,7 @@ export function buildModelTypeMaps(): ModelTypeMaps {
   return {
     aliasToCanonical: sortedEntries(ModelTypeAliases),
     engineToAddon: sortedEntries(ENGINE_TO_ADDON),
-    legacyEngineToCanonical: sortedEntries(LEGACY_ENGINE_TO_CANONICAL)
+    legacyEngineToCanonical: sortedEntries(LEGACY_ENGINE_TO_CANONICAL),
+    legacyRegistryEngineRules: sortedEntries(LEGACY_REGISTRY_ENGINE_RULES)
   }
 }

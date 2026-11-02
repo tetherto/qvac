@@ -1,5 +1,6 @@
 import { END_OF_INPUT } from "../../lib/constants";
 import type { BackendInfo } from "../../lib/types";
+import type { ParakeetSpeakerAttributionConfig } from "./options";
 export type { BackendInfo };
 export interface ParakeetConfigurationParams {
     /** Unified native `createInstance` dispatch key. */
@@ -7,6 +8,9 @@ export interface ParakeetConfigurationParams {
     modelPath?: string;
     maxThreads?: number;
     useGPU?: boolean;
+    /** Native ggml backend selector. */
+    backend?: string;
+    speakerAttribution?: ParakeetSpeakerAttributionConfig;
     sampleRate?: number;
     channels?: number;
     captionEnabled?: boolean;
@@ -77,6 +81,7 @@ export type AppendData = {
     data?: ArrayBufferLike;
 } | {
     type: typeof END_OF_INPUT;
+    job?: Record<string, unknown>;
 };
 export type ParakeetOutputCallback = (addon: unknown, event: unknown, jobId: number, data: unknown, error: unknown) => void;
 export type ParakeetStateCallback = (addon: ParakeetInterface, newState: string) => void;
@@ -123,7 +128,6 @@ export declare class ParakeetInterface {
     private _bufferedBytes;
     private _config;
     constructor(binding: ParakeetBinding, configurationParams: ParakeetConfigurationParams, outputCallback: ParakeetOutputCallback, stateCallback?: ParakeetStateCallback | null);
-    private _applyDefaults;
     private _setState;
     private _createNativeInstance;
     private _looksLikeVadEvent;

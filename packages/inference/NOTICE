@@ -71,6 +71,8 @@ Third-Party Model Licenses
     https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
   bci-embedder
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
+  coremldata
+    https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
   cosyvoice3-campplus-f32
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-flow-bf16
@@ -133,10 +135,22 @@ Third-Party Model Licenses
     https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
   latin_g2
     https://www.jaided.ai/easyocr/modelhub/
+  laya-f16
+    https://huggingface.co/convaiinnovations/laya
+  laya-multilingual-f16
+    https://huggingface.co/convaiinnovations/laya-multilingual
+  laya-multilingual-Q8_0
+    https://huggingface.co/convaiinnovations/laya-multilingual
+  laya-Q8_0
+    https://huggingface.co/convaiinnovations/laya
+  laya-typed-decisions-f16
+    https://huggingface.co/convaiinnovations/laya-typed-decisions
+  laya-typed-decisions-Q8_0
+    https://huggingface.co/convaiinnovations/laya-typed-decisions
   LightOnOCR-2-1B-ocr-soup-GGUF
     https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF
   Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
-    https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
+    https://huggingface.co/mradermacher/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
   MedPsy-1.7B-GGUF
     https://huggingface.co/qvac/MedPsy-1.7B-GGUF
   MedPsy-4B-GGUF
@@ -145,6 +159,26 @@ Third-Party Model Licenses
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   mmproj-unlimited-ocr-Q8_0
     https://huggingface.co/baidu/Unlimited-OCR
+  model
+    https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
+  moss-codec-decoder-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-TTS
+  moss-codec-encoder-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-TTS
+  moss-sfx-v2-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0
+  moss-speech-bf16
+    https://huggingface.co/OpenMOSS-Team/MOSS-Speech
+  moss-speech-codec-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-Speech-Codec
+  moss-speech-q8_0
+    https://huggingface.co/OpenMOSS-Team/MOSS-Speech
+  moss-transcribe-diarize-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize
+  moss-tts-delay-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-TTS
+  moss-ttsd-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0
   nb-tiny-ggml-model
     https://huggingface.co/NbAiLab/nb-whisper-tiny
   parler-indic-f16
@@ -211,6 +245,8 @@ Third-Party Model Licenses
     https://huggingface.co/HuggingFaceVLA/smolvla_libero
   SmolVLM2-500M-Video-Instruct-GGUF
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
+  Ternary-Bonsai-2-27B-gguf
+    https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf
   TranslatePsy-AfriSLM-0.8B-Q4-GGUF
     https://huggingface.co/qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF
   TranslatePsy-AfriSLM-0.8B-Q8-GGUF
@@ -251,6 +287,8 @@ Third-Party Model Licenses
     https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged
   Wan2.2-TI2V-5B-Turbo-GGUF
     https://huggingface.co/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF
+  weight
+    https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
 
 --- bsd-3-clause (BSD 3-Clause License) ---
 
@@ -277,30 +315,58 @@ Third-Party Model Licenses
 
   AfriqueGemma-4B-GGUF
     https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF
+  coremldata
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  coremldata
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  coremldata
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
+  coremldata
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  model
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  model
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  model
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
+  model
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  parakeet_realtime_eou_120m-v1.f16
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  parakeet_realtime_eou_120m-v1.q4_0
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  parakeet_realtime_eou_120m-v1.q8_0
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
   parakeet-ctc-0.6b.f16
     https://huggingface.co/nvidia/parakeet-ctc-0.6b
   parakeet-ctc-0.6b.q4_0
     https://huggingface.co/nvidia/parakeet-ctc-0.6b
   parakeet-ctc-0.6b.q8_0
     https://huggingface.co/nvidia/parakeet-ctc-0.6b
-  parakeet-eou-120m-v1.f16
-    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
-  parakeet-eou-120m-v1.q4_0
-    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
-  parakeet-eou-120m-v1.q8_0
-    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
   parakeet-tdt-0.6b-v3.f16
     https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   parakeet-tdt-0.6b-v3.q4_0
     https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   parakeet-tdt-0.6b-v3.q8_0
     https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  parakeet-tdt-1.1b.f16
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
+  parakeet-tdt-1.1b.q8_0
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
   sortformer-4spk-v1.f16
     https://huggingface.co/nvidia/diar_sortformer_4spk-v1
   sortformer-4spk-v1.q4_0
     https://huggingface.co/nvidia/diar_sortformer_4spk-v1
   sortformer-4spk-v1.q8_0
     https://huggingface.co/nvidia/diar_sortformer_4spk-v1
+  weight
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  weight
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  weight
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
+  weight
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
 
 --- gemma (Gemma Terms of Use) ---
 
@@ -362,6 +428,8 @@ Third-Party Model Licenses
     https://huggingface.co/ResembleAI/chatterbox
   chatterbox-t3-turbo
     https://huggingface.co/ResembleAI/chatterbox-turbo
+  coremldata
+    https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   de-base-ggml-model-f16
     https://huggingface.co/aware-ai/whisper-base-german
   DeepSeek-V4-Flash-0731-GGUF
@@ -384,16 +452,18 @@ Third-Party Model Licenses
     https://huggingface.co/ChristianAzinn/gte-large-gguf
   gte-large-gguf
     https://huggingface.co/ChristianAzinn/gte-large-gguf
-  indic-conformer-ctc.f16
+  indic-conformer-600m-multilingual.f16
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
-  indic-conformer-ctc.q4_0
+  indic-conformer-600m-multilingual.q4_0
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
-  indic-conformer-ctc.q8_0
+  indic-conformer-600m-multilingual.q8_0
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   lavasr-denoiser-f16
     https://huggingface.co/spaces/YatharthS
   lavasr-enhancer-f16
     https://huggingface.co/spaces/YatharthS
+  model
+    https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   pt-tiny-ggml-model-f16
     https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
   taew2_2_f16
@@ -404,6 +474,8 @@ Third-Party Model Licenses
     https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
   vae-BF16
     https://huggingface.co/ACE-Step/Ace-Step1.5
+  weight
+    https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   whisper-vad
     https://huggingface.co/ggml-org/whisper-vad
   whisper.cpp
@@ -618,6 +690,12 @@ Third-Party Model Licenses
 
 --- nvidia-open-model-license ---
 
+  coremldata
+    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
+  coremldata
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  coremldata
+    https://huggingface.co/nvidia/parakeet-unified-en-0.6b
   diar_streaming_sortformer_4spk-v2.1.f16
     https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
   diar_streaming_sortformer_4spk-v2.1.q4_0
@@ -628,6 +706,12 @@ Third-Party Model Licenses
     https://huggingface.co/nvidia/GR00T-N1.7-LIBERO
   groot-q8_vf16
     https://huggingface.co/nvidia/GR00T-N1.7-3B
+  model
+    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
+  model
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  model
+    https://huggingface.co/nvidia/parakeet-unified-en-0.6b
   nemotron-3.5-asr-streaming-0.6b.f16
     https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
   nemotron-3.5-asr-streaming-0.6b.q4_0
@@ -640,6 +724,17 @@ Third-Party Model Licenses
     https://huggingface.co/nvidia/parakeet-unified-en-0.6b
   parakeet-unified-en-0.6b.q8_0
     https://huggingface.co/nvidia/parakeet-unified-en-0.6b
+  weight
+    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
+  weight
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  weight
+    https://huggingface.co/nvidia/parakeet-unified-en-0.6b
+
+--- openmdw-1.1 ---
+
+  Nemotron-3-Diarization.q8_0
+    https://huggingface.co/nvidia/Nemotron-3-Diarization
 
 --- openrail ---
 
@@ -692,11 +787,7 @@ JavaScript Dependencies
   @hyperswarm/secret-stream@6.9.2
     https://github.com/holepunchto/hyperswarm-secret-stream
   @qvac/error@0.1.1
-  @qvac/fabric@0.16.1
-    https://github.com/tetherto/qvac
   @qvac/logging@0.1.1
-    https://github.com/tetherto/qvac
-  @qvac/model-fit@0.12.2
     https://github.com/tetherto/qvac
   @qvac/rag@0.8.1
     https://github.com/tetherto/qvac
@@ -712,19 +803,19 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-abort
   bare-abort-controller@1.1.2
     https://github.com/holepunchto/bare-abort-controller
-  bare-addon-resolve@1.10.1
+  bare-addon-resolve@1.11.0
     https://github.com/holepunchto/bare-addon-resolve
   bare-ansi-escapes@2.2.3
     https://github.com/holepunchto/bare-ansi-escapes
-  bare-assert@1.2.0
+  bare-assert@1.3.0
     https://github.com/holepunchto/bare-assert
   bare-buffer@3.7.1
     https://github.com/holepunchto/bare-buffer
   bare-cpu-info@0.1.1
     https://github.com/holepunchto/bare-cpu-info
-  bare-crypto@1.15.3
+  bare-crypto@1.15.4
     https://github.com/holepunchto/bare-crypto
-  bare-dns@2.2.1
+  bare-dns@2.3.0
     https://github.com/holepunchto/bare-dns
   bare-env@3.0.1
     https://github.com/holepunchto/bare-env
@@ -734,7 +825,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-fetch
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
-  bare-fs@4.8.1
+  bare-fs@4.8.4
     https://github.com/holepunchto/bare-fs
   bare-gpu-info@0.1.1
     https://github.com/holepunchto/bare-gpu-info
@@ -750,7 +841,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-inspect
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
-  bare-module-resolve@1.12.5
+  bare-module-resolve@1.12.6
     https://github.com/holepunchto/bare-module-resolve
   bare-net@2.3.3
     https://github.com/holepunchto/bare-net
@@ -760,7 +851,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-path
   bare-performance@2.1.1
     https://github.com/holepunchto/bare-performance
-  bare-pipe@4.3.1
+  bare-pipe@4.4.0
     https://github.com/holepunchto/bare-pipe
   bare-posix@1.0.1
     https://github.com/holepunchto/bare-posix
@@ -768,9 +859,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-process
   bare-rpc@1.3.8
     https://github.com/holepunchto/bare-rpc
-  bare-runtime@1.33.4
+  bare-runtime@1.35.0
     https://github.com/holepunchto/bare-runtime
-  bare-runtime-darwin-arm64@1.33.4
+  bare-runtime-darwin-arm64@1.35.0
     https://github.com/holepunchto/bare-runtime
   bare-semver@1.1.0
     https://github.com/holepunchto/bare-semver
@@ -782,23 +873,23 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-stream
   bare-structured-clone@2.0.1
     https://github.com/holepunchto/bare-structured-clone
-  bare-subprocess@6.2.0
+  bare-subprocess@6.2.2
     https://github.com/holepunchto/bare-subprocess
   bare-tcp@2.6.1
     https://github.com/holepunchto/bare-tcp
-  bare-tls@3.1.10
+  bare-tls@3.1.11
     https://github.com/holepunchto/bare-tls
   bare-tty@5.2.1
     https://github.com/holepunchto/bare-tty
   bare-type@1.4.0
     https://github.com/holepunchto/bare-type
-  bare-url@2.5.4
+  bare-url@2.5.5
     https://github.com/holepunchto/bare-url
   bare-zlib@1.4.1
     https://github.com/holepunchto/bare-zlib
   blind-relay@1.6.1
     https://github.com/holepunchto/blind-relay
-  compact-encoding@3.5.0
+  compact-encoding@3.5.2
     https://github.com/holepunchto/compact-encoding
   compact-encoding-bitfield@1.1.0
     https://github.com/compact-encoding/compact-encoding-bitfield
@@ -812,7 +903,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/fd-lock
   fs-native-extensions@1.5.1
     https://github.com/holepunchto/fs-native-extensions
-  hyperblobs@2.12.1
+  hyperblobs@2.13.0
     https://github.com/holepunchto/hyperblobs
   hypercore-errors@1.5.0
     https://github.com/holepunchto/hypercore-errors
@@ -820,9 +911,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-id-encoding
   hypercore-stats@2.5.1
     https://github.com/holepunchto/hypercore-stats
-  hypercore-storage@3.3.1
+  hypercore-storage@3.4.0
     https://github.com/holepunchto/hypercore-storage
-  hyperdb@6.9.0
+  hyperdb@6.11.0
     https://github.com/holepunchto/hyperdb
   hyperdht-address@1.1.1
     https://github.com/holepunchto/hyperdht-address
@@ -842,11 +933,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/mirror-drive
   noise-handshake@4.2.0
     https://github.com/holepunchto/noise-handshake
-  paparam@1.13.0
+  paparam@1.14.0
     https://github.com/holepunchto/paparam
   passive-core-watcher@1.0.1
     https://github.com/holepunchto/passive-core-watcher
-  quickbit-native@2.4.8
+  quickbit-native@2.4.9
     https://github.com/holepunchto/quickbit-native
   rabin-native@2.0.0
     https://github.com/holepunchto/rabin-native
@@ -862,7 +953,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/require-asset
   resource-on-exit@1.0.0
     https://github.com/holepunchto/bare-teardown
-  rocksdb-native@3.18.1
+  rocksdb-native@3.19.1
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
@@ -904,7 +995,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/bogon
   codecs@3.1.0
     https://github.com/mafintosh/codecs
-  corestore@7.12.5
+  corestore@7.15.0
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
@@ -922,11 +1013,11 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.36.1
+  hypercore@11.39.0
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.34.0
+  hyperdht@6.34.1
     https://github.com/holepunchto/hyperdht
   hyperswarm@4.17.2
     https://github.com/holepunchto/hyperswarm
@@ -944,7 +1035,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/nat-sampler
   protocol-buffers-encodings@1.2.0
     https://github.com/mafintosh/protocol-buffers-encodings
-  protomux@3.12.0
+  protomux@3.13.0
     https://github.com/holepunchto/protomux
   queue-tick@1.0.1
     https://github.com/mafintosh/queue-tick
@@ -966,7 +1057,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/signal-promise
   signed-varint@2.0.1
     https://github.com/dominictarr/signed-varint
-  sodium-native@5.1.0
+  sodium-native@5.1.1
     https://github.com/holepunchto/sodium-native
   sodium-secretstream@1.2.0
     https://github.com/mafintosh/sodium-secretstream
@@ -976,7 +1067,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/speedometer
   streamx@2.28.1
     https://github.com/mafintosh/streamx
-  tar-stream@3.2.1
+  tar-stream@3.2.2
     https://github.com/mafintosh/tar-stream
   teex@1.0.1
     https://github.com/mafintosh/teex

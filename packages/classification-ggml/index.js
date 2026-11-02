@@ -1,22 +1,21 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ImageClassifier = void 0;
+exports.ImageClassifier = exports.MegaLoc = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
-const path = require("bare-path");
 const env = require("bare-env");
 const QvacLogger = require("@qvac/logging");
-const fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
+const megaloc_1 = require("./megaloc");
+var megaloc_2 = require("./megaloc");
+Object.defineProperty(exports, "MegaLoc", { enumerable: true, get: function () { return megaloc_2.MegaLoc; } });
 const addon_1 = require("./addon");
-const DEFAULT_WEIGHTS_FILENAME = "mobilenetv3_3class_v3_fp16.gguf";
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
-function resolveDefaultModelPath() {
-    if (env.QVAC_CLASSIFICATION_MODEL_PATH) {
-        return env.QVAC_CLASSIFICATION_MODEL_PATH;
-    }
-    return path.join(__dirname, "weights", DEFAULT_WEIGHTS_FILENAME);
+const MODEL_PATH_REQUIRED = "MobileNet GGUF modelPath is required. Pass modelPath or set QVAC_CLASSIFICATION_MODEL_PATH.";
+function resolveConfiguredModelPath() {
+    const fromEnv = env.QVAC_CLASSIFICATION_MODEL_PATH;
+    return typeof fromEnv === "string" && fromEnv.length > 0 ? fromEnv : undefined;
 }
 function getErrorMessage(error, fallback) {
     if (error && typeof error === "object" && "message" in error) {
@@ -26,27 +25,11 @@ function getErrorMessage(error, fallback) {
     }
     return typeof error === "string" ? error : fallback;
 }
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
-// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
-// copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
-// package holds the runtime. On mobile the package tree isn't resolvable at
-// runtime (the worklet runs from a packed bundle), so fall back to this addon's
-// own prebuilds, where the mobile packaging stages the backends. The native side
-// appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-function resolveBackendsDir() {
-    // fabric's resolver only checks that the platform package resolves, not that
-    // its prebuilds are on disk.
-    const fabricRoot = fabricBackends.resolveBackendsDir();
-    if (fabricRoot !== null && fs.existsSync(fabricRoot))
-        return fabricRoot;
-    return path.join(__dirname, "prebuilds");
-}
 /**
  * High-level classifier for MobileNetV3-Small 3-class image triage.
  *
  * ```js
- * const classifier = new ImageClassifier()
+ * const classifier = new ImageClassifier({ modelPath })
  * await classifier.load()
  * const result = await classifier.classify(jpegBuffer)
  * // [ { label: 'food', confidence: 0.93 }, ... ]
@@ -64,7 +47,7 @@ class ImageClassifier {
     state;
     constructor(opts = {}) {
         const { modelPath, logger = undefined, nativeLogger = false } = opts;
-        this.modelPath = modelPath ?? resolveDefaultModelPath();
+        this.modelPath = modelPath ?? resolveConfiguredModelPath() ?? "";
         this.logger = new QvacLogger(logger);
         // Off by default: see `addon.js::_ensureLoggerInstalled` for the
         // process-wide JsLogger lifecycle that opt-in unlocks.
@@ -89,6 +72,9 @@ class ImageClassifier {
         });
     }
     async loadInternal() {
+        if (!this.modelPath) {
+            throw new Error(MODEL_PATH_REQUIRED);
+        }
         if (!fs.existsSync(this.modelPath)) {
             throw new Error(`MobileNet GGUF weights not found at: ${this.modelPath}`);
         }
@@ -96,7 +82,7 @@ class ImageClassifier {
         // JS-only flags. The native-logger gate lives in the JS-side opts arg.
         const configurationParams = {
             path: this.modelPath,
-            config: { backendsDir: resolveBackendsDir() },
+            config: {},
         };
         const disableNativeLogger = !this.nativeLogger || env.QVAC_CLASSIFICATION_DISABLE_NATIVE_LOGGER === "1";
         try {
@@ -228,4 +214,5 @@ exports.ImageClassifier = ImageClassifier;
 exports.default = ImageClassifier;
 const cjsExports = ImageClassifier;
 cjsExports.ImageClassifier = ImageClassifier;
+cjsExports.MegaLoc = megaloc_1.MegaLoc;
 module.exports = cjsExports;

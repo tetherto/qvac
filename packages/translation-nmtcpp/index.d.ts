@@ -60,6 +60,12 @@ interface TranslationNmtcpp {
 interface TranslationNmtcppConstructor {
     new (args: TranslationNmtcppArgs): TranslationNmtcpp;
     /**
+     * Assess a model before loading it, using current device memory. Concurrent
+     * calls run one at a time. A model or vocabulary that cannot be read, no
+     * usable device, or a malformed request rejects.
+     */
+    assessFit(request: TranslationNmtcpp.FitRequest): Promise<TranslationNmtcpp.FitResult>;
+    /**
      * Available model types for translation
      */
     readonly ModelTypes: TranslationNmtcppModelTypes;
@@ -74,6 +80,39 @@ declare const TranslationNmtcpp: TranslationNmtcppConstructor;
  * `module.exports` remains the bare class.
  */
 declare namespace TranslationNmtcpp {
+    interface FitRequest {
+        files: TranslationNmtcppFiles;
+        config: TranslationNmtcppConfig;
+        /** Additional free memory to reserve, in bytes. */
+        marginBytes?: number;
+    }
+    /**
+     * `unknown` is a load with no reliable verdict: a `main-gpu` selection,
+     * memory that cannot be read, no CPU device for the host row, or a load
+     * between the allowance and the source bytes.
+     */
+    type FitStatus = "fits" | "does-not-fit" | "unknown";
+    interface FitDevice {
+        /** The PCI bus ID when the backend reports one, the device name otherwise. */
+        id: string;
+        name: string;
+        /** Memory the host owns: the host CPU, and a GPU that shares the host's memory. */
+        unified: boolean;
+        /** The weight-load allowance on the selected device; the staged source bytes on the host. */
+        usedBytes: number;
+        freeBytes: number;
+        totalBytes: number;
+    }
+    type FitStats = Record<string, never>;
+    interface FitResult {
+        status: FitStatus;
+        /**
+         * The selected GPU, then the host CPU, which stages a discrete GPU's source
+         * bytes. One CPU row for a load on the CPU, and none for `unknown`.
+         */
+        devices: FitDevice[];
+        stats: FitStats;
+    }
     interface TranslationNmtcppFiles {
         model: string;
         srcVocab?: string;
@@ -147,9 +186,8 @@ declare namespace TranslationNmtcpp {
         gpuDevice?: number;
         /**
          * Path to the directory containing backend shared libraries
-         * (libqvac-ggml-vulkan.so, etc.). Defaults to the root `@qvac/fabric/backends`
-         * resolves on desktop, falling back to this package's `prebuilds/` on mobile where
-         * the package tree isn't resolvable from the packed worklet.
+         * (libqvac-ggml-vulkan.so, etc.). Defaults to the ones @qvac/fabric ships,
+         * which it locates itself next to its runtime.
          */
         backendsDir?: string;
         /**

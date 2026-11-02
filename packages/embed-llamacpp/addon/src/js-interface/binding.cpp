@@ -1,13 +1,14 @@
 #include <bare.h>
+#include <qvac-addon/fabric-bind.h>
 
 #include "../addon/AddonJs.hpp"
 
-namespace qvac_lib_inference_addon_embed::vector_index {
-bool registerBindings(js_env_t* env, js_value_t* exports);
-}
-
 js_value_t*
 qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
@@ -23,6 +24,9 @@ qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
 
   V("assessFit", qvac_lib_inference_addon_embed::assessFit)
   V("createInstance", qvac_lib_inference_addon_embed::createInstance)
+  V("createLayaInstance", qvac_lib_inference_addon_embed::createLayaInstance)
+  V("createRerankInstance",
+    qvac_lib_inference_addon_embed::createRerankInstance)
   V("runJob", qvac_lib_inference_addon_embed::runJob)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
@@ -34,11 +38,6 @@ qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
   V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)
-
-  if (!qvac_lib_inference_addon_embed::vector_index::registerBindings(
-          env, exports)) {
-    return nullptr;
-  }
 
   return exports;
 }

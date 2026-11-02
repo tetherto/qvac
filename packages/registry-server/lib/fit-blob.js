@@ -6,6 +6,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { gguf, buildGgufHeader, GGUFValueType } = require('@huggingface/gguf')
 const logger = require('./logger')
+const { supportsWeightlessDescription, describeArtifact } = require('./fit-description')
 
 const SAFETENSORS_LENGTH_PREFIX_BYTES = 8
 const SAFETENSORS_MAX_HEADER_BYTES = 64 * 1024 * 1024
@@ -26,8 +27,12 @@ function isSafetensorsFile(filePath) {
   return filePath.toLowerCase().endsWith('.safetensors')
 }
 
-function supportsFitBlob(filePath) {
-  return isGGUFFile(filePath) || isSafetensorsFile(filePath)
+function supportsFitBlob(filePath, engine) {
+  return (
+    isGGUFFile(filePath) ||
+    isSafetensorsFile(filePath) ||
+    supportsWeightlessDescription(filePath, engine)
+  )
 }
 
 /**
@@ -125,25 +130,30 @@ async function safetensorsFitBlob(filePath) {
   }
 }
 
-function fitBlobContent(filePath) {
+function fitBlobContent(filePath, engine) {
   if (isGGUFFile(filePath)) return ggufFitBlob(filePath)
   if (isSafetensorsFile(filePath)) return safetensorsFitBlob(filePath)
+  if (supportsWeightlessDescription(filePath, engine)) return describeArtifact(filePath, engine)
   return null
 }
 
 /**
  * Writes the weightless description of an artifact next to it: a GGUF holding
- * the tensor inventory and the settings with the tokenizer tables left out, or
- * a safetensors' JSON header.
+ * the tensor inventory and the settings with the tokenizer tables left out, a
+ * safetensors' JSON header, or, for the `.bin` and `.spm` artifacts of the
+ * whisper.cpp, BCI and nmt.cpp engines, a GGUF with no data section holding
+ * the file's settings, its tensor inventory and its vocabulary sizes.
+ *
+ * `engine` picks the reader for the extensions several engines share.
  *
  * Returns `{ path, size, sha256 }`, or `null` when the format carries no
  * separable description or the artifact could not be read.
  */
-async function writeFitBlob(filePath, outputDir) {
-  if (!supportsFitBlob(filePath)) return null
+async function writeFitBlob(filePath, outputDir, engine) {
+  if (!supportsFitBlob(filePath, engine)) return null
 
   try {
-    const content = await fitBlobContent(filePath)
+    const content = await fitBlobContent(filePath, engine)
     if (!content || content.length === 0) {
       logger.warn('No description could be built for fit blob', { filePath })
       return null

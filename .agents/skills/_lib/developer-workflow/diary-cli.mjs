@@ -3,7 +3,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  CONFIG_DIR,
   CONFIG_FILE,
   DEFAULT_DIARY_DIR,
   ensureConfigDir,
@@ -12,50 +11,14 @@ import {
   setDiaryEnabled,
   validateConfig,
 } from "./config.mjs";
-import {
-  discoverAsanaUser,
-  emptyConfig,
-  importAsanaConfig,
-  validateLocalConfig,
-} from "./config-init.mjs";
+import { emptyConfig, validateLocalConfig } from "./config-init.mjs";
 import { appendDiaryEntry, diaryStatus, ensureDiaryFile } from "./diary.mjs";
 
 const TEMPLATE = new URL("./templates/dev-diary.local-rule.mdc", import.meta.url);
 
-function asanaTokenInstructions() {
-  return `Asana token setup:
-
-1. Open Asana developer console:
-   https://app.asana.com/0/my-apps
-
-2. Create a Personal Access Token.
-   Description suggestion: Local qvac-pr-skills
-
-3. Permission model: Asana Personal Access Tokens do not require choosing
-   scopes in this setup. The token acts as your Asana user and can access
-   whatever that user can access. For diary/status enrichment, the user must be
-   able to read the workspace/project/tasks. For sync actions, the user must
-   also be allowed to comment, move, and complete tasks in that project.
-
-4. No special OAuth app or MCP server is needed. This local workflow uses the
-   token as your user against the Asana REST API.
-
-5. Store it in your default shell startup file or export it in the current
-   shell. Coding agents may not inherit the app environment, so the helper
-   falls back to asking your default shell for this variable:
-
-   export ASANA_ACCESS_TOKEN='<token>'
-
-6. Verify it:
-   curl https://app.asana.com/api/1.0/users/me \\
-     -H "Authorization: Bearer $ASANA_ACCESS_TOKEN"
-
-Docs: https://developers.asana.com/docs/personal-access-token`;
-}
-
 function usage() {
   console.log(`Usage:
-  node diary-cli.mjs --init [--basic|--asana] [asanaconfig.json]
+  node diary-cli.mjs --init [--basic]
   node diary-cli.mjs --status
   node diary-cli.mjs --path [YYYY-MM-DD]
   node diary-cli.mjs --read [YYYY-MM-DD]
@@ -81,10 +44,6 @@ function installLocalRule() {
   return { installed: false, path: target };
 }
 
-function positionalArgs() {
-  return process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
-}
-
 function dateArgAfter(flag) {
   const idx = process.argv.indexOf(flag);
   const value = idx === -1 ? null : process.argv[idx + 1];
@@ -93,33 +52,9 @@ function dateArgAfter(flag) {
 
 async function initDiary() {
   ensureConfigDir();
-  let config = existsSync(CONFIG_FILE) ? loadConfig() : emptyConfig();
-  if (!existsSync(CONFIG_FILE)) saveConfig(config);
-
-  const asanaConfig = positionalArgs()[0] || null;
-  if (asanaConfig) {
-    config = importAsanaConfig(asanaConfig, { existing: config });
-  }
-
-  const wantsAsana = Boolean(asanaConfig || process.argv.includes("--asana"));
-  if (wantsAsana) {
-    console.log(asanaTokenInstructions());
-    console.log("");
-    try {
-      await discoverAsanaUser(config);
-      await validateLocalConfig({ requireAsana: true });
-    } catch (e) {
-      const message = e.message || String(e);
-      const suffix = /token missing/i.test(message)
-        ? "\n\nCreate/export the Asana token above, then rerun this command."
-        : "\n\nFix the Asana config/access issue above, then rerun this command.";
-      throw new Error(`${message}${suffix}`);
-    }
-    config = loadConfig();
-  } else {
-    const errors = validateConfig(config, { requireAsana: false });
-    if (errors.length > 0) throw new Error(errors.join("\n"));
-  }
+  const config = existsSync(CONFIG_FILE) ? loadConfig() : emptyConfig();
+  const errors = validateConfig(config);
+  if (errors.length > 0) throw new Error(errors.join("\n"));
 
   config.diary = { ...(config.diary || {}), dir: config.diary?.dir || DEFAULT_DIARY_DIR };
   mkdirSync(config.diary.dir, { recursive: true });
@@ -132,6 +67,16 @@ async function initDiary() {
 }
 
 async function main() {
+  const args = process.argv.slice(2);
+  const allowedFlags = new Set([
+    "--init", "--basic", "--status", "--path", "--read", "--on", "--off", "--append",
+  ]);
+  if (args.some((arg) => arg.startsWith("--") && !allowedFlags.has(arg))) {
+    throw new Error("Unsupported argument. Only local diary operations are supported.");
+  }
+  if (args.includes("--init") && args.some((arg) => !["--init", "--basic"].includes(arg))) {
+    throw new Error("Diary initialization accepts only --init and --basic.");
+  }
   if (process.argv.includes("--status")) {
     console.log(JSON.stringify(diaryStatus(), null, 2));
     return;
@@ -157,7 +102,7 @@ async function main() {
     return;
   }
   if (process.argv.includes("--on")) {
-    await validateLocalConfig({ requireAsana: false });
+    await validateLocalConfig();
     setDiaryEnabled(true);
     console.log("Diary enabled");
     return;

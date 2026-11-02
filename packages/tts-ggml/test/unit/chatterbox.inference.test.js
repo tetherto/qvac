@@ -190,12 +190,12 @@ test('Chatterbox: modelDir fills in the two GGUF paths', async (t) => {
     files: { modelDir: './models' }
   })
   t.is(
-    model._t3ModelPath,
+    model._setup.paths.t3ModelPath,
     path.join('./models', 'chatterbox-t3-turbo.gguf'),
     'modelDir derives T3 GGUF path'
   )
   t.is(
-    model._s3genModelPath,
+    model._setup.paths.s3genModelPath,
     path.join('./models', 'chatterbox-s3gen.gguf'),
     'modelDir derives S3Gen GGUF path'
   )
@@ -209,8 +209,12 @@ test('Chatterbox: explicit t3Model / s3genModel override modelDir defaults', asy
       s3genModel: '/abs/custom-s3gen.gguf'
     }
   })
-  t.is(model._t3ModelPath, '/abs/custom-t3.gguf', 'explicit t3Model wins over modelDir')
-  t.is(model._s3genModelPath, '/abs/custom-s3gen.gguf', 'explicit s3genModel wins over modelDir')
+  t.is(model._setup.paths.t3ModelPath, '/abs/custom-t3.gguf', 'explicit t3Model wins over modelDir')
+  t.is(
+    model._setup.paths.s3genModelPath,
+    '/abs/custom-s3gen.gguf',
+    'explicit s3genModel wins over modelDir'
+  )
 })
 
 test('Chatterbox: cancel propagates as job failure', async (t) => {

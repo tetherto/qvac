@@ -32,7 +32,7 @@ export function resolvePluginSpecifiers(
 ): string[] {
   let plugins = config.plugins ?? []
 
-  if (plugins.length === 0) {
+  if (plugins.length === 0 && !(config.rpcServerProvider && config.plugins !== undefined)) {
     const allBuiltins = BUILTIN_SUFFIXES.map((suffix) => buildBuiltinSpecifier(sdkName, suffix))
     logger.warn('No plugins specified — bundling ALL built-in plugins.')
     logger.info("   For smaller bundles, add a 'plugins' array to qvac.config.*\n")

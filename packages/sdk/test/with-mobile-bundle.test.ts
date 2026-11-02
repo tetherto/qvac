@@ -1,20 +1,28 @@
 import test from 'brittle'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   resolveAddonPlatformPackage,
-  resolvePlatformAddonRoots,
   resolvePlatformPackageName
-} from '@/expo/plugins/patches/qvac-platform-addons'
+} from '@/commands/verify/platform-addons'
 import {
   MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
   MOBILE_UNSUPPORTED_MODULES,
-  mobileHostsForPlatform,
-  patchBareKitLinkers,
-  runIOSAddonLinker
+  buildMobileBundle,
+  mobileHostsForPlatform
 } from '@/expo/plugins/withMobileBundle'
+import { HostPrebuildsMissingError } from '@/utils/errors-client'
+import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
+import {
+  RUNTIME_ADDON_ANDROID_PACKAGE,
+  RUNTIME_ADDON_IOS_PACKAGE,
+  RUNTIME_ADDON_VERSION,
+  SPLIT_ADDON_ANDROID_PACKAGE,
+  SPLIT_ADDON_IOS_PACKAGE,
+  SPLIT_ADDON_VERSION,
+  createSplitAddonProject
+} from './fixtures/split-addon-project'
 
 test('mobileHostsForPlatform: each build target bundles and verifies only its own hosts', (t) => {
   t.alike(mobileHostsForPlatform('android'), ['android-arm64'])
@@ -30,37 +38,6 @@ test('MOBILE_HOSTS: the shared bundle covers every mobile host', (t) => {
     [...MOBILE_HOSTS_BY_PLATFORM.android, ...MOBILE_HOSTS_BY_PLATFORM.ios],
     'a dual-platform prebuild writes one bundle, so it must cover both platforms'
   )
-})
-
-test('resolvePlatformAddonRoots: finds the inner addon of the installed platform package', (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-platform-addon-'))
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
-  writeSplitAddon(fixtureDir, '@qvac/tts-ggml', '0.9.2')
-  writeSplitAddon(fixtureDir, '@qvac/asr-ggml', '0.5.2')
-  writeFatAddon(fixtureDir, '@qvac/llm-llamacpp', '0.53.0')
-
-  const android = resolvePlatformAddonRoots(
-    fixtureDir,
-    ['@qvac/tts-ggml', '@qvac/asr-ggml', '@qvac/llm-llamacpp'],
-    'android'
-  )
-
-  t.is(android.length, 2, 'only split addons need linking from their platform packages')
-  t.is(android[0].pkg.name, '@qvac/tts-ggml', 'the inner addon carries the meta package name')
-  t.is(android[0].pkg.version, '0.9.2')
-  t.ok(
-    android[0].dir.endsWith(join('@qvac', 'tts-ggml-android-arm64', 'addon')),
-    'resolves the tts android slice'
-  )
-  t.is(android[1].pkg.name, '@qvac/asr-ggml')
-  t.ok(
-    android[1].dir.endsWith(join('@qvac', 'asr-ggml-android-arm64', 'addon')),
-    'resolves the asr android slice'
-  )
-
-  const ios = resolvePlatformAddonRoots(fixtureDir, ['@qvac/tts-ggml', '@qvac/asr-ggml'], 'ios')
-  t.ok(ios[0].dir.endsWith(join('@qvac', 'tts-ggml-ios', 'addon')), 'resolves the tts ios slice')
-  t.ok(ios[1].dir.endsWith(join('@qvac', 'asr-ggml-ios', 'addon')), 'resolves the asr ios slice')
 })
 
 test('resolvePlatformPackageName: reads slice names from #host-addon for hosts and build targets', (t) => {
@@ -88,156 +65,159 @@ test('resolvePlatformPackageName: reads slice names from #host-addon for hosts a
   t.is(resolvePlatformPackageName(undefined, 'android-arm64'), null)
 })
 
-test('resolvePlatformAddonRoots: skips an addon whose platform package is absent', (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-platform-addon-'))
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
-  writeManifest(join(fixtureDir, 'node_modules', '@qvac', 'audiogen-ggml'), {
-    name: '@qvac/audiogen-ggml',
-    version: '0.4.1',
-    addon: true,
-    imports: { '#host-addon': hostAddonMap('@qvac/audiogen-ggml') }
-  })
-
-  t.alike(resolvePlatformAddonRoots(fixtureDir, ['@qvac/audiogen-ggml'], 'android'), [])
+test('MOBILE_UNSUPPORTED_MODULES: the desktop-only spawn path stays out of mobile bundles', (t) => {
+  t.alike(MOBILE_UNSUPPORTED_MODULES, ['bare-runtime/spawn'])
 })
 
-test('MOBILE_UNSUPPORTED_MODULES: desktop-only fit subprocess stays out of mobile bundles', (t) => {
-  t.alike(MOBILE_UNSUPPORTED_MODULES, ['bare-runtime/spawn', '@qvac/model-fit/process'])
-})
+function androidPrebuildMod(projectRoot: string) {
+  return {
+    modRequest: { projectRoot, platform: 'android' }
+  } as unknown as Parameters<typeof buildMobileBundle>[0]
+}
 
-test('patchBareKitLinkers: returns paths for patched platforms', (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-linker-patch-'))
-  const projectRoot = join(fixtureDir, 'project')
-  const bareKitPath = join(projectRoot, 'node_modules', 'react-native-bare-kit')
-  const sdkPath = join(fixtureDir, 'sdk')
-  const patchesDir = join(sdkPath, 'src', 'expo', 'plugins', 'patches')
-  const androidTarget = join(bareKitPath, 'android', 'link.mjs')
-  const iosTarget = join(bareKitPath, 'ios', 'link.mjs')
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
+const posixOnly = { skip: process.platform === 'win32' }
 
-  mkdirSync(join(bareKitPath, 'android'), { recursive: true })
-  mkdirSync(join(bareKitPath, 'ios'), { recursive: true })
-  mkdirSync(patchesDir, { recursive: true })
-  mkdirSync(join(sdkPath, 'dist', 'src', 'expo', 'plugins', 'patches'), { recursive: true })
-  writeFileSync(join(patchesDir, 'android-link.mjs'), 'android patch')
-  writeFileSync(join(patchesDir, 'ios-link.mjs'), 'ios patch')
-  writeFileSync(
-    join(sdkPath, 'dist', 'src', 'expo', 'plugins', 'patches', 'qvac-platform-addons.js'),
-    'resolver'
-  )
+test(
+  'buildMobileBundle: fails prebuild and names the missing platform package by default',
+  posixOnly,
+  async (t) => {
+    const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'))
+    t.teardown(project.cleanup)
+    const pm = installFakePackageManager(project.projectRoot, 'pnpm')
 
-  const linkerPaths = patchBareKitLinkers(projectRoot, sdkPath)
+    let error: unknown
+    try {
+      await withPath(pm.binDir, () =>
+        buildMobileBundle(androidPrebuildMod(project.projectRoot), {})
+      )
+    } catch (cause) {
+      error = cause
+    }
 
-  t.alike(linkerPaths, { android: androidTarget, ios: iosTarget })
-  t.ok(existsSync(androidTarget), 'copies the Android linker patch')
-  t.ok(existsSync(iosTarget), 'copies the iOS linker patch')
-  t.ok(
-    existsSync(join(bareKitPath, 'android', 'qvac-platform-addons.mjs')),
-    'copies the compiled resolver the Android patch imports'
-  )
-  t.ok(
-    existsSync(join(bareKitPath, 'ios', 'qvac-platform-addons.mjs')),
-    'copies the compiled resolver the iOS patch imports'
-  )
-})
-
-test('patchBareKitLinkers: leaves the stock linker when the resolver is missing', (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-linker-patch-'))
-  const projectRoot = join(fixtureDir, 'project')
-  const bareKitPath = join(projectRoot, 'node_modules', 'react-native-bare-kit')
-  const sdkPath = join(fixtureDir, 'sdk')
-  const patchesDir = join(sdkPath, 'src', 'expo', 'plugins', 'patches')
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
-
-  mkdirSync(join(bareKitPath, 'android'), { recursive: true })
-  mkdirSync(join(bareKitPath, 'ios'), { recursive: true })
-  mkdirSync(patchesDir, { recursive: true })
-  writeFileSync(join(patchesDir, 'android-link.mjs'), 'android patch')
-  writeFileSync(join(patchesDir, 'ios-link.mjs'), 'ios patch')
-
-  t.alike(patchBareKitLinkers(projectRoot, sdkPath), { android: null, ios: null })
-  t.absent(
-    existsSync(join(bareKitPath, 'android', 'link.mjs')),
-    'a patch without its resolver must not be installed'
-  )
-})
-
-test('runIOSAddonLinker: waits for the linker to finish', async (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-ios-linker-'))
-  const linkerPath = join(fixtureDir, 'link.mjs')
-  const markerPath = join(fixtureDir, 'linked')
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
-
-  writeFileSync(
-    linkerPath,
-    `import { writeFileSync } from 'node:fs'\nwriteFileSync(${JSON.stringify(markerPath)}, '')\n`
-  )
-
-  await runIOSAddonLinker(linkerPath)
-
-  t.ok(existsSync(markerPath), 'linker completed before the helper resolved')
-})
-
-test('runIOSAddonLinker: rejects when the linker fails', async (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-ios-linker-'))
-  const linkerPath = join(fixtureDir, 'link.mjs')
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
-
-  writeFileSync(linkerPath, `console.error('fixture failure')\nprocess.exit(7)\n`)
-
-  let error: Error | undefined
-  try {
-    await runIOSAddonLinker(linkerPath)
-  } catch (cause) {
-    error = cause as Error
+    t.ok(error instanceof HostPrebuildsMissingError, 'bundling fails')
+    t.alike(
+      (error as HostPrebuildsMissingError).dependencies,
+      {
+        [SPLIT_ADDON_ANDROID_PACKAGE]: SPLIT_ADDON_VERSION,
+        [SPLIT_ADDON_IOS_PACKAGE]: SPLIT_ADDON_VERSION
+      },
+      'the failure names the exact pins to add for every host the shared bundle covers'
+    )
+    t.alike(pm.calls(), [], 'nothing is installed without the option')
   }
+)
 
-  t.ok(error, 'expected the helper to reject')
-  t.ok(error?.message.includes('code 7'), 'reports the child exit code')
-  t.ok(error?.message.includes('fixture failure'), 'reports linker diagnostics')
-})
+test(
+  'buildMobileBundle: installMissingPrebuilds installs the packages of every mobile host',
+  posixOnly,
+  async (t) => {
+    const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'))
+    t.teardown(project.cleanup)
+    const pm = installFakePackageManager(project.projectRoot, 'pnpm')
+
+    await withPath(pm.binDir, () =>
+      buildMobileBundle(androidPrebuildMod(project.projectRoot), { installMissingPrebuilds: true })
+    )
+
+    t.alike(
+      pm.calls(),
+      [
+        {
+          cwd: project.projectRoot,
+          args: [
+            'add',
+            '--save-exact',
+            `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+            `${SPLIT_ADDON_IOS_PACKAGE}@${SPLIT_ADDON_VERSION}`
+          ]
+        }
+      ],
+      'the bundle is shared by both platforms, so an Android prebuild installs both'
+    )
+    t.ok(
+      existsSync(join(project.sdkPath, 'dist', 'worker.mobile.bundle.js')),
+      'the verified bundle is copied into the SDK'
+    )
+  }
+)
+
+test(
+  'buildMobileBundle: installMissingPrebuilds finds the SDK addon in a pnpm store',
+  posixOnly,
+  async (t) => {
+    const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'), {
+      layout: 'pnpm'
+    })
+    t.teardown(project.cleanup)
+    t.absent(
+      existsSync(join(project.projectRoot, 'node_modules', '@qvac', 'fake-ggml')),
+      'the addon is not in the top-level node_modules'
+    )
+    const pm = installFakePackageManager(project.projectRoot, 'pnpm')
+
+    await withPath(pm.binDir, () =>
+      buildMobileBundle(androidPrebuildMod(project.projectRoot), { installMissingPrebuilds: true })
+    )
+
+    t.alike(pm.calls(), [
+      {
+        cwd: project.projectRoot,
+        args: [
+          'add',
+          '--save-exact',
+          `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+          `${SPLIT_ADDON_IOS_PACKAGE}@${SPLIT_ADDON_VERSION}`
+        ]
+      }
+    ])
+  }
+)
+
+for (const layout of ['pnpm', 'hoisted'] as const) {
+  test(
+    `buildMobileBundle: installMissingPrebuilds covers an addon's split-addon dependency (${layout})`,
+    posixOnly,
+    async (t) => {
+      const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'), {
+        layout,
+        withRuntime: true
+      })
+      t.teardown(project.cleanup)
+      t.absent(
+        existsSync(join(project.projectRoot, 'node_modules', '@qvac', 'fake-runtime')),
+        'the dependency is not in the top-level node_modules'
+      )
+      const pm = installFakePackageManager(project.projectRoot, 'pnpm')
+
+      await withPath(pm.binDir, () =>
+        buildMobileBundle(androidPrebuildMod(project.projectRoot), {
+          installMissingPrebuilds: true
+        })
+      )
+
+      t.alike(pm.calls(), [
+        {
+          cwd: project.projectRoot,
+          args: [
+            'add',
+            '--save-exact',
+            `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+            `${SPLIT_ADDON_IOS_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+            `${RUNTIME_ADDON_ANDROID_PACKAGE}@${RUNTIME_ADDON_VERSION}`,
+            `${RUNTIME_ADDON_IOS_PACKAGE}@${RUNTIME_ADDON_VERSION}`
+          ]
+        }
+      ])
+    }
+  )
+}
 
 function hostAddonMap(metaName: string) {
   return {
-    linux: {
-      x64: [`${metaName}-linux-x64`, './addon-unavailable.js'],
-      arm64: [`${metaName}-linux-arm64`, './addon-unavailable.js']
-    },
-    darwin: {
-      arm64: [`${metaName}-darwin-arm64`, './addon-unavailable.js'],
-      x64: [`${metaName}-darwin-x64`, './addon-unavailable.js']
-    },
-    android: { arm64: [`${metaName}-android-arm64`, './addon-unavailable.js'] },
-    ios: [`${metaName}-ios`, './addon-unavailable.js'],
+    linux: { x64: `${metaName}-linux-x64`, arm64: `${metaName}-linux-arm64` },
+    darwin: { arm64: `${metaName}-darwin-arm64`, x64: `${metaName}-darwin-x64` },
+    android: { arm64: `${metaName}-android-arm64` },
+    ios: `${metaName}-ios`,
     default: './addon-unavailable.js'
   }
-}
-
-function writeManifest(dir: string, manifest: unknown) {
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
-}
-
-function writeSplitAddon(fixtureDir: string, metaName: string, version: string) {
-  const modules = join(fixtureDir, 'node_modules')
-  writeManifest(join(modules, ...metaName.split('/')), {
-    name: metaName,
-    version,
-    addon: true,
-    imports: { '#host-addon': hostAddonMap(metaName) }
-  })
-  for (const [slice, host] of [
-    [`${metaName}-android-arm64`, 'android-arm64'],
-    [`${metaName}-ios`, 'ios-arm64']
-  ]) {
-    const addonDir = join(modules, ...slice.split('/'), 'addon')
-    writeManifest(addonDir, { name: metaName, version, addon: true })
-    mkdirSync(join(addonDir, 'prebuilds', host), { recursive: true })
-  }
-}
-
-function writeFatAddon(fixtureDir: string, name: string, version: string) {
-  const dir = join(fixtureDir, 'node_modules', ...name.split('/'))
-  writeManifest(dir, { name, version, addon: true })
-  mkdirSync(join(dir, 'prebuilds', 'android-arm64'), { recursive: true })
 }

@@ -88,16 +88,7 @@ tts_cpp::parler::EngineOptions toEngineOptions(const ParlerConfig& cfg) {
   if (cfg.streamFirstChunkTokens.has_value())
     opts.stream_first_chunk_frames = *cfg.streamFirstChunkTokens;
 
-  // Mirrors SupertonicModel::toEngineOptions: compose
-  // `cfg.backendsDir / BACKENDS_SUBDIR` before forwarding.
-  if (!cfg.backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath = (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR))
-                          .lexically_normal();
-#endif
-    opts.backends_dir = backendsDirPath.string();
-  }
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   return opts;
 }
 
@@ -486,11 +477,14 @@ void ParlerModel::loadLocked() {
   LoadedEnhancer enhancer = loadEnhancer(
       cfg_.enhancerGgufPath,
       backend.device == kBackendDeviceGpu,
-      "ParlerModel::load: lavasr enhancer: ");
+      "ParlerModel::load: lavasr enhancer: ",
+      0,
+      cfg_.enhancerCoreml);
   LoadedDenoiser denoiser = loadDenoiser(
       cfg_.denoiserGgufPath,
       backend.device == kBackendDeviceGpu,
-      "ParlerModel::load: lavasr denoiser: ");
+      "ParlerModel::load: lavasr denoiser: ",
+      cfg_.denoiserCoreml);
 
   engine_ = std::move(engine);
   backendName_ = backend.name;

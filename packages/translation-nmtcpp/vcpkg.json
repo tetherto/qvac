@@ -2,11 +2,11 @@
   "dependencies": [
     {
       "name": "bergamot-translator",
-      "version>=": "1.0.1"
+      "version>=": "1.0.2"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.4.0"
+      "version>=": "1.5.0"
     },
     {
       "name": "qvac-lint-cpp",

@@ -9,6 +9,7 @@ export interface SdConfigurationParams {
     clipGPath?: string;
     t5XxlPath?: string;
     llmPath?: string;
+    llmVisionPath?: string;
     vaePath?: string;
     clipVisionPath?: string;
     esrganPath?: string;

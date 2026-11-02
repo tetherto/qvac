@@ -10,7 +10,7 @@ const packageRoot = path.resolve(__dirname, '../..')
 // Evaluate the real source against a controlled `require` so the tests cover
 // exactly what gets published. `makeRequire` receives the module being loaded,
 // so a fake can hand back its half-built exports.
-function evaluate (file, makeRequire) {
+function evaluate(file, makeRequire) {
   const filename = path.join(packageRoot, file)
   const module_ = { exports: {} }
   const wrapper = vm.compileFunction(

@@ -1,0 +1,25 @@
+name: Classification integration model manifest
+
+on:
+  workflow_call:
+    outputs:
+      manifest:
+        description: "S3 fixtures and SHA256 checksums for classification integration tests"
+        value: ${{ jobs.models.outputs.manifest }}
+
+jobs:
+  models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      manifest: ${{ steps.models.outputs.manifest }}
+    steps:
+      - name: Export model manifest
+        id: models
+        shell: bash
+        env:
+          MODEL_MANIFEST: >-
+            [{"src":"qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf","dest":"test/fixtures/megaloc-f16.gguf","sha256":"f2519f42a826bb82f5d3bd6360e6017fb156ad3cb25f71d73163df01d26c6636"},
+            {"src":"qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf","dest":"test/fixtures/megaloc-mixed.gguf","sha256":"c1215bca09ed783f34e66ab372b0b02e75213733bea8105764557b58f2082575"}]
+        run: printf 'manifest=%s\n' "$MODEL_MANIFEST" >> "$GITHUB_OUTPUT"

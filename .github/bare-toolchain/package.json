@@ -1,0 +1,8 @@
+{
+  "name": "qvac-bare-toolchain",
+  "private": true,
+  "description": "The bare-make toolchain CI builds with. The lockfile pins bare-make and everything it pulls in (llvm-runtime, cmake-toolchains, cmake-runtime, ninja-runtime, nasm-runtime), so a new upstream release changes nothing until a pull request updates the lockfile. Install with install.mjs.",
+  "dependencies": {
+    "bare-make": "2.1.1"
+  }
+}

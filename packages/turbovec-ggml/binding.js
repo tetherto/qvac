@@ -1,0 +1,6 @@
+// Pre-load @qvac/fabric so its shared .bare module (the ggml runtime, which
+// carries the vector-index API) is registered with the bare runtime before our
+// addon resolves its DT_NEEDED dependency qvac__fabric-<host>@0.bare (shipped by @qvac/fabric-<host>).
+require('@qvac/fabric')
+
+module.exports = require.addon()

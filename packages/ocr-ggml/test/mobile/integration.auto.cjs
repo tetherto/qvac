@@ -101,6 +101,11 @@ async function runErrorHandlingTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/error-handling.test.js', options)
 }
 
+async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFitTest')) return __FILTERED
+  return runIntegrationModule('../integration/fit.test.js', options)
+}
+
 async function runFullCoverageTest (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFullCoverageTest')) return __FILTERED
   return runIntegrationModule('../integration/full-coverage.test.js', options)

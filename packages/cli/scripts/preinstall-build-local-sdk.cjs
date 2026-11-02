@@ -84,7 +84,7 @@ if (!isMonorepoSibling()) {
 }
 
 const skipCompile = alreadyBuilt()
-run('bun', ['run', './scripts/link-workspace-inference.ts'])
+run(process.execPath, ['./scripts/link-workspace-inference.mjs'])
 
 if (skipCompile) {
   console.log('[@qvac/cli preinstall] @qvac/sdk dist is up to date, skipping rebuild')

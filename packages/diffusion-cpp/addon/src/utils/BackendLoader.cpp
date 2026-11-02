@@ -10,6 +10,7 @@
 #include <ggml-backend.h>
 
 #include "utils/LoggingMacros.hpp"
+#include "utils/ModuleBackendsDir.hpp"
 #endif
 
 namespace qvac_lib_inference_addon_sd {
@@ -161,12 +162,11 @@ void loadBackendModulesOnce(const std::string& backendsDir) {
   static std::once_flag backendsLoaded;
   std::call_once(backendsLoaded, [&backendsDir]() {
     using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-    if (!backendsDir.empty()) {
-      std::filesystem::path backendsDirPath(backendsDir);
-#ifdef BACKENDS_SUBDIR
-      backendsDirPath = backendsDirPath / BACKENDS_SUBDIR;
-      backendsDirPath = backendsDirPath.lexically_normal();
-#endif
+    // A configured directory is scanned as given. An empty one resolves to the
+    // directory next to this module (see ModuleBackendsDir.hpp).
+    const std::filesystem::path backendsDirPath =
+        resolveBackendsDir(backendsDir);
+    if (!backendsDirPath.empty()) {
       QLOG_IF(
           Priority::INFO,
           "Loading GPU backends from: " + backendsDirPath.string());

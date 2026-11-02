@@ -8,6 +8,7 @@ import { startNodeMemoryPoller } from '../../core/node-memory-poller.js'
 import { loadConfig } from '../../utils/config-loader.js'
 import { loadTests } from '../../utils/test-loader.js'
 import { buildMqttConnectionConfig, createMqttClient } from '../../utils/mqtt-connection.js'
+import { hostPlatform } from '../utils/host-platform.js'
 
 function readArg(args: string[], name: string): string | undefined {
   const prefix = `--${name}=`
@@ -55,7 +56,10 @@ async function main() {
 
   const runId = requireArg(args, 'runId')
   const configDir = path.resolve(readArg(args, 'config') ?? process.cwd())
-  const platform = readArg(args, 'platform') ?? 'desktop'
+  const platform = readArg(args, 'platform') ?? hostPlatform('desktop')
+  // The consumer entry applies the resource table as it is imported below, and it has to
+  // read the same label this process registers with.
+  process.env['QVAC_TEST_PLATFORM'] = platform
   const mqttBrokerOverride = readArg(args, 'mqtt-broker')
 
   // Load .env from the config directory (mocha-like behavior)

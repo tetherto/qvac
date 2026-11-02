@@ -8,8 +8,6 @@ const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const { ensureModel, releaseJsLogger } = require('./utils')
 
-const BACKENDS_DIR = path.resolve(__dirname, '../../prebuilds')
-
 const MODEL = {
   name: 'stable-diffusion-v2-1-Q8_0.gguf'
 }
@@ -59,8 +57,7 @@ test('main-gpu requests Vulkan0 on Windows multi-GPU runner', { timeout: 600000 
         threads: 4,
         prediction: 'v',
         diffusion_fa: true,
-        verbosity: 2,
-        backendsDir: BACKENDS_DIR
+        verbosity: 2
       },
       logger: console,
       opts: { stats: true }

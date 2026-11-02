@@ -388,3 +388,35 @@ test('BUILTIN: User can override device defaults', (t) => {
 
   t.is(result.device, 'vulkan')
 })
+
+test('draftModelSrc pairs with a spec_type from device defaults', (t) => {
+  const ctx: RuntimeContext = { platform: 'darwin' }
+  const patterns: DevicePattern[] = [
+    {
+      name: 'Speculative',
+      match: { platform: 'darwin' },
+      defaults: { [ModelType.llamacppCompletion]: { spec_type: 'draft-mtp' } }
+    }
+  ]
+
+  const result = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    { draftModelSrc: 'https://example.com/head.gguf' },
+    ctx,
+    patterns,
+    []
+  )
+  t.is(result.spec_type, 'draft-mtp')
+
+  t.exception(
+    () =>
+      resolveModelConfigWithContext(
+        ModelType.llamacppCompletion,
+        { draftModelSrc: 'https://example.com/head.gguf' },
+        ctx,
+        [],
+        []
+      ),
+    /draftModelSrc requires/
+  )
+})

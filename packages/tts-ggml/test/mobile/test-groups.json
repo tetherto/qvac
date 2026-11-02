@@ -33,7 +33,9 @@
       "runMultipleRunsTest",
       "runGpuSmokeTest",
       "runOutputSampleRateTest",
-      "runVoiceControlsTest"
+      "runVoiceControlsTest",
+      "runMossFitTest",
+      "runMossSfxFitTest"
     ]
   },
   "android": {
@@ -69,7 +71,9 @@
       "runMultipleRunsTest",
       "runGpuSmokeTest",
       "runOutputSampleRateTest",
-      "runVoiceControlsTest"
+      "runVoiceControlsTest",
+      "runMossFitTest",
+      "runMossSfxFitTest"
     ]
   }
 }

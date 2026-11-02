@@ -49,13 +49,6 @@ function breadcrumbs(slugs: string[], isHomePage = false): ListItem[] {
   return (list?.itemListElement ?? []) as ListItem[];
 }
 
-describe('buildDocsJsonLd — archived version slugs', () => {
-  it('emits nothing for an archived API version (hidden from indexing)', () => {
-    const slugs = ['reference', 'api', 'v0.8.x'];
-    expect(buildDocsJsonLd(page('v0.8.x'), slugs, false, lookup)).toBeNull();
-  });
-});
-
 describe('buildDocsJsonLd — home page', () => {
   it('emits WebSite and SoftwareApplication, and no BreadcrumbList', () => {
     const blocks = buildDocsJsonLd(page('QVAC'), [], true, lookup);
@@ -243,7 +236,7 @@ describe('docs breadcrumb URL integrity', () => {
     for (const key of pageSet) {
       const slugs = key.split('/');
       const blocks = buildDocsJsonLd(page(slugs[slugs.length - 1]), slugs, false, realLookup);
-      // `null` = archived version bundle, which emits no structured data.
+      // `null` = a page that emits no structured data at all.
       if (!blocks) continue;
 
       const list = blocks.find((b) => b['@type'] === 'BreadcrumbList') as

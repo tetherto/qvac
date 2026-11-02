@@ -1,10 +1,11 @@
-// Libraries @qvac/inference shares with its addon peers at runtime. On 0.x,
+// Libraries @qvac/inference and its addon peers share at runtime. On 0.x,
 // ranges that do not overlap install as separate copies and the Bare bundle
-// carries both.
+// carries both; for @qvac/fabric the addons then load mismatched native builds.
 export const SHARED_RUNTIME_LIBS = [
   '@qvac/infer-base',
   '@qvac/logging',
   '@qvac/error',
+  '@qvac/fabric',
 ]
 
 // A consumer that installs the package together with every @qvac peer,

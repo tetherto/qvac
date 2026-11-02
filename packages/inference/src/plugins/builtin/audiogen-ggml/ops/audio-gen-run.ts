@@ -199,6 +199,7 @@ function toUnderstandResult(result: {
   timesignature: string
   vocalLanguage: string
   audioCodes: Int32Array | number[]
+  seed: number
 }): AudioGenUnderstandResult {
   return { ...result, audioCodes: Array.from(result.audioCodes) }
 }

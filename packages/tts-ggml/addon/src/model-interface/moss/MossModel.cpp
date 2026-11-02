@@ -138,6 +138,10 @@ MossModel::~MossModel() noexcept = default;
 void MossModel::validateConfig(const MossConfig& cfg) {
   validateModelPaths(cfg);
   validateVoice(cfg);
+  validateFitConfig(cfg);
+}
+
+void MossModel::validateFitConfig(const MossConfig& cfg) {
   validateCounts(cfg);
   validateGpuIntent(cfg);
 }
@@ -151,8 +155,7 @@ tts_cpp::moss::EngineOptions MossModel::toEngineOptions(const MossConfig& cfg) {
   opts.dialogue_reference_paths = cfg.dialogueReferences;
   if (cfg.durationTokens.value_or(0) > 0)
     opts.duration_tokens = *cfg.durationTokens;
-  if (!cfg.backendsDir.empty())
-    opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   if (!cfg.language.empty())
     opts.language = cfg.language;
   if (cfg.seed.has_value())

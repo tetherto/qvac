@@ -109,7 +109,7 @@ async function resolveBatchPrompts(prompts: BatchPromptParams[]): Promise<Resolv
 
     resolvedPrompts.push({
       ...(prompt.id !== undefined && { id: prompt.id }),
-      history: prompt.history,
+      history: prompt.history.map((message) => ({ ...message, content: message.content ?? '' })),
       ...(prompt.generationParams && {
         generationParams: prompt.generationParams
       }),

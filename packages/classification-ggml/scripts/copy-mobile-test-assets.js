@@ -11,20 +11,18 @@
 //      copies the framework cannot match a native binary for the device
 //      arch flavour it is targeting (e.g. android-x64, ios-arm64-simulator).
 //
-//   2. Copy the FP16 GGUF weights bundle from `weights/` into
-//      `test/mobile/testAssets/`. On mobile, the bare runtime cannot
-//      access files in the npm package's `weights/` directory at runtime
-//      because the worklet is loaded from a packed `.bundle`; the test
-//      framework instead pushes everything under `test/mobile/testAssets/`
-//      to the device and exposes their on-device paths via
-//      `global.assetPaths`. Without this copy `ImageClassifier.load()`
-//      fails with `MobileNet GGUF weights not found at /app.bundle/...`.
+//   2. Copy the FP16 GGUF from `weights/` into `test/mobile/testAssets/`.
+//      Mobile integration tests pass that staged path as `modelPath`.
+//      The worklet is loaded from a packed `.bundle`, so the test
+//      framework pushes everything under `test/mobile/testAssets/` to the
+//      device and exposes their on-device paths via `global.assetPaths`.
 //
 // Idempotent: every action is a copy that overwrites silently if the
 // destination already exists.
 
 const fs = require('fs')
 const path = require('path')
+const process = require('process')
 
 const ADDON_DIR = path.resolve(__dirname, '..')
 const PREBUILDS_DIR = path.join(ADDON_DIR, 'prebuilds')
@@ -170,6 +168,22 @@ function main() {
   fanOutPrebuilds('ios-arm64', IOS_FLAVOURS)
   copyWeightsToTestAssets()
   copyTestImagesToTestAssets()
+  const fixtures = path.join(ADDON_DIR, 'test', 'fixtures')
+  for (const quant of ['f16', 'mixed']) {
+    const variable = `QVAC_MEGALOC_${quant.toUpperCase()}_MODEL_PATH`
+    const source = process.env[variable] || path.join(fixtures, `megaloc-${quant}.gguf`)
+    if (!fs.existsSync(source)) {
+      throw new Error(
+        `Convert the MegaLoc test models first (docs/megaloc.md), or set ${variable}: ${source}`
+      )
+    }
+    fs.copyFileSync(source, path.join(TEST_ASSETS_DIR, `megaloc-${quant}.gguf.bin`))
+  }
+  for (const filename of fs.readdirSync(fixtures)) {
+    if (filename.endsWith('.bin') || filename.endsWith('.png')) {
+      fs.copyFileSync(path.join(fixtures, filename), path.join(TEST_ASSETS_DIR, filename))
+    }
+  }
   console.log('[mobile:copy-prebuilds] Done.')
 }
 

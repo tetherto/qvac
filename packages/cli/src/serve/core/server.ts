@@ -1,6 +1,8 @@
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
+import multipart from '@fastify/multipart'
+import { z } from 'zod'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import {
@@ -18,13 +20,18 @@ import {
   extensionTags,
   type ServeExtension
 } from '@/serve/core/extensions'
+import { createHostMatcher } from '@/serve/core/host-check'
+import { IDENTITY_NONCE_PATTERN, IDENTITY_PATH, identityProof } from '@/serve/core/identity'
 import { shutdownSDK } from '@/serve/core/lifecycle'
 import authPlugin from '@/serve/core/plugins/auth'
 import cancelBridgePlugin from '@/serve/core/plugins/cancel-bridge'
 import contextPlugin from '@/serve/core/plugins/context'
 import errorHandlerPlugin from '@/serve/core/plugins/error-handler'
+import { HttpError } from '@/serve/lib/http-error'
 
 const MAX_BODY_BYTES = 100 * 1024 * 1024
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+const MAX_UPLOAD_FILES = 10
 
 export interface CoreServerOptions {
   host: string
@@ -33,6 +40,9 @@ export interface CoreServerOptions {
   docs?: boolean | undefined
   /** Trusted CORS origins from config and CLI, before the `--docs` additions. */
   corsOrigins: readonly string[]
+  /** Hostnames accepted in the Host header beyond loopback, IP literals and the bind host; `true` accepts any. */
+  allowedHosts: readonly string[] | true
+  publicBaseUrl?: string | null | undefined
   /** Mounted extensions, which contribute the OpenAPI description and tags. */
   extensions: readonly ServeExtension[]
 }
@@ -60,6 +70,24 @@ export async function createCoreServer(
 
   await app.register(errorHandlerPlugin, { fieldCodes: extensionErrorCodes(options.extensions) })
   await app.register(contextPlugin, { context: ctx })
+
+  // Binding to loopback does not stop a page whose own hostname now resolves to
+  // 127.0.0.1 (DNS rebinding): its requests are same-origin, so CORS never applies.
+  const hostAllowed = createHostMatcher({
+    bindHost: options.host,
+    allowedHosts: options.allowedHosts,
+    publicBaseUrl: options.publicBaseUrl
+  })
+  // lunte-disable-next-line require-await
+  app.addHook('onRequest', async (req) => {
+    if (!hostAllowed(req.headers.host)) {
+      throw new HttpError(
+        403,
+        'host_not_allowed',
+        'Host header is not allowed. Add it with --allowed-host or serve.allowedHosts.'
+      )
+    }
+  })
 
   await app.register(swagger, {
     openapi: {
@@ -106,8 +134,25 @@ export async function createCoreServer(
 
   await app.register(cancelBridgePlugin)
 
+  // On the root instance so every extension's routes can take uploads.
+  await app.register(multipart, {
+    limits: { fileSize: MAX_UPLOAD_BYTES, files: MAX_UPLOAD_FILES }
+  })
+
   if (options.apiKey) {
-    await app.register(authPlugin, { apiKey: options.apiKey })
+    const apiKey = options.apiKey
+    await app.register(authPlugin, { apiKey })
+    app.get(
+      IDENTITY_PATH,
+      {
+        schema: {
+          hide: true,
+          querystring: z.object({ nonce: z.string().regex(IDENTITY_NONCE_PATTERN) })
+        }
+      },
+      // lunte-disable-next-line require-await
+      async (req) => ({ proof: identityProof(apiKey, req.query.nonce, req.socket.localPort ?? 0) })
+    )
   }
 
   // lunte-disable-next-line require-await

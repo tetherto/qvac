@@ -1,10 +1,15 @@
 #include <bare.h>
+#include <qvac-addon/fabric-bind.h>
 
 #include "../addon/AddonJs.hpp"
 
 js_value_t*
 qvac_lib_infer_nmtcpp_exports( // NOLINT(readability-identifier-naming)
     js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
@@ -19,6 +24,7 @@ qvac_lib_infer_nmtcpp_exports( // NOLINT(readability-identifier-naming)
   }
 
   V("createInstance", qvac_lib_inference_addon_nmt::createInstance)
+  V("assessFit", qvac_lib_inference_addon_nmt::assessFit)
   V("runJob", qvac_lib_inference_addon_nmt::runJob)
   V("getActiveBackendName", qvac_lib_inference_addon_nmt::getActiveBackendName)
   V("getActiveBackendDescription",

@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 // Needed for GGUFShards
 #include <iomanip>
@@ -27,6 +28,8 @@
 /// queried without further disk or streambuf access.
 class ModelMetaData {
   metadata_handle_ptr metadata_;
+  /// The GGUF files of a model loaded from disk; empty when streamed.
+  std::vector<std::string> diskFiles_;
   using Buf = std::basic_streambuf<char>;
   using SharedBuffer = BorrowablePtr<Buf>;
 
@@ -53,6 +56,17 @@ public:
   /// @brief Returns the string value at @p key, or nullopt if absent or not a
   /// string type.
   [[nodiscard]] std::optional<std::string> tryGetString(const char* key) const;
+
+  /// @brief The GGUF's default pooling (`<arch>.pooling_type`), or nullopt if
+  /// it declares none.
+  [[nodiscard]] std::optional<uint32_t> tryGetPoolingType() const;
+
+  /// @brief Whether any tensor named in @p names is in the model's GGUF files,
+  /// read from their headers in one pass without loading weights. nullopt for
+  /// a streamed model, whose tensor table is not on disk, or a header that
+  /// cannot be read.
+  [[nodiscard]] std::optional<bool>
+  hasAnyTensor(std::initializer_list<const char*> names) const;
 
   class FirstFileFromGgufStreamState {
   public:

@@ -10,6 +10,10 @@ import { buildErrorCodes } from './build-error-codes'
 import { buildNumericConstants } from './build-numeric-constants'
 
 export const contractDir = new URL('../../contract/', import.meta.url)
+export const registryEngineManifestFile = new URL(
+  '../../../registry-server/lib/generated/engine-manifest.json',
+  import.meta.url
+)
 
 export const callShapeByHandlerType = {
   reply: 'request-reply',
@@ -160,6 +164,41 @@ function flattenAllOfWithUnion(json: JsonSchema, defName: string): JsonSchema {
 
 function isSchemaObject(node: unknown): node is JsonSchema {
   return node !== null && typeof node === 'object' && !Array.isArray(node)
+}
+
+/**
+ * Zod 4.6 emits primitive unions as `type: [...]`. That is valid JSON Schema,
+ * but the Kotlin generator represents that form as an untyped JsonElement.
+ * Keep the equivalent `anyOf` form used by earlier Zod releases so generated
+ * clients retain their typed union wrappers.
+ */
+function expandPrimitiveTypeArrays(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(expandPrimitiveTypeArrays)
+  if (!isSchemaObject(node)) return node
+
+  const expanded = Object.fromEntries(
+    Object.entries(node).map(function ([key, value]) {
+      return [key, expandPrimitiveTypeArrays(value)]
+    })
+  ) as JsonSchema
+  const types = expanded['type']
+  if (!Array.isArray(types)) return expanded
+  if (
+    !types.every(function (type) {
+      return typeof type === 'string'
+    })
+  ) {
+    throw new Error('JSON Schema type arrays must contain only strings')
+  }
+  if (expanded['anyOf'] !== undefined || expanded['oneOf'] !== undefined) {
+    throw new Error('Cannot expand a JSON Schema type array beside an existing union')
+  }
+
+  delete expanded['type']
+  expanded['anyOf'] = types.map(function (type) {
+    return { type }
+  })
+  return expanded
 }
 
 function unionArmsOf(node: JsonSchema): JsonSchema[] | undefined {
@@ -466,7 +505,8 @@ export function toWireJsonSchema(
     unrepresentable: 'any'
   }) as JsonSchema
   delete json['$schema']
-  const flattened = flattenAllOfWithUnion(json, defName)
+  const expanded = expandPrimitiveTypeArrays(json) as JsonSchema
+  const flattened = flattenAllOfWithUnion(expanded, defName)
   const collapsed = collapseSingleMemberUnions(flattened) as JsonSchema
   assertNoRefs(collapsed, defName)
   return collapsed
@@ -654,7 +694,7 @@ export function buildContract() {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     title: '@qvac/sdk wire contract',
     description:
-      'Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. ' +
+      'Generated from the SDK Zod schemas by `npm run contract:export`. Do not edit by hand. ' +
       'Requests use the schema input shape, responses the output shape; runtime-only ' +
       'refinements and transforms stay server-side.',
     $defs: defs
@@ -686,4 +726,13 @@ export async function renderContractFiles() {
     'error-codes.json': await formatJson(errorCodes, 'error-codes.json'),
     'numeric-constants.json': await formatJson(numericConstants, 'numeric-constants.json')
   }
+}
+
+// Build-time export only: registry validation reads its own packaged artifact.
+export async function renderRegistryEngineManifest() {
+  const { engineToAddon, legacyEngineToCanonical, legacyRegistryEngineRules } = buildModelTypeMaps()
+  return formatJson(
+    { engineToAddon, legacyEngineToCanonical, legacyRegistryEngineRules },
+    'engine-manifest.json'
+  )
 }

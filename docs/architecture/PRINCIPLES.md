@@ -243,7 +243,7 @@ Principles are not aspirational platitudes. If a principle doesn't help resolve 
 **Trade-off:** App developers must bring their own storage and state management. There's no "batteries-included" experience for building a complete application with just `@qvac/sdk`. This increases initial setup effort for app developers but avoids locking them into storage choices that may not fit their platform, scale, or privacy requirements.
 
 **Implications:**
-- The SDK manages only its own operational state: model cache, config, RAG workspaces. It does not persist application-level data.
+- The SDK manages only its own operational state: model cache and config. It does not persist application-level data.
 - No checkpointing of inference sessions or application state. Worker crash recovery is simple precisely because there's no state to reconcile — restart the worker, re-load the model, ready.
 - Features that require application-level persistence (conversation history, user preferences, document storage) are the app's responsibility, not the SDK's.
 - If a feature proposal adds a storage layer, an identity system, or a UI component to the SDK, the default answer is "that belongs in a separate package or in the app."

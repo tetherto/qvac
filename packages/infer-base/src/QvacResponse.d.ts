@@ -18,6 +18,12 @@ declare class QvacResponse<Output = any> extends EventEmitter {
          * `model.run(input, { signal })` straight into the response.
          */
         signal?: QvacResponse.AbortSignalLike;
+        /**
+         * Retain output history (default: true). When false, consume chunks through
+         * onUpdate(); getLatest() returns null and iterate() rejects. Completion
+         * resolves to [] unless ended() receives an explicit terminal result.
+         */
+        retainOutput?: boolean;
     }, pollInterval?: number);
     /**
      * Registers a callback to be invoked on each output update.
@@ -70,6 +76,7 @@ declare class QvacResponse<Output = any> extends EventEmitter {
      * listeners is attached for the lifetime of the iterator (not per
      * yielded chunk), so high-frequency token streams don't churn
      * listener registrations.
+     * Requires output retention; use onUpdate() when retention is disabled.
      */
     iterate(): AsyncIterableIterator<Output>;
     /**

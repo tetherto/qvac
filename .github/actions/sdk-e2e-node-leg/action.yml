@@ -1,0 +1,114 @@
+name: SDK E2E node leg
+description: >-
+  Resolve one matrix leg of a runner-hosted SDK e2e family (desktop, electron,
+  python, snap): its platform key and the test filter it runs. Shared by
+  test-node-sdk.yml and test-snap-sdk.yml so a rerun narrows every family the
+  same way.
+
+inputs:
+  family:
+    description: "SDK e2e family the leg belongs to (desktop, electron, python, snap)"
+    required: true
+  runner-label:
+    description: "Runner label the leg runs on (the matrix value)"
+    required: true
+  filter:
+    description: "Filter for a normal run (comma-separated categories or testId prefixes)"
+    required: false
+    default: ""
+  rerun-plan:
+    description: >-
+      JSON {family: {platform: [testId]}} of previously failed tests. When set,
+      it replaces `filter` with the list recorded for this leg's platform.
+    required: false
+    default: ""
+  allowed-families:
+    description: >-
+      Comma-separated families the calling workflow runs. Any other family
+      fails the leg before it installs anything. Empty = no check.
+    required: false
+    default: ""
+  allowed-platforms:
+    description: >-
+      Comma-separated platform keys (linux, windows, macos) the calling
+      workflow supports. Any other fails the leg before it installs anything.
+      Empty = no check.
+    required: false
+    default: ""
+
+outputs:
+  platform:
+    description: "Platform key of the leg: linux, windows, or macos"
+    value: ${{ steps.leg.outputs.platform }}
+  filter:
+    description: "Effective test filter for the leg (empty = no filter)"
+    value: ${{ steps.leg.outputs.filter }}
+
+runs:
+  using: composite
+  steps:
+    # A failed-test rerun carries a different test list per platform, so the
+    # effective filter is resolved inside the matrix leg rather than passed in.
+    - name: Resolve test filter for this platform
+      id: leg
+      shell: node {0}
+      env:
+        RERUN_PLAN: ${{ inputs.rerun-plan }}
+        BASE_FILTER: ${{ inputs.filter }}
+        CONSUMER: ${{ inputs.family }}
+        RUNNER_LABEL: ${{ inputs.runner-label }}
+        ALLOWED_FAMILIES: ${{ inputs.allowed-families }}
+        ALLOWED_PLATFORMS: ${{ inputs.allowed-platforms }}
+      run: |
+        const fs = require('fs');
+        const allowed = (raw) => (raw || '').split(',').map((item) => item.trim()).filter(Boolean);
+
+        // Same runner-label -> platform-key mapping as the report-start job and
+        // the rerun plan in test-sdk.yml.
+        const label = String(process.env.RUNNER_LABEL || '').toLowerCase();
+        let platform = 'linux';
+        if (label.includes('win')) platform = 'windows';
+        else if (label.includes('mac') || label.includes('darwin')) platform = 'macos';
+
+        // A family or runner the calling workflow has no steps for would
+        // install, bootstrap and start a consumer that cannot work.
+        const families = allowed(process.env.ALLOWED_FAMILIES);
+        if (families.length > 0 && !families.includes(process.env.CONSUMER)) {
+          console.log(
+            `::error::This workflow runs ${families.join(', ')}; got family "${process.env.CONSUMER}".`
+          );
+          process.exit(1);
+        }
+        const platforms = allowed(process.env.ALLOWED_PLATFORMS);
+        if (platforms.length > 0 && !platforms.includes(platform)) {
+          console.log(
+            `::error::This workflow runs on ${platforms.join(', ')}; runner ` +
+            `"${process.env.RUNNER_LABEL}" is ${platform}.`
+          );
+          process.exit(1);
+        }
+
+        let filter = process.env.BASE_FILTER || '';
+        const raw = (process.env.RERUN_PLAN || '').trim();
+
+        if (raw) {
+          let plan;
+          try {
+            plan = JSON.parse(raw);
+          } catch (err) {
+            console.log(`::error::Invalid rerun-plan JSON: ${err.message}`);
+            process.exit(1);
+          }
+          const family = process.env.CONSUMER;
+          const ids = plan && plan[family] && plan[family][platform];
+          if (!Array.isArray(ids) || ids.length === 0) {
+            console.log(
+              `::error::rerun-plan has no tests for ${family}/${platform}; this leg should not have started.`
+            );
+            process.exit(1);
+          }
+          filter = ids.join(',');
+        }
+
+        fs.appendFileSync(process.env.GITHUB_OUTPUT, `platform=${platform}\nfilter=${filter}\n`);
+        console.log(`${platform}: filter=${filter || '(none)'}`);

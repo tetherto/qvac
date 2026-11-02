@@ -7,8 +7,14 @@ export { createQvacServeModels, resolveOptions } from './provider-config.js'
 const configProperties = {
   model: { type: 'string', description: 'QVAC catalog model id to preload and use by default.' },
   host: { type: 'string', description: 'Loopback host for qvac serve.' },
-  port: { type: 'number', description: 'Port for qvac serve.' },
-  baseUrl: { type: 'string', description: 'OpenAI-compatible base URL exposed by qvac serve.' },
+  port: {
+    type: 'number',
+    description: 'Port for qvac serve; 0 (default) lets it bind any free port.'
+  },
+  baseUrl: {
+    type: 'string',
+    description: 'Ignored. The plugin connects to the port its own qvac serve reports.'
+  },
   apiKey: {
     type: 'string',
     minLength: 32,
@@ -18,7 +24,7 @@ const configProperties = {
   },
   qvacCommand: {
     type: 'string',
-    description: 'Command or absolute path used by localService launcher to start qvac.'
+    description: 'Command or absolute path used to start qvac serve.'
   },
   cwd: { type: 'string', description: 'Working directory for the local qvac serve process.' },
   ctxSize: {
@@ -30,11 +36,13 @@ const configProperties = {
     description: 'QVAC reasoning budget, where -1 enables reasoning and 0 disables it.'
   },
   tools: { type: 'boolean', description: 'Enable QVAC tool-call formatting for agent use.' },
-  readyTimeoutMs: { type: 'number', description: 'Maximum wait for qvac serve to become healthy.' },
+  readyTimeoutMs: {
+    type: 'number',
+    description: 'Maximum wait for qvac serve to report its port.'
+  },
   idleStopMs: {
     type: 'number',
-    description:
-      'OpenClaw localService idle shutdown delay; 0 keeps serve alive until OpenClaw exits.'
+    description: 'Ignored. qvac serve stops when OpenClaw exits.'
   },
   timeoutSeconds: {
     type: 'number',

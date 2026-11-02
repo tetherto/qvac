@@ -1,10 +1,10 @@
-// The version rules that tie @qvac/sdk's manifest to @qvac/inference. Both are
+// The version rules that tie @qvac/sdk's manifest to @qvac/inference. All are
 // checked here and every failure is reported in one run.
 //
 // 1. Addon ranges. @qvac/inference's peerDependencies is the source of truth for
 //    the inference addons. For every addon p in it, inference's
 //    devDependencies.p and the SDK's dependencies.p must carry the identical
-//    range.
+//    range. Opt-in services may instead use an optional SDK peer plus a dev dependency.
 //
 // 2. Shared major.minor. @qvac/sdk and @qvac/inference expose the same API, so
 //    the major and minor of the SDK's own version must equal the major and minor
@@ -13,6 +13,10 @@
 //    operator must hold the dependency inside that one major.minor: a caret does
 //    below 1.0.0 (^0.19.0 is >=0.19.0 <0.20.0) but not from 1.0.0 up (^1.19.0
 //    also allows 1.20.0), so a tilde is required there.
+//
+// 3. Bare runtime. Every version allowed by the SDK's bare-runtime dependency
+//    must satisfy inference's engines.bare requirement, including versions
+//    retained by a consumer's existing lockfile.
 //
 // The second rule reads @qvac/sdk's manifest alone and never
 // packages/inference's version. The two move independently between releases —
@@ -25,6 +29,7 @@
 import { readFileSync } from 'fs'
 import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { subset, validRange } from 'semver'
 
 type Ranges = Record<string, string>
 
@@ -33,6 +38,8 @@ export interface Manifest {
   dependencies?: Ranges
   devDependencies?: Ranges
   peerDependencies?: Ranges
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>
+  engines?: Ranges
 }
 
 const dependency = '@qvac/inference'
@@ -46,9 +53,13 @@ export function checkAddonRanges(inferencePkg: Manifest, sdkPkg: Manifest) {
   const drifts: string[] = []
   for (const [name, peer] of Object.entries(peers)) {
     const dev = inferenceDev[name]
-    const dep = sdkDeps[name]
+    const optionalPeer = sdkPkg.peerDependenciesMeta?.[name]?.optional === true
+    const dep = sdkDeps[name] ?? (optionalPeer ? sdkPkg.peerDependencies?.[name] : undefined)
     const mismatches: string[] = []
     if (dep !== peer) mismatches.push(dep === undefined ? 'SDK is missing it' : `SDK has ${dep}`)
+    if (sdkDeps[name] === undefined && optionalPeer && sdkPkg.devDependencies?.[name] !== peer) {
+      mismatches.push('SDK devDependencies must match its optional peer')
+    }
     if (dev !== peer) {
       mismatches.push(
         dev === undefined
@@ -127,8 +138,32 @@ export function checkSharedMajorMinor(sdkPkg: Manifest) {
   return []
 }
 
+export function checkBareRuntimeRange(inferencePkg: Manifest, sdkPkg: Manifest) {
+  const required = inferencePkg.engines?.['bare']
+  if (required === undefined) return []
+  if (validRange(required) === null) {
+    return [`@qvac/inference engines.bare "${required}" is not a valid semver range.`]
+  }
+
+  const runtime = sdkPkg.dependencies?.['bare-runtime']
+  if (runtime === undefined || validRange(runtime) === null) {
+    return [`${sdkManifest} must declare a valid bare-runtime dependency range.`]
+  }
+  if (!subset(runtime, required)) {
+    return [
+      `SDK bare-runtime "${runtime}" permits versions outside inference's engines.bare "${required}". ` +
+        'Align the runtime dependency so an existing consumer lockfile cannot retain an unsupported worker.'
+    ]
+  }
+  return []
+}
+
 export function collectVersionFailures(inferencePkg: Manifest, sdkPkg: Manifest) {
-  return [...checkAddonRanges(inferencePkg, sdkPkg), ...checkSharedMajorMinor(sdkPkg)]
+  return [
+    ...checkAddonRanges(inferencePkg, sdkPkg),
+    ...checkSharedMajorMinor(sdkPkg),
+    ...checkBareRuntimeRange(inferencePkg, sdkPkg)
+  ]
 }
 
 function readManifest(dir: string) {

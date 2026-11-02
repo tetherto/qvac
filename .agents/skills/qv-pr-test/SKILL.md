@@ -149,7 +149,7 @@ Always show the recommendation before the tier prompt. The user can override it.
 
 - **SDK (`packages/sdk`) default**: recommend **T2**. This covers install/build, changed examples if present, and changed e2e on desktop. Mobile is opt-in because it is slower and usually covered by CI.
 - **Non-SDK default**: recommend the smallest tier that includes at least unit-level validation. Usually T2.
-- **`packages/inference` touched**: discovery attaches `sdkE2eSetup` / `sdkE2eCwd` to it, but inference has no e2e or examples of its own, so the non-SDK default above would leave the setup command with nothing to run after it. Pair it with an SDK e2e run in `sdkE2eCwd` and recommend **T4** (`--suite smoke` on desktop) — that is what CI runs for an inference change, and with no changed e2e files T2 has no filter to work from. If the PR also touches `packages/sdk/e2e`, use that package's changed tests / `relatedTests` filter instead.
+- **`packages/inference` touched**: discovery attaches `sdkE2eSetup` / `sdkE2eCwd` to it, but inference has no e2e or examples of its own, so the non-SDK default above would leave the setup command with nothing to run after it. Pair it with an SDK e2e run in `sdkE2eCwd` and recommend **T4** (`--suite smoke` on desktop) — that is what CI runs for an inference change, and with no changed e2e files T2 has no filter to work from. If the PR also touches `packages/sdk-e2e`, use that package's changed tests / `relatedTests` filter instead.
 - **No examples**: if no changed or related examples are discovered, mark examples `not applicable`.
 - **No tests discovered**: recommend install/build only and ask the user to confirm build-only validation.
 - **Mixed PRs**: recommend the highest minimum required by any touched package. Example: SDK + addon changes means SDK T3 plus addon unit scripts.
@@ -174,23 +174,23 @@ Do not execute those agentically. `e2e` setup needs npm/GitHub Packages auth tha
 
 ## SDK e2e setup
 
-For any SDK e2e command, run setup from `packages/sdk/e2e` first, using the exact command from
+For any SDK e2e command, run setup from `packages/sdk-e2e` first, using the exact command from
 `touchedPackages[].sdkE2eSetup.command` in the discovery manifest — do not re-derive it from which files
-changed. It resolves to `install:build:full` whenever the PR touches `packages/sdk` outside `e2e/` or
+changed. It resolves to `install:build:full` whenever the PR touches `packages/sdk` or
 `packages/inference` at all, even if `packages/inference` itself has no diff lines: CI always builds
 `packages/inference` from the branch for SDK e2e (`inference-source: branch` is unconditional in
 `on-pr-test-sdk.yml`), because the checked-out `packages/inference` can already be ahead of the last npm
 publish from unrelated merged PRs — testing the branch's SDK against the *published* range (what
 `install:build` alone would do) can silently diverge from what CI tests. Only a PR limited to
-`packages/sdk/e2e/` resolves to the lighter `install:build`.
+`packages/sdk-e2e/` resolves to the lighter `install:build`.
 
 Do not skip setup based on assumed previous state. The PR worktree is treated as clean/synchronized, and SDK e2e validation must prepare the test package explicitly.
 
-Do not separately run `bun install` or `bun run build` in `packages/sdk` before SDK e2e unless the chosen tier also includes non-e2e SDK example validation that specifically needs it.
+Do not separately run `npm install` or `npm run build` in `packages/sdk` before SDK e2e unless the chosen tier also includes non-e2e SDK example validation that specifically needs it.
 
 ## SDK e2e manual execution
 
-For SDK e2e tiers, print the `e2e` setup command and e2e command for the user to run manually. The agent must not run `npm run install:build`, `npm run install:build:full`, or `npx qvac-test run:local:*` from `packages/sdk/e2e`.
+For SDK e2e tiers, print the `e2e` setup command and e2e command for the user to run manually. The agent must not run `npm run install:build`, `npm run install:build:full`, or `npx qvac-test run:local:*` from `packages/sdk-e2e`.
 
 Generate commands for the user's shell/OS. Do not assume POSIX-only utilities or paths. In particular:
 
@@ -208,17 +208,17 @@ pr-<num>-<headSha7>-<tier>-<platform-or-desktop>
 Report directory:
 
 ```text
-<WORKTREE_PATH>/packages/sdk/e2e/reports/<runId>/
+<WORKTREE_PATH>/packages/sdk-e2e/reports/<runId>/
 ```
 
 Manual command block shape for POSIX shells:
 
 ```sh
 export QVAC_PR_TEST_RUN_ID=pr-1234-abcdef0-t3-android
-export QVAC_PR_TEST_REPORT_DIR=<WORKTREE_PATH>/packages/sdk/e2e/reports/$QVAC_PR_TEST_RUN_ID
+export QVAC_PR_TEST_REPORT_DIR=<WORKTREE_PATH>/packages/sdk-e2e/reports/$QVAC_PR_TEST_RUN_ID
 mkdir -p $QVAC_PR_TEST_REPORT_DIR/logs
 
-cd <WORKTREE_PATH>/packages/sdk/e2e
+cd <WORKTREE_PATH>/packages/sdk-e2e
 npm run install:build:full
 
 npx qvac-test run:local:desktop --filter vision- --runId $QVAC_PR_TEST_RUN_ID --report-dir $QVAC_PR_TEST_REPORT_DIR
@@ -229,10 +229,10 @@ Manual command block shape for PowerShell:
 
 ```powershell
 $env:QVAC_PR_TEST_RUN_ID = "pr-1234-abcdef0-t3-android"
-$env:QVAC_PR_TEST_REPORT_DIR = "<WORKTREE_PATH>/packages/sdk/e2e/reports/$env:QVAC_PR_TEST_RUN_ID"
+$env:QVAC_PR_TEST_REPORT_DIR = "<WORKTREE_PATH>/packages/sdk-e2e/reports/$env:QVAC_PR_TEST_RUN_ID"
 New-Item -ItemType Directory -Force "$env:QVAC_PR_TEST_REPORT_DIR/logs"
 
-Set-Location "<WORKTREE_PATH>/packages/sdk/e2e"
+Set-Location "<WORKTREE_PATH>/packages/sdk-e2e"
 npm run install:build:full
 
 npx qvac-test run:local:desktop --filter vision- --runId $env:QVAC_PR_TEST_RUN_ID --report-dir $env:QVAC_PR_TEST_REPORT_DIR
@@ -243,18 +243,18 @@ Agent-owned SDK setup and changed-example command shape for POSIX shells:
 
 ```sh
 cd <WORKTREE_PATH>/packages/sdk
-bun install
-bun run build
-bun run examples/<changed-example>.ts
+npm install
+npm run build
+npx tsx examples/<changed-example>.ts
 ```
 
 Agent-owned SDK setup and changed-example command shape for PowerShell:
 
 ```powershell
 Set-Location "<WORKTREE_PATH>/packages/sdk"
-bun install
-bun run build
-bun run examples/<changed-example>.ts
+npm install
+npm run build
+npx tsx examples/<changed-example>.ts
 ```
 
 The user runs the `e2e` setup command and the `qvac-test run:local:*` commands. The agent may run changed examples separately only after the required SDK package-root install/build state exists or has been prepared without `e2e` npm auth.
@@ -263,7 +263,7 @@ Do not use `script` for log capture. It is not portable in this agent environmen
 
 When the user says the commands finished:
 
-1. Inspect `<WORKTREE_PATH>/packages/sdk/e2e/reports/<runId>/` first. Prefer qvac-test's structured report files over terminal logs.
+1. Inspect `<WORKTREE_PATH>/packages/sdk-e2e/reports/<runId>/` first. Prefer qvac-test's structured report files over terminal logs.
 2. Read supplemental terminal output only if the agent captured any for setup/example steps, or ask the user to paste terminal output if report files are missing/incomplete.
 3. Summarize failures first, then passes and skipped/not-applicable steps.
 
@@ -339,6 +339,6 @@ Logs: `<path>`
 - Generic discovery helpers: `.agents/skills/_lib/pr-skills/pr-test-generic.mjs`
 - SDK-specific discovery heuristics: `.agents/skills/_lib/pr-skills/pr-test-sdk.mjs`
 - Shared worktree library: `.agents/skills/_lib/pr-skills/worktree.mjs`
-- SDK e2e guidance: `packages/sdk/e2e/AGENTS.md`
-- SDK e2e scripts: `packages/sdk/e2e/package.json`
-- SDK e2e docs: `packages/sdk/e2e/README.md`
+- SDK e2e guidance: `packages/sdk-e2e/AGENTS.md`
+- SDK e2e scripts: `packages/sdk-e2e/package.json`
+- SDK e2e docs: `packages/sdk-e2e/README.md`

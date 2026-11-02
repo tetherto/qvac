@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -122,13 +122,16 @@ test("the filter script lists exactly the opted-in packages", () => {
   const directory = mkdtempSync(join(tmpdir(), "qvac-cpp-baseline-"));
   const outputPath = join(directory, "github-output");
   try {
-    // The script also reads the PR-head fabric-consumers manifest.
+    const helperPath = ".github/actions/nx-project-matrix/cpp-lint-selection.mjs";
+    mkdirSync(dirname(join(directory, helperPath)), { recursive: true });
+    copyFileSync(join(root, helperPath), join(directory, helperPath));
+    // The filter also reads the PR-head fabric-consumers manifest.
     mkdirSync(join(directory, ".fabric-consumers-head/.github"), { recursive: true });
     writeFileSync(join(directory, ".fabric-consumers-head/.github/fabric-consumers.json"), '{"npm_runtime":[]}');
     const result = spawnSync("bash", ["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script], {
       cwd: directory,
       encoding: "utf8",
-      env: { ...process.env, GITHUB_OUTPUT: outputPath, M: JSON.stringify(rows) },
+      env: { ...process.env, EVENT_NAME: "workflow_dispatch", GITHUB_OUTPUT: outputPath, M: JSON.stringify(rows) },
     });
     assert.equal(result.status, 0, `filter script failed:\nstdout=${result.stdout}\nstderr=${result.stderr}`);
 

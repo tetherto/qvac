@@ -100,7 +100,7 @@ test('Pocket terminal marker is the only last event in sentence streaming', (t) 
   const m = make()
   const events = []
   m._job.output = (data) => events.push(data)
-  m._sentenceStreamCtx = { chunkIdx: 0, chunks: ['Hello.'] }
+  m._sentenceStream.ctx = { chunkIdx: 0, chunks: ['Hello.'] }
   m._addonOutputCallback(null, null, { outputArray: new Int16Array([1]), isLast: false })
   m._addonOutputCallback(null, null, { outputArray: new Int16Array(), isLast: true })
   t.is(events[0].isLast, false)
@@ -162,7 +162,7 @@ test('Pocket reload releases the old model before allocating its replacement', a
     'create 2',
     'activate 2'
   ])
-  t.is(model._outputSampleRate, 44100)
+  t.is(model._setup.outputSampleRate, 44100)
   t.is(model.state.weightsLoaded, true)
   await model.destroy()
   t.is(live, 0)
@@ -191,7 +191,7 @@ test('Pocket failed replacement leaves an unloaded instance recoverable with the
     await model.load()
     await t.exception(model.reload({ outputSampleRate: 44100, steps: 8 }), /failed/)
     t.is(model.addon, null)
-    t.is(model._outputSampleRate, 32000)
+    t.is(model._setup.outputSampleRate, 32000)
     t.is(model._buildTtsParams().steps, 4)
     t.is(model._buildTtsParams().outputSampleRate, 32000)
     t.is(
@@ -227,7 +227,7 @@ test('Pocket does not allocate a replacement if old teardown fails', async (t) =
   await t.exception(model.reload({ outputSampleRate: 44100 }), /old teardown failed/)
   t.is(created, 1)
   t.is(model.addon, null)
-  t.is(model._outputSampleRate, null)
+  t.is(model._setup.outputSampleRate, null)
   t.is(model.state.configLoaded, false)
   t.is(model.state.weightsLoaded, false)
   await model.destroy()
@@ -261,7 +261,7 @@ test('Pocket invalidates delayed streaming text across reload and cancellation',
     await settled
     await new Promise((resolve) => setTimeout(resolve, 1))
     t.alike(dispatched, [], action)
-    t.is(model._sentenceStreamCtx, null)
+    t.is(model._sentenceStream.ctx, null)
     await model.destroy()
   }
 })
@@ -275,7 +275,7 @@ test('Pocket rejected native dispatch clears its completion barrier', async (t) 
   }
   await model.load()
   await t.exception(model.run({ input: 'Native queue is busy.' }))
-  t.is(model._pocketJobPending, null)
+  t.is(model._pocket.jobPending, null)
   await model.cancel()
   await model.reload({ outputSampleRate: 44100 })
   t.is(model.state.weightsLoaded, true)
@@ -457,8 +457,8 @@ test('Pocket rejected dispatch settles both streaming APIs without unhandled rej
     const response = await model[method]('Hello.', { accumulateSentences: false })
     await t.exception(response.await(), /dispatch failed/)
     await new Promise((resolve) => setTimeout(resolve, 1))
-    t.is(model._pocketJobPending, null)
-    t.is(model._sentenceStreamCtx, null)
+    t.is(model._pocket.jobPending, null)
+    t.is(model._sentenceStream.ctx, null)
     await model.destroy()
   }
 })

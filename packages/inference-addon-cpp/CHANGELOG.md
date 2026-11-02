@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0] - 2026-10-13
+
+### Added
+- `JsAsyncTask::run(env, work, marshal)` runs blocking `work` on a background thread and resolves the Promise with `marshal(env, result)`, called on the JavaScript loop. `run(env, work)` still resolves with `undefined`, and the callable must return `void`; a value-returning callable uses the marshal overload. Both forms reject with the same `code` and `message` as `JSCATCH`: a `StatusError`'s code, otherwise `INTERNAL_ERROR`. A throw from `marshal` rejects as well. The work functor, the marshal functor, and the result are released on the loop before the Promise settles, and a dying environment still skips marshalling and settlement. A failed JavaScript call during completion rejects with `JSLibraryError`; libjs reports that exception as uncaught, because completion runs with an empty JavaScript stack.
+
+### Fixed
+- Headers that use libuv types beyond the `uv_loop_t` forward declaration now include `<uv.h>` directly (`JsUtils.hpp`, `OutputCallbackJs.hpp`). libjs no longer includes `uv.h` from `<js.h>`, so those types are no longer picked up transitively. Unit tests compile against `tests/helpers_header/uv.h` instead of libuv. The stub still runs async send and close on the calling thread, so the `JsAsyncTask` completion chain can be observed without a loop.
+
 ## [1.4.0] - 2026-09-07
 
 ### Fixed

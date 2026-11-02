@@ -1,11 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { source } from '@/lib/source';
 import { allowDocsIndexingAtBuildTime } from '@/lib/docs-indexing';
-import {
-  DOCS_SITE_ORIGIN,
-  buildCanonicalDocsUrl,
-  isArchivedVersionSlug,
-} from '@/lib/docs-open-graph';
+import { DOCS_SITE_ORIGIN, buildCanonicalDocsUrl } from '@/lib/docs-open-graph';
 
 // Required for `output: 'export'` — resolves `sitemap()` at build time so the
 // result is written to `out/sitemap.xml` as a static file.
@@ -15,18 +11,16 @@ export const dynamic = 'force-static';
  * Generates `/sitemap.xml` at build time.
  *
  * Indexing policy — mirrors `robots.ts`:
- * - Production (`DOCS_ALLOW_INDEXING=true`): emit one entry per latest page.
+ * - Production (`DOCS_ALLOW_INDEXING=true`): emit one entry per page.
  * - Preview / local / PR builds (default): emit a semantically-empty sitemap
  *   (two duplicate entries for the canonical site root) so non-canonical
  *   deploys don't advertise any internal URL even if the file is fetched
  *   directly. See the in-function comment for why two entries (and not zero
  *   or one) are required.
  *
- * Non-canonical bundles (`dev` preview + `vX.Y.Z` back-versions) are excluded
- * entirely. Those pages still render so the in-page version selector keeps
- * working, but each one is marked `noindex` by `generateMetadata`, and we do
- * not advertise them here. Single source of truth for external crawlers and
- * AI training channels: the latest bundle.
+ * Every published page is listed, older documentation lines included: a page
+ * is canonical for its own line, so an older line is its own indexable
+ * document rather than a near-duplicate of the current one.
  *
  * Fields per entry are intentionally minimal (`url` + `lastModified`). Google
  * and Bing have publicly stated that `changeFrequency` and `priority` are
@@ -55,7 +49,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return source
     .getPages()
-    .filter((page) => !isArchivedVersionSlug(page.slugs))
     .map((page) => ({
       url: buildCanonicalDocsUrl(page.slugs),
       lastModified: (page.data as { lastModified?: Date }).lastModified,

@@ -9,6 +9,18 @@ Bare.exitCode = 1;
 async function main() {
   const server = await startRpcServer({ device: "CPU" });
   try {
+    // @qvac/fabric enables rpc-rdma for Linux only, and the backend tries RDMA
+    // only when it can load libibverbs and the host has an RDMA device.
+    // smoke-packaged.cjs checks the host for both and passes the result.
+    const expectRdma = Bare.argv.includes("--expect-rdma=true");
+    if (server.rdmaCapable !== expectRdma) {
+      throw new Error(
+        `Expected rdmaCapable ${expectRdma} on ${Bare.platform}-${Bare.arch}, got ${server.rdmaCapable}`,
+      );
+    }
+    console.log(
+      `in-process ggml-rpc-server rdmaCapable=${server.rdmaCapable} on ${Bare.platform}-${Bare.arch}`,
+    );
     const probe = await probeRpcServerProtocol(net, server.host, server.port);
     console.log(
       `in-process ggml-rpc-server ${probe.version} served ${probe.deviceCount} device(s) at ${server.url}`,
@@ -21,7 +33,10 @@ async function main() {
     await startRpcServer({ device: "__qvac_invalid_device__" });
     throw new Error("Expected an unknown-device startup failure");
   } catch (error) {
-    if (!/an unknown RPC server device was requested/.test(error.message)) {
+    if (
+      error.name !== "RpcServerDeviceError" ||
+      !/an unknown RPC server device was requested/.test(error.message)
+    ) {
       throw error;
     }
   }

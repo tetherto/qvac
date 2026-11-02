@@ -76,6 +76,58 @@ test('send rejects an unknown request type at the validation guard', async funct
   }
 })
 
+test('send rejects an invalid load config value at the validation guard', async function (t) {
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppEmbedding))
+  const request = {
+    type: 'loadModel',
+    modelType: ModelType.llamacppEmbedding,
+    modelSrc: 'model.gguf',
+    modelConfig: { pooling: 'rank' }
+  } as unknown as Request
+  try {
+    await send(request)
+    t.fail('expected send to reject an invalid modelConfig value')
+  } catch (error) {
+    t.ok(
+      error instanceof RequestValidationFailedError,
+      'device-default resolution parses the config, so its failure is a request validation failure'
+    )
+    t.ok((error as Error).message.includes('pooling'), 'the message names the field')
+  } finally {
+    await close()
+    clearPlugins()
+  }
+})
+
+test('send rejects an invalid candidate config value at the validation guard', async function (t) {
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppEmbedding))
+  const request = {
+    type: 'assessModelFit',
+    models: [
+      {
+        modelType: ModelType.llamacppEmbedding,
+        modelSrc: 'model.gguf',
+        modelConfig: { pooling: 'rank' }
+      }
+    ]
+  } as unknown as Request
+  try {
+    await send(request)
+    t.fail('expected send to reject an invalid candidate modelConfig value')
+  } catch (error) {
+    t.ok(
+      error instanceof RequestValidationFailedError,
+      'each candidate config is parsed the same way a load config is'
+    )
+    t.ok((error as Error).message.includes('pooling'), 'the message names the field')
+  } finally {
+    await close()
+    clearPlugins()
+  }
+})
+
 test('concurrent first sends share one initialization', async function (t) {
   // Force a resolvable on-disk config so `initializeConfig` calls `setConfig`.
   // With that, overlapping first calls that each ran their own initialization

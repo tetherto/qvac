@@ -71,6 +71,36 @@ test('orchestrateCompletion: tool-free turn forwards events and ends', async (t)
   )
 })
 
+test('orchestrateCompletion: prefill forwards the cache and finishes without callbacks', async (t) => {
+  let turns = 0
+  async function* runTurn(request: CompletionStreamRequest) {
+    turns++
+    t.is(request.prefill, true)
+    t.is(request.kvCache, 'prime')
+    yield doneChunk([
+      { type: 'completionStats', seq: 0, stats: { generatedTokens: 0 } },
+      { type: 'completionDone', seq: 1 }
+    ])
+  }
+  const frames = await collect(
+    orchestrateCompletion(
+      baseRequest({
+        prefill: true,
+        kvCache: 'prime',
+        history: [{ role: 'system', content: 'Hello' }]
+      }),
+      runTurn,
+      stubReader({})
+    )
+  )
+  t.is(turns, 1)
+  t.is(frames.at(-1)?.done, true)
+  t.is(
+    frames.some((frame) => frame.toolCallback !== undefined),
+    false
+  )
+})
+
 test('orchestrateCompletion: runs the tool loop and threads results into history', async (t) => {
   let turn = 0
   const seenHistories: CompletionStreamRequest['history'][] = []
@@ -263,8 +293,8 @@ test('orchestrateCompletion: runs tool_search itself and never asks the client',
   const searchResult = seenHistories[1]?.at(-1)
   t.is(searchResult?.role, 'tool', 'the search result was appended as a tool message')
   t.ok(
-    searchResult?.content.includes('"create_issue"'),
-    'the definition reached the next turn through the history'
+    searchResult?.content.includes('"loaded":["create_issue"]'),
+    'the next turn reads the loaded tool back from the history'
   )
   t.ok(
     frames

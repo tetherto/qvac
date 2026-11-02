@@ -1,4 +1,5 @@
 import type { ModelConstant } from '@qvac/sdk'
+import type { ModelFitPolicy } from '@qvac/sdk/schemas'
 
 export interface LoadConfig {
   /** When false, requests never trigger a load; an unloaded model returns
@@ -26,6 +27,8 @@ export interface ServeConfig {
   cors: {
     origins: string[]
   }
+  /** Hostnames accepted in the Host header beyond loopback, IP literals and the bind host; `true` accepts any. */
+  allowedHosts: string[] | true
   /** Parsed `serve.<extension>` blocks, keyed by extension name. */
   extensions: Partial<ServeExtensionConfig>
 }
@@ -41,5 +44,6 @@ export interface ResolvedModelEntry {
   endpointCategory: string
   isDefault: boolean
   preload: boolean
+  modelFitPolicy?: ModelFitPolicy
   config: Record<string, unknown>
 }

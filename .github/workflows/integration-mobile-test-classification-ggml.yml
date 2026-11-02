@@ -24,6 +24,11 @@ on:
         type: string
         required: false
         default: "packages/classification-ggml"
+      fabric_prebuild_run_id:
+        description: "Run id whose `fabric-prebuilds` artifact replaces the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
+        type: string
+        required: false
+        default: ""
   # Manual on-demand path. A dispatched run targets ONE platform and the
   # device(s) chosen below — it never runs the full default pool. The
   # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
@@ -79,6 +84,11 @@ on:
         type: string
         required: false
         default: ""
+      fabric_prebuild_run_id:
+        description: "Run id whose `fabric-prebuilds` artifact replaces the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
+        type: string
+        required: false
+        default: ""
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
@@ -97,6 +107,10 @@ concurrency:
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
+  test-models:
+    permissions: {}
+    uses: ./.github/workflows/reusable-test-models-classification-ggml.yml
+
   runner_names:
     permissions:
       contents: read
@@ -155,8 +169,8 @@ jobs:
     # workflow_call: validate-devices is skipped; the `skipped` branch of the
     # condition keeps this job running exactly as before.
     # workflow_dispatch: a bad/empty device selection blocks this job.
-    needs: [runner_names, validate-devices]
-    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    needs: [runner_names, test-models, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.test-models.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     environment: release
     timeout-minutes: 120
@@ -192,6 +206,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/actions/stage-integration-models
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository
@@ -227,6 +242,42 @@ jobs:
           # resolves empty, leaving the artifact-first path untouched.
           prebuild-run-id: ${{ inputs.prebuild_run_id }}
 
+      # Keep current MobileNet-only source compatible before MegaLoc lands.
+      - name: Stage MegaLoc test models
+        if: hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
+        uses: ./.github/actions/stage-integration-models
+        with:
+          workdir: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          s3-manifest: ${{ needs.test-models.outputs.manifest }}
+
+      - name: Verify MegaLoc test models
+        if: hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
+        working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
+        shell: bash
+        env:
+          MODEL_MANIFEST: ${{ needs.test-models.outputs.manifest }}
+        run: |
+          node --input-type=module -e '
+            import { createHash } from "node:crypto";
+            import { createReadStream } from "node:fs";
+            const expected = JSON.parse(process.env.MODEL_MANIFEST);
+            if (expected.length !== 2) throw new Error("Expected both MegaLoc test models");
+            for (const { dest, sha256 } of expected) {
+              const hash = createHash("sha256");
+              for await (const chunk of createReadStream(dest)) hash.update(chunk);
+              if (hash.digest("hex") !== sha256) throw new Error("Checksum mismatch: " + dest);
+              console.log("Verified " + dest);
+            }
+          '
+
+      - name: Drop staging AWS credentials
+        if: always() && hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
+        shell: bash
+        run: |
+          printf '%s=\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> "$GITHUB_ENV"
+
       # The shared composite handles prebuild fan-out, but classification-ggml
       # also needs `weights/*.gguf` copied into `test/mobile/testAssets/<file>.gguf.bin`
       # (plus `test/images/*` staged) so the React Native bundler packs them into
@@ -240,7 +291,13 @@ jobs:
       - name: Build mobile app
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        env:
+          # Retain Expo's metaspace limit while increasing heap for the GGUF fixtures.
+          GRADLE_OPTS: ${{ matrix.platform == 'Android' && '-Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"' || '' }}
         with:
+          # Empty keeps the published @qvac/fabric runtime.
+          fabric-prebuild-run-id: ${{ inputs.fabric_prebuild_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/classification-ggml' }}
           addon-npm-name: '@qvac/classification-ggml'

@@ -180,9 +180,9 @@ async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/fit.test.js', options)
 }
 
-async function runIdMapIndexTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runIdMapIndexTest')) return __FILTERED
-  return runIntegrationModule('../integration/id-map-index.test.js', options)
+async function runLayaTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLayaTest')) return __FILTERED
+  return runIntegrationModule('../integration/laya.test.js', options)
 }
 
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -198,4 +198,14 @@ async function runMultiGpuTest (options = {}) { // eslint-disable-line no-unused
 async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultiInstanceTest')) return __FILTERED
   return runIntegrationModule('../integration/multi-instance.test.js', options)
+}
+
+async function runMultimodalTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultimodalTest')) return __FILTERED
+  return runIntegrationModule('../integration/multimodal.test.js', options)
+}
+
+async function runRerankTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runRerankTest')) return __FILTERED
+  return runIntegrationModule('../integration/rerank.test.js', options)
 }

@@ -8,7 +8,7 @@ const Corestore = require('corestore')
 const Hyperswarm = require('hyperswarm')
 const DHT = require('hyperdht')
 const IdEnc = require('hypercore-id-encoding')
-const pino = require('pino')
+const createLogger = require('../lib/server-logger')
 const path = require('path')
 const fs = require('fs')
 
@@ -255,18 +255,6 @@ function logServiceInfo(logger, service) {
   logger.info({ key: IdEnc.normalize(service.serverPublicKey) }, 'RPC server public key')
   logger.info({ key: IdEnc.normalize(service.base.local.key) }, 'Writer local key')
   logger.info({ length: service.view?.core?.length ?? 0 }, 'View core length')
-}
-
-function createLogger() {
-  return pino({
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname'
-      }
-    }
-  })
 }
 
 function appendWriterKeyToEnv(publicKeyHex, logger) {

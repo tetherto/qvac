@@ -73,9 +73,7 @@ tts_cpp::audio8::EngineOptions toEngineOptions(const Audio8Config& cfg) {
   } else if (cfg.useGpu.has_value()) {
     opts.n_gpu_layers = *cfg.useGpu ? kOffloadAllGpuLayers : 0;
   }
-  if (!cfg.backendsDir.empty()) {
-    opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
-  }
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   return opts;
 }
 
@@ -328,21 +326,7 @@ Audio8Model::Output Audio8Model::synthesize(const AnyInput& input) {
   const VoiceOverride voice = mergeVoice(cfg, input.voice);
 
   const auto t0 = std::chrono::steady_clock::now();
-  tts_cpp::audio8::SynthesisResult result;
-  try {
-    // The engine caches the codes for the most recent voice prompt, so
-    // repeating the same reference across calls skips the codec encoder.
-    result = voice.referenceAudio.empty()
-                 ? engine->synthesize(input.text)
-                 : engine->synthesize(
-                       input.text,
-                       tts_cpp::audio8::load_voice_prompt(
-                           voice.referenceAudio, voice.referenceText));
-  } catch (const std::exception& e) {
-    throw createTTSError(
-        TTSErrorCode::SynthesisFailed,
-        std::string("audio8.synthesize: ") + e.what());
-  }
+  const auto result = runEngine(*engine, input, voice);
   const auto t1 = std::chrono::steady_clock::now();
   completeSynthesis(
       engine,
@@ -350,7 +334,40 @@ Audio8Model::Output Audio8Model::synthesize(const AnyInput& input) {
       std::chrono::duration<double>(t1 - t0).count(),
       engine->codec_on_coreml());
 
-  return pcmFloatToInt16(result.pcm);
+  return input.chunkCallback ? Output{} : pcmFloatToInt16(result.pcm);
+}
+
+tts_cpp::audio8::SynthesisResult Audio8Model::runEngine(
+    tts_cpp::audio8::Engine& engine, const AnyInput& input,
+    const VoiceOverride& voice) const {
+  int chunks = 0;
+  const auto callback = [&](const float* pcm, size_t count, int) {
+    if (cancelRequested_.load(std::memory_order_relaxed))
+      return false;
+    input.chunkCallback(pcmFloatToInt16(pcm, count), chunks++, false);
+    return !cancelRequested_.load(std::memory_order_relaxed);
+  };
+  try {
+    tts_cpp::audio8::SynthesisResult result;
+    if (voice.referenceAudio.empty()) {
+      result = input.chunkCallback
+                   ? engine.synthesize_stream(input.text, callback)
+                   : engine.synthesize(input.text);
+    } else {
+      const auto prompt = tts_cpp::audio8::load_voice_prompt(
+          voice.referenceAudio, voice.referenceText);
+      result = input.chunkCallback
+                   ? engine.synthesize_stream(input.text, prompt, callback)
+                   : engine.synthesize(input.text, prompt);
+    }
+    if (input.chunkCallback)
+      input.chunkCallback({}, chunks, true);
+    return result;
+  } catch (const std::exception& error) {
+    throw createTTSError(
+        TTSErrorCode::SynthesisFailed,
+        std::string("audio8.synthesize: ") + error.what());
+  }
 }
 
 std::any Audio8Model::process(const std::any& input) {
@@ -374,7 +391,10 @@ std::any Audio8Model::process(const std::any& input) {
   } guard{jobInProgress_};
 
   cancelRequested_.store(false, std::memory_order_relaxed);
-  return std::any(synthesize(*anyInput));
+  auto output = synthesize(*anyInput);
+  if (anyInput->chunkCallback)
+    return {};
+  return std::any(std::move(output));
 }
 
 bool Audio8Model::codecBackendIsCoreml(const std::string& backend) {

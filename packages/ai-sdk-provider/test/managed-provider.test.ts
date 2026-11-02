@@ -154,7 +154,7 @@ test('managed provider sends the persisted serve key', { skip }, async () => {
     const customFetch: typeof fetch = (input, init) => {
       const url =
         typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-      if (url.endsWith('/models')) return fetch(input, init)
+      if (url.endsWith('/models') || url.includes('/qvac/identity')) return fetch(input, init)
       completionAuth = new Headers(
         init?.headers ?? (input instanceof Request ? input.headers : undefined)
       ).get('authorization')
@@ -209,7 +209,7 @@ test('managed crash recovery sends the replacement record key', { skip }, async 
     const customFetch: typeof fetch = (input, init) => {
       const url =
         typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-      if (url.endsWith('/models')) return fetch(input, init)
+      if (url.endsWith('/models') || url.includes('/qvac/identity')) return fetch(input, init)
       completionAttempts += 1
       if (completionAttempts === 1) return fetch(input, init)
       recoveredAuth = new Headers(

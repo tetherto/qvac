@@ -1,8 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-import fs = require("bare-fs");
-import path = require("bare-path");
 import QvacLogger = require("@qvac/logging");
-import fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   QvacResponse,
@@ -30,20 +27,26 @@ const BERGAMOT_TARGET_TOKEN_BY_PAIR: Record<string, string> = {
   "en:pt": ">>por<<",
 };
 
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
-// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
-// copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
-// package holds the runtime. On mobile the package tree isn't resolvable at
-// runtime (the worklet runs from a packed bundle), so fall back to this addon's
-// own prebuilds, where the mobile packaging stages the backends. The native side
-// appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-function resolveBackendsDir(): string {
-  // fabric's resolver only checks that the platform package resolves, not that
-  // its prebuilds are on disk.
-  const fabricRoot = fabricBackends.resolveBackendsDir();
-  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
-  return path.join(__dirname, "prebuilds");
+function isAbsoluteModelPath(modelPath: string): boolean {
+  return (
+    modelPath.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/.test(modelPath) ||
+    modelPath.startsWith("\\\\")
+  );
+}
+
+function normalizeGpuAliases(config: Record<string, unknown>): void {
+  for (const [canonical, alias] of [
+    ["use_gpu", "useGPU"],
+    ["gpu_backend", "gpuBackend"],
+    ["gpu_device", "gpuDevice"],
+    ["op_offload_min_batch", "opOffloadMinBatch"],
+  ]) {
+    if (config[canonical] === undefined && config[alias] !== undefined) {
+      config[canonical] = config[alias];
+    }
+    delete config[alias];
+  }
 }
 
 interface QvacResponseHandlers {
@@ -169,6 +172,12 @@ interface TranslationNmtcpp {
 interface TranslationNmtcppConstructor {
   new (args: TranslationNmtcppArgs): TranslationNmtcpp;
   /**
+   * Assess a model before loading it, using current device memory. Concurrent
+   * calls run one at a time. A model or vocabulary that cannot be read, no
+   * usable device, or a malformed request rejects.
+   */
+  assessFit(request: TranslationNmtcpp.FitRequest): Promise<TranslationNmtcpp.FitResult>;
+  /**
    * Available model types for translation
    */
   readonly ModelTypes: TranslationNmtcppModelTypes;
@@ -185,6 +194,47 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     IndicTrans: "IndicTrans",
     Bergamot: "Bergamot",
   };
+
+  static async assessFit(
+    request: TranslationNmtcpp.FitRequest,
+  ): Promise<TranslationNmtcpp.FitResult> {
+    if (
+      !request ||
+      !request.files ||
+      typeof request.files.model !== "string" ||
+      !isAbsoluteModelPath(request.files.model)
+    ) {
+      throw new TypeError("files.model must be an absolute path");
+    }
+    if (request.files.pivotModel && !isAbsoluteModelPath(request.files.pivotModel)) {
+      throw new TypeError("files.pivotModel must be an absolute path");
+    }
+    const modelType = request.config?.modelType;
+    if (modelType !== "IndicTrans" && modelType !== "Bergamot") {
+      throw new TypeError("config.modelType must be IndicTrans or Bergamot");
+    }
+    if (
+      modelType === "IndicTrans" &&
+      (request.config["main-gpu"] !== undefined ||
+        request.config.main_gpu !== undefined)
+    ) {
+      // The fitter cannot follow a main-gpu selection.
+      return { status: "unknown", devices: [], stats: {} };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily.
+    const binding = require("./binding") as {
+      assessFit?: (input: TranslationNmtcpp.FitRequest) => Promise<TranslationNmtcpp.FitResult>;
+    };
+    if (typeof binding.assessFit !== "function") {
+      throw new Error("the translation-nmtcpp prebuild does not expose assessFit");
+    }
+    const config = { ...request.config };
+    normalizeGpuAliases(config);
+    return await binding.assessFit({
+      ...request,
+      config,
+    });
+  }
 
   private readonly opts: { stats?: boolean };
   readonly logger: QvacLogger;
@@ -441,35 +491,7 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     // expects snake_case (mirrors nmt_context_params field names), so we
     // translate camelCase → snake_case here. snake_case takes precedence
     // when both are present (explicit user choice wins over alias).
-    if (otherConfig.use_gpu === undefined && otherConfig.useGPU !== undefined) {
-      otherConfig.use_gpu = otherConfig.useGPU;
-    }
-    if (
-      otherConfig.gpu_backend === undefined &&
-      otherConfig.gpuBackend !== undefined
-    ) {
-      otherConfig.gpu_backend = otherConfig.gpuBackend;
-    }
-    if (
-      otherConfig.gpu_device === undefined &&
-      otherConfig.gpuDevice !== undefined
-    ) {
-      otherConfig.gpu_device = otherConfig.gpuDevice;
-    }
-    if (
-      otherConfig.op_offload_min_batch === undefined &&
-      otherConfig.opOffloadMinBatch !== undefined
-    ) {
-      otherConfig.op_offload_min_batch = otherConfig.opOffloadMinBatch;
-    }
-    delete otherConfig.useGPU;
-    delete otherConfig.gpuBackend;
-    delete otherConfig.gpuDevice;
-    delete otherConfig.opOffloadMinBatch;
-
-    if (otherConfig.backendsDir === undefined) {
-      otherConfig.backendsDir = resolveBackendsDir();
-    }
+    normalizeGpuAliases(otherConfig);
 
     const configurationParams: TranslationConfigurationParams = {
       path: this._files.model,
@@ -692,6 +714,44 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
  */
 // eslint-disable-next-line @typescript-eslint/no-namespace -- class/namespace merging is the only way to type a constructor-first CommonJS export.
 namespace TranslationNmtcpp {
+  export interface FitRequest {
+    files: TranslationNmtcppFiles;
+    config: TranslationNmtcppConfig;
+    /** Additional free memory to reserve, in bytes. */
+    marginBytes?: number;
+  }
+
+  /**
+   * `unknown` is a load with no reliable verdict: a `main-gpu` selection,
+   * memory that cannot be read, no CPU device for the host row, or a load
+   * between the allowance and the source bytes.
+   */
+  export type FitStatus = "fits" | "does-not-fit" | "unknown";
+
+  export interface FitDevice {
+    /** The PCI bus ID when the backend reports one, the device name otherwise. */
+    id: string;
+    name: string;
+    /** Memory the host owns: the host CPU, and a GPU that shares the host's memory. */
+    unified: boolean;
+    /** The weight-load allowance on the selected device; the staged source bytes on the host. */
+    usedBytes: number;
+    freeBytes: number;
+    totalBytes: number;
+  }
+
+  export type FitStats = Record<string, never>;
+
+  export interface FitResult {
+    status: FitStatus;
+    /**
+     * The selected GPU, then the host CPU, which stages a discrete GPU's source
+     * bytes. One CPU row for a load on the CPU, and none for `unknown`.
+     */
+    devices: FitDevice[];
+    stats: FitStats;
+  }
+
   export interface TranslationNmtcppFiles {
     model: string;
     srcVocab?: string;
@@ -772,9 +832,8 @@ namespace TranslationNmtcpp {
 
     /**
      * Path to the directory containing backend shared libraries
-     * (libqvac-ggml-vulkan.so, etc.). Defaults to the root `@qvac/fabric/backends`
-     * resolves on desktop, falling back to this package's `prebuilds/` on mobile where
-     * the package tree isn't resolvable from the packed worklet.
+     * (libqvac-ggml-vulkan.so, etc.). Defaults to the ones @qvac/fabric ships,
+     * which it locates itself next to its runtime.
      */
     backendsDir?: string;
 

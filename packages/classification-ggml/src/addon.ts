@@ -14,17 +14,29 @@ export interface ClassificationBinding {
     configurationParams: ClassificationConfigurationParams,
     outputCallback: ClassificationOutputCallback,
   ): object;
-  activate(handle: unknown): void;
-  runJob(handle: unknown, input: ClassificationJob): Promise<boolean>;
+  activate(handle: unknown): void | Promise<void>;
+  runJob(handle: unknown, input: ClassificationJob | ImageEmbeddingJob): Promise<boolean>;
   cancel(handle: unknown): Promise<void>;
   destroyInstance(handle: unknown): void;
 }
 
 export interface ClassificationConfigurationParams {
   path: string;
+  modelType?: "mobilenet" | "megaloc";
   config: {
-    backendsDir: string;
+    /** Directory of ggml backend modules; defaults to the ones @qvac/fabric ships. */
+    backendsDir?: string;
+    backend?: string;
+    threads?: number;
   };
+}
+
+export interface ImageEmbeddingJob {
+  type: "embedding";
+  content: Uint8Array;
+  width?: number;
+  height?: number;
+  channels?: 3;
 }
 
 export interface ClassificationJob {
@@ -65,7 +77,7 @@ export type MappedAddonEvent =
     }
   | {
       type: "Output";
-      data: unknown[];
+      data: unknown[] | Float32Array;
       error: null;
     }
   | {
@@ -133,7 +145,7 @@ export function mapAddonEvent(
       return null;
     }
   }
-  if (Array.isArray(rawData)) {
+  if (Array.isArray(rawData) || rawData instanceof Float32Array) {
     return { type: "Output", data: rawData, error: null };
   }
   if (rawData && typeof rawData === "object") {
@@ -182,13 +194,12 @@ export class ClassificationInterface {
     );
   }
 
-  activate(): Promise<void> {
+  async activate(): Promise<void> {
     if (!this.handle) throw new Error("Classification addon is not initialized");
-    this.binding.activate(this.handle);
-    return Promise.resolve();
+    await this.binding.activate(this.handle);
   }
 
-  async runJob(input: ClassificationJob): Promise<boolean> {
+  async runJob(input: ClassificationJob | ImageEmbeddingJob): Promise<boolean> {
     if (!this.handle) throw new Error("Classification addon is not initialized");
     return this.binding.runJob(this.handle, input);
   }

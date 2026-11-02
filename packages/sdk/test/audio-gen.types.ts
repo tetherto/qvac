@@ -5,8 +5,10 @@ import type {
   AudioGenClientParams,
   AudioGenConfig,
   AudioGenEngine,
+  AudioGenGenerationMetadata,
   AudioGenRepaintMode,
   AudioGenRuntimeConfig,
+  AudioGenStats,
   AudioGenTrack,
   AudioGenUnderstandResult,
   AudioUnderstandClientParams
@@ -189,3 +191,62 @@ const reuseRecoveredCodes: AudioGenClientParams = {
   audioCodes: recovered.audioCodes
 }
 void reuseRecoveredCodes
+
+const minimaxDevice: AudioGenConfig = {
+  engine: 'minimax',
+  lmModelSrc: '/models/minimax-lm.gguf',
+  synthModelSrc: '/models/minimax-synth.gguf',
+  device: 'gpu'
+}
+void minimaxDevice
+
+const unknownMinimaxDevice: AudioGenRuntimeConfig = {
+  engine: 'minimax',
+  // @ts-expect-error MiniMax devices are cpu, gpu or auto
+  device: 'metal'
+}
+void unknownMinimaxDevice
+
+const acestepDevice: AudioGenRuntimeConfig = {
+  engine: 'acestep',
+  // @ts-expect-error ACE-Step takes useGPU and nGpuLayers, not device
+  device: 'gpu'
+}
+void acestepDevice
+
+const perRunSampling: AudioGenClientParams = {
+  modelId: 'acestep-model',
+  caption: 'slow blues with warm electric guitar',
+  inferenceSteps: 50,
+  shift: 1.5
+}
+void perRunSampling
+
+const editRunControls: AudioEditClientParams = {
+  modelId: 'acestep-model',
+  sourceAudio: '/path/to/song.wav',
+  referenceAudio: new Uint8Array(8),
+  operations: [{ type: 'repaint', caption: 'analog synth solo', start: 10, end: 20 }],
+  vocalLanguage: 'en',
+  bpm: 120,
+  keyscale: 'C minor',
+  timesignature: '4/4',
+  augmentCaptionWithMetadata: true,
+  dcwEnabled: true,
+  dcwScaler: 0.05,
+  dcwHighScaler: 0.02,
+  inferenceSteps: 16,
+  shift: 2
+}
+void editRunControls
+
+// What an ACE-Step run rendered rides on its stats, seed included.
+declare const stats: AudioGenStats
+const rendered: AudioGenGenerationMetadata | undefined = stats.metadata
+const replaySeed: number | undefined = rendered?.seed
+void replaySeed
+const arMs: number | undefined = stats.arMs
+void arMs
+
+const decodeSeed: number = recovered.seed
+void decodeSeed

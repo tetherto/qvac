@@ -12,7 +12,7 @@ export function transformLlmConfig(llmConfig: LlmConfig) {
     JSON.stringify(llmConfig, (key: string, v: unknown) =>
       key === 'modelType' || key === 'system_prompt'
         ? undefined
-        : key === 'stop_sequences'
+        : key === 'stop_sequences' || key === 'backend'
           ? Array.isArray(v)
             ? v.join(', ')
             : v
@@ -24,6 +24,11 @@ export function transformLlmConfig(llmConfig: LlmConfig) {
       (_, key: string) => `"${key.replace(/[A-Z]/g, (l: string) => `_${l.toLowerCase()}`)}":`
     )
   ) as Record<string, string>
+
+  if ('poll_batch' in transformed) {
+    transformed['poll-batch'] = transformed['poll_batch']
+    delete transformed['poll_batch']
+  }
 
   if ('stop_sequences' in transformed) {
     transformed['reverse_prompt'] = transformed['stop_sequences']

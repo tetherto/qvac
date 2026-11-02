@@ -3,6 +3,13 @@
 const test = require('brittle')
 const { mapAddonEvent } = require('../../addon.js')
 
+test('MegaLoc Float32Array payload maps to Output rather than JobEnded', function (t) {
+  const data = new Float32Array([0.25, 0.75])
+  const result = mapAddonEvent('class std::vector<float>', data, null)
+  t.is(result.type, 'Output')
+  t.is(result.data, data)
+})
+
 test('Array payload maps to Output regardless of event name', function (t) {
   const data = [{ label: 'food', confidence: 0.9 }]
   const result = mapAddonEvent('struct ...::ClassifyOutput', data, null)

@@ -203,7 +203,7 @@ export const whisperConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`."
+      'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
     ),
   vad_params: vadParamsSchema,
   audio_format: audioFormatSchema
@@ -277,7 +277,27 @@ export const parakeetRuntimeConfigSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.'
+      "Run the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron streaming sessions and emit `{ type: 'vad', source: 'energy' }` events on each speech/silence transition. Tune it with `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, and `streamingEnergyVadHangoverMs`. Default false."
+    ),
+  streamingEnergyVadThresholdDb: z
+    .number()
+    .optional()
+    .describe(
+      'Energy-VAD speech threshold in dBFS RMS; audio above it counts as speech. Default -35.'
+    ),
+  streamingEnergyVadWindowMs: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Energy-VAD RMS window in ms; the engine caps it at 1000. Default 30.'),
+  streamingEnergyVadHangoverMs: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Silence the energy VAD requires before leaving the speaking state, in ms. Default 200.'
     ),
   streamingLeftContextMs: z
     .number()
@@ -297,6 +317,29 @@ export const parakeetRuntimeConfigSchema = z.object({
     .optional()
     .describe(
       'Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.'
+    ),
+
+  streamingSpeakerVad: z
+    .boolean()
+    .optional()
+    .describe(
+      'Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.'
+    ),
+  diarizationThreshold: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      'Speaker-activity threshold; omit for the model default (0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).'
+    ),
+  diarizationMinSegmentMs: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Shortest diarization turn in ms; omit for the model default (510 for Sortformer, 200 for Nemotron 3 Diarization).'
     ),
 
   // === AOSC (Audio-Online Speaker Cache; v2.1+ Sortformer only) =========
@@ -324,7 +367,9 @@ export const parakeetRuntimeConfigSchema = z.object({
     .int()
     .nonnegative()
     .optional()
-    .describe('AOSC: encoder left-context window in ms. Default 80.'),
+    .describe(
+      'Diarization encoder left-context window in ms. Default 80 for Sortformer, 0 for Nemotron 3 Diarization; explicit 80 is preserved.'
+    ),
   streamingChunkRightContextMs: z
     .number()
     .int()
@@ -337,11 +382,46 @@ export const parakeetRuntimeConfigSchema = z.object({
     .positive()
     .optional()
     .describe('AOSC: FIFO-overflow pop-out count. Default 144.'),
+
+  // === Load-time prewarm ================================================
+  // The pass runs inside `loadModel`, so these have no per-stream
+  // counterpart and nothing to reload.
+  prewarm: z
+    .boolean()
+    .optional()
+    .describe(
+      'Run one synthetic encoder pass while loading so the first request does not pay the GPU shader or kernel compile; Nemotron 3 Diarization also runs one streaming chunk. Default false.'
+    ),
+  prewarmAudioSeconds: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Length of the prewarm pass in seconds of audio; must be greater than 0. Default 1.'),
+
+  // === Long recordings (offline `transcribe`) ============================
+  // The offline encoder runs a long input as overlapping windows so memory
+  // stays flat however long the recording is, and `cancel()` also lands
+  // between windows. Both counts are encoder frames: 80 ms each, 12.5 per
+  // second of audio.
+  longFormWindowFrames: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      "Offline encoder window for long recordings, in 80 ms encoder frames. `0` takes the window the model recommends (TranscribePsy: 750 frames, 60 s, with 94 frames of context on each side; other models: the engine's balanced automatic windows); a negative value encodes the whole input in one pass. Default 0."
+    ),
+  longFormContextFrames: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      'Encoder frames of context shared with each neighbouring long-form window. `0` lets the engine choose; `-1` runs the windows without context.'
+    ),
   backendsDir: z
     .string()
     .optional()
     .describe(
-      'Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.'
+      'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
     ),
   openclCacheDir: z
     .string()
@@ -394,3 +474,24 @@ const legacyParakeetOnnxFieldsShape = LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.r
 export const parakeetLoadConfigSchema = parakeetRuntimeConfigSchema
   .extend(legacyParakeetOnnxFieldsShape)
   .strict()
+
+/** MOSS-Transcribe-Diarize processes a whole recording with speaker labels. */
+export const mossTranscribeConfigSchema = z
+  .object({
+    maxThreads: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('CPU threads; 0 lets the engine choose.'),
+    useGPU: z
+      .boolean()
+      .optional()
+      .describe('Enable the linked GPU backend, including Metal. Default false.'),
+    backendsDir: z
+      .string()
+      .optional()
+      .describe('Directory containing dynamically loaded ggml backend libraries.')
+  })
+  .strict()
+export type MossTranscribeConfig = z.infer<typeof mossTranscribeConfigSchema>

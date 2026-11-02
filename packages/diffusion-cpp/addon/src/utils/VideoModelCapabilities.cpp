@@ -4,13 +4,17 @@
 #include <cstdint>
 #include <fstream>
 #include <limits>
+#include <sstream>
 #include <string>
+
+#include <picojson/picojson.h>
 
 namespace qvac_lib_inference_addon_sd {
 namespace {
 
 constexpr uint32_t K_GGUF_MAGIC = 0x46554747; // "GGUF" in little-endian.
 constexpr size_t K_MAX_STRING_BYTES = 1024 * 1024;
+constexpr uint64_t K_MAX_SAFETENSORS_HEADER_BYTES = 16 * 1024 * 1024;
 constexpr uint32_t K_GGUF_TYPE_UINT8 = 0;
 constexpr uint32_t K_GGUF_TYPE_INT8 = 1;
 constexpr uint32_t K_GGUF_TYPE_UINT16 = 2;
@@ -39,7 +43,8 @@ bool skip(std::istream& input, uint64_t bytes) {
 
 bool skipString(std::istream& input) {
   uint64_t length = 0;
-  return read(input, length) && skip(input, length);
+  return read(input, length) && length <= K_MAX_STRING_BYTES &&
+         skip(input, length);
 }
 
 bool readString(std::istream& input, std::string& value) {
@@ -127,24 +132,66 @@ bool isMiniMaxH3VideoTensor(const std::string& name) {
   return name.find("video_patch_proj") != std::string::npos;
 }
 
+void setMiniMaxH3Capabilities(VideoModelCapabilities& capabilities) {
+  capabilities.isMiniMaxH3 = true;
+  capabilities.spatialAlignment = 32;
+  capabilities.frameCountStride = 17;
+  capabilities.frameCountOffset = 5;
+}
+
+bool inspectMiniMaxH3Safetensors(std::istream& input) {
+  input.clear();
+  input.seekg(0);
+  uint64_t headerBytes = 0;
+  if (!read(input, headerBytes) || headerBytes == 0 ||
+      headerBytes > K_MAX_SAFETENSORS_HEADER_BYTES)
+    return false;
+
+  std::string header(static_cast<size_t>(headerBytes), '\0');
+  input.read(header.data(), static_cast<std::streamsize>(header.size()));
+  if (!input.good())
+    return false;
+
+  picojson::value parsed;
+  if (!picojson::parse(parsed, header).empty() ||
+      !parsed.is<picojson::object>())
+    return false;
+
+  bool hasAudioPatchProjection = false;
+  bool hasVideoPatchProjection = false;
+  for (const auto& [name, value] : parsed.get<picojson::object>()) {
+    if (!value.is<picojson::object>())
+      continue;
+    hasAudioPatchProjection |=
+        name.find("audio_patch_proj.weight") != std::string::npos;
+    hasVideoPatchProjection |=
+        name.find("video_patch_proj.weight") != std::string::npos;
+  }
+  return hasAudioPatchProjection && hasVideoPatchProjection;
+}
+
 } // namespace
 
-VideoModelCapabilities
-inspectVideoModelCapabilities(const std::string& modelPath) {
+VideoModelCapabilities inspectVideoModelCapabilities(std::istream& input) {
   VideoModelCapabilities capabilities;
-  std::ifstream input(modelPath, std::ios::binary);
   if (!input)
     return capabilities;
 
   uint32_t magic = 0;
+  if (!read(input, magic))
+    return capabilities;
+  if (magic != K_GGUF_MAGIC) {
+    if (inspectMiniMaxH3Safetensors(input))
+      setMiniMaxH3Capabilities(capabilities);
+    return capabilities;
+  }
+
   uint32_t version = 0;
   uint64_t tensorCount = 0;
   uint64_t keyValueCount = 0;
-  if (!read(input, magic) || !read(input, version) ||
-      !read(input, tensorCount) || !read(input, keyValueCount) ||
-      magic != K_GGUF_MAGIC || (version != 2 && version != 3)) {
+  if (!read(input, version) || !read(input, tensorCount) ||
+      !read(input, keyValueCount) || (version != 2 && version != 3))
     return capabilities;
-  }
 
   for (uint64_t i = 0; i < keyValueCount; ++i) {
     uint32_t type = 0;
@@ -196,13 +243,25 @@ inspectVideoModelCapabilities(const std::string& modelPath) {
   // tensor names are model metadata, so this remains reliable after a GGUF is
   // renamed. H3 uses a 32-pixel spatial grid and 17*k+5 frame packing.
   if (hasMiniMaxH3AudioPatchProjection && hasMiniMaxH3VideoPatchProjection) {
-    capabilities.isMiniMaxH3 = true;
-    capabilities.spatialAlignment = 32;
-    capabilities.frameCountStride = 17;
-    capabilities.frameCountOffset = 5;
+    setMiniMaxH3Capabilities(capabilities);
   }
 
   return capabilities;
+}
+
+VideoModelCapabilities
+inspectVideoModelCapabilities(const std::string& modelPath) {
+  std::ifstream input(modelPath, std::ios::binary);
+  return inspectVideoModelCapabilities(input);
+}
+
+VideoModelCapabilities
+inspectVideoModelCapabilities(const std::uint8_t* data, std::size_t size) {
+  if (data == nullptr || size == 0)
+    return {};
+  const auto* chars = reinterpret_cast<const char*>(data);
+  std::istringstream input(std::string(chars, size), std::ios::binary);
+  return inspectVideoModelCapabilities(input);
 }
 
 } // namespace qvac_lib_inference_addon_sd

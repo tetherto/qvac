@@ -1,0 +1,37 @@
+name: Bare majors
+
+# Fails when a package this pull request touches still pins `bare` or a
+# `bare-*` dependency or devDependency below the latest major. Optional peers
+# are ignored. This workflow is not an input to qvac-merge-guard, so a red
+# check does not block merging.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bare-majors:
+    name: Touched packages are on current bare majors
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Unit tests
+        run: node --test .github/scripts/test/check-bare-majors.test.mjs
+
+      - name: Check bare majors on touched packages
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node .github/scripts/check-bare-majors.mjs --base "$BASE_SHA" --tree HEAD

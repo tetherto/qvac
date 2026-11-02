@@ -657,3 +657,75 @@ TEST(Audio8RealGguf, CloningSynthesisRoundTrip) {
   plainInput.text = input.text;
   EXPECT_NE(cloned, synthesizeOnce(plain, plainInput));
 }
+
+class Audio8StreamingTest : public ::testing::Test {
+protected:
+  void SetUp() override {
+    Audio8Config cfg;
+    cfg.lmModelPath = envOrEmpty(AUDIO8_LM_ENV);
+    cfg.codecDecoderPath = envOrEmpty(AUDIO8_DECODER_ENV);
+    if (cfg.lmModelPath.empty() || cfg.codecDecoderPath.empty()) {
+      GTEST_SKIP() << "Audio8 model fixtures are required";
+    }
+    cfg.greedy = true;
+    cfg.maxFrames = STREAM_TEST_FRAMES;
+    cfg.outputSampleRate = STREAM_TEST_RATE;
+    model = std::make_unique<Audio8Model>(cfg);
+    model->load();
+    input.text = "The listener should hear the first words before the complete "
+                 "response is generated.";
+  }
+
+  static constexpr int STREAM_TEST_FRAMES = 48;
+  static constexpr int STREAM_TEST_RATE = 24000;
+  std::unique_ptr<Audio8Model> model;
+  Audio8Model::AnyInput input;
+};
+
+TEST_F(Audio8StreamingTest, DeliversChunksAndSuppressesBatchReplay) {
+  size_t samples = 0;
+  int chunks = 0;
+  int endings = 0;
+  input.chunkCallback = [&](Audio8Model::Output&& pcm, int index, bool last) {
+    EXPECT_EQ(index, chunks);
+    if (last) {
+      EXPECT_TRUE(pcm.empty());
+      ++endings;
+      return;
+    }
+    EXPECT_EQ(endings, 0);
+    EXPECT_FALSE(pcm.empty());
+    samples += pcm.size();
+    ++chunks;
+  };
+  EXPECT_FALSE(model->process(input).has_value());
+  EXPECT_GT(chunks, 1);
+  EXPECT_EQ(endings, 1);
+  EXPECT_EQ(samples, runtimeInt(*model, "totalSamples"));
+  EXPECT_EQ(model->sampleRate(), STREAM_TEST_RATE);
+}
+
+TEST_F(Audio8StreamingTest, CancellationStopsDeliveryAndAllowsRecovery) {
+  int callbacks = 0;
+  input.chunkCallback = [&](Audio8Model::Output&&, int, bool last) {
+    EXPECT_FALSE(last);
+    ++callbacks;
+    model->cancel();
+  };
+  EXPECT_THROW(model->process(input), StatusError);
+  EXPECT_EQ(callbacks, 1);
+  input.chunkCallback = {};
+  EXPECT_FALSE(synthesizeOnce(*model, input).empty());
+}
+
+TEST_F(Audio8StreamingTest, CallbackFailureStopsDeliveryAndAllowsRecovery) {
+  int callbacks = 0;
+  input.chunkCallback = [&](Audio8Model::Output&&, int, bool) {
+    ++callbacks;
+    throw std::runtime_error("audio sink failed");
+  };
+  EXPECT_THROW(model->process(input), StatusError);
+  EXPECT_EQ(callbacks, 1);
+  input.chunkCallback = {};
+  EXPECT_FALSE(synthesizeOnce(*model, input).empty());
+}

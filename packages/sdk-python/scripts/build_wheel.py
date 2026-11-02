@@ -6,7 +6,7 @@ Bare runtime binary and the built SDK worker bundled under tetherto/qvac_sdk/_bu
 Usage:
   python3 scripts/build_wheel.py [--sdk-dir ../sdk] [--out-dir dist/] [--platform <tag>]
 
-Requires `bun run build` to have produced ../sdk/dist and the platform's
+Requires `npm run build` to have produced ../sdk/dist and the platform's
 bare-runtime package under ../sdk/node_modules. The wheel is tagged
 `py3-none-<platform>` for the current platform only (via hatch_build.py, driven
 by the QVAC_WHEEL_PLAT this script exports); models are never bundled. Only the
@@ -125,7 +125,7 @@ def stage_bundle(sdk_dir: Path) -> None:
     worker = sdk_dir / "dist"
     if not (worker / "src" / "worker" / "index.js").exists():
         raise SystemExit(
-            f"no built worker at {worker} -- run `bun run build` in {sdk_dir}"
+            f"no built worker at {worker} -- run `npm run build` in {sdk_dir}"
         )
     bare_pkg = sdk_dir / "node_modules" / bare_runtime_package()
     bare_bin = (

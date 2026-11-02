@@ -4,9 +4,7 @@ import type { ModelResourceProfile, ProcessedModel } from './types'
  * Builds the pre-download resource profile for one catalog entry.
  *
  * The profile carries only facts: what lands on disk, and the transformer shape
- * from the GGUF metadata when the registry captured it. Interpreting those into
- * a memory estimate is the estimators' job, so re-calibrating an estimator
- * never requires regenerating the catalog.
+ * from the GGUF metadata when the registry captured it.
  *
  * @param model - A processed registry model, after shard grouping and companion
  *   detection (so `expectedSize` already totals a sharded model's parts).

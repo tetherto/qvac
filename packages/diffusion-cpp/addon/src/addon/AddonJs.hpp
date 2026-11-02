@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -90,6 +91,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.clipGPath = args.getMapEntry(1, "clipGPath");
   config.t5XxlPath = args.getMapEntry(1, "t5XxlPath");
   config.llmPath = args.getMapEntry(1, "llmPath");
+  config.llmVisionPath = args.getMapEntry(1, "llmVisionPath");
   config.vaePath = args.getMapEntry(1, "vaePath");
   config.clipVisionPath = args.getMapEntry(1, "clipVisionPath");
   config.esrganPath = args.getMapEntry(1, "esrganPath");
@@ -545,23 +547,21 @@ activateUpscaler(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-/**
- * Project a load against the memory free right now. Args: [request], shaped
- * like the createInstance model map plus a `workload` sub-object.
- *
- * Takes no instance and loads nothing: the engine reads model metadata only. A
- * model it cannot read is an "error" status rather than a throw.
- *
- * A placement the engine reached only by changing the backend assignment is
- * reported as "does-not-fit", because nothing here applies such a plan. A
- * params-on-CPU load is the exception: the engine replans it in full, so the
- * plan is compared against the placement that load already uses.
- */
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+/** A fit request parsed into owned C++ values the worker thread can use. */
+struct FitTask {
+  /** Built on the JS thread: their constructors install the sd log callback. */
+  std::shared_ptr<const SdModel> sdModel;
+  std::shared_ptr<const WorldSessionModel> worldModel;
+  SdModel::FitWorkload workload;
+  int walkSteps = 100;
+};
+
+inline FitTask parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
   JsArgsParser args(env, info);
+  const auto mode = args.getMapEntry(0, "mode");
 
   SdCtxConfig config{};
   config.modelPath = args.getMapEntry(0, "path");
@@ -574,6 +574,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   config.clipGPath = args.getMapEntry(0, "clipGPath");
   config.t5XxlPath = args.getMapEntry(0, "t5XxlPath");
   config.llmPath = args.getMapEntry(0, "llmPath");
+  config.llmVisionPath = args.getMapEntry(0, "llmVisionPath");
   config.vaePath = args.getMapEntry(0, "vaePath");
   config.clipVisionPath = args.getMapEntry(0, "clipVisionPath");
   config.esrganPath = args.getMapEntry(0, "esrganPath");
@@ -582,12 +583,15 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       args.getMapEntry(0, "embeddingsConnectorsPath");
 
   auto configMap = args.getSubmap(0, "config");
-  applySdCtxHandlers(config, configMap);
+  if (mode != "world") {
+    applySdCtxHandlers(config, configMap);
+  }
 
   auto request = args.getJsObject(0, "request")
                      .getOptionalProperty<js::Object>(env, "request");
 
-  SdModel::FitWorkload workload;
+  FitTask task;
+  SdModel::FitWorkload& workload = task.workload;
   if (request.has_value()) {
     if (auto prompt = request->getOptionalProperty<js::String>(env, "prompt")) {
       workload.prompt = prompt->as<std::string>(env);
@@ -603,7 +607,18 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
     return value->as<double>(env);
   };
-  bool rejected = false;
+  workload.upscaleOnly = mode == "upscale";
+  if (!mode.empty() && mode != "diffusion" && mode != "upscale" &&
+      mode != "world") {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "assessFit: unsupported fit mode " + mode);
+  }
+  auto invalid = [](const char* name) {
+    return StatusError(
+        general_error::InvalidArgument,
+        std::string("assessFit: workload.") + name + " is out of range");
+  };
   auto count =
       [&](const char* name, double lo, double hi) -> std::optional<int> {
     auto value = number(name);
@@ -612,8 +627,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
     const double raw = *value;
     if (!std::isfinite(raw) || raw != std::trunc(raw) || raw < lo || raw > hi) {
-      rejected = true;
-      return std::nullopt;
+      throw invalid(name);
     }
     return static_cast<int>(raw);
   };
@@ -627,6 +641,12 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   }
   if (auto frames = count("videoFrames", 1, kMaxFrames)) {
     workload.videoFrames = *frames;
+  }
+  if (auto repeats = count("upscaleRepeats", 1, 64)) {
+    workload.upscaleRepeats = *repeats;
+  }
+  if (auto walkSteps = count("walkSteps", 1, 1000000)) {
+    task.walkSteps = *walkSteps;
   }
   if (request.has_value()) {
     if (auto tiling =
@@ -642,41 +662,99 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   }
   if (auto overlap = number("vaeTileOverlap")) {
     if (!std::isfinite(*overlap) || *overlap < 0.0 || *overlap > 1.0) {
-      rejected = true;
-    } else {
-      workload.vaeTileOverlap = static_cast<float>(*overlap);
+      throw invalid("vaeTileOverlap");
     }
+    workload.vaeTileOverlap = static_cast<float>(*overlap);
   }
 
-  SdModel::FitOutcome outcome;
-  if (rejected) {
-    outcome.reason = "unsupported-config";
+  if (mode == "world") {
+    WorldSessionConfig worldConfig;
+    worldConfig.ditModelPath = args.getMapEntry(0, "path");
+    worldConfig.taehvPath = args.getMapEntry(0, "taehvPath");
+    worldConfig.scenePath = args.getMapEntry(0, "scenePath");
+    applyWorldSessionHandlers(worldConfig, configMap);
+    task.worldModel =
+        std::make_shared<const WorldSessionModel>(std::move(worldConfig));
   } else {
-    const SdModel model{std::move(config)};
-    outcome = model.assessFit(workload);
+    task.sdModel = std::make_shared<const SdModel>(std::move(config));
   }
+  return task;
+}
 
-  const char* status = "error";
-  if (outcome.reason == "fits") {
-    status = "fits";
-  } else if (outcome.reason == "does-not-fit") {
-    status = "does-not-fit";
+/**
+ * Fits are serialised: the planners enumerate the shared ggml backend
+ * registry and log through the process-wide sd log callback.
+ */
+inline SdModel::FitOutcome runFit(const FitTask& task) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+
+  if (!task.worldModel) {
+    return task.sdModel->assessFit(task.workload);
   }
+  sd_fit_result_t fit{};
+  struct FitResultGuard {
+    sd_fit_result_t& result;
+    ~FitResultGuard() { sd_fit_result_free(&result); }
+  } guard{fit};
+  bool unplanned = false;
+  const sd_fit_status_t status =
+      task.worldModel->assessFit(task.walkSteps, fit, unplanned);
+  if (unplanned) {
+    return {};
+  }
+  return SdModel::fitOutcome(status, fit, false);
+}
 
+inline js_value_t*
+fitOutcomeObject(js_env_t* env, const SdModel::FitOutcome& outcome) {
+  using namespace qvac_lib_inference_addon_cpp;
+  auto bytes = [env](uint64_t value) {
+    return js::Number::create(env, static_cast<double>(value));
+  };
   auto result = js::Object::create(env);
-  result.setProperty(
-      env, "status", js::String::create(env, std::string(status)));
-  result.setProperty(env, "reason", js::String::create(env, outcome.reason));
-  result.setProperty(env, "changed", js::Boolean::create(env, outcome.changed));
-  result.setProperty(
-      env, "vaeTiling", js::Boolean::create(env, outcome.vaeTiling));
-  result.setProperty(
-      env, "streamLayers", js::Boolean::create(env, outcome.streamLayers));
-  result.setProperty(env, "backend", js::String::create(env, outcome.backend));
-  result.setProperty(
-      env, "paramsBackend", js::String::create(env, outcome.paramsBackend));
-  result.setProperty(env, "report", js::String::create(env, outcome.report));
+  result.setProperty(env, "status", js::String::create(env, outcome.status));
+  auto devices = js::Array::create(env);
+  for (size_t i = 0; i < outcome.devices.size(); ++i) {
+    const auto& row = outcome.devices[i];
+    auto entry = js::Object::create(env);
+    entry.setProperty(env, "id", js::String::create(env, row.id));
+    entry.setProperty(env, "name", js::String::create(env, row.name));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", bytes(row.usedBytes));
+    entry.setProperty(env, "freeBytes", bytes(row.freeBytes));
+    entry.setProperty(env, "totalBytes", bytes(row.totalBytes));
+    devices.set(env, i, entry);
+  }
+  result.setProperty(env, "devices", devices);
+  result.setProperty(env, "stats", js::Object::create(env));
   return result;
+}
+
+/**
+ * Project a load against the memory free right now. Args: [request], shaped
+ * like the createInstance model map plus a `workload` sub-object.
+ *
+ * Takes no instance and loads nothing: the engine reads model metadata only.
+ *
+ * A placement the engine reached only by changing the backend assignment is
+ * "does-not-fit", because nothing here applies such a plan. A params-on-CPU
+ * load is the exception: the engine replans it in full, so the plan is
+ * compared against the placement that load already uses. A placement the
+ * engine cannot plan from is "unknown".
+ *
+ * Returns a Promise. The request is parsed on the JS thread, the projection
+ * runs on a native worker thread, and the result object is built back on the
+ * JS thread. A malformed request throws before the Promise exists; a model the
+ * engine cannot read rejects the Promise.
+ */
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  return js::JsAsyncTask::run(
+      env,
+      [task = parseFitRequest(env, info)]() { return runFit(task); },
+      fitOutcomeObject);
 }
 JSCATCH
 

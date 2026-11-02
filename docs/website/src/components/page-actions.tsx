@@ -2,20 +2,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  Check,
   ChevronDown,
   Copy,
   ExternalLinkIcon,
   FileText,
   MessageSquare,
   Sparkles,
-  Tag,
 } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { buttonVariants } from './ui/button';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cva } from 'class-variance-authority';
-import type { VersionSelectorProps } from '@/lib/versions';
 import { useAskAI } from '@/components/ask-ai';
 
 // Cache fetched Markdown bodies in-memory so repeat clicks on the same page
@@ -166,18 +163,6 @@ export function CopyPageButton({
               <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
             </button>
           </PopoverClose>
-
-          <PopoverClose asChild>
-            <button
-              type="button"
-              onClick={() => window.open('/llms-full.txt', '_blank', 'noopener,noreferrer')}
-              className={cn(optionVariants())}
-            >
-              <FileText className="text-fd-muted-foreground" />
-              View full docs dump
-              <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
-            </button>
-          </PopoverClose>
         </PopoverContent>
       </Popover>
     </div>
@@ -303,62 +288,3 @@ export function ViewOptions({
   );
 }
 
-/**
- * Pure-presentation popover that switches between sibling versioned MDX
- * files. Section detection, version list, current label, and per-version
- * URLs are precomputed at build time by `getVersionSelectorProps()` and
- * passed in as props — the client bundle no longer carries the version
- * manifest or `usePathname()` for this widget. Cross-version navigation
- * goes through `window.location.href` because Fumadocs is statically
- * exported and `router.push` can't soft-navigate to sibling MDX files.
- */
-export function VersionSelector({
-  versions,
-  currentVersion,
-  currentLabel,
-  versionUrls,
-}: VersionSelectorProps) {
-  function handleVersionChange(targetVersion: string) {
-    if (targetVersion === currentVersion) return;
-    const target = versionUrls[targetVersion];
-    if (target) window.location.href = target;
-  }
-
-  return (
-    <Popover>
-      <PopoverTrigger
-        aria-label="Select version"
-        className={cn(
-          buttonVariants({
-            color: 'secondary',
-            size: 'sm',
-            className: 'gap-1.5 font-mono',
-          }),
-        )}
-      >
-        <Tag className="size-3.5 text-fd-muted-foreground" />
-        {currentLabel}
-        <ChevronDown className="size-3.5 text-fd-muted-foreground" />
-      </PopoverTrigger>
-      <PopoverContent className="flex flex-col">
-        {versions.map((version) => (
-          <PopoverClose asChild key={version.value}>
-            <button
-              type="button"
-              className={cn(optionVariants())}
-              onClick={() => handleVersionChange(version.value)}
-            >
-              <Check
-                className={cn(
-                  'text-fd-muted-foreground',
-                  currentVersion === version.value ? 'opacity-100' : 'opacity-0',
-                )}
-              />
-              {version.label}
-            </button>
-          </PopoverClose>
-        ))}
-      </PopoverContent>
-    </Popover>
-  );
-}

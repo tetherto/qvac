@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { llmConfigBaseSchema, embedConfigBaseSchema } from '@/schemas/llamacpp-config'
-import { whisperConfigSchema, parakeetRuntimeConfigSchema } from '@/schemas/transcription-config'
+import {
+  whisperConfigSchema,
+  parakeetRuntimeConfigSchema,
+  mossTranscribeConfigSchema
+} from '@/schemas/transcription-config'
 import { bciConfigSchema } from '@/schemas/bci-config'
 import { nmtConfigBaseSchema } from '@/schemas/translation-config'
 import { ttsLoadConfigSchema } from '@/schemas/text-to-speech'
@@ -8,6 +12,8 @@ import { ocrConfigSchema } from '@/schemas/ocr'
 import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
 import { vlaConfigSchema } from '@/schemas/vla'
+import { decisionConfigBaseSchema } from '@/schemas/decision'
+import { rerankConfigBaseSchema } from '@/schemas/rerank'
 import { classificationConfigSchema } from '@/schemas/classification'
 import { ModelType, normalizeModelType, type CanonicalModelType } from '@/schemas/model-types'
 
@@ -27,10 +33,13 @@ export const MODEL_CONFIG_SCHEMA_BY_TYPE = {
   [ModelType.llamacppCompletion]: llmConfigBaseSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
   [ModelType.bciWhispercppTranscription]: bciConfigSchema,
+  [ModelType.llamacppDecision]: decisionConfigBaseSchema,
+  [ModelType.llamacppRerank]: rerankConfigBaseSchema,
   [ModelType.llamacppEmbedding]: embedConfigBaseSchema,
   [ModelType.nmtcppTranslation]: nmtConfigBaseSchema,
   [ModelType.ttsGgml]: ttsLoadConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema,
+  [ModelType.mossTranscribe]: mossTranscribeConfigSchema,
   [ModelType.ggmlOcr]: ocrConfigSchema,
   [ModelType.sdcppGeneration]: sdcppConfigSchema,
   [ModelType.audiogenGgml]: audioGenConfigSchema,

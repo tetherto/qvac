@@ -42,6 +42,45 @@ test('deduplicateModels: keeps empty-checksum entries as-is', (t) => {
   t.is(result.length, 2, 'neither is dropped when checksum is empty')
 })
 
+test('deduplicateModels: preserves companion-only files with shared checksums', (t) => {
+  const first = makeModel({
+    registryPath: 'parakeet/first.mlmodelc/coremldata.bin',
+    sha256Checksum: 'shared-sha',
+    isCompanionOnly: true
+  })
+  const second = makeModel({
+    registryPath: 'parakeet/second.mlmodelc/coremldata.bin',
+    sha256Checksum: 'shared-sha',
+    isCompanionOnly: true
+  })
+
+  const result = deduplicateModels([first, second], false)
+
+  t.is(result.length, 2)
+  t.alike(
+    result.map((model) => model.registryPath),
+    [first.registryPath, second.registryPath]
+  )
+})
+
+test('deduplicateModels: preserves Core ML bundle components with shared checksums', (t) => {
+  const first = makeModel({
+    registryPath: 'parakeet/first.mlmodelc/coremldata.bin',
+    sha256Checksum: 'shared-sha'
+  })
+  const second = makeModel({
+    registryPath: 'parakeet/second.mlmodelc/coremldata.bin',
+    sha256Checksum: 'shared-sha'
+  })
+
+  const result = deduplicateModels([first, second], false)
+
+  t.alike(
+    result.map((model) => model.registryPath),
+    [first.registryPath, second.registryPath]
+  )
+})
+
 // ---------------------------------------------------------------------------
 // Regression: QVAC-18420 — Bergamot shared vocabs
 // ---------------------------------------------------------------------------
@@ -216,5 +255,32 @@ test('groupCompanionSets: groups Chatterbox MeCab dictionary files', (t) => {
   for (const filename of filenames.slice(1)) {
     const companion = grouped.find((model) => model.registryPath.endsWith(`/${filename}`))!
     t.is(companion.isCompanionOnly, true, `${filename} is companion-only`)
+  }
+})
+
+test('deduplicateModels: grouping preserves shared Core ML package weights in either order', (t) => {
+  const compiled = makeModel({
+    registryPath: 'acestep/vae-decoder.mlmodelc/weights/weight.bin',
+    sha256Checksum: 'shared-weights'
+  })
+  const source = makeModel({
+    registryPath: 'acestep/vae-decoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin',
+    sha256Checksum: 'shared-weights'
+  })
+
+  for (const files of [
+    [compiled, source],
+    [source, compiled]
+  ]) {
+    const grouped = groupCompanionSets(files)
+    t.ok(
+      grouped.every((entry) => entry.isCompanionOnly),
+      'both paths are companion-only'
+    )
+    t.alike(
+      deduplicateModels(grouped, false).map((entry) => entry.registryPath),
+      files.map((entry) => entry.registryPath),
+      'both bundle layouts remain addressable'
+    )
   }
 })

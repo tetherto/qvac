@@ -7,6 +7,194 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: the device the load
+  resolves to, then the host CPU, whose row includes the embedder. `status` is
+  `fits`, `does-not-fit` or `unknown`. An unreadable model or embedder, or an
+  invalid request, rejects ([#5473](https://github.com/tetherto/qvac/pull/5473)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5473](https://github.com/tetherto/qvac/pull/5473)).
+
+### Changed
+
+- Update the shared `speech-cpp` native dependency to `2026-10-29`
+  ([#5420](https://github.com/tetherto/qvac/pull/5420),
+  [#5447](https://github.com/tetherto/qvac/pull/5447)).
+- `assessFit` counts Android's OpenCL GPU as sharing host memory
+  ([#5447](https://github.com/tetherto/qvac/pull/5447)).
+
+## [0.14.1] - 2026-10-28
+
+### Changed
+
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech
+  addons ([#5397](https://github.com/tetherto/qvac/pull/5397)).
+- The shared native `ggml-speech` moves to `2026-10-27` across the speech
+  addons, which also speeds up single-query Metal softmax on long KV caches
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): matrix products on every quantized weight
+  type whose sums exceed the fp16 range no longer come back as infinity;
+  `ggml-speech` `2026-10-23` fixed q8_0 only
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+- Metal: a fused SwiGLU mat-vec whose output overlaps its inputs, and copies
+  into strided destinations, no longer produce wrong values; quantized matrix
+  products keep F32 activations
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+- Vulkan: tensor views not aligned for the speech ops fall back instead of
+  returning wrong data ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+
+## [0.14.0] - 2026-10-23
+
+### Changed
+
+- Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
+  the speech addons so they use the same source revision
+  ([#5245](https://github.com/tetherto/qvac/pull/5245)).
+- Move the shared native `speech-cpp` source pin to `2026-10-23#2` across
+  the speech addons ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+  Whisper's `assessFit` sizes integrated and unified-memory GPUs that report
+  no capacity of their own against host RAM, and returns the reason
+  `memory-capacity-unavailable` when no capacity is known.
+
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): q8_0 matrix products whose sums exceed
+  the fp16 range no longer come back as infinity, and attention over 32 or
+  more tokens with unpadded lengths is computed correctly. The shared native
+  `ggml-speech` moves to `2026-10-23` across the speech addons
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+
+## [0.13.0] - 2026-10-20
+
+### Breaking
+
+- An explicit `backendsDir` is now scanned as given, as in `@qvac/asr-ggml`
+  and `@qvac/tts-ggml`, rather than as a prebuilds root under which
+  `<host>/<module>` is appended
+  ([#5235](https://github.com/tetherto/qvac/pull/5235)). Unset, the addon finds
+  its ggml backends itself, next to the loaded module, for loads and for
+  `assessFit`, so most callers should drop the option. A caller that keeps it
+  passes the backends directory itself: change
+  `backendsDir: '/app/prebuilds'` to
+  `backendsDir: '/app/prebuilds/linux-x64/qvac__bci-whispercpp'`.
+
+### Added
+
+- Bounded FuzzTest coverage for the length-prefixed neural-signal parser
+  (`readNeuralFeatures`), including the uint32×uint32×sizeof(float) overflow
+  class ([#4605](https://github.com/tetherto/qvac/pull/4605)). Linux C++ CI
+  runs the suite after unit tests. The parser compiles without whisper, so
+  ASan and LeakSanitizer stay at full strength. No public addon API changes.
+
+### Changed
+
+- Align the shared native `speech-cpp` source pin to `2026-10-19` across
+  the speech addons so they use the same source revision
+  ([#5062](https://github.com/tetherto/qvac/pull/5062),
+  [#5194](https://github.com/tetherto/qvac/pull/5194)).
+
+### Fixed
+
+- On Linux, BCI no longer fails to register any ggml backend when loaded from
+  the SDK worker bundle ([#5235](https://github.com/tetherto/qvac/pull/5235)).
+  The JavaScript side used to point the addon at `<package>/prebuilds`, which
+  does not exist in the bundle, while the backends ship beside the native
+  module.
+
+## [0.12.0] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed
+  ([#5010](https://github.com/tetherto/qvac/pull/5010)). The fit runs on a worker thread so the JavaScript loop keeps
+  running, and concurrent calls run one at a time within the addon. A model
+  the fitter cannot read still resolves with `status: 'error'`; a malformed
+  request rejects instead of throwing. Change
+  `const fit = assessFit(request)` to `const fit = await assessFit(request)`.
+
+### Changed
+
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5066](https://github.com/tetherto/qvac/pull/5066)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+- `speech-cpp` is pinned to `2026-10-12` port-version 1, the registry
+  revision that ships the merged MOSS CUDA/Vulkan backend source, the same
+  pin as the other speech addons ([#5001](https://github.com/tetherto/qvac/pull/5001)).
+
+## [0.11.2] - 2026-10-14
+
+### Changed
+
+- `binding.js` is now `module.exports = require.addon()`. A host with no
+  prebuild throws `require.addon()`'s own error instead of a wrapped one.
+
+## [0.11.1] - 2026-10-13
+
+### Added
+
+- `package.json` records the `ggml-speech` build the prebuilds ship as
+  `qvac["ggml-speech"]`. The speech addons ship their ggml backends under the
+  same file names, so an app that bundles several of them needs releases that
+  record the same build.
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+- Update `speech-cpp` to `2026-10-12` to keep the native speech source pin aligned across all speech addons.
+
+- Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
+  same versions as the other speech addons. `speech-cpp` moves from
+  `2026-10-07#2`; its changes are in engines this package does not build, so
+  published behavior is unchanged.
+
+## [0.11.0] - 2026-10-09
+
+### Added
+
+- `assessFit` takes the registry's weightless descriptions of the model and
+  the embedder in place of the files, and projects them identically, so a load
+  can be assessed before it is downloaded.
+
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-10-07#2` and the `ggml-speech` floor to
+  `2026-10-07#1`, keeping the speech packages on one engine stack. The new
+  revisions add MOSS transcription memory fit and ggml memory queries that this
+  package does not use, so published behavior is unchanged.
+- `assessFit` counts the embedder: the host RAM it keeps is reported as
+  `embedderBytes` (replacing `embedderFileBytes`, its size on disk), is
+  included in `hostBytes`, and is part of the verdict on devices that share
+  system RAM. With no `embedderPath` it reads `bci-embedder.bin` next to the
+  model, as a load does, and an embedder that cannot be read is an `error`
+  outcome with reason `embedder-unreadable`.
+- Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
+  the ggml changes of the QVAC LLM stack, so both build from the same backend
+  code. Same models, same backends, no API change.
+- Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29, preserving the
+  QVAC seed, BCI windowed-attention and streaming/VAD patches.
+- Raise the `speech-cpp` floor to `2026-10-07#1`, whose whisper fitter reads
+  the registry's weightless descriptions. Transcription is unchanged.
+
+### Fixed
+
+- Require `ggml-speech` `2026-09-30` directly, not only through `speech-cpp`.
+  On Metal, `assessFit` no longer reports more free device memory than total
+  once the process has allocated past the GPU's recommended working set, which
+  made a model that does not fit report `fits`. Transcription is unchanged.
+
 ## [0.10.1] - 2026-09-29
 
 ### Changed

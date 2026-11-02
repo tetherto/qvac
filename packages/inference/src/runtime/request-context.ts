@@ -20,6 +20,8 @@ export type RequestKind =
   | 'completion'
   | 'batchCompletion'
   | 'embeddings'
+  | 'decision'
+  | 'rerank'
   | 'transcribe'
   | 'translate'
   | 'diffusion'
@@ -32,6 +34,8 @@ export type RequestKind =
   | 'loadModel'
   | 'downloadAsset'
   | 'rag'
+  | 'rpcServer'
+  | 'rpcDiscovery'
 
 /**
  * Lifecycle states a request transitions through. A new context starts in
@@ -95,6 +99,21 @@ let registry: RequestRegistry | null = null
 const LLAMACPP_COMPLETION_SLOT_GROUP = 'llamacppCompletion'
 
 function installDefaultPolicies(r: RequestRegistry): void {
+  // Laya owns one active job per model. Wait in the registry so cancelling a
+  // queued request never reaches the addon or interrupts the active job.
+  r.policy({
+    kind: 'decision',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
+  // The reranker likewise runs one job at a time per model.
+  r.policy({
+    kind: 'rerank',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
   // Cap is the model's `parallel`, passed per request by the handlers; the value
   // here is only the fallback when a caller supplies none.
   r.policy({
@@ -155,6 +174,12 @@ function installDefaultPolicies(r: RequestRegistry): void {
     maxConcurrentPerModel: 1,
     onOverflow: 'queue',
     maxQueueDepthPerModel: 256
+  })
+  // Diffusion has one native job per model and model-wide cancellation.
+  r.policy({
+    kind: 'diffusion',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'reject'
   })
   // An ABot-World session runs one job at a time: the addon rejects a second
   // step while a block is still streaming, and scene creation shares the same

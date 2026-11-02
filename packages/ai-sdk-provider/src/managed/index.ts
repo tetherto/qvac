@@ -31,7 +31,6 @@ import {
 } from './registry.js'
 import { runnerSpawnSpec, writeRunnerParamsFile } from './runner.js'
 import type { RunnerParams } from './runner.js'
-import { allocateFreePort } from './serve-process.js'
 
 interface Resolved {
   readonly apiKey: string
@@ -241,7 +240,6 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
               }
             }
           }
-          const port = options.servePort ?? (await allocateFreePort(host))
           const apiKey = randomBytes(32).toString('base64url')
           const ephemeral = await writeEphemeralConfig(options.models)
           await rm(errorPath(fleetKey), { force: true }).catch(() => {})
@@ -250,7 +248,7 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
             fleetKey,
             apiKey,
             configPath: ephemeral.configPath,
-            port,
+            ...(options.servePort !== undefined ? { port: options.servePort } : {}),
             host,
             idleTimeoutMs,
             startTimeoutMs,
@@ -267,7 +265,10 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
           if (errMsg !== undefined) {
             throw new ServeSpawnFailedError(`qvac serve failed to start: ${errMsg}`)
           }
-          throw new ServeStartTimeoutError(startTimeoutMs, `http://${host}:${port}/v1`)
+          throw new ServeStartTimeoutError(
+            startTimeoutMs,
+            `http://${host}:${options.servePort ?? '?'}/v1`
+          )
         } finally {
           await releaseLock(fleetKey)
         }

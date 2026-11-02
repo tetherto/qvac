@@ -1,0 +1,16 @@
+{
+  "dependencies": [
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.5"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build and run unit tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

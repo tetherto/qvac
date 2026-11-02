@@ -34,7 +34,8 @@ function createJobHandler(opts) {
             }
             const response = new QvacResponse({
                 cancelHandler: (() => opts.cancel()),
-                signal: runOpts?.signal
+                signal: runOpts?.signal,
+                retainOutput: runOpts?.retainOutput
             });
             active = response;
             bindCleanup(response);

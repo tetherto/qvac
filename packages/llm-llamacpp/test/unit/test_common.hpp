@@ -199,6 +199,13 @@ struct TestModelPath {
   }
 };
 
+/// Opt-in gate for the extended KV-cache suite (`test_kv_cache_extended.cpp`).
+/// CI never sets it, so those tests skip on every regular run.
+inline bool kvCacheExtendedTestsEnabled() {
+  const char* value = std::getenv("QVAC_RUN_KV_CACHE_EXTENDED");
+  return value != nullptr && std::string(value) == "1";
+}
+
 inline fs::path getTestBackendsDir() {
 #ifdef TEST_BINARY_DIR
   return fs::path(TEST_BINARY_DIR);
@@ -249,5 +256,13 @@ readFileToStreambufBinary(const std::string& path) {
     if ((m).onMissing == ::test_common::TestModelPath::OnMissing::Skip)        \
       GTEST_SKIP() << (m).missingMessage();                                    \
     FAIL() << (m).missingMessage();                                            \
+  }                                                                            \
+  static_assert(true, "")
+
+/// Skips the calling test unless `QVAC_RUN_KV_CACHE_EXTENDED=1`. Call it
+/// first, directly from the test body.
+#define SKIP_UNLESS_KV_CACHE_EXTENDED()                                        \
+  if (!::test_common::kvCacheExtendedTestsEnabled()) {                         \
+    GTEST_SKIP() << "opt-in: set QVAC_RUN_KV_CACHE_EXTENDED=1";                \
   }                                                                            \
   static_assert(true, "")

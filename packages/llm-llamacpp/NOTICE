@@ -239,4 +239,5 @@ C++ Dependencies
     https://github.com/nlohmann/json
   qvac-fabric
     https://github.com/tetherto/qvac-fabric-llm.cpp
-
+  stb_image v2.30 (MIT or public domain)
+    https://github.com/nothings/stb

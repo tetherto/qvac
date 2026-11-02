@@ -9,11 +9,7 @@
  * @see https://developers.google.com/search/docs/appearance/structured-data
  */
 
-import {
-  DOCS_SITE_ORIGIN,
-  buildCanonicalDocsUrl,
-  isArchivedVersionSlug,
-} from './docs-open-graph';
+import { DOCS_SITE_ORIGIN, buildCanonicalDocsUrl } from './docs-open-graph';
 
 export const SCHEMA_TYPES = [
   'APIReference',
@@ -201,8 +197,7 @@ function buildPageBlocks(
 }
 
 /**
- * Returns the JSON-LD blocks to render for `page`, or `null` when no
- * structured data should be emitted (archived version bundles).
+ * The JSON-LD blocks to render for `page`.
  *
  * `lookupPage` resolves breadcrumb ancestors against the page tree; see
  * `DocsPageLookup`. It is required so a missing lookup cannot silently
@@ -213,8 +208,7 @@ export function buildDocsJsonLd(
   slugs: string[],
   isHomePage: boolean,
   lookupPage: DocsPageLookup,
-): JsonLdBlock[] | null {
-  if (isArchivedVersionSlug(slugs)) return null;
+): JsonLdBlock[] {
   return isHomePage
     ? buildHomeBlocks()
     : buildPageBlocks(page, slugs, lookupPage);

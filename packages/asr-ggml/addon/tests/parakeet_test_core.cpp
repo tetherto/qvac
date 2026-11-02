@@ -189,6 +189,23 @@ TEST_F(ParakeetModelTest, NemotronMetadataSelectsNormalAsrModel) {
   EXPECT_NE(detected, ModelType::SORTFORMER);
 }
 
+TEST_F(ParakeetModelTest, NemotronDiarizationMetadataSelectsDiarization) {
+  const ModelType detected = ParakeetModel::modelTypeFromMetadata(
+      "nemotron-diarization", ModelType::TDT);
+  EXPECT_EQ(detected, ModelType::NemotronDiarization);
+  ParakeetConfig diarConfig = cfg;
+  diarConfig.modelType = detected;
+  ParakeetModel model(diarConfig);
+  EXPECT_TRUE(model.isDiarization());
+  EXPECT_FALSE(model.isSortformer());
+  EXPECT_FLOAT_EQ(
+      model.getDiarizationThreshold(),
+      ParakeetConfig::DEFAULT_NEMOTRON_DIARIZATION_THRESHOLD);
+  EXPECT_EQ(
+      model.getDiarizationMinSegmentMs(),
+      ParakeetConfig::DEFAULT_NEMOTRON_DIARIZATION_MIN_SEGMENT_MS);
+}
+
 TEST_F(ParakeetModelTest, UnknownMetadataPreservesModelTypeFallback) {
   EXPECT_EQ(
       ParakeetModel::modelTypeFromMetadata("unknown", ModelType::EOU),

@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
-import { createServer } from 'node:net'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { createInterface } from 'node:readline'
+import type { Readable } from 'node:stream'
 
 import {
   DEFAULT_SERVE_HOST,
@@ -13,14 +14,14 @@ import {
 } from '../defaults.js'
 import {
   CliNotFoundError,
-  PortAllocationFailedError,
+  CliUpgradeRequiredError,
   ServeExitedError,
   ServeSpawnFailedError,
   ServeStartTimeoutError
 } from './errors.js'
 
 // Low-level lifecycle of a single `qvac serve --openai` child: resolve the
-// command, pick a port, spawn, wait until healthy, and stop. Deliberately
+// command, spawn, learn its port, wait until healthy, and stop. Deliberately
 // free of any registry/process-handler coupling — the detached runner owns
 // those concerns and uses these primitives.
 
@@ -28,25 +29,10 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// Bind to port 0 and let the OS pick a free port, then immediately release it.
-// There is an inherent TOCTOU race (another process could grab the port before
-// the serve does), but it is vanishingly small on loopback and the serve will
-// surface an EADDRINUSE we propagate as ServeExitedError.
-export function allocateFreePort(host: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = createServer()
-    srv.once('error', (err) => reject(new PortAllocationFailedError(err)))
-    srv.listen({ port: 0, host }, () => {
-      const addr = srv.address()
-      if (addr === null || typeof addr === 'string') {
-        srv.close(() => reject(new PortAllocationFailedError()))
-        return
-      }
-      const { port } = addr
-      srv.close(() => resolve(port))
-    })
-  })
-}
+// The serve reports the port it bound on this inherited pipe. Only our own child
+// can write to it, so the port is never one another local process claimed.
+const READY_FD = 3
+const READY_PREFIX = 'QVAC_SERVE_READY '
 
 interface ServeCommand {
   readonly command: string
@@ -186,7 +172,10 @@ async function waitForHealth(params: {
     exit: { code: number | null; signal: NodeJS.Signals | null } | null
     spawnError: unknown
   } = {
-    exit: null,
+    exit:
+      child.exitCode !== null || child.signalCode !== null
+        ? { code: child.exitCode, signal: child.signalCode }
+        : null,
     spawnError: null
   }
   child.once('exit', (code, signal) => {
@@ -230,10 +219,70 @@ async function waitForHealth(params: {
   }
 }
 
+// Resolves with the port the child bound. Rejects if it exits or errors first,
+// mapping an older CLI's rejection of `--ready-fd` to an actionable error.
+function waitForReady(params: {
+  child: ChildProcess
+  timeoutMs: number
+  getTail: () => string
+  baseURL: string
+}): Promise<number> {
+  const { child, timeoutMs, getTail, baseURL } = params
+  const channel = child.stdio[READY_FD] as Readable | null | undefined
+  return new Promise((resolve, reject) => {
+    if (channel === null || channel === undefined) {
+      reject(new ServeSpawnFailedError('qvac serve has no ready channel'))
+      return
+    }
+    const lines = createInterface({ input: channel })
+    const timer = setTimeout(() => {
+      settle(() => reject(new ServeStartTimeoutError(timeoutMs, baseURL)))
+    }, timeoutMs)
+    function settle(action: () => void): void {
+      clearTimeout(timer)
+      lines.close()
+      child.off('close', onExit)
+      child.off('error', onError)
+      action()
+    }
+    function onExit(code: number | null, signal: NodeJS.Signals | null): void {
+      const tail = getTail()
+      settle(() =>
+        reject(
+          /unknown option '--ready-fd'/.test(tail)
+            ? new CliUpgradeRequiredError()
+            : new ServeExitedError(code, signal, tail)
+        )
+      )
+    }
+    function onError(err: unknown): void {
+      settle(() =>
+        reject(new ServeSpawnFailedError(`Failed to spawn qvac serve: ${String(err)}`, err))
+      )
+    }
+    // `close`, not `exit`: the CLI's rejection message must be in the tail first.
+    child.once('close', onExit)
+    child.once('error', onError)
+    lines.on('line', (line) => {
+      if (!line.startsWith(READY_PREFIX)) return
+      let signal: { port?: unknown; pid?: unknown }
+      try {
+        signal = JSON.parse(line.slice(READY_PREFIX.length)) as typeof signal
+      } catch {
+        return
+      }
+      if (typeof signal.port !== 'number' || signal.pid !== child.pid) return
+      const port = signal.port
+      settle(() => resolve(port))
+    })
+  })
+}
+
 export interface SpawnServeOptions {
   readonly apiKey: string
   readonly configPath: string
-  readonly port: number
+  // Omitted to let the serve bind any free port.
+  readonly port?: number
   readonly host?: string
   readonly startTimeoutMs?: number
   readonly serveBinPath?: string
@@ -248,15 +297,16 @@ export interface SpawnedServe {
   readonly baseURL: string
 }
 
-// Spawn `qvac serve --openai` on the given port and resolve once it answers a
-// health check. On any failure the child is killed and a structured error is
-// thrown, so the caller never leaks a half-started process.
+// Spawn `qvac serve --openai`, learn its port from the ready pipe, and resolve
+// once it answers a health check. The bearer key is only ever sent to that port.
+// On any failure the child is killed and a structured error is thrown, so the
+// caller never leaks a half-started process.
 export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedServe> {
   const host = options.host ?? DEFAULT_SERVE_HOST
   const startTimeoutMs = options.startTimeoutMs ?? DEFAULT_SERVE_START_TIMEOUT_MS
   const fetchImpl = options.fetchImpl ?? fetch
   const { command, baseArgs } = resolveServeCommand(options.serveBinPath)
-  const baseURL = `http://${host}:${options.port}/v1`
+  const requestedPort = options.port ?? 0
 
   const credentialArgs = cliSupportsApiKeyFile(options.serveBinPath)
     ? ['--api-key-file', writeApiKeyFile(options.configPath, options.apiKey)]
@@ -272,9 +322,11 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
     '--config',
     options.configPath,
     '--port',
-    String(options.port),
+    String(requestedPort),
     '--host',
     host,
+    '--ready-fd',
+    String(READY_FD),
     ...credentialArgs
   ]
 
@@ -285,7 +337,7 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
   // never cascades to a grandchild). We deliberately do NOT unref(): the runner
   // still owns the serve and must observe its 'exit'.
   const child = spawn(command, args, {
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
     env: process.env,
     detached: true
   })
@@ -296,12 +348,22 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
     throw new ServeSpawnFailedError(`Failed to spawn ${command}`)
   }
 
+  const deadline = Date.now() + startTimeoutMs
+  let port: number
+  let baseURL: string
   try {
+    port = await waitForReady({
+      child,
+      timeoutMs: startTimeoutMs,
+      getTail,
+      baseURL: `http://${host}:${requestedPort === 0 ? '?' : requestedPort}/v1`
+    })
+    baseURL = `http://${host}:${port}/v1`
     await waitForHealth({
       apiKey: options.apiKey,
       child,
       baseURL,
-      timeoutMs: startTimeoutMs,
+      timeoutMs: Math.max(deadline - Date.now(), 0),
       fetchImpl,
       getTail
     })
@@ -310,7 +372,7 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
     throw err
   }
 
-  return { child, pid: child.pid, port: options.port, host, baseURL }
+  return { child, pid: child.pid, port, host, baseURL }
 }
 
 // Signal the serve *and* its descendants (the `bare` inference worker) as one

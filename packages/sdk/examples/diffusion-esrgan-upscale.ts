@@ -11,7 +11,7 @@ import path from 'path'
 // ESRGAN upscale example.
 //
 // Usage:
-//   bun run examples/diffusion-esrgan-upscale.ts [esrganSrc] [prompt] [outputDir]
+//   npx tsx examples/diffusion-esrgan-upscale.ts [esrganSrc] [prompt] [outputDir]
 
 const esrganArg: string | undefined = process.argv[2]
 const promptArg: string | undefined = process.argv[3]

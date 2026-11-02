@@ -14,7 +14,8 @@ import {
 } from '@/utils/tts-stats'
 import {
   assertParlerJobOptionsSupported,
-  getParlerJobOptions
+  getParlerJobOptions,
+  getTtsEngineType
 } from '@/plugins/builtin/tts-ggml/ops/parler-options'
 import { bindTtsCancel, cancelIfAborted } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
 import type { TtsOpResult } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
@@ -147,6 +148,9 @@ export async function* textToSpeechStream(
   const request = textToSpeechStreamRequestSchema.parse(params)
 
   const model = getModel(request.modelId)
+  if (['moss-sfx', 'moss-speech'].includes(getTtsEngineType(model) ?? '')) {
+    throw new TextToSpeechStreamFailedError('MOSS-SoundEffect and MOSS-Speech are batch-only')
+  }
   const parlerJobOptions = getParlerJobOptions(request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
 

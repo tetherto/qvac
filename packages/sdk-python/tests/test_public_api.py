@@ -51,6 +51,7 @@ def test_ergonomic_wrappers_shadow_generated_stubs():
     # These names exist as both a generated stub and a hand-written wrapper;
     # the flat surface must resolve to the wrapper, not the raw stub.
     assert qvac.load_model.__module__ == "tetherto.qvac_sdk._api"
+    assert qvac.assess_model_fit.__module__ == "tetherto.qvac_sdk._api"
     assert qvac.unload_model.__module__ == "tetherto.qvac_sdk._api"
     assert qvac.cancel.__module__ == "tetherto.qvac_sdk._api"
     assert qvac.delete_cache.__module__ == "tetherto.qvac_sdk._api"
@@ -74,6 +75,7 @@ def test_js_client_api_capabilities_have_python_equivalents():
         "completion": "completion",
         "deleteCache": "delete_cache",
         "loadModel": "load_model",
+        "assessModelFit": "assess_model_fit",
         "downloadAsset": "download_asset",
         "heartbeat": "heartbeat",
         "unloadModel": "unload_model",

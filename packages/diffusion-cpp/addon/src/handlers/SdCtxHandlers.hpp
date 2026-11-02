@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <string>
@@ -7,6 +8,8 @@
 
 #include <inference-addon-cpp/Errors.hpp>
 #include <stable-diffusion.h>
+
+#include "utils/ImageCodec.hpp"
 
 namespace qvac_lib_inference_addon_sd {
 
@@ -62,6 +65,7 @@ struct SdCtxConfig {
       llmPath; // llm_path              -- LLM text encoder (FLUX.2 -> Qwen3)
   std::string
       vaePath; // vae_path              -- standalone VAE decoder weights
+  std::string llmVisionPath;  // llm_vision_path -- LLM vision projector
   std::string clipVisionPath; // clip_vision_path     -- CLIP vision encoder
                               // (OpenCLIP ViT-H/14) for Wan 2.1 I2V
   std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
@@ -101,6 +105,8 @@ struct SdCtxConfig {
   // vae_decode_only), so this no longer saves memory; it is parsed for
   // config-surface stability and addon-side validation only.
   bool vaeDecodeOnly = false;
+  uint64_t maxImagePixels = image_codec::MAX_DECODED_PIXELS;
+  uint64_t maxJobPixels = image_codec::MAX_JOB_DECODED_PIXELS;
 
   // -- Precision -------------------------------------------------------------
   sd_type_t wtype =
@@ -216,6 +222,10 @@ bool maxVramSpecHasNonZeroBudget(const std::string& spec);
 
 void validateWorldPlacement(
     const std::string& paramsBackend, const std::string& maxVram);
+
+bool worldFitPlacementSupported(
+    const std::string& backend, const std::string& paramsBackend,
+    const std::string& maxVram);
 /** Prepends the offload_to_cpu default before explicit module assignments. */
 std::string
 effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu);
