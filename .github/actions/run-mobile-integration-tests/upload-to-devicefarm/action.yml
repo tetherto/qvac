@@ -12,7 +12,7 @@ description: |
     * Default mode (test-groups input empty): a single test spec with the
       consumer's mocha-grep, scheduled later against dual-flagship devices.
     * Sharded mode (test-groups non-empty): N test specs, one per group,
-      scheduled later against the addon's own device pool. LLM uses 12 iOS +
+      scheduled later against the addon's own device pool. LLM uses 7 iOS +
       7 Android groups; OCR uses 2 (perf + regular).
 
   The WDIO config + post_test pulls live in wdio.template.js so we sidestep
