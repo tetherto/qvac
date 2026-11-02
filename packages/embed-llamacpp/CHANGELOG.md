@@ -1,5 +1,35 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: a row per device, then the
+  host CPU, and the resolved `ctxSize` and `gpuLayers`. `status` is `fits`,
+  `does-not-fit` or `unknown`. An unreadable model or an invalid request
+  rejects ([#5470](https://github.com/tetherto/qvac/pull/5470)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5470](https://github.com/tetherto/qvac/pull/5470)).
+
+## [0.53.1] - 2026-10-29
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.24.0` -> `^0.25.0`, which carries
+  `qvac-fabric` `11259.1.0` -> `11259.2.0`
+  ([#5435](https://github.com/tetherto/qvac/pull/5435)): a bound on the PNG
+  zlib decode, an RPC server graph-cache fix, DeepSeek V4.1 Flash and CUDA
+  top-k fixes. A caret on a `0.x` version locks the minor, so `^0.24.0` would
+  not have resolved `0.25.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.25.0` with it.
+- `@qvac/fabric` 0.25.0 changes the layout of `common_params` and
+  `common_chat_msg`, so every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.25.0` together.
+- The Core ML embedding sidecar API added in this fabric is not built into the
+  shared runtime, so embeddings keep running on ggml. No API change for this
+  package.
+
 ## [0.53.0] - 2026-10-27
 
 ### Changed

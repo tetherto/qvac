@@ -36,6 +36,14 @@ export interface TranscriptionSegment {
   isEndOfTurn?: boolean;
   /** Parakeet: segment begins a new SentencePiece word. */
   startsWord?: boolean;
+  /** Parakeet streaming: native token IDs for this segment. */
+  tokenIds?: number[];
+  /** Parakeet streaming: explicit native finality, including empty final markers. */
+  isFinal?: boolean;
+  /** Parakeet streaming: native chunk index. */
+  chunkIndex?: number;
+  /** Parakeet EOU streaming: native end-of-turn confidence. */
+  eotConfidence?: number;
   /** Parakeet Sortformer streaming: speaker of this diarization segment. */
   speakerId?: number;
   /**
@@ -74,6 +82,8 @@ export interface VadEvent {
   source: "silero" | "energy" | "sortformer";
   /** Parakeet: seconds from the start of the streaming session. */
   timestamp?: number;
+  /** Native chunk index; -1 when the native event has no chunk. */
+  chunkIndex?: number;
   /** Parakeet Sortformer: dominant speaker when speech starts. */
   speakerId?: number;
 }
@@ -84,6 +94,12 @@ export interface EndOfTurnEvent {
   /** Present for `source: "vad-silence"` only. */
   silenceDurationMs?: number;
   source: "vad-silence" | "model-eou";
+  /** Native Parakeet event time, in seconds from the streaming session start. */
+  timestamp?: number;
+  /** Native chunk index; -1 when unknown. */
+  chunkIndex?: number;
+  /** Native Parakeet end-of-turn confidence. */
+  confidence?: number;
 }
 
 export type ASRRunOutput = TranscriptionSegment[] | TranscriptionSegment;

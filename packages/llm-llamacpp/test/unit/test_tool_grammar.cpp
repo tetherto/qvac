@@ -209,6 +209,17 @@ GrammarVerdict checkGrammar(
   return verdict;
 }
 
+// The prompt parser rejects malformed input as InvalidInputFormat.
+void expectInvalidInputFormat(LlamaModel& model, const std::string& input) {
+  try {
+    (void)LlamaModelTestPeer::formatPrompt(model, input);
+    ADD_FAILURE() << "accepted: " << input.substr(0, 200);
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(e.codeString().find("InvalidInputFormat"), std::string::npos)
+        << e.codeString() << " " << e.what();
+  }
+}
+
 } // namespace
 
 class ToolGrammarModelTest : public ::testing::Test {
@@ -776,6 +787,53 @@ TEST_F(ToolGrammarModelTest, PromptParserRejectsMalformedToolTurns) {
         qvac_errors::StatusError)
         << input;
   }
+}
+
+// Same contract for tool definitions and the fields every entry shares,
+// including the OpenAI shape that nests the tool under `function`.
+TEST_F(ToolGrammarModelTest, PromptParserRejectsMalformedToolDefinitions) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  for (const char* input : {
+           R"([{"type":"function","function":{"name":"f"}}])",
+           R"([{"type":"function"}])",
+           R"([{"type":"function","name":""}])",
+           R"([{"type":"function","name":7}])",
+           R"([{"type":"function","name":"f","description":7}])",
+           R"([{"type":7,"role":"user","content":"hi"}])",
+           R"([{"role":7,"content":"hi"}])",
+       }) {
+    expectInvalidInputFormat(*model, input);
+  }
+}
+
+// Nesting past the parser's limit is rejected before picojson recurses into
+// it; brackets inside strings do not count.
+TEST_F(ToolGrammarModelTest, PromptParserRejectsDeepNesting) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  const auto nested = [](size_t depth) {
+    return std::string(depth, '[') + std::string(depth, ']');
+  };
+  EXPECT_NO_THROW(LlamaModelTestPeer::formatPrompt(*model, nested(128)));
+  expectInvalidInputFormat(*model, nested(129));
+  // Deep enough to overflow a worker thread's stack without the check.
+  expectInvalidInputFormat(*model, nested(100000));
+  expectInvalidInputFormat(
+      *model,
+      R"([{"role":"assistant","content":"","tool_calls":[{"name":"f",)"
+      R"("arguments":"{\"a\":)" +
+          nested(200) + R"(}"}]}])");
+
+  const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
+      *model,
+      R"([{"role":"user","content":"\")" + std::string(200, '[') + R"("}])");
+  ASSERT_EQ(parsed.chatMsgs.size(), 1u);
+  EXPECT_EQ(parsed.chatMsgs[0].content, "\"" + std::string(200, '['));
 }
 
 // Unset keeps fabric's single-call grammar; only `true` renders one that

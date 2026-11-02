@@ -192,7 +192,10 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make@1.8.0 bare-runtime bare-https brittle
+        run: npm install -g --force bare bare-runtime bare-https brittle
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
