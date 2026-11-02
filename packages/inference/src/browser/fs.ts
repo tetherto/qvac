@@ -144,6 +144,32 @@ async function walk(directory: DirectoryHandle, path: string): Promise<void> {
   }
 }
 
+// Files the page hands over to read in place (mountBrowserFile in the SDK),
+// keyed by their engine path. Shared through a global symbol with the
+// @qvac/llm-llamacpp browser binding, which reads model files by path too.
+const MOUNTED_FILES_KEY = Symbol.for('qvac.browser.mountedFiles')
+const globals = globalThis as unknown as Record<symbol, Map<string, WebFile> | undefined>
+const mountedFiles: Map<string, WebFile> = (globals[MOUNTED_FILES_KEY] ??= new Map())
+
+/** Makes @p file readable at @p path without copying it into OPFS. */
+export function mountFile(path: string, file: WebFile): void {
+  const target = normalize(path)
+  let directory = ''
+  for (const part of segments(parentOf(target))) {
+    directory += `/${part}`
+    if (!entries.has(directory)) entries.set(directory, { kind: 'directory', mtimeMs: Date.now() })
+  }
+  entries.set(target, { kind: 'file', size: file.size, mtimeMs: file.lastModified, data: null })
+  mountedFiles.set(target, file)
+}
+
+async function readableFile(path: string): Promise<WebFile> {
+  const mounted = mountedFiles.get(path)
+  if (mounted) return mounted
+  await persistQueue
+  return (await opfsFile(path)).getFile()
+}
+
 /** Loads the OPFS index of `/.qvac`. Must complete before any synchronous call. */
 export function hydrate(): Promise<void> {
   if (!hydrated) {
@@ -405,7 +431,7 @@ async function readFile(path: string | URL, options?: unknown): Promise<Buffer |
   if (entry.kind !== 'file') throw new FsError('EISDIR', 'read', target)
   if (entry.data) return decode(entry.data, encodingOf(options))
   await persistQueue
-  const file = await (await opfsFile(target)).getFile()
+  const file = await readableFile(target)
   return decode(new Uint8Array(await file.arrayBuffer()), encodingOf(options))
 }
 
@@ -473,7 +499,7 @@ async function copyFile(from: string | URL, to: string | URL): Promise<void> {
   requireParentDirectory(target, 'copyfile')
   entries.set(target, { ...entry, mtimeMs: Date.now() })
   await persist(async () => {
-    const file = await (await opfsFile(source)).getFile()
+    const file = await readableFile(source)
     const writable = await (await opfsFile(target, true)).createWritable()
     await file.stream().pipeTo(writable)
   })
@@ -493,7 +519,7 @@ async function open(path: string | URL): Promise<number> {
   const target = normalize(path)
   lookup(target, 'open')
   await persistQueue
-  const file = await (await opfsFile(target)).getFile()
+  const file = await readableFile(target)
   const fd = nextDescriptor++
   descriptors.set(fd, file)
   return fd
@@ -608,7 +634,7 @@ export function createReadStream(
   async function* chunks(): AsyncGenerator<Buffer> {
     lookup(target, 'open')
     await persistQueue
-    const file = await (await opfsFile(target)).getFile()
+    const file = await readableFile(target)
     const start = options?.start ?? 0
     const end = options?.end === undefined ? file.size : options.end + 1
     yield* readChunks(file.slice(start, end).stream().getReader())

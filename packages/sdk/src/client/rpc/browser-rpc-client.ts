@@ -160,3 +160,15 @@ export async function createDuplexSession(payload: string, commandId: number) {
   requestStream.write(new TextEncoder().encode(payload))
   return { requestStream, responseStream }
 }
+
+/**
+ * Hands a browser `File` to the worker without copying it and returns the
+ * path `loadModel` reads it from. The mount lasts until the worker closes.
+ */
+export async function mountBrowserFile(file: File): Promise<string> {
+  await getRPC()
+  const path = `/.qvac/mounted/${crypto.randomUUID()}/${file.name}`
+  // Sent on the worker's channel ahead of the RPC frames that use the path.
+  workerInstance!.postMessage({ type: 'qvac:mount-file', path, file })
+  return path
+}

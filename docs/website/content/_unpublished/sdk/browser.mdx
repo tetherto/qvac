@@ -46,6 +46,10 @@ addon's loader and its `.wasm` as assets.
 - A browser with WebGPU and `shader-f16` (Chrome or Edge 113+) for GPU
   inference. Without it the model runs on the CPU, which is much slower.
 - A secure context (HTTPS or `localhost`), for OPFS.
+- For models whose GGUF exceeds 4 GiB: WebAssembly Memory64 (Chrome 133+,
+  Firefox 134+). The SDK uses it automatically where available. Elsewhere
+  (Safari) the engine reads GGUFs up to 4 GiB of tensor data. Beyond that, a
+  model fits if the device's GPU has the memory.
 - No cross-origin isolation headers are needed.
 
 ## What is supported
@@ -57,7 +61,11 @@ Supported:
   Face over HTTPS and is checked against the registry's SHA-256 once.
 - `loadModel` from a path in the origin private file system (OPFS), such as
   `/.qvac/local/model.gguf`. A page can copy a file the user picks into OPFS and
-  load it from there.
+  load it from there; it then loads on later visits without picking it again.
+- `loadModel` from a user's file read in place, with no copy:
+  `mountBrowserFile(file)` takes a `File` from a file input, or from a folder
+  the user granted with the File System Access API (Chrome, Edge), and returns
+  the path to pass as `modelSrc`.
 - `loadModel` from `http(s)` URLs. Downloads resume, and the cache in OPFS
   survives reloads.
 - `completion`: streaming, events, reasoning, tool calls and generation

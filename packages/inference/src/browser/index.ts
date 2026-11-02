@@ -3,4 +3,4 @@
  * before `initialize()`: it loads the index of the origin private file system
  * that backs the engine's file access.
  */
-export { hydrate as prepareBrowserRuntime } from './fs'
+export { hydrate as prepareBrowserRuntime, mountFile } from './fs'

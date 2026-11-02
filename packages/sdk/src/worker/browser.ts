@@ -6,7 +6,7 @@
  * build.
  */
 import RPC from 'bare-rpc'
-import { prepareBrowserRuntime } from '@qvac/inference/browser'
+import { prepareBrowserRuntime, mountFile } from '@qvac/inference/browser'
 import { initialize } from '@qvac/inference/engine'
 import { registerPlugins } from '@qvac/inference/plugins'
 import { llmPlugin } from '@qvac/inference/llamacpp-completion/plugin'
@@ -17,6 +17,14 @@ import { createWorkerPortStream, type WorkerPort } from '@/utils/worker-port-str
 // Created first so requests sent while the file system index loads are
 // buffered rather than lost.
 const ipc = createWorkerPortStream(globalThis as unknown as WorkerPort)
+
+// mountBrowserFile(): a File the page passes to read in place.
+;(globalThis as unknown as WorkerPort).addEventListener('message', (event) => {
+  const data = event.data as { type?: string; path?: string; file?: File } | null
+  if (data?.type === 'qvac:mount-file' && data.path && data.file) {
+    mountFile(data.path, data.file as unknown as Parameters<typeof mountFile>[1])
+  }
+})
 
 await prepareBrowserRuntime()
 initialize()

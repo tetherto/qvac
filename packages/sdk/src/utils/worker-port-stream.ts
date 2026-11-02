@@ -25,7 +25,8 @@ export function createWorkerPortStream(port: WorkerPort): Duplex {
     }
   } as never)
   port.addEventListener('message', (event) => {
-    stream.push(event.data as Uint8Array)
+    // Other messages (e.g. file mounts) share the channel.
+    if (event.data instanceof Uint8Array) stream.push(event.data)
   })
   return stream
 }

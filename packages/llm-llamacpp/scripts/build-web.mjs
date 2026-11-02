@@ -95,27 +95,37 @@ if (!existsSync(dawn)) {
   renameSync(`${dawn}.staging`, dawn)
 }
 
-const build = join(scratch, 'cmake')
-mkdirSync(output, { recursive: true })
-run('emcmake', [
-  'cmake',
-  '-S',
-  web,
-  '-B',
-  build,
-  '-G',
-  'Ninja',
-  '-DCMAKE_BUILD_TYPE=Release',
-  `-DFABRIC_SOURCE_DIR=${fabric}`,
-  `-DEMDAWNWEBGPU_DIR=${join(dawn, 'emdawnwebgpu_pkg')}`,
-  `-DPICOJSON_DIR=${picojson}`,
-  `-DCONCURRENTQUEUE_DIR=${concurrentqueue}`,
-  `-DINFERENCE_ADDON_CPP_DIR=${resolve(root, '../inference-addon-cpp/src')}`,
-  `-DOUTPUT_DIR=${output}`
-])
+// Two variants: 32-bit (llm-llamacpp.*) runs everywhere WebGPU does;
+// Memory64 (llm-llamacpp-64.*) also reads models whose tensor data passes
+// 4 GiB. binding.browser.js loads the one the browser supports.
+const VARIANTS = [
+  { name: 'llm-llamacpp', memory64: 'OFF' },
+  { name: 'llm-llamacpp-64', memory64: 'ON' }
+]
 const jobs = process.env.QVAC_BUILD_JOBS ?? '4'
 if (!/^[1-9]\d*$/.test(jobs)) throw new Error('QVAC_BUILD_JOBS must be a positive integer')
-run('cmake', ['--build', build, '--target', 'llm-llamacpp', '--parallel', jobs])
+mkdirSync(output, { recursive: true })
+for (const variant of VARIANTS) {
+  const build = join(scratch, `cmake-${variant.name}`)
+  run('emcmake', [
+    'cmake',
+    '-S',
+    web,
+    '-B',
+    build,
+    '-G',
+    'Ninja',
+    '-DCMAKE_BUILD_TYPE=Release',
+    `-DQVAC_WASM_MEMORY64=${variant.memory64}`,
+    `-DFABRIC_SOURCE_DIR=${fabric}`,
+    `-DEMDAWNWEBGPU_DIR=${join(dawn, 'emdawnwebgpu_pkg')}`,
+    `-DPICOJSON_DIR=${picojson}`,
+    `-DCONCURRENTQUEUE_DIR=${concurrentqueue}`,
+    `-DINFERENCE_ADDON_CPP_DIR=${resolve(root, '../inference-addon-cpp/src')}`,
+    `-DOUTPUT_DIR=${output}`
+  ])
+  run('cmake', ['--build', build, '--target', 'llm-llamacpp', '--parallel', jobs])
+}
 
 const licenses = join(output, 'licenses')
 mkdirSync(licenses, { recursive: true })
@@ -131,8 +141,15 @@ writeFileSync(
     {
       ...lock,
       compiler,
-      wasmSha256: sha256(join(output, 'llm-llamacpp.wasm')),
-      moduleSha256: sha256(join(output, 'llm-llamacpp.mjs'))
+      variants: Object.fromEntries(
+        VARIANTS.map(({ name }) => [
+          name,
+          {
+            wasmSha256: sha256(join(output, `${name}.wasm`)),
+            moduleSha256: sha256(join(output, `${name}.mjs`))
+          }
+        ])
+      )
     },
     null,
     2

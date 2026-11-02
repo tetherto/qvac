@@ -1,6 +1,6 @@
 import test from 'brittle'
 import Buffer from 'bare-buffer'
-import fs, { hydrate } from '@/browser/fs'
+import fs, { hydrate, mountFile } from '@/browser/fs'
 
 // -----------------------------------------------------------------------------
 // The browser build's bare-fs stand-in over the origin private file system.
@@ -282,4 +282,21 @@ test('promise calls see files added to OPFS after the index was loaded', async (
   t.alike(await fs.promises.readdir('/.qvac/local'), ['picked.gguf'])
   t.is((await fs.promises.stat('/.qvac/local/picked.gguf')).size, 4)
   t.ok(fs.existsSync('/.qvac/local/picked.gguf'), 'indexed after the refresh')
+})
+
+test('mountFile: a File handed over by the page is read in place, never copied to OPFS', async (t) => {
+  const path = '/.qvac/mounted/abc/picked-in-place.gguf'
+  mountFile(path, new FakeFile('picked-in-place.gguf', encode('GGUF-in-place'), 7) as never)
+  t.ok(fs.existsSync(path))
+  t.alike(await fs.promises.readdir('/.qvac/mounted/abc'), ['picked-in-place.gguf'])
+  t.is((await fs.promises.stat(path)).size, 13)
+  let text = ''
+  for await (const chunk of fs.createReadStream(path, { start: 5 })) {
+    text += decode(chunk as Uint8Array)
+  }
+  t.is(text, 'in-place')
+  await t.exception(
+    root.getDirectoryHandle('.qvac').then((d) => d.getDirectoryHandle('mounted')),
+    /not found/
+  )
 })
