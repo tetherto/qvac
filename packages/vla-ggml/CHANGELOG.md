@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Bounded FuzzTest coverage for `safetensors_lite`, the custom length-prefixed
+  header parser used by the π₀.₅ / GR00T parity tests. Linux C++ CI runs the
+  suite after unit tests. Boundary tests cover both file and memory readers,
+  with isolated temporary fixtures for concurrent runs. No public addon API changes.
+
+### Fixed
+
+- Cap the safetensors header length at 16 MiB so a corrupt length field cannot
+  allocate before JSON parsing. `open()` checks that length before reading the
+  payload, so a bad header on a large file is rejected without allocating it.
+
+- Native and coverage builds reset fuzz mode when reusing the CMake build tree.
+
 ## [0.34.1] - 2026-10-29
 
 ### Changed
