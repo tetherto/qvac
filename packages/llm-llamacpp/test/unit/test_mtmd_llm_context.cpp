@@ -1232,6 +1232,41 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   fs::remove(cacheTokensMismatchPath);
 }
 
+// A batch call wipes the memory the single-prompt context kept, even when it
+// is refused: the context must stop counting its KV cells too, or the next
+// prompt is checked against cells that are gone.
+TEST_F(MtmdLlmContextTest, ABatchCallForgetsTheCellsItWipes) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  auto* ctx =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(ctx, nullptr) << "single-prompt context for a VLM must be MTMD";
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.prefill = true;
+  ASSERT_NO_THROW(model->processPrompt(prompt));
+  ASSERT_GT(ctx->getCacheTokens(), 0);
+
+  LlamaModel::Prompt batched;
+  batched.input = R"([{"role": "user", "content": "Hi"}])";
+  EXPECT_THROW(
+      model->processPromptBatch(std::vector<LlamaModel::Prompt>{batched}),
+      qvac_errors::StatusError)
+      << "test setup: parallel = 1 refuses a batch";
+
+  EXPECT_EQ(ctx->getNPast(), 0);
+  EXPECT_EQ(ctx->getCacheTokens(), 0)
+      << "the context still counts the KV cells the batch call wiped";
+}
+
 TEST_F(MtmdLlmContextTest, InvalidMedia) {
   if (!hasValidModel()) {
     FAIL() << "Multimodal model or projection file not found";
