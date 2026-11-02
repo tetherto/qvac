@@ -7,6 +7,7 @@ import { createStepBindings } from '../shared/step-bindings.js'
 import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { spawn as diagSpawn } from 'node:child_process'
 import { ResourceManager } from '../shared/resource-manager.js'
 import { collectTestDeps } from '../shared/collect-test-deps.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
@@ -122,7 +123,36 @@ function resolveBatchAttachmentPath(inputPath: string) {
   return path.resolve(process.cwd(), 'assets/images', fileName)
 }
 
+// TEMP DIAGNOSTIC (tmp/QVAC-27751-win-finetune-cuda-diag), do not merge: the Windows finetune
+// worker aborts on a CUDA "out of memory" from cudaGetLastError while device memory is mostly
+// free. Synchronous launches pin the failing kernel; the sampler shows device memory around it.
+// The worker inherits this process's environment.
+const DIAG_WORKER_ENV: Record<string, string> = { CUDA_LAUNCH_BLOCKING: '1' }
+
+function startDiagnostics() {
+  for (const [key, value] of Object.entries(DIAG_WORKER_ENV)) process.env[key] = value
+  console.log(`[diag] worker env ${JSON.stringify(DIAG_WORKER_ENV)}`)
+  if (process.platform !== 'win32') return
+  try {
+    const sampler = diagSpawn(
+      'nvidia-smi',
+      ['--query-gpu=timestamp,memory.used,memory.total', '--format=csv,noheader', '-lms', '500'],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    )
+    sampler.stdout?.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString().split('\n')) {
+        if (line.trim()) console.log(`[gpu-mem] ${line.trim()}`)
+      }
+    })
+    sampler.on('error', (error) => console.log(`[gpu-mem] sampler error ${error.message}`))
+    process.on('exit', () => sampler.kill())
+  } catch (error) {
+    console.log(`[gpu-mem] sampler failed ${String(error)}`)
+  }
+}
+
 export async function bootstrap(filteredTests?: TestDefinition[]) {
+  startDiagnostics()
   ensureDesktopE2EConfig()
 
   // `filteredTests` (when present) is the producer's post-filter test list

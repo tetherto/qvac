@@ -441,6 +441,8 @@ async function ensureRPC(): Promise<RPC> {
         getWorkerStderr(bareWorkerProc)?.on('data', (chunk) => {
           const text = chunk.toString()
           workerStderrTail = appendWorkerStderrTail(workerStderrTail, text)
+          // TEMP DIAGNOSTIC (tmp/QVAC-27751-win-finetune-cuda-diag): surface native worker stderr.
+          process.stderr.write(`[worker-stderr] ${text}`)
           for (const line of text.split('\n')) {
             if (line.trim()) workerLogger.debug(line)
           }
