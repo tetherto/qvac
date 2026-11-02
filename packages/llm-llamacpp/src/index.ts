@@ -1151,12 +1151,22 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     const params: AddonModule.AddonCalcTokensParams = {};
     if (text !== undefined) params.text = text;
     // Media bytes are dropped rather than serialized: the native side rejects
-    // any media message by its type.
+    // any media message or ordered media part by its type.
     if (history !== undefined) {
       params.history = JSON.stringify(
-        history.map((message) =>
-          (message as UserMediaMessage)?.type === "media" ? { ...message, content: "" } : message,
-        ),
+        history.map((message) => {
+          if ((message as UserMediaMessage)?.type === "media") return { ...message, content: "" };
+          const textMessage = message as UserTextMessage;
+          if (Array.isArray(textMessage?.content)) {
+            return {
+              ...message,
+              content: textMessage.content.map((part) =>
+                isByteMediaPart(part) ? { type: "media" } : part,
+              ),
+            };
+          }
+          return message;
+        }),
       );
     }
     if (tools !== undefined) params.tools = JSON.stringify(tools);

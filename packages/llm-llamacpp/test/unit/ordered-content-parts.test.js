@@ -71,3 +71,41 @@ test('ordered parts: malformed parts reach the native validator instead of throw
     t.alike(JSON.parse(text.input)[0].content, [bad], `${String(bad)} part is forwarded unchanged`)
   }
 })
+
+test('calcTokens drops nested media bytes without changing the caller history', async (t) => {
+  const { model } = createModel()
+  const bytes = new Uint8Array(1024 * 1024)
+  bytes.toJSON = () => {
+    throw new Error('Media bytes must never reach JSON.stringify')
+  }
+  const history = [
+    { role: 'user', type: 'media', content: bytes },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Compare:' },
+        { type: 'media', content: bytes },
+        { type: 'media', content: '/images/b.jpg' },
+        null
+      ]
+    }
+  ]
+  model.addon.calcTokens = (params) => {
+    t.alike(JSON.parse(params.history), [
+      { role: 'user', type: 'media', content: '' },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Compare:' },
+          { type: 'media' },
+          { type: 'media', content: '/images/b.jpg' },
+          null
+        ]
+      }
+    ])
+    return Promise.reject(new Error('Native media rejection'))
+  }
+  await t.exception(model.calcTokens({ history }), /Native media rejection/)
+  t.is(history[0].content, bytes)
+  t.is(history[1].content[1].content, bytes)
+})
