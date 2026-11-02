@@ -104,7 +104,6 @@ on:
         description: "Desktop/Electron/Snap connection timeout (seconds)"
         type: number
         default: 60
-      # Replaced device-farm-start-timeout: dispatch is at the 25-input limit.
       device-farm-billing-method:
         description: "Device Farm billing (UNMETERED falls back to METERED after 15 min in queue)"
         type: choice
