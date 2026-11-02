@@ -952,3 +952,31 @@ test('IdMapIndex: TurboVec calibrates from a first add of 1000 rows', (t) => {
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })
+
+test('IdMapIndex: TurboVec staged search is off until turned on', (t) => {
+  const file = tmpPath('id-map-index-turbovec-staged')
+  const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
+  const plain = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'q8' })
+  let loaded = null
+  try {
+    t.is(idx.stagedSearch, false, 'a new index has staged search off')
+    idx.setStagedSearch(true)
+    t.is(idx.stagedSearch, true, 'staged search can be turned on')
+    idx.addWithIds(normalizedPatternVec(0), new BigUint64Array([1n]))
+    t.is(idx.search(normalizedPatternVec(0), 1).ids[0], 1n, 'search works with it on')
+    idx.write(file)
+    loaded = IdMapIndex.load(file)
+    t.is(loaded.stagedSearch, false, 'a loaded index has staged search off')
+    idx.setStagedSearch(false)
+    t.is(idx.stagedSearch, false, 'staged search can be turned off again')
+
+    expectThrows(t, () => idx.setStagedSearch(1), 'a non-boolean is rejected')
+    expectThrows(t, () => plain.setStagedSearch(true), 'other storages reject it')
+    t.is(plain.stagedSearch, false, 'other storages report it off')
+  } finally {
+    if (loaded !== null) loaded.dispose()
+    idx.dispose()
+    plain.dispose()
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+  }
+})

@@ -45,6 +45,8 @@ TurboVec requires a 64-bit target and dimensions divisible by 8 and no greater t
 
 A fresh TurboVec index fits its TQ+ calibration from its first `addWithIds()` batch when that batch has at least 1,000 rows (from up to 4,096 rows spread across a larger batch), which improves recall. A smaller first batch leaves the index uncalibrated; it still works, without that gain. An empty or rejected first batch does not count, so the next one can still calibrate. The `calibrated` getter reports the state, and a loaded index keeps the state it was saved with.
 
+Staged search is off for every new or loaded TurboVec index, so a search scores every vector. `setStagedSearch(true)` turns on upstream's staged search: from 32,768 vectors it scans a compressed form first and scores only a shortlist, several times faster per query but with lower recall, most of all at small k. The setting is not saved in snapshots, and `stagedSearch` reports it.
+
 ## Operations and lifecycle
 
 - `addWithIds()`, `remove()`, `contains()`, and `compact()` mutate or inspect the index.

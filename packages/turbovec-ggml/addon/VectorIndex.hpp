@@ -71,6 +71,12 @@ public:
   // True when a TurboVec index holds a TQ+ calibration.
   [[nodiscard]] bool calibrated() const noexcept;
 
+  // Staged search is off for every index this wrapper creates or loads:
+  // fabric turns it on by default, as upstream does, but its shortlist
+  // loses recall at small k. Returns E_INVALID_ARG for a non-TurboVec index.
+  int setStaged(bool enabled) noexcept;
+  [[nodiscard]] bool staged() const noexcept { return staged_; }
+
   int addLogged(
       const float* vectors, int n, const uint64_t* ids,
       const std::string& deltaPath) noexcept;
@@ -146,6 +152,7 @@ private:
   // Set for a fresh TurboVec index until its first add; a loaded index
   // keeps the calibration state it was saved with.
   bool autoCalibrate_ = false;
+  bool staged_ = false;
 };
 
 } // namespace turbovec_ggml

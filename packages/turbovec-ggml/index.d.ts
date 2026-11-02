@@ -187,6 +187,16 @@ export default class IdMapIndex {
      * least 1000 rows; other storages are never calibrated.
      */
     get calibrated(): boolean;
+    /** Whether staged search is on. Off for every new or loaded index. */
+    get stagedSearch(): boolean;
+    /**
+     * Turn TurboVec staged search on or off. On, a search of 32,768 or more
+     * vectors scans a compressed form first and scores only a shortlist: several
+     * times faster per query, but it can miss some of the best matches,
+     * especially at small k. Throws for non-TurboVec storage. Not saved in
+     * snapshots.
+     */
+    setStagedSearch(enabled: boolean): void;
     /** Release filters and native index resources. This operation is idempotent. */
     dispose(): void;
     private disposeFilters;

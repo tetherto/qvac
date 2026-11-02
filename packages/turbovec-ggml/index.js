@@ -357,6 +357,23 @@ class IdMapIndex {
     get calibrated() {
         return loadBinding().idx_calibrated(ensureHandle(this));
     }
+    /** Whether staged search is on. Off for every new or loaded index. */
+    get stagedSearch() {
+        return loadBinding().idx_staged(ensureHandle(this));
+    }
+    /**
+     * Turn TurboVec staged search on or off. On, a search of 32,768 or more
+     * vectors scans a compressed form first and scores only a shortlist: several
+     * times faster per query, but it can miss some of the best matches,
+     * especially at small k. Throws for non-TurboVec storage. Not saved in
+     * snapshots.
+     */
+    setStagedSearch(enabled) {
+        if (typeof enabled !== 'boolean') {
+            throw new TypeError('setStagedSearch: enabled must be a boolean');
+        }
+        loadBinding().idx_set_staged(ensureHandle(this), enabled);
+    }
     /** Release filters and native index resources. This operation is idempotent. */
     dispose() {
         const handle = this[HANDLE];

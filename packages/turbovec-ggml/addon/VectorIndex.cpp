@@ -109,9 +109,18 @@ VectorIndex::VectorIndex(int dim, VectorStorage storage) : handle_(nullptr) {
     throw std::invalid_argument("ggml_vec_index_create rejected dim/storage");
   }
   autoCalibrate_ = isTurboVec(storage);
+  if (autoCalibrate_) {
+    (void)ggml_vec_index_turbovec_set_staged(handle_, 0);
+  }
 }
 
-VectorIndex::VectorIndex(ggml_vec_index_t* handle) noexcept : handle_(handle) {}
+VectorIndex::VectorIndex(ggml_vec_index_t* handle) noexcept : handle_(handle) {
+  // Fabric rejects the call for a non-TurboVec index, which has no staged
+  // search to turn off.
+  if (handle_ != nullptr) {
+    (void)ggml_vec_index_turbovec_set_staged(handle_, 0);
+  }
+}
 
 VectorIndex::~VectorIndex() {
   if (handle_ != nullptr) {
@@ -121,9 +130,11 @@ VectorIndex::~VectorIndex() {
 }
 
 VectorIndex::VectorIndex(VectorIndex&& other) noexcept
-    : handle_(other.handle_), autoCalibrate_(other.autoCalibrate_) {
+    : handle_(other.handle_), autoCalibrate_(other.autoCalibrate_),
+      staged_(other.staged_) {
   other.handle_ = nullptr;
   other.autoCalibrate_ = false;
+  other.staged_ = false;
 }
 
 VectorIndex& VectorIndex::operator=(VectorIndex&& other) noexcept {
@@ -133,8 +144,10 @@ VectorIndex& VectorIndex::operator=(VectorIndex&& other) noexcept {
     }
     handle_ = other.handle_;
     autoCalibrate_ = other.autoCalibrate_;
+    staged_ = other.staged_;
     other.handle_ = nullptr;
     other.autoCalibrate_ = false;
+    other.staged_ = false;
   }
   return *this;
 }
@@ -180,6 +193,14 @@ int VectorIndex::add(
 
 bool VectorIndex::calibrated() const noexcept {
   return ggml_vec_index_turbovec_is_calibrated(handle_) == 1;
+}
+
+int VectorIndex::setStaged(bool enabled) noexcept {
+  const int rc = ggml_vec_index_turbovec_set_staged(handle_, enabled ? 1 : 0);
+  if (rc == GGML_VEC_INDEX_OK) {
+    staged_ = enabled;
+  }
+  return rc;
 }
 
 int VectorIndex::addLogged(

@@ -493,6 +493,118 @@ TEST(VectorIndexTest, LoadedTurboVecKeepsItsCalibrationState) {
   EXPECT_FALSE(plain.calibrated());
 }
 
+TEST(VectorIndexTest, TurboVecStagedSearchIsOffUntilTurnedOn) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  for (const auto storage :
+       {VectorStorage::TurboVecQ2, VectorStorage::TurboVecQ4}) {
+    VectorIndex idx(DIM, storage);
+    EXPECT_FALSE(idx.staged());
+    ASSERT_EQ(idx.setStaged(true), GGML_VEC_INDEX_OK);
+    EXPECT_TRUE(idx.staged());
+    const VectorIndex moved(std::move(idx));
+    EXPECT_TRUE(moved.staged());
+  }
+  VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+  ASSERT_EQ(idx.setStaged(true), GGML_VEC_INDEX_OK);
+  ASSERT_EQ(idx.setStaged(false), GGML_VEC_INDEX_OK);
+  EXPECT_FALSE(idx.staged());
+}
+
+TEST(VectorIndexTest, OtherStoragesRejectStagedSearch) {
+  for (const auto storage :
+       {VectorStorage::F32, VectorStorage::Q8, VectorStorage::Q4}) {
+    VectorIndex idx(DIM, storage);
+    EXPECT_EQ(idx.setStaged(true), GGML_VEC_INDEX_E_INVALID_ARG);
+    EXPECT_FALSE(idx.staged());
+  }
+}
+
+TEST(VectorIndexTest, LoadedTurboVecStartsWithStagedSearchOff) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  const TempFile file("turbovec-ggml-unit-staged");
+  {
+    VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+    ASSERT_EQ(idx.setStaged(true), GGML_VEC_INDEX_OK);
+    const auto batch = gaussianBatch(2);
+    ASSERT_EQ(
+        idx.add(batch.vectors.data(), 2, batch.ids.data()), GGML_VEC_INDEX_OK);
+    ASSERT_EQ(idx.write(file.path()), GGML_VEC_INDEX_OK);
+  }
+  int status = -1;
+  const VectorIndex loaded = VectorIndex::load(file.path(), &status);
+  ASSERT_EQ(status, GGML_VEC_INDEX_OK);
+  EXPECT_FALSE(loaded.staged());
+}
+
+// Staged search applies from 32,768 rows at a dimension divisible by 32, and
+// only on hosts fabric runs it on. Elsewhere both sides scan in full and the
+// comparison holds trivially.
+TEST(VectorIndexTest, StagedSearchSettingReachesFabric) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  constexpr int dim = 64;
+  constexpr int n = 32768;
+  constexpr int nq = 64;
+  constexpr int k = 10;
+  std::mt19937 gen(5);
+  std::normal_distribution<float> dist(0.0F, 1.0F);
+  std::vector<float> vectors(static_cast<size_t>(n) * dim);
+  for (float& x : vectors) {
+    x = dist(gen);
+  }
+  std::vector<uint64_t> ids(n);
+  for (int i = 0; i < n; i++) {
+    ids[i] = static_cast<uint64_t>(i);
+  }
+  // A small first batch, so the wrapper does not calibrate and both sides
+  // hold the same codes.
+  const auto addAll = [&](auto&& add) {
+    ASSERT_EQ(add(vectors.data(), 1, ids.data()), GGML_VEC_INDEX_OK);
+    ASSERT_EQ(
+        add(vectors.data() + dim, n - 1, ids.data() + 1), GGML_VEC_INDEX_OK);
+  };
+  const std::vector<float> queries(
+      vectors.begin(), vectors.begin() + static_cast<ptrdiff_t>(nq) * dim);
+
+  VectorIndex wrapped(dim, VectorStorage::TurboVecQ4);
+  addAll([&](const float* v, int m, const uint64_t* i) {
+    return wrapped.add(v, m, i);
+  });
+  ggml_vec_index_t* raw = ggml_vec_index_create_turbovec_q4(dim);
+  ASSERT_NE(raw, nullptr);
+  addAll([&](const float* v, int m, const uint64_t* i) {
+    return ggml_vec_index_add(raw, v, m, i);
+  });
+
+  std::vector<float> scoresA(nq * k);
+  std::vector<float> scoresB(nq * k);
+  std::vector<uint64_t> idsA(nq * k);
+  std::vector<uint64_t> idsB(nq * k);
+  const auto compare = [&](const char* what) {
+    ASSERT_EQ(
+        wrapped.search(queries.data(), nq, k, scoresA.data(), idsA.data()),
+        GGML_VEC_INDEX_OK);
+    ASSERT_EQ(
+        ggml_vec_index_search(
+            raw, queries.data(), nq, k, scoresB.data(), idsB.data()),
+        GGML_VEC_INDEX_OK);
+    EXPECT_EQ(idsA, idsB) << what;
+  };
+
+  // Fabric's default is staged on; the wrapper's is off.
+  ASSERT_EQ(ggml_vec_index_turbovec_set_staged(raw, 0), GGML_VEC_INDEX_OK);
+  compare("off by default matches fabric with staged search off");
+  ASSERT_EQ(wrapped.setStaged(true), GGML_VEC_INDEX_OK);
+  ASSERT_EQ(ggml_vec_index_turbovec_set_staged(raw, 1), GGML_VEC_INDEX_OK);
+  compare("turned on matches fabric with staged search on");
+  ggml_vec_index_free(raw);
+}
+
 TEST(VectorIndexTest, LoadFailureReportsStatusWithoutHandle) {
   const TempFile missing("turbovec-ggml-unit-missing");
   int status = GGML_VEC_INDEX_OK;
