@@ -127,7 +127,7 @@ function resolveBatchAttachmentPath(inputPath: string) {
 // worker aborts on a CUDA "out of memory" from cudaGetLastError while device memory is mostly
 // free. Synchronous launches pin the failing kernel; the sampler shows device memory around it.
 // The worker inherits this process's environment.
-const DIAG_WORKER_ENV: Record<string, string> = { CUDA_LAUNCH_BLOCKING: '1' }
+const DIAG_WORKER_ENV: Record<string, string> = {}
 
 function startDiagnostics() {
   for (const [key, value] of Object.entries(DIAG_WORKER_ENV)) process.env[key] = value
