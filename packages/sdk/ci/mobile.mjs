@@ -109,7 +109,8 @@ function build(app, env) {
   const ios = env.PLATFORM === 'iOS'
   // The group's IOS_SIGNING: the imported profile's UUID, its export method, and the team.
   const signing = (env.IOS_SIGNING || '').split(',')
-  if (app === 'kotlin') buildKotlin(e)
+  // The Kotlin app bakes its run in from E2E_RUN_ID, as main's job env set it; unset, it registers as a wildcard.
+  if (app === 'kotlin') buildKotlin({ ...e, E2E_RUN_ID: runId })
   else {
     run(
       'npx',
