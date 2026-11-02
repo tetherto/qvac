@@ -37,11 +37,7 @@ permissions:
 # only serializes nodes within a single run. The group name is shared with
 # fill-fit-blobs-registry-server.yml, which writes to the same cluster.
 # Never cancel an in-flight deploy.
-# PR-validation runs never deploy, so they are grouped per PR number and a new
-# push cancels the superseded run. github.ref is the base branch under
-# pull_request_target, so a per-ref group would put every PR against the same
-# base branch into one group and let a run waiting on fork-ci approval block
-# all of them.
+# Group PR validation by PR number: pull_request_target uses the base branch ref.
 concurrency:
   group: ${{ github.event_name == 'pull_request_target' && format('{0}-pr-{1}', github.workflow, github.event.pull_request.number) || 'registry-server-staging-write' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
