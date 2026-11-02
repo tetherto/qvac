@@ -8,8 +8,10 @@ import {
   assessFit,
   detectEngineType,
   type AudioGenEngine,
+  type AudiogenFitDevice,
   type AudiogenFitRequest,
   type AudiogenFitResult,
+  type AudiogenFitStats,
   type AudiogenFitStatus,
   type AudiogenGenerationMetadata,
   type AudiogenMinimaxDevice,
@@ -91,6 +93,12 @@ async function minimaxVerdict(): Promise<AudiogenFitStatus> {
 }
 // @ts-expect-error assessFit returns a Promise of the result.
 const unawaitedVerdict: AudiogenFitStatus = assessFit(minimaxFit).status
+async function minimaxRows(): Promise<AudiogenFitDevice[]> {
+  const fit = await assessFit(minimaxFit)
+  const stats: AudiogenFitStats = fit.stats
+  void stats
+  return fit.devices
+}
 function readMetadata(stats: AudiogenStats): number | undefined {
   const metadata: AudiogenGenerationMetadata | undefined = stats.metadata
   return metadata === undefined
@@ -110,6 +118,7 @@ void strictMinimax
 void perRunSchedule
 void pendingFit
 void minimaxVerdict
+void minimaxRows
 void unawaitedVerdict
 void readMetadata
 void operationType

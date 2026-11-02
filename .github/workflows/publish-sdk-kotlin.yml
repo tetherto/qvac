@@ -1,5 +1,16 @@
 name: Publish SDK Kotlin
 
+# Builds the Kotlin SDK Maven repository, runs the release gates, and delivers
+# it to one destination:
+#   - release-assets: one Maven repository zip per Android runtime profile,
+#     plus the JVM client, attached to the sdk-v<version> GitHub release. A
+#     Gradle project extracts a zip and points a Maven repository at it, so it
+#     needs no registry and no token. publish-sdk.yml calls this after it
+#     creates the release; a dispatch with `tag` backfills an existing release.
+#   - central: Maven Central (staged unless release_central).
+# Each Android zip embeds the worker and its native addons, hundreds of MB, so
+# the AARs ship on the release rather than through a registry by default.
+
 on:
   push:
     tags:
@@ -7,19 +18,32 @@ on:
   workflow_dispatch:
     inputs:
       destination:
-        description: Maven destination (Central stages for review by default)
+        description: Where to publish (Central stages for review by default)
         type: choice
-        options: [github, central]
-        default: github
+        options: [release-assets, central]
+        default: release-assets
+      tag:
+        description: "release-assets only: existing release tag to attach to (default sdk-v<version in packages/sdk/package.json>). The checked-out revision must carry that version."
+        required: false
+        type: string
       release_central:
         description: Publish Central deployment publicly and wait for PUBLISHED
         type: boolean
         default: false
   workflow_call:
+    inputs:
+      destination:
+        description: release-assets or central
+        required: false
+        default: release-assets
+        type: string
+      version:
+        description: "Published SDK version; the release tag is sdk-v<version>"
+        required: false
+        type: string
 
 permissions:
-  contents: read
-  packages: write
+  contents: write # gh release upload (release-assets)
 
 concurrency:
   group: publish-sdk-kotlin-${{ github.ref }}
@@ -40,6 +64,55 @@ jobs:
         with:
           persist-credentials: false
 
+      # One place decides the destination, version and release tag for every
+      # later step.
+      - name: Resolve destination, version and tag
+        id: target
+        shell: bash
+        env:
+          IN_DESTINATION: ${{ inputs.destination }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          destination="${IN_DESTINATION:-release-assets}"
+          version="${IN_VERSION:-}"
+          if [ -z "$version" ]; then
+            version="$(python3 -c 'import json; print(json.load(open("../sdk/package.json"))["version"])')"
+          fi
+          tag="${IN_TAG:-sdk-v${version}}"
+          {
+            echo "destination=${destination}"
+            echo "version=${version}"
+            echo "tag=${tag}"
+          } >> "$GITHUB_OUTPUT"
+          echo "destination=${destination} version=${version} tag=${tag}"
+
+      - name: Verify release tag version
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: test "$GITHUB_REF_NAME" = "sdk-kotlin-v$VERSION"
+
+      # The assets are built from the checked-out revision, so its version has
+      # to be the one the release tag names, and the release has to exist.
+      - name: Verify the release the assets attach to
+        if: steps.target.outputs.destination == 'release-assets'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.target.outputs.version }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          kotlin_version="$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
+          if [ "$kotlin_version" != "$VERSION" ] || [ "$TAG" != "sdk-v$VERSION" ]; then
+            echo "::error::sdk-kotlin ${kotlin_version} at ${GITHUB_SHA} does not match release tag ${TAG}"
+            exit 1
+          fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName
+
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.10'
@@ -59,13 +132,6 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;29.0.14206865'
 
-      - name: Verify release tag version
-        if: github.ref_type == 'tag'
-        shell: bash
-        run: |
-          version="$(python3 -c 'import json; print(json.load(open("../sdk/package.json"))["version"])')"
-          test "$GITHUB_REF_NAME" = "sdk-kotlin-v$version"
-
       - name: Verify release gates
         run: >-
           ./gradlew --no-daemon
@@ -82,18 +148,23 @@ jobs:
           ./gradlew --no-daemon verifyMavenPublications
           ./scripts/verify-maven-consumers.sh
 
-      - name: Publish Maven artifacts
-        if: (inputs.destination || vars.KOTLIN_MAVEN_DESTINATION || 'github') != 'central'
-        run: ./gradlew --no-daemon publishSdkToReleaseRepository
+      # A zip records no commit and a rebuild is not byte-identical, so a re-run
+      # replaces the assets; the dispatch `tag` input exists for that.
+      - name: Attach Maven zips to the GitHub release
+        if: steps.target.outputs.destination == 'release-assets'
+        shell: bash
         env:
-          MAVEN_REPOSITORY_URL: ${{ vars.KOTLIN_MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
-          MAVEN_USERNAME: ${{ secrets.KOTLIN_MAVEN_USERNAME || github.actor }}
-          MAVEN_PASSWORD: ${{ secrets.KOTLIN_MAVEN_PASSWORD || github.token }}
-          MAVEN_SIGNING_KEY: ${{ secrets.KOTLIN_MAVEN_SIGNING_KEY }}
-          MAVEN_SIGNING_PASSWORD: ${{ secrets.KOTLIN_MAVEN_SIGNING_PASSWORD }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.target.outputs.version }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ./scripts/package-release-assets.sh "$VERSION"
+          gh release upload "$TAG" build/release-assets/*-maven.zip "build/release-assets/qvac-sdk-kotlin-$VERSION-SHA256SUMS" \
+            --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Stage or publish to Maven Central
-        if: (inputs.destination || vars.KOTLIN_MAVEN_DESTINATION || 'github') == 'central'
+        if: steps.target.outputs.destination == 'central'
         shell: bash
         run: |
           if [[ "$RELEASE_CENTRAL" == true ]]; then

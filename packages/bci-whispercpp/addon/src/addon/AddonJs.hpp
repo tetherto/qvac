@@ -3,7 +3,7 @@
 #include <any>
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -11,6 +11,14 @@
 #include <utility>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#include <os/proc.h>
+#endif
+#endif
+
+#include <ggml-backend.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -21,8 +29,10 @@
 #include <js.h>
 #include <whisper.h>
 
+#include "addon/AppMemoryBudget.hpp"
 #include "model-interface/BCITypes.hpp"
 #include "model-interface/bci/BCIModel.hpp"
+#include "model-interface/bci/BciFit.hpp"
 #include "model-interface/bci/EmbedderFit.hpp"
 #include "src/js-interface/JSAdapter.hpp"
 
@@ -109,70 +119,136 @@ struct JsTranscriptArrayOutputHandler
 //
 // Takes no instance and loads nothing. Returns a Promise: the request is read
 // on the JS thread, the projection runs on a worker thread, and the result is
-// built back on the JS thread. A model or embedder that cannot be read
-// resolves to an "error" status carrying the reason.
+// built back on the JS thread. Resolves to "fits" or "does-not-fit" with the
+// memory the load takes on each device, or "unknown" for a load the fitter
+// cannot size. A model or embedder that cannot be read, or an invalid request,
+// rejects.
 
-constexpr const char* K_FIT_STATUS_FITS = "fits";
-constexpr const char* K_FIT_STATUS_DOES_NOT_FIT = "does-not-fit";
-constexpr const char* K_FIT_STATUS_ERROR = "error";
-constexpr const char* K_EMBEDDER_UNREADABLE = "embedder-unreadable";
-constexpr double K_BYTES_PER_MIB = 1024.0 * 1024.0;
-constexpr size_t K_REPORT_LINE_BYTES = 128;
+struct FitDevice {
+  std::string id;
+  std::string name;
+  bool unified;
+  double usedBytes;
+  double freeBytes;
+  double totalBytes;
+};
 
-inline uint64_t saturatingAdd(uint64_t a, uint64_t b) {
-  return a > UINT64_MAX - b ? UINT64_MAX : a + b;
+struct FitResult {
+  std::string status;
+  std::vector<FitDevice> devices;
+};
+
+// The PCI bus ID when the backend reports one, so the same GPU matches across
+// addons built on different backends; the device name otherwise.
+//
+// Unified marks memory the host owns: the CPU, an integrated GPU, a GPU that
+// shares host memory, Android's OpenCL GPU, and a device that reports no
+// memory of its own. A unified device that reports none takes the CPU's
+// figures.
+inline FitDevice fitDevice(
+    ggml_backend_dev_t device, const std::string& name, bool sharesHostMemory,
+    double usedBytes, double freeBytes, double totalBytes) {
+  std::string id = name;
+  std::string deviceName = name;
+  const bool reportsNoMemory = totalBytes == 0;
+  bool unified = sharesHostMemory || reportsNoMemory;
+  if (device != nullptr) {
+    ggml_backend_dev_props props{};
+    ggml_backend_dev_get_props(device, &props);
+    id = props.device_id != nullptr ? props.device_id : props.name;
+    deviceName = props.name;
+    unified = unified || props.memory_unified ||
+              props.type == GGML_BACKEND_DEVICE_TYPE_IGPU ||
+              props.type == GGML_BACKEND_DEVICE_TYPE_CPU;
+#if defined(__ANDROID__)
+    const char* registry =
+        ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+    unified = unified ||
+              (registry != nullptr && std::strcmp(registry, "OpenCL") == 0);
+#endif
+  }
+  if (unified && reportsNoMemory) {
+    if (ggml_backend_dev_t host =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      size_t hostFree = 0;
+      size_t hostTotal = 0;
+      ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+      freeBytes = static_cast<double>(hostFree);
+      totalBytes = static_cast<double>(hostTotal);
+    }
+  }
+  return {id, deviceName, unified, usedBytes, freeBytes, totalBytes};
 }
 
-struct BciFit {
-  whisper_fit_result whisper{};
-  uint64_t marginBytes = 0;
-  bool embedderReadable = true;
-  uint64_t embedderBytes = 0;
+// A load the fitter could not measure would still start, so it is unknown. A
+// request or model file the fitter refuses rejects as an invalid argument, and
+// any other failure as an internal one.
+inline FitResult unsizedOrThrow(const std::string& reason) {
+  if (reason == "measurement-failed" ||
+      reason == "memory-capacity-unavailable" ||
+      reason == "backend-memory-unavailable") {
+    return FitResult{"unknown", {}};
+  }
+  const bool invalid = reason == "invalid-arguments" ||
+                       reason == "model-unreadable" ||
+                       reason == "embedder-unreadable";
+  throw qvac_errors::StatusError(
+      invalid ? qvac_errors::general_error::InvalidArgument
+              : qvac_errors::general_error::InternalError,
+      "assessFit: " + reason);
+}
 
-  [[nodiscard]] uint64_t hostBytes() const {
-    return saturatingAdd(whisper.host_bytes, embedderBytes);
+// One row for the device the load resolved to, then the host CPU, which holds
+// the host-side buffers and the embedder. A load on the CPU is one row holding
+// both.
+inline FitResult toFitResult(const BciFit& fit) {
+  const whisper_fit_result& whisper = fit.whisper;
+  if (whisper.status == WHISPER_FIT_ERROR) {
+    return unsizedOrThrow(whisper.reason);
+  }
+  if (!fit.embedderReadable) {
+    return unsizedOrThrow("embedder-unreadable");
   }
 
-  [[nodiscard]] bool embedderFitsBesideModel() const {
-    if (!whisper.device_shares_host_memory) {
-      return true;
-    }
-    const uint64_t required = saturatingAdd(
-        saturatingAdd(whisper.device.total_bytes, marginBytes), hostBytes());
-    return required <= whisper.device_free_bytes;
+  FitResult result;
+  result.status = fit.fits() ? "fits" : "does-not-fit";
+
+  ggml_backend_dev_t host =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (whisper.device_is_cpu) {
+    result.devices.push_back(fitDevice(
+        host,
+        whisper.device_name,
+        true,
+        static_cast<double>(
+            saturatingAdd(whisper.device.total_bytes, fit.hostBytes())),
+        static_cast<double>(whisper.device_free_bytes),
+        static_cast<double>(whisper.device_total_bytes)));
+    return result;
   }
 
-  [[nodiscard]] const char* status() const {
-    if (whisper.status == WHISPER_FIT_ERROR || !embedderReadable) {
-      return K_FIT_STATUS_ERROR;
-    }
-    return whisper.status == WHISPER_FIT_SUCCESS && embedderFitsBesideModel()
-               ? K_FIT_STATUS_FITS
-               : K_FIT_STATUS_DOES_NOT_FIT;
-  }
+  result.devices.push_back(fitDevice(
+      ggml_backend_dev_by_name(whisper.device_name),
+      whisper.device_name,
+      whisper.device_shares_host_memory,
+      static_cast<double>(whisper.device.total_bytes),
+      static_cast<double>(whisper.device_free_bytes),
+      static_cast<double>(whisper.device_total_bytes)));
 
-  [[nodiscard]] const char* reason() const {
-    if (whisper.status == WHISPER_FIT_ERROR) {
-      return whisper.reason;
-    }
-    if (!embedderReadable) {
-      return K_EMBEDDER_UNREADABLE;
-    }
-    return status();
+  size_t hostFree = 0;
+  size_t hostTotal = 0;
+  if (host != nullptr) {
+    ggml_backend_dev_memory(host, &hostFree, &hostTotal);
   }
-
-  [[nodiscard]] std::string report() const {
-    char line[K_REPORT_LINE_BYTES];
-    std::snprintf(
-        line,
-        sizeof(line),
-        "bci embedder: %.1f MiB host%s\nverdict with embedder: %s\n",
-        static_cast<double>(embedderBytes) / K_BYTES_PER_MIB,
-        whisper.device_shares_host_memory ? " (same RAM pool)" : "",
-        status());
-    return std::string(whisper.report) + line;
-  }
-};
+  result.devices.push_back(fitDevice(
+      host,
+      "CPU",
+      true,
+      static_cast<double>(fit.hostBytes()),
+      static_cast<double>(hostFree),
+      static_cast<double>(hostTotal)));
+  return result;
+}
 
 struct FitRequest {
   std::string modelPath;
@@ -251,37 +327,24 @@ inline void measureFitEmbedder(const std::string& embedderPath, BciFit& fit) {
   fit.embedderBytes = footprint.has_value() ? footprint->hostBytes() : 0;
 }
 
-inline js_value_t* fitResultObject(js_env_t* env, const BciFit& fit) {
+inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
   auto result = js::Object::create(env);
-  auto text = [&](const char* name, const std::string& value) {
-    result.setProperty(env, name, js::String::create(env, value));
-  };
-  auto bytes = [&](const char* name, uint64_t value) {
-    result.setProperty(
-        env, name, js::Number::create(env, static_cast<double>(value)));
-  };
-  const whisper_fit_result& whisper = fit.whisper;
-
-  text("status", fit.status());
-  text("reason", fit.reason());
-  text("modelType", whisper.model_type);
-  text("deviceName", whisper.device_name);
-  text("report", fit.report());
-  result.setProperty(
-      env, "deviceIsCpu", js::Boolean::create(env, whisper.device_is_cpu));
-  result.setProperty(
-      env,
-      "deviceSharesHostMemory",
-      js::Boolean::create(env, whisper.device_shares_host_memory));
-  bytes("deviceFreeBytes", whisper.device_free_bytes);
-  bytes("deviceTotalBytes", whisper.device_total_bytes);
-  bytes("deviceBytes", whisper.device.total_bytes);
-  bytes("weightsBytes", whisper.device.weights_bytes);
-  bytes("kvBytes", whisper.device.kv_bytes);
-  bytes("computeBytes", whisper.device.compute_bytes);
-  bytes("hostOverflowBytes", whisper.device.host_overflow_bytes);
-  bytes("hostBytes", fit.hostBytes());
-  bytes("embedderBytes", fit.embedderBytes);
+  result.setProperty(env, "status", js::String::create(env, fit.status));
+  auto devices = js::Array::create(env);
+  for (size_t i = 0; i < fit.devices.size(); ++i) {
+    const auto& row = fit.devices[i];
+    auto entry = js::Object::create(env);
+    entry.setProperty(env, "id", js::String::create(env, row.id));
+    entry.setProperty(env, "name", js::String::create(env, row.name));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", js::Number::create(env, row.usedBytes));
+    entry.setProperty(env, "freeBytes", js::Number::create(env, row.freeBytes));
+    entry.setProperty(
+        env, "totalBytes", js::Number::create(env, row.totalBytes));
+    devices.set(env, i, entry);
+  }
+  result.setProperty(env, "devices", devices);
+  result.setProperty(env, "stats", js::Object::create(env));
   return result;
 }
 
@@ -289,7 +352,7 @@ inline js_value_t* fitResultObject(js_env_t* env, const BciFit& fit) {
 // owned request and ggml's device registry, which lives for the whole process,
 // so no instance unload can free state underneath it. Fits run one at a time:
 // each initializes the resolved device's backends and ggml's global timer.
-inline BciFit runFit(const FitRequest& request) {
+inline FitResult runFit(const FitRequest& request) {
   static std::mutex fitMutex;
   const std::lock_guard<std::mutex> lock(fitMutex);
 
@@ -310,7 +373,17 @@ inline BciFit runFit(const FitRequest& request) {
       request.embedderPath.empty() ? colocatedEmbedderPath(request.modelPath)
                                    : request.embedderPath,
       fit);
-  return fit;
+  FitResult result = toFitResult(fit);
+#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+  // The margin the fitter held back on the device is held back from the app's
+  // limit too.
+  result.status = applyAppMemoryBudget(
+      result.status,
+      result.devices,
+      static_cast<double>(os_proc_available_memory()),
+      static_cast<double>(fit.marginBytes));
+#endif
+  return result;
 }
 
 inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {

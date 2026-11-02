@@ -327,6 +327,13 @@ public:
     return std::nullopt;
   }
 
+  /// Tokens @p chatMsgs and @p tools take as the opening request of a fresh
+  /// conversation, BOS included (`utils::countRenderedChatTokens`). Reads
+  /// only what is fixed at load, so it is safe beside an in-flight request.
+  [[nodiscard]] virtual size_t countChatTokens(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools) const = 0;
+
   /**
    * Number of renders in the most recent request where the chat template
    * rejected the tool definitions and the prompt was produced without them.
