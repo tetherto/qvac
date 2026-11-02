@@ -198,7 +198,7 @@ runs:
           const runArnsDirectory = process.env.RUN_ARNS_DIRECTORY || './run-arns';
           const timeoutMinutes = parsePositiveInteger(process.env.START_TIMEOUT_MINUTES, 90, 'START_TIMEOUT_MINUTES');
           const pollIntervalSeconds = parsePositiveInteger(process.env.POLL_INTERVAL_SECONDS, 15, 'POLL_INTERVAL_SECONDS');
-          const unmeteredWaitMinutes = Number.parseInt(process.env.UNMETERED_WAIT_MINUTES || '0', 10) || 0;
+          const unmeteredWaitMinutes = Math.max(Number(process.env.UNMETERED_WAIT_MINUTES) || 0, 0);
           const unmeteredWaitMs = unmeteredWaitMinutes * 60 * 1000;
           // A run that gets a slot late still has the full start timeout.
           const totalTimeoutMinutes = timeoutMinutes + unmeteredWaitMinutes;

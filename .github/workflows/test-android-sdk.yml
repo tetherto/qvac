@@ -725,6 +725,7 @@ jobs:
         run: echo "$RUN_ARN" > "./run-arns/${SAFE_NAME}.txt"
 
       - name: Upload METERED run ARN
+        id: upload-metered-arn
         if: always() && steps.reschedule.outputs.run-arn != ''
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -732,6 +733,13 @@ jobs:
           path: ./run-arns/${{ needs.device-farm.outputs.safe-name }}.txt
           retention-days: 1
           overwrite: true
+
+      # Cleanup finds runs only through the ARN artifact.
+      - name: Stop the METERED run if its ARN was not saved
+        if: always() && steps.reschedule.outputs.run-arn != '' && steps.upload-metered-arn.outcome != 'success'
+        env:
+          RUN_ARN: ${{ steps.reschedule.outputs.run-arn }}
+        run: aws devicefarm stop-run --arn "$RUN_ARN"
 
       - name: Wait for the METERED run to enter RUNNING
         if: steps.reschedule.outcome == 'success'
