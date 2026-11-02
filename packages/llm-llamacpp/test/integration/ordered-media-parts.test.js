@@ -72,6 +72,8 @@ test(
         predict: '1',
         reasoning_budget: '0',
         verbosity: '3',
+        // Compare full prefill counts across path, byte and mixed transports.
+        cache_share_across_keys: 'false',
         image_tile_mode: 'disabled'
       },
       logger: createLogger(),
