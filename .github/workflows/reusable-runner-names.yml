@@ -7,11 +7,8 @@ name: Runner names
 on:
   workflow_call:
     outputs:
-      macos_ios:
-        description: "iOS Device Farm build host"
-        value: ${{ jobs.export.outputs.macos_ios }}
       macos_15:
-        description: "macOS 15 hosted (prebuilds ios/darwin arm)"
+        description: "macOS 15 hosted (prebuilds ios/darwin arm, iOS Device Farm build host)"
         value: ${{ jobs.export.outputs.macos_15 }}
       macos_15_intel:
         description: "macOS 15 Intel hosted (darwin x64 prebuilds/cpp)"
@@ -64,7 +61,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      macos_ios: ${{ steps.export.outputs.macos_ios }}
       macos_15: ${{ steps.export.outputs.macos_15 }}
       macos_15_intel: ${{ steps.export.outputs.macos_15_intel }}
       macos_15_large: ${{ steps.export.outputs.macos_15_large }}
@@ -84,7 +80,6 @@ jobs:
       - name: Export runner labels
         id: export
         run: |
-          echo "macos_ios=macos-14" >> "$GITHUB_OUTPUT"
           echo "macos_15=macos-15" >> "$GITHUB_OUTPUT"
           echo "macos_15_intel=macos-15-intel" >> "$GITHUB_OUTPUT"
           echo "macos_15_large=macos-15-large" >> "$GITHUB_OUTPUT"
