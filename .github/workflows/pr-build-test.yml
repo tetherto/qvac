@@ -155,10 +155,10 @@ jobs:
     with:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['cpp:lint']) }}
 
-  # C++ and desktop tests run against the build's outputs.
+  # C++ and desktop tests run against the build's outputs; a package with no build target runs against the checkout.
   cpp-tests:
     needs: [select, route, trust, build]
-    if: always() && !cancelled() && needs.build.result == 'success' && needs.trust.outputs.allowed == 'true' && (needs.route.outputs.run_cpp_tests == 'true' || fromJSON(needs.select.outputs.matrices)['cpp:tests:baseline'][0] != null)
+    if: always() && !cancelled() && (needs.build.result == 'success' || (needs.build.result == 'skipped' && fromJSON(needs.select.outputs.matrices).build[0] == null)) && needs.trust.outputs.allowed == 'true' && (needs.route.outputs.run_cpp_tests == 'true' || fromJSON(needs.select.outputs.matrices)['cpp:tests:baseline'][0] != null)
     permissions:
       contents: read
       actions: read
@@ -171,7 +171,7 @@ jobs:
 
   desktop:
     needs: [select, route, trust, build]
-    if: always() && !cancelled() && needs.build.result == 'success' && needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_desktop == 'true'
+    if: always() && !cancelled() && (needs.build.result == 'success' || (needs.build.result == 'skipped' && fromJSON(needs.select.outputs.matrices).build[0] == null)) && needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_desktop == 'true'
     permissions:
       contents: read
       actions: read
