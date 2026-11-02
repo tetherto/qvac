@@ -8,11 +8,14 @@ on:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     # cmake/qvac-addon/** is native input for every consuming addon (link line,
-    # exported symbols, build-time assertions). Keep this list contiguous:
-    # ts-check-names.test.mjs stops at the first non-entry line.
+    # exported symbols, build-time assertions). The bare toolchain lock is an
+    # on-pr input of llm-llamacpp, so a lock bump runs its C++ tests and
+    # coverage. Keep this list contiguous: ts-check-names.test.mjs stops at the
+    # first non-entry line.
     paths:
       - "packages/**"
       - "cmake/qvac-addon/**"
+      - ".github/bare-toolchain/package-lock.json"
   workflow_dispatch:
     inputs:
       packages:
@@ -227,7 +230,7 @@ jobs:
       - name: Warn when a stack PR builds against released fabric
         if: steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds != 'true'
         shell: bash
-        run: echo "::warning::This PR changes packages/fabric, but no prebuilds label is set, so on-pr-fabric publishes nothing. Native jobs build against the released @qvac/fabric. Add the 'prebuilds' label to exercise the stack."
+        run: echo "::warning::This PR changes fabric or its toolchain, but no prebuilds label is set, so on-pr-fabric publishes nothing. Native jobs build against the released @qvac/fabric. Add the 'prebuilds' label to exercise the stack."
 
   resolve-fabric-prebuilds:
     needs: [fork-approval, authorize, detect-fabric-stack]
