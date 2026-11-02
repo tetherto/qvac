@@ -757,12 +757,28 @@ PrefillPlan TextLlmContext::preparePrefill(
     inputTokens = reconcilePrompt(inputTokens, isPrefillOnlyRequest);
     // Only the generation prompt follows the history, so the history ends
     // `generationPromptTokens_` tokens before the end of the suffix too. A
-    // history end inside the reused prefix has nothing left to capture, and
-    // with `cache_checkpoints: 0` nothing would keep it.
+    // history end strictly inside the reused prefix has nothing left to
+    // capture, and with `cache_checkpoints: 0` nothing would keep it.
     if (generationPromptTokens_ > 0 && cacheCheckpointPolicy_.maxCount > 0 &&
-        inputTokens.size() > generationPromptTokens_) {
-      checkpointAt = inputTokens.size() - generationPromptTokens_;
-      historyCheckpointEntries_ = fullSize - generationPromptTokens_;
+        fullSize > generationPromptTokens_) {
+      const size_t historyEnd = fullSize - generationPromptTokens_;
+      if (inputTokens.size() > generationPromptTokens_) {
+        checkpointAt = inputTokens.size() - generationPromptTokens_;
+        historyCheckpointEntries_ = historyEnd;
+      } else if (
+          residentLedger_.entries.size() == historyEnd &&
+          std::ranges::none_of(
+              cacheCheckpoints_, [historyEnd](const CacheCheckpoint& kept) {
+                return kept.ledger.entries.size() == historyEnd;
+              })) {
+        // The memory reused ends at the history end without a checkpoint
+        // there, as another conversation's cut back to its checkpoint does:
+        // it is taken now, before anything past it is decoded.
+        historyCheckpointEntries_ = historyEnd;
+        captureHistoryCheckpoint(nPast_);
+        // Taken: the decode has nothing left to capture.
+        historyCheckpointEntries_ = 0;
+      }
     }
   }
 
@@ -1531,27 +1547,80 @@ void TextLlmContext::adoptBestCacheSource(
       std::max(fullPrompt.positions(), fullPrompt.cacheTokens()),
       donorTrimmable,
       own,
-      [this, &prompt](const cache::DonorState& donor) {
-        return adoptDonorState(donor, prompt);
+      [this, &prompt, own](const cache::DonorState& donor) {
+        return adoptDonorState(donor, prompt, own > 0);
       });
 }
 
 bool TextLlmContext::adoptDonorState(
-    const cache::DonorState& donor, const cache::Ledger& prompt) {
-  // Every exit but the accepted one leaves the sequence empty: the request
-  // then starts cold, and whatever the sequence held before is gone.
-  ScopeGuard coldGuard([this]() noexcept {
+    const cache::DonorState& donor, const cache::Ledger& prompt,
+    bool keepOwnOnFailure) {
+  llama_synchronize(modelCtx_.lctx);
+  // What this sequence serves may hold turns its key's file lacks, and a
+  // rollback of this request would return to it: a copy that fails falls back
+  // to it rather than to nothing. Without a copy of it the donor is declined.
+  SequenceStateSnapshot own;
+  if (keepOwnOnFailure) {
+    bool kept = false;
+    try {
+      kept = snapshotSequenceState(
+          modelCtx_.lctx,
+          seqId_,
+          nPast_,
+          own,
+          cacheCheckpointPolicy_.storage,
+          SnapshotScope::Full,
+          cacheCheckpointPolicy_.directory);
+    } catch (const std::exception& ex) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format("[TextLlm] own state snapshot threw: %s\n", ex.what()));
+    }
+    if (!kept) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[TextLlm] not starting from %s: the sequence's own state could "
+              "not be kept aside\n",
+              donor.source.c_str()));
+      return false;
+    }
+  }
+  cache::Ledger ownLedger = residentLedger_;
+  const llama_pos ownNPast = nPast_;
+  const bool ownBorrowed = residentStateBorrowed_;
+  cache::Checkpoints ownCheckpoints = std::exchange(cacheCheckpoints_, {});
+  // Every exit but the accepted one leaves the sequence as it was, or empty
+  // when there was nothing to keep or it cannot be put back.
+  ScopeGuard fallbackGuard([&]() noexcept {
     try {
       clearSequenceMemory(modelCtx_.lctx);
+      nPast_ = 0;
+      clearCacheReconciliationState();
+      if (own.empty()) {
+        return;
+      }
+      if (restoreSequenceState(modelCtx_.lctx, seqId_, own)) {
+        residentLedger_ = std::move(ownLedger);
+        nPast_ = ownNPast;
+        residentStateBorrowed_ = ownBorrowed;
+        cacheCheckpoints_ = std::move(ownCheckpoints);
+      } else {
+        clearSequenceMemory(modelCtx_.lctx);
+      }
     } catch (...) {
       QLOG_IF(
           Priority::ERROR,
-          "[TextLlm] failed to clear sequence after rejecting a donor state\n");
+          "[TextLlm] failed to put the sequence back after rejecting a donor "
+          "state\n");
+      try {
+        clearSequenceMemory(modelCtx_.lctx);
+      } catch (...) {
+      }
+      nPast_ = 0;
+      clearCacheReconciliationState();
     }
-    nPast_ = 0;
-    clearCacheReconciliationState();
   });
-  llama_synchronize(modelCtx_.lctx);
   clearSequenceMemory(modelCtx_.lctx);
   nPast_ = 0;
   clearCacheReconciliationState();
@@ -1590,7 +1659,7 @@ bool TextLlmContext::adoptDonorState(
     nPast_ = residentLedger_.positions();
   }
   residentStateBorrowed_ = true;
-  coldGuard.dismiss();
+  fallbackGuard.dismiss();
   ++donorAdoptions_;
   QLOG_IF(
       Priority::DEBUG,

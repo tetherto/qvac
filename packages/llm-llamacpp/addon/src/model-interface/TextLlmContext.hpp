@@ -379,10 +379,12 @@ private:
   /// Replaces this sequence's state with a copy of `donor`, cut back to a
   /// checkpoint within the prefix it shares with `prompt` (on full-state
   /// memory, the servable prompt) when the memory cannot be trimmed there.
-  /// False, with the sequence cleared, when the copy cannot be used.
+  /// False when the copy cannot be used: the sequence then holds what it held
+  /// if `keepOwnOnFailure`, and nothing otherwise.
   bool adoptDonorState(
       const qvac_lib_inference_addon_llama::cache::DonorState& donor,
-      const qvac_lib_inference_addon_llama::cache::Ledger& prompt);
+      const qvac_lib_inference_addon_llama::cache::Ledger& prompt,
+      bool keepOwnOnFailure);
   void commitCacheRequest();
   bool restorePreRequestCacheState();
   // Checks a state `loadCache` or `adoptResidentState` just put in memory

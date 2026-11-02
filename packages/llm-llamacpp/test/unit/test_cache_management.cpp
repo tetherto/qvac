@@ -3898,6 +3898,57 @@ TEST(CrossKeyPrefixTest, ABaseCacheKeyServesANewConversation) {
   }
 }
 
+// A copy that fails leaves the key with what its own state served, turns its
+// file lacks included, instead of nothing.
+TEST(CrossKeyPrefixTest, AFailedCopyKeepsWhatTheKeyServed) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_failed_copy_base.bin", "cross_failed_copy_a.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  const SingleTurn apple = runSingle(*model, fruitQuestion("apple"), keys[1]);
+  const std::string again = chatInput(
+      {{"system", fruitStallRules()},
+       {"user", "Say one word: apple."},
+       {"assistant", apple.output},
+       {"user", "Again."}});
+  {
+    auto primer = loadSinglePromptModel(nullptr);
+    ASSERT_TRUE(primer->isLoaded());
+    LlamaModel::Prompt prime;
+    prime.input = again;
+    prime.cacheKey = keys[0];
+    prime.prefill = true;
+    primer->processPrompt(prime);
+    primer->saveCache(keys[0]);
+  }
+  // The file serves the whole prompt, but its state is cut short after the
+  // ledger header, so it cannot load.
+  uint32_t header[3] = {};
+  {
+    std::ifstream in(keys[0], std::ios::binary);
+    ASSERT_TRUE(in.read(reinterpret_cast<char*>(header), sizeof(header)));
+  }
+  fs::resize_file(
+      keys[0], sizeof(header) + header[2] * sizeof(llama_token) + 16);
+
+  const SingleTurn next = runSingle(*model, again, keys[1], keys[0]);
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 0u)
+      << "test setup: the cut file loaded";
+  EXPECT_GT(next.reuse, K_SHARED_RULES_TOKENS)
+      << "the failed copy left the key with nothing";
+  EXPECT_TRUE(mentions(next.output, "apple")) << next.output;
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
 // On the batch path, `baseCacheKey` serves a request from a file this
 // process never used. The file comes from a batched model too: a state file
 // loads only into a context with as many KV streams as the one that wrote it.
@@ -4238,6 +4289,46 @@ TEST(CrossKeyPrefixTest, BatchHybridExactPromptStartsFromTheDonorsCheckpoint) {
   const BatchedTurn onPrimed = harness.run(fruitQuestion("apple"), keys[0]);
   EXPECT_EQ(onCopy.reuse, onPrimed.reuse);
   EXPECT_EQ(onCopy.output, onPrimed.output);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// The checkpoint a new key starts from becomes its own: saved with the key
+// and loaded in a fresh model, the same prompt starts from it again.
+TEST(CrossKeyPrefixTest, BatchHybridKeyKeepsTheCheckpointItStartedFrom) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_kept_primed.bin", "cross_batch_kept_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadHybridChatModel(modelPath, "2");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    LlamaModel::Prompt prime;
+    prime.input = fruitQuestion("apple");
+    prime.cacheKey = keys[0];
+    prime.prefill = true;
+    model->processPromptBatch({prime});
+    harness.run(fruitQuestion("apple"), keys[1], /*saveAfter=*/true);
+    ASSERT_EQ(harness.scheduler().donorHitsForTesting(), 1u)
+        << "test setup: the new key did not start from the primed one";
+  }
+  ASSERT_TRUE(fs::exists(keys[1]));
+
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const BatchedTurn again = harness.run(fruitQuestion("apple"), keys[1]);
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u);
+  EXPECT_GT(again.reuse, K_SHARED_RULES_TOKENS)
+      << "the key's file kept no checkpoint of the state it started from";
   model.reset();
   for (const auto& key : keys) {
     fs::remove(key);
