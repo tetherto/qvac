@@ -175,7 +175,9 @@ async function validateCachedFile(
     }
 
     // Also marks files cached before the marker existed, so they load offline next time.
-    await markDownloadComplete(modelPath, localSize)
+    if (!(await isMarkedComplete(modelPath, localSize))) {
+      await markDownloadComplete(modelPath, localSize)
+    }
     logger.info(`✅ Using cached HTTP model: ${modelPath}`)
     return modelPath
   } catch (error) {
@@ -266,6 +268,11 @@ async function performHttpDownload(
     if (response.status === 416 && startOffset > 0) {
       response.body.destroy()
       logger.info(`✅ File already completely downloaded`)
+      // A partial longer than the file also gets a 416, so only trust a size the server confirms.
+      const unsatisfied = /^bytes \*\/(\d+)$/.exec(String(response.headers['content-range'] ?? ''))
+      if (unsatisfied?.[1] !== undefined && parseInt(unsatisfied[1]) === startOffset) {
+        meta.totalBytes = startOffset
+      }
       // Send 100% progress for already complete file
       if (progressCallback) {
         progressCallback({

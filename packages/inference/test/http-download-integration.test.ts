@@ -9,6 +9,10 @@ import {
   HTTPError,
   InsecureModelSourceError
 } from '@/errors/index'
+import { unloadModel } from '@/plugins/ops/unload-model'
+import { registerModel, unregisterModel } from '@/runtime/model-registry'
+import { ModelType } from '@/schemas/index'
+import { completeMarkerPath } from '@/utils/cache/paths'
 import { useTestCacheDir } from './fixtures/test-cache'
 
 // Deterministic, offline coverage of the hand-rolled download client driving the
@@ -40,6 +44,12 @@ async function startServer(): Promise<Server> {
       res.end()
       return
     }
+    if (req.method === 'HEAD' && url === '/head-unsized.bin') {
+      // A HEAD with no size never matches the cache, so the client re-requests with a Range.
+      res.writeHead(200)
+      res.end()
+      return
+    }
     if (req.method === 'HEAD') {
       res.writeHead(200, { 'content-length': String(CONTENT.length) })
       res.end()
@@ -56,6 +66,11 @@ async function startServer(): Promise<Server> {
     if (range !== undefined) {
       const match = /bytes=(\d+)-/.exec(String(range))
       const start = match && match[1] ? parseInt(match[1]) : 0
+      if (start >= CONTENT.length) {
+        res.writeHead(416, { 'content-range': `bytes */${CONTENT.length}` })
+        res.end()
+        return
+      }
       const chunk = CONTENT.subarray(start)
       sent206 = true
       res.writeHead(206, {
@@ -156,6 +171,82 @@ test('downloadModelFromHttp: a download of unknown size is not trusted offline',
   await server.close()
 
   await t.exception(() => downloadModelFromHttp(url), /Cannot resume partial download/)
+})
+
+test('downloadModelFromHttp: an unmarked cache is marked on an online load, then loads offline', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  const url = `${server.base}/ggml-legacy.bin`
+  const modelPath = await downloadModelFromHttp(url)
+  // A file cached before the marker existed.
+  fs.rmSync(completeMarkerPath(modelPath))
+
+  await downloadModelFromHttp(url)
+  t.ok(fs.existsSync(completeMarkerPath(modelPath)), 'the online size check wrote the marker')
+  await server.close()
+
+  t.is(await downloadModelFromHttp(url), modelPath, 'offline load uses the cached file')
+})
+
+test('downloadModelFromHttp: a 416 for the whole file marks it complete', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  const url = `${server.base}/head-unsized.bin`
+  const modelPath = await downloadModelFromHttp(url)
+  // HEAD gives no size, so this load sends a Range past the end and gets a 416.
+  await downloadModelFromHttp(url)
+  await server.close()
+
+  t.is(await downloadModelFromHttp(url), modelPath, 'offline load uses the cached file')
+})
+
+test('downloadModelFromHttp: a 416 for a file longer than the server has is not marked', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const url = `${server.base}/ggml-long.bin`
+  const modelPath = await downloadModelFromHttp(url)
+  fs.writeFileSync(modelPath, Buffer.concat([CONTENT, Buffer.alloc(10)]))
+
+  await downloadModelFromHttp(url)
+  t.absent(fs.existsSync(completeMarkerPath(modelPath)), 'no marker for a size the server denies')
+})
+
+test('unloadModel: clearStorage removes the complete marker with the model', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const modelPath = await downloadModelFromHttp(`${server.base}/ggml-cleared.bin`)
+  t.ok(fs.existsSync(completeMarkerPath(modelPath)), 'the download wrote the marker')
+
+  const modelId = 'test-clear-storage-marker'
+  registerModel(modelId, {
+    model: { unload: async () => {} },
+    path: modelPath,
+    config: {},
+    modelType: ModelType.whispercppTranscription
+  } as never)
+  t.teardown(() => unregisterModel(modelId))
+
+  await unloadModel({ modelId, clearStorage: true })
+  t.absent(fs.existsSync(modelPath), 'the model file is gone')
+  t.absent(fs.existsSync(completeMarkerPath(modelPath)), 'and so is its marker')
 })
 
 test('isResumableTransferError: integrity and insecure failures are terminal, transient network errors resume', (t) => {
