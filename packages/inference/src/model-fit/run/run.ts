@@ -225,7 +225,8 @@ export async function runFit(
     const unfinished = unfinishedFits(stateDir, probe)
     if (exists(crashed) || (unfinished.length > 0 && exists(suspect))) {
       try {
-        mark(crashed)
+        // Rewriting an existing marker would restart its TTL on every load.
+        if (!exists(crashed)) mark(crashed)
         remove(suspect)
         unfinished.forEach(remove)
       } catch {
