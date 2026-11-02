@@ -36,30 +36,6 @@
       "sha256": "c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f",
       "bytes": 554821024
     },
-    "gte-large_fp16.tensors.txt": {
-      "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16.tensors.txt",
-      "dest": "test/model/gte-large_fp16.tensors.txt"
-    },
-    "gte-large_fp16-00001-of-00005.gguf": {
-      "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
-      "dest": "test/model/gte-large_fp16-00001-of-00005.gguf"
-    },
-    "gte-large_fp16-00002-of-00005.gguf": {
-      "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
-      "dest": "test/model/gte-large_fp16-00002-of-00005.gguf"
-    },
-    "gte-large_fp16-00003-of-00005.gguf": {
-      "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
-      "dest": "test/model/gte-large_fp16-00003-of-00005.gguf"
-    },
-    "gte-large_fp16-00004-of-00005.gguf": {
-      "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
-      "dest": "test/model/gte-large_fp16-00004-of-00005.gguf"
-    },
-    "gte-large_fp16-00005-of-00005.gguf": {
-      "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
-      "dest": "test/model/gte-large_fp16-00005-of-00005.gguf"
-    },
     "laya-multilingual-Q8_0.gguf": {
       "s3Path": "qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-Q8_0.gguf",
       "dest": "models/laya/laya-multilingual-Q8_0.gguf"
