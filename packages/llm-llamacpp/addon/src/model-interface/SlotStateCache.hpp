@@ -4,6 +4,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <list>
 #include <mutex>
 #include <optional>
@@ -18,6 +19,7 @@
 #include "CacheCheckpointFile.hpp"
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
+#include "CacheSourceSelection.hpp"
 #include "SpeculativeRuntime.hpp"
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -78,7 +80,10 @@ public:
 
   /// Keeps `entry` under `key` and returns true. When it does not fit the
   /// budget even alone, `entry` is left untouched and false is returned: the
-  /// caller saves it the way it would without the tier.
+  /// caller saves it the way it would without the tier. An entry without a
+  /// key (a request that named none) only serves a prefix others may share:
+  /// it never pushes out a keyed conversation, and is false when it does not
+  /// fit beside them; a keyed entry that needs the room drops it first.
   bool insert(const std::string& key, SlotStateCacheEntry&& entry) {
     std::scoped_lock lock(mutex_);
     const uint64_t size = entry.bytes();
@@ -86,10 +91,29 @@ public:
       return false;
     }
     eraseLocked(key);
+    if (totalBytesLocked() + size > budget_) {
+      if (key.empty()) {
+        return false;
+      }
+      eraseLocked("");
+    }
     while (!entries_.empty() && totalBytesLocked() + size > budget_) {
       dropOldestLocked();
     }
-    entries_.emplace_back(key, std::move(entry));
+    // Decoded once here, not by every request that looks for a prefix.
+    std::optional<cache::Ledger> ledger;
+    try {
+      ledger =
+          cache::deserialize(entry.ledgerWords.data(), entry.ledgerWords.size())
+              .ledger;
+    } catch (const std::exception&) {
+      // A ledger that does not decode shares nothing.
+    }
+    entries_.push_back(
+        Stored{
+            .key = key,
+            .entry = std::move(entry),
+            .ledger = std::move(ledger)});
     return true;
   }
 
@@ -98,8 +122,8 @@ public:
   take(const std::string& key) {
     std::scoped_lock lock(mutex_);
     for (auto it = entries_.begin(); it != entries_.end(); ++it) {
-      if (it->first == key) {
-        SlotStateCacheEntry entry = std::move(it->second);
+      if (it->key == key) {
+        SlotStateCacheEntry entry = std::move(it->entry);
         entries_.erase(it);
         return entry;
       }
@@ -107,12 +131,53 @@ public:
     return std::nullopt;
   }
 
+  /// Hands `use` the entry with the longest `cache::reusablePrefix` of
+  /// `prompt` when it exceeds `minimum`, under the lock; the newest wins a
+  /// tie. The entry stays in place: a request that starts from another
+  /// conversation copies it. An entry whose file its caller deleted is
+  /// skipped: that conversation was dropped. Only the entry picked is checked
+  /// for that. Returns what `use` returned, or false when no entry qualified.
+  bool useLongestPrefix(
+      const cache::Ledger& prompt, bool trimmable, size_t minimum,
+      const std::function<bool(const SlotStateCacheEntry&)>& use) {
+    std::scoped_lock lock(mutex_);
+    std::vector<std::pair<const Stored*, size_t>> candidates;
+    for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
+      if (!it->ledger.has_value()) {
+        continue;
+      }
+      const size_t reusable = cache::reusablePrefix(
+          *it->ledger, &it->entry.checkpoints, prompt, trimmable);
+      if (reusable > minimum) {
+        candidates.emplace_back(&*it, reusable);
+      }
+    }
+    while (true) {
+      auto best = candidates.end();
+      for (auto it = candidates.begin(); it != candidates.end(); ++it) {
+        if (best == candidates.end() || it->second > best->second) {
+          best = it;
+        }
+      }
+      if (best == candidates.end()) {
+        return false;
+      }
+      const Stored& stored = *best->first;
+      if (stored.entry.activeCacheSavedToDisk &&
+          CacheManager::persistedBackingStoreMissing(stored.key)) {
+        candidates.erase(best);
+        continue;
+      }
+      return use(stored.entry);
+    }
+  }
+
   /// Writes every dirty, non-ephemeral entry to its `cacheKey` file and marks
   /// it clean. Entries stay in RAM. Returns how many were written.
   size_t flushDirty() {
     std::scoped_lock lock(mutex_);
     size_t written = 0;
-    for (auto& [key, entry] : entries_) {
+    for (auto& [key, entry, ledger] : entries_) {
       if (entry.dirty && !entry.ephemeral &&
           writeBack(key, entry) == WriteBackResult::Written) {
         entry.dirty = false;
@@ -131,7 +196,7 @@ public:
   /// `UnableToSaveSessionFile` when the write fails; the entry stays, dirty.
   SaveOutcome save(const std::string& key) {
     std::scoped_lock lock(mutex_);
-    for (auto& [entryKey, entry] : entries_) {
+    for (auto& [entryKey, entry, ledger] : entries_) {
       if (entryKey != key) {
         continue;
       }
@@ -271,8 +336,17 @@ private:
     return WriteBackResult::Failed;
   }
 
+  /// An entry kept under its key, with its ledger decoded; none when the
+  /// ledger does not decode. The budget counts the entry as stored, not the
+  /// decoded copy, a small fraction of the state it describes.
+  struct Stored {
+    std::string key;
+    SlotStateCacheEntry entry;
+    std::optional<cache::Ledger> ledger;
+  };
+
   void dropOldestLocked() {
-    auto& [key, entry] = entries_.front();
+    auto& [key, entry, ledger] = entries_.front();
     if (entry.dirty && !entry.ephemeral) {
       (void)writeBack(key, entry);
     }
@@ -280,19 +354,19 @@ private:
   }
 
   void eraseLocked(const std::string& key) noexcept {
-    entries_.remove_if([&](const auto& item) { return item.first == key; });
+    entries_.remove_if([&](const Stored& item) { return item.key == key; });
   }
 
   [[nodiscard]] uint64_t totalBytesLocked() const noexcept {
     uint64_t total = 0;
-    for (const auto& item : entries_) {
-      total += item.second.bytes();
+    for (const Stored& item : entries_) {
+      total += item.entry.bytes();
     }
     return total;
   }
 
   mutable std::mutex mutex_;
-  std::list<std::pair<std::string, SlotStateCacheEntry>> entries_;
+  std::list<Stored> entries_;
   const uint64_t budget_;
 };
 
