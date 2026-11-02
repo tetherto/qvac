@@ -3420,12 +3420,14 @@ data class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
 sealed class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu {
     data class Variant1(val value: Long) : LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu()
     data class Variant2(val value: String) : LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu()
+    data class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu) : LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu()
 }
 internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpuSerializer : KSerializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"integer\"}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"dedicated\",\"integrated\"]}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -3433,6 +3435,7 @@ internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigContextPara
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu.Variant1(input.json.decodeFromJsonElement(serializer<Long>(), element))
             1 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            2 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu.LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu variant")
         }
     }
@@ -3440,8 +3443,15 @@ internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigContextPara
         when (value) {
             is LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu.Variant1 -> encoder.encodeSerializableValue(serializer<Long>(), value.value)
             is LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMaingpu.LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu>(), value.value)
         }
     }
+}
+
+@Serializable
+enum class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu {
+    @SerialName("dedicated") `DEDICATED`,
+    @SerialName("integrated") `INTEGRATED`,
 }
 
 @Serializable
@@ -10733,12 +10743,14 @@ data class ReloadConfigRequestModelConfigContextParams(
 sealed class ReloadConfigRequestModelConfigContextParamsMaingpu {
     data class Variant1(val value: Long) : ReloadConfigRequestModelConfigContextParamsMaingpu()
     data class Variant2(val value: String) : ReloadConfigRequestModelConfigContextParamsMaingpu()
+    data class ReloadConfigRequestModelConfigContextParamsMainGpu(val value: io.tether.qvac.sdk.generated.schema.ReloadConfigRequestModelConfigContextParamsMainGpu) : ReloadConfigRequestModelConfigContextParamsMaingpu()
 }
 internal object ReloadConfigRequestModelConfigContextParamsMaingpuSerializer : KSerializer<ReloadConfigRequestModelConfigContextParamsMaingpu> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("ReloadConfigRequestModelConfigContextParamsMaingpu")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"integer\"}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"dedicated\",\"integrated\"]}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): ReloadConfigRequestModelConfigContextParamsMaingpu {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -10746,6 +10758,7 @@ internal object ReloadConfigRequestModelConfigContextParamsMaingpuSerializer : K
         return when (selectWireVariant(element, shapes)) {
             0 -> ReloadConfigRequestModelConfigContextParamsMaingpu.Variant1(input.json.decodeFromJsonElement(serializer<Long>(), element))
             1 -> ReloadConfigRequestModelConfigContextParamsMaingpu.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            2 -> ReloadConfigRequestModelConfigContextParamsMaingpu.ReloadConfigRequestModelConfigContextParamsMainGpu(input.json.decodeFromJsonElement(serializer<ReloadConfigRequestModelConfigContextParamsMainGpu>(), element))
             else -> throw SerializationException("No matching ReloadConfigRequestModelConfigContextParamsMaingpu variant")
         }
     }
@@ -10753,8 +10766,15 @@ internal object ReloadConfigRequestModelConfigContextParamsMaingpuSerializer : K
         when (value) {
             is ReloadConfigRequestModelConfigContextParamsMaingpu.Variant1 -> encoder.encodeSerializableValue(serializer<Long>(), value.value)
             is ReloadConfigRequestModelConfigContextParamsMaingpu.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is ReloadConfigRequestModelConfigContextParamsMaingpu.ReloadConfigRequestModelConfigContextParamsMainGpu -> encoder.encodeSerializableValue(serializer<ReloadConfigRequestModelConfigContextParamsMainGpu>(), value.value)
         }
     }
+}
+
+@Serializable
+enum class ReloadConfigRequestModelConfigContextParamsMainGpu {
+    @SerialName("dedicated") `DEDICATED`,
+    @SerialName("integrated") `INTEGRATED`,
 }
 
 @Serializable

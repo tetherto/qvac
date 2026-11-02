@@ -100,10 +100,25 @@ test('whisperConfigSchema accepts main-gpu and rejects conflicting selectors', (
   t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': '1' } }).success)
   t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 'integrated' } }).success)
   t.ok(whisperConfigSchema.safeParse({ contextParams: { gpu_device: 1 } }).success)
-  t.absent(
-    whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 1.5 } }).success,
-    'a fractional registry index is rejected'
-  )
+  // The addon's validateMainGpu() vocabulary: a non-negative 32-bit registry
+  // index (number or digit string), 'dedicated', or 'integrated'.
+  for (const selector of [
+    1.5,
+    -1,
+    2147483648,
+    'auto',
+    '1.5',
+    '-1',
+    '2147483648',
+    'Dedicated',
+    ''
+  ]) {
+    t.absent(
+      whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': selector } }).success,
+      `main-gpu rejects ${JSON.stringify(selector)} before model load`
+    )
+  }
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 2147483647 } }).success)
   // The addon's `main_gpu` spelling is not SDK vocabulary: the generated
   // Python model's `main_gpu` field already serialises to `main-gpu`, and a
   // second wire key of that name would make it emit both spellings.

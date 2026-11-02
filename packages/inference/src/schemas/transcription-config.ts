@@ -40,9 +40,22 @@ const vadParamsSchema = z
   .optional()
 
 const MAIN_GPU_DESCRIPTION =
-  "GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`."
+  "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`."
 
-const mainGpuSelectorSchema = z.union([z.number().int(), z.string()])
+// Mirrors the addon's validateMainGpu() so a bad selector is a structured
+// input error instead of a failure once model loading starts.
+const MAIN_GPU_INDEX_MAX = 2147483647
+
+const mainGpuSelectorSchema = z.union([
+  z.number().int().min(0).max(MAIN_GPU_INDEX_MAX),
+  z
+    .string()
+    .regex(/^\d+$/, 'main-gpu string must be a device index, dedicated, or integrated')
+    .refine((value) => Number(value) <= MAIN_GPU_INDEX_MAX, {
+      message: 'main-gpu device index must fit in a 32-bit integer'
+    }),
+  z.enum(['dedicated', 'integrated'])
+])
 
 const contextParamsSchema = z
   .object({

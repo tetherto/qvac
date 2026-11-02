@@ -13259,15 +13259,21 @@
                           "type": "number"
                         },
                         "main-gpu": {
-                          "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                          "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
                           "anyOf": [
                             {
                               "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
+                              "minimum": 0,
+                              "maximum": 2147483647
                             },
                             {
-                              "type": "string"
+                              "type": "string",
+                              "pattern": "^\\d+$"
+                            },
+                            {
+                              "type": "string",
+                              "enum": ["dedicated", "integrated"],
+                              "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu"
                             }
                           ]
                         }
@@ -21641,15 +21647,21 @@
                       "type": "number"
                     },
                     "main-gpu": {
-                      "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                      "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
                       "anyOf": [
                         {
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "minimum": 0,
+                          "maximum": 2147483647
                         },
                         {
-                          "type": "string"
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["dedicated", "integrated"],
+                          "title": "ReloadConfigRequestModelConfigContextParamsMainGpu"
                         }
                       ]
                     }

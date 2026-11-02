@@ -11525,11 +11525,26 @@ class MainGpu1(RootModel[int]):
     root: Annotated[
         int,
         Field(
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            ge=0,
+            le=2147483647,
         ),
     ]
+
+
+class MainGpu2(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            pattern="^\\d+$",
+        ),
+    ]
+
+
+class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu(Enum):
+    dedicated = "dedicated"
+    integrated = "integrated"
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
@@ -11552,10 +11567,13 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu1 | str | None,
+        MainGpu1
+        | MainGpu2
+        | LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu
+        | None,
         Field(
             alias="main-gpu",
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
         ),
     ] = None
 
@@ -12840,7 +12858,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention(Enum):
     auto = "auto"
 
 
-class MainGpu2(RootModel[int]):
+class MainGpu3(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -12950,7 +12968,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu2 | LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu | None,
+        MainGpu3 | LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu | None,
         Field(
             alias="mainGpu",
             description="GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
@@ -13067,7 +13085,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn(Enum):
     auto = "auto"
 
 
-class MainGpu3(RootModel[int]):
+class MainGpu4(RootModel[int]):
     root: Annotated[
         int, Field(description="GPU index or device class.", ge=0, le=9007199254740991)
     ]
@@ -13160,7 +13178,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu3 | LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu | None,
+        MainGpu4 | LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu | None,
         Field(alias="main-gpu", description="GPU index or device class."),
     ] = None
     split_mode: Annotated[
@@ -13366,7 +13384,7 @@ class LoadModelSrcRequestLlamacppRerankModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu3 | LoadModelSrcRequestLlamacppRerankModelConfigMainGpu | None,
+        MainGpu4 | LoadModelSrcRequestLlamacppRerankModelConfigMainGpu | None,
         Field(alias="main-gpu", description="GPU index or device class."),
     ] = None
     split_mode: Annotated[
@@ -18718,7 +18736,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
     cpu = "cpu"
 
 
-class MainGpu5(RootModel[int]):
+class MainGpu6(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -20517,7 +20535,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu5 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
+        MainGpu6 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
         Field(
             alias="main-gpu",
             description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
@@ -22090,15 +22108,30 @@ class ReloadConfigRequestModelConfigAudioFormat(Enum):
     s16le = "s16le"
 
 
-class MainGpu6(RootModel[int]):
+class MainGpu7(RootModel[int]):
     root: Annotated[
         int,
         Field(
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            ge=0,
+            le=2147483647,
         ),
     ]
+
+
+class MainGpu8(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            pattern="^\\d+$",
+        ),
+    ]
+
+
+class ReloadConfigRequestModelConfigContextParamsMainGpu(Enum):
+    dedicated = "dedicated"
+    integrated = "integrated"
 
 
 class ReloadConfigRequestModelConfigContextParams(GeneratedBaseModel):
@@ -22119,10 +22152,10 @@ class ReloadConfigRequestModelConfigContextParams(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu6 | str | None,
+        MainGpu7 | MainGpu8 | ReloadConfigRequestModelConfigContextParamsMainGpu | None,
         Field(
             alias="main-gpu",
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
         ),
     ] = None
 
