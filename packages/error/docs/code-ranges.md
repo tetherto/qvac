@@ -20,6 +20,8 @@ Keep registration definitions static too; filter them with
 a map. Shadowed maps and mutations fail validation. The checker reads source
 without loading packages or native addons and ignores compiled JavaScript copies
 of listed TypeScript modules.
+Discovery is file-local and does not follow imports, so list maps registered
+through imported helpers explicitly in `sources`.
 
 Run `npm run errors:check`, `npm run errors:test`, and `npm run errors:typecheck`
 from the repository root. Merge Guard requires successful validation for
