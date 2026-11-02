@@ -61,7 +61,9 @@ test('Core ML filtering preserves primary models and standalone binary models', 
   for (const path of [
     'qvac_models_compiled/ggml/parakeet/parakeet.f16.gguf',
     'qvac_models_compiled/ggml/parakeet/encoder-model.onnx.data',
-    'qvac_models_compiled/ggml/parakeet/weights.bin'
+    'qvac_models_compiled/ggml/parakeet/weights.bin',
+    'qvac_models_compiled/ggml/parakeet/encoder.mlmodelc.zip',
+    'qvac_models_compiled/ggml/acestep/vae-decoder.mlpackage.zip'
   ]) {
     const processed = processRegistryModel(
       registryEntry({ path, engine: 'parakeet-transcription' })
@@ -71,3 +73,21 @@ test('Core ML filtering preserves primary models and standalone binary models', 
     assert.equal(processed.addon, 'parakeet')
   }
 })
+
+for (const component of [
+  'Manifest.json',
+  'Data/com.apple.CoreML/model.mlmodel',
+  'Data/com.apple.CoreML/weights/weight.bin'
+]) {
+  test(`Core ML source-package component is not a standalone model: ${component}`, () => {
+    for (const prefix of ['', 'qvac_models_compiled/ggml/acestep/']) {
+      const processed = processRegistryModel(
+        registryEntry({
+          path: `${prefix}vae-decoder.mlpackage/${component}`,
+          engine: 'audiogen-ggml'
+        })
+      )
+      assert.equal(processed, null)
+    }
+  })
+}
