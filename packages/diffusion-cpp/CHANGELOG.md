@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-10-30
+
 ### Breaking
 
 - `assessFit` returns `{ status, devices, stats }`: the GPU devices the
@@ -10,28 +12,11 @@
   invalid request or a load the engine cannot measure rejects
   ([#5477](https://github.com/tetherto/qvac/pull/5477)).
 
-### Added
+### CUDA Support
 
-- Linux ARM64 and x64 releases include a dynamically loaded CUDA backend
-  built with the pinned CUDA 13 toolkit, including SM121a support for DGX
-  Spark and SM120a support for RTX 5090.
-- A distilled FLUX.2 Klein 4B CUDA example and measured Spark/RTX 5090
-  latency and recipes in the README. The example selects the existing
-  im2col VAE convolution path.
-
-### Changed
-
-- Linux release prebuilds enable CUDA through `SD_CUDA`; ordinary source,
-  unit-test, coverage and fuzz builds do not require the CUDA toolkit.
-  Source builds opt in with `npm run build:cuda`.
-- Both Linux prebuilds require the CUDA module alongside Vulkan, in PR
-  validation and the release artifact build, while retaining the addon's
-  independence from GPU runtime libraries.
-- Match qvac-fabric's CUDA targets per Linux platform: six targets on x64
-  and only `121a-real` on ARM64 to limit package size. Include native SM80 and
-  validate the CUDA 13.0.3 release compiler in the ggml registry port. Track
-  the toolkit marker in diffusion's vcpkg cache identity and document
-  automatic CUDA-to-Vulkan/CPU fallback and explicit device selection.
+- Add CUDA acceleration on Linux ARM64 and x64, including DGX Spark and RTX 5090.
+- Automatically fall back to Vulkan or CPU when CUDA is unavailable.
+- Add a FLUX.2 Klein 4B CUDA example and setup instructions.
 
 ## [0.32.1] - 2026-10-29
 
