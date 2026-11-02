@@ -18,45 +18,41 @@ function logger() {
   }
 }
 
-// Builds a client WITHOUT running the constructor (which would open a real
-// Corestore and join a real swarm); _close only touches the stubs below.
-function makeClient(storage, tempStorage) {
+// Runs the real constructor and close(); only the swarm half of _open is
+// skipped, so the Corestore still opens its storage on disk.
+function makeClient(opts = {}) {
   const QVACRegistryClient = require('../../lib/client')
-  const client = Object.create(QVACRegistryClient.prototype)
-  client.logger = logger()
-  client._metadataReady = null
-  client.db = null
-  client.hyperswarm = null
-  client.corestore = {
-    // lunte-disable-next-line require-await
-    async close() {}
+  class OfflineClient extends QVACRegistryClient {
+    async _open() {
+      await this.corestore.ready()
+    }
   }
-  client.storage = storage
-  client._tempStorage = tempStorage
-  return client
-}
-
-async function makeStorage(t) {
-  const storage = path.join(await tmp(t), 'storage')
-  fs.mkdirSync(path.join(storage, 'db'), { recursive: true })
-  fs.writeFileSync(path.join(storage, 'db', '000001.blob'), 'blob')
-  return storage
+  return new OfflineClient({ logger: { enabled: false }, ...opts })
 }
 
 test('close removes temp storage the client created', async (t) => {
-  const storage = await makeStorage(t)
+  if (getEnv(ENV_KEYS.REGISTRY_STORAGE)) {
+    t.comment('REGISTRY_STORAGE is set; skipping the temp-storage case')
+    return
+  }
 
-  await makeClient(storage, storage)._close()
+  const client = makeClient()
+  await client.ready()
+  t.ok(fs.existsSync(client.storage), 'temp storage opened')
 
-  t.absent(fs.existsSync(storage), 'temp storage removed')
+  await client.close()
+
+  t.absent(fs.existsSync(client.storage), 'temp storage removed')
 })
 
 test('close keeps storage the caller provided', async (t) => {
-  const storage = await makeStorage(t)
+  const storage = path.join(await tmp(t), 'storage')
 
-  await makeClient(storage, null)._close()
+  const client = makeClient({ storage })
+  await client.ready()
+  await client.close()
 
-  t.ok(fs.existsSync(path.join(storage, 'db', '000001.blob')), 'provided storage kept')
+  t.ok(fs.existsSync(storage), 'provided storage kept')
 })
 
 // lunte-disable-next-line require-await
