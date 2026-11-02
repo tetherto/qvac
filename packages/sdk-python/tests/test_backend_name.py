@@ -23,7 +23,9 @@ def test_backend_name_survives_completion_and_embedding(backend_name):
             ],
         }
     )
-    assert completion.events[0].stats.backend_name == backend_name
+    event = completion.events[0]
+    assert event.type == "completionStats"
+    assert event.stats.backend_name == backend_name
     embedding = EmbedResponse.model_validate(
         {
             "type": "embed",
@@ -32,6 +34,7 @@ def test_backend_name_survives_completion_and_embedding(backend_name):
             "stats": {"backendName": backend_name},
         }
     )
+    assert embedding.stats is not None
     assert embedding.stats.backend_name == backend_name
     assert embedding.model_dump(by_alias=True)["stats"]["backendName"] == backend_name
 
@@ -45,6 +48,7 @@ def test_backend_name_is_optional_for_older_addons():
             "stats": {"backendDevice": "cpu"},
         }
     )
+    assert response.stats is not None
     assert response.stats.backend_name is None
 
 
