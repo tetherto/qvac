@@ -33,6 +33,9 @@ await unloadModel({ modelId })
 | LLM addon          | `@qvac/llm-llamacpp` native prebuild         | `@qvac/llm-llamacpp` `prebuilds/web` (WebAssembly + WebGPU)     |
 | Model cache        | `~/.qvac` on disk                            | `/.qvac` in the origin private file system (OPFS)               |
 
+[`packages/sdk/examples/browser`](https://github.com/tetherto/qvac/tree/main/packages/sdk/examples/browser) is a complete page: model
+download with progress, streaming chat, stop, and the engine's logs.
+
 Bundlers that follow the `browser` export condition and
 `new Worker(new URL(..., import.meta.url))` pick this up with no
 configuration. That includes Vite and webpack. They emit the worker, the
