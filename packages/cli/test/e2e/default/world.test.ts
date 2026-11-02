@@ -43,6 +43,12 @@ const STUB_CONFIG = {
         src: '/models/abot.gguf',
         preload: false,
         config: { mode: 'world' }
+      },
+      'world-copy': {
+        type: 'sdcpp-generation',
+        src: '/models/abot.gguf',
+        preload: false,
+        config: { mode: 'world' }
       }
     }
   }
@@ -231,6 +237,19 @@ describe('qvac world: scenes and steps against a stubbed SDK', () => {
       payload: {}
     })
     assert.equal(live.statusCode, 200, live.body)
+  })
+
+  it('retires the older scene when another alias on the same SDK model creates one', async () => {
+    stubScene()
+    state().worldStepOverride = () => fakeStep([tinyPng()])
+    const first = await createScene()
+    await createScene({ ...SCENE, model: 'world-copy' })
+
+    assertStatusAndError(
+      await server().inject({ method: 'POST', url: `${SCENES}/${first.id}/steps`, payload: {} }),
+      409,
+      'scene_replaced'
+    )
   })
 
   it('streams frames as server-sent events', async () => {

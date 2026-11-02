@@ -885,7 +885,8 @@ and `worldStep()`. `model` names a `serve.models` alias whose endpoint category 
 
 A model holds one live scene. Creating a scene replaces the model's previous one and restarts
 the walk, so the older scene id answers `409 scene_replaced`. A model reload drops its scene
-too. Scene ids are kept in memory and are lost on restart.
+too. Aliases with the same `type`, `src` and `config` share one model, and so one scene.
+Scene ids are kept in memory and are lost on restart.
 
 ### `POST /qvac/v1/world/scenes`
 

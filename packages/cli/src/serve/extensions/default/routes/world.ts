@@ -170,6 +170,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       const scene = state.worldScenes.add({
         alias,
+        sdkModelId,
         loadCount: entry.loadCount,
         ...(stats?.width !== undefined ? { width: stats.width } : {}),
         ...(stats?.height !== undefined ? { height: stats.height } : {}),

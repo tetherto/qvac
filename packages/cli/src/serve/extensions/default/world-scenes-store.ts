@@ -5,6 +5,8 @@ const DEFAULT_MAX_ENTRIES = 256
 export interface WorldSceneRecord {
   id: string
   alias: string
+  /** Aliases with the same type, src and config share this SDK model, and so its scene. */
+  sdkModelId: string
   /** The model load the scene lives on; a reload drops it. */
   loadCount: number
   created: number
@@ -17,12 +19,13 @@ export interface WorldScenesStore {
   readonly maxEntries: number
   add(scene: Omit<WorldSceneRecord, 'id' | 'created'>): WorldSceneRecord
   get(id: string): WorldSceneRecord | undefined
-  /** The model holds one live scene, so creating one retires the alias's older ids. */
+  /** The SDK model holds one live scene, so creating one retires older ids on it, from any alias. */
   isActive(scene: WorldSceneRecord, loadCount: number | undefined): boolean
 }
 
 export function createWorldScenesStore(maxEntries = DEFAULT_MAX_ENTRIES): WorldScenesStore {
   const scenes = new Map<string, WorldSceneRecord>()
+  // sdkModelId -> live scene id
   const active = new Map<string, string>()
 
   return {
@@ -34,12 +37,11 @@ export function createWorldScenesStore(maxEntries = DEFAULT_MAX_ENTRIES): WorldS
         created: Math.floor(Date.now() / 1000)
       }
       scenes.set(scene.id, scene)
-      active.set(scene.alias, scene.id)
+      active.set(scene.sdkModelId, scene.id)
       // Drop the oldest retired ids first; a live scene is never evicted.
       for (const id of scenes.keys()) {
         if (scenes.size <= maxEntries) break
-        const alias = scenes.get(id)!.alias
-        if (active.get(alias) !== id) scenes.delete(id)
+        if (active.get(scenes.get(id)!.sdkModelId) !== id) scenes.delete(id)
       }
       return scene
     },
@@ -47,7 +49,7 @@ export function createWorldScenesStore(maxEntries = DEFAULT_MAX_ENTRIES): WorldS
       return scenes.get(id)
     },
     isActive(scene, loadCount) {
-      return active.get(scene.alias) === scene.id && scene.loadCount === loadCount
+      return active.get(scene.sdkModelId) === scene.id && scene.loadCount === loadCount
     }
   }
 }
