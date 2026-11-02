@@ -1,17 +1,6 @@
 name: Error code reservations
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    # Main PRs run this through Merge Guard's workflow_call.
-    branches: [release-*, feature-*, tmp-*]
-    paths:
-      - "packages/**"
-      - "plugins/**"
-      - "scripts/error-codes/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/on-pr-error-code-ranges.yml"
   workflow_dispatch:
   workflow_call:
 
