@@ -8,11 +8,14 @@ on:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     # cmake/qvac-addon/** is native input for every consuming addon (link line,
-    # exported symbols, build-time assertions). Keep this list contiguous:
-    # ts-check-names.test.mjs stops at the first non-entry line.
+    # exported symbols, build-time assertions). The bare toolchain lock is an
+    # on-pr input of llm-llamacpp, so a lock bump runs its C++ tests and
+    # coverage. Keep this list contiguous: ts-check-names.test.mjs stops at the
+    # first non-entry line.
     paths:
       - "packages/**"
       - "cmake/qvac-addon/**"
+      - ".github/bare-toolchain/package-lock.json"
   workflow_dispatch:
     inputs:
       packages:
@@ -34,7 +37,7 @@ on:
         type: boolean
         default: true
       config_ref_override:
-        description: "Trusted config ref for package selection and desktop integration during manual testing."
+        description: "Reviewed CI configuration branch or commit for all stages of this manual run. Empty reads main."
         required: false
         type: string
         default: ''
@@ -142,7 +145,7 @@ jobs:
         uses: ./.github/actions/nx-project-matrix
         with:
           target: on-pr
-          config-ref: ${{ inputs.config_ref_override || github.event.repository.default_branch }}
+          config-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref_override || github.event.repository.default_branch }}
           packages: ${{ github.event_name == 'workflow_dispatch' && inputs.packages || '[]' }}
       # PR head, matching on-pr-fabric: a PR that adds itself as a consumer must
       # get the overlay in that same PR. Own path, so it cannot clobber the
@@ -227,7 +230,7 @@ jobs:
       - name: Warn when a stack PR builds against released fabric
         if: steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds != 'true'
         shell: bash
-        run: echo "::warning::This PR changes packages/fabric, but no prebuilds label is set, so on-pr-fabric publishes nothing. Native jobs build against the released @qvac/fabric. Add the 'prebuilds' label to exercise the stack."
+        run: echo "::warning::This PR changes fabric or its toolchain, but no prebuilds label is set, so on-pr-fabric publishes nothing. Native jobs build against the released @qvac/fabric. Add the 'prebuilds' label to exercise the stack."
 
   resolve-fabric-prebuilds:
     needs: [fork-approval, authorize, detect-fabric-stack]
@@ -329,6 +332,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      config-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref_override || '' }}
       packages: ${{ needs.matrix.outputs.packages }}
       fabric-consumers: ${{ needs.matrix.outputs.fabricconsumers }}
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
@@ -336,7 +340,7 @@ jobs:
       # package's native tree reuses that package's prior prebuilds-<pkg>.
       # Suppressed on any fabric-stack PR: a bundle cached before the fabric
       # change is stale whether or not this run overlays the PR's fabric.
-      reuse-workflow-file: ${{ needs.detect-fabric-stack.outputs.fabric_stack == 'true' && '' || 'on-pr-nx.yml' }}
+      reuse-workflow-file: ${{ needs.detect-fabric-stack.outputs.fabric_stack != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.config_ref_override != '') && 'on-pr-nx.yml' || '' }}
 
   cpp-tests:
     needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, detect-fabric-stack, resolve-fabric-prebuilds]
@@ -366,6 +370,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      config-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref_override || '' }}
       packages: ${{ needs.ci-router.outputs.run_cpp_tests == 'true' && needs.matrix.outputs.packages || needs.matrix.outputs.cppbaseline }}
       fabric-consumers: ${{ needs.matrix.outputs.fabricconsumers }}
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
@@ -376,7 +381,7 @@ jobs:
       always() && !cancelled() &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.ci-router.outputs.run_desktop == 'true' &&
-      needs.prebuild.result != 'cancelled' &&
+      needs.prebuild.result == 'success' &&
       needs.matrix.outputs.packages != '[]' &&
       needs.detect-fabric-stack.result == 'success' &&
       needs.sanity-checks.result != 'failure' && needs.sanity-checks.result != 'cancelled' &&
@@ -391,6 +396,7 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
       base-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref_override || github.event.repository.default_branch }}
+      config-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref_override || '' }}
       packages: ${{ needs.matrix.outputs.packages }}
       fabric-consumers: ${{ needs.matrix.outputs.fabricconsumers }}
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
@@ -489,7 +495,7 @@ jobs:
   perf-report:
     name: perf-report (${{ matrix.package }})
     needs: [fork-approval, authorize, matrix, run-integration-tests]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfcomposite != '[]'
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfcomposite != '[]' && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'failure')
     permissions:
       contents: read
     strategy:
@@ -521,7 +527,7 @@ jobs:
   perf-report-rtf:
     name: perf-report-rtf (${{ matrix.package }})
     needs: [fork-approval, authorize, matrix, run-integration-tests]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfrtf != '[]'
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfrtf != '[]' && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'failure')
     permissions:
       contents: read
       actions: read

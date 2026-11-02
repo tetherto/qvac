@@ -16,6 +16,7 @@
     "continuousBatching": ["runContinuousBatchingTest"],
     "lightA": [
       "runApiBehaviorTest",
+      "runCalcTokensTest",
       "runFitTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
@@ -64,6 +65,7 @@
     ],
     "funcShardE": [
       "runApiBehaviorTest",
+      "runCalcTokensTest",
       "runFitTest",
       "runMultiInstanceTest",
       "runPrimeSystemToolsTest",

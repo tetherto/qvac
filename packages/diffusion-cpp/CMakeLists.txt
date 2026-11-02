@@ -12,41 +12,23 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-option(SD_CUDA "Enable CUDA GPU backend" OFF)
-if(SD_CUDA)
-  list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
-
-  # nvcc defaults its host compiler to g++, which rejects the -stdlib=libc++
-  # that vcpkg-overlays/triplets/{x64,arm64}-linux.cmake put in
-  # VCPKG_CXX_FLAGS / VCPKG_LINKER_FLAGS. enable_language(CUDA) then fails its
-  # ABI check inside the port build with
-  #   g++: error: unrecognized command-line option '-stdlib=libc++'
-  # Export CUDAHOSTCXX for the vcpkg child process rather than setting
-  # CMAKE_CUDA_HOST_COMPILER in vcpkg-overlays/toolchains/linux-clang.cmake:
-  # that file's contents feed the vcpkg ABI hash of every package on the linux
-  # triplets, so editing it invalidates the binary cache for non-CUDA builds
-  # too and forces every port to rebuild from source. Windows and macOS keep
-  # their default host compiler (MSVC / clang), which already matches.
-  if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE AND NOT DEFINED ENV{CUDAHOSTCXX})
-    set(ENV{CUDAHOSTCXX} "clang++")
-  endif()
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ConfigureCuda.cmake)
 
 option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)
 if(SD_OPENCL)
   list(APPEND VCPKG_MANIFEST_FEATURES "opencl")
 endif()
 
-# Vulkan and Metal are auto-enabled via default-features in the ggml and
-# stable-diffusion-cpp registry ports.  CUDA requires a specific build machine
-# so it remains opt-in via SD_CUDA.
+# CUDA is opt-in through SD_CUDA; Linux release prebuilds enable it in CI.
+# Ordinary source, unit-test, coverage and fuzz builds need no CUDA toolkit.
+# Vulkan and Metal use the registry ports' platform-specific defaults.
 #
 # GGML_BACKEND_DL is ON on Android, desktop Linux and Windows (set in the
 # ggml portfile), mirroring qvac-fabric: GPU backends are runtime-loaded
 # MODULE .so / .dll files shipped next to the addon, so the .bare itself never
-# links libvulkan/libOpenCL/vulkan-1 and loads on hosts without a graphics
-# stack (QVAC-23767, QVAC-25560). On macOS/iOS (Metal) GPU backends are
-# statically linked.
+# links libvulkan/libOpenCL/vulkan-1 or the CUDA runtime and loads on hosts
+# without a graphics stack (QVAC-23767, QVAC-25560). On macOS/iOS (Metal) GPU
+# backends are statically linked.
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
@@ -105,12 +87,11 @@ else()
 endif()
 message("Building inference-addon-sd module '${module_name}'")
 
-# On Android and desktop Linux with GGML_BACKEND_DL, install GPU backend .so
-# modules alongside the addon so ggml can dlopen them at runtime.  CPU
-# backends are statically linked (GGML_CPU_STATIC) and excluded from this
-# loop.
+# With GGML_BACKEND_DL, install GPU backend modules alongside the addon on
+# Android, Linux and Windows. CPU backends are statically linked
+# (GGML_CPU_STATIC) and excluded from this loop.
 set(BACKEND_DL_EXPORTS "")
-if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+if(GGML_BACKEND_DL AND (ANDROID OR WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if("${_backend}" MATCHES "^ggml-cpu")
       continue()
@@ -137,32 +118,15 @@ if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   endforeach()
 endif()
 
-# On Windows ggml installs the MODULE .dll files into vcpkg's lib/ (a MODULE
-# is a LIBRARY artifact to install(TARGETS)). Stage them as loose files into
-# the same per-host subdir cmake-bare uses for the INSTALL TARGET exports
-# above, which is where BackendLoader scans.
-set(BACKEND_DL_LOOSE_DLLS "")
-if(GGML_BACKEND_DL AND WIN32)
-  file(GLOB BACKEND_DL_LOOSE_DLLS
-    "${VCPKG_INSTALLED_PATH}/lib/qvac-diffusion-ggml-*.dll")
-  if(NOT BACKEND_DL_LOOSE_DLLS)
-    message(FATAL_ERROR "inference-addon-sd: GGML_BACKEND_DL is on but no "
-      "qvac-diffusion-ggml-*.dll under ${VCPKG_INSTALLED_PATH}/lib; the "
-      "prebuild would ship without GPU backends")
-  endif()
-  foreach(_dll IN LISTS BACKEND_DL_LOOSE_DLLS)
-    message(STATUS "inference-addon-sd: will stage ggml backend ${_dll}")
-  endforeach()
+# Every Windows build loads its GPU backends from DLLs, so fail the configure
+# rather than ship a CPU-only Windows prebuild when none were packaged.
+if(GGML_BACKEND_DL AND WIN32 AND NOT BACKEND_DL_EXPORTS)
+  message(FATAL_ERROR "inference-addon-sd: GGML_BACKEND_DL is on but ggml "
+    "exports no GPU backend module; the prebuild would ship without GPU "
+    "backends")
 endif()
 
 add_bare_module(inference-addon-sd NAME ${module_name} EXPORTS ${BACKEND_DL_EXPORTS})
-
-if(BACKEND_DL_LOOSE_DLLS)
-  install(
-    FILES ${BACKEND_DL_LOOSE_DLLS}
-    DESTINATION ${bare_target_value}/${module_name}
-  )
-endif()
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
@@ -259,6 +223,8 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
+  add_test(NAME cuda-options
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/cuda-options.cmake)
   add_subdirectory(test/unit)
 endif()
 

@@ -1,5 +1,6 @@
 import test from 'brittle'
 import { generateModelsFileContent } from '@/models/update-models/codegen'
+import { groupCompanionSets } from '@/models/update-models/companions'
 import type { ProcessedModel } from '@/models/update-models/types'
 
 function model(overrides: Partial<ProcessedModel> = {}): ProcessedModel {
@@ -49,4 +50,37 @@ test('codegen emits registry strings as data', (t) => {
   t.is(entry.registryPath, registryPath)
   t.is(entry.modelId, modelId)
   t.is(entry.engine, 'llamacpp-completion')
+})
+
+test('codegen catalogs Core ML source-package files without public model exports', (t) => {
+  const paths = [
+    'acestep/vae-decoder.mlpackage/Manifest.json',
+    'acestep/vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel',
+    'acestep/vae-decoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin'
+  ]
+  const primary = model({
+    registryPath: 'acestep/acestep-v15-turbo-F16.gguf',
+    modelId: 'acestep-v15-turbo-F16.gguf',
+    addon: 'audiogen',
+    engine: 'audiogen-ggml'
+  })
+  const grouped = groupCompanionSets([
+    primary,
+    ...paths.map((registryPath) =>
+      model({ registryPath, addon: 'audiogen', engine: 'audiogen-ggml' })
+    )
+  ])
+  const output = generateModelsFileContent(grouped)
+
+  t.alike(
+    catalogModels(output).map((entry) => entry.registryPath),
+    [primary.registryPath, ...paths]
+  )
+  t.is(
+    (output.match(/export const \w+ = \{/g) || []).length,
+    1,
+    'only the GGUF has a public constant'
+  )
+  t.absent(output.includes('export const AUDIOGEN_MANIFEST ='))
+  t.absent(output.includes('export const AUDIOGEN_MODEL ='))
 })

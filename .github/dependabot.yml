@@ -7,3 +7,16 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+  # The bare toolchain CI builds with. "all" includes llvm-runtime and the other
+  # packages bare-make pulls in, which move inside bare-make's ranges without a
+  # bare-make release. The Bare toolchain workflow opens an issue for the same
+  # releases, so a missed or closed pull request still leaves a signal.
+  - package-ecosystem: "npm"
+    directory: "/.github/bare-toolchain"
+    schedule:
+      interval: "weekly"
+    allow:
+      - dependency-type: "all"
+    groups:
+      bare-toolchain:
+        patterns: ["*"]

@@ -37,10 +37,9 @@ function readU64(buffer, off) {
   return buffer.readUInt32LE(off) + buffer.readUInt32LE(off + 4) * 0x100000000
 }
 
-// Minimal ELF64 dynamic-section reader: returns the DT_NEEDED entries of a
-// shared object. Enough for the prebuild artifacts this test inspects; not a
-// general ELF parser.
-function elfNeeded(buffer) {
+// Minimal ELF64 reader for dependencies and required C++ runtime symbols.
+// Keep in sync with scripts/verify-prebuild-linking.mjs (a standalone CI script).
+function elfInfo(buffer) {
   const isElf =
     buffer.length > 0x40 &&
     buffer[0] === 0x7f &&
@@ -62,7 +61,8 @@ function elfNeeded(buffer) {
       type: buffer.readUInt32LE(off + 4),
       offset: readU64(buffer, off + 0x18),
       size: readU64(buffer, off + 0x20),
-      link: buffer.readUInt32LE(off + 0x28)
+      link: buffer.readUInt32LE(off + 0x28),
+      entrySize: readU64(buffer, off + 0x38)
     })
   }
 
@@ -83,7 +83,36 @@ function elfNeeded(buffer) {
     while (end < buffer.length && buffer[end] !== 0) end++
     needed.push(buffer.toString('utf8', strOff, end))
   }
-  return needed
+
+  // Strong undefined C++ runtime symbols still break dlopen when no runtime
+  // appears in DT_NEEDED. Node can mask this by already loading libstdc++.
+  // Weak references may legitimately remain unresolved. These three __cxa
+  // entry points belong to glibc, not to a separately shipped C++ runtime.
+  const glibcCxa = new Set(['__cxa_atexit', '__cxa_finalize', '__cxa_thread_atexit_impl'])
+  const cxxRuntime =
+    /^(?:_Z(?:N[KVR]*(?:St|S[a-z]|10__cxxabiv1)|St|T[ISV](?:St|N10__cxxabiv1)|n[aw]|d[al])|__cxa_|__gxx_personality_v0)/
+  const symbols = sections.find((section) => section.type === 11) // SHT_DYNSYM
+  if (!symbols || symbols.entrySize !== 24 || symbols.size % 24 !== 0) {
+    throw new Error('missing or invalid .dynsym section')
+  }
+  const symbolNames = sections[symbols.link]
+  if (!symbolNames) throw new Error('no dynamic symbol string table')
+  const unresolvedCxx = []
+  for (let off = symbols.offset; off < symbols.offset + symbols.size; off += 24) {
+    const binding = buffer[off + 4] >> 4
+    const sectionIndex = buffer.readUInt16LE(off + 6)
+    if (binding !== 1 || sectionIndex !== 0) continue // STB_GLOBAL, SHN_UNDEF
+    const nameOffset = symbolNames.offset + buffer.readUInt32LE(off)
+    const end = buffer.indexOf(0, nameOffset)
+    if (end < nameOffset || end >= symbolNames.offset + symbolNames.size) {
+      throw new Error('invalid dynamic symbol name')
+    }
+    const name = buffer.toString('utf8', nameOffset, end)
+    if (!cxxRuntime.test(name)) continue
+    if (glibcCxa.has(name) && needed.includes('libc.so.6')) continue
+    unresolvedCxx.push(name)
+  }
+  return { needed, unresolvedCxx }
 }
 
 // Windows twin of the ELF reader: the DLL names in a PE32+ import table and
@@ -157,6 +186,89 @@ const FORBIDDEN_WIN_IMPORTS = [
 ]
 const FORBIDDEN_WIN_RUNTIME = ['vcruntime', 'msvcp', 'ucrtbase.dll', 'api-ms-win-crt-']
 
+test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', async (t) => {
+  if (os.platform() !== 'linux') {
+    t.pass('dynamic-linking layout check is linux-only')
+    return
+  }
+  if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
+    t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
+    return
+  }
+
+  const target = `${os.platform()}-${os.arch()}`
+  const moduleName = moduleNameForHost(target)
+  const addonPath = path.join(PREBUILDS_DIR, target, `${moduleName}.bare`)
+  t.ok(fs.existsSync(addonPath), `prebuild present: ${addonPath}`)
+
+  // 1. The addon itself must load on a host that has never had a graphics
+  //    stack: no GPU userspace loader and no external C++ runtime in NEEDED.
+  const { needed: addonNeeded, unresolvedCxx: addonUnresolvedCxx } = elfInfo(
+    fs.readFileSync(addonPath)
+  )
+  t.alike(addonUnresolvedCxx, [], 'addon has no unresolved C++ runtime symbols')
+  t.comment(`${moduleName}.bare NEEDED: ${addonNeeded.join(', ')}`)
+  for (const lib of [...FORBIDDEN_NEEDED, ...FORBIDDEN_RUNTIME]) {
+    t.absent(
+      addonNeeded.find((n) => n.startsWith(lib)),
+      `addon must not hard-link ${lib}* (breaks CPU-only hosts)`
+    )
+  }
+
+  // 2. GPU support must not silently disappear: the Vulkan backend has to
+  //    ship as a dlopen'd module next to the addon...
+  const vulkanModulePath = path.join(
+    PREBUILDS_DIR,
+    target,
+    moduleName,
+    'libqvac-diffusion-ggml-vulkan.so'
+  )
+  t.ok(fs.existsSync(vulkanModulePath), `Vulkan DL backend module present: ${vulkanModulePath}`)
+
+  // 3. ...and that module is where the libvulkan dependency belongs. It must
+  //    itself be self-contained w.r.t. the C++ runtime, or its dlopen fails
+  //    silently on hosts without libc++ and the GPU never registers.
+  const { needed: moduleNeeded, unresolvedCxx: moduleUnresolvedCxx } = elfInfo(
+    fs.readFileSync(vulkanModulePath)
+  )
+  t.alike(moduleUnresolvedCxx, [], 'Vulkan module has no unresolved C++ runtime symbols')
+  t.comment(`libqvac-diffusion-ggml-vulkan.so NEEDED: ${moduleNeeded.join(', ')}`)
+  t.ok(
+    moduleNeeded.find((n) => n.startsWith('libvulkan.')),
+    'Vulkan module links libvulkan (loaded only when present at runtime)'
+  )
+  for (const lib of FORBIDDEN_RUNTIME) {
+    t.absent(
+      moduleNeeded.find((n) => n.startsWith(lib)),
+      `Vulkan module must not depend on ${lib}* (dlopen must work on stock distros)`
+    )
+  }
+
+  const cudaPath = path.join(PREBUILDS_DIR, target, moduleName, 'libqvac-diffusion-ggml-cuda.so')
+  const requireCuda = proc.env.CI === 'true' || proc.env.QVAC_REQUIRE_CUDA_MODULE === 'true'
+  if (!fs.existsSync(cudaPath)) {
+    if (requireCuda) t.fail(`CUDA DL backend module missing: ${cudaPath}`)
+    else t.comment('CUDA module not built (SD_CUDA=OFF); skipping CUDA checks')
+    return
+  }
+  t.pass(`CUDA DL backend module present: ${cudaPath}`)
+  const { needed: cudaNeeded, unresolvedCxx: cudaUnresolvedCxx } = elfInfo(
+    fs.readFileSync(cudaPath)
+  )
+  t.alike(cudaUnresolvedCxx, [], 'CUDA module has no unresolved C++ runtime symbols')
+  t.comment(`libqvac-diffusion-ggml-cuda.so NEEDED: ${cudaNeeded.join(', ')}`)
+  t.ok(
+    cudaNeeded.find((n) => n.startsWith('libcudart.')),
+    'CUDA module links libcudart'
+  )
+  for (const lib of FORBIDDEN_RUNTIME) {
+    t.absent(
+      cudaNeeded.find((n) => n.startsWith(lib)),
+      `CUDA module must not depend on ${lib}*`
+    )
+  }
+})
+
 test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan backend DLL', async (t) => {
   if (os.platform() !== 'win32') {
     t.pass('PE import layout check is win32-only')
@@ -210,59 +322,6 @@ test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan backend
   }
 })
 
-test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', async (t) => {
-  if (os.platform() !== 'linux') {
-    t.pass('dynamic-linking layout check is linux-only')
-    return
-  }
-  if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
-    t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
-    return
-  }
-
-  const target = `${os.platform()}-${os.arch()}`
-  const moduleName = moduleNameForHost(target)
-  const addonPath = path.join(PREBUILDS_DIR, target, `${moduleName}.bare`)
-  t.ok(fs.existsSync(addonPath), `prebuild present: ${addonPath}`)
-
-  // 1. The addon itself must load on a host that has never had a graphics
-  //    stack: no GPU userspace loader and no external C++ runtime in NEEDED.
-  const addonNeeded = elfNeeded(fs.readFileSync(addonPath))
-  t.comment(`${moduleName}.bare NEEDED: ${addonNeeded.join(', ')}`)
-  for (const lib of [...FORBIDDEN_NEEDED, ...FORBIDDEN_RUNTIME]) {
-    t.absent(
-      addonNeeded.find((n) => n.startsWith(lib)),
-      `addon must not hard-link ${lib}* (breaks CPU-only hosts)`
-    )
-  }
-
-  // 2. GPU support must not silently disappear: the Vulkan backend has to
-  //    ship as a dlopen'd module next to the addon...
-  const vulkanModulePath = path.join(
-    PREBUILDS_DIR,
-    target,
-    moduleName,
-    'libqvac-diffusion-ggml-vulkan.so'
-  )
-  t.ok(fs.existsSync(vulkanModulePath), `Vulkan DL backend module present: ${vulkanModulePath}`)
-
-  // 3. ...and that module is where the libvulkan dependency belongs. It must
-  //    itself be self-contained w.r.t. the C++ runtime, or its dlopen fails
-  //    silently on hosts without libc++ and the GPU never registers.
-  const moduleNeeded = elfNeeded(fs.readFileSync(vulkanModulePath))
-  t.comment(`libqvac-diffusion-ggml-vulkan.so NEEDED: ${moduleNeeded.join(', ')}`)
-  t.ok(
-    moduleNeeded.find((n) => n.startsWith('libvulkan.')),
-    'Vulkan module links libvulkan (loaded only when present at runtime)'
-  )
-  for (const lib of FORBIDDEN_RUNTIME) {
-    t.absent(
-      moduleNeeded.find((n) => n.startsWith(lib)),
-      `Vulkan module must not depend on ${lib}* (dlopen must work on stock distros)`
-    )
-  }
-})
-
 // File-level layout checks above prove the module EXISTS; this proves Linux
 // and Windows can actually load and register it. A packaging mistake in the
 // backends subdir, the module search path, or registration would pass the
@@ -270,11 +329,9 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
 // registration is PROCESS-GLOBAL and happens on the first model load in the
 // suite, so this test cannot rely on catching the one-time
 // `load_backend: loaded Vulkan backend from ...` line — instead it requests
-// `main-gpu: 0`, whose resolution walks the live ggml device registry on
-// EVERY load and logs the resolved backend name: it can only resolve to
-// Vulkan0 if the DL module actually registered (same log-capture pattern as
-// main-gpu-backend.test.js). If registration broke, resolution falls back
-// to CPU and the assertion fails.
+// `backend: 'vulkan0'`, which requires that named backend to be registered.
+// Device index zero may be CUDA on a Linux release, so it is not a stable
+// way to select Vulkan. An unavailable explicit backend fails model load.
 test(
   'linux and win32 GPU hosts register the Vulkan backend through the DL module',
   { timeout: 600000 },
@@ -311,7 +368,7 @@ test(
         files: { model: path.join(modelDir, modelName) },
         config: {
           device: 'gpu',
-          'main-gpu': 0,
+          backend: 'vulkan0',
           threads: 4,
           prediction: 'v',
           verbosity: 2
@@ -320,20 +377,20 @@ test(
       })
       await model.load()
 
-      // The main-gpu resolver enumerates the live ggml device registry at
-      // this load; on a Vulkan-capable host it can only report a Vulkan
-      // backend if the DL module was loaded and registered. C++ log lines
-      // are marshalled to the JS event loop asynchronously, so poll like
-      // main-gpu-backend.test.js does instead of reading synchronously.
+      // Successful load with an explicit Vulkan assignment proves the
+      // registered device is usable. The assignment is also logged by the
+      // addon, with C++ messages marshalled asynchronously to JS.
       const deadline = Date.now() + 5000
       let resolvedLine = null
       while (!resolvedLine && Date.now() < deadline) {
-        resolvedLine = logs.find((line) => line.includes("main-gpu resolved to backend 'Vulkan"))
+        resolvedLine = logs.find((line) =>
+          line.includes("Explicit stable-diffusion backend assignment 'vulkan0'")
+        )
         if (!resolvedLine) await new Promise((resolve) => setTimeout(resolve, 50))
       }
       t.ok(
         resolvedLine,
-        `ggml device registry resolved a Vulkan backend (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
+        `explicit Vulkan backend loaded (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
       )
     } finally {
       if (model) await model.unload().catch(() => {})
