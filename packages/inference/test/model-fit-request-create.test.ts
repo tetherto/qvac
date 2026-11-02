@@ -358,6 +358,34 @@ test('parakeet: an explicit long-form window reaches the projection', (t) => {
   })
 })
 
+test('parakeet: prewarm and energy-VAD tuning stay out of the projection', (t) => {
+  // The addon's fit request has no field for either: the prewarm pass encodes
+  // `prewarmAudioSeconds` of audio, well inside the 300 s the projection
+  // covers by default, and the energy detector adds no graph of its own.
+  const plan = createFitRequest({
+    modelType: ModelType.parakeetTranscription,
+    modelPath: '/models/parakeet.gguf',
+    modelConfig: {
+      streaming: true,
+      streamingEnergyVad: true,
+      streamingEnergyVadThresholdDb: -40,
+      streamingEnergyVadWindowMs: 50,
+      streamingEnergyVadHangoverMs: 300,
+      prewarm: true,
+      prewarmAudioSeconds: 2
+    },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.alike(plan.probe.request, {
+    engine: 'parakeet',
+    modelPath: '/models/parakeet.gguf',
+    gpuLayers: 0
+  })
+})
+
 test('parakeet: a non-streaming load holds no live session to size', (t) => {
   const plan = createFitRequest({
     modelType: ModelType.parakeetTranscription,
