@@ -391,7 +391,9 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading model', error)
 
-      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, {
+        clearBlocks: this._shouldClearBlocksAfterError(options)
+      })
 
       throw error
     }
@@ -493,7 +495,9 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading blob directly', error)
 
-      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, {
+        clearBlocks: this._shouldClearBlocksAfterError(options)
+      })
 
       throw error
     }
@@ -516,11 +520,24 @@ class QVACRegistryClient extends ReadyResource {
     stream.once('close', release)
   }
 
-  async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd) {
+  // A cancelled download keeps its blocks so the next attempt resumes from them,
+  // unless the caller opts in via `clearBlocksOnCancel` (read at cancel time).
+  _shouldClearBlocksAfterError(options) {
+    if (!options.signal || !options.signal.aborted) return true
+
+    const clear = options.clearBlocksOnCancel
+    return Boolean(typeof clear === 'function' ? clear() : clear)
+  }
+
+  async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts = {}) {
+    const { clearBlocks = true } = opts
+
     // Hypercore can commit in-flight responses after a range is destroyed.
     if (rangeDownload) rangeDownload.destroy()
 
-    if (core && blockStart !== undefined) {
+    if (!clearBlocks && blockStart !== undefined) {
+      this.logger.info('Keeping blob blocks for resume', { start: blockStart, end: blockEnd })
+    } else if (core && blockStart !== undefined) {
       if (rangeDownload) await this._waitForInflightBlocks(core)
       await this._clearBlobBlocks(core, blockStart, blockEnd)
     }

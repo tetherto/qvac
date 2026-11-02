@@ -155,7 +155,8 @@ export async function downloadCompanionSetFromRegistry(
         fileProgressCallback,
         signal,
         blobBinding,
-        hooks
+        hooks,
+        shouldClearCache
       )
 
       overallDownloaded += file.expectedSize

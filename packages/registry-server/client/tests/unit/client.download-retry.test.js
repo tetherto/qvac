@@ -579,6 +579,159 @@ test('downloadBlob clears cached blocks when the download fails', async (t) => {
   )
 })
 
+// Cancels from inside the stream attempt, the way an AbortSignal fires while
+// blocks are still arriving.
+function cancellingStream(client, signal) {
+  // lunte-disable-next-line require-await
+  return async () => {
+    client._events.push('stream')
+    signal.aborted = true
+    throw new Error('Download cancelled')
+  }
+}
+
+function recordReleases(client) {
+  const released = { clears: [], destroyed: 0, closed: 0 }
+  client._core.download = () => ({
+    destroy() {
+      released.destroyed++
+    }
+  })
+  // lunte-disable-next-line require-await
+  client._core.close = async () => {
+    released.closed++
+  }
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async (core, start, end) => {
+    released.clears.push({ start, end })
+  }
+  return released
+}
+
+test('downloadModel keeps cached blocks when the download is cancelled', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient(t)
+  const released = recordReleases(client)
+  const signal = { aborted: false }
+  client._streamBlobToFile = cancellingStream(client, signal)
+
+  await t.exception(
+    () => client.downloadModel('models/tiny.gguf', 's3', { outputFile, signal }),
+    /Download cancelled/
+  )
+
+  t.is(released.clears.length, 0, 'cached blocks kept so the next download resumes')
+  t.ok(released.destroyed > 0, 'replication stopped')
+  t.is(released.closed, 1, 'core closed')
+})
+
+test('downloadModel clears cached blocks on cancel when clearBlocksOnCancel is set', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient(t)
+  const released = recordReleases(client)
+  const signal = { aborted: false }
+  client._streamBlobToFile = cancellingStream(client, signal)
+
+  await t.exception(
+    () =>
+      client.downloadModel('models/tiny.gguf', 's3', {
+        outputFile,
+        signal,
+        clearBlocksOnCancel: true
+      }),
+    /Download cancelled/
+  )
+
+  t.alike(released.clears, [{ start: 0, end: 10 }], 'model block range cleared once')
+  t.is(released.closed, 1, 'core closed')
+})
+
+test('downloadModel reads a clearBlocksOnCancel callback at cancel time', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient(t)
+  const released = recordReleases(client)
+  const signal = { aborted: false }
+  let clearRequested = false
+  // lunte-disable-next-line require-await
+  client._streamBlobToFile = async () => {
+    // The caller decides to clear while the download is already running.
+    clearRequested = true
+    signal.aborted = true
+    throw new Error('Download cancelled')
+  }
+
+  await t.exception(
+    () =>
+      client.downloadModel('models/tiny.gguf', 's3', {
+        outputFile,
+        signal,
+        clearBlocksOnCancel: () => clearRequested
+      }),
+    /Download cancelled/
+  )
+
+  t.is(released.clears.length, 1, 'callback value at cancel time is honoured')
+})
+
+test('downloadBlob keeps cached blocks when the download is cancelled', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'blob.bin')
+
+  const client = makeClient(t)
+  // lunte-disable-next-line require-await
+  client.ready = async () => {}
+  const released = recordReleases(client)
+  const signal = { aborted: false }
+  client._streamBlobToFile = cancellingStream(client, signal)
+
+  const blobBinding = {
+    coreKey: Buffer.alloc(32),
+    blockOffset: 3,
+    blockLength: 7,
+    byteLength: 700
+  }
+
+  await t.exception(
+    () => client.downloadBlob(blobBinding, { outputFile, signal }),
+    /Download cancelled/
+  )
+
+  t.is(released.clears.length, 0, 'cached blocks kept so the next download resumes')
+  t.is(released.closed, 1, 'core closed')
+})
+
+test('downloadBlob clears cached blocks on cancel when clearBlocksOnCancel is set', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'blob.bin')
+
+  const client = makeClient(t)
+  // lunte-disable-next-line require-await
+  client.ready = async () => {}
+  const released = recordReleases(client)
+  const signal = { aborted: false }
+  client._streamBlobToFile = cancellingStream(client, signal)
+
+  const blobBinding = {
+    coreKey: Buffer.alloc(32),
+    blockOffset: 3,
+    blockLength: 7,
+    byteLength: 700
+  }
+
+  await t.exception(
+    () => client.downloadBlob(blobBinding, { outputFile, signal, clearBlocksOnCancel: true }),
+    /Download cancelled/
+  )
+
+  t.alike(released.clears, [{ start: 3, end: 10 }], 'blob block range cleared once')
+})
+
 test('downloadModel releases nothing when it fails before the core is opened', async (t) => {
   const client = makeClient(t)
   let clears = 0

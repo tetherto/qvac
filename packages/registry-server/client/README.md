@@ -83,6 +83,9 @@ const hfModels = await client.findModels({
   - `options`:
     - `timeout`: Download timeout in ms (default: 30000)
     - `outputFile`: Optional file path to save directly to disk
+    - `onProgress`: Callback `({ downloaded, total, cachedBlocks, totalBlocks }) => void`
+    - `signal`: `AbortSignal` for cancellation
+    - `clearBlocksOnCancel`: `boolean` or `() => boolean`, read when `signal` aborts (default: `false`). By default a cancelled download keeps its blocks in the corestore, so the next download of the same model resumes from them. Set it to drop them instead. Failed downloads always drop their blocks; successful ones drop them once the file is written
   - Returns: `{ model: QVACModelEntry, artifact: QVACDownloadedArtifact }`
     - If `outputFile` provided: `artifact = { path: '/path/to/file' }`
     - Otherwise: `artifact = { stream: ReadableStream }`
@@ -115,6 +118,7 @@ result.artifact.stream.pipe(fs.createWriteStream('./model.ggml'))
     - `outputFile`: Optional file path to save directly to disk
     - `onProgress`: Callback `({ downloaded, total, cachedBlocks, totalBlocks }) => void`
     - `signal`: `AbortSignal` for cancellation
+    - `clearBlocksOnCancel`: Same as for `downloadModel`
   - Returns: `{ artifact: { path, totalSize } | { stream, totalSize } }`
 
 This method only waits for the network layer (Corestore + Hyperswarm) — it does not wait for the metadata core to sync, making it faster for known blob coordinates.

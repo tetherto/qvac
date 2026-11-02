@@ -101,7 +101,8 @@ async function downloadShardedFilesFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   localShardMetadata?: RegistryItem['shardMetadata'],
-  hooks?: DownloadHooks
+  hooks?: DownloadHooks,
+  shouldClearCache?: () => boolean
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError()
@@ -231,7 +232,8 @@ async function downloadShardedFilesFromRegistry(
       shardProgressCallback,
       signal,
       shard.blobBinding,
-      hooks
+      hooks,
+      shouldClearCache
     )
 
     overallDownloaded += shard.size
@@ -341,7 +343,8 @@ export async function downloadModelFromRegistry(
             ctx.broadcastProgress,
             ctx.signal,
             localShardMeta,
-            hooks
+            hooks,
+            ctx.shouldClearCache
           )
         } catch (error) {
           if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
@@ -495,7 +498,8 @@ export async function downloadModelFromRegistry(
           ctx.broadcastProgress,
           ctx.signal,
           blobBinding,
-          hooks
+          hooks,
+          ctx.shouldClearCache
         )
       } catch (error) {
         if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
