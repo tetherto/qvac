@@ -11,6 +11,7 @@ import {
   type LlamaFitDevice,
   type LlamaFitRequest,
   type LlamaFitResult,
+  type LlamaFitStats,
   type LlamaFitStatus
 } from "./fit";
 import type * as AddonModule from "./addon";
@@ -1850,6 +1851,7 @@ namespace LlmLlamacpp {
   export type FitResult = LlamaFitResult;
   export type FitStatus = LlamaFitStatus;
   export type FitDevice = LlamaFitDevice;
+  export type FitStats = LlamaFitStats;
 }
 
 export = LlmLlamacpp;
