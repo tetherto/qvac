@@ -318,6 +318,7 @@ jobs:
           fi
 
       - name: Build first Snap revision
+        id: snap-build-first
         working-directory: ${{ inputs.working-directory }}
         env:
           QVAC_TEST_SNAP_BUILD_ID: first
@@ -337,6 +338,15 @@ jobs:
           QVAC_TEST_SNAP_BUILD_ID: second
           TMPDIR: ${{ runner.temp }}
         run: npx qvac-test build:consumer:snap --config=. --skip-install
+
+      # The LXD build instance is named after the snap directory's inode, which
+      # the workspace wipe changes every run, so it is never reused and stays on
+      # disk unless removed here.
+      - name: Remove Snap build instance
+        if: always() && env.QVAC_TEST_SNAP_BUILD_MODE == 'lxd' && steps.snap-build-first.outcome != 'skipped'
+        continue-on-error: true
+        working-directory: ${{ inputs.working-directory }}/snap
+        run: snapcraft clean --use-lxd
 
       - name: Verify Snap refresh persistence
         working-directory: ${{ inputs.working-directory }}
