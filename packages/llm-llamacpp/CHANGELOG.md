@@ -1,5 +1,40 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `baseCacheKey` run option: a `cacheKey` file a request starts from when
+  nothing in memory serves more of its prompt, such as a primed system prompt
+  shared by many conversations. The file is read, never written
+  ([#5417](https://github.com/tetherto/qvac/pull/5417)).
+- `cache_share_across_keys` load config: `'false'` keeps every request to
+  its own `cacheKey`'s state, for a model whose callers must not learn
+  whether another conversation shares their prompt. Default `'true'`
+  ([#5417](https://github.com/tetherto/qvac/pull/5417),
+  [#5422](https://github.com/tetherto/qvac/pull/5422)).
+
+### Changed
+
+- A request reuses the longest prompt prefix it shares with any
+  conversation the model holds (in memory, in another batch slot, in the RAM
+  tier, or in a `cacheKey` file used in this process), not only its own
+  `cacheKey`'s. The other conversation is copied, never changed. On
+  multimodal models an image the two share is not encoded again.
+  Encoder-decoder models, and loads with `cache_share_across_keys: 'false'`,
+  are unchanged ([#5417](https://github.com/tetherto/qvac/pull/5417),
+  [#5422](https://github.com/tetherto/qvac/pull/5422)).
+- An image is now identified by the SHA-256 of its encoded bytes, not by a
+  hash of its pixels, so a multimodal cache file written by an earlier version
+  re-encodes its images once (on hybrid and sliding-window models its next
+  turn may start cold) ([#5422](https://github.com/tetherto/qvac/pull/5422)).
+- A request without a `cacheKey` keeps its state in memory for the next
+  request instead of resetting the context, unless the load sets
+  `cache_share_across_keys: 'false'`; it is never written to a file.
+  `CacheTokens` after such a request reports the tokens kept
+  ([#5417](https://github.com/tetherto/qvac/pull/5417),
+  [#5422](https://github.com/tetherto/qvac/pull/5422)).
+
 ## [0.66.0] - 2026-10-30
 
 ### Breaking
