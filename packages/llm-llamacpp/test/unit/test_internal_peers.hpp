@@ -1,5 +1,7 @@
 #pragma once
 
+#include "model-interface/CacheLedger.hpp"
+
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -53,6 +55,12 @@ public:
   formatPrompt(LlamaModel& model, const std::string& input) {
     std::shared_lock lock(model.stateMtx_);
     return model.formatPrompt(input);
+  }
+
+  static void resolvePromptMedia(LlamaModel &model,
+                                 const LlamaModel::Prompt &prompt) {
+    std::shared_lock lock(model.stateMtx_);
+    model.resolveChatAndTools(prompt);
   }
 
   /// The loaded single-prompt context, for driver-level accounting tests.
@@ -242,5 +250,15 @@ public:
   /// hand fabric more bitmaps than its prompt has markers.
   static size_t loadedMediaCount(const MtmdLlmContext& context) {
     return context.bitmaps_.entries.size();
+  }
+
+  static std::vector<uint64_t>
+  loadedMediaHashes(const MtmdLlmContext &context) {
+    std::vector<uint64_t> hashes;
+    for (const auto &bitmap : context.bitmaps_.entries) {
+      hashes.push_back(qvac_lib_inference_addon_llama::cache::hashBytes(
+          bitmap.data(), bitmap.n_bytes()));
+    }
+    return hashes;
   }
 };

@@ -1559,6 +1559,55 @@ TEST_F(MtmdLlmContextTest, RejectMediaMarkerWithoutBuffer) {
 // placeholder the JS layer leaves after hoisting its bytes) plans a byte
 // buffer. Separate `type: "media"` messages cannot express this without
 // splitting the turn.
+TEST_F(MtmdLlmContextTest, OrderedPartsLoadDistinctImagesInMarkerOrder) {
+  auto model = createModel();
+  ASSERT_NE(model, nullptr);
+  auto *ctx =
+      dynamic_cast<MtmdLlmContext *>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(ctx, nullptr);
+  const auto mediaDir = multimodalTestImagePath().parent_path();
+  const std::vector<fs::path> images = {mediaDir / "elephant.jpg",
+                                        mediaDir / "fruitPlate.png",
+                                        mediaDir / "news-paper.jpg"};
+  std::vector<std::vector<uint8_t>> bytes;
+  for (const auto &image : images) {
+    ASSERT_TRUE(fs::exists(image));
+    bytes.push_back(readBinaryFile(image));
+    ctx->loadMedia(bytes.back());
+  }
+  const auto expected = MtmdLlmContextTestPeer::loadedMediaHashes(*ctx);
+  ASSERT_EQ(expected.size(), 3u);
+  ASSERT_NE(expected[0], expected[1]);
+  ASSERT_NE(expected[1], expected[2]);
+  ASSERT_NE(expected[0], expected[2]);
+  ctx->resetMedia();
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      nlohmann::json::array(
+          {{{"role", "user"},
+            {"content",
+             nlohmann::json::array(
+                 {{{"type", "text"}, {"text", "First:"}},
+                  {{"type", "media"}},
+                  {{"type", "text"}, {"text", "Second:"}},
+                  {{"type", "media"}, {"content", images[1].string()}},
+                  {{"type", "text"}, {"text", "Third:"}},
+                  {{"type", "media"}}})}}})
+          .dump();
+  prompt.media = {bytes[0], bytes[2]};
+  LlamaModelTestPeer::resolvePromptMedia(*model, prompt);
+  EXPECT_EQ(MtmdLlmContextTestPeer::loadedMediaHashes(*ctx), expected);
+  ctx->resetMedia();
+
+  // Swapping the uploaded bytes must change image identity at both markers.
+  prompt.media = {bytes[2], bytes[0]};
+  LlamaModelTestPeer::resolvePromptMedia(*model, prompt);
+  EXPECT_EQ(MtmdLlmContextTestPeer::loadedMediaHashes(*ctx),
+            (std::vector<uint64_t>{expected[2], expected[1], expected[0]}));
+  ctx->resetMedia();
+}
+
 TEST_F(MtmdLlmContextTest, FormatPromptKeepsOrderedContentPartsInOneTurn) {
   auto model = createModel();
   if (!model) {
@@ -1578,10 +1627,9 @@ TEST_F(MtmdLlmContextTest, FormatPromptKeepsOrderedContentPartsInOneTurn) {
       R"(]}])");
 
   ASSERT_EQ(parsed.chatMsgs.size(), 1u);
-  EXPECT_EQ(
-      parsed.chatMsgs[0].content,
-      "Which image shows the same place as " + marker + "?\nA. " + marker +
-          "\nB. " + marker);
+  EXPECT_EQ(parsed.chatMsgs[0].content, "Which image shows the same place as " +
+                                            marker + "?\nA. " + marker +
+                                            "\nB. " + marker);
   ASSERT_EQ(parsed.mediaPlan.size(), 3u);
   EXPECT_EQ(parsed.mediaPlan[0].source, MediaSource::Path);
   EXPECT_EQ(parsed.mediaPlan[0].path, "/media/img1.jpg");

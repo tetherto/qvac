@@ -88,9 +88,9 @@ test(
     })
 
     try {
-      async function runAndCapture(messages) {
+      async function runAndCapture(messages, options) {
         formattedPrompt = ''
-        const response = await model.run(messages)
+        const response = await model.run(messages, options)
         const chunks = []
         response.onUpdate((data) => chunks.push(data))
         await response.await()
@@ -142,7 +142,7 @@ test(
       )
       t.ok(fromBytes.output.length > 0, 'byte-part request produced output')
 
-      // 2b. Mixed forms in one turn: a byte part before and after a path part.
+      // 2b. Mixed forms in one turn: a byte part followed by a path part.
       // Only the byte parts travel in the leading media messages, so the native
       // plan has to interleave them with the path entry by marker position.
       const fromMixed = await runAndCapture([
@@ -167,7 +167,7 @@ test(
       t.is(
         fromMixed.stats.promptTokens,
         fromPaths.stats.promptTokens,
-        'mixed parts encode the same images as the all-path request (same prompt token count)'
+        'mixed parts have the same prompt token count as the all-path request'
       )
 
       // 3. The pre-parts workaround: one message per part keeps the order but
@@ -186,6 +186,83 @@ test(
         ['Image A:', '<__media__>Image B:', '<__media__>Compare.'],
         'separate media messages still split the turn, as before'
       )
+
+      const orderedHistory = [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'First:' },
+            { type: 'media', content: imageABytes },
+            { type: 'text', text: 'Second:' },
+            { type: 'media', content: imageBPath },
+            { type: 'text', text: 'Third:' },
+            { type: 'media', content: imageBBytes },
+            { type: 'text', text: 'Describe.' }
+          ]
+        }
+      ]
+      const cacheKey = path.join(dirPath, `ordered-parts-${Date.now()}.bin`)
+      try {
+        const first = await runAndCapture(orderedHistory, { cacheKey })
+        t.ok(first.stats.CacheTokens > 0, 'ordered turn is cached')
+        const followUp = await runAndCapture(
+          [
+            ...orderedHistory,
+            { role: 'assistant', content: first.output },
+            { role: 'user', content: 'Compare the first two images.' }
+          ],
+          { cacheKey }
+        )
+        t.alike(
+          userBlocks(followUp.prompt),
+          [
+            'First:<__media__>Second:<__media__>Third:<__media__>Describe.',
+            'Compare the first two images.'
+          ],
+          'cached full history retains one ordered image turn'
+        )
+        t.ok(followUp.output.length > 0, 'cached ordered follow-up produced output')
+        const reused =
+          followUp.stats.CacheTokens - followUp.stats.promptTokens - followUp.stats.generatedTokens
+        t.ok(reused > 0, 'ordered image prefix was reused')
+      } finally {
+        await model.discardCache(cacheKey)
+      }
+
+      await model.unload()
+      const batched = new LlmLlamacpp({
+        files: { model: [modelPath], projectionModel: projectionModelPath },
+        config: {
+          device: useCpu ? 'cpu' : 'gpu',
+          gpu_layers: '98',
+          ctx_size: '8192',
+          parallel: '2',
+          temp: '0',
+          predict: '1',
+          reasoning_budget: '0',
+          image_tile_mode: 'disabled'
+        },
+        logger: createLogger(),
+        opts: { stats: true }
+      })
+      try {
+        await batched.load()
+        const response = await batched.run([
+          { id: 'ordered', prompt: orderedHistory },
+          { id: 'text', prompt: [{ role: 'user', content: 'Say hello.' }] }
+        ])
+        const results = await response.await()
+        t.alike(
+          results.map((result) => result.id),
+          ['ordered', 'text'],
+          'batch preserves request ids'
+        )
+        for (const result of results) {
+          t.ok(result.output.length > 0, `${result.id} batch slot produced output`)
+        }
+      } finally {
+        await batched.unload()
+      }
     } finally {
       releaseLogger()
       await model.unload().catch(() => {})
