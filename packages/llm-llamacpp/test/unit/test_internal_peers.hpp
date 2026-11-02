@@ -1,7 +1,5 @@
 #pragma once
 
-#include "model-interface/CacheLedger.hpp"
-
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -9,6 +7,7 @@
 #include <shared_mutex>
 #include <utility>
 
+#include "model-interface/CacheLedger.hpp"
 #include "model-interface/ContinuousBatchScheduler.hpp"
 #include "model-interface/LlamaFinetuner.hpp"
 #include "model-interface/LlamaModel.hpp"
@@ -57,8 +56,8 @@ public:
     return model.formatPrompt(input);
   }
 
-  static void resolvePromptMedia(LlamaModel &model,
-                                 const LlamaModel::Prompt &prompt) {
+  static void
+  resolvePromptMedia(LlamaModel& model, const LlamaModel::Prompt& prompt) {
     std::shared_lock lock(model.stateMtx_);
     model.resolveChatAndTools(prompt);
   }
@@ -253,11 +252,12 @@ public:
   }
 
   static std::vector<uint64_t>
-  loadedMediaHashes(const MtmdLlmContext &context) {
+  loadedMediaHashes(const MtmdLlmContext& context) {
     std::vector<uint64_t> hashes;
-    for (const auto &bitmap : context.bitmaps_.entries) {
-      hashes.push_back(qvac_lib_inference_addon_llama::cache::hashBytes(
-          bitmap.data(), bitmap.n_bytes()));
+    for (const auto& bitmap : context.bitmaps_.entries) {
+      hashes.push_back(
+          qvac_lib_inference_addon_llama::cache::hashBytes(
+              bitmap.data(), bitmap.n_bytes()));
     }
     return hashes;
   }

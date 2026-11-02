@@ -1829,7 +1829,7 @@ std::string optionalString(
   return it->second.get<std::string>();
 }
 
-[[noreturn]] void throwInvalidContentPart(const std::string &what) {
+[[noreturn]] void throwInvalidContentPart(const std::string& what) {
   throwInvalidToolTurn(what.c_str());
 }
 
@@ -1838,20 +1838,20 @@ std::string optionalString(
 // position and records its source in the media plan, in marker order. This is
 // what lets a single message interleave text and images, which separate
 // `type: "media"` messages cannot express without splitting the turn.
-void appendContentParts(const picojson::array &parts, const std::string &role,
-                        bool isTextLlm, std::string &content,
-                        std::vector<PlannedMedia> &mediaPlan,
-                        std::vector<std::string> &mediaPaths) {
-  for (const auto &partValue : parts) {
+void appendContentParts(
+    const picojson::array& parts, const std::string& role, bool isTextLlm,
+    std::string& content, std::vector<PlannedMedia>& mediaPlan,
+    std::vector<std::string>& mediaPaths) {
+  for (const auto& partValue : parts) {
     if (!partValue.is<picojson::object>()) {
       throwInvalidContentPart("content parts must be objects");
     }
-    const picojson::object &part = partValue.get<picojson::object>();
+    const picojson::object& part = partValue.get<picojson::object>();
     auto typeIt = part.find("type");
     if (typeIt == part.end() || !typeIt->second.is<std::string>()) {
       throwInvalidContentPart("content parts require a string type");
     }
-    const std::string &type = typeIt->second.get<std::string>();
+    const std::string& type = typeIt->second.get<std::string>();
     if (type == "text") {
       auto textIt = part.find("text");
       if (textIt == part.end() || !textIt->second.is<std::string>()) {
@@ -1869,8 +1869,10 @@ void appendContentParts(const picojson::array &parts, const std::string &role,
           "media content parts are only valid on user messages");
     }
     if (isTextLlm) {
-      throw qvac_errors::StatusError(ADDON_ID, toString(MediaNotSupported),
-                                     "Media not supported by text-only models");
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(MediaNotSupported),
+          "Media not supported by text-only models");
     }
     const auto partContentIt = part.find("content");
     if (partContentIt != part.end() &&
@@ -2133,9 +2135,13 @@ ParsedPromptPayload parsePromptPayload(
             throwInvalidContentPart("media messages require string content");
           }
           try {
-            appendContentParts(contentIt->second.get<picojson::array>(),
-                               newMsg.role, isTextLlm, content,
-                               parsed.mediaPlan, parsed.mediaPaths);
+            appendContentParts(
+                contentIt->second.get<picojson::array>(),
+                newMsg.role,
+                isTextLlm,
+                content,
+                parsed.mediaPlan,
+                parsed.mediaPaths);
           } catch (...) {
             resetMedia();
             throw;
