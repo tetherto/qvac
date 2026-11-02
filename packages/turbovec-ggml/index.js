@@ -143,8 +143,8 @@ class IdMapIndex {
             throw new TypeError('IdMapIndex: dim must be a positive int32');
         }
         const storage = normalizeStorageOptions(options);
-        if (storage.startsWith('turbovec-') && (dim > 1_024 || dim % 8 !== 0)) {
-            throw new RangeError('IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 1024');
+        if (storage.startsWith('turbovec-') && (dim > 16_384 || dim % 8 !== 0)) {
+            throw new RangeError('IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 16384');
         }
         this[HANDLE] = loadBinding().idx_create({ dim, storage });
     }
@@ -348,6 +348,14 @@ class IdMapIndex {
     /** Effective storage bit width. */
     get bitWidth() {
         return loadBinding().idx_bit_width(ensureHandle(this));
+    }
+    /**
+     * Whether a TurboVec index holds a TQ+ calibration. A fresh TurboVec index
+     * calibrates from its first `addWithIds()` batch when that batch has at
+     * least 1000 rows; other storages are never calibrated.
+     */
+    get calibrated() {
+        return loadBinding().idx_calibrated(ensureHandle(this));
     }
     /** Release filters and native index resources. This operation is idempotent. */
     dispose() {

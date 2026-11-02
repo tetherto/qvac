@@ -1,8 +1,10 @@
 #include "VectorIndex.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace turbovec_ggml {
 
@@ -92,6 +94,7 @@ VectorIndex::VectorIndex(int dim, VectorStorage storage) : handle_(nullptr) {
   if (handle_ == nullptr) {
     throw std::invalid_argument("ggml_vec_index_create rejected dim/storage");
   }
+  autoCalibrate_ = isTurboVec(storage);
 }
 
 VectorIndex::VectorIndex(ggml_vec_index_t* handle) noexcept : handle_(handle) {}
@@ -104,8 +107,9 @@ VectorIndex::~VectorIndex() {
 }
 
 VectorIndex::VectorIndex(VectorIndex&& other) noexcept
-    : handle_(other.handle_) {
+    : handle_(other.handle_), autoCalibrate_(other.autoCalibrate_) {
   other.handle_ = nullptr;
+  other.autoCalibrate_ = false;
 }
 
 VectorIndex& VectorIndex::operator=(VectorIndex&& other) noexcept {
@@ -114,14 +118,52 @@ VectorIndex& VectorIndex::operator=(VectorIndex&& other) noexcept {
       ggml_vec_index_free(handle_);
     }
     handle_ = other.handle_;
+    autoCalibrate_ = other.autoCalibrate_;
     other.handle_ = nullptr;
+    other.autoCalibrate_ = false;
   }
   return *this;
 }
 
 int VectorIndex::add(
     const float* vectors, int n, const uint64_t* ids) noexcept {
-  return ggml_vec_index_add(handle_, vectors, n, ids);
+  if (autoCalibrate_ && n >= kAutoCalibrateMinRows && vectors != nullptr &&
+      ggml_vec_index_len(handle_) == 0 &&
+      ggml_vec_index_turbovec_is_calibrated(handle_) == 0) {
+    // Best effort: a sample fabric cannot fit (for example one whose fit is
+    // the identity) leaves the index uncalibrated, and the add goes ahead.
+    const auto dim = static_cast<size_t>(ggml_vec_index_dim(handle_));
+    if (n <= kAutoCalibrateMaxRows) {
+      (void)ggml_vec_index_turbovec_calibrate(handle_, vectors, n);
+    } else {
+      // A batch can arrive in source order (documents, chunks), so take
+      // rows across all of it rather than its first ones.
+      std::vector<float> sample;
+      try {
+        sample.resize(static_cast<size_t>(kAutoCalibrateMaxRows) * dim);
+      } catch (...) {
+        sample.clear();
+      }
+      if (!sample.empty()) {
+        for (int i = 0; i < kAutoCalibrateMaxRows; ++i) {
+          const auto row = static_cast<size_t>(i) * static_cast<size_t>(n) /
+                           static_cast<size_t>(kAutoCalibrateMaxRows);
+          std::copy_n(vectors + row * dim, dim, sample.data() + i * dim);
+        }
+        (void)ggml_vec_index_turbovec_calibrate(
+            handle_, sample.data(), kAutoCalibrateMaxRows);
+      }
+    }
+  }
+  const int rc = ggml_vec_index_add(handle_, vectors, n, ids);
+  if (rc == GGML_VEC_INDEX_OK) {
+    autoCalibrate_ = false;
+  }
+  return rc;
+}
+
+bool VectorIndex::calibrated() const noexcept {
+  return ggml_vec_index_turbovec_is_calibrated(handle_) == 1;
 }
 
 int VectorIndex::addLogged(

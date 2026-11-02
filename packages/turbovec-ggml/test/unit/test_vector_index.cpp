@@ -29,6 +29,28 @@ std::vector<float> unitVec(int i) {
   return vector;
 }
 
+// `n` Gaussian rows with ids 1..n, a sample TQ+ can fit.
+struct Batch {
+  std::vector<float> vectors;
+  std::vector<uint64_t> ids;
+};
+
+Batch gaussianBatch(int n, uint64_t firstId = 1, unsigned seed = 7) {
+  std::mt19937 gen(seed);
+  std::normal_distribution<float> dist(0.0F, 1.0F);
+  Batch batch;
+  batch.vectors.resize(static_cast<size_t>(n) * DIM);
+  for (float& x : batch.vectors) {
+    x = dist(gen);
+  }
+  for (int i = 0; i < n; i++) {
+    batch.ids.push_back(firstId + static_cast<uint64_t>(i));
+  }
+  return batch;
+}
+
+constexpr bool kTurboVecTarget = sizeof(size_t) >= 8;
+
 // A unique path in the temp dir, removed on scope exit even when an ASSERT
 // returns early, so concurrent or failed runs never see each other's files.
 class TempFile {
@@ -96,7 +118,7 @@ TEST(VectorIndexTest, RejectsDimensionsFabricRefuses) {
   EXPECT_THROW(
       VectorIndex(12, VectorStorage::TurboVecQ2), std::invalid_argument);
   EXPECT_THROW(
-      VectorIndex(1032, VectorStorage::TurboVecQ4), std::invalid_argument);
+      VectorIndex(16392, VectorStorage::TurboVecQ4), std::invalid_argument);
 }
 
 TEST(VectorIndexTest, MoveTransfersOwnership) {
@@ -183,6 +205,119 @@ TEST(VectorIndexTest, WriteAndLoadRestoresIndex) {
   EXPECT_EQ(loaded.dim(), DIM);
   EXPECT_EQ(loaded.bitWidth(), 8);
   EXPECT_TRUE(loaded.contains(7));
+}
+
+TEST(VectorIndexTest, FirstAddOfEnoughRowsCalibratesTurboVec) {
+  if constexpr (!kTurboVecTarget) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  for (const auto storage :
+       {VectorStorage::TurboVecQ2, VectorStorage::TurboVecQ4}) {
+    VectorIndex idx(DIM, storage);
+    EXPECT_FALSE(idx.calibrated());
+    const auto batch = gaussianBatch(VectorIndex::kAutoCalibrateMinRows);
+    ASSERT_EQ(
+        idx.add(
+            batch.vectors.data(),
+            VectorIndex::kAutoCalibrateMinRows,
+            batch.ids.data()),
+        GGML_VEC_INDEX_OK);
+    EXPECT_TRUE(idx.calibrated());
+    EXPECT_EQ(idx.len(), VectorIndex::kAutoCalibrateMinRows);
+  }
+}
+
+TEST(VectorIndexTest, LargeFirstAddCalibratesFromASpreadSample) {
+  if constexpr (!kTurboVecTarget) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  const int n = VectorIndex::kAutoCalibrateMaxRows * 2 + 3;
+  VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+  const auto batch = gaussianBatch(n);
+  ASSERT_EQ(
+      idx.add(batch.vectors.data(), n, batch.ids.data()), GGML_VEC_INDEX_OK);
+  EXPECT_TRUE(idx.calibrated());
+  EXPECT_EQ(idx.len(), n);
+}
+
+TEST(VectorIndexTest, OnlyAFirstAddCalibrates) {
+  if constexpr (!kTurboVecTarget) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  VectorIndex idx(DIM, VectorStorage::TurboVecQ2);
+  const int small = VectorIndex::kAutoCalibrateMinRows - 1;
+  const auto first = gaussianBatch(small);
+  ASSERT_EQ(
+      idx.add(first.vectors.data(), small, first.ids.data()),
+      GGML_VEC_INDEX_OK);
+  EXPECT_FALSE(idx.calibrated());
+  const auto second =
+      gaussianBatch(VectorIndex::kAutoCalibrateMinRows, 100000, 11);
+  ASSERT_EQ(
+      idx.add(
+          second.vectors.data(),
+          VectorIndex::kAutoCalibrateMinRows,
+          second.ids.data()),
+      GGML_VEC_INDEX_OK);
+  EXPECT_FALSE(idx.calibrated());
+}
+
+TEST(VectorIndexTest, OtherStoragesAreNeverCalibrated) {
+  VectorIndex idx(DIM, VectorStorage::F32);
+  const auto batch = gaussianBatch(VectorIndex::kAutoCalibrateMinRows);
+  ASSERT_EQ(
+      idx.add(
+          batch.vectors.data(),
+          VectorIndex::kAutoCalibrateMinRows,
+          batch.ids.data()),
+      GGML_VEC_INDEX_OK);
+  EXPECT_FALSE(idx.calibrated());
+}
+
+TEST(VectorIndexTest, LoadedTurboVecKeepsItsCalibrationState) {
+  if constexpr (!kTurboVecTarget) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  const TempFile calibratedFile("turbovec-ggml-unit-calibrated");
+  const TempFile plainFile("turbovec-ggml-unit-uncalibrated");
+  {
+    VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+    const auto batch = gaussianBatch(VectorIndex::kAutoCalibrateMinRows);
+    ASSERT_EQ(
+        idx.add(
+            batch.vectors.data(),
+            VectorIndex::kAutoCalibrateMinRows,
+            batch.ids.data()),
+        GGML_VEC_INDEX_OK);
+    ASSERT_TRUE(idx.calibrated());
+    ASSERT_EQ(idx.write(calibratedFile.path()), GGML_VEC_INDEX_OK);
+  }
+  {
+    VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+    const auto batch = gaussianBatch(2);
+    ASSERT_EQ(
+        idx.add(batch.vectors.data(), 2, batch.ids.data()), GGML_VEC_INDEX_OK);
+    ASSERT_EQ(idx.write(plainFile.path()), GGML_VEC_INDEX_OK);
+  }
+  int status = -1;
+  const VectorIndex calibrated =
+      VectorIndex::load(calibratedFile.path(), &status);
+  ASSERT_EQ(status, GGML_VEC_INDEX_OK);
+  EXPECT_TRUE(calibrated.calibrated());
+
+  // A loaded index is not fresh: a large add does not calibrate it.
+  VectorIndex plain = VectorIndex::load(plainFile.path(), &status);
+  ASSERT_EQ(status, GGML_VEC_INDEX_OK);
+  EXPECT_FALSE(plain.calibrated());
+  const auto more =
+      gaussianBatch(VectorIndex::kAutoCalibrateMinRows, 100000, 11);
+  ASSERT_EQ(
+      plain.add(
+          more.vectors.data(),
+          VectorIndex::kAutoCalibrateMinRows,
+          more.ids.data()),
+      GGML_VEC_INDEX_OK);
+  EXPECT_FALSE(plain.calibrated());
 }
 
 TEST(VectorIndexTest, LoadFailureReportsStatusWithoutHandle) {

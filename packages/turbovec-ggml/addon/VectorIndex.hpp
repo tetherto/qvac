@@ -44,6 +44,15 @@ public:
   // rejects the dimension, or for TurboVec storage on a 32-bit target.
   VectorIndex(int dim, VectorStorage storage);
 
+  // A first add of at least this many rows to a fresh TurboVec index fits
+  // its TQ+ calibration from that batch before encoding it (the automatic
+  // fit upstream turbovec had before 1.1). Smaller first batches leave the
+  // index uncalibrated.
+  static constexpr int kAutoCalibrateMinRows = 1000;
+  // Rows a first-add calibration fits from: the whole batch up to this
+  // many, otherwise rows at an even stride across it.
+  static constexpr int kAutoCalibrateMaxRows = 4096;
+
   // Adopt an already-opened native handle (used by static load).
   explicit VectorIndex(ggml_vec_index_t* handle) noexcept;
 
@@ -55,7 +64,12 @@ public:
   VectorIndex& operator=(VectorIndex&& other) noexcept;
 
   // Returns 0 on success, ggml_vec_index_error on failure (e.g. duplicate).
+  // The first add to a fresh TurboVec index may calibrate it first, see
+  // kAutoCalibrateMinRows.
   int add(const float* vectors, int n, const uint64_t* ids) noexcept;
+
+  // True when a TurboVec index holds a TQ+ calibration.
+  [[nodiscard]] bool calibrated() const noexcept;
 
   int addLogged(
       const float* vectors, int n, const uint64_t* ids,
@@ -129,6 +143,9 @@ public:
 
 private:
   ggml_vec_index_t* handle_;
+  // Set for a fresh TurboVec index until its first add; a loaded index
+  // keeps the calibration state it was saved with.
+  bool autoCalibrate_ = false;
 };
 
 } // namespace turbovec_ggml

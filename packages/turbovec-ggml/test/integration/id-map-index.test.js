@@ -59,7 +59,7 @@ function expectDisposedFilter(t, filter, message) {
   )
 }
 
-function assertTvimHeader(t, file, version, bitWidth, storageKind = null) {
+function assertTvimHeader(t, file, version, bitWidth) {
   const bytes = fs.readFileSync(file)
   t.is(bytes[0], 0x54, 'tvim magic T')
   t.is(bytes[1], 0x56, 'tvim magic V')
@@ -67,7 +67,18 @@ function assertTvimHeader(t, file, version, bitWidth, storageKind = null) {
   t.is(bytes[3], 0x49, 'tvim magic I')
   t.is(bytes[4], version, `tvim version ${version}`)
   t.is(bytes[5], bitWidth, 'tvim bit width')
-  if (storageKind !== null) t.is(bytes[6], storageKind, 'tvim storage kind')
+}
+
+// TurboVec snapshots use upstream turbovec's v8 container: magic "TV8\0",
+// revision, bit width, then kind 1 for an id-mapped index.
+function assertTv8Header(t, file, bitWidth) {
+  const bytes = fs.readFileSync(file)
+  t.is(bytes[0], 0x54, 'tv8 magic T')
+  t.is(bytes[1], 0x56, 'tv8 magic V')
+  t.is(bytes[2], 0x38, 'tv8 magic 8')
+  t.is(bytes[3], 0x00, 'tv8 magic NUL')
+  t.is(bytes[5], bitWidth, 'tv8 bit width')
+  t.is(bytes[6], 1, 'tv8 id-mapped kind')
 }
 
 function assertTvidHeader(t, file) {
@@ -152,7 +163,7 @@ function normalizedPatternVec(row) {
   return vector
 }
 
-function runTurboVecRoundTrip(t, storage, bitWidth, storageKind) {
+function runTurboVecRoundTrip(t, storage, bitWidth) {
   const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
   const localN = 6
   const vectors = new Float32Array(localN * TURBOVEC_DIM)
@@ -198,7 +209,7 @@ function runTurboVecRoundTrip(t, storage, bitWidth, storageKind) {
     if (removeLoggedError !== null) {
       t.is(removeLoggedError.message, 'InvalidArgument', `${storage} removeLogged error category`)
     }
-    assertTvimHeader(t, file, 3, bitWidth, storageKind)
+    assertTv8Header(t, file, bitWidth)
     expectThrows(t, () => IdMapIndex.loadMmap(file), `${storage} mmap load should be rejected`)
     loaded = IdMapIndex.load(file)
     t.is(loaded.search(query, 1).ids[0], ids[0], `${storage} reload search works`)
@@ -244,7 +255,7 @@ test('IdMapIndex: TurboVec q4 add + search + persistence round-trip', (t) => {
     )
     return
   }
-  runTurboVecRoundTrip(t, 'turbovec-q4', 4, 4)
+  runTurboVecRoundTrip(t, 'turbovec-q4', 4)
 })
 
 test('IdMapIndex: TurboVec q2 add + search + persistence round-trip', (t) => {
@@ -256,7 +267,7 @@ test('IdMapIndex: TurboVec q2 add + search + persistence round-trip', (t) => {
     )
     return
   }
-  runTurboVecRoundTrip(t, 'turbovec-q2', 2, 5)
+  runTurboVecRoundTrip(t, 'turbovec-q2', 2)
 })
 
 test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) => {
@@ -294,18 +305,18 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) 
   )
   if (SUPPORTS_TURBOVEC) {
     for (const storage of ['turbovec-q2', 'turbovec-q4']) {
-      const max = new IdMapIndex({ dim: 1024, storage })
-      const vector = new Float32Array(1024)
+      const max = new IdMapIndex({ dim: 16384, storage })
+      const vector = new Float32Array(16384)
       vector[0] = 1
-      max.addWithIds(vector, new BigUint64Array([1024n]))
-      t.is(max.search(vector, 1).ids[0], 1024n, `${storage} searches at maximum dimension`)
+      max.addWithIds(vector, new BigUint64Array([16384n]))
+      t.is(max.search(vector, 1).ids[0], 16384n, `${storage} searches at maximum dimension`)
       max.dispose()
     }
   }
   expectThrows(
     t,
-    () => new IdMapIndex({ dim: 1032, storage: 'turbovec-q2' }),
-    'TurboVec dimensions must not exceed 1024'
+    () => new IdMapIndex({ dim: 16392, storage: 'turbovec-q2' }),
+    'TurboVec dimensions must not exceed 16384'
   )
   if (SUPPORTS_TURBOVEC) {
     const q2 = new IdMapIndex({ dim: TURBOVEC_DIM, bitWidth: 2 })
@@ -881,6 +892,47 @@ test('IdMapIndex: corrupt persistence file load fails', (t) => {
     const error = expectThrows(t, () => IdMapIndex.load(file), 'corrupt tvim file should throw')
     if (error !== null) t.is(error.message, 'BadMagic', 'load preserves native error category')
   } finally {
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+  }
+})
+
+test('IdMapIndex: TurboVec calibrates from a first add of 1000 rows', (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    t.pass('TurboVec requires a 64-bit target')
+    return
+  }
+  const rows = 1000
+  const vectors = new Float32Array(rows * TURBOVEC_DIM)
+  const ids = new BigUint64Array(rows)
+  for (let i = 0; i < rows; i++) {
+    vectors.set(normalizedPatternVec(i), i * TURBOVEC_DIM)
+    ids[i] = BigInt(i + 1)
+  }
+  const file = tmpPath('id-map-index-turbovec-calibrated')
+  const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
+  const small = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
+  const plain = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'q8' })
+  let loaded = null
+  try {
+    t.is(idx.calibrated, false, 'a fresh index is uncalibrated')
+    idx.addWithIds(vectors, ids)
+    t.is(idx.calibrated, true, 'a first add of 1000 rows calibrates')
+    const query = vectors.subarray(0, TURBOVEC_DIM)
+    t.is(idx.search(query, 1).ids[0], ids[0], 'a calibrated index retrieves a stored row')
+    idx.write(file)
+    loaded = IdMapIndex.load(file)
+    t.is(loaded.calibrated, true, 'the calibration survives a snapshot')
+
+    small.addWithIds(vectors.subarray(0, 999 * TURBOVEC_DIM), ids.subarray(0, 999))
+    t.is(small.calibrated, false, 'a first add of 999 rows does not calibrate')
+
+    plain.addWithIds(vectors, ids)
+    t.is(plain.calibrated, false, 'other storages are never calibrated')
+  } finally {
+    if (loaded !== null) loaded.dispose()
+    idx.dispose()
+    small.dispose()
+    plain.dispose()
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })

@@ -17,7 +17,7 @@ export type IdMapIndexStorage = keyof typeof BIT_WIDTH_BY_STORAGE;
 export interface IdMapIndexOptions {
     /**
      * Vector dimensionality. TurboVec requires a 64-bit target and a dimension
-     * divisible by 8 and no greater than 1,024.
+     * divisible by 8 and no greater than 16,384.
      */
     dim: number;
     /** 2 = TurboVec q2, 4 = q4, 8 = q8, and 32 = full f32 storage. Defaults to 8. */
@@ -70,10 +70,11 @@ export default class IdMapIndex {
     [FILTERS_PRUNE_AT]: number;
     constructor(options: IdMapIndexOptions);
     /**
-     * Load a v2/v3 snapshot or migrate legacy v1 storage. Legacy bit-width 8
-     * snapshots migrate to q8; other v1 widths migrate to f32. Older TurboVec
-     * snapshots above 1,024 dimensions can be loaded and rewritten, but cannot
-     * add, search, or build IVF state. Synchronous and potentially blocking.
+     * Load a v2/v3/v8 snapshot or migrate legacy v1 storage. Legacy bit-width 8
+     * snapshots migrate to q8; other v1 widths migrate to f32. TurboVec v3
+     * snapshots from earlier releases keep their encoding and keep writing v3;
+     * those above 1,024 dimensions can be loaded and rewritten, but cannot add,
+     * search, or build IVF state. Synchronous and potentially blocking.
      * Called on a subclass, returns an instance of that subclass; its
      * constructor and field initializers do not run.
      */
@@ -180,6 +181,12 @@ export default class IdMapIndex {
     get dim(): number;
     /** Effective storage bit width. */
     get bitWidth(): IdMapIndexBitWidth;
+    /**
+     * Whether a TurboVec index holds a TQ+ calibration. A fresh TurboVec index
+     * calibrates from its first `addWithIds()` batch when that batch has at
+     * least 1000 rows; other storages are never calibrated.
+     */
+    get calibrated(): boolean;
     /** Release filters and native index resources. This operation is idempotent. */
     dispose(): void;
     private disposeFilters;

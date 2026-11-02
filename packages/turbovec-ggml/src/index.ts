@@ -71,6 +71,7 @@ interface IdMapIndexBinding {
   idx_len(handle: NativeHandle): number
   idx_dim(handle: NativeHandle): number
   idx_bit_width(handle: NativeHandle): IdMapIndexBitWidth
+  idx_calibrated(handle: NativeHandle): boolean
 }
 
 let binding: IdMapIndexBinding | undefined
@@ -94,7 +95,7 @@ export type IdMapIndexStorage = keyof typeof BIT_WIDTH_BY_STORAGE
 export interface IdMapIndexOptions {
   /**
    * Vector dimensionality. TurboVec requires a 64-bit target and a dimension
-   * divisible by 8 and no greater than 1,024.
+   * divisible by 8 and no greater than 16,384.
    */
   dim: number
   /** 2 = TurboVec q2, 4 = q4, 8 = q8, and 32 = full f32 storage. Defaults to 8. */
@@ -250,19 +251,20 @@ export default class IdMapIndex {
       throw new TypeError('IdMapIndex: dim must be a positive int32')
     }
     const storage = normalizeStorageOptions(options)
-    if (storage.startsWith('turbovec-') && (dim > 1_024 || dim % 8 !== 0)) {
+    if (storage.startsWith('turbovec-') && (dim > 16_384 || dim % 8 !== 0)) {
       throw new RangeError(
-        'IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 1024'
+        'IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 16384'
       )
     }
     this[HANDLE] = loadBinding().idx_create({ dim, storage })
   }
 
   /**
-   * Load a v2/v3 snapshot or migrate legacy v1 storage. Legacy bit-width 8
-   * snapshots migrate to q8; other v1 widths migrate to f32. Older TurboVec
-   * snapshots above 1,024 dimensions can be loaded and rewritten, but cannot
-   * add, search, or build IVF state. Synchronous and potentially blocking.
+   * Load a v2/v3/v8 snapshot or migrate legacy v1 storage. Legacy bit-width 8
+   * snapshots migrate to q8; other v1 widths migrate to f32. TurboVec v3
+   * snapshots from earlier releases keep their encoding and keep writing v3;
+   * those above 1,024 dimensions can be loaded and rewritten, but cannot add,
+   * search, or build IVF state. Synchronous and potentially blocking.
    * Called on a subclass, returns an instance of that subclass; its
    * constructor and field initializers do not run.
    */
@@ -511,6 +513,15 @@ export default class IdMapIndex {
   /** Effective storage bit width. */
   get bitWidth() {
     return loadBinding().idx_bit_width(ensureHandle(this))
+  }
+
+  /**
+   * Whether a TurboVec index holds a TQ+ calibration. A fresh TurboVec index
+   * calibrates from its first `addWithIds()` batch when that batch has at
+   * least 1000 rows; other storages are never calibrated.
+   */
+  get calibrated() {
+    return loadBinding().idx_calibrated(ensureHandle(this))
   }
 
   /** Release filters and native index resources. This operation is idempotent. */

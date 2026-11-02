@@ -1376,6 +1376,19 @@ js_value_t* idxIntGetter(js_env_t* env, js_callback_info_t* info) {
   return makeInt32(env, (idx->*Fn)());
 }
 
+js_value_t* idxCalibrated(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 1;
+  js_value_t* argv[1] = {nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  VectorIndex* idx = unwrap(env, argv[0]);
+  if (idx == nullptr) {
+    return nullptr;
+  }
+  return makeBoolean(env, idx->calibrated());
+}
+
 js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
   if (!qvacAddonBindFabric()) {
     js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
@@ -1417,6 +1430,7 @@ js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
   V("idx_len", (idxIntGetter<&VectorIndex::len>));
   V("idx_dim", (idxIntGetter<&VectorIndex::dim>));
   V("idx_bit_width", (idxIntGetter<&VectorIndex::bitWidth>));
+  V("idx_calibrated", idxCalibrated);
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)
   return exports;
