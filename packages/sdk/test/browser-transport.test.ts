@@ -73,3 +73,20 @@ test('worker port stream: a streamed response arrives in order', async (t) => {
   t.is(text, 'Pa\nri\ns\n')
   t.ok(server)
 })
+
+test('worker port stream: other messages on the channel are not fed to RPC', async (t) => {
+  const [pagePort, workerPort, closePorts] = portPair()
+  t.teardown(closePorts)
+
+  const server = new RPC(createWorkerPortStream(workerPort), (req: RPC.IncomingRequest) => {
+    req.reply(decodeUtf8(req.data!), 'utf8')
+  })
+  const client = new RPC(createWorkerPortStream(pagePort), () => {})
+
+  // A file mount travels on the same channel as the RPC frames.
+  pagePort.postMessage({ type: 'qvac:mount-file', path: '/.qvac/mounted/x/m.gguf' }, [])
+  const req = client.request(3)
+  req.send('{"type":"heartbeat"}', 'utf8')
+  t.is(String(await req.reply('utf8')), '{"type":"heartbeat"}')
+  t.ok(server)
+})

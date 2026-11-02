@@ -25,3 +25,7 @@ export function getWorkerLifeSignal() {
 }
 
 export function notifyChannelClosed() {}
+
+export function mountBrowserFile(_file: unknown) {
+  return notAvailable()
+}

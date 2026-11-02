@@ -19,8 +19,9 @@ const inferenceBrowser = join(dirname(require.resolve('@qvac/inference/package')
 const llmWebModule = {
   name: 'llm-llamacpp-web-module',
   setup(builder) {
-    builder.onResolve({ filter: /prebuilds\/web\/llm-llamacpp\.mjs$/ }, () => ({
-      path: '@qvac/llm-llamacpp/prebuilds/web/llm-llamacpp.mjs',
+    // Both engine variants (32-bit and Memory64) stay external.
+    builder.onResolve({ filter: /prebuilds\/web\/llm-llamacpp(-64)?\.mjs$/ }, (args) => ({
+      path: `@qvac/llm-llamacpp/prebuilds/web/${args.path.split('/').pop()}`,
       external: true
     }))
   }

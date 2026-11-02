@@ -597,3 +597,8 @@ process.once('SIGINT', () => handleTerminationSignal('SIGINT'))
 process.once('SIGTERM', () => handleTerminationSignal('SIGTERM'))
 process.once('SIGHUP', () => handleTerminationSignal('SIGHUP'))
 process.once('exit', closeSyncForExit)
+
+// Browser-only (see browser-rpc-client) — `#rpc` interface stub.
+export function mountBrowserFile(_file: File): Promise<string> {
+  return Promise.reject(new Error('mountBrowserFile is only available in the browser'))
+}
