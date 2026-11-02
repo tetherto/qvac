@@ -226,7 +226,8 @@ export async function createCoreServer(
 }
 
 function isIntrospectionPath(url: string): boolean {
-  return url === '/openapi.json' || url === '/docs' || url.startsWith('/docs/')
+  const path = url.split('?')[0]!
+  return path === '/openapi.json' || path === '/docs' || path.startsWith('/docs/')
 }
 
 // Swagger UI is same-origin with the API, so `--docs` trusts the loopback
