@@ -96,7 +96,7 @@ try {
         { type: 'text', text: '\nWhich image is a newspaper?' }
       ]
     }
-  ]
+  ] satisfies Parameters<typeof completion>[0]['history']
 
   const result3 = completion({ modelId, history: history3, stream: true })
 
