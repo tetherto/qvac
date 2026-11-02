@@ -13,5 +13,8 @@
         "spirv-headers"
       ]
     }
+  ],
+  "overlay-ports": [
+    "../../vcpkg-overlays/ports"
   ]
 }
