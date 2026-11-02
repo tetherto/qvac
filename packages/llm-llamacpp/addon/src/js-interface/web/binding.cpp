@@ -29,12 +29,13 @@ extern "C" size_t qvac_fabric_load_backends(void) { return 0; }
 extern "C" const char* qvac_fabric_backends_dir(void) { return ""; }
 
 // Delivers one event to binding.browser.js. A nonzero return asks the running
-// job to stop.
+// job to stop. Pointers arrive as BigInt in the Memory64 build, hence Number().
 EM_JS(
     int, qvac_web_emit,
     (int handle, int jobId, const char* event, const char* payload), {
       return Module.qvacEmit(
-                 handle, jobId, UTF8ToString(event), UTF8ToString(payload))
+                 handle, jobId, UTF8ToString(Number(event)),
+                 UTF8ToString(Number(payload)))
                  ? 1
                  : 0;
     });

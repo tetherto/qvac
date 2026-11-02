@@ -1,7 +1,7 @@
 # Browser (WebAssembly + WebGPU)
 
-`@qvac/llm-llamacpp` ships a browser build next to the native prebuilds:
-`prebuilds/web/llm-llamacpp.{mjs,wasm}`. It is the same engine (the
+`@qvac/llm-llamacpp` ships a browser build next to the native prebuilds, in
+`prebuilds/web/`. It is the same engine (the
 `addon/src/model-interface` and `utils` sources) compiled with Emscripten
 against Fabric's WebGPU backend, behind the same `LlmLlamacpp` class. Code
 that runs on Bare runs unchanged in the browser, within the limits below.
@@ -17,11 +17,19 @@ browser:
 | `bare-fs` | `browser/fs.js` (sharded loading and finetune are unsupported) |
 | `bare-path` | `browser/path.js` (POSIX subset) |
 
-`binding.browser.js` loads `./prebuilds/web/llm-llamacpp.mjs` with a dynamic
-`import()`, and that module fetches `llm-llamacpp.wasm` from its own URL. Most
-bundlers (Vite, webpack) emit both as assets. A prebuilt bundle can instead
-leave the module external as `@qvac/llm-llamacpp/prebuilds/web/llm-llamacpp.mjs`,
-a subpath the package exports for that purpose.
+The build ships two engines. `binding.browser.js` loads the one the browser
+supports with a dynamic `import()`, and each loader fetches its `.wasm` from its
+own URL:
+
+| Engine | Runs in | Model files |
+|--------|---------|-------------|
+| `llm-llamacpp.{mjs,wasm}` (32-bit) | every browser with WebGPU | up to 4 GiB of tensor data (32-bit `size_t`) |
+| `llm-llamacpp-64.{mjs,wasm}` (Memory64) | Chrome 133+, Firefox 134+ | no file-size limit |
+
+Most bundlers (Vite, webpack) emit both as assets; a browser downloads only
+one. A prebuilt bundle can instead leave the loaders external as
+`@qvac/llm-llamacpp/prebuilds/web/*`, a subpath the package exports for that
+purpose.
 
 ## Requirements
 
@@ -36,8 +44,12 @@ a subpath the package exports for that purpose.
 
 Model paths are absolute paths in the origin private file system (OPFS):
 `/models/qwen.gguf` is `models/qwen.gguf` under
-`navigator.storage.getDirectory()`. The file is mounted read-only into the
-engine and read on demand, so it's never copied whole into WebAssembly memory.
+`navigator.storage.getDirectory()`. A path can also name a browser `File`
+registered in place under `globalThis[Symbol.for('qvac.browser.mountedFiles')]`
+(a `Map` from path to `File`), which is how `@qvac/sdk`'s `mountBrowserFile`
+loads a user's file without copying it. Either way the file is mounted
+read-only into the engine and read on demand, so it's never copied whole into
+WebAssembly memory.
 
 ```js
 import LlmLlamacpp from '@qvac/llm-llamacpp'
