@@ -32,6 +32,9 @@
           <label><input type="radio" name="source" value="registry" checked /> QVAC registry</label>
           <label><input type="radio" name="source" value="url" /> URL</label>
           <label><input type="radio" name="source" value="file" /> File on this computer</label>
+          <label id="folder-source"
+            ><input type="radio" name="source" value="folder" /> Folder on this computer</label
+          >
         </div>
         <div data-source="registry">
           <label for="registry-model">Model</label>
@@ -39,7 +42,8 @@
           <p class="hint">
             Registry models hosted on Hugging Face download from their origin and are checked
             against the registry's SHA-256. Models served only through the registry's peer-to-peer
-            network are listed but cannot load in a browser.
+            network are listed but cannot load in a browser. Large models need enough GPU memory on
+            this device.
           </p>
         </div>
         <div data-source="url" hidden>
@@ -50,8 +54,34 @@
         <div data-source="file" hidden>
           <label for="model-file">GGUF file</label>
           <input id="model-file" type="file" accept=".gguf" />
+          <div class="source-tabs" role="radiogroup" aria-label="How to use the file">
+            <label
+              ><input type="radio" name="file-mode" value="copy" checked /> Copy into browser
+              storage</label
+            >
+            <label><input type="radio" name="file-mode" value="in-place" /> Use in place</label>
+          </div>
           <p class="hint">
-            The file is copied once into the browser's private storage and loaded from there.
+            <strong>Copy</strong> keeps the model in the browser's private storage, so it loads on
+            later visits without picking it again, but uses the disk space twice.
+            <strong>Use in place</strong> reads the file where it is, with no copy, but you pick it
+            again after a reload.
+          </p>
+        </div>
+        <div data-source="folder" hidden>
+          <div class="controls folder-controls">
+            <button id="choose-folder" class="secondary" type="button">Choose folder</button>
+            <button id="reconnect-folder" class="secondary" type="button" hidden>
+              Reconnect folder
+            </button>
+            <span id="folder-name" class="tag"></span>
+          </div>
+          <label for="folder-model">Model in the folder</label>
+          <select id="folder-model"></select>
+          <p class="hint">
+            Grant a folder such as <code>~/.qvac/models</code> once. Models load where they are,
+            with no copy, including ones the desktop SDK already downloaded. The browser remembers
+            the folder and asks again for permission on later visits. Chrome and Edge only.
           </p>
         </div>
         <div class="controls">

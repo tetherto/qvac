@@ -1,4 +1,4 @@
-/* global document, window, location, isSecureContext, crossOriginIsolated */
+/* global document, window, location, isSecureContext, crossOriginIsolated, indexedDB */
 
 // QVAC SDK in the browser: the same loadModel / completion / cancel /
 // unloadModel / close calls as on Node, served by a Dedicated Worker that
@@ -12,15 +12,20 @@ import {
   loggingStream,
   SDK_ALL_LOG_ID,
   InferenceCancelledError,
+  mountBrowserFile,
   models
 } from '@qvac/sdk'
 
 const elements = Object.fromEntries(
   [...document.querySelectorAll('[id]')].map((element) => [element.id, element])
 )
-// Completion models that fit a browser tab: single-file, not a vision
-// projector, and small enough for 32-bit WebAssembly memory.
-const MAX_BROWSER_MODEL_BYTES = 3.5e9
+// Single-file completion models (vision projectors are loaded alongside a
+// model, not on their own). The engine's 32-bit build cannot address a GGUF
+// whose tensor data reaches 4 GiB; browsers with WebAssembly Memory64
+// (Chrome 133+, Firefox 134+) run the 64-bit build, which has no such limit.
+// Whether a model then fits is up to the device's GPU memory.
+const GIB = 1024 ** 3
+const MEMORY64 = WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 1]))
 const DEFAULT_REGISTRY_MODEL = 'QWEN3_1_7B_INST_Q4'
 const registryModels = models
   .filter(
@@ -28,30 +33,32 @@ const registryModels = models
       model.engine === 'llamacpp-completion' &&
       !model.shardMetadata &&
       !model.companionSet &&
-      !model.name.startsWith('MMPROJ_') &&
-      model.expectedSize <= MAX_BROWSER_MODEL_BYTES
+      !model.name.startsWith('MMPROJ_')
   )
   .sort((a, b) => a.expectedSize - b.expectedSize)
 
+function unavailableReason(model) {
+  // Only Hugging Face-hosted entries can be downloaded over HTTPS; the rest
+  // reach clients through the registry's peer-to-peer network.
+  if (model.registrySource !== 'hf') return 'peer-to-peer only'
+  if (!MEMORY64 && model.expectedSize >= 4 * GIB) return 'needs WebAssembly Memory64'
+  return null
+}
+
 function fillRegistrySelect() {
-  const groups = [
-    // Hugging Face-hosted entries download from their origin over HTTPS.
-    { label: 'Loads in the browser (Hugging Face)', source: 'hf', disabled: false },
-    // Everything else reaches clients only through the registry's P2P network.
-    { label: 'Peer-to-peer only (not available in a browser)', source: 's3', disabled: true }
-  ]
-  for (const group of groups) {
-    const optgroup = document.createElement('optgroup')
-    optgroup.label = group.label
-    for (const model of registryModels.filter((m) => m.registrySource === group.source)) {
-      const option = document.createElement('option')
-      option.value = model.name
-      option.disabled = group.disabled
-      option.textContent = `${model.name} · ${(model.expectedSize / 1e9).toFixed(2)} GB`
-      optgroup.append(option)
-    }
-    elements['registry-model'].append(optgroup)
+  const available = document.createElement('optgroup')
+  available.label = 'Loads in this browser'
+  const unavailable = document.createElement('optgroup')
+  unavailable.label = 'Not available in this browser'
+  for (const model of registryModels) {
+    const reason = unavailableReason(model)
+    const option = document.createElement('option')
+    option.value = model.name
+    option.disabled = reason !== null
+    option.textContent = `${model.name} · ${(model.expectedSize / 1e9).toFixed(2)} GB${reason ? ` · ${reason}` : ''}`
+    ;(reason ? unavailable : available).append(option)
   }
+  elements['registry-model'].append(available, unavailable)
   elements['registry-model'].value = DEFAULT_REGISTRY_MODEL
 }
 
@@ -96,6 +103,84 @@ async function importLocalFile(file) {
   return `/.qvac/local/${file.name}`
 }
 
+// A granted folder (File System Access API, Chrome and Edge): its handle is
+// kept in IndexedDB so later visits only need to confirm the permission.
+const folderFiles = new Map()
+
+function openHandleStore() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('qvac-browser-example', 1)
+    request.onupgradeneeded = () => request.result.createObjectStore('handles')
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+async function handleStore(mode, action) {
+  const db = await openHandleStore()
+  return new Promise((resolve, reject) => {
+    const request = action(db.transaction('handles', mode).objectStore('handles'))
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+// Lists the .gguf files in the folder and one level of subfolders.
+async function showFolder(folder) {
+  folderFiles.clear()
+  elements['folder-model'].replaceChildren()
+  const visit = async (directory, prefix, depth) => {
+    for await (const [name, handle] of directory.entries()) {
+      if (handle.kind === 'file' && name.endsWith('.gguf')) {
+        folderFiles.set(prefix + name, handle)
+      } else if (handle.kind === 'directory' && depth > 0) {
+        await visit(handle, `${prefix}${name}/`, depth - 1)
+      }
+    }
+  }
+  await visit(folder, '', 1)
+  for (const name of [...folderFiles.keys()].sort()) {
+    const option = document.createElement('option')
+    option.value = name
+    option.textContent = name
+    elements['folder-model'].append(option)
+  }
+  elements['folder-name'].textContent = `${folder.name} · ${folderFiles.size} model(s)`
+  elements['reconnect-folder'].hidden = true
+}
+
+async function restoreFolder() {
+  if (!window.showDirectoryPicker) {
+    elements['folder-source'].hidden = true
+    return
+  }
+  const folder = await handleStore('readonly', (store) => store.get('models-folder')).catch(
+    () => null
+  )
+  if (!folder) return
+  if ((await folder.queryPermission({ mode: 'read' })) === 'granted') {
+    await showFolder(folder)
+  } else {
+    elements['folder-name'].textContent = folder.name
+    elements['reconnect-folder'].hidden = false
+  }
+}
+
+elements['choose-folder'].addEventListener('click', async () => {
+  try {
+    const folder = await window.showDirectoryPicker({ id: 'qvac-models', mode: 'read' })
+    await handleStore('readwrite', (store) => store.put(folder, 'models-folder'))
+    await showFolder(folder)
+  } catch (error) {
+    if (error.name !== 'AbortError') reportError(error)
+  }
+})
+
+elements['reconnect-folder'].addEventListener('click', async () => {
+  const folder = await handleStore('readonly', (store) => store.get('models-folder'))
+  if ((await folder.requestPermission({ mode: 'read' })) === 'granted') await showFolder(folder)
+})
+
 async function resolveModelSrc() {
   const source = selectedSource()
   if (source === 'registry') {
@@ -107,9 +192,15 @@ async function resolveModelSrc() {
     if (!url) throw new Error('Enter a model URL')
     return url
   }
+  if (source === 'folder') {
+    const handle = folderFiles.get(elements['folder-model'].value)
+    if (!handle) throw new Error('Choose a folder that contains a GGUF model')
+    return mountBrowserFile(await handle.getFile())
+  }
   const file = elements['model-file'].files[0]
   if (!file) throw new Error('Choose a GGUF file')
-  return importLocalFile(file)
+  const inPlace = document.querySelector('input[name="file-mode"]:checked').value === 'in-place'
+  return inPlace ? mountBrowserFile(file) : importLocalFile(file)
 }
 
 fillRegistrySelect()
@@ -172,7 +263,12 @@ function updateControls() {
   elements['model-url'].disabled = locked
   elements['registry-model'].disabled = locked
   elements['model-file'].disabled = locked
-  for (const radio of document.querySelectorAll('input[name="source"]')) radio.disabled = locked
+  for (const radio of document.querySelectorAll('input[name="source"], input[name="file-mode"]')) {
+    radio.disabled = locked
+  }
+  elements['folder-model'].disabled = locked
+  elements['choose-folder'].disabled = locked
+  elements['reconnect-folder'].disabled = locked
   elements.context.disabled = busy || Boolean(modelId)
   elements.clear.disabled = busy
   elements.close.disabled = closed
@@ -421,6 +517,7 @@ async function initialize() {
   }
   elements.capabilities.textContent = JSON.stringify(evidence.capabilities, null, 2)
   followLogs(SDK_ALL_LOG_ID, 'sdk')
+  await restoreFolder()
 }
 
 window.addEventListener('pagehide', () => {
