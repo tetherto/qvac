@@ -12,6 +12,8 @@
 // The caller provides the model because ./utils pulls in bare-crypto and
 // bare-https, whose prebuilds NEED libstdc++ and would mask the failure.
 
+/* global Bare */
+
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
@@ -24,6 +26,11 @@ function mappedCxxRuntimes() {
 }
 
 async function main() {
+  // bare-sidecar talks to its parent over fd 3 and exits with 0 when that pipe
+  // errors or closes. Run directly, nothing holds fd 3, so without these
+  // listeners the process would exit mid-run and skip every check below.
+  if (Bare.IPC) Bare.IPC.on('error', () => {}).on('close', () => {})
+
   if (!process.argv[2] || !fs.existsSync(process.argv[2])) {
     throw new Error(`usage: sidecar-cuda-smoke.js <model.gguf> (got ${process.argv[2]})`)
   }
