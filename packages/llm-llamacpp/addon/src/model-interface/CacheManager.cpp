@@ -716,6 +716,7 @@ void CacheManager::atomicPromoteFile(
             renameEc.message().c_str()));
   }
 #endif
+  cache::CacheFileIndex::recordWrite();
 }
 
 void CacheManager::invalidate() {

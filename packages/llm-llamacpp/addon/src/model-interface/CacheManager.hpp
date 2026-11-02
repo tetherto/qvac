@@ -60,6 +60,8 @@ public:
   bool isCacheDisabled() const;
   bool hasActiveCache() const;
   bool wasCacheUsedInLastPrompt() const;
+  /// Every cacheKey file this process writes is promoted here, which tells
+  /// the file indexes to check their files on disk again.
   static void atomicPromoteFile(const std::string& from, const std::string& to);
   /// `llama_state_seq_save_file` wrote all `savedBytes` to `path`. Its count
   /// includes bytes still buffered when the file was closed, and the close

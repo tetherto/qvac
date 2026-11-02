@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -23,11 +24,13 @@ namespace qvac_lib_inference_addon_llama::cache {
 /// The cacheKey files this process has used, with the ledgers their headers
 /// carry, so a request can start from the file that shares the most of its
 /// prompt. Only paths a request or `saveCache` named are known: the addon
-/// never scans directories. A file is read again when its size or
-/// modification time changes; one that is missing, empty or in another
-/// format, or that failed to load, is skipped until it is written. The
-/// ledgers kept are bounded in bytes as well as in files; the files named or
-/// matched least recently are forgotten first. Thread-safe.
+/// never scans directories. A file is checked on disk when it is named, when
+/// it is about to be offered, and, with every other file, after this process
+/// writes a cacheKey file; a check reads it again when its size or
+/// modification time changed. One that is missing, empty or in another
+/// format, or that failed to load, is skipped until a check finds it changed.
+/// The ledgers kept are bounded in bytes as well as in files; the files named
+/// or matched least recently are forgotten first. Thread-safe.
 class CacheFileIndex {
 public:
   /// Paths kept at most; the least recently noted one is forgotten first.
@@ -49,13 +52,16 @@ public:
   explicit CacheFileIndex(size_t maxLedgerBytes = MAX_LEDGER_BYTES)
       : maxLedgerBytes_(maxLedgerBytes) {}
 
-  /// Remembers `path` as a cacheKey file of this model.
+  /// Remembers `path` as a cacheKey file of this model, to be checked on disk
+  /// before the next match.
   void note(const std::string& path) {
     if (path.empty()) {
       return;
     }
     std::scoped_lock lock(mutex_);
-    files_[path].lastNoted = ++clock_;
+    Known& known = files_[path];
+    known.lastNoted = ++clock_;
+    known.checkDue = true;
     while (files_.size() > MAX_FILES) {
       auto oldest = files_.begin();
       for (auto it = files_.begin(); it != files_.end(); ++it) {
@@ -75,6 +81,10 @@ public:
   [[nodiscard]] std::optional<Match> longestPrefix(
       const Ledger& prompt, bool trimmable, const std::string& excluded) {
     std::scoped_lock lock(mutex_);
+    // Read before the checks: a write during them is checked on the next call.
+    const uint64_t writes = writeCount().load();
+    const bool checkAll = writes != checkedAtWrite_;
+    checkedAtWrite_ = writes;
     std::vector<std::pair<const std::string, Known>*> newestFirst;
     newestFirst.reserve(files_.size());
     for (auto& file : files_) {
@@ -86,32 +96,75 @@ public:
         [](const auto* a, const auto* b) {
           return a->second.lastNoted > b->second.lastNoted;
         });
-    std::optional<Match> best;
+    struct Candidate {
+      std::pair<const std::string, Known>* file;
+      size_t reusable;
+      bool checked;
+    };
+    std::vector<Candidate> candidates;
     size_t kept = 0;
     for (auto* file : newestFirst) {
       if (kept > maxLedgerBytes_) {
         break;
       }
       auto& [path, known] = *file;
-      const bool usable = path != excluded && refreshLocked(path, known);
-      kept += known.bytes();
-      if (!usable) {
-        continue;
+      bool usable = false;
+      bool checked = false;
+      if (path != excluded) {
+        if (checkAll || known.checkDue) {
+          usable = refreshLocked(path, known);
+          known.checkDue = false;
+          checked = true;
+        } else {
+          usable = known.read && !known.unusable;
+        }
       }
-      const size_t reusable =
-          reusablePrefix(known.ledger, nullptr, prompt, trimmable);
-      if (reusable > 0 && (!best.has_value() || reusable > best->reusable)) {
-        best = Match{.path = path, .reusable = reusable, .words = {}};
+      kept += known.bytes();
+      if (usable) {
+        candidates.push_back(
+            {.file = file,
+             .reusable =
+                 reusablePrefix(known.ledger, nullptr, prompt, trimmable),
+             .checked = checked});
       }
     }
-    if (best.has_value()) {
-      Known& matched = files_.at(best->path);
-      best->words = matched.words;
+    // The file offered is checked on disk first: one deleted or rewritten
+    // since it was read would fail to load, and the request would start cold.
+    Candidate* best = nullptr;
+    while (true) {
+      best = nullptr;
+      for (Candidate& candidate : candidates) {
+        if (candidate.reusable > 0 &&
+            (best == nullptr || candidate.reusable > best->reusable)) {
+          best = &candidate;
+        }
+      }
+      if (best == nullptr || best->checked) {
+        break;
+      }
+      auto& [path, known] = *best->file;
+      best->checked = true;
+      best->reusable =
+          refreshLocked(path, known)
+              ? reusablePrefix(known.ledger, nullptr, prompt, trimmable)
+              : 0;
+    }
+    std::optional<Match> match;
+    if (best != nullptr) {
+      Known& matched = best->file->second;
+      match = Match{
+          .path = best->file->first,
+          .reusable = best->reusable,
+          .words = matched.words};
       matched.lastNoted = ++clock_;
     }
     forgetBeyondBudgetLocked();
-    return best;
+    return match;
   }
+
+  /// This process wrote a cacheKey file: every index checks all its files on
+  /// disk before its next match.
+  static void recordWrite() noexcept { writeCount().fetch_add(1); }
 
   /// Skips `path` until it changes: it failed to load as read. Its ledger is
   /// released; its size and modification time tell when it changes.
@@ -177,6 +230,8 @@ public:
 private:
   struct Known {
     uint64_t lastNoted = 0;
+    // Named since its last check on disk.
+    bool checkDue = true;
     bool read = false;
     // The file as read failed to load (see `markUnusable`).
     bool unusable = false;
@@ -252,10 +307,18 @@ private:
     return true;
   }
 
+  /// cacheKey files this process has written (`recordWrite`).
+  static std::atomic<uint64_t>& writeCount() noexcept {
+    static std::atomic<uint64_t> count{0};
+    return count;
+  }
+
   size_t maxLedgerBytes_;
   mutable std::mutex mutex_;
   std::unordered_map<std::string, Known> files_;
   uint64_t clock_ = 0;
+  // `writeCount()` when every file was last checked on disk.
+  uint64_t checkedAtWrite_ = 0;
 };
 
 } // namespace qvac_lib_inference_addon_llama::cache

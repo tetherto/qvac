@@ -469,6 +469,57 @@ TEST_F(CacheFileIndexTest, SkipsAFileThatFailedToLoadUntilItChanges) {
   EXPECT_EQ(match->reusable, 4u);
 }
 
+// The file picked is checked on disk before it is offered: one that changed
+// since it was read is read again and the pick is made again.
+TEST_F(CacheFileIndexTest, PicksAgainWhenThePickedFileChangedOnDisk) {
+  cache::CacheFileIndex index;
+  const std::string picked = write("picked.bin", {1, 2, 3, 4});
+  const std::string other = write("other.bin", {1, 2, 3});
+  const std::string shorter = write("shorter.bin", {1, 9});
+  index.note(picked);
+  index.note(other);
+  const cache::Ledger prompt = cache::fromTokens({1, 2, 3, 4, 5});
+  ASSERT_EQ(index.longestPrefix(prompt, true, "")->path, picked);
+
+  // Copied outside this process's cache writes.
+  fs::copy_file(shorter, picked, fs::copy_options::overwrite_existing);
+  const auto match = index.longestPrefix(prompt, true, "");
+  ASSERT_TRUE(match.has_value());
+  EXPECT_EQ(match->path, other) << "a file that no longer serves was offered";
+  EXPECT_EQ(match->reusable, 3u);
+}
+
+// Files other than the one picked are checked on disk only when named, or
+// after this process writes a cacheKey file, not by every request.
+TEST_F(CacheFileIndexTest, ChecksOtherFilesWhenNamedOrAfterAWrite) {
+  cache::CacheFileIndex index;
+  const std::string grows = write("grows.bin", {1, 2});
+  const std::string other = write("other.bin", {1, 2, 3});
+  const std::string longer = write("longer.bin", {1, 2, 3, 4, 5});
+  const std::string longest = write("longest.bin", {1, 2, 3, 4, 5, 6});
+  index.note(grows);
+  index.note(other);
+  const cache::Ledger prompt = cache::fromTokens({1, 2, 3, 4, 5, 6, 7});
+  ASSERT_EQ(index.longestPrefix(prompt, true, "")->path, other);
+
+  fs::copy_file(longer, grows, fs::copy_options::overwrite_existing);
+  EXPECT_EQ(index.longestPrefix(prompt, true, "")->path, other)
+      << "test setup: a file not picked is not checked by every request";
+  (void)write("unrelated.bin", {7});
+  auto match = index.longestPrefix(prompt, true, "");
+  ASSERT_TRUE(match.has_value());
+  EXPECT_EQ(match->path, grows) << "a cache write did not check every file";
+  EXPECT_EQ(match->reusable, 5u);
+
+  // Ranked on its old ledger, the other file would lose to the one serving 5.
+  fs::copy_file(longest, other, fs::copy_options::overwrite_existing);
+  index.note(other);
+  match = index.longestPrefix(prompt, true, "");
+  ASSERT_TRUE(match.has_value());
+  EXPECT_EQ(match->path, other) << "naming a file did not check it";
+  EXPECT_EQ(match->reusable, 6u);
+}
+
 namespace {
 
 // A conversation of 64 tokens that starts with `first`.

@@ -202,8 +202,10 @@ state serves the longest prefix of it, cheapest first on a tie:
 4. the `cacheKey` files a request (as `cacheKey` or `baseCacheKey`) or
    `saveCache()` named in this process, the 256 named or picked as a
    prompt's closest match most recently, as far as 64 MiB of memory holds
-   their ledgers (no directory is
-   scanned; a changed file is read again, a deleted one skipped). A request
+   their ledgers (no directory is scanned). A file is checked on disk when it
+   is named, before it is offered, and, with all the others, after this
+   process writes a `cacheKey` file: a changed one is read again, a deleted
+   one skipped. A request
    its own sequence, or on the batch path another parked one, already serves
    whole reads none of them.
 
