@@ -1,0 +1,19 @@
+name: Error code caller smoke test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [tmp-error-code-ranges-base-20261102]
+    paths:
+      - ".github/workflows/tmp-error-code-caller-smoke.yml"
+      - ".github/workflows/on-pr-error-code-ranges.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  error-code-ranges:
+    cache-mode: none
+    permissions:
+      contents: read
+    uses: ./.github/workflows/on-pr-error-code-ranges.yml
