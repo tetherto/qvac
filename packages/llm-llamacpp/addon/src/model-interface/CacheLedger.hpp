@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -66,6 +67,13 @@ inline constexpr const char* CACHE_CHECKPOINT_DIR_KEY_DASHED =
 inline constexpr const char* CACHE_RAM_MIB_KEY = "cache_ram_mib";
 inline constexpr const char* CACHE_RAM_MIB_KEY_DASHED = "cache-ram-mib";
 inline constexpr uint64_t MAX_CACHE_RAM_MIB = 1ULL << 20; // 1 TiB
+// Whether a request may start from state another conversation left: memory
+// kept after a request without a key, another key's state, or a file this
+// model has used. Off, a request reuses only its own key's state.
+inline constexpr const char* CACHE_SHARE_ACROSS_KEYS_KEY =
+    "cache_share_across_keys";
+inline constexpr const char* CACHE_SHARE_ACROSS_KEYS_KEY_DASHED =
+    "cache-share-across-keys";
 
 struct CheckpointPolicy {
   size_t maxCount = DEFAULT_PROCESS_CHECKPOINTS;
@@ -289,6 +297,31 @@ parseCacheRamBytes(std::unordered_map<std::string, std::string>& config) {
   const uint64_t mib =
       parseUnsigned64InRange(value->second, 0, MAX_CACHE_RAM_MIB, value->first);
   return mib * 1024ULL * 1024ULL;
+}
+
+// Consumes `cache_share_across_keys` (default on). Throws
+// std::invalid_argument for a malformed value or both spellings.
+inline bool parseCacheShareAcrossKeys(
+    std::unordered_map<std::string, std::string>& config) {
+  const auto value = takeConfigKey(
+      config, CACHE_SHARE_ACROSS_KEYS_KEY, CACHE_SHARE_ACROSS_KEYS_KEY_DASHED);
+  if (!value.has_value()) {
+    return true;
+  }
+  std::string lowered = value->second;
+  std::transform(
+      lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
+  if (lowered == "1" || lowered == "on" || lowered == "true") {
+    return true;
+  }
+  if (lowered == "0" || lowered == "off" || lowered == "false") {
+    return false;
+  }
+  throw std::invalid_argument(
+      value->first + " must be 0/off/false or 1/on/true, got: \"" +
+      value->second + "\"");
 }
 
 inline uint64_t hashBytes(const void* data, size_t size) {

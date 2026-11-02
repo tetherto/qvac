@@ -2,8 +2,9 @@
 // whose product can outlive its slot (a cacheKey: the conversation stays in
 // its sequence) must run on a scheduler lane like any generation job — truly
 // parallel with its peers. A keyless prefill's only product is live
-// single-context state, which cannot run concurrently (lanes wipe their
-// state, and the single context is shared), so on a parallel model it must be
+// single-context state, which cannot run concurrently (a lane keeps a keyless
+// state at most anonymously, and the single context is shared), so on a
+// parallel model it must be
 // rejected instead of racing peers on the shared context. Two jobs on the
 // same cacheKey run one after the other.
 
