@@ -510,10 +510,17 @@ See [Runtime — Cancellation](/sdk/runtime/cancellation) for cancellation behav
 This example loads the registry-hosted ACE-Step models, reports progress, generates an instrumental, and writes the PCM output as WAV.
 
 <Callout type="info">
-  The generated Python client exposes the contract-level `audio_gen_stream()`
-  method. Unlike the TypeScript `audioGen()` wrapper, it yields progress, base64
-  PCM chunks, and the terminal stats frame directly; callers decode and
-  concatenate the chunks themselves — see the Python tab.
+  The generated Python client exposes the contract-level `audio_gen_stream()`,
+  `audio_edit_stream()`, and `audio_understand()` methods. Unlike the TypeScript
+  `audioGen()`, `audioEdit()`, and `audioUnderstand()` wrappers, each yields
+  progress and the terminal stats frame on one iterator. The generation and
+  edit streams carry base64 PCM chunks that callers decode and concatenate
+  themselves; `audio_understand()` yields the description in its `understand`
+  field instead. In the cover, edit, and understand tabs, `sourceAudio` and
+  `referenceAudio` are tagged unions (`{"type": "filePath", "value": path}` or
+  `{"type": "base64", "value": ...}`) rather than bare strings. The Python tabs
+  pass the canonical `model_type` `"audiogen-ggml"`; `"audiogen"` is a
+  deprecated alias that still loads but emits a `DeprecationWarning`.
 </Callout>
 
 <Tabs>
@@ -570,9 +577,19 @@ The cover example takes an existing recording (any FFmpeg-decodable file), an op
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/audiogen_cover.py title="audiogen_cover.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
 </Tabs>
 
-The edit example takes an existing recording plus a source and a target caption, runs a Flow-Edit followed by a Repaint of seconds 10–20, and writes the result as WAV:
+The edit example takes an existing recording plus a source and a target caption, runs a Flow-Edit followed by a Repaint of seconds 10–20, and writes the result as WAV. The recording must run at least 20 seconds, since a repaint range past the end of the source is rejected:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -589,6 +606,16 @@ The edit example takes an existing recording plus a source and a target caption,
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/edit-music.ts title="edit-music.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/audiogen_edit.py title="audiogen_edit.py" lineNumbers
 
 ```
 
@@ -618,12 +645,34 @@ The understand example takes an existing recording and prints the caption, music
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/audiogen_understand.py title="audiogen_understand.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### MiniMax-Music3
 
 This example loads a local MiniMax-Music3 pair from the `AUDIOGEN_MINIMAX_LM_MODEL` and `AUDIOGEN_MINIMAX_SYNTH_MODEL` environment variables, generates an instrumental, and writes the PCM output as WAV. Set `AUDIOGEN_MAX_FRAMES`, `AUDIOGEN_STEPS`, and `AUDIOGEN_CFG_SCALE` to override the MiniMax-only per-run controls (`maxFrames`, `inferenceSteps`, `cfgScale`).
 
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/audiogen/generate-music-minimax.js title="generate-music-minimax.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-music-minimax.ts title="generate-music-minimax.ts" lineNumbers
@@ -631,6 +680,18 @@ This example loads a local MiniMax-Music3 pair from the `AUDIOGEN_MINIMAX_LM_MOD
 ```
 
 </WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/audiogen_minimax.py title="audiogen_minimax.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
   **Tip:** see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python
