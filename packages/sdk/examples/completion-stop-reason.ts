@@ -4,9 +4,9 @@
  * `completion()` sets `stopReason` on the aggregated `final` promise to
  * indicate why the model stopped generating:
  *
- *  - `"eos"`        — natural end-of-sequence. The model finished on its own.
- *  - `"stopSequence"` — a configured stop sequence ended generation.
- *  - `undefined`    — the backend did not report a specific stop reason.
+ *  - `undefined`    — natural end-of-sequence (EOS). The model finished on
+ *                     its own. This is the common case and the backwards-
+ *                     compatible default.
  *  - `"length"`     — the `predict` token budget was exhausted. Output is
  *                     truncated; the model did not reach a natural stopping
  *                     point.
@@ -48,7 +48,7 @@ try {
     if (event.type === 'contentDelta') process.stdout.write(event.text)
   }
   const final1 = await run1.final
-  console.log(`\n▸ stopReason: ${final1.stopReason ?? '(not reported)'}`)
+  console.log(`\n▸ stopReason: ${final1.stopReason ?? '(undefined — natural EOS)'}`)
 
   // --- Case 2: predict budget exhausted → stopReason = "length" ---
   console.log('\n▸ Case 2: predict budget hit (predict: 10)')
