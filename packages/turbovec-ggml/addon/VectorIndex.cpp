@@ -127,31 +127,31 @@ VectorIndex& VectorIndex::operator=(VectorIndex&& other) noexcept {
 
 int VectorIndex::add(
     const float* vectors, int n, const uint64_t* ids) noexcept {
-  if (autoCalibrate_ && n >= kAutoCalibrateMinRows && vectors != nullptr &&
+  if (autoCalibrate_ && n >= AUTO_CALIBRATE_MIN_ROWS && vectors != nullptr &&
       ggml_vec_index_len(handle_) == 0 &&
       ggml_vec_index_turbovec_is_calibrated(handle_) == 0) {
     // Best effort: a sample fabric cannot fit (for example one whose fit is
     // the identity) leaves the index uncalibrated, and the add goes ahead.
     const auto dim = static_cast<size_t>(ggml_vec_index_dim(handle_));
-    if (n <= kAutoCalibrateMaxRows) {
+    if (n <= AUTO_CALIBRATE_MAX_ROWS) {
       (void)ggml_vec_index_turbovec_calibrate(handle_, vectors, n);
     } else {
       // A batch can arrive in source order (documents, chunks), so take
       // rows across all of it rather than its first ones.
       std::vector<float> sample;
       try {
-        sample.resize(static_cast<size_t>(kAutoCalibrateMaxRows) * dim);
+        sample.resize(static_cast<size_t>(AUTO_CALIBRATE_MAX_ROWS) * dim);
       } catch (...) {
         sample.clear();
       }
       if (!sample.empty()) {
-        for (int i = 0; i < kAutoCalibrateMaxRows; ++i) {
+        for (int i = 0; i < AUTO_CALIBRATE_MAX_ROWS; ++i) {
           const auto row = static_cast<size_t>(i) * static_cast<size_t>(n) /
-                           static_cast<size_t>(kAutoCalibrateMaxRows);
+                           static_cast<size_t>(AUTO_CALIBRATE_MAX_ROWS);
           std::copy_n(vectors + row * dim, dim, sample.data() + i * dim);
         }
         (void)ggml_vec_index_turbovec_calibrate(
-            handle_, sample.data(), kAutoCalibrateMaxRows);
+            handle_, sample.data(), AUTO_CALIBRATE_MAX_ROWS);
       }
     }
   }

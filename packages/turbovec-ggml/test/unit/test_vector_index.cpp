@@ -215,15 +215,15 @@ TEST(VectorIndexTest, FirstAddOfEnoughRowsCalibratesTurboVec) {
        {VectorStorage::TurboVecQ2, VectorStorage::TurboVecQ4}) {
     VectorIndex idx(DIM, storage);
     EXPECT_FALSE(idx.calibrated());
-    const auto batch = gaussianBatch(VectorIndex::kAutoCalibrateMinRows);
+    const auto batch = gaussianBatch(VectorIndex::AUTO_CALIBRATE_MIN_ROWS);
     ASSERT_EQ(
         idx.add(
             batch.vectors.data(),
-            VectorIndex::kAutoCalibrateMinRows,
+            VectorIndex::AUTO_CALIBRATE_MIN_ROWS,
             batch.ids.data()),
         GGML_VEC_INDEX_OK);
     EXPECT_TRUE(idx.calibrated());
-    EXPECT_EQ(idx.len(), VectorIndex::kAutoCalibrateMinRows);
+    EXPECT_EQ(idx.len(), VectorIndex::AUTO_CALIBRATE_MIN_ROWS);
   }
 }
 
@@ -231,7 +231,7 @@ TEST(VectorIndexTest, LargeFirstAddCalibratesFromASpreadSample) {
   if constexpr (!kTurboVecTarget) {
     GTEST_SKIP() << "TurboVec requires a 64-bit target";
   }
-  const int n = VectorIndex::kAutoCalibrateMaxRows * 2 + 3;
+  const int n = VectorIndex::AUTO_CALIBRATE_MAX_ROWS * 2 + 3;
   VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
   const auto batch = gaussianBatch(n);
   ASSERT_EQ(
@@ -245,18 +245,18 @@ TEST(VectorIndexTest, OnlyAFirstAddCalibrates) {
     GTEST_SKIP() << "TurboVec requires a 64-bit target";
   }
   VectorIndex idx(DIM, VectorStorage::TurboVecQ2);
-  const int small = VectorIndex::kAutoCalibrateMinRows - 1;
+  const int small = VectorIndex::AUTO_CALIBRATE_MIN_ROWS - 1;
   const auto first = gaussianBatch(small);
   ASSERT_EQ(
       idx.add(first.vectors.data(), small, first.ids.data()),
       GGML_VEC_INDEX_OK);
   EXPECT_FALSE(idx.calibrated());
   const auto second =
-      gaussianBatch(VectorIndex::kAutoCalibrateMinRows, 100000, 11);
+      gaussianBatch(VectorIndex::AUTO_CALIBRATE_MIN_ROWS, 100000, 11);
   ASSERT_EQ(
       idx.add(
           second.vectors.data(),
-          VectorIndex::kAutoCalibrateMinRows,
+          VectorIndex::AUTO_CALIBRATE_MIN_ROWS,
           second.ids.data()),
       GGML_VEC_INDEX_OK);
   EXPECT_FALSE(idx.calibrated());
@@ -264,11 +264,11 @@ TEST(VectorIndexTest, OnlyAFirstAddCalibrates) {
 
 TEST(VectorIndexTest, OtherStoragesAreNeverCalibrated) {
   VectorIndex idx(DIM, VectorStorage::F32);
-  const auto batch = gaussianBatch(VectorIndex::kAutoCalibrateMinRows);
+  const auto batch = gaussianBatch(VectorIndex::AUTO_CALIBRATE_MIN_ROWS);
   ASSERT_EQ(
       idx.add(
           batch.vectors.data(),
-          VectorIndex::kAutoCalibrateMinRows,
+          VectorIndex::AUTO_CALIBRATE_MIN_ROWS,
           batch.ids.data()),
       GGML_VEC_INDEX_OK);
   EXPECT_FALSE(idx.calibrated());
@@ -282,11 +282,11 @@ TEST(VectorIndexTest, LoadedTurboVecKeepsItsCalibrationState) {
   const TempFile plainFile("turbovec-ggml-unit-uncalibrated");
   {
     VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
-    const auto batch = gaussianBatch(VectorIndex::kAutoCalibrateMinRows);
+    const auto batch = gaussianBatch(VectorIndex::AUTO_CALIBRATE_MIN_ROWS);
     ASSERT_EQ(
         idx.add(
             batch.vectors.data(),
-            VectorIndex::kAutoCalibrateMinRows,
+            VectorIndex::AUTO_CALIBRATE_MIN_ROWS,
             batch.ids.data()),
         GGML_VEC_INDEX_OK);
     ASSERT_TRUE(idx.calibrated());
@@ -310,11 +310,11 @@ TEST(VectorIndexTest, LoadedTurboVecKeepsItsCalibrationState) {
   ASSERT_EQ(status, GGML_VEC_INDEX_OK);
   EXPECT_FALSE(plain.calibrated());
   const auto more =
-      gaussianBatch(VectorIndex::kAutoCalibrateMinRows, 100000, 11);
+      gaussianBatch(VectorIndex::AUTO_CALIBRATE_MIN_ROWS, 100000, 11);
   ASSERT_EQ(
       plain.add(
           more.vectors.data(),
-          VectorIndex::kAutoCalibrateMinRows,
+          VectorIndex::AUTO_CALIBRATE_MIN_ROWS,
           more.ids.data()),
       GGML_VEC_INDEX_OK);
   EXPECT_FALSE(plain.calibrated());

@@ -45,13 +45,13 @@ public:
   VectorIndex(int dim, VectorStorage storage);
 
   // A first add of at least this many rows to a fresh TurboVec index fits
-  // its TQ+ calibration from that batch before encoding it (the automatic
-  // fit upstream turbovec had before 1.1). Smaller first batches leave the
-  // index uncalibrated.
-  static constexpr int kAutoCalibrateMinRows = 1000;
+  // its TQ+ calibration from that batch before encoding it, the rule fabric
+  // keeps for indexes loaded from turbovec 0.9 (v3) snapshots. Smaller first
+  // batches leave the index uncalibrated.
+  static constexpr int AUTO_CALIBRATE_MIN_ROWS = 1000;
   // Rows a first-add calibration fits from: the whole batch up to this
   // many, otherwise rows at an even stride across it.
-  static constexpr int kAutoCalibrateMaxRows = 4096;
+  static constexpr int AUTO_CALIBRATE_MAX_ROWS = 4096;
 
   // Adopt an already-opened native handle (used by static load).
   explicit VectorIndex(ggml_vec_index_t* handle) noexcept;
@@ -65,7 +65,7 @@ public:
 
   // Returns 0 on success, ggml_vec_index_error on failure (e.g. duplicate).
   // The first add to a fresh TurboVec index may calibrate it first, see
-  // kAutoCalibrateMinRows.
+  // AUTO_CALIBRATE_MIN_ROWS.
   int add(const float* vectors, int n, const uint64_t* ids) noexcept;
 
   // True when a TurboVec index holds a TQ+ calibration.
