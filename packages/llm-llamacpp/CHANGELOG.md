@@ -23,6 +23,10 @@
   nothing in memory serves more of its prompt, such as a primed system prompt
   shared by many conversations. The file is read, never written
   ([#5417](https://github.com/tetherto/qvac/pull/5417)).
+- `cache_share_across_keys` load config: `'false'` keeps every text request
+  to its own `cacheKey`'s state, for a model whose callers must not learn
+  whether another conversation shares their prompt. Default `'true'`
+  ([#5417](https://github.com/tetherto/qvac/pull/5417)).
 - `LlmLlamacpp.calcTokens({ text?, history?, tools? })`: counts the tokens a
   text takes on the loaded model, or a conversation rendered by its chat
   template as a fresh `run()` would, without running it. It answers while
@@ -35,9 +39,11 @@
   conversation the model holds (in memory, in another batch slot, in the RAM
   tier, or in a `cacheKey` file used in this process), not only its own
   `cacheKey`'s. The other conversation is copied, never changed. Multimodal
-  models are unchanged ([#5417](https://github.com/tetherto/qvac/pull/5417)).
+  models, and loads with `cache_share_across_keys: 'false'`, are unchanged
+  ([#5417](https://github.com/tetherto/qvac/pull/5417)).
 - A text request without a `cacheKey` keeps its state in memory for the next
-  request instead of resetting the context; it is never written to a file.
+  request instead of resetting the context, unless the load sets
+  `cache_share_across_keys: 'false'`; it is never written to a file.
   `CacheTokens` after such a request reports the tokens kept
   ([#5417](https://github.com/tetherto/qvac/pull/5417)).
 

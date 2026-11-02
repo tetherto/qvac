@@ -318,6 +318,9 @@ void LlamaModel::init(bool acquireLock) {
     snap->cacheRamBytes_ =
         qvac_lib_inference_addon_llama::cache::parseCacheRamBytes(
             configFilemap);
+    snap->cacheShareAcrossKeys_ =
+        qvac_lib_inference_addon_llama::cache::parseCacheShareAcrossKeys(
+            configFilemap);
     speculativeConfig =
         qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);
@@ -412,6 +415,7 @@ void LlamaModel::init(bool acquireLock) {
 
   if (snap->llmContext_) {
     snap->llmContext_->setCacheCheckpointPolicy(snap->cacheCheckpointPolicy_);
+    snap->llmContext_->setSharesCacheAcrossKeys(snap->cacheShareAcrossKeys_);
     validateCheckpointBudget(*snap);
     snap->cacheManager_.emplace(
         snap->llmContext_.get(),
@@ -510,8 +514,12 @@ namespace {
 batching::DriverFactory buildDriverFactory(
     LlmModelContext shared, mtmd_context* sharedVision,
     qvac_lib_inference_addon_llama::cache::CheckpointPolicy checkpointPolicy,
-    uint64_t maxImagePixels) {
-  return [shared, sharedVision, checkpointPolicy, maxImagePixels](
+    bool sharesCacheAcrossKeys, uint64_t maxImagePixels) {
+  return [shared,
+          sharedVision,
+          checkpointPolicy,
+          sharesCacheAcrossKeys,
+          maxImagePixels](
              const common_params& params,
              uint32_t seqId,
              llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
@@ -525,6 +533,7 @@ batching::DriverFactory buildDriverFactory(
           params, shared, sid, perSeqCtxCeiling);
     }
     driver->setCacheCheckpointPolicy(checkpointPolicy);
+    driver->setSharesCacheAcrossKeys(sharesCacheAcrossKeys);
     return driver;
   };
 }
@@ -562,6 +571,7 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
             shared,
             state.llmContext_->visionContext(),
             state.cacheCheckpointPolicy_,
+            state.cacheShareAcrossKeys_,
             maxImagePixels_));
     scheduler->setRamTier(state.ramTier_);
     scheduler->setFileIndex(state.fileIndex_);

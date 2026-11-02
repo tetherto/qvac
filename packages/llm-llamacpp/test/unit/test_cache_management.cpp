@@ -2635,8 +2635,8 @@ TEST(CacheHistoryCheckpointTest, BatchedHybridThinkingChatReusesTheHistory) {
 
 namespace {
 
-std::unique_ptr<LlamaModel>
-loadBatchedModel(const char* cacheRamMib = nullptr) {
+std::unique_ptr<LlamaModel> loadBatchedModel(
+    const char* cacheRamMib = nullptr, const char* shareAcrossKeys = nullptr) {
   std::unordered_map<std::string, std::string> config;
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
@@ -2647,6 +2647,9 @@ loadBatchedModel(const char* cacheRamMib = nullptr) {
   config["seed"] = "5";
   if (cacheRamMib != nullptr) {
     config["cache_ram_mib"] = cacheRamMib;
+  }
+  if (shareAcrossKeys != nullptr) {
+    config["cache_share_across_keys"] = shareAcrossKeys;
   }
   config["backendsDir"] = test_common::getTestBackendsDir().string();
   std::string path = test_common::BaseTestModelPath::get();
@@ -2897,7 +2900,8 @@ TEST(BatchedCacheResidencyTest, SameKeyPromptsRunInOrder) {
 
 namespace {
 
-std::unique_ptr<LlamaModel> loadSinglePromptModel(const char* cacheRamMib) {
+std::unique_ptr<LlamaModel> loadSinglePromptModel(
+    const char* cacheRamMib, const char* shareAcrossKeys = nullptr) {
   std::unordered_map<std::string, std::string> config;
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
@@ -2907,6 +2911,9 @@ std::unique_ptr<LlamaModel> loadSinglePromptModel(const char* cacheRamMib) {
   config["seed"] = "5";
   if (cacheRamMib != nullptr) {
     config["cache_ram_mib"] = cacheRamMib;
+  }
+  if (shareAcrossKeys != nullptr) {
+    config["cache_share_across_keys"] = shareAcrossKeys;
   }
   config["backendsDir"] = test_common::getTestBackendsDir().string();
   std::string path = test_common::BaseTestModelPath::get();
@@ -3922,6 +3929,77 @@ TEST(CrossKeyPrefixTest, BatchBaseCacheKeyServesANewConversation) {
   EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
   model.reset();
   EXPECT_EQ(bytesOf(keys[0]), base);
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// With `cache_share_across_keys` off, a request reuses only its own key's
+// state: a request without a key resets afterwards, and a new key starts cold
+// whatever another conversation or its `baseCacheKey` holds.
+TEST(CrossKeyPrefixTest, TurnedOffARequestReusesOnlyItsOwnKey) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {"cross_off_a.bin", "cross_off_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel(nullptr, "false");
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, fruitQuestion("apple"), "");
+  EXPECT_EQ(LlamaModelTestPeer::llmContext(*model)->getNPast(), 0)
+      << "a request without a key kept its state";
+
+  const SingleTurn apple = runSingle(*model, fruitQuestion("apple"), keys[0]);
+  EXPECT_EQ(apple.reuse, 0u);
+  const SingleTurn banana =
+      runSingle(*model, fruitQuestion("banana"), keys[1], keys[0]);
+  ASSERT_TRUE(fs::exists(keys[0])) << "test setup: the switch saved the chat";
+  EXPECT_EQ(banana.reuse, 0u) << "a new key started from another conversation";
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 0u);
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+
+  const SingleTurn again = runSingle(
+      *model,
+      chatInput(
+          {{"system", fruitStallRules()},
+           {"user", "Say one word: apple."},
+           {"assistant", apple.output},
+           {"user", "Again."}}),
+      keys[0]);
+  EXPECT_GT(again.reuse, K_SHARED_RULES_TOKENS) << "the key lost its own state";
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// The batch counterpart: with `cache_share_across_keys` off, a request
+// without a key parks nothing, and a new key starts cold beside another
+// conversation's parked state.
+TEST(CrossKeyPrefixTest, TurnedOffBatchKeepsEachKeyToItsOwnState) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_off_batch_a.bin", "cross_off_batch_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadBatchedModel(nullptr, "false");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  harness.run(fruitQuestion("apple"), "");
+  EXPECT_TRUE(harness.scheduler().parkedSeqIds().empty())
+      << "a request without a key parked its state";
+
+  harness.run(fruitQuestion("apple"), keys[0]);
+  const BatchedTurn banana = harness.run(fruitQuestion("banana"), keys[1]);
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u);
+  EXPECT_EQ(banana.reuse, 0u) << "a new key started from another conversation";
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+  model.reset();
   for (const auto& key : keys) {
     fs::remove(key);
   }

@@ -234,6 +234,11 @@ public:
   /// a key's state to that key.
   [[nodiscard]] virtual bool sharesCacheAcrossKeys() const { return false; }
 
+  /// `cache_share_across_keys` from the load config: false keeps every
+  /// request to its own key's state, on drivers that would share. Set once
+  /// at creation.
+  virtual void setSharesCacheAcrossKeys(bool shares) { (void)shares; }
+
   /// See `LlmContext::holdsBorrowedState`.
   [[nodiscard]] virtual bool holdsBorrowedState() const { return false; }
 

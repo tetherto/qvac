@@ -413,6 +413,9 @@ private:
         cacheCheckpointPolicy_;
     /// RAM tier budget for conversation states (`cache_ram_mib`).
     uint64_t cacheRamBytes_ = 0;
+    /// `cache_share_across_keys`, applied to the single-prompt context and to
+    /// every batch driver.
+    bool cacheShareAcrossKeys_ = true;
     /// The RAM tier itself, shared by the single-prompt cache and the batch
     /// scheduler.
     std::shared_ptr<batching::SlotStateCache> ramTier_;

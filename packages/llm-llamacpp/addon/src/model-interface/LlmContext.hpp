@@ -314,6 +314,9 @@ public:
   /// See `SequenceDriver::sharesCacheAcrossKeys`.
   [[nodiscard]] virtual bool sharesCacheAcrossKeys() const { return false; }
 
+  /// See `SequenceDriver::setSharesCacheAcrossKeys`.
+  virtual void setSharesCacheAcrossKeys(bool shares) { (void)shares; }
+
   /// See `SequenceDriver::setCacheSourceProvider`.
   virtual void setCacheSourceProvider(
       qvac_lib_inference_addon_llama::cache::CacheSourceProvider provider) {

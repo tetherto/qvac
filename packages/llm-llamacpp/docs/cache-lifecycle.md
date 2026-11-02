@@ -189,7 +189,8 @@ prompt are deleted.
 
 ## Starting from another conversation
 
-On text models a request is not limited to its own `cacheKey`'s state. After
+On text models a request is not limited to its own `cacheKey`'s state, unless
+the load sets `cache_share_across_keys: 'false'` (see **Trust** below). After
 its prompt is tokenized and before it is reconciled, it starts from whichever
 state serves the longest prefix of it, cheapest first on a tie:
 
@@ -226,7 +227,8 @@ then belongs to the request, which reconciles it as above and writes it only
 to its own key's file. This is llama-server's `--slot-prompt-similarity` and `--cache-ram`,
 with any shared prefix taken. A request without a key keeps its state in
 memory the same way, never written to a file. Multimodal models keep a key's
-state to that key for now.
+state to that key for now, as does any model loaded with
+`cache_share_across_keys: 'false'`.
 
 **Cost.** Decoding is paid once per token, because the shared prefix is
 reused. Rendering and tokenizing are not: every cached turn renders and
@@ -241,7 +243,10 @@ the measurement.
 **Trust.** Any conversation the model holds can seed another, and a request's
 stats (`CacheTokens`, the prompt tokens it decoded) show how much of its
 prompt was already held. Conversations that must not learn about each other,
-such as different clients of one server, need separate model instances. A
+such as different clients of one server, need a model loaded with
+`cache_share_across_keys: 'false'`, which keeps every request to its own
+key's state: a request without a key starts cold and is reset afterwards, a
+new key starts cold, and `baseCacheKey` has no effect. A
 `cacheKey` or `baseCacheKey` file's state is loaded as written once its ledger
 matches the prompt, so the files must come from a trusted source.
 
@@ -683,6 +688,7 @@ stateDiagram-v2
 | `cache_checkpoint_dir` | load config | Required with `disk`, refused without it: where checkpoint files go, inside a private directory created in it (0700; on Windows, the directory itself). |
 | `parallel` | load config | With `>= 2` each request runs in its own slot; a committed keyed conversation stays resident in it for the next request on its `cacheKey` (see above). |
 | `cache_ram_mib` | load config | Host-RAM budget for conversations that are not running: switched away on the single-prompt path, or evicted from their batch slot. Write-back: files are written on budget eviction, `saveCache()`, reload or unload (default 0, off). |
+| `cache_share_across_keys` | load config | `'false'` keeps every request on a text model to its own key's state (see [Starting from another conversation](#starting-from-another-conversation)); default `'true'`. |
 
 ## Where each thing lives, at a glance
 

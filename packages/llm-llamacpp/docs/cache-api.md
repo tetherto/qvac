@@ -45,7 +45,7 @@ conversation](./cache-lifecycle.md#starting-from-another-conversation).
 | --- | --- | --- |
 | `cacheKey` | `string` | Path to the cache file. The conversation stays in memory and is written to this file only by `saveCache()` or when it would otherwise be lost (see [Save the cache to disk](#save-the-cache-to-disk)). Omit it and nothing is written to a file (see [Inference without a cacheKey](#inference-without-a-cachekey)). |
 | `ephemeral` | `boolean` | `true` keeps the conversation in memory only: whenever it would be written automatically, it is dropped instead. `saveCache()` still writes it. Default `false`. |
-| `baseCacheKey` | `string` | A `cacheKey` file to start from when nothing in memory serves more of the prompt, such as a primed system prompt. Read, never written; skipped when missing or when it shares no prefix with the prompt. Once named, the file stays a source for later requests on this model, as any `cacheKey` file it used does, until files named or picked as a prompt's closest match more recently push it out (the model keeps the 256 most recent, as far as 64 MiB of memory holds their prompt records). The file must come from a trusted source: its state is loaded as written. Text models only. See [Start from a primed file](#start-from-a-primed-file). |
+| `baseCacheKey` | `string` | A `cacheKey` file to start from when nothing in memory serves more of the prompt, such as a primed system prompt. Read, never written; skipped when missing or when it shares no prefix with the prompt. Once named, the file stays a source for later requests on this model, as any `cacheKey` file it used does, until files named or picked as a prompt's closest match more recently push it out (the model keeps the 256 most recent, as far as 64 MiB of memory holds their prompt records). The file must come from a trusted source: its state is loaded as written. Text models only; no effect with [`cache_share_across_keys: 'false'`](#keep-conversations-apart). See [Start from a primed file](#start-from-a-primed-file). |
 | `prefill` | `boolean` | Evaluate prompt without generating a response. On a model loaded with `parallel >= 2`, needs a `cacheKey` — see below. |
 | `generationParams` | `object` | Per-run overrides for temp, top_p, top_k, predict, seed, penalties. |
 
@@ -447,7 +447,7 @@ same key without `ephemeral` makes it a normal conversation again.
 
 ## Switch between cache files
 
-On the single-prompt path, passing a different `cacheKey` saves the old conversation to its file if it has unsaved turns (moves it into the RAM tier when that is on, or does not write it when it is ephemeral), then loads the new one. On text models a new key without a file starts from the prefix it shares with the old conversation; on multimodal models it starts cold.
+On the single-prompt path, passing a different `cacheKey` saves the old conversation to its file if it has unsaved turns (moves it into the RAM tier when that is on, or does not write it when it is ephemeral), then loads the new one. On text models a new key without a file starts from the prefix it shares with the old conversation; on multimodal models, or with [`cache_share_across_keys: 'false'`](#keep-conversations-apart), it starts cold.
 
 ```js
 await model.run([{ role: 'user', content: 'Topic A' }], { cacheKey: 'session1.bin' })
@@ -461,13 +461,37 @@ await model.run([{ role: 'user', content: 'Topic B' }], { cacheKey: 'session2.bi
 Omit `cacheKey`. Nothing is written to a file. On text models the request
 still reuses the prefix it shares with what the model holds, and its state
 stays in memory for the next request, as llama-server does; on multimodal
-models the context is reset after each call.
+models, or with [`cache_share_across_keys: 'false'`](#keep-conversations-apart),
+the context is reset after each call.
 
 ```js
 await model.run([{ role: 'user', content: 'One-off question' }])
 ```
 
 If caching was previously active, omitting `cacheKey` saves the active conversation to its file (unless it is ephemeral or has no unsaved turns) and sets it aside.
+
+## Keep conversations apart
+
+On text models a request starts from whichever state the model holds that
+serves the most of its prompt, whatever its `cacheKey` (see [Starting from another
+conversation](cache-lifecycle.md#starting-from-another-conversation)), and its
+`CacheTokens` and timing show how much was already held. When the callers of
+one model must not learn whether another conversation shares their prompt,
+such as different clients of one server, load it with
+`cache_share_across_keys: 'false'` (also `cache-share-across-keys`; `'0'` and
+`'off'` work too):
+
+```js
+const model = new LlmLlamacpp({
+  files: { model: [modelPath] },
+  config: { ctx_size: '16384', parallel: '4', cache_share_across_keys: 'false' }
+})
+```
+
+Every request then reuses only its own key's state: a request without a key
+starts cold and is reset afterwards, a new key starts cold, and `baseCacheKey`
+has no effect. The default, `'true'`, shares state as llama-server's prompt
+cache does.
 
 ## Tools and reasoning
 

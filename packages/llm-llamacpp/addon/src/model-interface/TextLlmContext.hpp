@@ -157,11 +157,14 @@ public:
   void setCacheReconciliationEnabled(bool enabled) override {
     cacheReconciliationEnabled_ = enabled;
   }
-  /// Every decoder-only text model: the ledger describes its memory exactly,
-  /// whichever request left it there. Encoder-decoder models encode each
-  /// prompt afresh.
+  /// Every decoder-only text model, unless the load turned it off: the ledger
+  /// describes its memory exactly, whichever request left it there.
+  /// Encoder-decoder models encode each prompt afresh.
   [[nodiscard]] bool sharesCacheAcrossKeys() const override {
-    return !llama_model_has_encoder(modelCtx_.model);
+    return cacheSharedAcrossKeys_ && !llama_model_has_encoder(modelCtx_.model);
+  }
+  void setSharesCacheAcrossKeys(bool shares) override {
+    cacheSharedAcrossKeys_ = shares;
   }
   void setCacheSourceProvider(
       qvac_lib_inference_addon_llama::cache::CacheSourceProvider provider)
@@ -488,6 +491,8 @@ private:
   std::string thinkingForcedOpenText_;
 
   bool cacheReconciliationEnabled_ = false;
+  // `cache_share_across_keys`; see `sharesCacheAcrossKeys`.
+  bool cacheSharedAcrossKeys_ = true;
   bool cacheRequestActive_ = false;
   bool cacheRequestRolledBack_ = false;
   // Request phase, reset at `preparePrefill` and set by `onPrefillComplete`.

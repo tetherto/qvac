@@ -381,6 +381,19 @@ declare namespace LlmLlamacpp {
          */
         cache_ram_mib?: NumericLike;
         /**
+         * Whether a request on a text model may start from state another
+         * conversation left: the memory a request without a `cacheKey` keeps,
+         * another key's state in a sequence or the RAM tier, or a `cacheKey` file
+         * the model has used. `'true'` (default) shares it, as llama-server's
+         * prompt cache does. `'false'` keeps every request to its own key's state,
+         * for a model serving callers who must not learn through `cacheTokens` or
+         * timing whether another conversation shares their prompt: a request
+         * without a key starts cold and is reset afterwards, a new key starts cold,
+         * and `baseCacheKey` has no effect. Also accepted as
+         * `cache-share-across-keys`.
+         */
+        cache_share_across_keys?: "true" | "false" | "on" | "off" | "1" | "0";
+        /**
          * Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'`
          * drafts with the model's own multi-token-prediction (MTP / NextN) head,
          * or with the external MTP head given as `spec_draft_model`; the model or
@@ -589,7 +602,8 @@ declare namespace LlmLlamacpp {
          * this model, as any `cacheKey` file it used does, until files named
          * or picked as a prompt's closest match more recently push it out (the
          * model keeps the 256 most recent, as far as 64 MiB of memory holds
-         * their prompt records). Text models only.
+         * their prompt records). Text models only; no effect with
+         * `cache_share_across_keys: 'false'`.
          */
         baseCacheKey?: string;
         /**

@@ -292,6 +292,36 @@ TEST(CacheLedger, ParseCheckpointDirIsRequiredExactlyWithDisk) {
   }
 }
 
+// `cache_share_across_keys` is on unless the load turns it off, and is
+// consumed so llama.cpp's parser never sees it.
+TEST(CacheLedger, ParseCacheShareAcrossKeys) {
+  std::unordered_map<std::string, std::string> none{{"ctx_size", "4096"}};
+  EXPECT_TRUE(cache::parseCacheShareAcrossKeys(none));
+  EXPECT_EQ(none.size(), 1u);
+
+  for (const char* off : {"false", "0", "off", "FALSE"}) {
+    std::unordered_map<std::string, std::string> config{
+        {"cache_share_across_keys", off}};
+    EXPECT_FALSE(cache::parseCacheShareAcrossKeys(config)) << off;
+    EXPECT_TRUE(config.empty());
+  }
+  std::unordered_map<std::string, std::string> dashed{
+      {"cache-share-across-keys", "true"}};
+  EXPECT_TRUE(cache::parseCacheShareAcrossKeys(dashed));
+  EXPECT_TRUE(dashed.empty());
+
+  for (const char* bad : {"", "no", "2", "yes"}) {
+    std::unordered_map<std::string, std::string> config{
+        {"cache_share_across_keys", bad}};
+    EXPECT_THROW(
+        cache::parseCacheShareAcrossKeys(config), std::invalid_argument)
+        << "value: \"" << bad << "\"";
+  }
+  std::unordered_map<std::string, std::string> both{
+      {"cache_share_across_keys", "0"}, {"cache-share-across-keys", "0"}};
+  EXPECT_THROW(cache::parseCacheShareAcrossKeys(both), std::invalid_argument);
+}
+
 // Every untrimmable model, DeepSeek V4 included, snapshots only the state a
 // tail trim cannot rebuild.
 TEST(ModelMemoryPolicy, UntrimmableModelsSnapshotPartially) {
