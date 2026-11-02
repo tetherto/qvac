@@ -37,6 +37,7 @@ class QVACRegistryClient extends ReadyResource {
     this._metadataReady = null
 
     this.storage = this.registryConfig.getRegistryStorage(opts.storage)
+    this._tempStorage = this.registryConfig.tempStoragePath || null
     this.registryCoreKey = this.registryConfig.getRegistryCoreKey(opts.registryCoreKey)
     this.corestore = new Corestore(this.storage, opts.corestoreOpts || {})
 
@@ -733,6 +734,16 @@ class QVACRegistryClient extends ReadyResource {
       this.logger.debug('Closing corestore')
       await this.corestore.close()
       this.corestore = null
+    }
+
+    if (this._tempStorage) {
+      this.logger.debug('Removing temp storage', { storage: this._tempStorage })
+      try {
+        await fs.promises.rm(this._tempStorage, { recursive: true, force: true })
+      } catch (e) {
+        this.logger.warn('Failed to remove temp storage', { error: e.message })
+      }
+      this._tempStorage = null
     }
 
     this.logger.debug('QVACRegistryClient closed')

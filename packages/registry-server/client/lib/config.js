@@ -33,6 +33,7 @@ class RegistryConfig {
       `qvac-registry-client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
     )
     this.logger.debug('Created temp storage path', { storageDir })
+    this.tempStoragePath = storageDir
     return storageDir
   }
 
