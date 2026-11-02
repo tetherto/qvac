@@ -26,10 +26,34 @@
       <section class="panel setup" aria-labelledby="setup-heading">
         <div class="section-heading">
           <h2 id="setup-heading">01 <span>Load a model</span></h2>
-          <span class="tag">Qwen3.5 · 2B · Q4_K_M</span>
+          <span id="model-tag" class="tag"></span>
         </div>
-        <label for="model-url">GGUF model URL</label>
-        <input id="model-url" type="url" spellcheck="false" />
+        <div class="source-tabs" role="radiogroup" aria-label="Model source">
+          <label><input type="radio" name="source" value="registry" checked /> QVAC registry</label>
+          <label><input type="radio" name="source" value="url" /> URL</label>
+          <label><input type="radio" name="source" value="file" /> File on this computer</label>
+        </div>
+        <div data-source="registry">
+          <label for="registry-model">Model</label>
+          <select id="registry-model"></select>
+          <p class="hint">
+            Registry models hosted on Hugging Face download from their origin and are checked
+            against the registry's SHA-256. Models served only through the registry's peer-to-peer
+            network are listed but cannot load in a browser.
+          </p>
+        </div>
+        <div data-source="url" hidden>
+          <label for="model-url">GGUF model URL</label>
+          <input id="model-url" type="url" spellcheck="false" placeholder="https://…/model.gguf" />
+          <p class="hint">The host must allow cross-origin requests (Hugging Face does).</p>
+        </div>
+        <div data-source="file" hidden>
+          <label for="model-file">GGUF file</label>
+          <input id="model-file" type="file" accept=".gguf" />
+          <p class="hint">
+            The file is copied once into the browser's private storage and loaded from there.
+          </p>
+        </div>
         <div class="controls">
           <label for="context"
             >Context size
@@ -38,9 +62,8 @@
           ><button id="unload" class="secondary" disabled>Unload</button>
         </div>
         <p class="hint">
-          The default model downloads about 1.4 GB once; the browser keeps it in its private file
-          system for later visits and runs inference locally. The model host must allow cross-origin
-          requests.
+          Downloaded models stay in the browser's private file system, so later visits load them
+          without downloading again. Inference runs locally on this machine.
         </p>
         <progress
           id="progress"

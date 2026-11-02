@@ -11,15 +11,118 @@ import {
   close,
   loggingStream,
   SDK_ALL_LOG_ID,
-  InferenceCancelledError
+  InferenceCancelledError,
+  models
 } from '@qvac/sdk'
 
 const elements = Object.fromEntries(
   [...document.querySelectorAll('[id]')].map((element) => [element.id, element])
 )
-const defaultModelUrl =
-  'https://huggingface.co/bartowski/Qwen_Qwen3.5-2B-GGUF/resolve/7d26695454df6de5fbcce2e58681e62dae06ce43/Qwen_Qwen3.5-2B-Q4_K_M.gguf'
-elements['model-url'].value = new URLSearchParams(location.search).get('model') ?? defaultModelUrl
+// Completion models that fit a browser tab: single-file, not a vision
+// projector, and small enough for 32-bit WebAssembly memory.
+const MAX_BROWSER_MODEL_BYTES = 3.5e9
+const DEFAULT_REGISTRY_MODEL = 'QWEN3_1_7B_INST_Q4'
+const registryModels = models
+  .filter(
+    (model) =>
+      model.engine === 'llamacpp-completion' &&
+      !model.shardMetadata &&
+      !model.companionSet &&
+      !model.name.startsWith('MMPROJ_') &&
+      model.expectedSize <= MAX_BROWSER_MODEL_BYTES
+  )
+  .sort((a, b) => a.expectedSize - b.expectedSize)
+
+function fillRegistrySelect() {
+  const groups = [
+    // Hugging Face-hosted entries download from their origin over HTTPS.
+    { label: 'Loads in the browser (Hugging Face)', source: 'hf', disabled: false },
+    // Everything else reaches clients only through the registry's P2P network.
+    { label: 'Peer-to-peer only (not available in a browser)', source: 's3', disabled: true }
+  ]
+  for (const group of groups) {
+    const optgroup = document.createElement('optgroup')
+    optgroup.label = group.label
+    for (const model of registryModels.filter((m) => m.registrySource === group.source)) {
+      const option = document.createElement('option')
+      option.value = model.name
+      option.disabled = group.disabled
+      option.textContent = `${model.name} · ${(model.expectedSize / 1e9).toFixed(2)} GB`
+      optgroup.append(option)
+    }
+    elements['registry-model'].append(optgroup)
+  }
+  elements['registry-model'].value = DEFAULT_REGISTRY_MODEL
+}
+
+function selectedSource() {
+  return document.querySelector('input[name="source"]:checked').value
+}
+
+function showSource(source) {
+  for (const panel of document.querySelectorAll('[data-source]')) {
+    panel.hidden = panel.dataset.source !== source
+  }
+  const model = registryModels.find((m) => m.name === elements['registry-model'].value)
+  elements['model-tag'].textContent =
+    source === 'registry' && model ? `${model.params ?? ''} · ${model.quantization ?? ''}` : ''
+}
+
+// Copies a picked file into the origin private file system, where the
+// engine reads model files, and returns its path there. A copy of the same
+// size from an earlier visit is reused.
+async function importLocalFile(file) {
+  const root = await navigator.storage.getDirectory()
+  const qvac = await root.getDirectoryHandle('.qvac', { create: true })
+  const local = await qvac.getDirectoryHandle('local', { create: true })
+  const handle = await local.getFileHandle(file.name, { create: true })
+  if ((await handle.getFile()).size !== file.size) {
+    let copied = 0
+    const progress = new TransformStream({
+      transform(chunk, controller) {
+        copied += chunk.byteLength
+        showProgress(
+          { downloaded: copied, total: file.size, percentage: (100 * copied) / file.size },
+          'Copying file'
+        )
+        controller.enqueue(chunk)
+      }
+    })
+    await file
+      .stream()
+      .pipeThrough(progress)
+      .pipeTo(await handle.createWritable())
+  }
+  return `/.qvac/local/${file.name}`
+}
+
+async function resolveModelSrc() {
+  const source = selectedSource()
+  if (source === 'registry') {
+    const model = registryModels.find((m) => m.name === elements['registry-model'].value)
+    return `registry://${model.registrySource}/${model.registryPath}`
+  }
+  if (source === 'url') {
+    const url = elements['model-url'].value.trim()
+    if (!url) throw new Error('Enter a model URL')
+    return url
+  }
+  const file = elements['model-file'].files[0]
+  if (!file) throw new Error('Choose a GGUF file')
+  return importLocalFile(file)
+}
+
+fillRegistrySelect()
+const requestedUrl = new URLSearchParams(location.search).get('model')
+if (requestedUrl) {
+  elements['model-url'].value = requestedUrl
+  document.querySelector('input[name="source"][value="url"]').checked = true
+}
+showSource(selectedSource())
+for (const radio of document.querySelectorAll('input[name="source"]')) {
+  radio.addEventListener('change', () => showSource(selectedSource()))
+}
+elements['registry-model'].addEventListener('change', () => showSource(selectedSource()))
 
 // Everything the page observed, for the Download logs button.
 const evidence = {
@@ -65,7 +168,11 @@ function updateControls() {
   elements.run.disabled = busy || !modelId || closed
   elements.stop.disabled = !activeRun
   elements.unload.disabled = busy || !modelId || closed
-  elements['model-url'].disabled = busy || Boolean(modelId)
+  const locked = busy || Boolean(modelId)
+  elements['model-url'].disabled = locked
+  elements['registry-model'].disabled = locked
+  elements['model-file'].disabled = locked
+  for (const radio of document.querySelectorAll('input[name="source"]')) radio.disabled = locked
   elements.context.disabled = busy || Boolean(modelId)
   elements.clear.disabled = busy
   elements.close.disabled = closed
@@ -96,14 +203,14 @@ function resetError() {
   elements.error.textContent = ''
 }
 
-function showProgress(progress) {
+function showProgress(progress, phase = 'Downloading model') {
   const loaded = progress.downloaded ?? 0
   const total = progress.total ?? 0
   elements.progress.hidden = false
   if (total > 0) {
     elements.progress.value = loaded / total
     elements['progress-text'].textContent =
-      `Downloading model · ${(loaded / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB · ${progress.percentage.toFixed(0)}%`
+      `${phase} · ${(loaded / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB · ${progress.percentage.toFixed(0)}%`
   } else {
     elements.progress.removeAttribute('value')
     elements['progress-text'].textContent = 'Preparing model…'
@@ -131,9 +238,10 @@ elements.load.addEventListener('click', async () => {
   updateControls()
   setStatus('Loading model', 'busy')
   elements['progress-text'].textContent = 'Fetching model and preparing WebGPU…'
-  const modelSrc = elements['model-url'].value.trim()
   const started = performance.now()
+  let modelSrc
   try {
+    modelSrc = await resolveModelSrc()
     modelId = await loadModel({
       modelSrc,
       modelType: 'llamacpp-completion',

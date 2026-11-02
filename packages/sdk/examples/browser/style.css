@@ -141,6 +141,7 @@ label {
   display: block;
 }
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid #cfdae0;
@@ -153,6 +154,7 @@ textarea {
   background: #fbfcfd;
 }
 input:focus,
+select:focus,
 textarea:focus {
   outline: 2px solid #b1d8e6;
   outline-offset: 2px;
@@ -161,6 +163,24 @@ textarea {
   resize: vertical;
   min-height: 110px;
   line-height: 1.6;
+}
+.source-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 4px 0 14px;
+}
+.source-tabs label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #203747;
+  cursor: pointer;
+}
+.source-tabs input {
+  width: auto;
+  margin: 0;
 }
 .controls {
   display: flex;
