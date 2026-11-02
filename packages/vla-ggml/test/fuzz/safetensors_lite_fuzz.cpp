@@ -2,7 +2,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <random>
+#include <stdexcept>
 #include <string>
+#include <system_error>
 #include <tuple>
 #include <vector>
 
@@ -20,8 +23,57 @@ namespace {
 
 using qvac_vla_safetensors_lite::Reader;
 
-std::vector<uint8_t> makeSafetensors(
-    const std::string& header, const std::vector<uint8_t>& blob) {
+// Atomically claim a directory so concurrent test processes never share files.
+class TempDirectory {
+public:
+  TempDirectory() {
+    std::random_device random;
+    const auto root = std::filesystem::temp_directory_path();
+    for (int attempt = 0; attempt < 100; ++attempt) {
+      const auto candidate =
+          root / ("qvac-safetensors-" + std::to_string(random()) + "-" +
+                  std::to_string(random()));
+      std::error_code error;
+      if (std::filesystem::create_directory(candidate, error)) {
+        path_ = candidate;
+        return;
+      }
+      if (error && error != std::errc::file_exists) {
+        throw std::filesystem::filesystem_error(
+            "cannot create safetensors test directory", candidate, error);
+      }
+    }
+    throw std::runtime_error(
+        "cannot claim a unique safetensors test directory");
+  }
+
+  ~TempDirectory() {
+    std::error_code ignored;
+    std::filesystem::remove_all(path_, ignored);
+  }
+
+  TempDirectory(const TempDirectory&) = delete;
+  TempDirectory& operator=(const TempDirectory&) = delete;
+
+  std::filesystem::path write(const std::vector<uint8_t>& bytes) const {
+    const auto file = path_ / "fixture.bin";
+    std::ofstream out(file, std::ios::binary);
+    out.write(
+        reinterpret_cast<const char*>(bytes.data()),
+        static_cast<std::streamsize>(bytes.size()));
+    out.close();
+    if (!out) {
+      throw std::runtime_error("cannot write safetensors test fixture");
+    }
+    return file;
+  }
+
+private:
+  std::filesystem::path path_;
+};
+
+std::vector<uint8_t>
+makeSafetensors(const std::string& header, const std::vector<uint8_t>& blob) {
   std::vector<uint8_t> out(8 + header.size() + blob.size());
   const uint64_t headerLen = header.size();
   std::memcpy(out.data(), &headerLen, 8);
@@ -73,37 +125,24 @@ TEST(SafetensorsLiteFuzzSeeds, ValidSeedParsesAndReadsF32) {
 }
 
 TEST(SafetensorsLiteFuzzSeeds, FileOpenRejectsZeroHeaderWithoutReadingPayload) {
-  const auto path =
-      std::filesystem::temp_directory_path() / "qvac-safetensors-bad-header.bin";
-  {
-    std::ofstream out(path, std::ios::binary);
-    const uint64_t headerLen = 0;
-    std::vector<char> payload(64 * 1024, 'x');
-    out.write(reinterpret_cast<const char*>(&headerLen), 8);
-    out.write(payload.data(), static_cast<std::streamsize>(payload.size()));
-  }
+  const TempDirectory directory;
+  std::vector<uint8_t> bytes(8 + 64 * 1024, 'x');
+  const uint64_t headerLen = 0;
+  std::memcpy(bytes.data(), &headerLen, 8);
+  const auto path = directory.write(bytes);
   Reader reader;
   EXPECT_THROW(reader.open(path.string()), std::runtime_error);
-  std::filesystem::remove(path);
 }
 
 TEST(SafetensorsLiteFuzzSeeds, FileOpenReadsValidTensor) {
-  const std::vector<uint8_t> bytes = validOneTensorSeed();
-  const auto path =
-      std::filesystem::temp_directory_path() / "qvac-safetensors-valid.bin";
-  {
-    std::ofstream out(path, std::ios::binary);
-    out.write(
-        reinterpret_cast<const char*>(bytes.data()),
-        static_cast<std::streamsize>(bytes.size()));
-  }
+  const TempDirectory directory;
+  const auto path = directory.write(validOneTensorSeed());
   Reader reader;
   ASSERT_NO_THROW(reader.open(path.string()));
   EXPECT_TRUE(reader.has("w"));
-  std::filesystem::remove(path);
 }
 
-TEST(SafetensorsLiteFuzzSeeds, HugeHeaderLengthIsRejected) {
+TEST(SafetensorsLiteFuzzSeeds, HeaderLengthBeyondBufferIsRejected) {
   std::vector<uint8_t> bytes(16, 0);
   const uint64_t huge = Reader::kMaxHeaderLength + 1;
   std::memcpy(bytes.data(), &huge, 8);
@@ -111,5 +150,44 @@ TEST(SafetensorsLiteFuzzSeeds, HugeHeaderLengthIsRejected) {
   EXPECT_THROW(
       reader.openFromMemory(bytes.data(), bytes.size()), std::runtime_error);
 }
+
+class SafetensorsLiteHeaderLimit : public ::testing::TestWithParam<uint64_t> {
+protected:
+  std::vector<uint8_t> fixture() const {
+    std::string header =
+        R"({"w":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}})";
+    // Whitespace padding preserves a valid header and an aligned data section.
+    header.resize(static_cast<size_t>(GetParam()), ' ');
+    return makeSafetensors(header, std::vector<uint8_t>(4, 0));
+  }
+};
+
+TEST_P(SafetensorsLiteHeaderLimit, MemoryOpenEnforcesLimit) {
+  const auto bytes = fixture();
+  Reader reader;
+  if (GetParam() > Reader::kMaxHeaderLength) {
+    EXPECT_THROW(
+        reader.openFromMemory(bytes.data(), bytes.size()), std::runtime_error);
+  } else {
+    ASSERT_NO_THROW(reader.openFromMemory(bytes.data(), bytes.size()));
+    EXPECT_EQ(reader.readF32("w"), std::vector<float>({0.0F}));
+  }
+}
+
+TEST_P(SafetensorsLiteHeaderLimit, FileOpenEnforcesLimit) {
+  const TempDirectory directory;
+  const auto path = directory.write(fixture());
+  Reader reader;
+  if (GetParam() > Reader::kMaxHeaderLength) {
+    EXPECT_THROW(reader.open(path.string()), std::runtime_error);
+  } else {
+    ASSERT_NO_THROW(reader.open(path.string()));
+    EXPECT_EQ(reader.readF32("w"), std::vector<float>({0.0F}));
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Boundary, SafetensorsLiteHeaderLimit,
+    ::testing::Values(Reader::kMaxHeaderLength, Reader::kMaxHeaderLength + 8));
 
 } // namespace
