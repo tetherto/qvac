@@ -71,14 +71,21 @@ function parseSource(source: string) {
         ) {
           throw new Error(`Mutated error table is unsupported: ${identifier.text}`)
         }
-        if (
-          ts.isVariableDeclaration(parent) &&
-          !readsProperty &&
-          !(checker.getTypeAtLocation(node).flags & ts.TypeFlags.NumberLike) &&
-          parent.initializer === target &&
-          ts.isIdentifier(parent.name)
-        ) {
-          assertUnmodified(parent.name)
+        if (!readsProperty && !(checker.getTypeAtLocation(node).flags & ts.TypeFlags.NumberLike)) {
+          if (
+            ts.isBinaryExpression(parent) &&
+            parent.right === target &&
+            parent.operatorToken.kind === ts.SyntaxKind.EqualsToken
+          ) {
+            throw new Error(`Assignment-based error table alias is unsupported: ${identifier.text}`)
+          }
+          if (
+            ts.isVariableDeclaration(parent) &&
+            parent.initializer === target &&
+            ts.isIdentifier(parent.name)
+          ) {
+            assertUnmodified(parent.name)
+          }
         }
       }
       ts.forEachChild(node, visit)

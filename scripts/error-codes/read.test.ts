@@ -63,6 +63,18 @@ test('rejects mutation of a numeric map instead of reading its obsolete initiali
   assert.throws(() => readCodeMap(source, 'CODES'), /Mutated error/)
 })
 
+test('rejects assignment-based aliases that hide added registration codes', () => {
+  const source = `
+    const CODES = { FIRST: 1001 }
+    const definitions = { [CODES.FIRST]: {} }
+    let alias
+    alias = definitions
+    alias[999999] = {}
+    addCodes(definitions)
+  `
+  assert.throws(() => referencedCodeMaps(source), /Assignment-based error table alias/)
+})
+
 test('rejects a function parameter shadowing a module code map', () => {
   const source = `
     const CODES = { FIRST: 1001 }
@@ -96,7 +108,8 @@ test('copying a numeric constant does not alias it', () => {
   const source = `
     const FIRST = 1001
     const CODES = { FIRST: FIRST }
-    let code = FIRST
+    let code
+    code = FIRST
     code = 2000
   `
   assert.deepEqual(readCodeMap(source, 'CODES'), { FIRST: 1001 })

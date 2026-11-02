@@ -30,12 +30,13 @@
       "owner": "@qvac/translation-nmtcpp",
       "ranges": [
         [8001, 8100],
-        [8201, 9000]
+        [8204, 9000]
       ],
       "status": "active",
-      "note": "Excludes OCR's existing 8101-8200 allocation from the former broad 8001-9000 reservation. Published translation codes 8001-8009 are unchanged. Historical conflict: the removed @qvac/util-transcription used 8201-8203 with different meanings; skip those numbers when this block grows."
+      "note": "Excludes OCR and retired util-transcription allocations from the former broad 8001-9000 reservation. Published translation codes 8001-8009 are unchanged."
     },
     { "owner": "@qvac/ocr-ggml", "ranges": [[8101, 8200]], "status": "active" },
+    { "owner": "@qvac/util-transcription", "ranges": [[8201, 8203]], "status": "retired" },
     { "owner": "@qvac/ocr-onnx", "ranges": [[9001, 10000]], "status": "retired" },
     { "owner": "@tetherto/vad-onnx", "ranges": [[10001, 11000]], "status": "retired" },
     { "owner": "@qvac/decoder-audio", "ranges": [[11001, 12000]], "status": "active" },

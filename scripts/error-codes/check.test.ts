@@ -1,7 +1,27 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { checkCodeSources } from './check.js'
-import type { CodeRangeRegistry } from '../../packages/error/src/code-ranges.js'
+import {
+  validatePackageCodes,
+  type CodeRangeRegistry
+} from '../../packages/error/src/code-ranges.js'
+
+test('the registry keeps historical transcription codes unavailable to translation', () => {
+  const data: unknown = JSON.parse(
+    readFileSync(new URL('../../packages/error/code-ranges.json', import.meta.url), 'utf8')
+  )
+  for (const code of [8201, 8202, 8203]) {
+    assert.throws(
+      () => validatePackageCodes(data, '@qvac/translation-nmtcpp', { NEW_ERROR: code }),
+      /outside/
+    )
+  }
+  assert.throws(() => validatePackageCodes(data, '@qvac/util-transcription', { OLD_ERROR: 8201 }))
+  assert.doesNotThrow(() =>
+    validatePackageCodes(data, '@qvac/translation-nmtcpp', { EXISTING: 8009, NEXT: 8204 })
+  )
+})
 
 const registry: CodeRangeRegistry = {
   version: 1,
@@ -127,7 +147,15 @@ test('rejects a function-local code map shadowing a listed module map', () => {
 test('shared names retain their numbers across every subrange of an allocation', () => {
   const data: CodeRangeRegistry = {
     version: 1,
-    allocations: [{ ...registry.allocations[0]!, ranges: [[1001, 1500], [1501, 2000]] }]
+    allocations: [
+      {
+        ...registry.allocations[0]!,
+        ranges: [
+          [1001, 1500],
+          [1501, 2000]
+        ]
+      }
+    ]
   }
   const files = new Map([
     [sources[0]!.file, 'const CODES = { FIRST: 1001 }'],
@@ -140,7 +168,15 @@ test('shared names may mirror either existing number when the owner reuses a nam
   const server = { owner: 'sdk', file: 'packages/sdk/src/server-errors.ts', symbols: ['CODES'] }
   const data: CodeRangeRegistry = {
     version: 1,
-    allocations: [{ ...registry.allocations[0]!, ranges: [[1001, 1500], [1501, 2000]] }]
+    allocations: [
+      {
+        ...registry.allocations[0]!,
+        ranges: [
+          [1001, 1500],
+          [1501, 2000]
+        ]
+      }
+    ]
   }
   const files = new Map([
     [sources[0]!.file, 'const CODES = { AUDIO: 1001 }'],
