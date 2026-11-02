@@ -129,12 +129,12 @@ export const BERGAMOT_MODEL_RE = /^(.+\/)model\.([a-z]+)\.intgemm\.alphas\.bin$/
 export const DEFAULT_REGISTRY_CORE_KEY = 'uf1fm44uzockp6azhcdiqt1esjgm65fwtimsh946e8kwysdes9ko'
 
 // Addon → OpenAI-style endpoint category. Mirrors `ENDPOINT_CATEGORY` from
-// packages/cli/src/serve/config.ts, restricted to the addon keys (the CLI map
+// packages/sdk-tools/src/serve/config.ts, restricted to the addon keys (the CLI map
 // also accepts the legacy engine aliases). `vad`, `bci`, and `other` have no
 // endpoint in the OpenAI-shaped surface today and are filtered out at codegen
 // time.
 //
-// Update both this table and packages/cli/src/serve/config.ts together when a
+// Update both this table and packages/sdk-tools/src/serve/config.ts together when a
 // new addon ships a new endpoint category.
 export const ADDON_TO_ENDPOINT_CATEGORY = {
   llm: 'chat',

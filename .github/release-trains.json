@@ -9,9 +9,9 @@
     "checks": ["shared-runtime-libs", "sdk-python", "package-checks"],
     "packageChecks": ".github/sdk-pod-checks.json"
   },
-  "cli": {
+  "sdk-tools": {
     "groups": ["agentstack"],
-    "anchorProject": "@qvac/cli",
+    "anchorProject": "@qvac/sdk-tools",
     "fromNpm": ["packages/sdk"],
     "checks": ["package-checks"],
     "packageChecks": ".github/sdk-pod-checks.json"

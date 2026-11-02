@@ -16,7 +16,7 @@ const require = createRequire(import.meta.url)
 // bare-module-lexer (loaded by bare-pack through bare-module-traverse) calls
 // js_is_sharedarraybuffer from its native addon, which Node outside this range
 // lacks; the bare-pack child process crashes instead of throwing. Same range as
-// engines.node in @qvac/cli.
+// engines.node in @qvac/sdk-tools.
 export const BARE_PACK_NODE_ENGINES = '^22.21.0 || >=24.9.0'
 
 export function isBarePackNodeSupported(version: string): boolean {

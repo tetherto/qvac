@@ -46,7 +46,7 @@ layer to reach npm.
 - `.agents/skills/qv-sdk-backmerge/SKILL.md`
 - `.agents/skills/qv-sdk-inference-version/SKILL.md` (sdk releases only)
 - `docs/architecture/AGENT-INTEGRATIONS.md`
-- `packages/cli/test/AGENT_STACK_E2E.md`
+- `packages/sdk-tools/test/AGENT_STACK_E2E.md`
 - Planner: `.agents/skills/_lib/sdk/agent-stack-plan.mjs`
 - Path map: `scripts/sdk/package-paths.cjs`
 - Cascade details: [references/prepare-cascade.md](references/prepare-cascade.md)
@@ -141,7 +141,7 @@ Backmerge keeps `main` in sync with the cut.
 
 ### CLI
 
-- `packages/cli/package.json` — version + `dependencies["@qvac/sdk"]`
+- `packages/sdk-tools/package.json` — version + `dependencies["@qvac/sdk"]`
 - changelog via `qv-sdk-changelog --package=cli`
 - NOTICE via `qv-notice-generate cli`
 - README committed SDK range if documented

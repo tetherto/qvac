@@ -17,7 +17,7 @@
         "packages/sdk-python/",
         "packages/rag/",
         "packages/ai-sdk-provider/",
-        "packages/cli/",
+        "packages/sdk-tools/",
         "packages/error/",
         "packages/logging/",
         "packages/model-fit/",

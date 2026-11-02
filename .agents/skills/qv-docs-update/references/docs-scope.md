@@ -9,7 +9,7 @@ All paths are relative to the monorepo root.
 ```text
 packages/sdk
 packages/sdk-python
-packages/cli
+packages/sdk-tools
 ```
 
 Never edit anything under `packages/**`. If a source file is wrong — an example that no longer compiles, a TSDoc block that contradicts the code — report it and stop. Fixing source is the developer's job.

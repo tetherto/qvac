@@ -598,7 +598,7 @@ function runR2(pages: Page[], files: ChangedFile[]) {
 // ---------------------------------------------------------------------------
 // R4 — CLI command router (exact)
 //
-// packages/cli/src/ has one folder per command area, and each command has its
+// packages/sdk-tools/src/ has one folder per command area, and each command has its
 // own `### `qvac <command>`` heading in the CLI collection's index page, in the
 // line being written.
 // ---------------------------------------------------------------------------
@@ -659,11 +659,11 @@ function runR4(pages: Page[], files: ChangedFile[]) {
     // A command the routing map declares undocumented is a decision, not a
     // gap. Honouring it here is what stops R4 and R3 from contradicting each
     // other — R4 asking for a heading that R3 says should not exist.
-    const declaration = declaredUndocumented(`packages/cli/src/${folder}/`);
+    const declaration = declaredUndocumented(`packages/sdk-tools/src/${folder}/`);
     if (declaration) {
       discarded.push({
         page: CLI_INDEX,
-        source: `packages/cli/src/${folder}/`,
+        source: `packages/sdk-tools/src/${folder}/`,
         via: "R4",
         reason: `routing-map.yaml declares ${declaration} as not documented`,
       });
@@ -697,7 +697,7 @@ function runR4(pages: Page[], files: ChangedFile[]) {
         );
       } else {
         unrouted.push({
-          source: `packages/cli/src/${folder}/`,
+          source: `packages/sdk-tools/src/${folder}/`,
           bucket: "cli-command",
           status: folderFiles[0]!.status,
           reason: `no \`${command}\` heading in ${CLI_INDEX} and no "## Reference" section to add one under`,

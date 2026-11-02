@@ -78,7 +78,7 @@ Consequences for release changelog / metadata PRs:
 7. Validate tag requirements ([bc]/[api]/[mod])
 8. **If the diff exposes or changes a user-facing SDK capability**, apply first-class product parity (see below) before outputting the description
 9. **If diff touches the `version` of `packages/sdk` or its `@qvac/inference` range, or sdk's dep blocks**, chain into the `qv-sdk-inference-version` skill (see "SDK @qvac/inference Version Trigger" below)
-10. **If the diff touches user-facing paths under `packages/sdk`, `packages/cli`, or `packages/sdk-python` and `docs/website/content/docs` is not already in the diff**, apply the docs website trigger (see "Docs Website Trigger" below) before outputting the description
+10. **If the diff touches user-facing paths under `packages/sdk`, `packages/sdk-tools`, or `packages/sdk-python` and `docs/website/content/docs` is not already in the diff**, apply the docs website trigger (see "Docs Website Trigger" below) before outputting the description
 11. Output complete PR description
 12. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
 
@@ -119,16 +119,16 @@ Infer first, ask only if uncertain:
 
 Fill template sections based on the diff analysis. Delete sections that don't apply.
 
-## First-class product parity (CLI)
+## First-class product parity (SDK tools)
 
 **Trigger:** the diff touches `packages/sdk/server/bare/plugins/**`, `packages/sdk/client/api/**`, a plugin `*-config.ts` schema, or a request/sampling schema used by serve, **and** the change is a user-facing inference capability (new modality, new request field, new load-time `modelConfig` field). Native addon-only diffs skip this.
 
 See `packages/sdk/AGENTS.md`.
 
-If triggered and `packages/cli` is unchanged:
+If triggered and `packages/sdk-tools` is unchanged:
 
-1. ASK: "CLI not updated. Add CLI in this PR, mark library-only in the body, or skip?"
-2. Add CLI: stop until the CLI diff is present. Library-only: one-line why in the body. Skip: reminder at the end.
+1. ASK: "`@qvac/sdk-tools` not updated. Add SDK tools support in this PR, mark library-only in the body, or skip?"
+2. Add SDK tools support: stop until the `packages/sdk-tools` diff is present. Library-only: one-line why in the body. Skip: reminder at the end.
 
 ## Output Format
 
@@ -215,11 +215,11 @@ To skip this sync for a single run, the user can invoke `/qv-sdk-pr-create --no-
 
 ## Docs Website Trigger
 
-**Trigger:** diff touches user-facing paths under `packages/sdk`, `packages/cli`, or `packages/sdk-python`, and `docs/website/content/docs` is not already in the diff.
+**Trigger:** diff touches user-facing paths under `packages/sdk`, `packages/sdk-tools`, or `packages/sdk-python`, and `docs/website/content/docs` is not already in the diff.
 
 ### Steps (after Step 9 of Workflow above)
 
-1. When triggered, ask: "user-facing SDK/CLI change with no docs-website diff. run `/qv-docs-update` before opening the PR?" [Yes / No (library-only)]
+1. When triggered, ask: "user-facing SDK or SDK tools change with no docs-website diff. run `/qv-docs-update` before opening the PR?" [Yes / No (library-only)]
 2. If yes, read `.agents/skills/qv-docs-update/SKILL.md` and follow it. Don't open the PR until it reports `DONE`, `NO_DOCS_IMPACT`, or `GENERATED_DOCS_ONLY`.
 3. If no (library-only), put the library-only note in the PR body — one line on why the change needs no docs.
 
@@ -269,7 +269,7 @@ Before outputting the PR description, verify:
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
-- [ ] If the diff is a user-facing SDK capability, CLI was updated in this PR, the body says library-only, or the skip reminder was emitted
+- [ ] If the diff is a user-facing SDK capability, `@qvac/sdk-tools` was updated in this PR, the body says library-only, or the skip reminder was emitted
 - [ ] If diff touches sdk's `version` / `@qvac/inference` range (or sdk's deps), `qv-sdk-inference-version` ran (or `--no-sync` was set with a reminder emitted), and the version checks plus sdk-python checks pass
 - [ ] If base is `release-<pkg>-<x.y.z>` or `release-train-<train>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 - [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)

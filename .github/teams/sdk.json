@@ -17,7 +17,7 @@
   "ownedPaths": [
     "packages/sdk/",
     "packages/sdk-e2e/",
-    "packages/cli/",
+    "packages/sdk-tools/",
     "packages/rag/",
     "packages/logging/",
     "packages/error/",

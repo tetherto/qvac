@@ -19,7 +19,7 @@ Run this skill only when the developer asks for it. The source API must be stabl
 
 ## What this skill reads and writes
 
-There are three observed source packages: `packages/sdk`, `packages/sdk-python`, `packages/cli`. They are read-only.
+There are three observed source packages: `packages/sdk`, `packages/sdk-python`, `packages/sdk-tools`. They are read-only.
 
 Never edit anything under `packages/**`. If a source file is wrong, report it and stop. Fixing source is the developer's job.
 
@@ -183,8 +183,8 @@ Each file carries a bucket. The bucket decides which router runs in Phase 4.
 | `api` | `packages/sdk/src/client/api/**` |
 | `client-other` | `packages/sdk/src/client/**` outside `api/` |
 | `surface` | barrels, `src/types/**`, `src/schemas/**` |
-| `cli-command` | `packages/cli/src/{bundle-sdk,serve,configure,openai,doctor,verify}/**` |
-| `cli-infra` | `packages/cli/src/cli/**`, `src/{config,errors,logger,index}.ts` |
+| `cli-command` | `packages/sdk-tools/src/{bundle-sdk,serve,configure,openai,doctor,verify}/**` |
+| `cli-infra` | `packages/sdk-tools/src/cli/**`, `src/{config,errors,logger,index}.ts` |
 | `python-surface` | `packages/sdk-python/**` outside `examples/` |
 | `area` | `packages/sdk/src/{logging,models,server,worker}/**` |
 | `internal` | everything else |

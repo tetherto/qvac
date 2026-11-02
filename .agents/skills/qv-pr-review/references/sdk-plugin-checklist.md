@@ -147,9 +147,9 @@ Rules for this section:
 - Breaking changes are documented under **Breaking Changes**.
 - Lockfile / package updates are included when dependencies change.
 
-### First-class products (`qvac serve` / `qvac configure`)
+### First-class products (`qvac-sdk serve` / `qvac-sdk configure`)
 
 See `packages/sdk/AGENTS.md`. Native addon-only PRs skip this section.
 
-- User-facing inference change updates `@qvac/cli` in this PR, or the PR body says library-only.
-- Missing `packages/cli` diff with no library-only note is a gap (Medium).
+- User-facing inference change updates `@qvac/sdk-tools` in this PR, or the PR body says library-only.
+- Missing `packages/sdk-tools` diff with no library-only note is a gap (Medium).

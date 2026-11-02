@@ -19,8 +19,8 @@
     "tests_bare": true
   },
   {
-    "package": "cli",
-    "path": "packages/cli",
+    "package": "sdk-tools",
+    "path": "packages/sdk-tools",
     "sdk_sources": ["workspace"],
     "sdk_sources_release": ["workspace", "published"]
   },
