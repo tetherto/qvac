@@ -23786,7 +23786,7 @@
               "type": "number"
             },
             "denoiserBackendDevice": {
-              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU.",
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
               "type": "number"
             },
             "denoiserBackendId": {
@@ -23991,7 +23991,7 @@
               "type": "number"
             },
             "denoiserBackendDevice": {
-              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU.",
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
               "type": "number"
             },
             "denoiserBackendId": {

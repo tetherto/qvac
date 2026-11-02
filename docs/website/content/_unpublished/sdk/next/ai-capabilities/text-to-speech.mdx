@@ -105,9 +105,9 @@ statistics from the final frame (`undefined` if the run reported none).
 | `backendDevice` | Compute device chosen at load: `0` CPU, `1` GPU. |
 | `backendId` | Backend family: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other GPU. |
 | `gpuUnsupported` | `1` when a GPU is present but unusable by engine policy, so the run fell back to CPU. |
-| `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU. |
+| `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed. |
 | `enhancerBackendId` | LavaSR enhancer backend family, same codes as `backendId`. |
-| `denoiserBackendDevice` | LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU. |
+| `denoiserBackendDevice` | LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed. |
 | `denoiserBackendId` | LavaSR denoiser backend family, same codes as `backendId`. |
 | `codecSidecarLoaded` | Audio8 on macOS/iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired. |
 | `codecOnCoreml` | Audio8: `1` when the synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` names. |

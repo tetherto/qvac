@@ -1366,7 +1366,7 @@ export const ttsStatsSchema = z.object({
   denoiserBackendDevice: z
     .number()
     .optional()
-    .describe('LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU.'),
+    .describe('LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.'),
   denoiserBackendId: z
     .number()
     .optional()

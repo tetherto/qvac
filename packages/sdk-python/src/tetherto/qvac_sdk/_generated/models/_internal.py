@@ -23805,7 +23805,7 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="denoiserBackendDevice",
-            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU.",
+            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
         ),
     ] = None
     denoiser_backend_id: Annotated[
@@ -24017,7 +24017,7 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="denoiserBackendDevice",
-            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU.",
+            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
         ),
     ] = None
     denoiser_backend_id: Annotated[
