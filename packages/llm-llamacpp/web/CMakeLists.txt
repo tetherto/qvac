@@ -19,15 +19,31 @@ foreach(option
     GGML_METAL GGML_VULKAN GGML_CUDA GGML_HIP GGML_OPENCL GGML_BLAS GGML_RPC
     GGML_LLAMAFILE LLAMA_BUILD_TESTS LLAMA_BUILD_EXAMPLES LLAMA_BUILD_TOOLS
     LLAMA_BUILD_SERVER LLAMA_BUILD_APP LLAMA_BUILD_HTML LLAMA_BUILD_MTMD
-    LLAMA_OPENSSL LLAMA_SUBPROCESS LLAMA_WASM_MEM64)
+    LLAMA_OPENSSL LLAMA_SUBPROCESS)
   set(${option} OFF CACHE BOOL "" FORCE)
 endforeach()
 set(GGML_WEBGPU ON CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
 set(LLAMA_MTMD ON CACHE BOOL "" FORCE)
 
-add_compile_options(-sMEMORY64=0 "$<$<COMPILE_LANGUAGE:CXX>:-fexceptions>")
-add_link_options(-sMEMORY64=0 -fexceptions)
+# 32-bit WebAssembly runs in every browser with WebGPU, but its size_t is 32
+# bits, so llama.cpp cannot address a GGUF whose tensor data reaches 4 GiB.
+# The Memory64 variant lifts that limit (Chrome 133+, Firefox 134+; not
+# Safari). binding.browser.js picks the variant at runtime.
+option(QVAC_WASM_MEMORY64 "Build the 64-bit (Memory64) variant" OFF)
+if(QVAC_WASM_MEMORY64)
+  set(WASM_MEMORY64 1)
+  set(OUTPUT_BASENAME llm-llamacpp-64)
+  # Upper bound for memory growth, not an allocation.
+  set(WASM_MAXIMUM_MEMORY 17179869184)
+else()
+  set(WASM_MEMORY64 0)
+  set(OUTPUT_BASENAME llm-llamacpp)
+  set(WASM_MAXIMUM_MEMORY 4294967296)
+endif()
+set(LLAMA_WASM_MEM64 ${QVAC_WASM_MEMORY64} CACHE BOOL "" FORCE)
+add_compile_options(-sMEMORY64=${WASM_MEMORY64} "$<$<COMPILE_LANGUAGE:CXX>:-fexceptions>")
+add_link_options(-sMEMORY64=${WASM_MEMORY64} -fexceptions)
 add_subdirectory("${FABRIC_SOURCE_DIR}" fabric EXCLUDE_FROM_ALL)
 
 set(ADDON_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
@@ -54,6 +70,7 @@ target_include_directories(llm-llamacpp PRIVATE
   "${FABRIC_SOURCE_DIR}/vendor")
 target_link_libraries(llm-llamacpp PRIVATE llama-common llama mtmd)
 set_target_properties(llm-llamacpp PROPERTIES
+  OUTPUT_NAME "${OUTPUT_BASENAME}"
   SUFFIX ".mjs"
   RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
 target_link_options(llm-llamacpp PRIVATE
@@ -65,7 +82,7 @@ target_link_options(llm-llamacpp PRIVATE
   -sEXIT_RUNTIME=0
   -sALLOW_MEMORY_GROWTH=1
   -sSTACK_SIZE=8388608
-  -sMAXIMUM_MEMORY=4294967296
+  -sMAXIMUM_MEMORY=${WASM_MAXIMUM_MEMORY}
   -lworkerfs.js
   "-sEXPORTED_FUNCTIONS=_qvac_web_create,_qvac_web_activate,_qvac_web_run,_qvac_web_save_cache,_qvac_web_discard_cache,_qvac_web_destroy,_qvac_web_result"
   "-sEXPORTED_RUNTIME_METHODS=ccall,FS"

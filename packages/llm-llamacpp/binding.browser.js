@@ -5,8 +5,9 @@
 //
 // Model paths are absolute paths in the origin private file system (OPFS),
 // e.g. `/models/qwen.gguf` is `models/qwen.gguf` under
-// `navigator.storage.getDirectory()`. Each file is mounted read-only into the
-// engine without being copied into WebAssembly memory.
+// `navigator.storage.getDirectory()`, or the paths of files the page mounted
+// in place. Each file is mounted read-only into the engine without being
+// copied into WebAssembly memory.
 
 const LOG_PRIORITY = { ERROR: 0, WARNING: 1, INFO: 2, DEBUG: 3 }
 
@@ -25,9 +26,23 @@ function log(line, fallback) {
   if (logCallback && message.trim() !== '') logCallback(priority, message)
 }
 
+// A module that declares one page of 64-bit memory: it validates only where
+// WebAssembly Memory64 is supported (Chrome 133+, Firefox 134+; not Safari).
+const MEMORY64_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 1])
+
+// Memory64 lifts the 4 GiB limit of 32-bit WebAssembly, which otherwise
+// caps the size of the GGUF the engine can read. Both imports stay literal
+// so bundlers emit both variants.
+function importEngine() {
+  if (WebAssembly.validate(MEMORY64_PROBE)) {
+    return import('./prebuilds/web/llm-llamacpp-64.mjs')
+  }
+  return import('./prebuilds/web/llm-llamacpp.mjs')
+}
+
 function loadModule() {
   if (!modulePromise) {
-    modulePromise = import('./prebuilds/web/llm-llamacpp.mjs').then(({ default: createModule }) =>
+    modulePromise = importEngine().then(({ default: createModule }) =>
       createModule({
         print: (line) => log(line, LOG_PRIORITY.INFO),
         printErr: (line) => log(line, LOG_PRIORITY.WARNING),
@@ -75,10 +90,16 @@ async function call(name, types, args) {
   return check(module, status)
 }
 
+// Files handed over to read in place (the SDK's mountBrowserFile), keyed by
+// path; filled by @qvac/inference's browser file system.
+const MOUNTED_FILES_KEY = Symbol.for('qvac.browser.mountedFiles')
+
 async function opfsFile(path) {
   if (typeof path !== 'string' || !path.startsWith('/')) {
     throw new TypeError(`Expected an absolute OPFS path, got: ${path}`)
   }
+  const mounted = globalThis[MOUNTED_FILES_KEY]?.get(path)
+  if (mounted) return mounted
   const parts = path.split('/').filter(Boolean)
   const name = parts.pop()
   let directory = await navigator.storage.getDirectory()
