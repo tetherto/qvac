@@ -118,7 +118,7 @@ async function buildServerParts(
       }
     }),
     extensions: {},
-    runtime: { state: 'active' },
+    runtime: { state: 'active', pending: 0, epoch: 0 },
     get loadModelOverride() {
       return overrideRef.current
     },

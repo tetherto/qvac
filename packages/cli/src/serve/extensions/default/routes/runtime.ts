@@ -9,6 +9,7 @@ import {
   type LoadedModelInfo
 } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { isLifecycleBlockedError } from '@/serve/core/lifecycle'
 import { errorResponses } from '@/serve/lib/error-responses'
 import {
   runtimeModelsResult,
@@ -74,13 +75,18 @@ export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyP
     const { qvac } = app
 
     async function readState(): Promise<LifecycleState> {
+      const { runtime } = qvac
+      const epoch = runtime.epoch
+      let state: LifecycleState
       try {
-        qvac.runtime.state = await ops.state()
+        state = await ops.state()
       } catch (err) {
         qvac.logger.error(`  runtime state failed: ${errorMessage(err)}`)
         throw new HttpError(500, 'runtime_state_failed', 'Failed to read the runtime state.')
       }
-      return qvac.runtime.state
+      // A transition that started or ended during the read owns the gate.
+      if (runtime.epoch === epoch && runtime.pending === 0) runtime.state = state
+      return state
     }
 
     // The SDK settles on a state even when a transition fails, so re-read it
@@ -90,12 +96,22 @@ export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyP
       pending: 'suspending' | 'resuming',
       failure: { code: string; message: string }
     ): Promise<z.infer<typeof runtimeState>> {
+      const { runtime } = qvac
       // Gate new requests for as long as the SDK call runs.
-      qvac.runtime.state = pending
+      runtime.pending++
+      runtime.epoch++
+      runtime.state = pending
+      let failed = false
       try {
         await run()
       } catch (err) {
+        failed = true
         qvac.logger.error(`  runtime ${failure.code}: ${errorMessage(err)}`)
+      } finally {
+        runtime.pending--
+        runtime.epoch++
+      }
+      if (failed) {
         await readState().catch(() => {})
         throw new HttpError(500, failure.code, failure.message)
       }
@@ -146,6 +162,8 @@ export function runtimeRoutes(ops: RuntimeOperations = SDK_OPERATIONS): FastifyP
             try {
               return toRow(entry.id, await ops.getLoadedModelInfo({ modelId: entry.sdkModelId! }))
             } catch (err) {
+              // Suspended after the request passed the gate: let it map to 503.
+              if (isLifecycleBlockedError(err)) throw err
               // Unloaded between the registry read and the SDK call.
               if (qvac.registry.getEntry(entry.id)?.state !== qvac.registry.STATES.READY) {
                 return null

@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import type { FastifyInstance } from 'fastify'
-import type { LifecycleState, LoadedModelInfo } from '@qvac/sdk'
+import { SDK_SERVER_ERROR_CODES, type LifecycleState, type LoadedModelInfo } from '@qvac/sdk'
 import { buildServer } from '@/serve/index'
 import { runtimeRoutes, type RuntimeOperations } from '@/serve/extensions/default/routes/runtime'
 
@@ -11,12 +11,19 @@ interface Fake {
   failSuspend: boolean
   failResume: boolean
   suspendLatch?: Promise<void>
+  stateLatch?: Promise<void>
+  infoError?: Error
 }
 
 function fakeOperations(fake: Fake): RuntimeOperations {
   /* lunte-disable require-await */
   return {
-    state: async () => fake.state,
+    state: async () => {
+      // Read before waiting, like an SDK reply that is already in flight.
+      const state = fake.state
+      await fake.stateLatch
+      return state
+    },
     suspend: async () => {
       await fake.suspendLatch
       fake.state = 'suspended'
@@ -26,16 +33,23 @@ function fakeOperations(fake: Fake): RuntimeOperations {
       if (fake.failResume) throw new Error('corestore refused')
       fake.state = 'active'
     },
-    getLoadedModelInfo: async ({ modelId }): Promise<LoadedModelInfo> => ({
-      modelId,
-      modelType: 'llm',
-      handlers: ['completionStream'],
-      addonPackage: '@qvac/llm-llamacpp',
-      loadedAt: new Date(1_760_000_000_000),
-      path: '/home/someone/.qvac/models/secret.gguf'
-    })
+    getLoadedModelInfo: async ({ modelId }): Promise<LoadedModelInfo> => {
+      if (fake.infoError) throw fake.infoError
+      return infoFor(modelId)
+    }
   }
   /* lunte-enable require-await */
+}
+
+function infoFor(modelId: string): LoadedModelInfo {
+  return {
+    modelId,
+    modelType: 'llm',
+    handlers: ['completionStream'],
+    addonPackage: '@qvac/llm-llamacpp',
+    loadedAt: new Date(1_760_000_000_000),
+    path: '/home/someone/.qvac/models/secret.gguf'
+  }
 }
 
 async function server(
@@ -142,6 +156,60 @@ describe('runtime routes with --enable-admin', () => {
     } finally {
       release()
       delete fake.suspendLatch
+    }
+  })
+
+  it('keeps the gate closed when a state read from before the suspend replies late', async () => {
+    let releaseState = (): void => {}
+    let releaseSuspend = (): void => {}
+    fake.stateLatch = new Promise((resolve) => {
+      releaseState = resolve
+    })
+    fake.suspendLatch = new Promise((resolve) => {
+      releaseSuspend = resolve
+    })
+    try {
+      const staleRead = app.inject({ method: 'GET', url: '/qvac/v1/runtime/state' })
+      await new Promise((resolve) => setImmediate(resolve))
+      const suspending = app.inject({ method: 'POST', url: '/qvac/v1/runtime/suspend' })
+      await new Promise((resolve) => setImmediate(resolve))
+
+      releaseState()
+      assert.equal(((await staleRead).json() as { state: string }).state, 'active')
+      assert.equal((await app.inject({ method: 'GET', url: '/probe' })).statusCode, 503)
+
+      delete fake.stateLatch
+      releaseSuspend()
+      assert.equal((await suspending).statusCode, 200)
+      assert.equal((await app.inject({ method: 'GET', url: '/probe' })).statusCode, 503)
+    } finally {
+      releaseState()
+      releaseSuspend()
+      delete fake.stateLatch
+      delete fake.suspendLatch
+    }
+  })
+
+  it('keeps serving the OpenAPI document with a query string while suspended', async () => {
+    await app.inject({ method: 'POST', url: '/qvac/v1/runtime/suspend' })
+    const res = await app.inject({ method: 'GET', url: '/openapi.json?pretty=1' })
+    assert.equal(res.statusCode, 200)
+  })
+
+  it('answers 503 when the models list reaches the SDK after a suspend', async () => {
+    const opts = { modelSrc: 'x', sdkType: 'llm', endpointCategory: 'chat', config: {} }
+    app.qvac.registry.register('blocked-llm', opts)
+    app.qvac.registry.setReady('blocked-llm', 'sdk-blocked')
+    fake.infoError = Object.assign(new Error('blocked'), {
+      code: SDK_SERVER_ERROR_CODES.LIFECYCLE_OPERATION_BLOCKED
+    })
+    try {
+      const res = await app.inject({ method: 'GET', url: '/qvac/v1/runtime/models' })
+      assert.equal(res.statusCode, 503)
+      assert.equal(code(res), 'runtime_suspended')
+    } finally {
+      delete fake.infoError
+      app.qvac.registry.markUnloaded('blocked-llm')
     }
   })
 
