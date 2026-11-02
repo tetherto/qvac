@@ -5040,3 +5040,46 @@ TEST(CrossKeyMultimodalTest, HybridExactPromptStartsFromTheDonorsCheckpoint) {
     fs::remove(key);
   }
 }
+
+// The checkpoint a new key starts from becomes its own: saved with the key
+// and loaded in a fresh model, the same image prompt starts from it again
+// without encoding the image.
+TEST(CrossKeyMultimodalTest, HybridKeyKeepsTheCheckpointItStartedFrom) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found() ||
+      !visionModelsFound(modelPath.path, qwen35ProjectionPath())) {
+    GTEST_SKIP() << "Qwen3.5 model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_kept_primed.bin", "cross_vision_kept_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadVisionModel(modelPath.path, qwen35ProjectionPath(), "2");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    LlamaModel::Prompt prime = imageQuestion("elephant.jpg", K_ANIMAL, keys[0]);
+    prime.prefill = true;
+    model->processPromptBatch({prime});
+    harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[1]));
+    ASSERT_EQ(harness.scheduler().donorHitsForTesting(), 1u)
+        << "test setup: the new key did not start from the primed one";
+    model->saveCache(keys[1]);
+  }
+  ASSERT_TRUE(fs::exists(keys[1]));
+
+  auto model = loadVisionModel(modelPath.path, qwen35ProjectionPath(), "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const BatchedTurn again =
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[1]));
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u);
+  EXPECT_EQ(again.visionEncodeTiles, 0)
+      << "the key's file kept no checkpoint of the state it started from";
+  EXPECT_GT(again.reuse, 0u);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}

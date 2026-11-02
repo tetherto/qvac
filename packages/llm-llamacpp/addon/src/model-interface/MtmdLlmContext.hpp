@@ -432,7 +432,8 @@ private:
   /// See TextLlmContext::adoptDonorState.
   bool adoptDonorState(
       const qvac_lib_inference_addon_llama::cache::DonorState& donor,
-      const qvac_lib_inference_addon_llama::cache::Ledger& prompt);
+      const qvac_lib_inference_addon_llama::cache::Ledger& prompt,
+      bool keepOwnOnFailure);
   void commitCacheRequest();
   bool restorePreRequestCacheState();
   // Checks a state `loadCache` or `adoptResidentState` just put in memory

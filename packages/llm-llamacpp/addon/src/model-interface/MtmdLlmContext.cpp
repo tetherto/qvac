@@ -1556,26 +1556,76 @@ void MtmdLlmContext::adoptBestCacheSource(
       std::max(fullPrompt.positions(), fullPrompt.cacheTokens()),
       donorTrimmable,
       own,
-      [this, &prompt](const cache::DonorState& donor) {
-        return adoptDonorState(donor, prompt);
+      [this, &prompt, own](const cache::DonorState& donor) {
+        return adoptDonorState(donor, prompt, own > 0);
       });
 }
 
 bool MtmdLlmContext::adoptDonorState(
-    const cache::DonorState& donor, const cache::Ledger& prompt) {
+    const cache::DonorState& donor, const cache::Ledger& prompt,
+    bool keepOwnOnFailure) {
   // See TextLlmContext::adoptDonorState.
-  ScopeGuard coldGuard([this]() noexcept {
+  llama_synchronize(modelCtx_.lctx);
+  SequenceStateSnapshot own;
+  if (keepOwnOnFailure) {
+    bool kept = false;
+    try {
+      kept = snapshotSequenceState(
+          modelCtx_.lctx,
+          seqId_,
+          current_.pos,
+          own,
+          cacheCheckpointPolicy_.storage,
+          SnapshotScope::Full,
+          cacheCheckpointPolicy_.directory);
+    } catch (const std::exception& ex) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format("[MtmdLlm] own state snapshot threw: %s\n", ex.what()));
+    }
+    if (!kept) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[MtmdLlm] not starting from %s: the sequence's own state could "
+              "not be kept aside\n",
+              donor.source.c_str()));
+      return false;
+    }
+  }
+  cache::Ledger ownLedger = residentLedger_;
+  const ContextUsage ownUsage = current_;
+  const bool ownBorrowed = residentStateBorrowed_;
+  cache::Checkpoints ownCheckpoints = std::exchange(cacheCheckpoints_, {});
+  ScopeGuard fallbackGuard([&]() noexcept {
     try {
       clearSequenceMemory(modelCtx_.lctx);
+      current_ = {};
+      clearCacheReconciliationState();
+      if (own.empty()) {
+        return;
+      }
+      if (restoreSequenceState(modelCtx_.lctx, seqId_, own)) {
+        residentLedger_ = std::move(ownLedger);
+        current_ = ownUsage;
+        residentStateBorrowed_ = ownBorrowed;
+        cacheCheckpoints_ = std::move(ownCheckpoints);
+      } else {
+        clearSequenceMemory(modelCtx_.lctx);
+      }
     } catch (...) {
       QLOG_IF(
           Priority::ERROR,
-          "[MtmdLlm] failed to clear sequence after rejecting a donor state\n");
+          "[MtmdLlm] failed to put the sequence back after rejecting a donor "
+          "state\n");
+      try {
+        clearSequenceMemory(modelCtx_.lctx);
+      } catch (...) {
+      }
+      current_ = {};
+      clearCacheReconciliationState();
     }
-    current_ = {};
-    clearCacheReconciliationState();
   });
-  llama_synchronize(modelCtx_.lctx);
   clearSequenceMemory(modelCtx_.lctx);
   current_ = {};
   clearCacheReconciliationState();
@@ -1613,7 +1663,7 @@ bool MtmdLlmContext::adoptDonorState(
         .pos = residentLedger_.positions(), .cacheTokens = best->cacheTokens};
   }
   residentStateBorrowed_ = true;
-  coldGuard.dismiss();
+  fallbackGuard.dismiss();
   ++donorAdoptions_;
   QLOG_IF(
       Priority::DEBUG,
@@ -1725,14 +1775,28 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
   }
 
   pendingReuseEntries_ = reuse;
-  // Only the generation prompt follows the history; a history end inside the
-  // reused prefix has nothing left to capture, and with `cache_checkpoints:
-  // 0` nothing would keep it.
+  // Only the generation prompt follows the history; a history end strictly
+  // inside the reused prefix has nothing left to capture, and with
+  // `cache_checkpoints: 0` nothing would keep it.
   if (generationPromptTokens_ > 0 && cacheCheckpointPolicy_.maxCount > 0 &&
-      fullLedger.entries.size() > generationPromptTokens_ &&
-      fullLedger.entries.size() - generationPromptTokens_ > reuse) {
-    historyCheckpointEntries_ =
+      fullLedger.entries.size() > generationPromptTokens_) {
+    const size_t historyEnd =
         fullLedger.entries.size() - generationPromptTokens_;
+    if (historyEnd > reuse) {
+      historyCheckpointEntries_ = historyEnd;
+    } else if (
+        residentLedger_.entries.size() == historyEnd &&
+        std::ranges::none_of(
+            cacheCheckpoints_, [historyEnd](const CacheCheckpoint& kept) {
+              return kept.ledger.entries.size() == historyEnd;
+            })) {
+      // See TextLlmContext::preparePrefill: the memory reused ends at the
+      // history end without a checkpoint there, so it is taken now.
+      historyCheckpointEntries_ = historyEnd;
+      captureHistoryCheckpoint(current_.pos);
+      // Taken: the decode has nothing left to capture.
+      historyCheckpointEntries_ = 0;
+    }
   }
   // What is left is a prefix of this request's own prompt.
   residentStateBorrowed_ = false;
