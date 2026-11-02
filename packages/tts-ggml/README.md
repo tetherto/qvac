@@ -48,9 +48,8 @@ three-sentence prompt then synthesizes in 31% (Turbo) and 33% (Multilingual)
 less time than on Metal. Without a split there is nothing to overlap, so a call
 gains only the S3Gen time. The first use of each sidecar function by an
 executable compiles it for the Neural Engine (3 to 26 s per function on an M2;
-the OS caches the result). When a sidecar is present, `assessFit` returns an
-error with reason `coreml-memory-estimate-unavailable`; its memory usage is
-not projected.
+the OS caches the result). When a sidecar is present, `assessFit` answers
+`unknown`, since the sidecar's memory usage is not projected.
 
 
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
