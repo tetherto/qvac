@@ -77,6 +77,7 @@ function assertTv8Header(t, file, bitWidth) {
   t.is(bytes[1], 0x56, 'tv8 magic V')
   t.is(bytes[2], 0x38, 'tv8 magic 8')
   t.is(bytes[3], 0x00, 'tv8 magic NUL')
+  t.is(bytes[4], 1, 'tv8 revision')
   t.is(bytes[5], bitWidth, 'tv8 bit width')
   t.is(bytes[6], 1, 'tv8 id-mapped kind')
 }
@@ -911,6 +912,7 @@ test('IdMapIndex: TurboVec calibrates from a first add of 1000 rows', (t) => {
   const file = tmpPath('id-map-index-turbovec-calibrated')
   const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
   const small = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
+  const q2 = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q2' })
   const plain = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'q8' })
   let loaded = null
   try {
@@ -926,12 +928,26 @@ test('IdMapIndex: TurboVec calibrates from a first add of 1000 rows', (t) => {
     small.addWithIds(vectors.subarray(0, 999 * TURBOVEC_DIM), ids.subarray(0, 999))
     t.is(small.calibrated, false, 'a first add of 999 rows does not calibrate')
 
+    const repeated = ids.slice()
+    repeated[rows - 1] = repeated[0]
+    expectThrows(
+      t,
+      () => q2.addWithIds(vectors, repeated),
+      'a first add with a repeated id is rejected'
+    )
+    t.is(q2.calibrated, false, 'a rejected first add does not calibrate')
+    q2.addWithIds(new Float32Array(0), new BigUint64Array(0))
+    t.is(q2.calibrated, false, 'an empty first add does not calibrate')
+    q2.addWithIds(vectors, ids)
+    t.is(q2.calibrated, true, 'a q2 index still calibrates on its first rows')
+
     plain.addWithIds(vectors, ids)
     t.is(plain.calibrated, false, 'other storages are never calibrated')
   } finally {
     if (loaded !== null) loaded.dispose()
     idx.dispose()
     small.dispose()
+    q2.dispose()
     plain.dispose()
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }

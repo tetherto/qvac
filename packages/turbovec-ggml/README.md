@@ -43,7 +43,7 @@ The default storage is `q8`. `bitWidth: 2` selects `turbovec-q2`, while `bitWidt
 
 TurboVec requires a 64-bit target and dimensions divisible by 8 and no greater than 16,384. It is a port of upstream turbovec 1.1.2 and provides approximate rotated/quantized dot-product search. TurboVec snapshots use turbovec's v8 container and support `write()` and `load()`, but reject mmap loading, delta-log loading, logged mutations, and delta compaction. v3 snapshots written by earlier releases still load, keep their encoding and keep writing v3.
 
-A fresh TurboVec index fits its TQ+ calibration from its first `addWithIds()` batch when that batch has at least 1,000 rows (from up to 4,096 rows spread across a larger batch), which improves recall. A smaller first batch leaves the index uncalibrated; it still works, without that gain. The `calibrated` getter reports the state, and a loaded index keeps the state it was saved with.
+A fresh TurboVec index fits its TQ+ calibration from its first `addWithIds()` batch when that batch has at least 1,000 rows (from up to 4,096 rows spread across a larger batch), which improves recall. A smaller first batch leaves the index uncalibrated; it still works, without that gain. An empty or rejected first batch does not count, so the next one can still calibrate. The `calibrated` getter reports the state, and a loaded index keeps the state it was saved with.
 
 ## Operations and lifecycle
 

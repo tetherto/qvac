@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -49,7 +50,7 @@ Batch gaussianBatch(int n, uint64_t firstId = 1, unsigned seed = 7) {
   return batch;
 }
 
-constexpr bool kTurboVecTarget = sizeof(size_t) >= 8;
+constexpr bool TURBOVEC_TARGET = sizeof(size_t) >= 8;
 
 // A unique path in the temp dir, removed on scope exit even when an ASSERT
 // returns early, so concurrent or failed runs never see each other's files.
@@ -208,7 +209,7 @@ TEST(VectorIndexTest, WriteAndLoadRestoresIndex) {
 }
 
 TEST(VectorIndexTest, FirstAddOfEnoughRowsCalibratesTurboVec) {
-  if constexpr (!kTurboVecTarget) {
+  if constexpr (!TURBOVEC_TARGET) {
     GTEST_SKIP() << "TurboVec requires a 64-bit target";
   }
   for (const auto storage :
@@ -228,20 +229,192 @@ TEST(VectorIndexTest, FirstAddOfEnoughRowsCalibratesTurboVec) {
 }
 
 TEST(VectorIndexTest, LargeFirstAddCalibratesFromASpreadSample) {
-  if constexpr (!kTurboVecTarget) {
+  if constexpr (!TURBOVEC_TARGET) {
     GTEST_SKIP() << "TurboVec requires a 64-bit target";
   }
   const int n = VectorIndex::AUTO_CALIBRATE_MAX_ROWS * 2 + 3;
+  const int sampleRows = VectorIndex::AUTO_CALIBRATE_MAX_ROWS;
+  auto batch = gaussianBatch(n);
+  // Rows drift with their position, as a batch in source order can, so a
+  // fit from the first rows differs from a fit across the whole batch.
+  for (int i = 0; i < n; i++) {
+    const float shift = 4.0F * static_cast<float>(i) / static_cast<float>(n);
+    for (int d = 0; d < DIM; d++) {
+      batch.vectors[static_cast<size_t>(i) * DIM + d] += shift;
+    }
+  }
+  std::vector<float> spread(static_cast<size_t>(sampleRows) * DIM);
+  for (int i = 0; i < sampleRows; i++) {
+    const auto row = static_cast<size_t>(i) * static_cast<size_t>(n) /
+                     static_cast<size_t>(sampleRows);
+    std::copy_n(
+        batch.vectors.data() + row * DIM,
+        DIM,
+        spread.data() + static_cast<size_t>(i) * DIM);
+  }
+
+  VectorIndex automatic(DIM, VectorStorage::TurboVecQ4);
+  VectorIndex expected(DIM, VectorStorage::TurboVecQ4);
+  VectorIndex firstRows(DIM, VectorStorage::TurboVecQ4);
+  ASSERT_EQ(
+      ggml_vec_index_turbovec_calibrate(
+          expected.raw(), spread.data(), sampleRows),
+      GGML_VEC_INDEX_OK);
+  ASSERT_EQ(
+      ggml_vec_index_turbovec_calibrate(
+          firstRows.raw(), batch.vectors.data(), sampleRows),
+      GGML_VEC_INDEX_OK);
+  for (VectorIndex* idx : {&automatic, &expected, &firstRows}) {
+    ASSERT_EQ(
+        idx->add(batch.vectors.data(), n, batch.ids.data()), GGML_VEC_INDEX_OK);
+    EXPECT_TRUE(idx->calibrated());
+    EXPECT_EQ(idx->len(), n);
+  }
+
+  // Equal codes give equal scores bit for bit; the first-rows fit shows the
+  // check can tell the two samples apart.
+  constexpr int queryCount = 8;
+  constexpr int topK = 10;
+  const auto queries = gaussianBatch(queryCount, 1, 23);
+  auto scoresOf = [&](const VectorIndex& idx) {
+    std::vector<float> scores(static_cast<size_t>(queryCount) * topK);
+    std::vector<uint64_t> ids(scores.size());
+    EXPECT_EQ(
+        idx.search(
+            queries.vectors.data(),
+            queryCount,
+            topK,
+            scores.data(),
+            ids.data()),
+        GGML_VEC_INDEX_OK);
+    return scores;
+  };
+  const auto automaticScores = scoresOf(automatic);
+  EXPECT_EQ(automaticScores, scoresOf(expected));
+  EXPECT_NE(automaticScores, scoresOf(firstRows));
+}
+
+TEST(VectorIndexTest, BothSampleBranchesCalibrate) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  // MAX_ROWS fits from the batch itself, one more row from a gathered copy.
+  for (const int n :
+       {VectorIndex::AUTO_CALIBRATE_MAX_ROWS,
+        VectorIndex::AUTO_CALIBRATE_MAX_ROWS + 1}) {
+    VectorIndex idx(DIM, VectorStorage::TurboVecQ2);
+    const auto batch = gaussianBatch(n);
+    ASSERT_EQ(
+        idx.add(batch.vectors.data(), n, batch.ids.data()), GGML_VEC_INDEX_OK);
+    EXPECT_TRUE(idx.calibrated()) << n << " rows";
+  }
+}
+
+TEST(VectorIndexTest, RejectedFirstAddLeavesIndexFresh) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  const int n = VectorIndex::AUTO_CALIBRATE_MIN_ROWS * 2;
   VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
-  const auto batch = gaussianBatch(n);
+  auto batch = gaussianBatch(n);
+  batch.ids.back() = batch.ids.front();
+  EXPECT_EQ(
+      idx.add(batch.vectors.data(), n, batch.ids.data()),
+      GGML_VEC_INDEX_E_DUPLICATE);
+  EXPECT_EQ(idx.len(), 0);
+  EXPECT_FALSE(idx.calibrated());
+
+  batch.ids.back() = static_cast<uint64_t>(n);
   ASSERT_EQ(
       idx.add(batch.vectors.data(), n, batch.ids.data()), GGML_VEC_INDEX_OK);
   EXPECT_TRUE(idx.calibrated());
+}
+
+TEST(VectorIndexTest, EmptyFirstAddLeavesIndexFresh) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+  const float noVectors[DIM] = {};
+  const uint64_t noIds[1] = {};
+  ASSERT_EQ(idx.add(noVectors, 0, noIds), GGML_VEC_INDEX_OK);
+  EXPECT_FALSE(idx.calibrated());
+
+  const auto batch = gaussianBatch(VectorIndex::AUTO_CALIBRATE_MIN_ROWS);
+  ASSERT_EQ(
+      idx.add(
+          batch.vectors.data(),
+          VectorIndex::AUTO_CALIBRATE_MIN_ROWS,
+          batch.ids.data()),
+      GGML_VEC_INDEX_OK);
+  EXPECT_TRUE(idx.calibrated());
+}
+
+TEST(VectorIndexTest, FirstBatchFabricCannotFitIsAddedUncalibrated) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  // Every row equal: no spread to fit, so the fit is the identity.
+  const int n = VectorIndex::AUTO_CALIBRATE_MIN_ROWS;
+  auto batch = gaussianBatch(n);
+  for (int i = 1; i < n; i++) {
+    std::copy_n(
+        batch.vectors.data(),
+        DIM,
+        batch.vectors.data() + static_cast<size_t>(i) * DIM);
+  }
+  VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+  ASSERT_EQ(
+      idx.add(batch.vectors.data(), n, batch.ids.data()), GGML_VEC_INDEX_OK);
+  EXPECT_FALSE(idx.calibrated());
   EXPECT_EQ(idx.len(), n);
 }
 
+TEST(VectorIndexTest, FirstAddCalibratesAtMaximumDimension) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  constexpr int maxDim = 16384;
+  const int n = VectorIndex::AUTO_CALIBRATE_MIN_ROWS;
+  std::mt19937 gen(5);
+  std::normal_distribution<float> dist(0.0F, 1.0F);
+  std::vector<float> vectors(static_cast<size_t>(n) * maxDim);
+  for (float& x : vectors) {
+    x = dist(gen);
+  }
+  std::vector<uint64_t> ids(static_cast<size_t>(n));
+  for (int i = 0; i < n; i++) {
+    ids[static_cast<size_t>(i)] = static_cast<uint64_t>(i) + 1;
+  }
+  VectorIndex idx(maxDim, VectorStorage::TurboVecQ4);
+  ASSERT_EQ(idx.add(vectors.data(), n, ids.data()), GGML_VEC_INDEX_OK);
+  EXPECT_TRUE(idx.calibrated());
+  float score = 0.0F;
+  uint64_t id = 0;
+  ASSERT_EQ(idx.search(vectors.data(), 1, 1, &score, &id), GGML_VEC_INDEX_OK);
+  EXPECT_EQ(id, 1U);
+}
+
+TEST(VectorIndexTest, MoveCarriesFreshTurboVecState) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  const auto batch = gaussianBatch(VectorIndex::AUTO_CALIBRATE_MIN_ROWS);
+  VectorIndex source(DIM, VectorStorage::TurboVecQ4);
+  VectorIndex moved(std::move(source));
+  VectorIndex assigned(DIM, VectorStorage::F32);
+  assigned = std::move(moved);
+  ASSERT_EQ(
+      assigned.add(
+          batch.vectors.data(),
+          VectorIndex::AUTO_CALIBRATE_MIN_ROWS,
+          batch.ids.data()),
+      GGML_VEC_INDEX_OK);
+  EXPECT_TRUE(assigned.calibrated());
+}
+
 TEST(VectorIndexTest, OnlyAFirstAddCalibrates) {
-  if constexpr (!kTurboVecTarget) {
+  if constexpr (!TURBOVEC_TARGET) {
     GTEST_SKIP() << "TurboVec requires a 64-bit target";
   }
   VectorIndex idx(DIM, VectorStorage::TurboVecQ2);
@@ -275,7 +448,7 @@ TEST(VectorIndexTest, OtherStoragesAreNeverCalibrated) {
 }
 
 TEST(VectorIndexTest, LoadedTurboVecKeepsItsCalibrationState) {
-  if constexpr (!kTurboVecTarget) {
+  if constexpr (!TURBOVEC_TARGET) {
     GTEST_SKIP() << "TurboVec requires a 64-bit target";
   }
   const TempFile calibratedFile("turbovec-ggml-unit-calibrated");

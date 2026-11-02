@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <memory>
+#include <new>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -33,6 +35,18 @@ ggml_vec_index_t* createIndex(int dim, VectorStorage storage) {
     return ggml_vec_index_create_turbovec_q2(dim);
   }
   return nullptr;
+}
+
+// True when `ids` repeats an id, or when the check cannot allocate (the
+// caller then skips the optional work that depends on it).
+bool hasRepeatedId(const uint64_t* ids, int n) noexcept {
+  try {
+    std::vector<uint64_t> sorted(ids, ids + n);
+    std::sort(sorted.begin(), sorted.end());
+    return std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end();
+  } catch (...) {
+    return true;
+  }
 }
 
 } // namespace
@@ -127,9 +141,13 @@ VectorIndex& VectorIndex::operator=(VectorIndex&& other) noexcept {
 
 int VectorIndex::add(
     const float* vectors, int n, const uint64_t* ids) noexcept {
+  // The calibration commits before the add, so it runs only for a batch the
+  // add will take: fabric rejects a batch with a repeated id and leaves the
+  // index unchanged, and a calibration fit from it would outlive it.
   if (autoCalibrate_ && n >= AUTO_CALIBRATE_MIN_ROWS && vectors != nullptr &&
-      ggml_vec_index_len(handle_) == 0 &&
-      ggml_vec_index_turbovec_is_calibrated(handle_) == 0) {
+      ids != nullptr && ggml_vec_index_len(handle_) == 0 &&
+      ggml_vec_index_turbovec_is_calibrated(handle_) == 0 &&
+      !hasRepeatedId(ids, n)) {
     // Best effort: a sample fabric cannot fit (for example one whose fit is
     // the identity) leaves the index uncalibrated, and the add goes ahead.
     const auto dim = static_cast<size_t>(ggml_vec_index_dim(handle_));
@@ -137,26 +155,24 @@ int VectorIndex::add(
       (void)ggml_vec_index_turbovec_calibrate(handle_, vectors, n);
     } else {
       // A batch can arrive in source order (documents, chunks), so take
-      // rows across all of it rather than its first ones.
-      std::vector<float> sample;
-      try {
-        sample.resize(static_cast<size_t>(AUTO_CALIBRATE_MAX_ROWS) * dim);
-      } catch (...) {
-        sample.clear();
-      }
-      if (!sample.empty()) {
-        for (int i = 0; i < AUTO_CALIBRATE_MAX_ROWS; ++i) {
-          const auto row = static_cast<size_t>(i) * static_cast<size_t>(n) /
-                           static_cast<size_t>(AUTO_CALIBRATE_MAX_ROWS);
-          std::copy_n(vectors + row * dim, dim, sample.data() + i * dim);
+      // rows across all of it rather than its first ones. Every element is
+      // written below, so the buffer is not zero-filled first.
+      const auto sampleRows = static_cast<size_t>(AUTO_CALIBRATE_MAX_ROWS);
+      const std::unique_ptr<float[]> sample(
+          new (std::nothrow) float[sampleRows * dim]);
+      if (sample != nullptr) {
+        for (size_t i = 0; i < sampleRows; ++i) {
+          const size_t row = i * static_cast<size_t>(n) / sampleRows;
+          std::copy_n(vectors + row * dim, dim, sample.get() + i * dim);
         }
         (void)ggml_vec_index_turbovec_calibrate(
-            handle_, sample.data(), AUTO_CALIBRATE_MAX_ROWS);
+            handle_, sample.get(), AUTO_CALIBRATE_MAX_ROWS);
       }
     }
   }
   const int rc = ggml_vec_index_add(handle_, vectors, n, ids);
-  if (rc == GGML_VEC_INDEX_OK) {
+  // An empty batch adds no rows, so the index is still fresh after it.
+  if (rc == GGML_VEC_INDEX_OK && n > 0) {
     autoCalibrate_ = false;
   }
   return rc;
