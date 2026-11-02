@@ -220,6 +220,21 @@ test('ASR event adapters preserve the public engine event contract', (t) => {
       source: 'silero'
     }
   )
+  // Parakeet stamps its events with the session time; the native chunk index
+  // stays an engine detail.
+  const stamped = toVadStateEvent({
+    type: 'vad',
+    speaking: false,
+    score: 0.1,
+    source: 'energy',
+    timestamp: 2.5,
+    chunkIndex: 3
+  })
+  t.alike(stamped, { speaking: false, probability: 0.1, source: 'energy', timestamp: 2.5 })
+  t.is(
+    transcribeStreamResponseSchema.parse({ type: 'transcribeStream', vad: stamped }).vad?.timestamp,
+    2.5
+  )
   t.alike(
     toEndOfTurnEvent({
       type: 'endOfTurn',

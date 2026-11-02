@@ -2876,8 +2876,20 @@ class BciTranscribeResponseStats(GeneratedBaseModel):
     whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
         None
     )
-    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
-    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    encoder_time: Annotated[
+        float | None,
+        Field(
+            alias="encoderTime",
+            description="Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
+        ),
+    ] = None
+    decoder_time: Annotated[
+        float | None,
+        Field(
+            alias="decoderTime",
+            description="Parakeet decoder time, or the MOSS decode time, in ms.",
+        ),
+    ] = None
     mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
@@ -2958,6 +2970,36 @@ class BciTranscribeResponseStats(GeneratedBaseModel):
         Field(
             alias="encoderUsedCoreml",
             description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+        ),
+    ] = None
+    aosc_active: Annotated[
+        float | None,
+        Field(
+            alias="aoscActive",
+            description="Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+        ),
+    ] = None
+    prefill_time: Annotated[
+        float | None,
+        Field(alias="prefillTime", description="MOSS: prompt prefill time, in ms."),
+    ] = None
+    audio_tokens: Annotated[
+        float | None,
+        Field(
+            alias="audioTokens", description="MOSS: audio tokens fed to the decoder."
+        ),
+    ] = None
+    prompt_tokens: Annotated[
+        float | None,
+        Field(
+            alias="promptTokens",
+            description="MOSS: prompt tokens prefilled before decoding.",
+        ),
+    ] = None
+    generated_tokens: Annotated[
+        float | None,
+        Field(
+            alias="generatedTokens", description="MOSS: tokens the decoder generated."
         ),
     ] = None
 
@@ -3219,8 +3261,20 @@ class BciTranscribeStreamResponseStats(GeneratedBaseModel):
     whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
         None
     )
-    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
-    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    encoder_time: Annotated[
+        float | None,
+        Field(
+            alias="encoderTime",
+            description="Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
+        ),
+    ] = None
+    decoder_time: Annotated[
+        float | None,
+        Field(
+            alias="decoderTime",
+            description="Parakeet decoder time, or the MOSS decode time, in ms.",
+        ),
+    ] = None
     mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
@@ -3301,6 +3355,36 @@ class BciTranscribeStreamResponseStats(GeneratedBaseModel):
         Field(
             alias="encoderUsedCoreml",
             description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+        ),
+    ] = None
+    aosc_active: Annotated[
+        float | None,
+        Field(
+            alias="aoscActive",
+            description="Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+        ),
+    ] = None
+    prefill_time: Annotated[
+        float | None,
+        Field(alias="prefillTime", description="MOSS: prompt prefill time, in ms."),
+    ] = None
+    audio_tokens: Annotated[
+        float | None,
+        Field(
+            alias="audioTokens", description="MOSS: audio tokens fed to the decoder."
+        ),
+    ] = None
+    prompt_tokens: Annotated[
+        float | None,
+        Field(
+            alias="promptTokens",
+            description="MOSS: prompt tokens prefilled before decoding.",
+        ),
+    ] = None
+    generated_tokens: Annotated[
+        float | None,
+        Field(
+            alias="generatedTokens", description="MOSS: tokens the decoder generated."
         ),
     ] = None
 
@@ -12619,7 +12703,13 @@ class LoadModelSrcRequestMossTranscribeModelConfig(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Enable the linked GPU backend, including Metal. Default false.",
+            description="Select a GPU automatically when `backend` is `auto`, including Metal. Default false.",
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable."
         ),
     ] = None
     backends_dir: Annotated[
@@ -24057,8 +24147,20 @@ class TranscribeResponseStats(GeneratedBaseModel):
     whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
         None
     )
-    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
-    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    encoder_time: Annotated[
+        float | None,
+        Field(
+            alias="encoderTime",
+            description="Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
+        ),
+    ] = None
+    decoder_time: Annotated[
+        float | None,
+        Field(
+            alias="decoderTime",
+            description="Parakeet decoder time, or the MOSS decode time, in ms.",
+        ),
+    ] = None
     mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
@@ -24141,6 +24243,36 @@ class TranscribeResponseStats(GeneratedBaseModel):
             description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
+    aosc_active: Annotated[
+        float | None,
+        Field(
+            alias="aoscActive",
+            description="Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+        ),
+    ] = None
+    prefill_time: Annotated[
+        float | None,
+        Field(alias="prefillTime", description="MOSS: prompt prefill time, in ms."),
+    ] = None
+    audio_tokens: Annotated[
+        float | None,
+        Field(
+            alias="audioTokens", description="MOSS: audio tokens fed to the decoder."
+        ),
+    ] = None
+    prompt_tokens: Annotated[
+        float | None,
+        Field(
+            alias="promptTokens",
+            description="MOSS: prompt tokens prefilled before decoding.",
+        ),
+    ] = None
+    generated_tokens: Annotated[
+        float | None,
+        Field(
+            alias="generatedTokens", description="MOSS: tokens the decoder generated."
+        ),
+    ] = None
 
 
 class TranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
@@ -24217,6 +24349,12 @@ class TranscribeResponseVad(GeneratedBaseModel):
     ] = None
     speaking: bool
     probability: float
+    timestamp: Annotated[
+        float | None,
+        Field(
+            description="Parakeet: event time in seconds from the start of the streaming session."
+        ),
+    ] = None
     source: Annotated[
         TranscribeResponseVadSource | None,
         Field(
@@ -24464,8 +24602,20 @@ class TranscribeStreamResponseStats(GeneratedBaseModel):
     whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
         None
     )
-    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
-    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    encoder_time: Annotated[
+        float | None,
+        Field(
+            alias="encoderTime",
+            description="Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
+        ),
+    ] = None
+    decoder_time: Annotated[
+        float | None,
+        Field(
+            alias="decoderTime",
+            description="Parakeet decoder time, or the MOSS decode time, in ms.",
+        ),
+    ] = None
     mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
@@ -24548,6 +24698,36 @@ class TranscribeStreamResponseStats(GeneratedBaseModel):
             description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
+    aosc_active: Annotated[
+        float | None,
+        Field(
+            alias="aoscActive",
+            description="Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+        ),
+    ] = None
+    prefill_time: Annotated[
+        float | None,
+        Field(alias="prefillTime", description="MOSS: prompt prefill time, in ms."),
+    ] = None
+    audio_tokens: Annotated[
+        float | None,
+        Field(
+            alias="audioTokens", description="MOSS: audio tokens fed to the decoder."
+        ),
+    ] = None
+    prompt_tokens: Annotated[
+        float | None,
+        Field(
+            alias="promptTokens",
+            description="MOSS: prompt tokens prefilled before decoding.",
+        ),
+    ] = None
+    generated_tokens: Annotated[
+        float | None,
+        Field(
+            alias="generatedTokens", description="MOSS: tokens the decoder generated."
+        ),
+    ] = None
 
 
 class TranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
@@ -24624,6 +24804,12 @@ class TranscribeStreamResponseVad(GeneratedBaseModel):
     ] = None
     speaking: bool
     probability: float
+    timestamp: Annotated[
+        float | None,
+        Field(
+            description="Parakeet: event time in seconds from the start of the streaming session."
+        ),
+    ] = None
     source: Annotated[
         TranscribeStreamResponseVadSource | None,
         Field(
