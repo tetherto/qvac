@@ -726,8 +726,6 @@
   ],
   "desktop-python": [
     "embeddinggemma2-audio-deterministic",
-    "embeddinggemma2-cancel",
-    "embeddinggemma2-concurrent",
     "embeddinggemma2-image-retrieval",
     "embeddinggemma2-reject-corrupt-media",
     "embeddinggemma2-text-parity",

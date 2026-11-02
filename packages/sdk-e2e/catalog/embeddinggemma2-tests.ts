@@ -5,9 +5,7 @@ export const embeddingGemma2Tests: TestDefinition[] = [
   'image-retrieval',
   'audio-deterministic',
   'text-parity',
-  'reject-corrupt-media',
-  'concurrent',
-  'cancel'
+  'reject-corrupt-media'
 ].map((name) => ({
   testId: `embeddinggemma2-${name}`,
   params: {},

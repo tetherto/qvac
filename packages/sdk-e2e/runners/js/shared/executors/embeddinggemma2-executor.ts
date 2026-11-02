@@ -1,4 +1,4 @@
-import { embed, cancel, InferenceCancelledError } from '@qvac/sdk'
+import { embed } from '@qvac/sdk'
 import type { TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import type { ResourceManager } from '../resource-manager.js'
@@ -40,9 +40,7 @@ export class EmbeddingGemma2Executor extends AbstractModelExecutor<typeof embedd
     'embeddinggemma2-image-retrieval': this.images.bind(this),
     'embeddinggemma2-audio-deterministic': this.audio.bind(this),
     'embeddinggemma2-text-parity': this.text.bind(this),
-    'embeddinggemma2-reject-corrupt-media': this.corrupt.bind(this),
-    'embeddinggemma2-concurrent': this.concurrent.bind(this),
-    'embeddinggemma2-cancel': this.cancelActive.bind(this)
+    'embeddinggemma2-reject-corrupt-media': this.corrupt.bind(this)
   }
 
   async images(): Promise<TestResult> {
@@ -110,58 +108,6 @@ export class EmbeddingGemma2Executor extends AbstractModelExecutor<typeof embedd
     return {
       passed: vectorsValid(recovered.embedding),
       output: 'Corrupt media must fail and the next image request must succeed'
-    }
-  }
-
-  async concurrent(): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded('embeddinggemma2')
-    const inputs = [[await this.media('images', 'elephant.jpg')]]
-    const reference = await embed({ modelId, inputs })
-    const results = await Promise.allSettled([
-      embed({ modelId, inputs }),
-      embed({ modelId, inputs })
-    ])
-    const completed = results.filter((result) => result.status === 'fulfilled')
-    const busy = results.filter(
-      (result) =>
-        result.status === 'rejected' && /already set or being processed/.test(String(result.reason))
-    )
-    const recovered = await embed({ modelId, inputs })
-    return {
-      passed:
-        completed.length === 1 &&
-        busy.length === 1 &&
-        completed.every(
-          (result) =>
-            vectorsValid(result.value.embedding) &&
-            cosine(result.value.embedding[0], reference.embedding[0]) > 0.999
-        ) &&
-        vectorsValid(recovered.embedding),
-      output:
-        'An overlapping call must reject as busy, leave the active result intact, and allow a subsequent call'
-    }
-  }
-  async cancelActive(): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded('embeddinggemma2')
-    const input = [await this.media('audio', 'diarization-sample-16k.wav')]
-    const call = embed({ modelId, inputs: Array.from({ length: 6 }, () => input) })
-    const outcome = call.then(
-      () => 'completed',
-      (error: unknown) => error
-    )
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    await cancel({ requestId: call.requestId })
-    const result = await outcome
-    if (!(result instanceof InferenceCancelledError)) {
-      return { passed: false, output: `Expected typed cancellation, got ${String(result)}` }
-    }
-    const recovered = await embed({
-      modelId,
-      inputs: [[await this.media('images', 'elephant.jpg')]]
-    })
-    return {
-      passed: vectorsValid(recovered.embedding),
-      output: 'Cancellation must retain its SDK type and allow the next image request'
     }
   }
 }

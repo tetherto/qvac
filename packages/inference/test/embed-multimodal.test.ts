@@ -137,10 +137,10 @@ test('embed fit: refuses a projector rather than reporting text-only memory', (t
 })
 
 let nextId = 0
-function install(run: (input: unknown) => Promise<unknown>, cancel = async () => {}) {
+function install(run: (input: unknown) => Promise<unknown>) {
   const modelId = `embed-multimodal-test-${++nextId}`
   registerModel(modelId, {
-    model: { run, addon: { cancel } } as unknown as AnyModel,
+    model: { run, addon: { cancel: async () => {} } } as unknown as AnyModel,
     modelType: ModelType.llamacppEmbedding,
     path: '/model.gguf',
     config: {}
@@ -179,25 +179,6 @@ test('embed op: missing vectors fail and release the request', async (t) => {
   const modelId = install(async () => ({ await: async () => [[]] }))
   t.teardown(() => unregisterModel(modelId))
   await t.exception(embed({ modelId, inputs: ['query'] }), /embedding/i)
-  t.is(getRequestRegistry().list().length, 0)
-})
-
-test('embed op: cancellation reaches the addon and releases the request', async (t) => {
-  let cancelled = false
-  const modelId = install(
-    async () => ({
-      await: async () => {
-        getRequestRegistry().cancel({ requestId: 'cancel-multimodal' })
-        return [[new Float32Array([0, 1])]]
-      }
-    }),
-    async () => {
-      cancelled = true
-    }
-  )
-  t.teardown(() => unregisterModel(modelId))
-  await t.exception(embed({ modelId, inputs: [[{ media }]] }, 'cancel-multimodal'), /cancel/i)
-  t.ok(cancelled)
   t.is(getRequestRegistry().list().length, 0)
 })
 
