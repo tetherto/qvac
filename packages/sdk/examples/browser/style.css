@@ -189,12 +189,21 @@ textarea {
   align-items: end;
   margin-top: 16px;
 }
-.controls label {
+.controls label:last-of-type {
   margin-right: auto;
 }
 .controls input {
   display: block;
   max-width: 110px;
+}
+.controls .check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding-bottom: 11px;
+}
+.controls .check input {
+  display: inline-block;
 }
 button {
   border: 1px solid #183e51;
@@ -254,6 +263,12 @@ pre {
     monospace;
   color: #283e4c;
   padding-top: 8px;
+}
+#output .thinking {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #7a8d98;
 }
 .diagnostics pre {
   background: #f5f8fa;

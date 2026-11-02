@@ -370,13 +370,22 @@ elements.run.addEventListener('click', async () => {
   const started = performance.now()
   let firstTokenMs
   let timer
+  let thinking
   const requestHistory = [...history, { role: 'user', content: prompt }]
   try {
+    // captureThinking keeps the model's reasoning out of `contentText`, so an
+    // answer cut off mid-reasoning never lands in the next turn's history.
     activeRun = completion({
       modelId,
       history: requestHistory,
       stream: true,
-      generationParams: { predict: Number(elements.tokens.value), temp: 0.6, seed: 42 }
+      captureThinking: true,
+      generationParams: {
+        predict: Number(elements.tokens.value),
+        temp: Number(elements.temperature.value),
+        // 0 turns the reasoning channel off for this request.
+        ...(!elements.reasoning.checked && { reasoning_budget: 0 })
+      }
     })
     updateControls()
     setStatus('Generating', 'busy')
@@ -384,9 +393,17 @@ elements.run.addEventListener('click', async () => {
       elements.elapsed.textContent = `${((performance.now() - started) / 1000).toFixed(1)} s`
     }, 100)
     for await (const event of activeRun.events) {
-      if (event.type === 'contentDelta' || event.type === 'thinkingDelta') {
+      if (event.type === 'thinkingDelta') {
         firstTokenMs ??= performance.now() - started
-        elements.output.textContent += event.text
+        if (!thinking) {
+          thinking = document.createElement('span')
+          thinking.className = 'thinking'
+          elements.output.append(thinking)
+        }
+        thinking.append(thinking.textContent ? event.text : event.text.trimStart())
+      } else if (event.type === 'contentDelta') {
+        firstTokenMs ??= performance.now() - started
+        elements.output.append(event.text)
       }
     }
     const final = await activeRun.final

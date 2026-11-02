@@ -117,6 +117,11 @@ Explain in three short sentences why the sky appears blue.</textarea>
             <label for="tokens"
               >Output limit
               <input id="tokens" type="number" min="1" max="2048" value="256" /></label
+            ><label for="temperature"
+              >Temperature
+              <input id="temperature" type="number" min="0" max="2" step="0.1" value="0.6" /></label
+            ><label for="reasoning" class="check"
+              ><input id="reasoning" type="checkbox" checked /> Reasoning</label
             ><button id="run" disabled>Run completion</button
             ><button id="stop" class="secondary" disabled>Stop</button>
           </div>
