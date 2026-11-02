@@ -23,8 +23,10 @@ const web = join(root, 'web')
 const lock = JSON.parse(readFileSync(join(web, 'source-lock.json'), 'utf8'))
 const scratch = join(root, 'build', 'web')
 const output = join(root, 'prebuilds', 'web')
+// Commands run from the scratch directory: CMake's compiler checks write
+// a.out.js and a.out.wasm into the working directory.
 const run = (command, args, options = {}) =>
-  execFileSync(command, args, { stdio: 'inherit', ...options })
+  execFileSync(command, args, { stdio: 'inherit', cwd: scratch, ...options })
 
 function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
