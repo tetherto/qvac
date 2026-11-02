@@ -59,14 +59,24 @@ runs:
         probe="${probe}
         vcpkg=${vcpkg_version}"
 
+        sha256() {
+          if command -v sha256sum > /dev/null 2>&1; then sha256sum; else shasum -a 256; fi
+        }
+
+        # The lock, not the clang on PATH: a job may fingerprint before it
+        # installs the locked toolchain, and the lock also moves
+        # cmake-toolchains, which changes flags without changing clang.
+        lockfile="${GITHUB_WORKSPACE}/.github/bare-toolchain/package-lock.json"
+        if [ -f "${lockfile}" ]; then
+          lock_digest="$(sha256 < "${lockfile}")"
+          probe="${probe}
+        bare-toolchain=${lock_digest:0:16}"
+        fi
+
         echo "--- toolchain ---"
         echo "${probe}"
 
-        if command -v sha256sum > /dev/null 2>&1; then
-          digest="$(printf '%s' "${probe}" | sha256sum)"
-        else
-          digest="$(printf '%s' "${probe}" | shasum -a 256)"
-        fi
+        digest="$(printf '%s' "${probe}" | sha256)"
 
         echo "TOOLCHAIN_FINGERPRINT=${digest:0:16}" >> "${GITHUB_ENV}"
         echo "toolchain fingerprint: ${digest:0:16}"
@@ -123,6 +133,12 @@ runs:
         }
 
         $probe = "vctools=$toolsVersion sdk=$sdkVersion vcpkg=$($vcpkgVersion.Trim())"
+        # See the bash branch for why the lock is hashed.
+        $lockfile = Join-Path $env:GITHUB_WORKSPACE '.github\bare-toolchain\package-lock.json'
+        if (Test-Path $lockfile) {
+          $lockDigest = (Get-FileHash -Algorithm SHA256 $lockfile).Hash.ToLower()
+          $probe = "$probe bare-toolchain=$($lockDigest.Substring(0, 16))"
+        }
         Write-Output "--- toolchain ---"
         Write-Output $probe
 

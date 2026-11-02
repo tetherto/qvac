@@ -29,12 +29,12 @@ export type Announcement = {
 };
 
 export const announcement: Announcement | null = {
-  id: 'translatepsy-afrislm',
+  id: 'kotlin-sdk',
   label: 'New:',
-  title: 'TranslatePsy-AfriSLM',
-  description: 'translates directly between 19 African languages, offline.',
+  title: 'QVAC SDK now supports Kotlin.',
+  description: 'Build local AI into your JVM and Android apps.',
   cta: {
-    text: 'Download Model',
-    href: 'https://huggingface.co/collections/qvac/translatepsy-afrislm',
+    text: 'Get started',
+    href: 'https://docs.qvac.tether.io/sdk/kotlin-sdk',
   },
 };
