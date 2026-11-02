@@ -2,15 +2,14 @@
  * Parakeet Sortformer diarization + TDT transcription pipeline.
  *
  * Usage:
- *   npx tsx examples/asr/parakeet-sortformer.ts [sortformer-gguf] [wav-file]
+ *   npx tsx examples/asr/parakeet-sortformer.ts <wav-file> [sortformer-gguf]
  *
  * Two-step flow: Sortformer v2.1 diarizes the audio, then TDT transcribes each
- * speaker segment. Defaults to registry GGUFs and
- * `examples/audio/diarization-sample-16k.wav`. For live streaming + AOSC, see
+ * speaker segment. Defaults to registry GGUFs. For live streaming + AOSC, see
  * `parakeet-sortformer-streaming.ts`.
  *
- * Sample audio is in the QVAC source repo but not the published npm package.
- * Download the default file into `examples/audio/`:
+ * Audio should be 16 kHz mono 16-bit PCM in a WAV container. A multi-speaker
+ * sample is in the QVAC source repo but not the published npm package:
  *   https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/diarization-sample-16k.wav
  */
 import {
@@ -20,18 +19,20 @@ import {
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0
 } from '@qvac/sdk'
-import { dirname, join } from 'path'
-import { fileURLToPath } from 'url'
+import { join } from 'path'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-
 const args = process.argv.slice(2)
-const sortformerSrc = args[0] ?? PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0
 
-const defaultAudioPath = join(__dirname, '..', 'audio', 'diarization-sample-16k.wav')
-const audioFilePath = args[1] ?? defaultAudioPath
+if (!args[0]) {
+  console.error('Usage: npx tsx examples/asr/parakeet-sortformer.ts <wav-file> [sortformer-gguf]')
+  console.error('\nIf the model path is omitted, defaults to the registry model.')
+  process.exit(1)
+}
+
+const audioFilePath = args[0]
+const sortformerSrc = args[1] ?? PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0
 
 try {
   // ── Step 1: Diarize with Sortformer ──

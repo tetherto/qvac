@@ -6,7 +6,7 @@ import {
   TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
   TTS_CODEC_DECODER_AUDIO8_Q8_0
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // Audio8 (GGML): DualAR LM + codec decoder, native 44.1 kHz output. The
 // primary modelSrc is the LM GGUF; the codec decoder loads via modelConfig.

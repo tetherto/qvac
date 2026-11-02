@@ -430,6 +430,8 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
   let variant = ''
   if (lower.includes('transcribepsy') || lowerPath.includes('transcribepsy')) {
     variant = 'TRANSCRIBEPSY'
+  } else if (lower.includes('mosaic')) {
+    variant = 'MOSAIC'
   } else if (lower.includes('sortformer') || lower.includes('diar_streaming')) {
     variant = 'SORTFORMER'
   } else if (lower.includes('nemotron') || lowerPath.includes('nemotron')) {
@@ -452,10 +454,12 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
     const versionHint = versionMatch ? `V${versionMatch[1]!}` : ''
     const speakerHint = speakerMatch ? speakerMatch[1]! : ''
     const coremlHint = lower.includes('coreml') ? 'COREML' : ''
+    const compactHint = variant === 'MOSAIC' && lower.includes('compact') ? 'COMPACT' : ''
 
     const nameParts = [
       family,
       variant,
+      compactHint,
       paramsHint,
       speakerHint,
       versionHint,
