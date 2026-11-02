@@ -36,6 +36,11 @@ std::string writeTempGguf(const char* archValue) {
   }
   if (archValue != nullptr) {
     gguf_set_val_str(ctx, "general.architecture", archValue);
+    // groot rejects a GGUF with no embodiment before it allocates weights.
+    // With a tag it reaches the device weight load like pi05.
+    if (std::string(archValue) == "groot") {
+      gguf_set_val_str(ctx, "groot.embodiment_tag", "factory_test");
+    }
   }
   // Also stamp a couple of generic keys to make the file look more realistic;
   // these are ignored by the sniffer.
@@ -136,10 +141,9 @@ TEST(VlaModelFactory, DispatchesPi05ArchitectureToPi05Loader) {
 
 TEST(VlaModelFactory, DispatchesGrootArchitectureToGrootLoader) {
   // Same trick as the pi05/smolvla dispatch tests: the metadata-only GGUF
-  // carries none of GrootModel's ~1032 required tensors (and none of the
-  // groot.embodiment_tag/embodiment_cat_id keys grootLoadModel requires),
-  // so the loader throws before reaching tensor lookup — that failure
-  // message alone proves dispatch picked the GrootModel branch.
+  // carries none of GrootModel's ~1032 required tensors, so the loader
+  // throws — that failure message alone proves dispatch picked the
+  // GrootModel branch.
   const std::string path = writeTempGguf("groot");
   ASSERT_FALSE(path.empty());
   try {
@@ -204,9 +208,9 @@ TEST(VlaModelFactory, RejectsUnknownArchitecture) {
 // on a missing tensor. On a host that does have a GPU, selection succeeds and
 // that message must be absent. pi05 then allocates device buffers before it
 // checks the tensor list, and ggml returns no buffer for a context with no
-// tensors on every backend, so pi05 must hit the strict "weight load failed"
-// refusal. groot stops earlier on its missing embodiment metadata and smolvla
-// on a missing tensor, so for them only the absence is asserted. Both
+// tensors on every backend, so pi05 and groot must hit the strict "weight
+// load failed" refusal. smolvla has no device weight load and stops on a
+// missing tensor, so for it only the absence is asserted. Both
 // branches are asserted so the test means something on CPU-only CI runners
 // and on GPU dev boxes alike.
 namespace {
@@ -261,7 +265,7 @@ TEST(VlaModelFactory, Pi05BackendOverrideNeverFallsBackToCpu) {
 }
 
 TEST(VlaModelFactory, GrootBackendOverrideNeverFallsBackToCpu) {
-  expectOverrideStrictness("groot", /*gpuReachesWeightLoad=*/false);
+  expectOverrideStrictness("groot", /*gpuReachesWeightLoad=*/true);
 }
 
 TEST(VlaModelFactory, SmolvlaBackendOverrideNeverFallsBackToCpu) {
