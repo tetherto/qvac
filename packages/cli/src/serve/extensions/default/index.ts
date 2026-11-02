@@ -5,6 +5,7 @@ import { CLASSIFICATIONS_FIELD_CODES } from '@/serve/extensions/default/schemas/
 import { MODEL_FIT_FIELD_CODES } from '@/serve/extensions/default/schemas/model-fit'
 import { MUSIC_FIELD_CODES } from '@/serve/extensions/default/schemas/music'
 import { OCR_FIELD_CODES } from '@/serve/extensions/default/schemas/ocr'
+import { PLUGINS_FIELD_CODES } from '@/serve/extensions/default/schemas/plugins'
 import { REGISTRY_FIELD_CODES } from '@/serve/extensions/default/schemas/registry'
 import { SYSTEM_FIELD_CODES } from '@/serve/extensions/default/schemas/system'
 import { TRANSLATE_FIELD_CODES } from '@/serve/extensions/default/schemas/translate'
@@ -32,7 +33,8 @@ const defaultExtension: ServeExtension = {
     ...REGISTRY_FIELD_CODES,
     ...UPSCALE_FIELD_CODES,
     ...MUSIC_FIELD_CODES,
-    ...WORLD_FIELD_CODES
+    ...WORLD_FIELD_CODES,
+    ...PLUGINS_FIELD_CODES
   },
   // lunte-disable-next-line require-await
   setup: async (ctx) => createDefaultState(ctx, tearDownMusicJob),
