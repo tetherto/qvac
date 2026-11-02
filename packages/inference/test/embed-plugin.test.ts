@@ -3,7 +3,7 @@ import { unregisterAddonLogger } from '@/logging/index'
 import { handleLoadModel } from '@/handlers/load-model/handler'
 import { registerPlugin, unregisterPlugin } from '@/plugins/registry'
 import { embeddingsPlugin } from '@/plugins/builtin/llamacpp-embedding/plugin'
-import { embedConfigSchema, type ResolveContext } from '@/schemas/index'
+import type { ResolveContext } from '@/schemas/index'
 
 const ctx: ResolveContext = {
   resolveModelPath: async (src) => `/cache/${String(src)}`,

@@ -42,6 +42,8 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
     kind: 'embeddings',
     modelId
   })
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+
   // `requestLogger` is intentionally referenced once so the
   // request-scoped logger is built at handler entry per the canonical
   // shape, even when this op has no per-step emits beyond the
@@ -51,19 +53,19 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
 
   const model = getModel(modelId)
 
-  // Hard-cancel wiring: llamacpp-embedding declares
-  // `cancel: { scope: "model", hard: true }`. The signal listener
-  // forwards an abort to the addon so C++ work stops as soon as the
-  // user cancels — mirrors the canonical handler shape documented in
-  // `request-lifecycle-primitives.mdc`. The post-await
-  // `signal.aborted` checks below are the soft-cancel safety net for
-  // the case where the abort fires between `model.run(...)` returning
-  // and `response.await()` resolving (both can take seconds on large
-  // batches).
+  const input =
+    parsed.inputs !== undefined
+      ? await prepareEmbedInputs(parsed.inputs, ctx.signal, ctx.requestId)
+      : parsed.text
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+
+  // Admission keeps model-wide cancellation scoped to this request. Media
+  // preparation has no native job to cancel, so wire the addon only afterward.
+  let cancelPromise: Promise<void> | undefined
   const onAbort = () => {
     const addon = model.addon
     if (addon?.cancel) {
-      addon.cancel.call(addon).catch((err: unknown) => {
+      cancelPromise ??= addon.cancel.call(addon).catch((err: unknown) => {
         requestLogger.warn(
           `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
         )
@@ -71,21 +73,12 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
     }
   }
   ctx.signal.addEventListener('abort', onAbort, { once: true })
-  // `{ once: true }` does not fire if the signal is already aborted at
-  // register time. The registry may abort synchronously when a
-  // cancel-before-begin race resolves or the parent signal was pre-
-  // aborted — re-use `onAbort` so the listener body is the single
-  // source of truth for "what cancel does."
-  if (ctx.signal.aborted) onAbort()
-  ctx.scope.defer(() => {
+  ctx.scope.defer(async () => {
     ctx.signal.removeEventListener('abort', onAbort)
+    // A delayed native cancel must finish before the next job owns this model slot.
+    await cancelPromise
   })
 
-  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
-  const input =
-    parsed.inputs !== undefined
-      ? await prepareEmbedInputs(parsed.inputs, ctx.signal, ctx.requestId)
-      : parsed.text
   const modelStart = nowMs()
   let response: EmbedResponse
   let rawEmbeddings: Awaited<ReturnType<EmbedResponse['await']>>

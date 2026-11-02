@@ -1,4 +1,4 @@
-import { InferenceCancelledError } from '@/errors/index'
+import { InferenceCancelledError, RequestRejectedByPolicyError } from '@/errors/index'
 import test from 'brittle'
 import fs from 'bare-fs'
 import os from 'bare-os'
@@ -137,10 +137,10 @@ test('embed fit: refuses a projector rather than reporting text-only memory', (t
 })
 
 let nextId = 0
-function install(run: (input: unknown) => Promise<unknown>) {
+function install(run: (input: unknown) => Promise<unknown>, cancel = async () => {}) {
   const modelId = `embed-multimodal-test-${++nextId}`
   registerModel(modelId, {
-    model: { run, addon: { cancel: async () => {} } } as unknown as AnyModel,
+    model: { run, addon: { cancel } } as unknown as AnyModel,
     modelType: ModelType.llamacppEmbedding,
     path: '/model.gguf',
     config: {}
@@ -205,10 +205,16 @@ test('embed op: cancellation during a failed media read preserves the cause', as
   const requestId = 'cancel-media-read'
   const readError = new Error('EIO: media read failed')
   let ran = false
-  const modelId = install(async () => {
-    ran = true
-    throw new Error('Inference must not run after media preparation fails')
-  })
+  let cancelled = 0
+  const modelId = install(
+    async () => {
+      ran = true
+      throw new Error('Inference must not run after media preparation fails')
+    },
+    async () => {
+      cancelled++
+    }
+  )
   const readFile = fs.promises.readFile
   t.teardown(() => {
     fs.promises.readFile = readFile
@@ -233,5 +239,79 @@ test('embed op: cancellation during a failed media read preserves the cause', as
     t.is((error as Error).cause, readError)
   }
   t.absent(ran)
+  t.is(cancelled, 0, 'media preparation has no native job to cancel')
   t.is(getRequestRegistry().list().length, 0)
+})
+
+test('embed op: overlapping and pre-cancelled calls leave the active model alone', async (t) => {
+  let cancelled = 0
+  const modelId = install(
+    async () => {
+      throw new Error('Overlapping requests must not run')
+    },
+    async () => {
+      cancelled++
+    }
+  )
+  t.teardown(() => unregisterModel(modelId))
+  const registry = getRequestRegistry()
+  await using active = await registry.begin({
+    requestId: 'embed-holder',
+    kind: 'embeddings',
+    modelId
+  })
+  const request = {
+    modelId,
+    inputs: [[{ media: { type: 'filePath' as const, value: '/missing-overlap-media.wav' } }]]
+  }
+  await t.exception(
+    () => embed(request),
+    RequestRejectedByPolicyError as unknown as new () => Error
+  )
+  registry.cancel({ requestId: 'embed-pre-cancelled' })
+  await t.exception(
+    () => embed(request, 'embed-pre-cancelled'),
+    InferenceCancelledError as unknown as new () => Error
+  )
+  t.is(cancelled, 0)
+  t.absent(active.signal.aborted)
+})
+
+test('embed op: retains admission until native cancellation settles', async (t) => {
+  const requestId = 'embed-pending-cancel'
+  let finishCancel: () => void = () => {}
+  const cancellation = new Promise<void>((resolve) => {
+    finishCancel = resolve
+  })
+  let notifyCancel: () => void = () => {}
+  const cancelStarted = new Promise<void>((resolve) => {
+    notifyCancel = resolve
+  })
+  let runs = 0
+  const modelId = install(
+    async () => {
+      const first = ++runs === 1
+      return {
+        await: async () => {
+          if (first) getRequestRegistry().cancel({ requestId })
+          return [[new Float32Array([0, 1])]]
+        }
+      }
+    },
+    async () => {
+      notifyCancel()
+      await cancellation
+    }
+  )
+  t.teardown(() => unregisterModel(modelId))
+  const first = embed({ modelId, text: 'first' }, requestId).catch((error: unknown) => error)
+  await cancelStarted
+  await new Promise<void>((resolve) => setTimeout(resolve, 5))
+  await t.exception(
+    () => embed({ modelId, text: 'overlap' }),
+    RequestRejectedByPolicyError as unknown as new () => Error
+  )
+  finishCancel()
+  t.ok((await first) instanceof InferenceCancelledError)
+  t.alike((await embed({ modelId, text: 'recovery' })).embedding, [0, 1])
 })
