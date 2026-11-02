@@ -313,8 +313,8 @@ class IdMapIndex {
         loadBinding().idx_prepare(ensureHandle(this));
     }
     /**
-     * Persist a checksummed v2 snapshot for f32/q4/q8 or v3 for TurboVec.
-     * Delta-bound handles must use `compactDelta()`. A NotDurable error means
+     * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
+     * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound handles must use `compactDelta()`. A NotDurable error means
      * replacement succeeded but parent-directory durability was not confirmed.
      */
     write(path) {
