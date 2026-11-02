@@ -1,5 +1,5 @@
 ---
-description: User-facing SDK capabilities must land on qvac serve / qvac configure in the same PR unless marked library-only
+description: User-facing SDK capabilities must land on qvac-sdk serve / qvac-sdk configure (@qvac/sdk-tools) in the same PR unless marked library-only
 globs:
   - packages/sdk/server/bare/plugins/**
   - packages/sdk/client/api/**
@@ -13,5 +13,5 @@ alwaysApply: false
 # First-class product parity
 
 Read `packages/sdk/AGENTS.md` for the shared parity requirement and
-`docs/architecture/AGENT-INTEGRATIONS.md` for current SDK/CLI ownership. This rule
+`docs/architecture/AGENT-INTEGRATIONS.md` for current SDK and SDK tools ownership. This rule
 exists to apply that guidance to the relevant Cursor file scopes.
