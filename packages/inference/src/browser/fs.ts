@@ -340,12 +340,51 @@ export function unlinkSync(path: string | URL): void {
 
 // --- promise API -------------------------------------------------------------------
 
+// The page can add files to OPFS after the index was loaded (for example a
+// model the user picked from disk). Promise calls that miss in the index
+// re-read the directory from OPFS before giving up.
+async function refreshDirectory(path: string): Promise<void> {
+  await persistQueue
+  let directory: DirectoryHandle
+  try {
+    directory = await opfsDirectory(path, false)
+  } catch {
+    return
+  }
+  let ancestor = ''
+  for (const part of segments(path)) {
+    ancestor += `/${part}`
+    if (!entries.has(ancestor)) entries.set(ancestor, { kind: 'directory', mtimeMs: Date.now() })
+  }
+  for await (const [name, handle] of directory) {
+    const child = path === '/' ? `/${name}` : `${path}/${name}`
+    if (entries.has(child)) continue
+    try {
+      if (handle.kind === 'directory') {
+        entries.set(child, { kind: 'directory', mtimeMs: Date.now() })
+      } else {
+        const file = await handle.getFile()
+        const data = file.size <= INLINE_LIMIT ? new Uint8Array(await file.arrayBuffer()) : null
+        entries.set(child, { kind: 'file', size: file.size, mtimeMs: file.lastModified, data })
+      }
+    } catch (error) {
+      logger.warn(`Skipping unreadable OPFS entry ${child}: ${String(error)}`)
+    }
+  }
+}
+
+async function lookupFresh(path: string | URL): Promise<string> {
+  const target = normalize(path)
+  if (!entries.has(target)) await refreshDirectory(parentOf(target))
+  return target
+}
+
 async function stat(path: string | URL): Promise<Stats> {
-  return statSync(path)
+  return statSync(await lookupFresh(path))
 }
 
 async function access(path: string | URL): Promise<void> {
-  accessSync(path)
+  accessSync(await lookupFresh(path))
 }
 
 async function mkdir(path: string | URL, options?: { recursive?: boolean }): Promise<void> {
@@ -355,7 +394,9 @@ async function mkdir(path: string | URL, options?: { recursive?: boolean }): Pro
 }
 
 async function readdir(path: string | URL, options?: unknown): Promise<string[] | Dirent[]> {
-  return listDirectory(normalize(path), options)
+  const target = normalize(path)
+  await refreshDirectory(target)
+  return listDirectory(target, options)
 }
 
 async function readFile(path: string | URL, options?: unknown): Promise<Buffer | string> {

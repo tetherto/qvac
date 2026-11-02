@@ -272,3 +272,14 @@ test('write stream: a failed write is reported as a stream error', async (t) => 
   })
   t.ok(/QuotaExceeded/.test(error.message))
 })
+
+test('promise calls see files added to OPFS after the index was loaded', async (t) => {
+  const qvacDir = await root.getDirectoryHandle('.qvac')
+  const local = await qvacDir.getDirectoryHandle('local', { create: true })
+  const picked = await local.getFileHandle('picked.gguf', { create: true })
+  picked.bytes = encode('GGUF')
+  t.is(fs.existsSync('/.qvac/local/picked.gguf'), false, 'not in the index yet')
+  t.alike(await fs.promises.readdir('/.qvac/local'), ['picked.gguf'])
+  t.is((await fs.promises.stat('/.qvac/local/picked.gguf')).size, 4)
+  t.ok(fs.existsSync('/.qvac/local/picked.gguf'), 'indexed after the refresh')
+})

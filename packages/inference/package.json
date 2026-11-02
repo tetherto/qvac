@@ -186,7 +186,8 @@
     "@qvac/ggml-rpc-server": "./dist/browser/unsupported/ggml-rpc-server.js",
     "./dist/handlers/load-model/safe-fetch.js": "./dist/browser/safe-fetch.js",
     "./dist/runtime/cache-lock.js": "./dist/browser/cache-lock.js",
-    "./dist/resources/native.js": "./dist/browser/resources.js"
+    "./dist/resources/native.js": "./dist/browser/resources.js",
+    "./dist/handlers/load-model/registry.js": "./dist/browser/registry.js"
   },
   "files": [
     "dist/**/*",
