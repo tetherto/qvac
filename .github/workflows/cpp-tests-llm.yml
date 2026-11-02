@@ -213,6 +213,10 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
+      - name: Ensure AWS CLI
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/ensure-aws-cli
+
       - name: Download test models
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash

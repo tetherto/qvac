@@ -200,6 +200,10 @@ jobs:
           aws-region: eu-central-1
 
       # Single-test smoke legs never load an S3-hosted model.
+      - name: Ensure AWS CLI
+        if: ${{ !matrix.single_test }}
+        uses: ./.github/actions/ensure-aws-cli
+
       - name: Stage S3-hosted test models
         if: ${{ !matrix.single_test }}
         shell: bash
