@@ -456,7 +456,7 @@ Images can be provided in two ways:
 ```mermaid
 flowchart TD
     Start([New inference]) --> CheckKey{cacheKey<br/>provided?}
-    CheckKey -->|No| ClearRAM[Save active cache if unsaved<br/>unless ephemeral, then set aside<br/>text: memory kept; multimodal: cleared]
+    CheckKey -->|No| ClearRAM[Save active cache if unsaved<br/>unless ephemeral, then set aside<br/>memory kept; encoder-decoder: cleared]
     ClearRAM --> NormalInference[Process without cache]
     CheckKey -->|Yes| SameKey{Same as<br/>active key?}
     SameKey -->|Yes| Reuse[Reuse in-memory cache]
