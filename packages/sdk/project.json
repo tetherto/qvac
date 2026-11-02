@@ -95,6 +95,7 @@
           "args": "desktop",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu",
+            "setup": ["node22"],
             "labels": {
               "test-e2e-smoke": "smoke",
               "test-e2e-full": "",
@@ -106,6 +107,7 @@
           "args": "desktop",
           "ci": {
             "runner": "macos_arm64_gpu",
+            "setup": ["node22"],
             "labels": {
               "test-e2e-smoke": "smoke",
               "test-e2e-full": "",
@@ -117,6 +119,7 @@
           "args": "desktop",
           "ci": {
             "runner": "win_2025_x64_gpu",
+            "setup": ["node22"],
             "labels": {
               "test-e2e-smoke": "smoke",
               "test-e2e-full": "",
@@ -128,6 +131,7 @@
           "args": "python",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu",
+            "setup": ["node22"],
             "labels": {
               "test-e2e-python": "smoke"
             }
@@ -137,6 +141,7 @@
           "args": "python",
           "ci": {
             "runner": "macos_arm64_gpu",
+            "setup": ["node22"],
             "labels": {
               "test-e2e-python": "smoke"
             }
@@ -146,6 +151,7 @@
           "args": "python",
           "ci": {
             "runner": "win_2025_x64_gpu",
+            "setup": ["node22"],
             "labels": {
               "test-e2e-python": "smoke"
             }
@@ -155,6 +161,7 @@
           "args": "electron",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu",
+            "setup": ["node22"],
             "labels": {
               "dispatch:electron": ""
             }
@@ -164,6 +171,7 @@
           "args": "electron",
           "ci": {
             "runner": "macos_arm64_gpu_gui",
+            "setup": ["node22"],
             "labels": {
               "dispatch:electron": ""
             }
@@ -173,6 +181,7 @@
           "args": "electron",
           "ci": {
             "runner": "win_2025_x64_gpu",
+            "setup": ["node22"],
             "labels": {
               "dispatch:electron": ""
             }
@@ -182,6 +191,7 @@
           "args": "snap",
           "ci": {
             "runner": "linux_ubuntu2204_x64_gpu",
+            "setup": ["node22"],
             "labels": {
               "dispatch:snap": ""
             }
