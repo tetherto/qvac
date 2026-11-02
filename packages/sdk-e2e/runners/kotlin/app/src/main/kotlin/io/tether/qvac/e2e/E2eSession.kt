@@ -108,11 +108,12 @@ object E2eSession {
         val policy = asMap(asMap(readAssetJson(app, "e2e/resources/platform-policy.json"))[RESOURCE_PLATFORM.substringBefore('-')])
         val unloadSettleMs = (policy["unloadSettleMs"] as? Number)?.toLong()
             ?: error("no platform policy for \"$RESOURCE_PLATFORM\" in platform-policy.json")
+        val singleUseResources = asList(policy["singleUseResources"]).map(Any?::toString)
         val workerConfig = Json.parseToJsonElement(readAsset(app, "e2e/worker-config.json")).jsonObject
         val transport = AndroidBareKitTransport.connect(app, config = workerConfig)
         val client = QvacClient(transport)
         val wire = Wire(client)
-        val resources = Resources(client, table, RESOURCE_PLATFORM, host, ::log, unloadSettleMs)
+        val resources = Resources(client, table, RESOURCE_PLATFORM, host, ::log, unloadSettleMs, singleUseResources)
         val calls = Calls(wire, resources, File(app.cacheDir, "e2e-scratch"))
         val interpreter = Interpreter(resources, calls, host.fixtureRoot, ::log)
         log("✅ Worker ready")
