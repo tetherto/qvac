@@ -172,7 +172,7 @@ Its `verbose_json` response includes MOSS speaker labels and Nemotron
 
 - `{ type: "text", text }` — incremental transcript text.
 - `{ type: "segment", segment }` — segment metadata when `metadata: true`, on both engines. Parakeet segments also carry `isEndOfTurn` and `startsWord`.
-- `{ type: "vad", speaking, probability, source }` — voice-activity-detection state (whisper-only; `source` is `"silero"`).
+- `{ type: "vad", speaking, probability, source }` — voice-activity-detection state. `source` is `"silero"` for whisper, `"energy"` for Parakeet's energy detector (`streamingEnergyVad` at load or `emitEnergyVad` per stream, on CTC, TDT, RNN-T, and Nemotron models), or `"sortformer"` for Parakeet speaker activity, which also carries `speakerId`.
 - `{ type: "endOfTurn", source: "whisper", silenceDurationMs }` — turn boundary detected from a measured silence window (whisper).
 - `{ type: "endOfTurn", source: "parakeet" }` — turn boundary detected from the EOU model's `<EOU>` token (parakeet; no silence window — the event is token-driven).
 
@@ -206,7 +206,10 @@ const session = await transcribeStream({
     leftContextMs: 500,       // ASR encoder left-context window
     rightLookaheadMs: 200,    // ASR encoder right-lookahead window
     emitPartials: true,       // emit partial segments before chunk boundaries
-    emitEnergyVad: false,     // CTC/TDT energy-based VAD hint (engine-internal)
+    emitEnergyVad: true,      // emit { type: "vad", source: "energy" } events
+    energyVadThresholdDb: -35, // speech threshold in dBFS RMS
+    energyVadWindowMs: 30,    // RMS window in ms (the engine caps it at 1000)
+    energyVadHangoverMs: 200, // silence before the detector leaves "speaking"
   },
 });
 
@@ -225,11 +228,25 @@ for await (const event of session) {
 
 The synthetic `{ type: "endOfTurn", source: "parakeet" }` event surfaces whenever the EOU model emits an `<EOU>` token, and is the parakeet equivalent of whisper's silence-window EOU. Pair it with the `PARAKEET_EOU_120M_V1_Q8_0` checkpoint when you need explicit turn boundaries from parakeet.
 
+The energy detector is tuned with the same three knobs at load time as `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, and `streamingEnergyVadHangoverMs` in `parakeetConfig`; the per-stream values above override them for one session. The threshold is a dBFS RMS level (default -35), the window is the RMS span in ms (default 30), and the hangover is how long the audio must stay below the threshold before the state returns to silence (default 200 ms). VAD events reach sessions opened with `parakeetStreamingConfig` or `emitVadEvents: true`.
+
+### Parakeet prewarming
+
+Set `prewarm: true` in `parakeetConfig` to run one synthetic encoder pass while the model loads, so the first `transcribe()` or stream does not pay the GPU shader or kernel compile. `prewarmAudioSeconds` sets the length of that pass in seconds of audio (default 1; it must be greater than 0). Nemotron 3 Diarization also runs one streaming chunk. Both options apply at load time only and have no per-stream counterpart.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+  modelType: "parakeet-transcription",
+  modelConfig: { useGPU: true, prewarm: true, prewarmAudioSeconds: 2 },
+});
+```
+
 ## Examples
 
 ### `qvac-fabric-speech.cpp`
 
-The following script shows an example of `qvac-fabric-speech.cpp` transcription with prompt-guided decoding, VAD, and GPU acceleration:
+The following script shows an example of `qvac-fabric-speech.cpp` transcription with prompt-guided decoding, VAD, and GPU acceleration. Pass the path of a 16 kHz mono WAV file as the first argument:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -259,7 +276,7 @@ The following script shows an example of `qvac-fabric-speech.cpp` transcription 
 
 ### Parakeet TDT
 
-The following script shows an example of multilingual transcription using the Parakeet TDT model from a WAV file:
+The following script shows an example of multilingual transcription using the Parakeet TDT model from a WAV file. Pass the path of a 16 kHz mono WAV file as the first argument; an optional second argument overrides the default model:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -277,11 +294,19 @@ The following script shows an example of multilingual transcription using the Pa
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_tdt.py title="transcription_parakeet_tdt.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet CTC
 
-The following script shows an example of English-only transcription using the Parakeet CTC model from a WAV file:
+The following script shows an example of English-only transcription using the Parakeet CTC model from a WAV file. Pass the path of a 16 kHz mono WAV file as the first argument; an optional second argument overrides the default model:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -299,11 +324,19 @@ The following script shows an example of English-only transcription using the Pa
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_ctc.py title="transcription_parakeet_ctc.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Unified
 
-The following script shows an example of English transcription using the Parakeet Unified model from a WAV file. Load it once and use it with either `transcribe()` for batch or `transcribeStream()` for low-latency streaming.
+The following script shows an example of English transcription using the Parakeet Unified model from a WAV file. Load it once and use it with either `transcribe()` for batch or `transcribeStream()` for low-latency streaming. The script uses batch `transcribe()`. Pass the path of a 16 kHz mono WAV file as the first argument; an optional second argument overrides the default model:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -321,11 +354,19 @@ The following script shows an example of English transcription using the Parakee
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_unified.py title="transcription_parakeet_unified.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Unified with Core ML
 
-The following macOS script loads a regenerated Unified GGUF from disk, downloads its five Core ML encoder files through the registry, and transcribes a WAV file:
+The following macOS script loads a regenerated Unified GGUF from disk, downloads its five Core ML encoder files through the registry, and transcribes a WAV file. Pass the path of the regenerated GGUF (`parakeet-unified-en-0.6b.{f16,q4_0,q8_0}.gguf`) as the first argument and the path of a 16 kHz mono WAV file as the second:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -343,11 +384,19 @@ The following macOS script loads a regenerated Unified GGUF from disk, downloads
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_unified_coreml.py title="transcription_parakeet_unified_coreml.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### TranscribePsy
 
-The following script transcribes a file with TranscribePsy. By default it loads the ggml GGUF; on macOS, `--coreml` loads the Core ML distribution and reports whether the encoder ran on the Neural Engine, and `--window-sec` sets an explicit long-form window:
+The following script transcribes a file with TranscribePsy. By default it loads the ggml GGUF; on macOS, `--coreml` loads the Core ML distribution and reports whether the encoder ran on the Neural Engine, and `--window-sec` sets an explicit long-form window. Pass the path of the audio file as the first argument:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -365,11 +414,19 @@ The following script transcribes a file with TranscribePsy. By default it loads 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_transcribepsy.py title="transcription_parakeet_transcribepsy.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Indic Conformer
 
-The following script shows an example of Indic-language transcription using the Parakeet Indic Conformer CTC model from a WAV file:
+The following script shows an example of Indic-language transcription using the Parakeet Indic Conformer CTC model from a WAV file. Pass the path of a 16 kHz mono WAV file as the first argument and the audio's language code (e.g., `hi`, `ta`) as the second; the language is required. An optional third argument overrides the default model:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -387,11 +444,19 @@ The following script shows an example of Indic-language transcription using the 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_indic_conformer.py title="transcription_parakeet_indic_conformer.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Sortformer
 
-The following script shows an example of speaker diarization using the Parakeet Sortformer model, followed by per-segment transcription with the TDT model:
+The following script shows an example of speaker diarization using the Parakeet Sortformer model, followed by per-segment transcription with the TDT model. Pass the path of a 16 kHz mono 16-bit WAV file as the first argument; an optional second argument overrides the default Sortformer model. To try it with a multi-speaker recording, download [`diarization-sample-16k.wav`](https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/diarization-sample-16k.wav) next to the example and pass its path:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -406,6 +471,14 @@ The following script shows an example of speaker diarization using the Parakeet 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-sortformer.ts title="parakeet-sortformer.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_sortformer.py title="transcription_parakeet_sortformer.py" lineNumbers
 ```
 </WrapCode>
 </Tab>
