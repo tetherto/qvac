@@ -18,8 +18,6 @@ JS
   cp vcpkg.json "$root/moss-packaged-results/$package-vcpkg.json"
   cp vcpkg-configuration.json "$root/moss-packaged-results/$package-registry.json"
   npm install --ignore-scripts
-  npm install --no-save --ignore-scripts bare-make
-  export PATH="$PWD/node_modules/.bin:$PATH"
   npm run build:ts
   rm -rf build prebuilds
   if [ "$package" = tts-ggml ]; then

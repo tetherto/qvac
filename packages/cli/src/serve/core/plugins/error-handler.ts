@@ -1,12 +1,12 @@
 import fp from 'fastify-plugin'
 import type { FastifyError, FastifyPluginAsync } from 'fastify'
+import { ContextOverflowError, RequestRejectedByPolicyError } from '@qvac/sdk'
 import {
   hasZodFastifySchemaValidationErrors,
   isResponseSerializationError
 } from 'fastify-type-provider-zod'
 import { HttpError, errorType } from '@/serve/lib/http-error'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
-import { RequestRejectedByPolicyError } from '@qvac/sdk'
 
 export interface ErrorHandlerOptions {
   /**
@@ -31,25 +31,41 @@ const plugin: FastifyPluginAsync<ErrorHandlerOptions> = async (app, opts) => {
   const fieldCodes = { ...CORE_FIELD_CODES, ...opts.fieldCodes }
 
   app.setErrorHandler((err: FastifyError, req, reply) => {
+    // Disconnect cancellation can reject after the client has gone. There is
+    // no response left to send, and this is not a server failure to log.
+    if (reply.raw.destroyed || reply.raw.writableEnded) return
+
     const sseSentinel = req.routeOptions?.config?.sseSentinel ?? true
-    const message = err.message ?? 'An internal error occurred.'
+    const contextOverflow = err instanceof ContextOverflowError
+    const httpError = contextOverflow
+      ? new HttpError(
+          400,
+          'context_length_exceeded',
+          "The request exceeds the model's context capacity. Shorten the input, start a new conversation, or increase ctx_size."
+        )
+      : err instanceof HttpError
+        ? err
+        : undefined
+    const message = httpError?.message ?? err.message ?? 'An internal error occurred.'
 
     if (reply.raw.headersSent) {
-      app.qvac.logger.error(formatServerError('streaming_error', req.method, req.url, err))
+      if (!contextOverflow) {
+        app.qvac.logger.error(formatServerError('streaming_error', req.method, req.url, err))
+      }
       sendSSE(reply.raw, {
         error: {
-          message,
-          type: 'server_error',
-          code: err instanceof HttpError ? err.code : 'internal_error'
+          message: httpError?.message ?? 'An internal error occurred.',
+          type: contextOverflow ? 'invalid_request_error' : 'server_error',
+          code: httpError?.code ?? 'internal_error'
         }
       })
       endSSE(reply.raw, { sentinel: sseSentinel })
       return
     }
 
-    if (err instanceof HttpError) {
-      reply.code(err.status).send({
-        error: { message, type: errorType(err.status), code: err.code }
+    if (httpError) {
+      reply.code(httpError.status).send({
+        error: { message, type: errorType(httpError.status), code: httpError.code }
       })
       return
     }

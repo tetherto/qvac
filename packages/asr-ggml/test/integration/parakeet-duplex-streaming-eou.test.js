@@ -22,6 +22,7 @@
  */
 
 const test = require('brittle')
+const { checkStreamingMetadata } = require('./parakeet-metadata-assertions.js')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const {
@@ -189,6 +190,7 @@ test(
           model,
           audio
         )
+        checkStreamingMetadata(t, segments)
 
         const allEot = segments.filter((s) => s.isEndOfTurn === true)
         const transcript = segments

@@ -38,9 +38,18 @@ function withDeviceInfo(config: ExpoConfig): ExpoConfig {
 
   if (!hasExpoDevice) {
     const deviceInfoPath = path.join(qvacSdkPath, 'dist', 'client', 'rpc', 'expo-device-info.js')
-    if (fs.existsSync(deviceInfoPath)) {
+    // r+ so a build without this module is left alone; truncate because the stub is shorter.
+    let fd: number
+    try {
+      fd = fs.openSync(deviceInfoPath, 'r+')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return config
+      throw err
+    }
+    try {
+      fs.ftruncateSync(fd, 0)
       fs.writeFileSync(
-        deviceInfoPath,
+        fd,
         [
           `"use strict";`,
           `Object.defineProperty(exports, "__esModule", { value: true });`,
@@ -50,10 +59,12 @@ function withDeviceInfo(config: ExpoConfig): ExpoConfig {
           `exports.getDeviceInfo = getDeviceInfo;`
         ].join('\n')
       )
-      console.log(
-        '[withDeviceInfo] 🔧 QVAC: expo-device not in app dependencies, stubbed device info'
-      )
+    } finally {
+      fs.closeSync(fd)
     }
+    console.log(
+      '[withDeviceInfo] 🔧 QVAC: expo-device not in app dependencies, stubbed device info'
+    )
   } else {
     console.log('[withDeviceInfo] 🔧 QVAC: expo-device in app dependencies, using expo-device info')
   }

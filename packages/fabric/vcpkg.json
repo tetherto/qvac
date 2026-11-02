@@ -6,7 +6,7 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "11259.1.0",
+      "version>=": "11259.2.0",
       "features": [
         {
           "name": "cuda-backend",

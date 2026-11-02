@@ -19,7 +19,13 @@ import {
 import { QvacErrorAddonOcrGgml, ERR_CODES, errorMessage } from "./lib/error";
 import { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } from "./lib/main-gpu";
 import { assessFit } from "./fit";
-export type { OcrFitRequest, OcrFitResult } from "./fit";
+export type {
+  OcrFitRequest,
+  OcrFitResult,
+  OcrFitStatus,
+  OcrFitDevice,
+  OcrFitStats,
+} from "./fit";
 export { assessFit } from "./fit";
 
 /**

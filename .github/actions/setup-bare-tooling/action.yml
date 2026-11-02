@@ -1,5 +1,5 @@
 name: Setup Bare tooling
-description: Setup Node and install the global Bare runtime and bare-make tooling used by prebuild workflows.
+description: Setup Node, install the global Bare runtime, and put the locked bare-make toolchain from .github/bare-toolchain first on PATH.
 
 inputs:
   shell_type:
@@ -11,7 +11,7 @@ inputs:
     required: false
     default: lts/*
   extra-packages:
-    description: Whitespace-separated list of additional global npm packages to install alongside bare-runtime and bare-make
+    description: Whitespace-separated list of additional global npm packages to install alongside bare-runtime
     required: false
     default: ''
 
@@ -25,4 +25,10 @@ runs:
 
     - name: Install global dependencies
       shell: ${{ inputs.shell_type }}
-      run: npm install -g --force bare-runtime bare-make@1.8.0 ${{ inputs.extra-packages }}
+      run: npm install -g --force bare-runtime ${{ inputs.extra-packages }}
+
+    # A remote reference downloads the whole repository at the pinned SHA, so
+    # the lockfile two levels up is the one from that same commit.
+    - name: Install the locked bare toolchain
+      shell: ${{ inputs.shell_type }}
+      run: node "${{ github.action_path }}/../../bare-toolchain/install.mjs"

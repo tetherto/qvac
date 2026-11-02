@@ -8,6 +8,7 @@ import {
 } from "../../lib/constants";
 import { mergeFloat32Chunks, pcmS16ToFloat32 } from "../../lib/audio";
 import type { BackendInfo } from "../../lib/types";
+import type { ParakeetSpeakerAttributionConfig } from "./options";
 
 export type { BackendInfo };
 
@@ -28,8 +29,9 @@ export interface ParakeetConfigurationParams {
   modelPath?: string;
   maxThreads?: number;
   useGPU?: boolean;
-  /** MOSS native backend selector. */
+  /** Native ggml backend selector. */
   backend?: string;
+  speakerAttribution?: ParakeetSpeakerAttributionConfig;
   sampleRate?: number;
   channels?: number;
   captionEnabled?: boolean;
@@ -295,6 +297,10 @@ export class ParakeetInterface {
       return eventStr;
     }
     if (isError || eventStr.includes("Error")) return "Error";
+    if (
+      data !== null && typeof data === "object" &&
+      (data as { type?: unknown }).type === "endOfTurn"
+    ) return "EndOfTurn";
     if (this._looksLikeVadEvent(data)) return "VadState";
     if (eventStr.includes("RuntimeStats")) return "JobEnded";
     if (eventStr.includes("Output")) return "Output";
