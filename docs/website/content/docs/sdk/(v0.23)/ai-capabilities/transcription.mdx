@@ -163,7 +163,8 @@ Enable `streamingSpeakerVad` at load or `emitSpeakerVad` per stream to receive
 speaker-activity events. Streaming diarization metadata retains speaker IDs.
 
 The CLI accepts MOSS `hotwords` and `max_new_tokens` in transcription requests.
-Its `verbose_json` response includes MOSS speaker labels and Nemotron
+Its `verbose_json` response includes whisper `language`, `no_speech_prob`,
+`speaker_turn_next` and `token_timestamps` per segment, MOSS speaker labels and Nemotron
 `speaker_segments` with `speaker_id`, `start`, and `end` in seconds.
 
 ## Whisper segment metadata
@@ -199,10 +200,10 @@ for (const segment of segments) {
 
 Two more whisper `modelConfig` keys reach the engine: `carry_initial_prompt:
 true` prepends `initial_prompt` to every decode window instead of only the
-first, and `contextParams["main-gpu"]` (alias `contextParams.main_gpu`) picks
-the GPU once `use_gpu` is `true` — a ggml device-registry index, `"dedicated"`,
-or `"integrated"`. Supply only one spelling, and do not combine it with the
-legacy `contextParams.gpu_device` ordinal.
+first, and `contextParams["main-gpu"]` picks the GPU once `use_gpu` is `true` —
+a ggml device-registry index, `"dedicated"`, or `"integrated"`. Do not combine
+it with the legacy `contextParams.gpu_device` ordinal. The Python client's
+generated `context_params` model exposes the same key as its `main_gpu` field.
 
 ## Streaming with `transcribeStream()`
 

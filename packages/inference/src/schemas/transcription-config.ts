@@ -55,22 +55,14 @@ const contextParamsSchema = z
       .describe(
         'GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.'
       ),
-    'main-gpu': mainGpuSelectorSchema.optional().describe(MAIN_GPU_DESCRIPTION),
-    main_gpu: mainGpuSelectorSchema
-      .optional()
-      .describe('Alias of `main-gpu`; supply only one spelling.')
+    // The addon also reads a `main_gpu` spelling; the SDK carries the one
+    // used by the other engines' configs, which the generated Python model
+    // exposes as its `main_gpu` field. A second key with that name would
+    // collide with the field and serialise both spellings at once.
+    'main-gpu': mainGpuSelectorSchema.optional().describe(MAIN_GPU_DESCRIPTION)
   })
   .superRefine((params, ctx) => {
-    const hasCanonical = params['main-gpu'] !== undefined
-    const hasAlias = params.main_gpu !== undefined
-    if (hasCanonical && hasAlias) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['main_gpu'],
-        message: 'Use only one of main-gpu and main_gpu'
-      })
-    }
-    if ((hasCanonical || hasAlias) && params.gpu_device !== undefined) {
+    if (params['main-gpu'] !== undefined && params.gpu_device !== undefined) {
       ctx.addIssue({
         code: 'custom',
         path: ['gpu_device'],

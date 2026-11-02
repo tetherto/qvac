@@ -11532,17 +11532,6 @@ class MainGpu1(RootModel[int]):
     ]
 
 
-class MainGpu11(RootModel[int]):
-    root: Annotated[
-        int,
-        Field(
-            description="Alias of `main-gpu`; supply only one spelling.",
-            ge=-9007199254740991,
-            le=9007199254740991,
-        ),
-    ]
-
-
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
     GeneratedBaseModel
 ):
@@ -11567,13 +11556,6 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
         Field(
             alias="main-gpu",
             description="GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
-        ),
-    ] = None
-    main_gpu_1: Annotated[
-        MainGpu11 | str | None,
-        Field(
-            alias="main_gpu",
-            description="Alias of `main-gpu`; supply only one spelling.",
         ),
     ] = None
 
@@ -22141,13 +22123,6 @@ class ReloadConfigRequestModelConfigContextParams(GeneratedBaseModel):
         Field(
             alias="main-gpu",
             description="GPU to run on once `use_gpu` is true: a ggml device-registry index (number or integer string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
-        ),
-    ] = None
-    main_gpu_1: Annotated[
-        MainGpu11 | str | None,
-        Field(
-            alias="main_gpu",
-            description="Alias of `main-gpu`; supply only one spelling.",
         ),
     ] = None
 
