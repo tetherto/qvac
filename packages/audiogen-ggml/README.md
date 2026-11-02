@@ -182,9 +182,10 @@ by the addon. See
 [`examples/generate-with-backends.js`](examples/generate-with-backends.js).
 
 WebGPU is an opt-in native Dawn backend. Build from source with
-`bare-make generate -D AUDIOGEN_WEBGPU=ON`, then `bare-make build` and
-`bare-make install`. It is not included in the default prebuilds. Select it
-with `backend: 'webgpu'` after building; `backendId: 5` maps to `webgpu`.
+`bare-make generate -D AUDIOGEN_WEBGPU=ON`, then `bare-make build`,
+`bare-make install`, and `npm run link:platform`. It is not included in the
+default prebuilds. Select it with `backend: 'webgpu'` after building;
+`backendId: 5` maps to `webgpu`.
 Native WebGPU support is unmeasured; its automatic placement keeps the LM
 and detokenizer on CPU. Independent backend selection does not override
 native operation or model compatibility checks. JavaScript packages do not
