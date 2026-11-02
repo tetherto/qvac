@@ -13,6 +13,7 @@
 // bare-https, whose prebuilds NEED libstdc++ and would mask the failure.
 
 const fs = require('bare-fs')
+const path = require('bare-path')
 const process = require('bare-process')
 const LlmLlamacpp = require('../../index.js')
 const { attachSpecLogger } = require('./spec-logger')
@@ -23,10 +24,11 @@ function mappedCxxRuntimes() {
 }
 
 async function main() {
-  const modelPath = process.argv[2]
-  if (!modelPath || !fs.existsSync(modelPath)) {
-    throw new Error(`usage: sidecar-cuda-smoke.js <model.gguf> (got ${modelPath})`)
+  if (!process.argv[2] || !fs.existsSync(process.argv[2])) {
+    throw new Error(`usage: sidecar-cuda-smoke.js <model.gguf> (got ${process.argv[2]})`)
   }
+  // The addon takes absolute model paths only.
+  const modelPath = path.resolve(process.argv[2])
   const preloaded = mappedCxxRuntimes()
   if (preloaded.length > 0) {
     throw new Error(
