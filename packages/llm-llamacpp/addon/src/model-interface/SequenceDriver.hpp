@@ -230,8 +230,8 @@ public:
 
   /// Whether this driver reconciles every request against its sequence and
   /// may start one from another conversation's state (`cache::DonorState`),
-  /// with or without a `cacheKey`. Every decoder-only driver does;
-  /// encoder-decoder models encode each prompt afresh.
+  /// with or without a `cacheKey`. Every decoder-only driver does unless the
+  /// load turned it off; encoder-decoder models encode each prompt afresh.
   [[nodiscard]] virtual bool sharesCacheAcrossKeys() const { return false; }
 
   /// `cache_share_across_keys` from the load config: false keeps every

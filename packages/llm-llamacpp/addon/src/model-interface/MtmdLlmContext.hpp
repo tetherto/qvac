@@ -233,7 +233,10 @@ public:
   /// See TextLlmContext: the ledger, media entries included, describes the
   /// memory exactly whichever request left it there.
   [[nodiscard]] bool sharesCacheAcrossKeys() const override {
-    return !llama_model_has_encoder(modelCtx_.model);
+    return cacheSharedAcrossKeys_ && !llama_model_has_encoder(modelCtx_.model);
+  }
+  void setSharesCacheAcrossKeys(bool shares) override {
+    cacheSharedAcrossKeys_ = shares;
   }
   void setCacheSourceProvider(
       qvac_lib_inference_addon_llama::cache::CacheSourceProvider provider)
@@ -585,6 +588,8 @@ private:
   bool isPrefillOnlyRequest_ = false;
 
   bool cacheReconciliationEnabled_ = false;
+  // `cache_share_across_keys`; see `sharesCacheAcrossKeys`.
+  bool cacheSharedAcrossKeys_ = true;
   bool cacheRequestActive_ = false;
   bool cacheRequestRolledBack_ = false;
   // Request phase, reset at request entry and set by `onPrefillComplete`.

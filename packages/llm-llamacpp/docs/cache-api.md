@@ -474,8 +474,8 @@ If caching was previously active, omitting `cacheKey` saves the active conversat
 
 ## Keep conversations apart
 
-On text models a request starts from whichever state the model holds that
-serves the most of its prompt, whatever its `cacheKey` (see [Starting from another
+Except on encoder-decoder models, a request starts from whichever state the
+model holds that serves the most of its prompt, whatever its `cacheKey` (see [Starting from another
 conversation](cache-lifecycle.md#starting-from-another-conversation)), and its
 `CacheTokens` and timing show how much was already held. When the callers of
 one model must not learn whether another conversation shares their prompt,

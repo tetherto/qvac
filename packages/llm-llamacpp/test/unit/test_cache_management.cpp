@@ -4576,7 +4576,7 @@ namespace {
 
 std::unique_ptr<LlamaModel> loadVisionModel(
     const std::string& modelPath, const std::string& projectionPath,
-    const char* parallel = nullptr) {
+    const char* parallel = nullptr, const char* shareAcrossKeys = nullptr) {
   std::unordered_map<std::string, std::string> config;
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
@@ -4586,6 +4586,9 @@ std::unique_ptr<LlamaModel> loadVisionModel(
   config["seed"] = "5";
   if (parallel != nullptr) {
     config["parallel"] = parallel;
+  }
+  if (shareAcrossKeys != nullptr) {
+    config["cache_share_across_keys"] = shareAcrossKeys;
   }
   config["backendsDir"] = test_common::getTestBackendsDir().string();
   std::string path = modelPath;
@@ -4702,6 +4705,38 @@ TEST(CrossKeyMultimodalTest, NewKeyReusesTheImageSetAside) {
   EXPECT_GT(mtmd.getVisionEncodeTiles(), 0) << "another image was not encoded";
   EXPECT_EQ(bytesOf(keys[0]), firstFile);
 
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// With `cache_share_across_keys` off, a request without a key is reset
+// afterwards and a new key encodes the image again rather than start from
+// another conversation.
+TEST(CrossKeyMultimodalTest, TurnedOffANewKeyEncodesTheImageAgain) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_off_a.bin", "cross_vision_off_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model =
+      loadVisionModel(smolVlmPath(), smolVlmProjectionPath(), nullptr, "false");
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, ""));
+  EXPECT_EQ(LlamaModelTestPeer::llmContext(*model)->getNPast(), 0)
+      << "a request without a key kept its state";
+
+  runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0);
+  runSingle(*model, imageQuestion("elephant.jpg", K_COLOUR, keys[1]));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0)
+      << "the new key started from another conversation's image";
+  EXPECT_EQ(mtmd.donorAdoptionsForTesting(), 0u);
   model.reset();
   for (const auto& key : keys) {
     fs::remove(key);

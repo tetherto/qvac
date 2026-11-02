@@ -8,10 +8,11 @@
   nothing in memory serves more of its prompt, such as a primed system prompt
   shared by many conversations. The file is read, never written
   ([#5417](https://github.com/tetherto/qvac/pull/5417)).
-- `cache_share_across_keys` load config: `'false'` keeps every text request
-  to its own `cacheKey`'s state, for a model whose callers must not learn
+- `cache_share_across_keys` load config: `'false'` keeps every request to
+  its own `cacheKey`'s state, for a model whose callers must not learn
   whether another conversation shares their prompt. Default `'true'`
-  ([#5417](https://github.com/tetherto/qvac/pull/5417)).
+  ([#5417](https://github.com/tetherto/qvac/pull/5417),
+  [#5422](https://github.com/tetherto/qvac/pull/5422)).
 
 ### Changed
 

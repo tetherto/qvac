@@ -1416,7 +1416,7 @@ namespace LlmLlamacpp {
      */
     cache_ram_mib?: NumericLike;
     /**
-     * Whether a request on a text model may start from state another
+     * Whether a request on a decoder-only model may start from state another
      * conversation left: the memory a request without a `cacheKey` keeps,
      * another key's state in a sequence or the RAM tier, or a `cacheKey` file
      * the model has used. `'true'` (default) shares it, as llama-server's

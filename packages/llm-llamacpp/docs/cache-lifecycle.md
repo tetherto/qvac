@@ -693,7 +693,7 @@ stateDiagram-v2
 | `cache_checkpoint_dir` | load config | Required with `disk`, refused without it: where checkpoint files go, inside a private directory created in it (0700; on Windows, the directory itself). |
 | `parallel` | load config | With `>= 2` each request runs in its own slot; a committed keyed conversation stays resident in it for the next request on its `cacheKey` (see above). |
 | `cache_ram_mib` | load config | Host-RAM budget for conversations that are not running: switched away on the single-prompt path, or evicted from their batch slot. Write-back: files are written on budget eviction, `saveCache()`, reload or unload (default 0, off). |
-| `cache_share_across_keys` | load config | `'false'` keeps every request on a text model to its own key's state (see [Starting from another conversation](#starting-from-another-conversation)); default `'true'`. |
+| `cache_share_across_keys` | load config | `'false'` keeps every request to its own key's state (see [Starting from another conversation](#starting-from-another-conversation)); default `'true'`. |
 
 ## Where each thing lives, at a glance
 
