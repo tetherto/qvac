@@ -135,7 +135,7 @@ void MossTranscribeModel::load() {
   }
   backendName_ = engine_->backend_name();
   backendId_ = backendFamily(backendName_);
-  auto device = ggml_backend_dev_by_name(backendName_.c_str());
+  auto device = resolveBackendDevice(backendName_);
   backendDevice_ = backendDeviceClass(device, backendId_);
   const char* description =
       device ? ggml_backend_dev_description(device) : nullptr;
