@@ -59,7 +59,7 @@ function expectDisposedFilter(t, filter, message) {
   )
 }
 
-function assertTvimHeader(t, file, version, bitWidth, storageKind = null) {
+function assertTvimHeader(t, file, version, bitWidth) {
   const bytes = fs.readFileSync(file)
   t.is(bytes[0], 0x54, 'tvim magic T')
   t.is(bytes[1], 0x56, 'tvim magic V')
@@ -67,7 +67,19 @@ function assertTvimHeader(t, file, version, bitWidth, storageKind = null) {
   t.is(bytes[3], 0x49, 'tvim magic I')
   t.is(bytes[4], version, `tvim version ${version}`)
   t.is(bytes[5], bitWidth, 'tvim bit width')
-  if (storageKind !== null) t.is(bytes[6], storageKind, 'tvim storage kind')
+}
+
+// TurboVec snapshots use upstream turbovec's v8 container: magic "TV8\0",
+// revision, bit width, then kind 1 for an id-mapped index.
+function assertTv8Header(t, file, bitWidth) {
+  const bytes = fs.readFileSync(file)
+  t.is(bytes[0], 0x54, 'tv8 magic T')
+  t.is(bytes[1], 0x56, 'tv8 magic V')
+  t.is(bytes[2], 0x38, 'tv8 magic 8')
+  t.is(bytes[3], 0x00, 'tv8 magic NUL')
+  t.is(bytes[4], 1, 'tv8 revision')
+  t.is(bytes[5], bitWidth, 'tv8 bit width')
+  t.is(bytes[6], 1, 'tv8 id-mapped kind')
 }
 
 function assertTvidHeader(t, file) {
@@ -152,7 +164,7 @@ function normalizedPatternVec(row) {
   return vector
 }
 
-function runTurboVecRoundTrip(t, storage, bitWidth, storageKind) {
+function runTurboVecRoundTrip(t, storage, bitWidth) {
   const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
   const localN = 6
   const vectors = new Float32Array(localN * TURBOVEC_DIM)
@@ -198,7 +210,7 @@ function runTurboVecRoundTrip(t, storage, bitWidth, storageKind) {
     if (removeLoggedError !== null) {
       t.is(removeLoggedError.message, 'InvalidArgument', `${storage} removeLogged error category`)
     }
-    assertTvimHeader(t, file, 3, bitWidth, storageKind)
+    assertTv8Header(t, file, bitWidth)
     expectThrows(t, () => IdMapIndex.loadMmap(file), `${storage} mmap load should be rejected`)
     loaded = IdMapIndex.load(file)
     t.is(loaded.search(query, 1).ids[0], ids[0], `${storage} reload search works`)
@@ -244,7 +256,7 @@ test('IdMapIndex: TurboVec q4 add + search + persistence round-trip', (t) => {
     )
     return
   }
-  runTurboVecRoundTrip(t, 'turbovec-q4', 4, 4)
+  runTurboVecRoundTrip(t, 'turbovec-q4', 4)
 })
 
 test('IdMapIndex: TurboVec q2 add + search + persistence round-trip', (t) => {
@@ -256,7 +268,7 @@ test('IdMapIndex: TurboVec q2 add + search + persistence round-trip', (t) => {
     )
     return
   }
-  runTurboVecRoundTrip(t, 'turbovec-q2', 2, 5)
+  runTurboVecRoundTrip(t, 'turbovec-q2', 2)
 })
 
 test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) => {

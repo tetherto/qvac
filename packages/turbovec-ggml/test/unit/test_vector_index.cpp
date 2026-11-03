@@ -96,7 +96,7 @@ TEST(VectorIndexTest, RejectsDimensionsFabricRefuses) {
   EXPECT_THROW(
       VectorIndex(12, VectorStorage::TurboVecQ2), std::invalid_argument);
   EXPECT_THROW(
-      VectorIndex(1032, VectorStorage::TurboVecQ4), std::invalid_argument);
+      VectorIndex(16392, VectorStorage::TurboVecQ4), std::invalid_argument);
 }
 
 TEST(VectorIndexTest, MoveTransfersOwnership) {
