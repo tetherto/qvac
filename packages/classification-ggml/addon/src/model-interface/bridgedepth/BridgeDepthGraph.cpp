@@ -223,9 +223,8 @@ Padding computePadding(int h, int w, int divisor) {
   return p;
 }
 
-std::vector<float> padImage(const float* chw, int h, int w, Padding pad) {
+void padImageInto(const float* chw, int h, int w, Padding pad, float* out) {
   const int hDim = h + pad.top, wDim = w + pad.right;
-  std::vector<float> out(static_cast<size_t>(3) * hDim * wDim);
   for (int c = 0; c < 3; ++c) {
     for (int y = 0; y < hDim; ++y) {
       const int sy = std::max(y - pad.top, 0);
@@ -236,6 +235,12 @@ std::vector<float> padImage(const float* chw, int h, int w, Padding pad) {
       }
     }
   }
+}
+
+std::vector<float> padImage(const float* chw, int h, int w, Padding pad) {
+  std::vector<float> out(
+      static_cast<size_t>(3) * (h + pad.top) * (w + pad.right));
+  padImageInto(chw, h, w, pad, out.data());
   return out;
 }
 
@@ -366,7 +371,7 @@ struct BridgeDepthGraph::Impl {
     std::unique_ptr<ggml_context, decltype(&ggml_free)> owned(
         ggml_init(ip), ggml_free);
     if (!owned)
-      throw std::runtime_error("BridgeDepth: graph context allocation failed");
+      throw ResourceError("BridgeDepth: graph context allocation failed");
     ggml_context* ctx = owned.get();
     ggml_cgraph* gf = ggml_new_graph_custom(ctx, GRAPH_SIZE, false);
     Inputs inputs;
@@ -378,7 +383,7 @@ struct BridgeDepthGraph::Impl {
     }
     ggml_backend_sched_reset(sched);
     if (!ggml_backend_sched_alloc_graph(sched, gf)) {
-      throw std::runtime_error("BridgeDepth: graph allocation failed");
+      throw ResourceError("BridgeDepth: graph allocation failed");
     }
     for (auto& item : inputs.list) {
       if (item.t->buffer)
@@ -1722,7 +1727,9 @@ namespace {
 // FNV-1a over every tensor's name, type and shape in file order plus the
 // hyperparameters the graph reads. The graph hard-codes the rvc_pretrain ViT-S
 // layout and ggml aborts (it does not throw) on a shape mismatch, so a GGUF is
-// accepted only when this matches the converter's output exactly.
+// accepted only when this matches the converter's output exactly. It catches
+// wrong converter output, not a crafted file: FNV-1a can be forced to collide.
+// Tensor data that indexes memory is range checked separately at load.
 uint64_t layoutFingerprint(
     const gguf_context* gctx, const ggml_context* wctx,
     const std::vector<uint32_t>& kv) {
@@ -1832,7 +1839,7 @@ BridgeDepthGraph::BridgeDepthGraph(
 
   m.wbuf = ggml_backend_alloc_ctx_tensors(m.wctx, m.backend);
   if (!m.wbuf)
-    throw std::runtime_error("BridgeDepth: weight allocation failed");
+    throw ResourceError("BridgeDepth: weight allocation failed");
   ggml_backend_buffer_set_usage(m.wbuf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
   std::vector<char> buf;
   for (int64_t i = 0; i < gguf_get_n_tensors(m.gctx); ++i) {
@@ -1861,6 +1868,17 @@ BridgeDepthGraph::BridgeDepthGraph(
       throw std::runtime_error("BridgeDepth: " + name + " is not I32");
     std::vector<int32_t> idx(ggml_nelements(t));
     ggml_backend_tensor_get(t, idx.data(), 0, ggml_nbytes(t));
+    // The values become get_rows indices into the table. The layout
+    // fingerprint does not cover tensor data, and GPU get_rows does not bound
+    // check, so an out-of-range value would read past the table.
+    const std::string table =
+        name.substr(0, name.size() - 24) + ".relative_position_enc_table";
+    const int64_t rows = m.weight(table)->ne[1];
+    for (const int32_t v : idx) {
+      if (v < 0 || v >= rows)
+        throw std::runtime_error(
+            "BridgeDepth: " + name + " has an index outside " + table);
+    }
     m.rpeIndexHost.emplace(name, std::move(idx));
   }
 
@@ -1875,7 +1893,7 @@ BridgeDepthGraph::BridgeDepthGraph(
       false,
       true);
   if (!m.sched)
-    throw std::runtime_error("BridgeDepth: scheduler creation failed");
+    throw ResourceError("BridgeDepth: scheduler creation failed");
 }
 
 BridgeDepthGraph::~BridgeDepthGraph() = default;
@@ -1979,10 +1997,11 @@ std::vector<float> BridgeDepthGraph::infer(
     throw std::runtime_error(
         "BridgeDepth: image is smaller than the minimum size");
   const Padding pad = computePadding(h, w, PAD_DIVISOR);
-  std::vector<float> imgs = padImage(left, h, w, pad);
-  const std::vector<float> r = padImage(right, h, w, pad);
-  imgs.insert(imgs.end(), r.begin(), r.end());
   const int hDim = h + pad.top, wDim = w + pad.right;
+  const size_t plane = static_cast<size_t>(3) * hDim * wDim;
+  std::vector<float> imgs(2 * plane);
+  padImageInto(left, h, w, pad, imgs.data());
+  padImageInto(right, h, w, pad, imgs.data() + plane);
   const int ph = hDim / 8 * 7 / 14, pw = wDim / 8 * 7 / 14;
   const std::vector<float>& pos = m.posEmbed(ph, pw);
   const std::vector<float> mean = channelConst(MEAN_RGB),

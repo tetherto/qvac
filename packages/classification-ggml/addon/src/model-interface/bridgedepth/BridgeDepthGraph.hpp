@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,13 @@ struct Padding {
 Padding computePadding(int h, int w, int divisor);
 // `chw` is [3, h, w]; returns [3, h + top, w + right].
 std::vector<float> padImage(const float* chw, int h, int w, Padding pad);
+// Same, written to `out`, which holds 3 * (h + top) * (w + right) floats.
+void padImageInto(const float* chw, int h, int w, Padding pad, float* out);
+
+// Device or memory failures, as opposed to a bad file or input.
+struct ResourceError : std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
 
 class BridgeDepthGraph {
 public:

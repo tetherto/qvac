@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <any>
 #include <cmath>
 #include <cstdio>
@@ -297,7 +298,8 @@ TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {
 }
 
 // The production path: decode, own top-k seeds, unpad. Measured 2026-11-03:
-// 99.8% within 0.2 px on CPU and Metal; the misses follow top-k tie breaks.
+// 99.8% within 0.2 px on CPU, Metal, CUDA and Vulkan; the misses follow top-k
+// tie breaks.
 TEST_F(BridgeDepthReference, ModelMatchesTorchWithOwnSeeds) {
   bd::BridgeDepthModel model({modelPath_, "", backend_, 4});
   model.load();
@@ -310,7 +312,7 @@ TEST_F(BridgeDepthReference, ModelMatchesTorchWithOwnSeeds) {
       "%s own seeds: %.5f within 0.2 px\n",
       backend_.c_str(),
       within(output.disparity, 0.2));
-  EXPECT_GE(within(output.disparity, 0.2), 0.95);
+  EXPECT_GE(within(output.disparity, 0.2), 0.99);
 
   bool sawWeights = false;
   for (const auto& [key, value] : model.runtimeStats()) {
@@ -328,5 +330,77 @@ TEST_F(BridgeDepthReference, ModelMatchesTorchWithOwnSeeds) {
       expectThrows([&] {
         model.process(std::any(mismatched));
       }).find("same size"),
+      std::string::npos);
+}
+
+// Repeated calls, a size change in between (the positional embedding is cached
+// per size) and switching the seeds override must not leak state between runs.
+TEST_F(BridgeDepthReference, RepeatedAndMixedSizesGiveTheSameResult) {
+  classification_ggml::GgmlBackends backends(backend_, "", 4, "test");
+  bd::BridgeDepthGraph graph(modelPath_, backends.device(), backends.cpu());
+  uint32_t width = 0;
+  uint32_t height = 0;
+  const auto left = bd::toPlanarRgb(pair_.left, width, height);
+  const auto right = bd::toPlanarRgb(pair_.right, width, height);
+  auto maxDiff = [](const std::vector<float>& a, const std::vector<float>& b) {
+    float max = 0.0f;
+    for (size_t i = 0; i < a.size(); ++i)
+      max = std::max(max, std::fabs(a[i] - b[i]));
+    return max;
+  };
+  const auto first = graph.infer(left.data(), right.data(), 100, 200, &seeds_);
+  const auto again = graph.infer(left.data(), right.data(), 100, 200, &seeds_);
+  EXPECT_LT(maxDiff(first, again), 1e-4f);
+
+  const auto own = graph.infer(left.data(), right.data(), 100, 200);
+  EXPECT_GE(within(own, 0.2), 0.99);
+
+  // 33 x 47 pads by 15 rows and 1 column, the largest top pad.
+  std::vector<float> small(3U * 33 * 47);
+  for (size_t i = 0; i < small.size(); ++i)
+    small[i] = static_cast<float>((i * 37) % 256);
+  const auto other = graph.infer(small.data(), small.data(), 33, 47);
+  ASSERT_EQ(other.size(), 33U * 47);
+  for (const float value : other)
+    ASSERT_TRUE(std::isfinite(value));
+
+  const auto last = graph.infer(left.data(), right.data(), 100, 200, &seeds_);
+  EXPECT_LT(maxDiff(first, last), 1e-4f);
+}
+
+// An index outside the rpe table would make GPU get_rows read past it, and the
+// layout fingerprint does not cover tensor data, so load checks every value.
+TEST_F(BridgeDepthReference, RejectsOutOfRangeRpeIndex) {
+  const auto copy =
+      std::filesystem::temp_directory_path() /
+      ("qvac-bridgedepth-" + std::to_string(std::random_device{}()) + ".gguf");
+  std::filesystem::copy_file(modelPath_, copy);
+  struct Remove {
+    std::filesystem::path path;
+    ~Remove() { std::filesystem::remove(path); }
+  } cleanup{copy};
+  {
+    gguf_init_params params{};
+    params.no_alloc = true;
+    gguf_context* gguf = gguf_init_from_file(modelPath_.c_str(), params);
+    ASSERT_NE(gguf, nullptr);
+    const int64_t id = gguf_find_tensor(
+        gguf, "align_0.layers.0.attn.nmp.attn.relative_position_index");
+    ASSERT_GE(id, 0);
+    const auto offset = static_cast<std::streamoff>(
+        gguf_get_data_offset(gguf) + gguf_get_tensor_offset(gguf, id));
+    gguf_free(gguf);
+    std::fstream file(copy, std::ios::binary | std::ios::in | std::ios::out);
+    file.seekp(offset);
+    const int32_t outside = 100000;
+    file.write(reinterpret_cast<const char*>(&outside), sizeof(outside));
+    ASSERT_TRUE(file.good());
+  }
+  classification_ggml::GgmlBackends backends("CPU", "", 2, "test");
+  EXPECT_NE(
+      expectThrows([&] {
+        bd::BridgeDepthGraph graph(
+            copy.string(), backends.device(), backends.cpu());
+      }).find("has an index outside"),
       std::string::npos);
 }

@@ -83,6 +83,8 @@ void BridgeDepthModel::load() {
         config_.modelPath, state->backends->device(), state->backends->cpu());
   } catch (const StatusError&) {
     throw;
+  } catch (const ResourceError& error) {
+    throw StatusError(InternalError, error.what());
   } catch (const std::exception& error) {
     throw StatusError(InvalidArgument, error.what());
   }
