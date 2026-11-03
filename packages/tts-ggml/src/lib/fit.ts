@@ -1,9 +1,12 @@
+import { validateBackendOption } from './fabricOptions'
+
 /**
  * Settings every voice takes, spelled as `createInstance` takes them. A fit
  * request is a load config plus the workload below, so the projection reads
  * the same keys and applies the same defaults as the load it describes.
  */
 interface TtsFitCommon {
+  backend?: string
   /** Layers to offload. Unset defers to `useGPU`. */
   nGpuLayers?: number
   /** All layers or none, when `nGpuLayers` is unset. */
@@ -30,6 +33,8 @@ export interface SupertonicFitRequest extends TtsFitCommon {
 export interface ParlerFitRequest extends TtsFitCommon {
   engineType: 'parler'
   parlerModelPath: string
+  /** Match the Parler decoder-sidecar load policy. */
+  coremlDecoder?: boolean
   descriptionTokens?: number
   promptTokens?: number
   /** 0 takes the checkpoint's default generation length. */
@@ -69,6 +74,8 @@ export interface CosyvoiceFitRequest extends TtsFitCommon {
 }
 
 export interface MossFitRequest extends TtsFitCommon {
+  nCtx?: number
+  maxNewTokens?: number
   engineType: 'moss'
   mossBackbonePath: string
   mossCodecDecoderPath: string
@@ -96,7 +103,24 @@ export interface MossSoundEffectFitRequest extends TtsFitCommon {
   threads?: number
 }
 
+export interface PocketFitRequest extends TtsFitCommon {
+  engineType: 'pocket'
+  pocketFlowModelPath: string
+  pocketMimiModelPath: string
+  pocketFrontendPath: string
+  pocketVoicePath?: string
+  referenceAudio?: string
+  text: string
+  threads?: number
+  nCtx?: number
+  maxTokens?: number
+  steps?: number
+  framesAfterEos?: number
+  memoryBudgetBytes?: number
+}
+
 export type TtsFitRequest =
+  | PocketFitRequest
   | SupertonicFitRequest
   | ParlerFitRequest
   | ChatterboxFitRequest
@@ -159,6 +183,7 @@ interface FitBinding {
  * addon.
  */
 export async function assessFit(request: TtsFitRequest): Promise<TtsFitResult> {
+  validateBackendOption(request.engineType, request.backend)
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
   const binding = require('../binding.js') as FitBinding
 

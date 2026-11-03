@@ -197,6 +197,7 @@ class TTSGgml {
         await this._pocket?.waitCancel();
         this._pocket?.checkReload();
         const normalized = options == null || typeof options !== "object" ? {} : options;
+        (0, parler_1.assertNoPerCallParlerCoreml)(normalized, "runStream");
         if (this._setup.engineType === engineIds_1.ENGINE_POCKET) {
             return this._startStream(() => this._runStreamOrchestrator(text, normalized, (0, jobFields_1.resolveJobFields)(this._setup, normalized, "runStream")));
         }
@@ -345,6 +346,18 @@ class TTSGgml {
             return addon.runJob({ ...input, streamOutput: true });
         }
         return this._pocket ? this._pocket.runJob(addon, input) : addon.runJob(input);
+    }
+    async warmUp(text) {
+        if (this._setup.engineType !== engineIds_1.ENGINE_SUPERTONIC) {
+            throw new Error("warmUp is supported by Supertonic only");
+        }
+        if (typeof text !== "string")
+            throw new Error("warmUp text must be a string");
+        await this._runExclusive(async () => {
+            await this._job.active?.await().catch(() => { });
+            const response = await this._runInternal({ input: text, type: "warmUp" });
+            await response.await();
+        });
     }
     async cancel() {
         if (this._pocket)
