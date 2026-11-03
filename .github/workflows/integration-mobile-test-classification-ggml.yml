@@ -263,7 +263,7 @@ jobs:
             import { createHash } from "node:crypto";
             import { createReadStream } from "node:fs";
             const expected = JSON.parse(process.env.MODEL_MANIFEST);
-            if (expected.length !== 2) throw new Error("Expected both MegaLoc test models");
+            if (expected.length !== 3) throw new Error("Expected the MegaLoc and BridgeDepth test models");
             for (const { dest, sha256 } of expected) {
               const hash = createHash("sha256");
               for await (const chunk of createReadStream(dest)) hash.update(chunk);

@@ -89,8 +89,11 @@ QVAC_BRIDGEDEPTH_MODEL_PATH=/path/bridgedepth-vits-f32.gguf npm run test:cpp
 QVAC_BRIDGEDEPTH_MODEL_PATH=/path/bridgedepth-vits-f32.gguf npm run test:integration
 ```
 
-`QVAC_BRIDGEDEPTH_BACKEND` selects the device (default CPU). Without the model
-path, the tests that need weights are skipped and the input, padding and GGUF
+The integration test also finds the model at
+`test/fixtures/bridgedepth-vits-f32.gguf`, which is where CI stages it and where
+`npm run mobile:copy-prebuilds` reads it for the mobile bundle.
+`QVAC_BRIDGEDEPTH_BACKEND` selects the device (default CPU). Without the model,
+the tests that need weights are skipped and the input, padding and GGUF
 validation tests still run. `test/fixtures/generate-bridgedepth-reference.py`
 regenerates the fixture pair and the PyTorch reference.
 

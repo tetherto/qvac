@@ -5,16 +5,33 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const env = require('bare-env')
 const { BridgeDepth } = require('../../index')
-const { TEST_TIMEOUT } = require('./utils')
+const { isMobile, TEST_TIMEOUT } = require('./utils')
 
-// Weights are not bundled: convert them (docs/bridgedepth.md) and set
-// QVAC_BRIDGEDEPTH_MODEL_PATH. QVAC_BRIDGEDEPTH_BACKEND picks the device.
-const modelPath = env.QVAC_BRIDGEDEPTH_MODEL_PATH || ''
+// Weights are not bundled: convert them (docs/bridgedepth.md) into
+// test/fixtures/bridgedepth-vits-f32.gguf or set QVAC_BRIDGEDEPTH_MODEL_PATH.
+// Without a model the parity test is skipped.
+// QVAC_BRIDGEDEPTH_BACKEND picks the device.
 const backend = env.QVAC_BRIDGEDEPTH_BACKEND || 'CPU'
 const fixtures = path.join(__dirname, '..', 'fixtures')
 
+function asset(filename, modelEnv) {
+  if (modelEnv && env[modelEnv]) return env[modelEnv]
+  if (isMobile && global.assetPaths) {
+    const suffix = filename.endsWith('.gguf') ? filename + '.bin' : filename
+    for (const key of Object.keys(global.assetPaths)) {
+      if (key.endsWith('/' + suffix)) return global.assetPaths[key].replace(/^file:\/\//, '')
+    }
+  }
+  const local = path.join(fixtures, filename)
+  return fs.existsSync(local) ? local : ''
+}
+
+// CI stages the model through reusable-test-models-classification-ggml.yml and
+// verifies its checksum, so a missing model only skips local runs.
+const modelPath = asset('bridgedepth-vits-f32.gguf', 'QVAC_BRIDGEDEPTH_MODEL_PATH')
+
 function fixture(name) {
-  return fs.readFileSync(path.join(fixtures, name))
+  return fs.readFileSync(asset(name))
 }
 
 function floats(name) {

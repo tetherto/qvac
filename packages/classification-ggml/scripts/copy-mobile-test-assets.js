@@ -169,15 +169,24 @@ function main() {
   copyWeightsToTestAssets()
   copyTestImagesToTestAssets()
   const fixtures = path.join(ADDON_DIR, 'test', 'fixtures')
-  for (const quant of ['f16', 'mixed']) {
-    const variable = `QVAC_MEGALOC_${quant.toUpperCase()}_MODEL_PATH`
-    const source = process.env[variable] || path.join(fixtures, `megaloc-${quant}.gguf`)
+  const models = [
+    ['megaloc-f16.gguf', 'QVAC_MEGALOC_F16_MODEL_PATH', 'MegaLoc', 'docs/megaloc.md'],
+    ['megaloc-mixed.gguf', 'QVAC_MEGALOC_MIXED_MODEL_PATH', 'MegaLoc', 'docs/megaloc.md'],
+    [
+      'bridgedepth-vits-f32.gguf',
+      'QVAC_BRIDGEDEPTH_MODEL_PATH',
+      'BridgeDepth',
+      'docs/bridgedepth.md'
+    ]
+  ]
+  for (const [filename, variable, model, guide] of models) {
+    const source = process.env[variable] || path.join(fixtures, filename)
     if (!fs.existsSync(source)) {
       throw new Error(
-        `Convert the MegaLoc test models first (docs/megaloc.md), or set ${variable}: ${source}`
+        `Convert the ${model} test models first (${guide}), or set ${variable}: ${source}`
       )
     }
-    fs.copyFileSync(source, path.join(TEST_ASSETS_DIR, `megaloc-${quant}.gguf.bin`))
+    fs.copyFileSync(source, path.join(TEST_ASSETS_DIR, `${filename}.bin`))
   }
   for (const filename of fs.readdirSync(fixtures)) {
     if (filename.endsWith('.bin') || filename.endsWith('.png')) {
