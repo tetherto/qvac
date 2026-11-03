@@ -17,9 +17,10 @@ const sha256 = (file) =>
       .on('error', fail)
   })
 
-// Unpinned entries pass on presence, as the S3 stager did.
-export async function matches(file, entry) {
+// Unpinned entries pass on presence only after an exact cache hit; a fallback restore may hold an older object.
+export async function matches(file, entry, exactHit = true) {
   if (!existsSync(file)) return false
+  if (entry.bytes == null && entry.sha256 == null) return exactHit
   if (entry.bytes != null && statSync(file).size !== entry.bytes) return false
   if (entry.sha256 != null && (await sha256(file)) !== entry.sha256) return false
   return true
@@ -33,6 +34,7 @@ export async function download({
   workdir,
   target,
   host = `${process.platform}-${process.arch}`,
+  exactHit = false,
   fetchObject,
   syncPrefix,
   fetchUrls
@@ -48,7 +50,7 @@ export async function download({
       syncPrefix(m.s3Prefix, dest, m.exclude ?? [])
       continue
     }
-    if (await matches(dest, m)) continue
+    if (await matches(dest, m, exactHit)) continue
     mkdirSync(dirname(dest), { recursive: true })
     rmSync(dest, { force: true })
     if (m.s3Path) fetchObject(m.s3Path, dest)
@@ -75,6 +77,7 @@ async function main(env) {
     manifest,
     workdir: env.WORKDIR,
     target: env.TARGET,
+    exactHit: env.EXACT_HIT === 'true',
     fetchObject: (key, file) => aws(['s3', 'cp', `s3://${env.BUCKET}/${key}`, file]),
     syncPrefix: (prefix, dir, exclude) =>
       aws([
