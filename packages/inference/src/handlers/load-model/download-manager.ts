@@ -321,6 +321,11 @@ export function markClearCacheForRequest(requestId: string): boolean {
   return false
 }
 
+export function hasActiveTransfer(downloadKey: string): boolean {
+  const transfer = activeTransfers.get(downloadKey)
+  return !!transfer && !transfer.abortController.signal.aborted
+}
+
 export function cancelTransfer(downloadKey: string, clearCache = false): void {
   const transfer = activeTransfers.get(downloadKey)
   if (!transfer) return

@@ -1,0 +1,135 @@
+import test from 'brittle'
+import fs from 'bare-fs'
+import os from 'bare-os'
+import path from 'bare-path'
+import { AbortController } from 'bare-abort-controller'
+import { QVACRegistryClient } from '@qvac/registry-client'
+import { initEnv } from '@/runtime/env'
+import { closeRegistryClient } from '@/runtime/registry-client'
+import { downloadSingleFileFromRegistry } from '@/handlers/load-model/registry-download-utils'
+import { handleDeleteCache } from '@/handlers/delete-cache'
+import { getSingleFileCachePath } from '@/utils/cache/paths'
+import { QWEN3_600M_INST_Q4 } from '@/models/registry/index'
+
+type DownloadOptions = { signal?: { aborted: boolean }; clearBlocksOnCancel?: () => boolean }
+
+// Points the cache at a temp home and replaces the client's network methods.
+function stubClient(t: ReturnType<typeof test>, methods: Record<string, unknown>) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-registry-cache-'))
+  const argv = Bare.argv.slice()
+  Bare.argv.length = 0
+  Bare.argv.push('', '', JSON.stringify({ HOME_DIR: home }))
+  initEnv()
+
+  const proto = QVACRegistryClient.prototype as unknown as Record<string, unknown>
+  const names = ['ready', 'close', ...Object.keys(methods)]
+  const original = Object.fromEntries(names.map((name) => [name, proto[name]]))
+  proto['ready'] = async () => {}
+  proto['close'] = async function (this: { corestore: { close(): Promise<void> } }) {
+    await this.corestore.close()
+  }
+  Object.assign(proto, methods)
+
+  t.teardown(async () => {
+    await closeRegistryClient()
+    Object.assign(proto, original)
+    Bare.argv.length = 0
+    Bare.argv.push(...argv)
+    initEnv()
+    fs.rmSync(home, { recursive: true, force: true })
+  })
+  return home
+}
+
+const binding = {
+  coreKey: 'a'.repeat(64),
+  blockOffset: 0,
+  blockLength: 1,
+  byteOffset: 0,
+  byteLength: 4,
+  sha256: 'b'.repeat(64)
+}
+
+test('downloadSingleFileFromRegistry: clearCache reaches the client as clearBlocksOnCancel', async (t) => {
+  let clearCache = false
+  let seen: boolean | undefined
+  const ac = new AbortController()
+  const home = stubClient(t, {
+    downloadBlob: async (_binding: unknown, opts: DownloadOptions) => {
+      // The SDK flags clearCache on the transfer before it aborts.
+      clearCache = true
+      ac.abort(undefined)
+      seen = opts.clearBlocksOnCancel?.()
+      throw new Error('Download cancelled')
+    }
+  })
+
+  await t.exception(
+    downloadSingleFileFromRegistry(
+      'model.gguf',
+      's3',
+      path.join(home, 'models', 'model.gguf'),
+      'model.gguf',
+      'key',
+      4,
+      '',
+      undefined,
+      ac.signal,
+      binding,
+      undefined,
+      () => clearCache
+    )
+  )
+  t.is(seen, true, 'client reads clearCache at cancel time')
+})
+
+test('deleteCache({ modelSrc }): clears the catalogued blob and deletes the cached file', async (t) => {
+  const cleared: unknown[] = []
+  stubClient(t, {
+    clearBlob: async (blob: unknown) => {
+      cleared.push(blob)
+    }
+  })
+  const modelPath = getSingleFileCachePath(QWEN3_600M_INST_Q4.registryPath)
+  fs.mkdirSync(path.dirname(modelPath), { recursive: true })
+  fs.writeFileSync(modelPath, 'partial')
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: QWEN3_600M_INST_Q4.src
+  })
+
+  t.is(response.success, true)
+  t.alike(
+    cleared.map((blob) => (blob as { blockOffset: number }).blockOffset),
+    [QWEN3_600M_INST_Q4.blobBlockOffset],
+    'cleared the model blob'
+  )
+  t.absent(fs.existsSync(modelPath), 'cached file deleted')
+})
+
+test('deleteCache({ modelSrc }): an uncatalogued model resolves its blob from the registry', async (t) => {
+  const cleared: unknown[] = []
+  stubClient(t, {
+    getModel: async () => ({ blobBinding: binding }),
+    clearBlob: async (blob: unknown) => {
+      cleared.push(blob)
+    }
+  })
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: 'registry://s3/not/in/catalog.gguf'
+  })
+
+  t.is(response.success, true)
+  t.alike(cleared, [binding], 'cleared the blob the registry reported')
+})
+
+test('deleteCache({ modelSrc }): rejects a source that is not registry://', async (t) => {
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: 'https://example.com/m.gguf'
+  })
+  t.is(response.success, false)
+})

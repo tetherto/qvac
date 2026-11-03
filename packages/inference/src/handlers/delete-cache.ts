@@ -1,11 +1,13 @@
 import type { DeleteCacheRequest, DeleteCacheResponse } from '@/schemas/index'
 import { deleteKvCacheState } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-session'
+import { deleteRegistryModelCache } from '@/handlers/load-model/registry-delete'
 import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 
 /**
- * RPC handler for `deleteCache(...)`. The three KV-cache bookkeeping
+ * RPC handler for `deleteCache(...)`. `modelSrc` deletes a registry model's
+ * cached download instead of KV caches. The three KV-cache bookkeeping
  * layers (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`)
  * are private to `kv-cache-session.ts`; this handler delegates to that
  * module's single administrative entry point (`deleteKvCacheState`).
@@ -19,6 +21,8 @@ export async function handleDeleteCache(request: DeleteCacheRequest): Promise<De
       await deleteKvCacheState({ all: true })
     } else if ('auto' in request && request.auto) {
       await deleteKvCacheState({ auto: true })
+    } else if ('modelSrc' in request) {
+      await deleteRegistryModelCache(request.modelSrc)
     } else if ('kvCacheKey' in request) {
       await deleteKvCacheState({
         kvCacheKey: request.kvCacheKey,
