@@ -1,14 +1,40 @@
-import { unloadModel as sdkUnloadModel, close as sdkClose } from '@qvac/sdk'
+import { SDK_SERVER_ERROR_CODES, unloadModel as sdkUnloadModel, close as sdkClose } from '@qvac/sdk'
 import type { ModelRegistry } from '@/serve/core/model-registry'
 import type { LoadConfig, ServeConfig } from '@/serve/core/config/types'
 import type { LoadManager } from '@/serve/core/load-manager'
 import type { Logger } from '@/logger'
+import { HttpError } from '@/serve/lib/http-error'
 
 export interface PreloadResult {
   /** Number of models marked `preload` that were attempted. */
   attempted: number
   /** How many of them reached READY. */
   loaded: number
+}
+
+export function runtimeSuspendedError(state = 'suspended'): HttpError {
+  return new HttpError(
+    503,
+    'runtime_suspended',
+    `The runtime is ${state}. Resume it with POST /qvac/v1/runtime/resume.`
+  )
+}
+
+// The worker's own lifecycle gate, hit by a request that passed the HTTP gate
+// before a suspend started. It can arrive wrapped, e.g. inside a load failure.
+export function isLifecycleBlockedError(err: unknown): boolean {
+  const seen = new Set<unknown>()
+  let current: unknown = err
+  while (typeof current === 'object' && current !== null && !seen.has(current)) {
+    seen.add(current)
+    if (
+      (current as { code?: unknown }).code === SDK_SERVER_ERROR_CODES.LIFECYCLE_OPERATION_BLOCKED
+    ) {
+      return true
+    }
+    current = (current as { cause?: unknown }).cause
+  }
+  return false
 }
 
 // Render an error and its `cause` chain: RPC-init failures carry the worker's
