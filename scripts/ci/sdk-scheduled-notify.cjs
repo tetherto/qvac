@@ -41,7 +41,7 @@ const CHECKS = {
       ``,
       `- Run: ${url}`,
       `- Artifact: \`opencode-upstream-compat\``,
-      `- Triage: inspect package versions, \`opencode-run.stderr\`, \`opencode-run.jsonl\`, and \`qvac-host.log\` from the artifact.`,
+      `- Triage: inspect package versions, \`opencode-run.stderr\`, \`opencode-run.jsonl\`, \`qvac-host.log\`, \`qvac-serve.stdout\`/\`qvac-serve.stderr\`, and \`prompt-surface.md\` from the artifact.`,
       `- Likely cause: latest \`opencode-ai\` changed plugin/provider behavior, request shape, model handling, or runtime assumptions that the latest published \`@qvac/opencode-plugin\` no longer satisfies.`
     ]
   })
