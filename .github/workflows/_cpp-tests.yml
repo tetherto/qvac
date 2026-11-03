@@ -141,12 +141,14 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           target: cpp:tests
       - if: runner.environment != 'github-hosted' && env.TRUSTED == 'true'
+        id: models-cache
         uses: tetherto/qvac-actions/cache@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           key: ${{ steps.models.outputs.key }}
           path: ${{ steps.models.outputs.paths }}
           enable-cross-os-archive: "true"
       - if: runner.environment != 'github-hosted' && env.TRUSTED != 'true'
+        id: models-restore
         uses: tetherto/qvac-actions/cache-restore@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           key: ${{ steps.models.outputs.key }}
@@ -158,6 +160,7 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           target: cpp:tests
+          exact-hit: ${{ steps.models-cache.outputs.cache-hit || steps.models-restore.outputs.cache-hit }}
       # cpp:build ran above; excluding task dependencies keeps Nx from building it again.
       - name: cpp:tests
         shell: bash
