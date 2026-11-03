@@ -62,6 +62,31 @@ if(NOT tts-cpp_pocket_FOUND)
     "speech repository's engines/tts and set tts-cpp_DIR to its "
     "share/tts-cpp directory; see README.md for local build instructions.")
 endif()
+# The SDK maps per-model Core ML policy into these public options. Reject a
+# stale speech-cpp package at configure time, before compiling the addon.
+include(CheckCXXSourceCompiles)
+function(tts_check_parler_coreml_policy)
+  # Header capability only: cross-platform shared backends need not link into
+  # an executable, and caller try-compile settings remain unchanged.
+  set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+  set(CMAKE_REQUIRED_LIBRARIES tts-cpp::tts-cpp)
+  unset(TTS_CPP_HAS_PARLER_COREML_POLICY CACHE)
+  check_cxx_source_compiles("#include <tts-cpp/parler/engine.h>
+int main() {
+  tts_cpp::parler::EngineOptions options;
+  options.coreml_decoder = true;
+  options.coreml_compute_units = \"cpu_only\";
+  options.coreml_strict = false;
+  return 0;
+}" TTS_CPP_HAS_PARLER_COREML_POLICY)
+  if(NOT TTS_CPP_HAS_PARLER_COREML_POLICY)
+    message(FATAL_ERROR
+      "tts-ggml requires speech-cpp with per-instance Parler Core ML policy. "
+      "Rebuild/install the updated speech library and addon together; see README.md.")
+  endif()
+endfunction()
+tts_check_parler_coreml_policy()
+
 find_package(mecab CONFIG REQUIRED)
 # Pull in ggml directly (in addition to the transitive
 # find_package(ggml) that tts-cppConfig.cmake already does) so the
@@ -157,7 +182,12 @@ endif()
 # Package its dylibs alongside the addon, using cmake-bare's SONAME-aware
 # install rules; the module's @loader_path rpath already points here.
 if(APPLE)
-  foreach(_library ggml::ggml ggml::ggml-base ggml::ggml-cpu tts-cpp::tts-cpp)
+  set(_apple_runtime_libraries ggml::ggml ggml::ggml-base tts-cpp::tts-cpp)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    list(APPEND _apple_runtime_libraries ggml::${_backend})
+  endforeach()
+  list(REMOVE_DUPLICATES _apple_runtime_libraries)
+  foreach(_library ${_apple_runtime_libraries})
     if(TARGET ${_library})
       get_target_property(_library_type ${_library} TYPE)
       if(_library_type STREQUAL "SHARED_LIBRARY")

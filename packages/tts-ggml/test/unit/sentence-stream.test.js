@@ -219,3 +219,56 @@ test('sentence stream: splitting text that yields no chunks is an error', (t) =>
   t.ok(splitSentenceChunks('One. Two.', { maxChunkScalars: 5 }, 'en').length >= 2)
   t.exception(() => splitSentenceChunks('   ', {}, 'en'), /produced no chunks after split/)
 })
+
+test('sentence stream: Parler sidecar flags follow the last reporting sentence through fallback', async (t) => {
+  const host = fakeHost()
+  const streamer = new SentenceStreamer(host)
+  streamer.streamChunks(['One.', 'Two.', 'Three.'])
+  await tick()
+  streamer.onStats({
+    totalTime: 1,
+    decoderSidecarLoaded: 1,
+    dacSidecarLoaded: 1,
+    decoderOnCoreml: 1,
+    dacOnCoreml: 1
+  })
+  await tick()
+  streamer.onStats({ totalTime: 1, decoderSidecarLoaded: 0, decoderOnCoreml: 0, dacOnCoreml: 1 })
+  await tick()
+  streamer.onStats({ totalTime: 1 })
+  await tick()
+  const stats = host.ended[0]
+  t.is(stats.decoderSidecarLoaded, 0, 'retired decoder overrides its loaded state')
+  t.is(stats.dacSidecarLoaded, 1, 'missing fields preserve the last reporting sentence')
+  t.is(stats.decoderOnCoreml, 0, 'decoder fallback is not hidden by a previous success')
+  t.is(stats.dacOnCoreml, 1, 'DAC state is independent and never summed')
+  t.is(stats.totalTime, 3)
+})
+
+test('sentence stream: a later Core ML success cannot hide a prior capacity fallback', async (t) => {
+  const host = fakeHost()
+  const streamer = new SentenceStreamer(host)
+  streamer.streamChunks(['Long.', 'Short.'])
+  await tick()
+  streamer.onStats({
+    totalTime: 1,
+    decoderSidecarLoaded: 1,
+    dacSidecarLoaded: 1,
+    decoderOnCoreml: 0,
+    dacOnCoreml: 0
+  })
+  await tick()
+  streamer.onStats({
+    totalTime: 1,
+    decoderSidecarLoaded: 1,
+    dacSidecarLoaded: 1,
+    decoderOnCoreml: 1,
+    dacOnCoreml: 1
+  })
+  await tick()
+  const stats = host.ended[0]
+  t.is(stats.decoderOnCoreml, 0)
+  t.is(stats.dacOnCoreml, 0)
+  t.is(stats.decoderSidecarLoaded, 1)
+  t.is(stats.dacSidecarLoaded, 1)
+})
