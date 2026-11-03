@@ -225,6 +225,8 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
           AWS_REGION: us-west-2
           MODEL_S3_BUCKET: tether-ai-dev-us
+          # The registry bucket S3-only manifest entries are mirrored from into the US bucket.
+          SOURCE_S3_BUCKET: ${{ contains(matrix.row.meta.secrets, 'MODEL_S3_BUCKET') && secrets.MODEL_S3_BUCKET || '' }}
           HF_TOKEN: ${{ contains(matrix.row.meta.secrets, 'HF_TOKEN') && secrets.HF_TOKEN || '' }}
           BENCHMARK_ARGS: ${{ inputs.args }}
         run: pnpm exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream

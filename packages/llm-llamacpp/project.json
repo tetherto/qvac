@@ -270,7 +270,10 @@
         }
       },
       "metadata": {
-        "timeoutMinutes": 120
+        "timeoutMinutes": 120,
+        "secrets": [
+          "MODEL_S3_BUCKET"
+        ]
       }
     },
     "test:integration": {
@@ -381,7 +384,8 @@
         },
         "timeoutMinutes": 150,
         "secrets": [
-          "HF_TOKEN"
+          "HF_TOKEN",
+          "MODEL_S3_BUCKET"
         ]
       }
     },

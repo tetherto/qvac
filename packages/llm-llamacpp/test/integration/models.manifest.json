@@ -211,8 +211,7 @@
     "bitnet_b1_58-large-TQ2_0.gguf": {
       "s3Path": "qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
       "sha256": "281aafb18a9f4a3124c10a1d8683e2296f0cfe8a2944da0a5667d17488a951bb",
-      "bytes": 217082208,
-      "warm": false
+      "bytes": 217082208
     },
     "LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf": {
       "urls": [
