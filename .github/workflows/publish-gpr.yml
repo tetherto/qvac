@@ -188,6 +188,7 @@ jobs:
           DIR: ${{ matrix.row.dir }}
           SOURCE: ${{ contains(matrix.row.sources, 'workspace') && 'workspace' || 'npm' }}
           PUBLISH_REGISTRY: gpr
+          GH_TOKEN: ${{ github.token }}
           PUBLISH_PROJECTS: ${{ toJSON(fromJSON(needs.select.outputs.matrices).publish.*.project) }}
           PUBLISH_TAG: ${{ needs.logic.outputs.tag }}
           NX_DAEMON: "false"

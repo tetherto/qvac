@@ -50,6 +50,17 @@ const tag = distTag({
   refName: env.GITHUB_REF_NAME
 })
 const version = publishVersion({ version: inference.version, tag, runId: env.GITHUB_RUN_ID })
+// The engine's row publishes beside this one, so the pin waits for that version, as main's SDK publish needed the
+// engine's; a failed engine publish fails this one instead of shipping a pin to nothing.
+const [owner] = (env.GITHUB_REPOSITORY || '').split('/')
+const versions = `https://api.github.com/orgs/${owner}/packages/npm/inference-mono/versions?per_page=100`
+for (let i = 0; ; i++) {
+  const res = await fetch(versions, { headers: { authorization: `Bearer ${env.GH_TOKEN}` } })
+  if (res.ok && (await res.json()).some((v) => v.name === version)) break
+  if (i === 40) throw new Error(`@tetherto/inference-mono@${version} did not reach GitHub Packages`)
+  console.log(`Waiting for @tetherto/inference-mono@${version} (${res.status})`)
+  await new Promise((r) => setTimeout(r, 15000))
+}
 const manifestPath = join(sdk, 'package.json')
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 manifest.dependencies['@qvac/inference'] = `npm:@tetherto/inference-mono@${version}`
