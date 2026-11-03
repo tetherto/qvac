@@ -1,6 +1,8 @@
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { request } from 'node:http'
 import { tmpdir } from 'node:os'
+import { setTimeout as sleep } from 'node:timers/promises'
 import type { FastifyInstance } from 'fastify'
 import { SDK_SERVER_ERROR_CODES } from '@qvac/sdk'
 import { buildServer } from '@/serve/index'
@@ -16,6 +18,7 @@ interface Fake {
   calls: InvokeOptions[]
   result: unknown
   chunks: unknown[]
+  pulled?: number
   error?: Error
   // Thrown after the chunks, so the SSE headers are already out.
   streamError?: Error
@@ -32,7 +35,10 @@ function fakeOperations(fake: Fake): PluginOperations {
     invokeStream: async function* (options) {
       fake.calls.push(options)
       if (fake.error) throw fake.error
-      yield* fake.chunks
+      for (const chunk of fake.chunks) {
+        fake.pulled = (fake.pulled ?? 0) + 1
+        yield chunk
+      }
       if (fake.streamError) throw fake.streamError
     }
   }
@@ -115,6 +121,7 @@ describe('plugin invoke with --enable-admin', () => {
     fake.calls = []
     fake.result = null
     fake.chunks = []
+    delete fake.pulled
     delete fake.error
     delete fake.streamError
   })
@@ -236,5 +243,30 @@ describe('plugin invoke with --enable-admin', () => {
       error: { message: 'bad chunk', type: 'server_error', code: 'plugin_response_invalid' }
     })
     assert.equal(events.at(-1), '[DONE]')
+  })
+
+  it('stops pulling chunks while a slow client is not reading', async () => {
+    fake.chunks = Array.from({ length: 200 }, () => ({ pad: 'x'.repeat(64 * 1024) }))
+    await app.listen({ port: 0, host: '127.0.0.1' })
+    const { port } = app.server.address() as { port: number }
+    const req = request({
+      port,
+      host: '127.0.0.1',
+      method: 'POST',
+      path: URL,
+      headers: { 'content-type': 'application/json' }
+    })
+    const paused = new Promise<void>((resolve) => {
+      req.on('response', (res) => {
+        res.pause()
+        resolve()
+      })
+    })
+    req.end(JSON.stringify({ model: 'echo', handler: 'count', stream: true }))
+    await paused
+    await sleep(200)
+    const pulled = fake.pulled ?? 0
+    req.destroy()
+    assert.ok(pulled < fake.chunks.length, `pulled ${pulled} of ${fake.chunks.length}`)
   })
 })
