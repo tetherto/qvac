@@ -1,7 +1,7 @@
 {
   "title": "QVAC diffusion performance: four platforms, six API configurations",
   "status": "DRAFT - final confirmation jobs and evidence review in progress",
-  "updated_utc": "2026-11-03T20:03:02.997908+00:00",
+  "updated_utc": "2026-11-03T20:26:29.053193+00:00",
   "intro": "RTX, Mac and Strix: 3 November 2026. DGX Spark: retained 29 October 2026 measurements at their original revisions. The original RTX and Spark report measured CUDA only. This extension adds RTX Vulkan, Strix Vulkan and HIP/ROCm, and Mac Metal. Vulkan correctness checks in the older CI record were not performance measurements.",
   "platforms": [
     {
@@ -549,22 +549,22 @@
         [
           "Global FA + residency (full)",
           "Measured combination",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "1543.865 -> 1236.747 s; -19.89% latency; 1.248x; 307.118 s saved",
+          "PSNR 59.14 dB; SSIM 0.999691; RMS channel error 0.1104% of full scale. Worst frame 58.16 dB. Audio exact.",
           "M3 Ultra / Metal",
-          "Full: 960 x 544 / 124 frames; short: additional prompts at 512 x 288 / 39 frames.",
-          "Confirm combined speed and memory; preserve the offloaded baseline on unvalidated capacities."
+          "Full: 960 x 544 / 124 frames; short: additional prompts at 512 x 288 / 39 frames. Accepted paired coverage: 1 prompt(s), 960 x 544 / 124 frames; measured before/after repetitions per prompt 2/2, excluding warmup. native warm latency, matched prompt/seed/geometry.",
+          "The useful total speed gain comes from global FA. Treat residency as a separate optional memory-placement choice, not another large speed multiplier. Preserve the exact FA-only output tier and validate capacity on the selected machine."
         ],
         [
           "Residency added after global FA (full)",
           "Incremental memory placement",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "1238.215 -> 1236.747 s; -0.12% latency; 1.001x; 1.468 s saved",
+          "Video/audio files byte exact. 1 comparison.",
           "M3 Ultra / Metal",
-          "Separates the residency contribution from the flash-attention gain.",
-          "Use only if the memory/speed tradeoff remains reliable over repeated requests."
+          "Separates the residency contribution from the flash-attention gain. Accepted paired coverage: 1 prompt(s), 960 x 544 / 124 frames; measured before/after repetitions per prompt 2/2, excluding warmup. native warm latency, matched prompt/seed/geometry.",
+          "Optional placement profile on the tested 96 GiB M3 Ultra, primarily for lower measured process RSS. The full-size case adds only 0.12% warm speed beyond FA and is not a meaningful speed-default change. Video/audio remain byte exact relative to FA alone. Total unified-memory usage and smaller-machine fit are not established by RSS; keep CPU parameter placement as fallback."
         ],
         [
           "Global FA + residency (short)",
@@ -664,7 +664,9 @@
         "A VAE-only flash-attention selector is needed to reproduce the older combined profile safely. The additive speed effect must be measured with the selected patch and checkpoint, not inferred from independent tests.",
         "Parameter residency can reduce copies and process RSS on unified-memory systems, but allocation limits and repeated-request stability still matter. Preserve the offloaded baseline when capacity is not established.",
         "Flash attention reduces attention-intermediate storage and memory traffic through a fused attention implementation ([algorithm background](https://arxiv.org/abs/2205.14135)). In the full-size Metal pair, VAE time fell from 468.376 to 169.173 s: 299.203 s of the 305.650 s complete-request saving, approximately 97.9%. Denoising stayed near 1067 s. This is why the VAE/attention parameter, rather than a transformer rewrite, is the first Metal implementation target.",
-        "The minimal graph patch removes separate chunk/materialization and SiLU/multiply work by using existing SwiGLU and strided Q/K/V views. Mathematical equivalence does not guarantee identical backend arithmetic: CUDA/Vulkan tested outputs were exact for this isolated change, while Metal changed video/audio. The implementation must gate the actual execution backend and preserve original operations; a compile-time GPU-vendor switch is insufficient."
+        "The minimal graph patch removes separate chunk/materialization and SiLU/multiply work by using existing SwiGLU and strided Q/K/V views. Mathematical equivalence does not guarantee identical backend arithmetic: CUDA/Vulkan tested outputs were exact for this isolated change, while Metal changed video/audio. The implementation must gate the actual execution backend and preserve original operations; a compile-time GPU-vendor switch is insufficient.",
+        "The H3 warm-context tea-prompt CLI pair after global FA on RTX CUDA sampled peak device use of 23736 -> 23736 MiB (+0 MiB, +0.00%). These are device-level samples including runtime overhead, not a model allocation estimate; tiny changes are measurement-scale variation. The report does not infer a lower capacity requirement from one peak sample.",
+        "The H3 warm-context tea-prompt CLI pair after global FA on RTX VULKAN sampled peak device use of 24301 -> 23602 MiB (-699 MiB, -2.88%). These are device-level samples including runtime overhead, not a model allocation estimate; tiny changes are measurement-scale variation. The report does not infer a lower capacity requirement from one peak sample."
       ],
       "measurement_references": [
         {
@@ -871,6 +873,24 @@
           "reference": "r3-rtx-h3-vulkan-global-flash",
           "candidate": "r3-rtx-h3-vulkan-global-flash-mmap",
           "latency_reduction_percent": 0.016904563175527836,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "Global FA + residency (full)",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-full-confirm-metal-baseline",
+          "candidate": "r3-mac-h3-full-confirm-metal-global-flash-resident",
+          "latency_reduction_percent": 19.892833894155242,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "Residency added after global FA (full)",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-full-confirm-metal-global-flash",
+          "candidate": "r3-mac-h3-full-confirm-metal-global-flash-resident",
+          "latency_reduction_percent": 0.11859814329498099,
           "quality_pending": false,
           "repeat_output_unstable": false
         },
@@ -2482,6 +2502,15 @@
           "repeat_output_unstable": false
         },
         {
+          "row": "Global FA + residency (full)",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-full-confirm-metal-baseline",
+          "candidate": "r3-mac-h3-full-confirm-metal-global-flash-resident",
+          "latency_reduction_percent": 19.892833894155242,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
           "row": "CUDA graphs: global FA control",
           "hardware": "RTX 5090 / CUDA",
           "reference": "r3-rtx-h3-cli-warm-graphs-cuda-p1-baseline",
@@ -2572,7 +2601,7 @@
         [
           "M3 Ultra / Metal",
           "`flash_attn=true`. Full-size native: 1543.865 -> 1238.215 s; -19.80% latency; 1.247x; 305.650 s saved",
-          "Original engine graph. Full residency is a separate capacity-qualified option only if its completed combined profile passes; shorter screens do not prove total memory savings."
+          "Keep the original engine graph. Optional params_backend=\"mtl0\" on the tested 96 GiB M3 Ultra preserves FA-only video/audio and reduces process RSS from 67.465 to 43.958 GB (-34.84%), with only 0.12% additional warm speed. RSS is not total unified-memory usage; other capacities retain CPU parameter placement."
         ],
         [
           "Radeon 8060S / Vulkan",
@@ -2588,8 +2617,9 @@
       "cumulative": [
         "RTX warm-context research CLI, three prompts: minimal graph patch plus global FA is 119.849 -> 110.717 s; -7.62% latency; 1.082x; 9.132 s saved on CUDA and 103.228 -> 91.501 s; -11.36% latency; 1.128x; 11.727 s saved on Vulkan. These use their own paired CLI controls, not the native-addon baseline.",
         "The graph-only increment after FA is 113.067 -> 110.717 s; -2.08% latency; 1.021x; 2.351 s saved on CUDA and 94.039 -> 91.501 s; -2.70% latency; 1.028x; 2.538 s saved on Vulkan. Reverse-order and graphs-enabled controls are separately tabulated; native overlay integration remains required.",
-        "Mac full-size global FA plus residency: No accepted completed paired measurement. The incremental residency effect is No accepted completed paired measurement.",
+        "Mac full-size global FA plus residency: 1543.865 -> 1236.747 s; -19.89% latency; 1.248x; 307.118 s saved The incremental residency effect is 1238.215 -> 1236.747 s; -0.12% latency; 1.001x; 1.468 s saved",
         "The retained October Spark older isolated engine plus VAE-only FA result is 401.450 -> 307.420 s (-23.42%, 94.030 s saved). It has a different engine base and context lifetime; it is not the expected result of the new minimal patch.",
+        "The full-size Metal combined profile lowers process RSS by 23.507 GB (-34.84%) relative to FA alone, while video/audio files remain byte exact. Most of the complete-request improvement comes from FA; residency contributes only 1.469 s of additional warm saving. Keep this as a memory-placement option with its own capacity validation.",
         "Graphs-enabled CUDA build control, one full-size prompt: 119.998 -> 110.787 s; -7.68% latency; 1.083x; 9.211 s saved overall, and 113.954 -> 110.787 s; -2.78% latency; 1.029x; 3.167 s saved for the patch increment. The compiled graphs path is enabled; runtime capture counts were not instrumented."
       ],
       "decision_briefs": {
@@ -4254,7 +4284,7 @@
       ],
       "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths.",
       "implementation_steps": [
-        "Implement exact-output memory placement first on the accepted API/capacity combination. For RTX Vulkan the measured setting is params_backend=\"cpu,vae=vulkan0\". Preserve offloaded fallback and never infer that the whole model fits on a 32 GB GPU.",
+        "Implement exact-output memory placement first on the accepted API/capacity combination. For RTX Vulkan the measured setting is params_backend=\"cpu,vae=vulkan0\". Resolve the caller-selected device rather than hardcoding logical device zero in production. Preserve offloaded fallback and never infer that the whole model fits on a 32 GB GPU.",
         "Offer temporal_tiling=false only in the accepted minor-output-change tier and tested lengths/APIs. Preserve tiled decoding for strict baseline output. Do not count a redundant temporal flag on the existing Vulkan stateful path as an additional optimization.",
         "If F16 matrix expansion is selected, use the verified 1632-matrix rule, not a blanket precision override. Measure memory, load/first-request latency and repeated 97/193-frame generation. Keep quantized weights when capacity or incremental benefit is unproven.",
         "Do not carry the rejected Metal packing/dispatch code, broad upstream upgrade or slower CUDA stateful/3D-GEMM alternatives into the release feature. Any new kernel should have independent operator coverage plus a repeatable end-to-end benefit.",
@@ -4495,5 +4525,9 @@
     "MiniMax-H3: pinned-engine global flash attention is the broadest useful change, especially Metal VAE decode. The minimal engine graph patch is a smaller, separate API-scoped candidate; retain the original Metal graph.",
     "LTX-2.3: exact-output VAE residency helps RTX Vulkan. CUDA full-temporal decode is a separate small-output-change tier. Metal F16 expansion trades substantial memory for a modest warm-speed gain.",
     "No production selection policy, engine pin or release version changes are made. The branch preserves reproducible evidence and unapplied experimental patches. Implement accepted profiles with explicit override, capacity and fallback tests before PR/desktop CI validation."
+  ],
+  "completion": [
+    "RTX 5090: the November 3 project directory, including models and build/test files, was removed after SHA-256-verified evidence collection and branch preservation. Completed 2026-11-03T20:03:33.252849+00:00; filesystem free space rose by 88.49 GiB during cleanup. Other files and workloads were not modified.",
+    "Generated outputs and raw private logs remain in the verified local evidence archive. The branch contains sanitized timing, quality, memory, source/model identities, reproduction configurations and experimental patches. Dated Spark evidence was retained without reconnecting to that unbooked host."
   ]
 }
