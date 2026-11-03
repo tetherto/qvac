@@ -69,7 +69,8 @@ async function resolveTableAsset(kind: string, file: string): Promise<string> {
  * `require` while it bundles, so a template literal fails the whole build.
  */
 const PACKAGE_ASSETS: Record<string, number> = {
-  // Classification downloads its registry model, so no package file is bundled.
+  // @ts-ignore - Metro turns the bundled data file into an asset module.
+  '@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf': require('../../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf')
 }
 
 /** A data file inside an installed package, as a bundled-asset URI. */
@@ -88,10 +89,10 @@ async function resolveTablePackageAsset(pkg: string, file: string): Promise<stri
 // platform policy; see catalog/platform-policy.ts.
 const resources = new ResourceManager(policyFor('mobile'))
 
-// One table, shared with every other client, applied here.
+// One table, shared with every other client, applied here as `mobile-<os>` so an entry can target one OS.
 applyResourceTable(
   RESOURCE_TABLE,
-  'mobile',
+  `mobile-${Platform.OS}`,
   (dep, definition) => resources.define(dep, definition as never),
   {
     const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],

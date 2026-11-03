@@ -60,7 +60,8 @@ model).
 and \`verbose_json\`. \`json\` and \`text\` work with Whisper, Parakeet,
 and MOSS transcription aliases. SRT/VTT require Whisper or MOSS segment metadata.
 Parakeet also supports \`verbose_json\`, including offline diarization turns.
-\`verbose_json\` exposes text, duration, segment id/start/end/text, and available speaker/speaker_id labels.
+\`verbose_json\` exposes text, duration, segment id/start/end/text, available speaker/speaker_id labels,
+and the whisper language, no_speech_prob, speaker_turn_next and token_timestamps the engine reports.
 Its duration is the latest segment or speaker-turn end, not the submitted
 audio length.
 Unknown values return \`400 invalid_response_format\`.
@@ -674,22 +675,12 @@ async function streamSpeech(
       : firstPcm
   sendSSE(raw, { type: 'speech.audio.delta', audio: firstChunk.toString('base64') })
 
-  // Fastify drops errors thrown after hijack, so a failure here has to end
-  // the stream itself or the client would hang.
-  try {
-    for (let frame = await nextAudioFrame(frames); frame; frame = await nextAudioFrame(frames)) {
-      samples += frame.buffer.length
-      sendSSE(raw, {
-        type: 'speech.audio.delta',
-        audio: int16SamplesToBuffer(frame.buffer).toString('base64')
-      })
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    logger.error(`  speech stream failed after samples=${samples}: ${message}`)
-    sendSSE(raw, { error: { message, type: 'server_error', code: 'internal_error' } })
-    endSSE(raw, { sentinel: false })
-    return
+  for (let frame = await nextAudioFrame(frames); frame; frame = await nextAudioFrame(frames)) {
+    samples += frame.buffer.length
+    sendSSE(raw, {
+      type: 'speech.audio.delta',
+      audio: int16SamplesToBuffer(frame.buffer).toString('base64')
+    })
   }
 
   // Local synthesis has no billable tokens; OpenAI's schema still requires usage.

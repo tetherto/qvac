@@ -13,5 +13,9 @@ declare module 'fastify' {
   interface FastifyContextConfig {
     unsupportedParams?: string[]
     sseSentinel?: boolean
+    /** Answers `403 admin_disabled` unless the server was started with `--enable-admin`. */
+    admin?: boolean
+    /** Still served while the runtime is suspended. */
+    allowWhileSuspended?: boolean
   }
 }

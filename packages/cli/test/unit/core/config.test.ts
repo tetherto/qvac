@@ -248,8 +248,8 @@ describe('resolveNestedModelSrcConstants', () => {
   })
 })
 
-describe('parseServeConfig default weights', () => {
-  it('loads the registry classifier when a classification alias has no src', () => {
+describe('parseServeConfig bundled weights', () => {
+  it('loads the bundled classifier when a classification alias has no src', () => {
     const cfg = parseServeConfig(
       { serve: { models: { cls: { type: 'ggml-classification' } } } },
       {}
@@ -263,6 +263,21 @@ describe('parseServeConfig default weights', () => {
     assert.throws(
       () => parseServeConfig({ serve: { models: { ocr: { type: 'ggml-ocr' } } } }, {}),
       /serve\.models\.ocr: "src" is required/
+    )
+  })
+})
+
+describe('parseServeConfig enableAdmin', () => {
+  it('is off unless the flag or serve.enableAdmin turns it on', () => {
+    assert.equal(parseServeConfig({}, {}).enableAdmin, false)
+    assert.equal(parseServeConfig({}, { enableAdmin: true }).enableAdmin, true)
+    assert.equal(parseServeConfig({ serve: { enableAdmin: true } }, {}).enableAdmin, true)
+  })
+
+  it('rejects a non-boolean serve.enableAdmin', () => {
+    assert.throws(
+      () => parseServeConfig({ serve: { enableAdmin: 'yes' } }, {}),
+      /serve\.enableAdmin must be a boolean/
     )
   })
 })

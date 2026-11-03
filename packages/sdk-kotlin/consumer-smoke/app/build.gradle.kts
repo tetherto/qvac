@@ -1,5 +1,9 @@
 plugins {
     id("com.android.application") version "9.3.0"
+    // bare-rpc-kotlin ships Kotlin 2.4 metadata, which the Kotlin 2.2 compiler
+    // AGP 9.3 bundles cannot read. The version on the classpath is the one
+    // AGP's built-in Kotlin compiles with.
+    id("org.jetbrains.kotlin.android") version "2.4.20" apply false
 }
 
 // One product flavour per published runtime artifact, so a single build checks

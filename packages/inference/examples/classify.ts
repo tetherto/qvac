@@ -1,4 +1,5 @@
-// Image classification. Omitting modelSrc downloads the registry MobileNetV3-Small.
+// Image classification. The model ships inside @qvac/classification-ggml, so no
+// modelSrc is needed.
 //
 // Run: bare examples/classify.ts <image-file>
 // Requires: npm install @qvac/inference @qvac/classification-ggml

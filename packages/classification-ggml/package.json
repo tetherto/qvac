@@ -1,6 +1,6 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.34.0",
+  "version": "0.34.1",
   "description": "GGML vision addon for QVAC: MobileNet classification and MegaLoc image embeddings",
   "addon": true,
   "scripts": {
@@ -78,8 +78,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.24.0",
-    "@qvac/fabric-ios": "^0.24.0",
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0",
     "@types/node": "^24.2.1",
     "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0",
@@ -96,7 +96,7 @@
     "bare-process": "^4.2.2"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.24.0",
+    "@qvac/fabric": "^0.25.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-env": "^3.0.0",
@@ -108,15 +108,15 @@
     "brittle": "^3.16.5"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.24.0",
-    "@qvac/fabric-linux-arm64": "^0.24.0",
-    "@qvac/fabric-darwin-arm64": "^0.24.0",
-    "@qvac/fabric-darwin-x64": "^0.24.0",
-    "@qvac/fabric-win32-x64": "^0.24.0"
+    "@qvac/fabric-linux-x64": "^0.25.0",
+    "@qvac/fabric-linux-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-arm64": "^0.25.0",
+    "@qvac/fabric-darwin-x64": "^0.25.0",
+    "@qvac/fabric-win32-x64": "^0.25.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.24.0",
-    "@qvac/fabric-ios": "^0.24.0"
+    "@qvac/fabric-android-arm64": "^0.25.0",
+    "@qvac/fabric-ios": "^0.25.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {

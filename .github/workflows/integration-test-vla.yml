@@ -192,7 +192,10 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make@1.8.0 bare-runtime bare-https brittle
+        run: npm install -g --force bare bare-runtime bare-https brittle
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
@@ -458,6 +461,7 @@ jobs:
           PI05_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/pi05/pi05-base-q-aggressive.gguf', github.workspace, env.WORKDIR) || '' }}
           PI05_TEST_FIXTURE: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/fixture.safetensors', github.workspace, env.WORKDIR) || '' }}
           PI05_TEST_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/activations.safetensors', github.workspace, env.WORKDIR) || '' }}
+          PI05_TEST_ACTIONS_2CAM: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/activations_2cam.safetensors', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_ACTIVATIONS_V4: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_v4.safetensors', github.workspace, env.WORKDIR) || '' }}
           QVAC_VLA_EXPECTED_BACKEND: ${{ matrix.expected_backend }}
@@ -500,6 +504,7 @@ jobs:
           PI05_TEST_GGUF: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/pi05/pi05-base-q-aggressive.gguf
           PI05_TEST_FIXTURE: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/fixture.safetensors
           PI05_TEST_ACTIVATIONS: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/activations.safetensors
+          PI05_TEST_ACTIONS_2CAM: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/activations_2cam.safetensors
           GROOT_TEST_GGUF: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/groot/groot-q8_vf16.gguf
           GROOT_TEST_ACTIVATIONS_V4: ${{ github.workspace }}/${{ env.WORKDIR }}/test/groot-oracle/activations_v4.safetensors
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}

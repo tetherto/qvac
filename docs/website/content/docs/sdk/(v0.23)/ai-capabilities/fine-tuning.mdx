@@ -1,0 +1,119 @@
+---
+title: Fine-tuning
+icon: FlaskConical
+description: Adapting LLMs to domain-specific tasks via LoRA — i.e., train small adapter weights on custom datasets to specialize model behavior.
+schemaType: HowTo
+---
+
+## Overview
+
+Fine-tuning trains a [LoRA](https://arxiv.org/abs/2106.09685) (Low-Rank Adaptation) adapter on top of an LLM base model, to be used at inference time with [completion](/sdk/ai-capabilities/text-generation).
+
+Load any supported LLM using `modelType: "llm"`. Then call `finetune()` with the dataset and training settings. Training can be done in two modes:
+
+- [SFT](#sft): chat-based; enable with `assistantLossOnly: true`.
+- [Causal](#causal): raw text; default (`assistantLossOnly: false`).
+
+The output is a small `.gguf` adapter file that you can pass to `completion()` via `modelConfig.lora`.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`finetune()`](/sdk/reference/api#finetune)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+You can load any `llama.cpp`-compatible [text-generation/chat](/sdk/ai-capabilities/text-generation) model that meets the following criteria:
+- **File format:** `*.gguf` (or use constants)
+- **Architecture:** `qwen3`, `gemma3`, or `bitnet`
+- **Quantization:** `F32`, `F16`, `Q4_0`, `Q8_0`, `TQ1_0`, or `TQ2_0`
+
+<Callout type="info">
+
+In QVAC, not every model compatible with text generation/chat is also compatible with fine-tuning. Only those that meet all the criteria above are.
+
+</Callout>
+
+For models available as constants, see [SDK — Models](/sdk#models). Note that not every model constant is fine-tunable: for example, many Qwen3-4B/8B constants are `Q4_K_M`. Check a model's quantization with [`getModelInfo()`](/sdk/reference/api#getmodelinfo) before training.
+
+## Training
+
+### SFT
+
+Supervised fine-tuning (SFT) teaches the model how to respond to prompts. Use it for chat tuning, instruction following, or any task where you want to shape assistant responses.
+
+**Dataset format:** JSONL where each line is a JSON object with a `messages` array. Supported roles: `system`, `user`, `assistant`, and `tool`. Example:
+
+```jsonl
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What is 2+2?"},{"role":"assistant","content":"2+2 equals 4."}]}
+{"messages":[{"role":"user","content":"What is the capital of France?"},{"role":"assistant","content":"The capital of France is Paris."}]}
+```
+
+### Causal
+
+Causal fine-tuning adapts the model to a domain by training on raw text. Use it for domain adaptation, style transfer, or tasks where you want the model to better reflect specialized vocabulary, patterns, or tone.
+
+**Dataset format:** plain text file. Example:
+
+```
+This is sample training text.
+Another paragraph of content.
+```
+
+## Example
+
+The example trains on a small SFT dataset with a separate eval file. Save both next to the example, as `train.jsonl` and `eval.jsonl`, then swap in your own data — the example reads whatever those two files contain.
+
+<Tabs>
+<Tab value="train" label="train.jsonl" default>
+<WrapCode>
+
+```jsonl file=<rootDir>/packages/sdk/examples/finetune/train.jsonl title="train.jsonl" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="eval" label="eval.jsonl">
+<WrapCode>
+
+```jsonl file=<rootDir>/packages/sdk/examples/finetune/eval.jsonl title="eval.jsonl" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+The following script loads an LLM, runs fine-tuning on that dataset, and optionally demonstrates pause/resume when invoked with `--pause-resume`. The adapter and its checkpoints land in `./finetune-output`:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/finetune/llamacpp-finetune.js title="llamacpp-finetune.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/finetune/llamacpp-finetune.ts title="llamacpp-finetune.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/finetune.py title="finetune.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>
