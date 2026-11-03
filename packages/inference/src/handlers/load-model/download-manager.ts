@@ -1,6 +1,11 @@
 import type { ModelProgressUpdate } from '@/schemas/index'
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
-import { DownloadCancelledError, InferenceCancelledError } from '@/errors/index'
+import {
+  DeleteCacheFailedError,
+  DownloadCancelledError,
+  InferenceCancelledError,
+  ModelLoadFailedError
+} from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import { getRequestRegistry } from '@/runtime/index'
 import type { DisposableScope } from '@/runtime/disposable-scope'
@@ -66,6 +71,7 @@ export interface StartOrJoinResult {
 }
 
 const activeTransfers = new Map<string, Transfer>()
+const deletingKeys = new Set<string>()
 let nextSubscriberId = 0
 
 function createSubscriber(
@@ -205,6 +211,16 @@ export function startOrJoinDownload(
   onProgress?: (progress: ModelProgressUpdate) => void,
   request?: SubscriberRequestBinding
 ): StartOrJoinResult {
+  if (deletingKeys.has(downloadKey)) {
+    return {
+      promise: Promise.reject(
+        new ModelLoadFailedError(`The cache for ${downloadKey} is being deleted`)
+      ),
+      joined: false,
+      getCacheHit: () => undefined
+    }
+  }
+
   const existing = activeTransfers.get(downloadKey)
   if (existing && !existing.abortController.signal.aborted) {
     logger.info(`📥 Reusing existing download for: ${downloadKey}`)
@@ -319,6 +335,25 @@ export function markClearCacheForRequest(requestId: string): boolean {
     }
   }
   return false
+}
+
+/**
+ * Runs `fn` while new downloads and loads of `downloadKey` are refused, so a
+ * cache deletion cannot remove files another call is writing or loading.
+ */
+export async function withDownloadBlocked<T>(
+  downloadKey: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  if (deletingKeys.has(downloadKey)) {
+    throw new DeleteCacheFailedError(`The cache for ${downloadKey} is already being deleted`)
+  }
+  deletingKeys.add(downloadKey)
+  try {
+    return await fn()
+  } finally {
+    deletingKeys.delete(downloadKey)
+  }
 }
 
 export function hasActiveTransfer(downloadKey: string): boolean {

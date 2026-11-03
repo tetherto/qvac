@@ -8,8 +8,17 @@ import { initEnv } from '@/runtime/env'
 import { closeRegistryClient } from '@/runtime/registry-client'
 import { downloadSingleFileFromRegistry } from '@/handlers/load-model/registry-download-utils'
 import { handleDeleteCache } from '@/handlers/delete-cache'
-import { getSingleFileCachePath } from '@/utils/cache/paths'
-import { QWEN3_600M_INST_Q4 } from '@/models/registry/index'
+import {
+  getShardedModelCacheDir,
+  getSingleFileCachePath,
+  getCompanionSetCacheDir
+} from '@/utils/cache/paths'
+import { generateShortHash } from '@/utils/index'
+import { QWEN3_600M_INST_Q4, models } from '@/models/registry/index'
+import {
+  createRegistryDownloadKey,
+  startOrJoinDownload
+} from '@/handlers/load-model/download-manager'
 
 type DownloadOptions = { signal?: { aborted: boolean }; clearBlocksOnCancel?: () => boolean }
 
@@ -132,4 +141,86 @@ test('deleteCache({ modelSrc }): rejects a source that is not registry://', asyn
     modelSrc: 'https://example.com/m.gguf'
   })
   t.is(response.success, false)
+})
+
+test('deleteCache({ modelSrc }): an uncatalogued sharded model clears every shard', async (t) => {
+  const cleared: unknown[] = []
+  const shard = (n: number) => ({
+    path: `x/model-0000${n}-of-00002.gguf`,
+    source: 's3',
+    blobBinding: { ...binding, blockOffset: n }
+  })
+  stubClient(t, {
+    findModels: async () => [shard(1), shard(2)],
+    clearBlob: async (blob: unknown) => {
+      cleared.push(blob)
+    }
+  })
+  const registryPath = 'x/model-00001-of-00002.gguf'
+  const shardDir = getShardedModelCacheDir(generateShortHash(registryPath))
+  fs.writeFileSync(path.join(shardDir, 'model-00001-of-00002.gguf'), 'partial')
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: `registry://s3/${registryPath}`
+  })
+
+  t.is(response.success, true)
+  t.is(cleared.length, 2, 'cleared both shards')
+  t.absent(fs.existsSync(shardDir), 'shard directory deleted')
+})
+
+test('deleteCache({ modelSrc }): removes the legacy flat cache of an NMT companion set', async (t) => {
+  stubClient(t, { clearBlob: async () => {} })
+  const model = models.find((m) => m.name === 'BERGAMOT_AR_EN')!
+  const flatFiles = model.companionSet!.files.map((file) =>
+    getSingleFileCachePath(file.registryPath)
+  )
+  for (const file of flatFiles) {
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, 'legacy')
+  }
+  const setDir = getCompanionSetCacheDir(model.companionSet!.setKey)
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: `registry://${model.registrySource}/${model.registryPath}`
+  })
+
+  t.is(response.success, true)
+  t.absent(
+    flatFiles.some((file) => fs.existsSync(file)),
+    'legacy flat files deleted'
+  )
+  t.absent(fs.existsSync(setDir), 'companion set directory deleted')
+})
+
+test('deleteCache({ modelSrc }): a download of the model is refused while deletion runs', async (t) => {
+  let release!: () => void
+  let clearing!: () => void
+  const started = new Promise<void>((resolve) => (clearing = resolve))
+  stubClient(t, {
+    clearBlob: () => {
+      clearing()
+      return new Promise<void>((resolve) => (release = resolve))
+    }
+  })
+
+  const deletion = handleDeleteCache({ type: 'deleteCache', modelSrc: QWEN3_600M_INST_Q4.src })
+  await started
+
+  const key = createRegistryDownloadKey(
+    QWEN3_600M_INST_Q4.registrySource,
+    QWEN3_600M_INST_Q4.registryPath
+  )
+  let downloadStarted = false
+  const download = startOrJoinDownload(key, async () => {
+    downloadStarted = true
+    return 'path'
+  })
+  await t.exception(download.promise, /being deleted/)
+  t.absent(downloadStarted, 'download did not start')
+
+  release()
+  t.is((await deletion).success, true)
 })

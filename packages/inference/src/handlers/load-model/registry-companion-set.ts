@@ -269,6 +269,26 @@ async function checkLegacyOnnxCache(
   return primaryPath
 }
 
+/**
+ * Legacy cache locations the loader still accepts for a companion set, so a
+ * cache deletion removes them too.
+ */
+export function getLegacyCompanionSetPaths(
+  companionSet: CompanionSetMetadata,
+  allowLegacyFlatCache: boolean
+): string[] {
+  const { files, primaryKey } = companionSet
+  if (isLegacyOnnxSet(files)) {
+    const primary = files.find((f) => f.key === primaryKey)
+    if (!primary) return []
+    return [
+      validateAndJoinPath(getModelsCacheDir(), 'onnx', generateShortHash(primary.registryPath))
+    ]
+  }
+  if (!allowLegacyFlatCache) return []
+  return files.map((file) => getSingleFileCachePath(file.registryPath))
+}
+
 function getLegacyOnnxPath(cacheKey: string, filename: string): string {
   const baseCache = getModelsCacheDir()
   return validateAndJoinPath(baseCache, 'onnx', cacheKey, filename)
