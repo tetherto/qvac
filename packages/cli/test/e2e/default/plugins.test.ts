@@ -26,10 +26,11 @@ describe('qvac plugins: without --enable-admin', () => {
       paths: Record<string, Record<string, { responses: Record<string, { description: string }> }>>
     }
     const responses = doc.paths['/qvac/v1/plugins/{name}/invoke']?.['post']?.responses
-    assert.match(responses?.['400']?.description ?? '', /builtin_plugin/)
+    assert.match(responses?.['400']?.description ?? '', /missing_model[\s\S]*builtin_plugin/)
     assert.match(responses?.['403']?.description ?? '', /admin_disabled/)
     assert.match(responses?.['404']?.description ?? '', /handler_not_found/)
     assert.match(responses?.['502']?.description ?? '', /plugin_response_invalid/)
+    assert.match(responses?.['503']?.description ?? '', /model_load_failed/)
   })
 })
 

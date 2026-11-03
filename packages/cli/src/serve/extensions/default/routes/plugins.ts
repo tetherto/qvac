@@ -1,3 +1,4 @@
+import type { ServerResponse } from 'node:http'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { z } from 'zod'
 import { invokePlugin, invokePluginStream, MODEL_TYPES, SDK_SERVER_ERROR_CODES } from '@qvac/sdk'
@@ -76,10 +77,13 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
             200: pluginInvocation,
             ...errorResponses({
               400: {
+                missing_model: '`model` is missing',
+                missing_handler: '`handler` is missing',
                 builtin_plugin: '`:name` is a built-in model type',
                 invalid_model_type: "The `model` alias's `type` is not `:name`",
                 invalid_plugin_params: 'The plugin rejected `params`',
-                handler_type_mismatch: '`stream` does not match whether the handler streams'
+                handler_type_mismatch: '`stream` does not match whether the handler streams',
+                invalid_request: 'The body carries an unknown field'
               },
               403: {
                 admin_disabled: 'The server was started without `--enable-admin`',
@@ -90,7 +94,13 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
                 handler_not_found: 'The plugin has no handler called `handler`'
               },
               502: { plugin_response_invalid: "The handler's result failed the plugin's schema" },
-              503: { runtime_suspended: 'The runtime is not active; resume it first' }
+              503: {
+                model_not_loaded: 'The model is not loaded and lazy loading is disabled',
+                model_not_ready: 'The model is still loading',
+                model_load_failed: 'The model failed to load',
+                model_load_timeout: 'The model did not load in time',
+                runtime_suspended: 'The runtime is not active; resume it first'
+              }
             })
           },
           tags: ['Plugins'],
@@ -162,6 +172,12 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
             index: index++,
             result: next.value
           })
+          // Hold the next chunk until a slow client catches up.
+          if (raw.writableNeedDrain) await writable(raw)
+          if (raw.destroyed) {
+            await chunks.return(undefined)
+            return undefined
+          }
           next = await chunks.next().catch((err: unknown) => {
             throw toHttpError(err)
           })
@@ -172,6 +188,18 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
       }
     )
   }
+}
+
+function writable(raw: ServerResponse): Promise<void> {
+  return new Promise((resolve) => {
+    function done(): void {
+      raw.off('drain', done)
+      raw.off('close', done)
+      resolve()
+    }
+    raw.once('drain', done)
+    raw.once('close', done)
+  })
 }
 
 // Matched by code: the SDK does not export the plugin error classes.
