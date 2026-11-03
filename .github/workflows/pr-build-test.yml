@@ -2,10 +2,9 @@ name: PR build and test
 
 # Native builds, C++ lint and tests, and desktop tests for packages on the CI contract, after trust and approval.
 on:
-  # TEMP rehearsal: pull_request until the stack merges, since pull_request_target runs main's copy, which does not exist yet.
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
-    branches: [main, release-*, feature-*, tmp-*, feat/package-ci-contract-*]
+    branches: [main, release-*, feature-*, tmp-*]
   workflow_dispatch:
     inputs:
       packages:
