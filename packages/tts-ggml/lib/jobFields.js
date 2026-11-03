@@ -50,6 +50,7 @@ function assertNoOtherEngineFields(setup, source, where) {
  * and every engine the cross-engine conditioning it supports.
  */
 function resolveJobFields(setup, source, where) {
+    (0, parler_1.assertNoPerCallParlerCoreml)(source, where);
     if (setup.engineType === engineIds_1.ENGINE_MOSS_SPEECH) {
         assertNoOtherEngineFields(setup, source, where);
         return (0, mossSpeech_1.resolveSpeechJobFields)(source, where);
