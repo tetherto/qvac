@@ -58,7 +58,9 @@ function buildTranscribeRequest(
  * @param params.prompt - Optional initial prompt to guide the transcription
  * @param params.metadata - When true, resolves to an array of transcript
  *                          segments (`{ text, startMs, endMs, append, id }`,
- *                          plus `isEndOfTurn` and `startsWord` on parakeet)
+ *                          plus `isEndOfTurn` and `startsWord` on parakeet, and
+ *                          `language`, `noSpeechProb`, `speakerTurnNext` and
+ *                          `tokens` on whisper when the engine reports them)
  *                          instead of joined text.
  * @param options - Optional RPC options including per-call profiling
  * @returns A promise (decorated with `requestId`) resolving to the
@@ -193,7 +195,9 @@ export function transcribeStream(
  * @param params.prompt - Optional initial prompt to guide transcription
  * @param params.metadata - When true, the session yields transcript segment
  *                          objects (`{ text, startMs, endMs, append, id }`,
- *                          plus `isEndOfTurn` and `startsWord` on parakeet)
+ *                          plus `isEndOfTurn` and `startsWord` on parakeet, and
+ *                          `language`, `noSpeechProb`, `speakerTurnNext` and
+ *                          `tokens` on whisper when the engine reports them)
  *                          instead of plain text.
  * @param options - Optional RPC options including per-call profiling.
  * @returns A session object: call `write(audioChunk)` with a `Uint8Array`
