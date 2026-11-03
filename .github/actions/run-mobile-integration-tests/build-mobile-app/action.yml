@@ -245,11 +245,16 @@ runs:
         PLATFORM: ${{ inputs.platform }}
       run: |
         if [ "$PLATFORM" = "Android" ]; then
-          preset=android out=node_modules/react-native-bare-kit/android/src/main/addons
+          # The APK builds only arm64-v8a. The android preset also asks for
+          # arm/ia32/x64, which arm64-only platform packages cannot provide.
+          targets=(--host android-arm64)
+          out=node_modules/react-native-bare-kit/android/src/main/addons
         else
-          preset=ios out=node_modules/react-native-bare-kit/ios/addons
+          targets=(--preset ios)
+          out=node_modules/react-native-bare-kit/ios/addons
         fi
-        npx --no-install bare-link --preset "$preset" --out "$out" backend/backend.cjs
+        npx --no-install bare-link --version
+        npx --no-install bare-link "${targets[@]}" --out "$out" backend/backend.cjs
         echo "Linked addons in $out:"
         find "$out" -mindepth 1 -maxdepth 2 | sort
 
