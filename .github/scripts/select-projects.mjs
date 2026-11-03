@@ -227,6 +227,7 @@ export function rows(project, target, labels) {
     target,
     timeout: meta.timeoutMinutes ?? 0,
     meta,
+    jsBuild: jsBuild({ data: { targets: project.targets } }),
     // The workspace toolchain pins live on nx.json's build target defaults.
     toolchain: project.targets.build?.metadata?.toolchain ?? {},
     config: '',
