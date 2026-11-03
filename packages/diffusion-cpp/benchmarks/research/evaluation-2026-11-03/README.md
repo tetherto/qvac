@@ -18,6 +18,10 @@ measurements. Do not attribute this campaign's Vulkan results to Spark.
 
 ## Contents
 
+- [REPORT.md](REPORT.md): shareable Markdown report with one approach-by-API
+  matrix per model, decision reasons, quality and memory tradeoffs. It remains
+  a draft until the running confirmations finish. No comparison images are
+  required.
 - `report-content.json`: model descriptions, eight-column decision tables,
   measured and pending profiles, technical scope and remaining gates.
 - `reproduction-records.json`: individually hashed UTF-8 virtual files for

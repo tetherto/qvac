@@ -1,7 +1,7 @@
 {
   "title": "QVAC diffusion performance: four platforms, six API configurations",
   "status": "DRAFT - validation in progress",
-  "updated_utc": "2026-11-03T15:11:22.213696+00:00",
+  "updated_utc": "2026-11-03T17:03:14.896714+00:00",
   "intro": "RTX, Mac and Strix: 3 November 2026. DGX Spark: retained 29 October 2026 measurements at their original revisions. The original RTX and Spark report measured CUDA only. This extension adds RTX Vulkan, Strix Vulkan and HIP/ROCm, and Mac Metal. Vulkan correctness checks in the older CI record were not performance measurements.",
   "platforms": [
     {
@@ -72,7 +72,9 @@
   "methodology": [
     "Use the same checkpoint bytes, prompt, seed, dimensions, frame count, sampling steps and output codec within each pair. Different APIs can produce different seeded outputs, so an API switch is a separate choice rather than a transparent optimization.",
     "Native figures are warm request medians after one excluded warmup per prompt. Fresh-process CLI generation times are a separate experiment. Neither is a cold-boot measurement. Report startup and memory alongside warm speed where a profile trades them off.",
+    "All reported latency tests run one request at a time. They do not establish concurrent serving throughput. Warm-context research CLI tests repeat generation in one engine context and exclude the explicitly marked warmup; they remain separate from both native addon timings and fresh-process CLI timings.",
     "Validate every output with hashes and full decoded image/video comparisons, including audio samples. Inspect representative native-resolution images/crops or video frame pairs. Numerical similarity and sampled visual inspection do not prove equivalence for all prompts.",
+    "PSNR and SSIM measure agreement with the baseline output, not prompt adherence or an absolute quality score. No improvement in semantic quality, FVD or a blinded human preference score is claimed.",
     "PSNR around 59 dB means an RMS difference of approximately 0.29 on a 0-255 color-channel scale; it is not a percentage of quality retained. Report maximum channel error, SSIM and visible differences separately.",
     "Report directly measured combined profiles. Do not multiply separately measured speedups. Small changes within run variation remain neutral or provisional.",
     "Exclude the Mac runs that overlapped the external workload. Exclude native Strix HIP modules built with the wrong GGML tensor-name ABI; use the corrected GGML_MAX_NAME=128 modules. Whole-engine CLI builds have their own internally consistent ABI.",
@@ -98,7 +100,7 @@
           "Existing parameter",
           "V",
           "120.407 -> 113.771 s; -5.51% latency; 1.058x; 6.636 s saved",
-          "PSNR 52.36-55.99 dB; SSIM 0.999008-0.999269. Audio exact. Reviewed frame samples show no visible change.",
+          "PSNR 52.36-55.99 dB; SSIM 0.999008-0.999269. Worst frame 50.52 dB. Audio exact. Reviewed frame samples show no visible change.",
           "RTX 5090 / CUDA",
           "960 x 544, 124 frames; diffusion FA already enabled. native warm latency, matched prompt/seed/geometry.",
           "Recommend a model/API-scoped profile after the final implementation checks; retain the current baseline elsewhere."
@@ -108,7 +110,7 @@
           "Existing parameter",
           "V",
           "103.638 -> 94.686 s; -8.64% latency; 1.095x; 8.952 s saved",
-          "PSNR 51.18-54.41 dB; SSIM 0.998624-0.998854. Audio exact. Reviewed frame samples show no visible change.",
+          "PSNR 51.18-54.41 dB; SSIM 0.998624-0.998854. Worst frame 49.49 dB. Audio exact. Reviewed frame samples show no visible change.",
           "RTX 5090 / Vulkan",
           "960 x 544, 124 frames; diffusion FA already enabled. native warm latency, matched prompt/seed/geometry.",
           "Recommend a model/API-scoped profile after the final implementation checks; retain the current baseline elsewhere."
@@ -118,7 +120,7 @@
           "Existing parameter",
           "V",
           "135.831 -> 100.164 s; -26.26% latency; 1.356x; 35.667 s saved",
-          "PSNR 57.73-57.73 dB; SSIM 0.999649-0.999649. Audio exact.",
+          "PSNR 57.73 dB; SSIM 0.999649. Worst frame 56.55 dB. Audio exact.",
           "M3 Ultra / Metal",
           "Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.",
           "Provisional until full-size, quality and repeated-request checks complete."
@@ -128,7 +130,7 @@
           "Existing parameter",
           "V",
           "101.173 -> 96.131 s; -4.98% latency; 1.052x; 5.042 s saved",
-          "PSNR 51.12-51.12 dB; SSIM 0.998222-0.998222. Audio exact.",
+          "PSNR 51.12 dB; SSIM 0.998222. Worst frame 50.64 dB. Audio exact.",
           "Radeon 8060S / Vulkan",
           "Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.",
           "Provisional until full-size, quality and repeated-request checks complete."
@@ -136,11 +138,11 @@
         [
           "Global flash attention",
           "Existing parameter",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "68.679 -> 61.573 s; -10.35% latency; 1.115x; 7.106 s saved",
+          "PSNR 48.14 dB; SSIM 0.996470. Worst frame 47.09 dB. Audio exact.",
           "Radeon 8060S / HIP",
-          "Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only.",
+          "Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.",
           "Provisional until full-size, quality and repeated-request checks complete."
         ],
         [
@@ -156,31 +158,41 @@
         [
           "Minimal SwiGLU + QKV views",
           "Engine graph optimization",
-          "V",
-          "139.800 -> 136.825 s; -2.13% latency; 1.022x; 2.975 s saved",
-          "Decoded video and audio exact. 1 comparisons.",
+          "V - 1/3 prompts",
+          "119.697 -> 117.369 s; -1.94% latency; 1.020x; 2.328 s saved",
+          "Video/audio files byte exact. 1 comparison.",
           "RTX 5090 / CUDA",
-          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately. fresh-context CLI generation time.",
-          "Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen."
+          "Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 1.94-1.94%. Fresh-process I/O-confounded results remain in the records.",
+          "Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged."
         ],
         [
           "Minimal operations + global FA",
           "Measured combination",
-          "V",
-          "139.800 -> 130.010 s; -7.00% latency; 1.075x; 9.790 s saved",
-          "PSNR 53.52-53.52 dB; SSIM 0.998686-0.998686. Audio exact.",
+          "V - 1/3 prompts",
+          "119.697 -> 110.573 s; -7.62% latency; 1.083x; 9.124 s saved",
+          "PSNR 55.96 dB; SSIM 0.999271. Worst frame 55.33 dB. Audio exact.",
           "RTX 5090 / CUDA",
-          "Combined profile measured directly against its own baseline; do not multiply separate speedups. fresh-context CLI generation time.",
-          "Provisional pending incremental benefit and output validation."
+          "Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 7.62-7.62%. Fresh-process I/O-confounded results remain in the records.",
+          "Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged."
+        ],
+        [
+          "Operations added after global FA",
+          "Incremental engine benefit",
+          "V - 1/3 prompts",
+          "113.102 -> 110.573 s; -2.24% latency; 1.023x; 2.529 s saved",
+          "Video/audio files byte exact. 1 comparison.",
+          "RTX 5090 / CUDA",
+          "Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 2.24-2.24%. Fresh-process I/O-confounded results remain in the records.",
+          "Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged."
         ],
         [
           "Minimal SwiGLU + QKV views",
           "Engine graph optimization",
           "V",
           "116.760 -> 107.940 s; -7.55% latency; 1.082x; 8.820 s saved",
-          "Decoded video and audio exact. 1 comparisons.",
+          "Video/audio files byte exact. 1 comparison.",
           "RTX 5090 / Vulkan",
-          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately. fresh-context CLI generation time.",
+          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately. Fresh CLI context each repetition; generation and process wall time separately..",
           "Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen."
         ],
         [
@@ -188,30 +200,30 @@
           "Measured combination",
           "V",
           "116.760 -> 98.975 s; -15.23% latency; 1.180x; 17.785 s saved",
-          "PSNR 52.51-52.51 dB; SSIM 0.997947-0.997947. Audio exact.",
+          "PSNR 52.51 dB; SSIM 0.997947. Worst frame 51.98 dB. Audio exact.",
           "RTX 5090 / Vulkan",
-          "Combined profile measured directly against its own baseline; do not multiply separate speedups. fresh-context CLI generation time.",
+          "Combined profile measured directly against its own baseline; do not multiply separate speedups. Fresh CLI context each repetition; generation and process wall time separately..",
           "Provisional pending incremental benefit and output validation."
         ],
         [
           "Minimal SwiGLU + QKV views",
           "Engine graph optimization",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "142.645 -> 145.870 s; +2.26% latency; 0.978x; 3.225 s slower",
+          "PSNR 37.19 dB; SSIM 0.986075. Worst frame 31.83 dB. Audio SNR 25.18 dB. Perceptual audio parity not established.",
           "M3 Ultra / Metal",
-          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately.",
-          "Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen."
+          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately. Fresh CLI context each repetition; generation and process wall time separately..",
+          "Reject as the preferred Metal profile: output/audio change and the initial non-FA screen is slower. Keep the original graph."
         ],
         [
           "Minimal operations + global FA",
           "Measured combination",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "142.645 -> 108.140 s; -24.19% latency; 1.319x; 34.505 s saved",
+          "PSNR 37.20 dB; SSIM 0.986081. Worst frame 31.83 dB. Audio SNR 25.18 dB. Perceptual audio parity not established.",
           "M3 Ultra / Metal",
-          "Combined profile measured directly against its own baseline; do not multiply separate speedups.",
-          "Provisional pending incremental benefit and output validation."
+          "Combined profile measured directly against its own baseline; do not multiply separate speedups. Fresh CLI context each repetition; generation and process wall time separately..",
+          "Use global FA alone on Metal. Adding the patch measured only 3.8% extra speed with PSNR 37.20 dB and audio SNR 25.18 dB; perceptual audio parity is not established."
         ],
         [
           "Minimal SwiGLU + QKV views",
@@ -258,30 +270,30 @@
           "Engine / GGML experiment",
           "V",
           "80.180 -> 70.595 s; -11.95% latency; 1.136x; 9.585 s saved",
-          "PSNR 42.88-42.88 dB; SSIM 0.993938-0.993938. Audio differs; perceptual parity not established.",
+          "PSNR 42.88 dB; SSIM 0.993938. Worst frame 40.85 dB. Audio SNR 21.14 dB. Perceptual audio parity not established.",
           "M3 Ultra / Metal",
-          "Different engine base from the pinned minimal patch; do not compare its absolute latency with another cohort. fresh-context CLI generation time.",
+          "Different engine base from the pinned minimal patch; do not compare its absolute latency with another cohort. Fresh CLI context each repetition; generation and process wall time separately..",
           "Reject any strict-parity claim when audio changes; otherwise assess the broader backport separately."
         ],
         [
           "Older isolated H3 operations",
           "Engine / GGML experiment",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "90.065 -> 84.655 s; -6.01% latency; 1.064x; 5.410 s saved",
+          "Video/audio files byte exact. 1 comparison.",
           "Radeon 8060S / Vulkan",
-          "Different engine base from the pinned minimal patch; do not compare its absolute latency with another cohort.",
+          "Different engine base from the pinned minimal patch; do not compare its absolute latency with another cohort. Fresh CLI context each repetition; generation and process wall time separately..",
           "Reject any strict-parity claim when audio changes; otherwise assess the broader backport separately."
         ],
         [
           "Older isolated H3 operations",
           "Engine / GGML experiment",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "72.410 -> 63.990 s; -11.63% latency; 1.132x; 8.420 s saved",
+          "PSNR 29.11 dB; SSIM 0.946455. Worst frame 26.71 dB. Audio SNR 1.09 dB. Perceptual audio parity not established.",
           "Radeon 8060S / HIP",
-          "Different engine base from the pinned minimal patch; do not compare its absolute latency with another cohort.",
-          "Reject any strict-parity claim when audio changes; otherwise assess the broader backport separately."
+          "Different engine base from the pinned minimal patch; do not compare its absolute latency with another cohort. Fresh CLI context each repetition; generation and process wall time separately..",
+          "Reject on HIP: visible video changes and audio SNR only 1.09 dB; speed does not meet the requested quality tier."
         ],
         [
           "Older isolated operations + VAE-only FA",
@@ -298,7 +310,7 @@
           "Memory placement",
           "V",
           "135.831 -> 131.249 s; -3.37% latency; 1.035x; 4.582 s saved",
-          "Decoded video and audio exact. 1 comparisons.",
+          "Video/audio files byte exact. 1 comparison.",
           "M3 Ultra / Metal",
           "Short screen; unified-memory RSS is not total system/device consumption. native warm latency, matched prompt/seed/geometry.",
           "Use only with proven capacity and repeated-request behavior; full combined confirmation determines speed recommendation."
@@ -308,7 +320,7 @@
           "Memory placement",
           "V",
           "101.173 -> 97.740 s; -3.39% latency; 1.035x; 3.433 s saved",
-          "Decoded video and audio exact. 1 comparisons.",
+          "Video/audio files byte exact. 1 comparison.",
           "Radeon 8060S / Vulkan",
           "Short screen; unified-memory RSS is not total system/device consumption. native warm latency, matched prompt/seed/geometry.",
           "Use only with proven capacity and repeated-request behavior; full combined confirmation determines speed recommendation."
@@ -316,22 +328,12 @@
         [
           "Parameter residency",
           "Memory placement",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "68.679 -> 68.846 s; +0.24% latency; 0.998x; 0.167 s slower",
+          "Video/audio files byte exact. 1 comparison.",
           "Radeon 8060S / HIP",
-          "Short screen; unified-memory RSS is not total system/device consumption.",
+          "Short screen; unified-memory RSS is not total system/device consumption. native warm latency, matched prompt/seed/geometry.",
           "Use only with proven capacity and repeated-request behavior; full combined confirmation determines speed recommendation."
-        ],
-        [
-          "Approximate caches / broad upstream layout",
-          "Algorithm / engine",
-          "V - dated",
-          "Some configurations faster; not accepted as quality-preserving speed gains.",
-          "Motion/audio changes; broad update around 20-23 dB.",
-          "RTX and GB10 / CUDA, 29 Oct",
-          "Includes EasyCache and broad PR #2240; DBCache/TaylorSeer did not provide a useful H3 result.",
-          "Reject for the requested quality tier."
         ],
         [
           "Graphs, launch queues, thread count and VAE convolution",
@@ -362,6 +364,176 @@
           "GB10 / CUDA, 29 Oct",
           "No matched vLLM H3 GGUF adapter; new-platform recipes do not validate gfx1151 or Metal diffusion.",
           "Separate runtime option, not a drop-in quality-preserving optimization."
+        ],
+        [
+          "2D VAE GEMM control",
+          "Existing decoder parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Metal commands per buffer: 2",
+          "Scheduling parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Metal commands per buffer: 4",
+          "Scheduling parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Metal serial encoding",
+          "Scheduling parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "2D VAE GEMM control",
+          "Existing decoder parameter",
+          "V",
+          "101.173 -> 100.647 s; -0.52% latency; 1.005x; 0.527 s saved",
+          "Video/audio files byte exact. 1 comparison.",
+          "Radeon 8060S / Vulkan",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Vulkan host-memory selection",
+          "Memory placement parameter",
+          "V",
+          "101.173 -> 102.655 s; +1.46% latency; 0.986x; 1.482 s slower",
+          "Video/audio files byte exact. 1 comparison.",
+          "Radeon 8060S / Vulkan",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Vulkan synchronized submits",
+          "Scheduling parameter",
+          "V",
+          "101.173 -> 100.957 s; -0.21% latency; 1.002x; 0.217 s saved",
+          "Video/audio files byte exact. 1 comparison.",
+          "Radeon 8060S / Vulkan",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "2D VAE GEMM control",
+          "Existing decoder parameter",
+          "V",
+          "68.679 -> 69.237 s; +0.81% latency; 0.992x; 0.558 s slower",
+          "Video/audio files byte exact. 1 comparison.",
+          "Radeon 8060S / HIP",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "HIP rocWMMA attention after global FA",
+          "Attention kernel build option",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged.",
+          "Decide from diffusion results; published LLM results are not a diffusion validation."
+        ],
+        [
+          "HIP force-blas",
+          "Matrix kernel build option",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.",
+          "Require numerical output checks and repeatable incremental speed before any production selection change."
+        ],
+        [
+          "HIP force-mmq",
+          "Matrix kernel build option",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.",
+          "Require numerical output checks and repeatable incremental speed before any production selection change."
+        ],
+        [
+          "Memory-mapped checkpoint reads",
+          "Existing model I/O parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / CUDA",
+          "Process-local mmap of task checkpoint files; evaluate startup/RSS separately from warm speed. No filesystem mount or system setting.",
+          "Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled."
+        ],
+        [
+          "Memory-mapped checkpoint reads",
+          "Existing model I/O parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / Vulkan",
+          "Process-local mmap of task checkpoint files; evaluate startup/RSS separately from warm speed. No filesystem mount or system setting.",
+          "Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled."
+        ],
+        [
+          "Global FA + residency (full)",
+          "Measured combination",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "M3 Ultra / Metal",
+          "Full: 960 x 544 / 124 frames; short: additional prompts at 512 x 288 / 39 frames.",
+          "Confirm combined speed and memory; preserve the offloaded baseline on unvalidated capacities."
+        ],
+        [
+          "Residency added after global FA (full)",
+          "Incremental memory placement",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "M3 Ultra / Metal",
+          "Separates the residency contribution from the flash-attention gain.",
+          "Use only if the memory/speed tradeoff remains reliable over repeated requests."
+        ],
+        [
+          "Global FA + residency (short)",
+          "Measured combination",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "M3 Ultra / Metal",
+          "Full: 960 x 544 / 124 frames; short: additional prompts at 512 x 288 / 39 frames.",
+          "Confirm combined speed and memory; preserve the offloaded baseline on unvalidated capacities."
+        ],
+        [
+          "Residency added after global FA (short)",
+          "Incremental memory placement",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "M3 Ultra / Metal",
+          "Separates the residency contribution from the flash-attention gain.",
+          "Use only if the memory/speed tradeoff remains reliable over repeated requests."
         ]
       ],
       "details": [
@@ -405,19 +577,11 @@
           "quality_pending": false
         },
         {
-          "row": "Minimal SwiGLU + QKV views",
-          "hardware": "RTX 5090 / CUDA",
-          "reference": "r3-rtx-h3-cli-pinned-cuda-baseline",
-          "candidate": "r3-rtx-h3-cli-pinned-cuda-localops",
-          "latency_reduction_percent": 2.1280400572246227,
-          "quality_pending": false
-        },
-        {
-          "row": "Minimal operations + global FA",
-          "hardware": "RTX 5090 / CUDA",
-          "reference": "r3-rtx-h3-cli-pinned-cuda-baseline",
-          "candidate": "r3-rtx-h3-cli-pinned-cuda-localops-global-flash",
-          "latency_reduction_percent": 7.002861230329056,
+          "row": "Global flash attention",
+          "hardware": "Radeon 8060S / HIP",
+          "reference": "r3-strix-h3-short-abi128-rocm-baseline",
+          "candidate": "r3-strix-h3-short-abi128-rocm-global-flash",
+          "latency_reduction_percent": 10.347337997510161,
           "quality_pending": false
         },
         {
@@ -437,11 +601,43 @@
           "quality_pending": false
         },
         {
+          "row": "Minimal SwiGLU + QKV views",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-short-cli-pinned-metal-baseline",
+          "candidate": "r3-mac-h3-short-cli-pinned-metal-localops",
+          "latency_reduction_percent": -2.260857373199217,
+          "quality_pending": false
+        },
+        {
+          "row": "Minimal operations + global FA",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-short-cli-pinned-metal-baseline",
+          "candidate": "r3-mac-h3-short-cli-pinned-metal-localops-global-flash",
+          "latency_reduction_percent": 24.189421290616565,
+          "quality_pending": false
+        },
+        {
           "row": "Older isolated H3 operations",
           "hardware": "M3 Ultra / Metal",
           "reference": "r3-mac-h3-short-cli-metal-parent",
           "candidate": "r3-mac-h3-short-cli-metal-isolated",
           "latency_reduction_percent": 11.954352706410585,
+          "quality_pending": false
+        },
+        {
+          "row": "Older isolated H3 operations",
+          "hardware": "Radeon 8060S / Vulkan",
+          "reference": "r3-strix-h3-short-cli-vulkan-parent",
+          "candidate": "r3-strix-h3-short-cli-vulkan-isolated",
+          "latency_reduction_percent": 6.006772886248816,
+          "quality_pending": false
+        },
+        {
+          "row": "Older isolated H3 operations",
+          "hardware": "Radeon 8060S / HIP",
+          "reference": "r3-strix-h3-short-cli-rocm-parent",
+          "candidate": "r3-strix-h3-short-cli-rocm-isolated",
+          "latency_reduction_percent": 11.628228145283805,
           "quality_pending": false
         },
         {
@@ -459,9 +655,438 @@
           "candidate": "r3-strix-h3-short-vulkan-resident",
           "latency_reduction_percent": 3.3936752212782806,
           "quality_pending": false
+        },
+        {
+          "row": "Parameter residency",
+          "hardware": "Radeon 8060S / HIP",
+          "reference": "r3-strix-h3-short-abi128-rocm-baseline",
+          "candidate": "r3-strix-h3-short-abi128-rocm-resident",
+          "latency_reduction_percent": -0.24243041955752945,
+          "quality_pending": false
+        },
+        {
+          "row": "2D VAE GEMM control",
+          "hardware": "Radeon 8060S / Vulkan",
+          "reference": "r3-strix-h3-short-vulkan-baseline",
+          "candidate": "r3-strix-h3-short-vulkan-vae-gemm",
+          "latency_reduction_percent": 0.5208873865191842,
+          "quality_pending": false
+        },
+        {
+          "row": "Vulkan host-memory selection",
+          "hardware": "Radeon 8060S / Vulkan",
+          "reference": "r3-strix-h3-short-vulkan-baseline",
+          "candidate": "r3-strix-h3-short-vulkan-host-memory",
+          "latency_reduction_percent": -1.4643162488201074,
+          "quality_pending": false
+        },
+        {
+          "row": "Vulkan synchronized submits",
+          "hardware": "Radeon 8060S / Vulkan",
+          "reference": "r3-strix-h3-short-vulkan-baseline",
+          "candidate": "r3-strix-h3-short-vulkan-sync-submit",
+          "latency_reduction_percent": 0.21448304150788947,
+          "quality_pending": false
+        },
+        {
+          "row": "2D VAE GEMM control",
+          "hardware": "Radeon 8060S / HIP",
+          "reference": "r3-strix-h3-short-abi128-rocm-baseline",
+          "candidate": "r3-strix-h3-short-abi128-rocm-vae-gemm",
+          "latency_reduction_percent": -0.812469514192746,
+          "quality_pending": false
         }
       ],
       "optimal_profile_status": "Pending final quality, memory and cumulative review.",
+      "grouped_measurement_references": [
+        {
+          "api": "cuda",
+          "experiment": "Minimal operations",
+          "prompt_count": 1,
+          "complete_three_prompts": false,
+          "aggregation": "Arithmetic mean of the per-prompt warm medians; excludes one warmup for each profile/prompt. Distinct from native addon and fresh-process timings.",
+          "reference_seconds": 119.69703311,
+          "candidate_seconds": 117.369030974,
+          "seconds_saved": 2.328002136000009,
+          "latency_reduction_percent": 1.9449121465363353,
+          "speedup": 1.0198348927027925,
+          "per_prompt_reduction_percent_range": [
+            1.9449121465363353,
+            1.9449121465363353
+          ],
+          "pairs": [
+            {
+              "prompt_index": 1,
+              "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-cuda-p1-localops",
+              "reference_seconds": 119.69703311,
+              "candidate_seconds": 117.369030974,
+              "latency_reduction_percent": 1.9449121465363353,
+              "reference_runs_seconds": [
+                119.288154513,
+                119.72655632,
+                119.69703311
+              ],
+              "candidate_runs_seconds": [
+                117.369030974,
+                117.291888651,
+                117.599076089
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 92.06,
+                "video_decode_seconds": 24.89,
+                "audio_decode_seconds": 1.05
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 89.6,
+                "video_decode_seconds": 25.08,
+                "audio_decode_seconds": 1.05
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 38025744384,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 38029983744,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p1-baseline\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p1-baseline\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.0,
+                "video_mse_0_255": 0.0,
+                "video_psnr_db": "infinity",
+                "different_channel_values_percent": 0.0,
+                "decoded_video_sha256": [
+                  "676eb0a7ea42e5bb955378e6135353dab7cffd64e9afcee67df0eecbcf6ea2bc",
+                  "676eb0a7ea42e5bb955378e6135353dab7cffd64e9afcee67df0eecbcf6ea2bc"
+                ],
+                "video_max_absolute_difference_0_255": 0,
+                "video_worst_frame_index": 0,
+                "video_worst_frame_psnr_db": "infinity",
+                "video_ssim": 1.0,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p1-localops",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "a65316cb47b0252fb1a3779cb088520d711854c845f33e1b5845f585998ca93b",
+                  "a65316cb47b0252fb1a3779cb088520d711854c845f33e1b5845f585998ca93b"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "api": "cuda",
+          "experiment": "Minimal operations + global FA",
+          "prompt_count": 1,
+          "complete_three_prompts": false,
+          "aggregation": "Arithmetic mean of the per-prompt warm medians; excludes one warmup for each profile/prompt. Distinct from native addon and fresh-process timings.",
+          "reference_seconds": 119.69703311,
+          "candidate_seconds": 110.573296376,
+          "seconds_saved": 9.123736734000005,
+          "latency_reduction_percent": 7.6223582965631325,
+          "speedup": 1.082513021073145,
+          "per_prompt_reduction_percent_range": [
+            7.6223582965631325,
+            7.6223582965631325
+          ],
+          "pairs": [
+            {
+              "prompt_index": 1,
+              "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-cuda-p1-localops-global-flash",
+              "reference_seconds": 119.69703311,
+              "candidate_seconds": 110.573296376,
+              "latency_reduction_percent": 7.6223582965631325,
+              "reference_runs_seconds": [
+                119.288154513,
+                119.72655632,
+                119.69703311
+              ],
+              "candidate_runs_seconds": [
+                110.573296376,
+                110.610348377,
+                110.199701929
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 92.06,
+                "video_decode_seconds": 24.89,
+                "audio_decode_seconds": 1.05
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 89.54,
+                "video_decode_seconds": 18.27,
+                "audio_decode_seconds": 1.05
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 38025744384,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 38032461824,
+                "sampled_peak_gpu_device_used_mib": 23736.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p1-baseline\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p1-baseline-global-flash\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.1280076035160368,
+                "video_mse_0_255": 0.16476258083458517,
+                "video_psnr_db": 55.96221774758569,
+                "different_channel_values_percent": 11.28577280416535,
+                "decoded_video_sha256": [
+                  "676eb0a7ea42e5bb955378e6135353dab7cffd64e9afcee67df0eecbcf6ea2bc",
+                  "f5d6da91c288f510f7e09673912c271031573394ffd1048b7ec4a0e832b4b62a"
+                ],
+                "video_max_absolute_difference_0_255": 13,
+                "video_worst_frame_index": 60,
+                "video_worst_frame_psnr_db": 55.32896141710191,
+                "video_ssim": 0.999271,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p1-localops-global-flash",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "a65316cb47b0252fb1a3779cb088520d711854c845f33e1b5845f585998ca93b",
+                  "f6087b83fcd70f605861f24165d3f778b684cdc7190d5bc013a4b52d3b0f7c67"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "api": "cuda",
+          "experiment": "Minimal operations added to global FA",
+          "prompt_count": 1,
+          "complete_three_prompts": false,
+          "aggregation": "Arithmetic mean of the per-prompt warm medians; excludes one warmup for each profile/prompt. Distinct from native addon and fresh-process timings.",
+          "reference_seconds": 113.102278054,
+          "candidate_seconds": 110.573296376,
+          "seconds_saved": 2.528981677999994,
+          "latency_reduction_percent": 2.2360130330819215,
+          "speedup": 1.0228715409677243,
+          "per_prompt_reduction_percent_range": [
+            2.2360130330819215,
+            2.2360130330819215
+          ],
+          "pairs": [
+            {
+              "prompt_index": 1,
+              "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline-global-flash",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-cuda-p1-localops-global-flash",
+              "reference_seconds": 113.102278054,
+              "candidate_seconds": 110.573296376,
+              "latency_reduction_percent": 2.2360130330819215,
+              "reference_runs_seconds": [
+                113.102278054,
+                113.176568127,
+                112.763981792
+              ],
+              "candidate_runs_seconds": [
+                110.573296376,
+                110.610348377,
+                110.199701929
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 92.03,
+                "video_decode_seconds": 18.33,
+                "audio_decode_seconds": 1.05
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 89.54,
+                "video_decode_seconds": 18.27,
+                "audio_decode_seconds": 1.05
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 38033526784,
+                "sampled_peak_gpu_device_used_mib": 23736.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 38032461824,
+                "sampled_peak_gpu_device_used_mib": 23736.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p1-baseline-global-flash\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p1-baseline-global-flash\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.0,
+                "video_mse_0_255": 0.0,
+                "video_psnr_db": "infinity",
+                "different_channel_values_percent": 0.0,
+                "decoded_video_sha256": [
+                  "f5d6da91c288f510f7e09673912c271031573394ffd1048b7ec4a0e832b4b62a",
+                  "f5d6da91c288f510f7e09673912c271031573394ffd1048b7ec4a0e832b4b62a"
+                ],
+                "video_max_absolute_difference_0_255": 0,
+                "video_worst_frame_index": 0,
+                "video_worst_frame_psnr_db": "infinity",
+                "video_ssim": 1.0,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline-global-flash",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p1-localops-global-flash",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "f6087b83fcd70f605861f24165d3f778b684cdc7190d5bc013a4b52d3b0f7c67",
+                  "f6087b83fcd70f605861f24165d3f778b684cdc7190d5bc013a4b52d3b0f7c67"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "historical_screening_note": "Retained CUDA-only screens from 29 October, at the older revisions. These include rejected alternatives and unmeasured ideas; V means tried, not recommended. They do not establish Metal, Vulkan or HIP performance. Round-two controls already include H3 flash attention, FLUX GEMM and LTX residency as stated in the original records.",
+      "historical_rows": [
+        [
+          "Full upstream PR #2240",
+          "Engine algorithm/layout + kernels",
+          "V - dated",
+          "RTX screen: 102.11 to 90.04 s; 1.134x; 11.82% lower generation latency. Spark second fresh invocation: 347.05 to 294.38 s; 1.179x; 15.18% lower.",
+          "Visible motion/geometry and audio changes. RTX/Spark PSNR 20.98/22.72 dB, SSIM 0.7618/0.8259, audio SNR 9.21/6.67 dB",
+          "RTX and Spark / CUDA, 29 Oct",
+          "A faster broad upstream patch is not automatically an acceptable QVAC engine upgrade.",
+          "Reject the complete patch for the visually identical tier."
+        ],
+        [
+          "EasyCache 0.05 / 0.20",
+          "Approximate denoising reuse",
+          "V - dated",
+          "0.20: RTX: 113.649 to 104.789 s; 1.085x; 7.80% lower latency; Spark: 604.611 to 535.998 s; 1.128x; 11.35% lower latency",
+          "0.05: byte exact, zero skipped steps. 0.20: video PSNR 35.16/34.90 dB; audio SNR 2.85/3.07 dB",
+          "RTX and Spark / CUDA, 29 Oct",
+          "0.20 skips one of eight denoising steps and changes motion/detail and audio.",
+          "Reject 0.20 for the quality target; 0.05 offers no useful acceleration."
+        ],
+        [
+          "DBCache / TaylorSeer flags",
+          "Approximate denoising reuse",
+          "V - dated",
+          "RTX: 113.649 to 92.487 / 91.396 s (18.62% / 19.58% lower). Spark: 604.611 to 471.004 / 472.186 s (22.10% / 21.90% lower).",
+          "Visible artifacts; RTX/Spark PSNR 16.83/17.20 dB, SSIM 0.6620/0.6758; audio SNR 1.32/1.22 dB",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Both flags skip two of eight steps and produce the same output within each host. They use the pinned engine's whole-condition reuse path.",
+          "Reject these tested settings: substantial output changes exceed the accepted quality tier."
+        ],
+        [
+          "CUDA graphs / graph optimization",
+          "Build and scheduling parameters",
+          "V - dated",
+          "RTX: 113.649 to 114.078 s; 0.996x; 0.38% higher latency; Spark: 604.611 to 611.753 s; 0.988x; 1.18% higher latency",
+          "Byte exact in tested outputs",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Actual cudaGraphLaunch observed. GGML_CUDA_GRAPH_OPT=1 was also slower: RTX +1.30%, Spark +0.64% latency.",
+          "Reject as a default change: no reliable speed gain."
+        ],
+        [
+          "CPU threads 2 / 16",
+          "Runtime parameters",
+          "V - dated",
+          "RTX: 114.314 / 114.322 s vs 113.649 s. Spark: 606.780 / 606.052 s vs 604.611 s.",
+          "Output byte exact",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Changes are smaller than 0.6% and do not support a new default.",
+          "Keep the tested 8-thread control; extra tuning showed no benefit."
+        ],
+        [
+          "CUDA launch queue 4x",
+          "Process-scoped CUDA scheduling",
+          "V - dated",
+          "RTX: 115.007 to 114.331 s; 1.006x; 0.59% lower. Spark: 601.678 to 599.833 s; 1.003x; 0.31% lower.",
+          "Four matched clip pairs per host byte exact",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Three measured warm requests per side. No system-level setting is changed.",
+          "Reject as a speed recommendation: differences are too small and within run variability."
+        ],
+        [
+          "GPU parameter residency",
+          "Memory placement",
+          "V - dated",
+          "Spark: 1.003x; 0.33% lower latency",
+          "Output bit exact; 0% changed values",
+          "Spark only; RTX selective profile failed / CUDA, 29 Oct",
+          "Spark: 661.899 to 659.693 s, within run-to-run noise. Not a gain over an already resident default. RTX warmed up, then ran out of memory on a later request.",
+          "Keep the memory-fitting configuration. Spark gain is noise; RTX selective residency failed a subsequent request."
+        ],
+        [
+          "VAE weights on GPU",
+          "Module parameter placement",
+          "V - dated",
+          "RTX: 113.649 to 113.903 s; 0.998x; 0.22% higher latency",
+          "Byte exact",
+          "RTX only / CUDA, 29 Oct",
+          "Host RSS 39.836 to 33.734 GB; retain capacity checks. Not a denoising acceleration.",
+          "No speed recommendation. Consider separately for lower host RSS."
+        ],
+        [
+          "Forced cuBLAS build",
+          "Matrix backend selection",
+          "V - dated",
+          "Spark: about 1.02x",
+          "Rejected: black video and corrupted audio",
+          "Spark; FLUX build also tried on RTX / CUDA, 29 Oct",
+          "H3: PSNR 9.65 dB, SSIM 0.3005, audio SNR -51.4 dB. This specific forced-backend experiment failed quality.",
+          "Reject: corrupt output outweighs the small timing gain."
+        ],
+        [
+          "BF16 DiT matrices",
+          "Precision selection",
+          "V - dated",
+          "Spark: 1.022x; 2.18% lower latency, single measured run",
+          "Rejected: substantial video/audio differences",
+          "Spark only / CUDA, 29 Oct",
+          "Existing Q4 matrices dequantized to BF16, not the original BF16 checkpoint. Video PSNR 23.53 dB, SSIM 0.8504; audio RMSE 0.001478 and SNR 5.21 dB.",
+          "Reject as a quality-preserving optimization; changed values, small single-run gain."
+        ],
+        [
+          "NVFP4 text encoder",
+          "Quantization / loader support",
+          " - dated",
+          "X - unmeasured",
+          "Unvalidated",
+          "Future: Blackwell CUDA / CUDA, 29 Oct",
+          "Pinned engine lacks the ComfyUI NVFP4 AWQ loader. Draft engine PR #49 provides a candidate and reports separate T2V/I2V checks, but our campaign has not benchmarked it or validated quality against the default encoder. In the measured warm H3 workload, conditioning is about 0.4 s of 605 s on Spark: eliminating it entirely would save only about 0.07%. Cold-load and long-prompt benefits remain unmeasured.",
+          "Defer to a cold-start/long-prompt study: requires an unmerged loader and different encoder checkpoint; negligible ceiling for this measured warm workload."
+        ],
+        [
+          "Shared-runtime-only H3 ablation",
+          "Engine change-scope isolation",
+          "V - dated",
+          "RTX parent to shared-only: 97.23 to 97.06 s (0.17% lower); adding H3 operations: 89.39 s (7.90% lower). Spark: 340.04 to 337.52 s (0.74% lower), then 298.41 s (11.59% lower).",
+          "RTX paired outputs byte exact. Spark shared-to-isolated PSNR 52.66-53.85 dB, SSIM 0.99836-0.99875; audio exact",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Three fresh processes per variant. Parent to isolated: RTX 1.088x, 8.06% lower; Spark 1.140x, 12.24% lower. Neutral shared-only performance does not prove the required ggml operations are unnecessary.",
+          "Reject shared-runtime-only as a speed change. Focus the backport on H3 operations and the ggml APIs they require."
+        ]
+      ],
       "above_five_percent": [
         {
           "row": "Global flash attention",
@@ -488,11 +1113,11 @@
           "quality_pending": false
         },
         {
-          "row": "Minimal operations + global FA",
-          "hardware": "RTX 5090 / CUDA",
-          "reference": "r3-rtx-h3-cli-pinned-cuda-baseline",
-          "candidate": "r3-rtx-h3-cli-pinned-cuda-localops-global-flash",
-          "latency_reduction_percent": 7.002861230329056,
+          "row": "Global flash attention",
+          "hardware": "Radeon 8060S / HIP",
+          "reference": "r3-strix-h3-short-abi128-rocm-baseline",
+          "candidate": "r3-strix-h3-short-abi128-rocm-global-flash",
+          "latency_reduction_percent": 10.347337997510161,
           "quality_pending": false
         },
         {
@@ -512,14 +1137,83 @@
           "quality_pending": false
         },
         {
+          "row": "Minimal operations + global FA",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-short-cli-pinned-metal-baseline",
+          "candidate": "r3-mac-h3-short-cli-pinned-metal-localops-global-flash",
+          "latency_reduction_percent": 24.189421290616565,
+          "quality_pending": false
+        },
+        {
           "row": "Older isolated H3 operations",
           "hardware": "M3 Ultra / Metal",
           "reference": "r3-mac-h3-short-cli-metal-parent",
           "candidate": "r3-mac-h3-short-cli-metal-isolated",
           "latency_reduction_percent": 11.954352706410585,
           "quality_pending": false
+        },
+        {
+          "row": "Older isolated H3 operations",
+          "hardware": "Radeon 8060S / Vulkan",
+          "reference": "r3-strix-h3-short-cli-vulkan-parent",
+          "candidate": "r3-strix-h3-short-cli-vulkan-isolated",
+          "latency_reduction_percent": 6.006772886248816,
+          "quality_pending": false
+        },
+        {
+          "row": "Older isolated H3 operations",
+          "hardware": "Radeon 8060S / HIP",
+          "reference": "r3-strix-h3-short-cli-rocm-parent",
+          "candidate": "r3-strix-h3-short-cli-rocm-isolated",
+          "latency_reduction_percent": 11.628228145283805,
+          "quality_pending": false
         }
-      ]
+      ],
+      "tradeoff_headers": [
+        "Profile / API",
+        "Load + first request",
+        "Peak process RSS",
+        "Sampled device memory",
+        "Primary stage change"
+      ],
+      "tradeoff_rows": [
+        [
+          "Global flash attention / RTX 5090 / CUDA",
+          "141.357 -> 135.055 s; -4.46%",
+          "40.240 -> 40.257 GB; +0.04%",
+          "23728.000 -> 23728.000 MiB; +0.00%",
+          "VAE: 25.923 -> 19.244 s; -25.76%"
+        ],
+        [
+          "Global flash attention / RTX 5090 / Vulkan",
+          "112.890 -> 102.636 s; -9.08%",
+          "39.616 -> 39.624 GB; +0.02%",
+          "24304.000 -> 24304.000 MiB; +0.00%",
+          "VAE: 27.172 -> 18.132 s; -33.27%"
+        ],
+        [
+          "Global flash attention / M3 Ultra / Metal",
+          "235.005 -> 131.769 s; -43.93%",
+          "62.980 -> 63.069 GB; +0.14%",
+          "Unified memory; RSS is not total device usage",
+          "VAE: 53.174 -> 19.613 s; -63.12%"
+        ],
+        [
+          "Global flash attention / Radeon 8060S / Vulkan",
+          "114.706 -> 112.281 s; -2.11%",
+          "1.782 -> 1.783 GB; +0.05%",
+          "56.084 -> 61.105 GB VRAM + GTT; +8.95%",
+          "VAE: 29.602 -> 24.919 s; -15.82%"
+        ],
+        [
+          "Global flash attention / Radeon 8060S / HIP",
+          "75.783 -> 76.261 s; +0.63%",
+          "38.979 -> 38.982 GB; +0.01%",
+          "24.266 -> 17.806 GB VRAM + GTT; -26.62%",
+          "VAE: 22.294 -> 14.618 s; -34.43%"
+        ]
+      ],
+      "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths."
     },
     {
       "title": "2. FLUX.2 Klein 4B Q8",
@@ -549,7 +1243,7 @@
           "GEMM VAE",
           "Existing decoder parameter",
           "V",
-          "2.605 -> 2.771 s; +6.37% latency; 0.940x; -0.166 s saved",
+          "2.605 -> 2.771 s; +6.37% latency; 0.940x; 0.166 s slower",
           "PSNR 60.49-61.18 dB; SSIM 0.999444-0.999631. Max channel error 1/255.",
           "RTX 5090 / Vulkan",
           "Same model and sampling; vae_conv_direct=false. Main envelope 1024 x 1024 / 10 steps. native warm latency, matched prompt/seed/geometry.",
@@ -559,8 +1253,8 @@
           "GEMM VAE",
           "Existing decoder parameter",
           "V",
-          "27.889 -> 30.800 s; +10.44% latency; 0.905x; -2.911 s saved",
-          "PSNR 71.18-71.18 dB; SSIM 0.999976-0.999976. Max channel error 1/255.",
+          "27.889 -> 30.800 s; +10.44% latency; 0.905x; 2.911 s slower",
+          "PSNR 71.18 dB; SSIM 0.999976. Max channel error 1/255.",
           "M3 Ultra / Metal",
           "Same model and sampling; vae_conv_direct=false. Main envelope 1024 x 1024 / 10 steps. native warm latency, matched prompt/seed/geometry.",
           "Reject GEMM if confirmation retains the measured regression; direct convolution is the fallback."
@@ -569,8 +1263,8 @@
           "GEMM VAE",
           "Existing decoder parameter",
           "V",
-          "29.601 -> 47.245 s; +59.61% latency; 0.627x; -17.644 s saved",
-          "PSNR 56.17-56.17 dB; SSIM 0.998930-0.998930. Max channel error 2/255.",
+          "29.601 -> 47.245 s; +59.61% latency; 0.627x; 17.644 s slower",
+          "PSNR 56.17 dB; SSIM 0.998930. Max channel error 2/255.",
           "Radeon 8060S / Vulkan",
           "Same model and sampling; vae_conv_direct=false. Main envelope 1024 x 1024 / 10 steps. native warm latency, matched prompt/seed/geometry.",
           "Reject GEMM: substantially slower and more memory; retain direct convolution."
@@ -600,7 +1294,7 @@
           "Measured combination / memory placement",
           "V",
           "8.786 -> 3.365 s; -61.70% latency; 2.611x; 5.421 s saved",
-          "Output comparison pending.",
+          "PSNR 58.72-60.28 dB; SSIM 0.999343-0.999585. Max channel error 2/255.",
           "RTX 5090 / CUDA",
           "Sampled device peak 7926 MiB versus 15636 MiB for resident GEMM; more host memory and slower than resident GEMM. native warm latency, matched prompt/seed/geometry.",
           "Offer as a distinct lower-VRAM profile; do not infer fit on every nominal 8 GB card."
@@ -608,11 +1302,11 @@
         [
           "DiT matrix expansion to F16",
           "Existing tensor-type parameter",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "27.889 -> 26.884 s; -3.60% latency; 1.037x; 1.005 s saved",
+          "Decoded pixels exact. 1 comparison.",
           "M3 Ultra / Metal",
-          "Expand only Q8 transformer block weight matrices at load time. Verify rule matching, startup and memory.",
+          "Expand only Q8 transformer block weight matrices at load time. Verify rule matching, startup and memory. native warm latency, matched prompt/seed/geometry.",
           "Pending speed/quality confirmation; not the original unquantized checkpoint."
         ],
         [
@@ -639,8 +1333,8 @@
           "HIP force-blas",
           "Kernel selection build option",
           "V",
-          "33.589 -> 34.978 s; +4.14% latency; 0.960x; -1.389 s saved",
-          "PSNR 22.93-22.93 dB; SSIM 0.907176-0.907176. Max channel error 240/255.",
+          "33.589 -> 34.978 s; +4.14% latency; 0.960x; 1.389 s slower",
+          "PSNR 22.93 dB; SSIM 0.907176. Max channel error 240/255.",
           "Radeon 8060S / HIP",
           "Corrected ABI128 backend, one prompt with warm repetitions. native warm latency, matched prompt/seed/geometry.",
           "Retain default selection unless the incremental gain is repeatable and material."
@@ -650,20 +1344,10 @@
           "Kernel selection build option",
           "V",
           "33.589 -> 33.402 s; -0.56% latency; 1.006x; 0.187 s saved",
-          "PSNR 18.61-18.61 dB; SSIM 0.810486-0.810486. Max channel error 237/255.",
+          "PSNR 18.61 dB; SSIM 0.810486. Max channel error 237/255.",
           "Radeon 8060S / HIP",
           "Corrected ABI128 backend, one prompt with warm repetitions. native warm latency, matched prompt/seed/geometry.",
           "Retain default selection unless the incremental gain is repeatable and material."
-        ],
-        [
-          "Small decoder / fewer steps / approximate caches / spatial tiles",
-          "Model / algorithm / parameters",
-          "V - dated",
-          "Small decoder: ~2-3% extra; four steps: 2.072x on Spark; some caches ~33-35% faster.",
-          "Changed tint/texture/composition; small decoder 35.99-42.85 dB, spatial tiles 25-28 dB.",
-          "RTX and GB10 / CUDA, 29 Oct",
-          "These change the accepted quality/sampling profile. EasyCache provided no useful skipped work in the tested configuration.",
-          "Reject for the visually identical default; any faster-quality preset must be separately named and accepted."
         ],
         [
           "FA off / threads / queues / Vulkan host-memory tuning",
@@ -694,6 +1378,146 @@
           "GB10 / CUDA, 29 Oct",
           "Startup regresses: SGLang load+first 17.602 -> 58.792 s; vLLM 17.732 -> 68.093 s.",
           "Separate runtime option; not quality-equivalent or cold-start equivalent to QVAC."
+        ],
+        [
+          "CPU parameter placement",
+          "Memory placement parameter",
+          "V",
+          "27.889 -> 28.374 s; +1.74% latency; 0.983x; 0.485 s slower",
+          "Decoded pixels exact. 1 comparison.",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Diffusion flash attention disabled",
+          "Attention parameter control",
+          "V",
+          "27.889 -> 122.796 s; +340.30% latency; 0.227x; 94.907 s slower",
+          "PSNR 58.08 dB; SSIM 0.999753. Max channel error 22/255.",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Metal commands per buffer: 2",
+          "Scheduling parameter",
+          "V",
+          "27.889 -> 27.943 s; +0.19% latency; 0.998x; 0.054 s slower",
+          "Decoded pixels exact. 1 comparison.",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Metal commands per buffer: 4",
+          "Scheduling parameter",
+          "V",
+          "27.889 -> 27.913 s; +0.09% latency; 0.999x; 0.024 s slower",
+          "Decoded pixels exact. 1 comparison.",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Metal serial encoding",
+          "Scheduling parameter",
+          "V",
+          "27.889 -> 27.930 s; +0.15% latency; 0.999x; 0.041 s slower",
+          "Decoded pixels exact. 1 comparison.",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "CPU parameter placement",
+          "Memory placement parameter",
+          "V",
+          "29.601 -> 30.947 s; +4.55% latency; 0.957x; 1.346 s slower",
+          "Decoded pixels exact. 1 comparison.",
+          "Radeon 8060S / Vulkan",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Vulkan host-memory selection",
+          "Memory placement parameter",
+          "V",
+          "29.601 -> 29.927 s; +1.10% latency; 0.989x; 0.326 s slower",
+          "Decoded pixels exact. 1 comparison.",
+          "Radeon 8060S / Vulkan",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Vulkan synchronized submits",
+          "Scheduling parameter",
+          "V",
+          "29.601 -> 31.033 s; +4.84% latency; 0.954x; 1.432 s slower",
+          "Decoded pixels exact. 1 comparison.",
+          "Radeon 8060S / Vulkan",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "DiT matrix expansion to F16",
+          "Existing tensor-type parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / CUDA",
+          "Three prompts, 1024 x 1024, warm repetitions. CUDA reference already uses GEMM; Vulkan retains direct VAE.",
+          "Pending final speed/quality and memory review; retain original quantized weights elsewhere."
+        ],
+        [
+          "GEMM VAE + F16 matrices",
+          "Measured combination",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / CUDA",
+          "Directly measured combination against the same-cohort direct/Q8 baseline.",
+          "Use only if the F16 increment justifies additional memory and all quality/latency checks pass."
+        ],
+        [
+          "DiT matrix expansion to F16",
+          "Existing tensor-type parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / Vulkan",
+          "Three prompts, 1024 x 1024, warm repetitions. CUDA reference already uses GEMM; Vulkan retains direct VAE.",
+          "Pending final speed/quality and memory review; retain original quantized weights elsewhere."
+        ],
+        [
+          "HIP rocWMMA attention after GEMM",
+          "Attention kernel build option",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged.",
+          "Decide from diffusion results; published LLM results are not a diffusion validation."
+        ],
+        [
+          "Memory-mapped checkpoint reads",
+          "Existing model I/O parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / CUDA",
+          "Process-local mmap of task checkpoint files; evaluate startup/RSS separately from warm speed. No filesystem mount or system setting.",
+          "Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled."
+        ],
+        [
+          "Memory-mapped checkpoint reads",
+          "Existing model I/O parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / Vulkan",
+          "Process-local mmap of task checkpoint files; evaluate startup/RSS separately from warm speed. No filesystem mount or system setting.",
+          "Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled."
         ]
       ],
       "details": [
@@ -701,7 +1525,7 @@
         "The same decoder-family implementation can exist in other FLUX checkpoints, but the measured evidence covers Klein 4B Q8 and its tested VAE only. Do not enable it for the whole FLUX family or FLUX 3 based on these results.",
         "The higher-memory GEMM profile needs a tested capacity check. Explicit module placement currently returns unknown from the fit estimator, so unknown cannot authorize an automatic memory increase. Keep direct convolution as fallback outside the validated envelope.",
         "CPU parameter placement reduces RTX device-memory consumption while retaining most of the GEMM speed gain, at the cost of host memory and additional latency. It is not proof that the profile fits every nominal 8 GB GPU.",
-        "Show exactly one image comparison. Use numerical metrics for every tested prompt and geometry; do not fill the report with repeated near-identical image pairs."
+        "The final Markdown report contains no comparison images. Visually identical labels refer to inspected outputs supported by full-output numerical comparisons; exact output and small visible texture changes are distinguished."
       ],
       "measurement_references": [
         {
@@ -750,7 +1574,15 @@
           "reference": "r3-rtx-flux2-cuda-direct-validation",
           "candidate": "r3-rtx-flux2-cuda-gemm-cpu-params",
           "latency_reduction_percent": 61.70043250625995,
-          "quality_pending": true
+          "quality_pending": false
+        },
+        {
+          "row": "DiT matrix expansion to F16",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-flux2-screen-metal-direct",
+          "candidate": "r3-mac-flux2-screen-metal-dit-f16",
+          "latency_reduction_percent": 3.6035713005127437,
+          "quality_pending": false
         },
         {
           "row": "HIP force-blas",
@@ -767,9 +1599,156 @@
           "candidate": "r3-strix-flux2-abi128-rocm-gemm-force-mmq",
           "latency_reduction_percent": 0.5567298818065367,
           "quality_pending": false
+        },
+        {
+          "row": "CPU parameter placement",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-flux2-screen-metal-direct",
+          "candidate": "r3-mac-flux2-screen-metal-cpu-params",
+          "latency_reduction_percent": -1.7390368962673435,
+          "quality_pending": false
+        },
+        {
+          "row": "Diffusion flash attention disabled",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-flux2-screen-metal-direct",
+          "candidate": "r3-mac-flux2-screen-metal-fa-off",
+          "latency_reduction_percent": -340.3026282763814,
+          "quality_pending": false
+        },
+        {
+          "row": "Metal commands per buffer: 2",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-flux2-screen-metal-direct",
+          "candidate": "r3-mac-flux2-screen-metal-commands-2",
+          "latency_reduction_percent": -0.1936247265947221,
+          "quality_pending": false
+        },
+        {
+          "row": "Metal commands per buffer: 4",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-flux2-screen-metal-direct",
+          "candidate": "r3-mac-flux2-screen-metal-commands-4",
+          "latency_reduction_percent": -0.08605543404209871,
+          "quality_pending": false
+        },
+        {
+          "row": "Metal serial encoding",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-flux2-screen-metal-direct",
+          "candidate": "r3-mac-flux2-screen-metal-serial",
+          "latency_reduction_percent": -0.14701136648858107,
+          "quality_pending": false
+        },
+        {
+          "row": "CPU parameter placement",
+          "hardware": "Radeon 8060S / Vulkan",
+          "reference": "r3-strix-flux2-vulkan-direct-validation",
+          "candidate": "r3-strix-flux2-vulkan-cpu-params",
+          "latency_reduction_percent": -4.547143677578461,
+          "quality_pending": false
+        },
+        {
+          "row": "Vulkan host-memory selection",
+          "hardware": "Radeon 8060S / Vulkan",
+          "reference": "r3-strix-flux2-vulkan-direct-validation",
+          "candidate": "r3-strix-flux2-vulkan-host-memory",
+          "latency_reduction_percent": -1.1013141447924075,
+          "quality_pending": false
+        },
+        {
+          "row": "Vulkan synchronized submits",
+          "hardware": "Radeon 8060S / Vulkan",
+          "reference": "r3-strix-flux2-vulkan-direct-validation",
+          "candidate": "r3-strix-flux2-vulkan-sync-submit",
+          "latency_reduction_percent": -4.8376744028918015,
+          "quality_pending": false
         }
       ],
       "optimal_profile_status": "Pending final quality, memory and cumulative review.",
+      "historical_screening_note": "Retained CUDA-only screens from 29 October, at the older revisions. These include rejected alternatives and unmeasured ideas; V means tried, not recommended. They do not establish Metal, Vulkan or HIP performance. Round-two controls already include H3 flash attention, FLUX GEMM and LTX residency as stated in the original records.",
+      "historical_rows": [
+        [
+          "GPU parameter residency",
+          "Memory placement",
+          "V - dated",
+          "RTX: 1.043-1.055x; 4.10-5.17% lower latency",
+          "Output bit exact; 0% changed values",
+          "RTX; not a new resident-default gain / CUDA, 29 Oct",
+          "9.176-9.305 to 8.800-8.830 s across three prompts. Sampled GPU peak 5994 to 11356 MiB (+89.46%).",
+          "Keep when capacity permits; already the default, not an additional cumulative gain."
+        ],
+        [
+          "Small FLUX.2 decoder",
+          "Distilled VAE checkpoint",
+          "V - dated",
+          "RTX: 2.860/2.859/2.851 to 2.784/2.776/2.784 s; 1.024-1.030x; 2.35-2.90% lower after GEMM. Spark: 15.433/15.433/15.405 to 15.024/15.032/15.044 s; 1.024-1.027x; 2.34-2.65% lower.",
+          "Visually close, not identical: PSNR 35.99-42.85 dB, SSIM 0.9764-0.9850 across both hosts; subtle texture and background tint changes",
+          "Klein 4B on RTX and Spark; three prompts per host / CUDA, 29 Oct",
+          "RTX GPU peak 15636 to 13802 MiB (-1834 MiB, -11.73%). Authors claim compatibility across open FLUX.2; other checkpoints and FLUX 3 unvalidated.",
+          "Optional memory trade-off only; reject automatic replacement for this quality tier."
+        ],
+        [
+          "EasyCache 0.05 / 0.20",
+          "Approximate denoising reuse",
+          "V - dated",
+          "RTX 2.836 to 2.837/2.839 s; Spark 15.388 to 15.281/15.330 s; no reliable gain",
+          "Byte exact; zero skipped steps",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Tested at 10 steps with the GEMM VAE.",
+          "Reject as a performance change: no work saved."
+        ],
+        [
+          "DBCache / TaylorSeer flags",
+          "Approximate denoising reuse",
+          "V - dated",
+          "RTX 2.836 to 1.899/1.900 s (1.493x, about 33% lower). Spark 15.388 to 10.056/10.305 s (1.530/1.493x, 34.65/33.03% lower).",
+          "Visible texture/geometry differences: RTX/Spark PSNR 19.98/19.62 dB; SSIM 0.8066/0.8020",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Both modes skip four of ten steps and produce the same output within each host.",
+          "Reject for the visually identical tier."
+        ],
+        [
+          "Four-step distilled preset",
+          "Sampling parameters",
+          "V - dated",
+          "2.072x; 51.74% lower latency",
+          "Different output; quality parity not established",
+          "Spark only / CUDA, 29 Oct",
+          "10 to 4 steps with GEMM VAE. Four steps are recommended for distilled Klein 4B by its authors. This is a sampling trade-off, not a bit-exact kernel optimization.",
+          "Offer only as a clearly labeled sampling choice. Faster, but not the same fixed-seed output or a proven quality-preserving change."
+        ],
+        [
+          "CUDA graphs / graph optimization",
+          "Build and scheduling parameters",
+          "V - dated",
+          "RTX screen: 2.836 to 2.836 s (1.000x). Spark repeated R1: 1.49-2.12% higher latency; R2 screen approximately neutral.",
+          "Byte exact in tested outputs",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Nsight confirms graph launches. Additional graph optimization flag: RTX 0.00%, Spark 0.34% lower latency, within noise.",
+          "Keep graphs off for this profile; no reliable improvement."
+        ],
+        [
+          "CPU threads / global flash / launch queues",
+          "Runtime parameters",
+          "V - dated",
+          "Thread/flash screens within about 1%. RTX queues: 2.858 to 2.852 s; 1.002x; 0.21% lower. Spark queues: 15.341 to 15.378 s; 0.998x; 0.24% higher.",
+          "Exact output where paired equality was checked",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Do not add these nominal gains to GEMM speedup.",
+          "No default change: effects are too small to justify added complexity."
+        ],
+        [
+          "GEMM plus actual VAE tiles",
+          "Kernel / memory trade-off",
+          "V - dated",
+          "Spark: 2.446-2.466x; 59.12-59.45% lower latency versus direct VAE",
+          "Rejected for visually identical tier: visible tone/contrast changes",
+          "Spark only / CUDA, 29 Oct",
+          "32-latent-pixel tiles, 25% overlap. PSNR 25.60-27.97 dB; SSIM 0.8910-0.9825. Lower memory does not offset this output deviation.",
+          "Reject for the accepted quality tier: visible contrast/tone changes."
+        ]
+      ],
       "above_five_percent": [
         {
           "row": "GEMM VAE",
@@ -793,9 +1772,68 @@
           "reference": "r3-rtx-flux2-cuda-direct-validation",
           "candidate": "r3-rtx-flux2-cuda-gemm-cpu-params",
           "latency_reduction_percent": 61.70043250625995,
-          "quality_pending": true
+          "quality_pending": false
         }
-      ]
+      ],
+      "tradeoff_headers": [
+        "Profile / API",
+        "Load + first request",
+        "Peak process RSS",
+        "Sampled device memory",
+        "Primary stage change"
+      ],
+      "tradeoff_rows": [
+        [
+          "GEMM VAE / RTX 5090 / CUDA",
+          "11.218 -> 5.218 s; -53.49%",
+          "2.675 -> 2.712 GB; +1.36%",
+          "11356.000 -> 15636.000 MiB; +37.69%",
+          "VAE: 6.240 -> 0.290 s; -95.35%"
+        ],
+        [
+          "GEMM VAE / RTX 5090 / Vulkan",
+          "4.675 -> 4.890 s; +4.60%",
+          "2.404 -> 2.403 GB; -0.03%",
+          "11084.000 -> 16685.000 MiB; +50.53%",
+          "VAE: 0.293 -> 0.457 s; +56.11%"
+        ],
+        [
+          "GEMM VAE / M3 Ultra / Metal",
+          "34.936 -> 33.112 s; -5.22%",
+          "11.851 -> 11.900 GB; +0.41%",
+          "Unified memory; RSS is not total device usage",
+          "VAE: 3.808 -> 6.714 s; +76.30%"
+        ],
+        [
+          "GEMM VAE / Radeon 8060S / Vulkan",
+          "31.458 -> 51.960 s; +65.17%",
+          "2.325 -> 5.371 GB; +131.08%",
+          "11.140 -> 15.673 GB VRAM + GTT; +40.69%",
+          "VAE: 1.842 -> 19.660 s; +967.54%"
+        ],
+        [
+          "GEMM VAE / Radeon 8060S / HIP",
+          "75.554 -> 37.722 s; -50.07%",
+          "2.605 -> 2.581 GB; -0.92%",
+          "11.691 -> 16.626 GB VRAM + GTT; +42.21%",
+          "VAE: 39.415 -> 4.796 s; -87.83%"
+        ],
+        [
+          "GEMM + CPU parameters / RTX 5090 / CUDA",
+          "11.218 -> 9.230 s; -17.72%",
+          "2.675 -> 9.331 GB; +248.80%",
+          "11356.000 -> 7926.000 MiB; -30.20%",
+          "VAE: 6.240 -> 0.292 s; -95.31%"
+        ],
+        [
+          "DiT matrix expansion to F16 / M3 Ultra / Metal",
+          "34.936 -> 34.090 s; -2.42%",
+          "11.851 -> 17.694 GB; +49.29%",
+          "Unified memory; RSS is not total device usage",
+          "Denoising: 23.433 -> 22.433 s; -4.26%"
+        ]
+      ],
+      "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths."
     },
     {
       "title": "3. LTX-2.3 22B distilled Q5",
@@ -816,7 +1854,7 @@
           "Existing memory placement",
           "V",
           "15.195 -> 14.167 s; -6.77% latency; 1.073x; 1.028 s saved",
-          "Decoded video and audio exact. 3 comparisons.",
+          "Video/audio files byte exact. 3 comparisons.",
           "RTX 5090 / Vulkan",
           "97 frames: three prompts; 193 frames: one prompt. Adds device memory. native warm latency, matched prompt/seed/geometry.",
           "Recommend only a capacity-checked profile; preserve CPU-weight fallback."
@@ -826,7 +1864,7 @@
           "Existing decode parameter",
           "V",
           "13.294 -> 12.645 s; -4.88% latency; 1.051x; 0.649 s saved",
-          "PSNR 43.82-50.71 dB; SSIM 0.996474-0.997734. Audio exact. Subtle texture/contrast differences are possible; audio is compared separately.",
+          "PSNR 43.82-50.71 dB; SSIM 0.996474-0.997734. Worst frame 40.84 dB. Audio exact. Subtle texture/contrast differences are possible; audio is compared separately.",
           "RTX 5090 / CUDA",
           "Decode the complete latent sequence together; slightly higher memory. native warm latency, matched prompt/seed/geometry.",
           "Optional minor-change quality tier; keep temporal tiling for strict baseline behavior."
@@ -836,7 +1874,7 @@
           "Existing memory placement",
           "V",
           "24.440 -> 22.167 s; -9.30% latency; 1.103x; 2.273 s saved",
-          "Decoded video and audio exact. 1 comparisons.",
+          "Video/audio files byte exact. 1 comparison.",
           "RTX 5090 / Vulkan",
           "97 frames: three prompts; 193 frames: one prompt. Adds device memory. native warm latency, matched prompt/seed/geometry.",
           "Recommend only a capacity-checked profile; preserve CPU-weight fallback."
@@ -846,7 +1884,7 @@
           "Existing decode parameter",
           "V",
           "22.700 -> 21.060 s; -7.22% latency; 1.078x; 1.640 s saved",
-          "PSNR 46.39-46.39 dB; SSIM 0.996980-0.996980. Audio exact. Subtle texture/contrast differences are possible; audio is compared separately.",
+          "PSNR 46.39 dB; SSIM 0.996980. Worst frame 43.76 dB. Audio exact. Subtle texture/contrast differences are possible; audio is compared separately.",
           "RTX 5090 / CUDA",
           "Decode the complete latent sequence together; slightly higher memory. native warm latency, matched prompt/seed/geometry.",
           "Optional minor-change quality tier; keep temporal tiling for strict baseline behavior."
@@ -854,11 +1892,11 @@
         [
           "Full-temporal decode",
           "Existing decode parameter",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "92.877 -> 91.742 s; -1.22% latency; 1.012x; 1.135 s saved",
+          "PSNR 50.04 dB; SSIM 0.998227. Worst frame 47.60 dB. Audio exact.",
           "M3 Ultra / Metal",
-          "512 x 320, 97 frames. Vulkan already uses its stateful path.",
+          "512 x 320, 97 frames. Vulkan already uses its stateful path. native warm latency, matched prompt/seed/geometry.",
           "Decide from this API result; do not transfer the CUDA recommendation automatically."
         ],
         [
@@ -892,11 +1930,41 @@
           "Optional quality-tier choice; do not promise faster cold/first-request latency."
         ],
         [
+          "DiT matrix expansion to F16",
+          "Existing tensor-type parameter",
+          "V",
+          "92.877 -> 88.428 s; -4.79% latency; 1.050x; 4.450 s saved",
+          "Video/audio files byte exact. 1 comparison.",
+          "M3 Ultra / Metal",
+          "Verified rule selects 1632 quantized matrix weights (37.10 GB after expansion), excluding normalization and embedding weights. Same checkpoint and sampling. native warm latency, matched prompt/seed/geometry.",
+          "Pending quality, warm-speed, startup and memory checks. Extra memory must be capacity-gated; no RTX resident profile is claimed."
+        ],
+        [
+          "DiT matrix expansion to F16",
+          "Existing tensor-type parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / Vulkan",
+          "Verified rule selects 1632 quantized matrix weights (37.10 GB after expansion), excluding normalization and embedding weights. Same checkpoint and sampling.",
+          "Pending quality, warm-speed, startup and memory checks. Extra memory must be capacity-gated; no RTX resident profile is claimed."
+        ],
+        [
+          "DiT matrix expansion to F16",
+          "Existing tensor-type parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "Verified rule selects 1632 quantized matrix weights (37.10 GB after expansion), excluding normalization and embedding weights. Same checkpoint and sampling.",
+          "Pending quality, warm-speed, startup and memory checks. Extra memory must be capacity-gated; no RTX resident profile is claimed."
+        ],
+        [
           "VAE residency + full-temporal",
           "Measured combination",
           "V",
           "15.195 -> 14.144 s; -6.92% latency; 1.074x; 1.051 s saved",
-          "Decoded video and audio exact. 3 comparisons.",
+          "Video/audio files byte exact. 3 comparisons.",
           "RTX 5090 / Vulkan",
           "The temporal flag adds no useful work reduction to the Vulkan stateful decoder. native warm latency, matched prompt/seed/geometry.",
           "Prefer the simpler residency-only profile when the incremental gain is within variation."
@@ -916,19 +1984,19 @@
           "One-file backend experiment",
           "V",
           "122.930 -> 119.540 s; -2.76% latency; 1.028x; 3.390 s saved",
-          "Decoded video and audio exact. 1 comparisons.",
+          "Video/audio files byte exact. 1 comparison.",
           "M3 Ultra / Metal",
-          "Unchanged per-position kernel grouped into up to 128 threads. Inspect decoder stage and checkpoint I/O. fresh-context CLI generation time.",
+          "Unchanged per-position kernel grouped into up to 128 threads. Inspect decoder stage and checkpoint I/O. Fresh CLI context each repetition; generation and process wall time separately..",
           "Provisional; reject if complete-request gain is not reliable or is explained by unrelated I/O."
         ],
         [
           "Metal dispatch grouping, 193 frames",
           "One-file backend experiment",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "198.650 -> 198.590 s; -0.03% latency; 1.000x; 0.060 s saved",
+          "Video/audio files byte exact. 1 comparison.",
           "M3 Ultra / Metal",
-          "Unchanged per-position kernel grouped into up to 128 threads. Inspect decoder stage and checkpoint I/O.",
+          "Unchanged per-position kernel grouped into up to 128 threads. Inspect decoder stage and checkpoint I/O. Fresh CLI context each repetition; generation and process wall time separately..",
           "Provisional; reject if complete-request gain is not reliable or is explained by unrelated I/O."
         ],
         [
@@ -936,30 +2004,10 @@
           "Four-file backend experiment",
           "V",
           "112.030 -> 106.260 s; -5.15% latency; 1.054x; 5.770 s saved",
-          "Decoded video and audio exact. 1 comparisons.",
+          "Video/audio files byte exact. 1 comparison.",
           "M3 Ultra / Metal",
-          "Apparent total gain is I/O-confounded. Decoder median regressed 6.130 -> 8.605 s. Longer/multi-prompt confirmation pending. fresh-context CLI generation time.",
-          "Do not recommend from this aggregate; retain the baseline unless confirmation establishes a real gain."
-        ],
-        [
-          "Full/DiT residency, 3D GEMM and CUDA stateful decoder",
-          "Memory / kernel / decode",
-          "V - dated",
-          "3D GEMM slower: RTX +3.48%, Spark +17.54%; stateful CUDA slower: RTX +11.39%, Spark +10.88%.",
-          "Stateful output differs slightly; broad upstream upgrade produced invalid video/audio.",
-          "RTX and GB10 / CUDA, 29 Oct",
-          "Full residency exhausted RTX memory; one DiT-only request succeeded but the next failed. Existing Vulkan stateful behavior is a different case.",
-          "Reject these CUDA profiles; repeated-request reliability is required."
-        ],
-        [
-          "Official sigmas / 2D GEMM / caches / graphs / queues",
-          "Algorithm / kernel / parameters",
-          "V - dated and current screens",
-          "Official schedule: RTX 29.97 -> 30.65 s; Spark 41.60 -> 41.51 s. Other tested changes neutral or slower.",
-          "Schedule changes output. Native custom-sigma forwarding was ineffective, not an optimization.",
-          "Backend coverage follows individual records",
-          "No useful cache skips in the tested setup; 2D GEMM is not the 3D decoder optimization.",
-          "Keep the baseline; fix forwarding only as a separate functional task if required."
+          "Apparent total gain is I/O-confounded. Decoder median regressed 6.130 -> 8.605 s (+40.38%). Optional extra performance cases were not run; correctness suites passed. Fresh CLI context each repetition; generation and process wall time separately..",
+          "Reject: slower decoder and no credible end-to-end compute gain to justify four changed backend files."
         ],
         [
           "SGLang / vLLM-Omni and LTX-2.5",
@@ -970,6 +2018,136 @@
           "GB10 / CUDA, 29 Oct",
           "Load+first 44.075 -> 326.362 s; 66.73 GiB reserved, outside RTX capacity. No matched vLLM adapter. LTX-2.5 components unsupported.",
           "Separate runtime/model work, not an equivalent implementation candidate."
+        ],
+        [
+          "CPU parameter placement",
+          "Memory placement parameter",
+          "V",
+          "92.877 -> 95.573 s; +2.90% latency; 0.972x; 2.696 s slower",
+          "Video/audio files byte exact. 1 comparison.",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "2D VAE GEMM control",
+          "Existing decoder parameter",
+          "V",
+          "92.877 -> 92.889 s; +0.01% latency; 1.000x; 0.012 s slower",
+          "Video/audio files byte exact. 1 comparison.",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "Metal commands per buffer: 2",
+          "Scheduling parameter",
+          "V",
+          "92.877 -> 93.221 s; +0.37% latency; 0.996x; 0.344 s slower",
+          "Video/audio files byte exact. 1 comparison.",
+          "M3 Ultra / Metal",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. native warm latency, matched prompt/seed/geometry.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "CPU parameter placement",
+          "Memory placement parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / Vulkan",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "2D VAE GEMM control",
+          "Existing decoder parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / Vulkan",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "CPU parameter placement",
+          "Memory placement parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "2D VAE GEMM control",
+          "Existing decoder parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
+          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+        ],
+        [
+          "HIP rocWMMA attention",
+          "Attention kernel build option",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged.",
+          "Decide from diffusion results; published LLM results are not a diffusion validation."
+        ],
+        [
+          "HIP force-blas",
+          "Matrix kernel build option",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.",
+          "Require numerical output checks and repeatable incremental speed before any production selection change."
+        ],
+        [
+          "HIP force-mmq",
+          "Matrix kernel build option",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "Radeon 8060S / HIP",
+          "Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.",
+          "Require numerical output checks and repeatable incremental speed before any production selection change."
+        ],
+        [
+          "Memory-mapped checkpoint reads",
+          "Existing model I/O parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / CUDA",
+          "Process-local mmap of task checkpoint files; evaluate startup/RSS separately from warm speed. No filesystem mount or system setting.",
+          "Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled."
+        ],
+        [
+          "Memory-mapped checkpoint reads",
+          "Existing model I/O parameter",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / Vulkan",
+          "Process-local mmap of task checkpoint files; evaluate startup/RSS separately from warm speed. No filesystem mount or system setting.",
+          "Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled."
+        ],
+        [
+          "F16 matrices + full-temporal decode",
+          "Measured combination",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "M3 Ultra / Metal",
+          "Directly measured cumulative effect; the temporal change has a distinct output-quality tier.",
+          "Prefer F16 alone for exact output unless the incremental temporal benefit justifies its quality tradeoff."
         ]
       ],
       "details": [
@@ -1013,6 +2191,22 @@
           "quality_pending": false
         },
         {
+          "row": "Full-temporal decode",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-ltx-metal-baseline",
+          "candidate": "r3-mac-ltx-metal-full-temporal",
+          "latency_reduction_percent": 1.2225781271028973,
+          "quality_pending": false
+        },
+        {
+          "row": "DiT matrix expansion to F16",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-ltx-metal-baseline",
+          "candidate": "r3-mac-ltx-metal-dit-f16",
+          "latency_reduction_percent": 4.790718957766952,
+          "quality_pending": false
+        },
+        {
           "row": "VAE residency + full-temporal",
           "hardware": "RTX 5090 / Vulkan",
           "reference": "r3-rtx-ltx-confirm-97-vulkan-baseline",
@@ -1029,15 +2223,170 @@
           "quality_pending": false
         },
         {
+          "row": "Metal dispatch grouping, 193 frames",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-ltx-cli-dispatch-193-baseline",
+          "candidate": "r3-mac-ltx-cli-dispatch-193-dispatch",
+          "latency_reduction_percent": 0.03020387616410887,
+          "quality_pending": false
+        },
+        {
           "row": "Metal per-value packing",
           "hardware": "M3 Ultra / Metal",
           "reference": "r3-mac-ltx-cli-pinned-clean-baseline",
           "candidate": "r3-mac-ltx-cli-pinned-clean-parallel-pack",
           "latency_reduction_percent": 5.150406141212184,
           "quality_pending": false
+        },
+        {
+          "row": "CPU parameter placement",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-ltx-metal-baseline",
+          "candidate": "r3-mac-ltx-metal-cpu-params",
+          "latency_reduction_percent": -2.9022099001372883,
+          "quality_pending": false
+        },
+        {
+          "row": "2D VAE GEMM control",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-ltx-metal-baseline",
+          "candidate": "r3-mac-ltx-metal-vae-gemm",
+          "latency_reduction_percent": -0.012920244407957207,
+          "quality_pending": false
+        },
+        {
+          "row": "Metal commands per buffer: 2",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-ltx-metal-baseline",
+          "candidate": "r3-mac-ltx-metal-commands-2",
+          "latency_reduction_percent": -0.3698419961777674,
+          "quality_pending": false
         }
       ],
       "optimal_profile_status": "Pending final quality, memory and cumulative review.",
+      "historical_screening_note": "Retained CUDA-only screens from 29 October, at the older revisions. These include rejected alternatives and unmeasured ideas; V means tried, not recommended. They do not establish Metal, Vulkan or HIP performance. Round-two controls already include H3 flash attention, FLUX GEMM and LTX residency as stated in the original records.",
+      "historical_rows": [
+        [
+          "Official distilled sigma schedule",
+          "Sampling configuration / addon capability",
+          "V - dated",
+          "RTX upstream CLI generation median: 29.97 to 30.65 s; 0.978x; 2.27% higher latency. Spark: 41.60 to 41.51 s; 1.002x; 0.22% lower, within noise.",
+          "Different scene/audio, not a quality ranking: RTX PSNR 11.27 dB, SSIM 0.3722; Spark PSNR 11.07-11.16 dB, SSIM 0.3818-0.3863",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Three fresh invocations per side with numerical scaling. Earlier native custom_sigmas probes changed nothing: the pinned video addon ignores the parameter. SGLang uses the explicit distilled schedule, so its native-addon comparison is not schedule matched.",
+          "Reject as a transparent speed change. Consider separately as sampling-correctness / model integration work."
+        ],
+        [
+          "Direct vs GEMM 3D convolution",
+          "Newer engine VAE kernels",
+          "V - dated",
+          "RTX generation median: 30.78 to 31.85 s; 0.966x; 3.48% higher latency. Spark: 41.33 to 48.58 s; 0.851x; 17.54% higher.",
+          "RTX PSNR 49.78 dB, SSIM 0.9978; audio SNR 19.81 dB. Spark output varies even without a setting change",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Three fresh invocations per side with scaling 1/128. Spark paired PSNR 23.23-27.41 dB is confounded by unchanged-parent variation (23.63 dB). Unscaled runs are invalid white video. Distinct from the pinned addon's 2D flag.",
+          "Reject the tested GEMM path: consistently slower on both hosts."
+        ],
+        [
+          "Broad upstream engine upgrade",
+          "Engine / ggml update",
+          "V - dated",
+          "X - failed output validation",
+          "Unscaled tests produced 97 all-white frames and saturated audio on both parent and candidate builds",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Not attributed specifically to H3 PR #2240. Scaling by 1/128 restored valid RTX output, but it differs from QVAC (PSNR 21.40 dB, SSIM 0.7477, audio SNR -1.80 dB). This is a diagnostic recovery, not a validated QVAC upgrade.",
+          "Reject a broad engine upgrade. Isolate any useful kernels and preserve QVAC behavior."
+        ],
+        [
+          "Global flash attention",
+          "Existing kernel selection",
+          "V - dated",
+          "RTX: 1.001x; 0.05% lower latency; Spark: 0.981x; 1.91% higher latency",
+          "Video and audio bit exact; 0% changed values",
+          "RTX 5090 and Spark / CUDA, 29 Oct",
+          "No useful gain: effectively neutral on RTX, slightly slower on Spark. Not promoted for LTX.",
+          "Reject: neutral on RTX and slower on Spark."
+        ],
+        [
+          "EasyCache / DBCache / TaylorSeer",
+          "Approximate denoising reuse",
+          "V - dated",
+          "RTX DBCache/TaylorSeer: 13.316 to 13.196/13.371 s (-0.90%/+0.41% latency); EasyCache: 14.021/14.302 s (+5.29%/+7.40%). Spark: 38.570 to 38.167-38.388 s (0.47-1.04% lower).",
+          "All tested video/audio byte exact; zero skipped steps",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Pinned addon schedule only. Native runs named distilled are ignored-parameter checks, not a second schedule.",
+          "Reject: no denoising work saved, and EasyCache adds overhead on RTX."
+        ],
+        [
+          "CUDA graphs / optimization",
+          "Build / graph scheduling",
+          "V - dated",
+          "RTX: 13.316 to 13.314 s (1.000x); graph optimization 13.438 s (+0.92%). Spark: 38.570 to 38.228 s (-0.89%); graph optimization 38.126 s (-1.15%).",
+          "Byte exact in tested outputs",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Actual cudaGraphLaunch verified; profiler timing excluded.",
+          "No reliable speed recommendation from these single measured requests."
+        ],
+        [
+          "CPU threads / launch queues",
+          "Runtime parameters",
+          "V - dated",
+          "RTX threads 2/16: 13.320/13.352 s versus 13.316 s; queues 13.318 s. Spark threads: 38.309/38.212 s versus 38.570 s. Spark queues: 38.270 to 38.199 s; 0.19% lower.",
+          "Byte exact for tested variants",
+          "RTX and Spark / CUDA, 29 Oct",
+          "No cumulative gain is claimed for timing noise.",
+          "Keep current settings; no reliable speed gain."
+        ],
+        [
+          "Selective RTX GPU residency",
+          "Module parameter placement",
+          "V - dated",
+          "VAE-only: 13.316 to 13.100 s; 1.016x; 1.62% lower latency. DiT profiles: X - allocation failures.",
+          "VAE-only output bit exact; DiT residency fails repeated use",
+          "RTX / CUDA, 29 Oct",
+          "VAE-only sampled GPU peak +1384 MiB (+6.81%), host RSS -1.626 GB (-4.53%). DiT-only succeeds once then fails its next request; DiT+VAE and fully resident configurations fail allocation.",
+          "Reject as a speed default. DiT residency is unreliable; VAE-only benefit is small for its VRAM cost."
+        ],
+        [
+          "2D convolution GEMM flag",
+          "Kernel selection",
+          "V - dated",
+          "Spark: approximately 1.00x; less than 1% difference",
+          "All 12 exported AVI pairs byte identical",
+          "Spark only / CUDA, 29 Oct",
+          "vae_conv_direct:false does not deliver FLUX-like gains for the LTX decoder. It is not an accepted LTX optimization.",
+          "Reject: no useful effect on this decoder."
+        ],
+        [
+          "Forced cuBLAS build",
+          "Matrix backend selection",
+          "V - dated",
+          "Spark: 0.926x; 7.96% higher latency",
+          "Rejected: video/audio differences",
+          "Spark only / CUDA, 29 Oct",
+          "37.879 to 40.895 s in the original single-prompt comparison. Video PSNR 24.85 dB, SSIM 0.8708; audio SNR -1.28 dB.",
+          "Reject: slower and changes video/audio."
+        ],
+        [
+          "DiT and 3D VAE kernels",
+          "Engine / backend kernels",
+          " - dated",
+          "X - unmeasured",
+          "Target: same output tolerance",
+          "Future: M3 Metal, Strix Vulkan/ROCm, CUDA / CUDA, 29 Oct",
+          "DiT denoising is about 70% of Spark generation time: prioritize Q5 matrix/attention kernels, then 3D convolution and temporal allocation. Vulkan stateful decoding already exists; it is not a new gain.",
+          "3D CUDA experiment is listed separately. Metal/Strix-specific kernels remain untested, not rejected."
+        ],
+        [
+          "Stateful decoder on CUDA",
+          "Engine decoder execution policy",
+          "V - dated",
+          "RTX CLI generation: tiled 31.87 to stateful 35.50 s; 11.39% slower. Spark: 42.29 to 46.89 s; 10.88% slower. Versus complete decode: 15.45% / 14.53% slower.",
+          "Small numerical video differences: RTX/Spark PSNR 48.44/48.45 dB vs tiled; audio bit exact",
+          "RTX and Spark / CUDA, 29 Oct",
+          "Research-only hook in the pinned engine, three fresh invocations each; all existing build tests pass. RTX sampled GPU peak unchanged at 19702 MiB; RSS +0.299 GB (+0.86%) vs tiled. Spark RSS +0.002 GB (+0.03%). No production policy change.",
+          "Reject as a CUDA speed optimization on this workload. The existing Vulkan policy remains separate."
+        ]
+      ],
       "above_five_percent": [
         {
           "row": "VAE residency, 97 frames",
@@ -1079,7 +2428,59 @@
           "latency_reduction_percent": 5.150406141212184,
           "quality_pending": false
         }
-      ]
+      ],
+      "tradeoff_headers": [
+        "Profile / API",
+        "Load + first request",
+        "Peak process RSS",
+        "Sampled device memory",
+        "Primary stage change"
+      ],
+      "tradeoff_rows": [
+        [
+          "VAE residency, 97 frames / RTX 5090 / Vulkan",
+          "24.538 -> 22.176 s; -9.63%",
+          "36.831 -> 35.001 GB; -4.97%",
+          "19907.000 -> 21355.000 MiB; +7.27%",
+          "VAE: 3.830 -> 2.760 s; -27.93%"
+        ],
+        [
+          "Full-temporal decode, 97 frames / RTX 5090 / CUDA",
+          "37.796 -> 33.059 s; -12.53%",
+          "36.145 -> 36.568 GB; +1.17%",
+          "20332.000 -> 20494.000 MiB; +0.80%",
+          "VAE: 3.584 -> 2.949 s; -17.71%"
+        ],
+        [
+          "VAE residency, 193 frames / RTX 5090 / Vulkan",
+          "33.427 -> 30.018 s; -10.20%",
+          "36.918 -> 35.164 GB; -4.75%",
+          "20577.000 -> 22025.000 MiB; +7.04%",
+          "VAE: 7.174 -> 5.044 s; -29.69%"
+        ],
+        [
+          "Full-temporal decode, 193 frames / RTX 5090 / CUDA",
+          "44.271 -> 41.937 s; -5.27%",
+          "36.688 -> 36.693 GB; +0.01%",
+          "20948.000 -> 21348.000 MiB; +1.91%",
+          "VAE: 7.386 -> 5.714 s; -22.65%"
+        ],
+        [
+          "Full-temporal decode / M3 Ultra / Metal",
+          "120.576 -> 119.250 s; -1.10%",
+          "43.941 -> 43.960 GB; +0.04%",
+          "Unified memory; RSS is not total device usage",
+          "VAE: 8.182 -> 7.021 s; -14.19%"
+        ],
+        [
+          "DiT matrix expansion to F16 / M3 Ultra / Metal",
+          "120.576 -> 118.018 s; -2.12%",
+          "43.941 -> 64.074 GB; +45.82%",
+          "Unified memory; RSS is not total device usage",
+          "Denoising: 81.915 -> 77.051 s; -5.94%"
+        ]
+      ],
+      "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths."
     }
   ],
   "validation": [
@@ -1088,5 +2489,69 @@
     "Implement the smallest accepted engine change first, validate it through a temporary addon overlay, then follow the engine merge, separate vcpkg registry PR and addon repin sequence. Addon release notes/version bump remain a later separate PR.",
     "Run the full affected unit/integration suites and desktop CI matrix on the actual implementation. Research operator tests and manual benchmarks do not certify an unimplemented default-selection policy.",
     "Remaining coverage includes other Apple devices/capacities, other AMD GPUs/drivers, fresh Spark confirmation of newly proposed patches, larger request envelopes, image/video-conditioned modes and failure/recovery behavior. Mobile tests belong to late validation only if the affected implementation applies there."
-  ]
+  ],
+  "enablement_strategy": {
+    "status": "Implementation design constraints; final accepted profiles depend on completed measurements.",
+    "scope": "Keep production defaults and package pins unchanged during research. Implement only the accepted profiles in the next step.",
+    "selection": [
+      "Key a profile by the exact supported model/decoder family, resolved module backend, tested accelerator class and request envelope. A generic device=gpu or NVIDIA device name does not distinguish CUDA from Vulkan.",
+      "Do not change global registry defaults for a setting that regresses another API. The tested FLUX GEMM choice must not leak from CUDA/HIP into Metal/Vulkan.",
+      "Treat an API switch as an explicit user choice. Same-seed outputs can differ visibly between CUDA, Vulkan, HIP and Metal; a faster API is not automatically a quality-preserving optimization.",
+      "Preserve explicit overrides. Current SdCtxConfig stores plain bool values for flashAttn and vaeConvDirect; omitted values and explicit values equal to the default are not distinguished. An automatic policy must preserve option presence before applying any inferred default.",
+      "For per-module assignments, inspect the backend of the affected module. A VAE convolution policy follows the VAE execution backend, not merely the diffusion transformer's backend.",
+      "Higher-memory profiles start as explicit capacity-qualified choices. SdModel::assessFit currently returns unknown for explicit backend or non-default parameter placement; unknown must not authorize additional residency or precision expansion.",
+      "The fallback is the existing configuration on every untested device, API, model, request shape or unsupported capacity. Preserve its existing backend failure and fallback semantics rather than silently retrying on a different API."
+    ],
+    "candidate_settings": [
+      {
+        "model": "FLUX.2 Klein 4B Q8",
+        "setting": "vae_conv_direct=false",
+        "scope": "Existing addon/engine parameter. CUDA on RTX 5090 and dated GB10; HIP on tested gfx1151 is a candidate. No SDK or engine algorithm change is required for the parameter itself.",
+        "fallback": "vae_conv_direct=true on Metal and Vulkan, and whenever the selected profile's additional memory is not established. Preserve explicit user choice."
+      },
+      {
+        "model": "MiniMax-H3 FL2VA Q4",
+        "setting": "flash_attn=true while retaining diffusion_fa=true",
+        "scope": "Existing addon parameter on the pinned engine. Select only the backend/model envelopes with accepted audio/video comparisons; newer engine text-encoder behavior requires revalidation.",
+        "fallback": "Current flash_attn=false, diffusion_fa=true. A future VAE-only selector is a separate engine/addon change, not synonymous with this flag."
+      },
+      {
+        "model": "MiniMax-H3 FL2VA Q4",
+        "setting": "Focused existing SwiGLU operation and QKV views",
+        "scope": "One engine model header, no new GGML operation. If platform-dependent benefit is confirmed, choose the path from the actual backend at graph construction and retain the original graph elsewhere. Backend gating must itself be tested in the implementation.",
+        "fallback": "Original separate SwiGLU graph and contiguous Q/K/V chunks. Retained older Spark isolated-upstream measurements do not validate this newer minimal patch."
+      },
+      {
+        "model": "LTX-2.3 22B distilled Q5",
+        "setting": "VAE-only GPU parameter residency",
+        "scope": "Existing params_backend module assignment. Confirmed RTX Vulkan candidate relative to the tested CPU-parameter baseline; model-wide residency is not implied.",
+        "fallback": "Retain tested CPU parameter placement when capacity is not proven; do not move the full model onto a 32 GB device."
+      },
+      {
+        "model": "LTX-2.3 22B distilled Q5",
+        "setting": "temporal_tiling=false",
+        "scope": "Existing per-request parameter, offered only as an explicitly accepted minor-output-change tier on backends with a measured gain. Vulkan's stateful decoder already ignores this distinction.",
+        "fallback": "Current temporal tiling for strict baseline output or unvalidated lengths. Do not claim a redundant Vulkan toggle adds cumulative speed."
+      },
+      {
+        "model": "FLUX.2 Klein / LTX-2.3",
+        "setting": "Selected quantized transformer weight matrices expanded to F16",
+        "scope": "Existing tensor_type_rules with checkpoint-specific, verified matrix-only rules. Requires measured warm/startup latency, memory and repeated-output quality. Does not restore the original unquantized checkpoint.",
+        "fallback": "Empty tensor_type_rules with the checkpoint's original quantized weights; preserve user-supplied rules. No blanket precision override or RTX LTX residency claim."
+      }
+    ],
+    "next_step_validation": [
+      "Test exact model and backend matching, explicit true/false overrides, aliases, per-module assignment, unknown fit and insufficient capacity. Test that every other API preserves the baseline configuration.",
+      "For accepted engine patches: run existing engine tests and independent operator coverage, then validate the actual addon through a temporary vcpkg overlay on the desktop matrix. Verify both selected and fallback branches.",
+      "Repeat paired quality/speed/memory checks on the exact implementation revisions. Confirm startup, repeated requests, alternate prompts and accepted request sizes; record baseline variability rather than imposing a blanket claim from one measurement.",
+      "Use separate engine, registry and addon PRs only when those layers need changes. SDK changes are not presently indicated. Keep addon release notes and version bump in the later separate PR.",
+      "Fresh Spark validation of new patches, M3 Pro/other Apple capacities and other AMD GPUs are still coverage gaps, not inferred passes."
+    ],
+    "source_references": [
+      "packages/diffusion-cpp/addon/src/handlers/SdCtxHandlers.hpp:83",
+      "packages/diffusion-cpp/addon/src/handlers/SdCtxHandlers.hpp:145",
+      "packages/diffusion-cpp/addon/src/model-interface/SdModel.cpp:580",
+      "packages/diffusion-cpp/README.md:173"
+    ]
+  }
 }
