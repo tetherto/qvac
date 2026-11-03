@@ -26,6 +26,17 @@ export function lockedToolchain(env = process.env) {
   return prependPath(env, join(lock, 'node_modules/.bin'))
 }
 
+// PATH without the locked toolchain: main's C++ workflow never installed it, and vcpkg's compiler probe on Windows
+// runs without node, so the toolchain's npm shims fail there.
+export function withoutLockedToolchain(env = process.env) {
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH'
+  const dirs = (env[key] ?? '').split(delimiter)
+  const kept = dirs.filter(
+    (d) => !d.replaceAll('\\', '/').endsWith('bare-toolchain/node_modules/.bin')
+  )
+  return { ...env, [key]: kept.join(delimiter) }
+}
+
 // Windows' CMake, downloaded once per runner temp directory, as main's workflows put it on PATH.
 export function pinnedCmake(env = process.env) {
   if (process.platform !== 'win32') return env
@@ -67,7 +78,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     options: { platform: { type: 'string', default: '' } },
     allowPositionals: true
   })
-  let env = pinnedCmake()
+  let env = pinnedCmake(withoutLockedToolchain())
   // The cross-compile variables main set on its android leg; the preset builds for the host either way.
   if (values.platform === 'android') {
     env = {
