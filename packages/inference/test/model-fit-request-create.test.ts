@@ -1162,7 +1162,7 @@ test('MOSS: fit projects the declared recording and matching decoding options', 
   const plan = createFitRequest({
     modelType: ModelType.mossTranscribe,
     modelPath: '/models/moss.gguf',
-    modelConfig: { useGPU: true, maxThreads: 4, backendsDir: '/backends' },
+    modelConfig: { useGPU: true, maxThreads: 4, backend: 'cuda', backendsDir: '/backends' },
     transcriptionWorkload: { audioSeconds: 90, hotwords: ['Erin'], maxNewTokens: 0 },
     marginBytes: 1024,
     isShardedModel: false
@@ -1178,6 +1178,7 @@ test('MOSS: fit projects the declared recording and matching decoding options', 
         hotwords: ['Erin'],
         maxNewTokens: 0,
         gpuLayers: 1,
+        backend: 'cuda',
         threads: 4,
         backendsDir: '/backends',
         marginBytes: 1024

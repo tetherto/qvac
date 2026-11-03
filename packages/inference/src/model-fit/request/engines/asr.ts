@@ -40,6 +40,9 @@ export function createMossTranscribeFitRequest(
     ...(workload.hotwords !== undefined && { hotwords: workload.hotwords }),
     ...(workload.maxNewTokens !== undefined && { maxNewTokens: workload.maxNewTokens }),
     gpuLayers: gpuLayersFromGate(config.useGPU),
+    // An explicit selector projects on that device and overrides the GPU gate,
+    // as it does at load; a missing device rejects instead of falling back.
+    ...(config.backend !== undefined && { backend: config.backend }),
     ...(config.maxThreads !== undefined && { threads: config.maxThreads }),
     ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir }),
     ...(params.marginBytes !== undefined && { marginBytes: params.marginBytes })
