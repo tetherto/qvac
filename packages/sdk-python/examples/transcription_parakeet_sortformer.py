@@ -40,7 +40,10 @@ from tetherto.qvac_sdk.models import (
 
 SAMPLE_RATE = 16000
 BYTES_PER_SAMPLE = 2
-SEGMENT_PATTERN = re.compile(r"Speaker (\d+): ([\d.]+)s - ([\d.]+)s")
+# Sortformer reports each segment as `Speaker N: HH:MM:SS.mmm - HH:MM:SS.mmm`
+SEGMENT_PATTERN = re.compile(
+    r"Speaker (\d+): (\d+):(\d+):([\d.]+) - (\d+):(\d+):([\d.]+)"
+)
 
 
 async def transcribe_file(t, model_id: str, audio_path: str) -> str:
@@ -63,10 +66,18 @@ async def transcribe_file(t, model_id: str, audio_path: str) -> str:
 
 def parse_diarization(text: str) -> list[dict]:
     segments = [
-        {"speaker": int(m[1]), "start": float(m[2]), "end": float(m[3])}
+        {
+            "speaker": int(m[1]),
+            "start": seconds(m[2], m[3], m[4]),
+            "end": seconds(m[5], m[6], m[7]),
+        }
         for m in SEGMENT_PATTERN.finditer(text)
     ]
     return sorted(segments, key=lambda seg: seg["start"])
+
+
+def seconds(h: str, m: str, s: str) -> float:
+    return int(h) * 3600 + int(m) * 60 + float(s)
 
 
 def read_pcm(wav_path: str) -> bytes:

@@ -163,7 +163,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                         SearchIndexType.vectorSearch(),
                     ),
                 ),
-            )
+            ).toList() // a cold Flow: nothing is sent until it is collected
 
             // Index builds are asynchronous; querying too early returns no matches
             for (attempt in 0 until 60) {

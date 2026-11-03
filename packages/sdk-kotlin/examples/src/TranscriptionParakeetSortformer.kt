@@ -35,7 +35,8 @@ import kotlinx.coroutines.runBlocking
 
 private const val SAMPLE_RATE = 16000
 private const val BYTES_PER_SAMPLE = 2
-private val SEGMENT_PATTERN = Regex("""Speaker (\d+): ([\d.]+)s - ([\d.]+)s""")
+// Sortformer reports each segment as `Speaker N: HH:MM:SS.mmm - HH:MM:SS.mmm`
+private val SEGMENT_PATTERN = Regex("""Speaker (\d+): (\d+):(\d+):([\d.]+) - (\d+):(\d+):([\d.]+)""")
 
 private data class Segment(val speaker: Int, val start: Double, val end: Double)
 
@@ -103,11 +104,13 @@ fun main(args: Array<String>): Unit = runBlocking {
 private fun parseDiarization(text: String): List<Segment> =
     SEGMENT_PATTERN.findAll(text)
         .map { m ->
-            val (speaker, start, end) = m.destructured
-            Segment(speaker.toInt(), start.toDouble(), end.toDouble())
+            val (speaker, startH, startM, startS, endH, endM, endS) = m.destructured
+            Segment(speaker.toInt(), seconds(startH, startM, startS), seconds(endH, endM, endS))
         }
         .sortedBy { it.start }
         .toList()
+
+private fun seconds(h: String, m: String, s: String) = h.toInt() * 3600 + m.toInt() * 60 + s.toDouble()
 
 private fun readPcm(wavPath: String): ByteArray =
     AudioSystem.getAudioInputStream(File(wavPath)).use { it.readAllBytes() }
