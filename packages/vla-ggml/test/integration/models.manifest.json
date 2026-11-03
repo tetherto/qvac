@@ -26,6 +26,12 @@
       "targets": ["test:integration"],
       "skip": ["darwin-x64"]
     },
+    "pi05-activations-2cam.safetensors": {
+      "s3Path": "qvac_models_compiled/vla/pi05-base/2026-05-21/activations_2cam.safetensors",
+      "dest": "test/pi05-oracle/activations_2cam.safetensors",
+      "targets": ["test:integration"],
+      "skip": ["darwin-x64"]
+    },
     "groot-multi-q8_vf16.gguf": {
       "s3Path": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
       "dest": "model/vla/groot/groot-q8_vf16.gguf",
