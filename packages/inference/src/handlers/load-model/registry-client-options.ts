@@ -34,7 +34,7 @@ export function buildRegistryClientOptions(params: {
     ...(maxRetries !== undefined && { maxRetries }),
     ...(onProgress && { onProgress }),
     ...(signal && { signal: signal }),
-    // Without it the client keeps a cancelled download's blocks for resume.
+    // Without it the client clears a cancelled download's blocks, so a pause could not resume.
     ...(shouldClearCache && { clearBlocksOnCancel: shouldClearCache })
   }
 }

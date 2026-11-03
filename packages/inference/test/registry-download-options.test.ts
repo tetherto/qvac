@@ -18,7 +18,7 @@ test('buildRegistryClientOptions: falls back to default timeout and omits maxRet
   t.is(opts.maxRetries, undefined)
   t.is(opts.onProgress, undefined)
   t.is(opts.signal, undefined)
-  t.is(opts.clearBlocksOnCancel, undefined, 'cancelled downloads keep blocks for resume')
+  t.is(opts.clearBlocksOnCancel, undefined, 'the client default applies')
 })
 
 test('buildRegistryClientOptions: propagates registryStreamTimeoutMs from config', (t) => {
