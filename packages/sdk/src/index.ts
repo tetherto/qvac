@@ -75,6 +75,7 @@ export {
   type FinetuneHandle
 } from './client/api'
 export { close } from './client'
+export { mountBrowserFile } from './client/api/mount-browser-file'
 export { plugins } from './client/plugins-factory'
 export {
   type LifecycleState,

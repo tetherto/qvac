@@ -767,6 +767,9 @@ importers:
 
   packages/inference:
     dependencies:
+      '@noble/hashes':
+        specifier: ^2.0.1
+        version: 2.4.0
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
@@ -827,6 +830,9 @@ importers:
       bare-zlib:
         specifier: ^1.4.0
         version: 1.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      buffer:
+        specifier: ^6.0.3
+        version: 6.0.3
       compact-encoding:
         specifier: ^3.3.0
         version: 3.3.0
@@ -842,6 +848,9 @@ importers:
       hyperswarm:
         specifier: ^4.17.0
         version: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      path-browserify:
+        specifier: ^1.0.1
+        version: 1.0.1
       semver:
         specifier: ^7.8.5
         version: 7.8.5
@@ -1798,6 +1807,9 @@ importers:
       chromadb:
         specifier: ^3.0.14
         version: 3.5.0
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
       events:
         specifier: ^3.3.0
         version: 3.3.0
@@ -4278,6 +4290,10 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
+
+  '@noble/hashes@2.4.0':
+    resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
+    engines: {node: '>= 20.19.0'}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -9388,6 +9404,9 @@ packages:
   passive-core-watcher@1.0.1:
     resolution: {integrity: sha512-Fv9xkrCp5a+ItfWg1qgFp1+WjEdnJ67CtX+1VwaifIVT+9fla/EXLVP7TjXAodsOa9TwJ0YCl5erN3ewGS9KMg==}
 
+  path-browserify@1.0.1:
+    resolution: {integrity: sha512-b7uo2UCUOYZcnF/3ID0lulOJi/bafxa1xPe7ZPsammBSpjSWQkjNxlt635YGS2MiR9GjvuXCtz2emr3jbsz98g==}
+
   path-exists@3.0.0:
     resolution: {integrity: sha512-bpC7GYwiDYQ4wYLe+FA8lhRjhQCMcQGuSgGGqDkg/QerRWw9CmGRT0iSOVRSZJ29NMLZgIzqaljJ63oaL4NIJQ==}
     engines: {node: '>=4'}
@@ -13932,6 +13951,8 @@ snapshots:
       '@emnapi/runtime': 1.10.0
       '@tybys/wasm-util': 0.10.3
     optional: true
+
+  '@noble/hashes@2.4.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -21820,6 +21841,8 @@ snapshots:
       - bare-url
       - react-native-b4a
       - sodium-javascript
+
+  path-browserify@1.0.1: {}
 
   path-exists@3.0.0: {}
 

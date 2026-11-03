@@ -1,0 +1,94 @@
+---
+title: Browser (experimental)
+description: Run the SDK in a web page, with the LLM addon on WebGPU in a Dedicated Worker.
+schemaType: TechArticle
+---
+
+In a web page, `@qvac/sdk` runs the same client API it runs on Node, Bare and
+Expo. Requests go to the same worker request handling and `@qvac/inference`
+engine, here in a Dedicated Worker. The LLM addon runs as WebAssembly on WebGPU.
+
+```js
+import { loadModel, completion, unloadModel } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: 'https://huggingface.co/<org>/<repo>/resolve/main/model-Q4_K_M.gguf',
+  modelType: 'llamacpp-completion',
+  modelConfig: { ctx_size: 4096 },
+  onProgress: (p) => console.log(`${p.percentage.toFixed(0)}%`)
+})
+
+const run = completion({ modelId, history: [{ role: 'user', content: 'Hello' }], stream: true })
+for await (const token of run.tokenStream) console.log(token)
+await unloadModel({ modelId })
+```
+
+## How it works
+
+| Layer              | Bare / Node                                  | Browser                                                         |
+| ------------------ | -------------------------------------------- | --------------------------------------------------------------- |
+| Transport (`#rpc`) | bare-rpc over a child process or Worklet IPC | bare-rpc over the Worker's `postMessage`                        |
+| Worker             | Bare worker (`dist/src/worker`)              | `dist/worker.browser.js`, prebuilt from `src/worker/browser.ts` |
+| Engine             | `@qvac/inference`                            | `@qvac/inference`, with its `browser` field substitutions       |
+| LLM addon          | `@qvac/llm-llamacpp` native prebuild         | `@qvac/llm-llamacpp` `prebuilds/web` (WebAssembly + WebGPU)     |
+| Model cache        | `~/.qvac` on disk                            | `/.qvac` in the origin private file system (OPFS)               |
+
+Bundlers that follow the `browser` export condition and
+`new Worker(new URL(..., import.meta.url))` pick this up with no
+configuration. That includes Vite and webpack. They emit the worker, the
+addon's loader and its `.wasm` as assets.
+
+## Requirements
+
+- A browser with WebGPU and `shader-f16` (Chrome or Edge 113+) for GPU
+  inference. Without it the model runs on the CPU, which is much slower.
+- A secure context (HTTPS or `localhost`), for OPFS.
+- For models whose GGUF exceeds 4 GiB: WebAssembly Memory64 (Chrome 133+,
+  Firefox 134+). The SDK uses it automatically where available. Elsewhere
+  (Safari) the engine reads GGUFs up to 4 GiB of tensor data. Beyond that, a
+  model fits if the device's GPU has the memory.
+- No cross-origin isolation headers are needed.
+
+## What is supported
+
+Supported:
+
+- `loadModel` from a registry model constant (such as `QWEN3_1_7B_INST_Q4`) when
+  the registry lists Hugging Face as its origin. The file downloads from Hugging
+  Face over HTTPS and is checked against the registry's SHA-256 once.
+- `loadModel` from a path in the origin private file system (OPFS), such as
+  `/.qvac/local/model.gguf`. A page can copy a file the user picks into OPFS and
+  load it from there; it then loads on later visits without picking it again.
+- `loadModel` from a user's file read in place, with no copy:
+  `mountBrowserFile(file)` takes a `File` from a file input, or from a folder
+  the user granted with the File System Access API (Chrome, Edge), and returns
+  the path to pass as `modelSrc`.
+- `loadModel` from `http(s)` URLs. Downloads resume, and the cache in OPFS
+  survives reloads.
+- `completion`: streaming, events, reasoning, tool calls and generation
+  parameters.
+- `cancel`. It takes effect at the next generated token, so on the CPU fallback a
+  long prompt evaluation finishes first.
+- `unloadModel` and `close`.
+
+Requests run one at a time.
+
+Not available in the browser, each failing with an error that says so:
+
+- Model types other than `llamacpp-completion`.
+- Media (image or audio) messages.
+- Registry models stored in S3. Clients receive them only through the
+  registry's peer-to-peer network (Hypercore over Hyperswarm), which cannot run
+  in a browser: Hypercore's storage is a native RocksDB addon, and the DHT needs
+  UDP.
+- Peer-to-peer (`pear://`) model sources.
+- Sharded models.
+- RAG.
+- Delegated inference.
+- Fine-tuning.
+- Model-fit assessment.
+- Config files. The browser worker uses the SDK defaults.
+
+Plain Hugging Face URLs are not checked against the Hub's SHA-256, because the
+browser hides the redirect response that carries it. Registry models are
+checked against the registry's own SHA-256 instead.
