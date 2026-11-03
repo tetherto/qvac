@@ -7,7 +7,8 @@ on:
   # TEMP rehearsal: the feat/package-ci-contract-* base until the stack merges, as pr-build-test.yml.
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
-    branches: [main, release-*, feature-*, tmp-*, feat/package-ci-contract-*]
+    # A PR into a release-train-* branch is checked by release-train.yml, which calls this workflow with the train.
+    branches: [main, release-*, "!release-train-*", feature-*, tmp-*, feat/package-ci-contract-*]
   workflow_dispatch:
     inputs:
       packages:
