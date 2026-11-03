@@ -50,14 +50,14 @@ jobs:
       projects: ${{ steps.resolve.outputs.projects }}
     steps:
       - name: Checkout scripts
-        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           sparse-checkout: |
             .github
             scripts/ci
             nx.json
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           node-version: lts/*
       - id: resolve
@@ -74,13 +74,13 @@ jobs:
       # The tarballs are what the release would publish.
       - if: steps.resolve.outputs.source == 'train'
         name: Checkout the train
-        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           ref: ${{ steps.resolve.outputs.ref || github.event.pull_request.head.sha || github.sha }}
           path: src
           persist-credentials: "false"
       - if: steps.resolve.outputs.source == 'train'
-        uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           package-json-file: src/package.json
       - if: steps.resolve.outputs.source == 'train'
@@ -96,7 +96,7 @@ jobs:
           pnpm exec nx run-many -t build --projects="$PROJECTS" --exclude-task-dependencies --outputStyle=stream
           node .github/scripts/release-train.mjs pack "$TRAIN" "$RUNNER_TEMP/train-tarballs"
       - if: steps.resolve.outputs.source == 'train'
-        uses: tetherto/qvac-actions/upload-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           name: train-tarballs
           path: ${{ runner.temp }}/train-tarballs
@@ -119,7 +119,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout source and actions
-        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -129,11 +129,11 @@ jobs:
           PROJECTS: ${{ needs.select.outputs.projects }}
         run: node scripts/ci/release-guard.mjs
       - if: steps.pkg.outputs.train == 'true'
-        uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           node-version: lts/*
       - if: steps.pkg.outputs.train == 'true'
-        uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
       # From the merge base, so commits already on the train branch are not read as this PR's.
       - if: steps.pkg.outputs.train == 'true'
         env:
@@ -171,13 +171,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout pull request
-        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           node-version: lts/*
       - env:
@@ -209,34 +209,34 @@ jobs:
         project: ${{ fromJSON(needs.select.outputs.projects) }}
     steps:
       - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
       - name: Checkout pull request
-        uses: tetherto/qvac-actions/checkout@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ inputs.ref || needs.train.outputs.ref || github.event.pull_request.head.sha || github.sha }}
           path: src
           persist-credentials: "false"
-      - uses: tetherto/qvac-actions/setup-node@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           node-version: lts/*
-      - uses: tetherto/qvac-actions/setup-pnpm@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           package-json-file: src/package.json
       # The toolkits the package's check targets name in metadata.setup.
       - if: contains(matrix.project.checkSetup, 'python')
-        uses: tetherto/qvac-actions/setup-python@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/setup-python@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           python-version: "3.10"
       - if: contains(matrix.project.checkSetup, 'java')
-        uses: tetherto/qvac-actions/setup-java@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/setup-java@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           java-version: "17"
       - if: contains(matrix.project.checkSetup, 'android-ndk')
-        uses: tetherto/qvac-actions/setup-android@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/setup-android@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
       - if: contains(matrix.project.checkSetup, 'android-ndk')
         working-directory: src
         run: sdkmanager "ndk;$(jq -r '.targetDefaults.build.metadata.toolchain.android.ndk' nx.json)"
@@ -257,7 +257,7 @@ jobs:
         working-directory: src
         run: pnpm install --frozen-lockfile ${{ env.SOURCE != '' && '--filter .' || '' }}
       - if: env.SOURCE == 'train'
-        uses: tetherto/qvac-actions/download-artifact@1f7fae693183e6181384bae9ee0cdd7ab00ddde7  # TEMP rehearsal: qvac-actions PR 18 head until it merges
+        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           name: train-tarballs
           path: ${{ runner.temp }}/train-tarballs
