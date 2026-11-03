@@ -21,7 +21,7 @@ function runLink(t, platform, exitCode = 0) {
 const fs = require('node:fs')
 const args = process.argv.slice(2)
 fs.appendFileSync(process.env.CALLS, JSON.stringify(args) + '\\n')
-if (args.includes('--version')) { console.log('v4.2.0'); process.exit(0) }
+if (args.includes('--version')) { process.exitCode = args.at(-1) === '--version' ? 1 : 0; console.log('v4.2.0'); return }
 if (Number(process.env.LINK_EXIT)) process.exit(Number(process.env.LINK_EXIT))
 fs.mkdirSync(args[args.indexOf('--out') + 1], { recursive: true })
 `)
@@ -38,7 +38,7 @@ test('Android links only the arm64 host built by Gradle', (t) => {
   const result = runLink(t, 'Android')
   assert.equal(result.status, 0, result.stderr)
   assert.deepEqual(result.calls, [
-    ['--no-install', 'bare-link', '--version'],
+    ['--no-install', 'bare-link', '--version', 'backend/backend.cjs'],
     ['--no-install', 'bare-link', '--host', 'android-arm64', '--out', 'node_modules/react-native-bare-kit/android/src/main/addons', 'backend/backend.cjs'],
   ])
   assert.match(action, /-PreactNativeArchitectures=arm64-v8a/)

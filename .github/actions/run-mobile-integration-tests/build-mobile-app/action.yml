@@ -253,7 +253,7 @@ runs:
           targets=(--preset ios)
           out=node_modules/react-native-bare-kit/ios/addons
         fi
-        npx --no-install bare-link --version
+        npx --no-install bare-link --version backend/backend.cjs
         npx --no-install bare-link "${targets[@]}" --out "$out" backend/backend.cjs
         echo "Linked addons in $out:"
         find "$out" -mindepth 1 -maxdepth 2 | sort
