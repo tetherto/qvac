@@ -159,13 +159,13 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check the linked siblings are on npm
+      - name: Check nothing outside the train is linked
         env:
           TRAIN: ${{ needs.train.outputs.name }}
         run: node .github/scripts/release-train.mjs linked "$TRAIN"
 
       # Without --exclude-task-dependencies, `^build` also builds the native
-      # addons the train links, which needs a C++ toolchain this runner lacks.
+      # addons the train depends on, which needs a C++ toolchain this runner lacks.
       - name: Build
         env:
           TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
