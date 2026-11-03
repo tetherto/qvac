@@ -9,6 +9,8 @@ description: >-
   every prebuild / cpp-test / coverage / benchmark workflow in the repo.
   Bump the `version` (Linux + Windows major) and `windows-version` (Windows
   full pin) defaults below to roll the whole monorepo forward.
+  Linux downloads retry transient errors and finish before replacing the
+  trusted signing key or invoking the installer.
 
 inputs:
   version:
@@ -35,12 +37,21 @@ runs:
       shell: bash
       env:
         LLVM_VERSION: ${{ inputs.version }}
+        LLVM_DOWNLOAD_RETRIES: "5"
+        LLVM_DOWNLOAD_RETRY_DELAY: "15"
       run: |
         set -euo pipefail
-        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
-          | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
-        sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-        wget -q https://apt.llvm.org/llvm.sh
+        curl --fail --location --show-error \
+          --retry "$LLVM_DOWNLOAD_RETRIES" --retry-all-errors \
+          --retry-delay "$LLVM_DOWNLOAD_RETRY_DELAY" \
+          --output "$RUNNER_TEMP/llvm-snapshot.gpg.key" \
+          https://apt.llvm.org/llvm-snapshot.gpg.key
+        sudo install -m 644 "$RUNNER_TEMP/llvm-snapshot.gpg.key" \
+          /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+        curl --fail --location --show-error \
+          --retry "$LLVM_DOWNLOAD_RETRIES" --retry-all-errors \
+          --retry-delay "$LLVM_DOWNLOAD_RETRY_DELAY" \
+          --output llvm.sh https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
         sudo ./llvm.sh "$LLVM_VERSION" all
 
