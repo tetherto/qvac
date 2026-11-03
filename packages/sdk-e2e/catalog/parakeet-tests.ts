@@ -6,6 +6,9 @@ type ParakeetDependency =
   | 'parakeet-sortformer'
   | 'parakeet-indic-conformer'
   | 'parakeet-unified'
+  | 'parakeet-transcribepsy'
+  | 'parakeet-transcribepsy-windowed'
+  | 'parakeet-transcribepsy-coreml'
 
 /**
  * One parakeet transcription. Same shape as the whisper ones; the difference is which model the
@@ -237,6 +240,76 @@ export const parakeetUnifiedCorruptedWav = createParakeetTest(
   60000
 )
 
+// ── TranscribePsy tests ───────────────────────────────────────────────────────
+// TranscribePsy-250M-EU-sub: a 254M Parakeet-TDT distilled for Dutch, English,
+// French, German, Italian, Polish, Portuguese and Spanish, published by QVAC on
+// Hugging Face. It loads as a TDT model and detects the language itself; long
+// recordings are encoded in the 60 s / 25 % windows the model recommends.
+
+export const parakeetTranscribePsyWav = createParakeetTest(
+  'parakeet-transcribepsy-wav',
+  'parakeet-transcribepsy',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  300000, // download ~305 MB
+  ['smoke']
+)
+
+export const parakeetTranscribePsyMp3 = createParakeetTest(
+  'parakeet-transcribepsy-mp3',
+  'parakeet-transcribepsy',
+  'transcription-short-mp3.mp3',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
+export const parakeetTranscribePsySilence = createParakeetTest(
+  'parakeet-transcribepsy-silence',
+  'parakeet-transcribepsy',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+// Corrupted WAV on the TranscribePsy path
+export const parakeetTranscribePsyCorruptedWav = createParakeetTest(
+  'parakeet-transcribepsy-corrupted-wav',
+  'parakeet-transcribepsy',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000
+)
+
+// Explicit long-form windows: the resource loads the same GGUF with 15 s
+// windows and 1.28 s of context, so the 17 s fixture is encoded as two windows
+// and the transcript still carries the words that straddle them.
+export const parakeetTranscribePsyWindowed = createParakeetTest(
+  'parakeet-transcribepsy-windowed',
+  'parakeet-transcribepsy-windowed',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
+// macOS / iOS only: the Core ML distribution is an encoder-less GGUF whose
+// encoder and decoder bundles the loader stages beside it, and the batch run
+// has to report that its encoder ran on Core ML rather than on ggml.
+export const parakeetTranscribePsyCoremlWav: TestDefinition = {
+  testId: 'parakeet-transcribepsy-coreml-wav',
+  params: { audioFileName: 'transcription-short-wav.wav' },
+  expectation: { validation: 'contains-all', contains: ['test', 'automation'] },
+  metadata: {
+    category: 'parakeet',
+    dependency: 'parakeet-transcribepsy-coreml',
+    estimatedDurationMs: 300000
+  },
+  steps: [
+    ...parakeetSteps('parakeet-transcribepsy-coreml'),
+    { project: { from: '$run', path: 'stats.encoderUsedCoreml', as: 'encoderUsedCoreml' } },
+    { assert: { on: '$encoderUsedCoreml', named: 'valueIn', with: { values: [1] } } }
+  ]
+}
+
 // ── Indic Conformer CTC (desktop-only) ────────────────────────────────────────
 // Multilingual CTC with a required `modelConfig.language` mask. Happy path
 // uses the asr-ggml Hindi sample (`sample_hi.raw` wrapped as WAV) and asserts
@@ -323,6 +396,15 @@ export const parakeetUnifiedTests = [
   parakeetUnifiedCorruptedWav
 ]
 
+export const parakeetTranscribePsyTests = [
+  parakeetTranscribePsyWav,
+  parakeetTranscribePsyMp3,
+  parakeetTranscribePsySilence,
+  parakeetTranscribePsyCorruptedWav,
+  parakeetTranscribePsyWindowed,
+  parakeetTranscribePsyCoremlWav
+]
+
 export const parakeetIndicConformerTests = [
   parakeetIndicConformerHi,
   parakeetIndicConformerSilence,
@@ -335,6 +417,7 @@ export const parakeetTests = [
   ...parakeetTdtTests,
   ...parakeetCtcTests,
   ...parakeetUnifiedTests,
+  ...parakeetTranscribePsyTests,
   ...parakeetIndicConformerTests,
   ...parakeetSortformerTests
 ]

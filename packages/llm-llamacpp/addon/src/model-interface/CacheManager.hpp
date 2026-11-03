@@ -33,10 +33,21 @@ class SlotStateCache;
 struct SlotStateCacheEntry;
 } // namespace qvac_lib_inference_addon_llama::batching
 
+namespace qvac_lib_inference_addon_llama::cache {
+class CacheFileIndex;
+} // namespace qvac_lib_inference_addon_llama::cache
+
+/// The single-prompt cache session. It is also where the context looks for a
+/// state that serves more of a prompt than its own sequence: the RAM tier
+/// and the cacheKey files this model has used.
 class CacheManager {
 public:
   CacheManager(
       LlmContext* llmContext, std::function<void(bool)> resetStateCallback);
+  ~CacheManager();
+  // The context's cache source provider points back here.
+  CacheManager(const CacheManager&) = delete;
+  CacheManager& operator=(const CacheManager&) = delete;
 
   bool handleCache(
       ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
@@ -49,6 +60,8 @@ public:
   bool isCacheDisabled() const;
   bool hasActiveCache() const;
   bool wasCacheUsedInLastPrompt() const;
+  /// Every cacheKey file this process writes is promoted here, which tells
+  /// the file indexes to check their files on disk again.
   static void atomicPromoteFile(const std::string& from, const std::string& to);
   /// `llama_state_seq_save_file` wrote all `savedBytes` to `path`. Its count
   /// includes bytes still buffered when the file was closed, and the close
@@ -65,6 +78,12 @@ public:
   void setRamTier(
       std::shared_ptr<qvac_lib_inference_addon_llama::batching::SlotStateCache>
           ramTier);
+
+  /// cacheKey files this model has used, shared with the batch scheduler.
+  /// Every key a request names is noted in it.
+  void setFileIndex(
+      std::shared_ptr<qvac_lib_inference_addon_llama::cache::CacheFileIndex>
+          fileIndex);
 
   /// Writes the active conversation to its file if it has unsaved turns and
   /// is not ephemeral. Run when the model is reloaded or unloaded.
@@ -93,9 +112,15 @@ private:
   /// dirty, not ephemeral, not empty, and its file was not deleted.
   bool hasTurnsToFlush();
   void saveActiveCacheForTransition();
-  /// Moves the active conversation into the RAM tier; false when the tier is
-  /// off or the state does not fit it.
-  bool moveActiveCacheToRamTier();
+  /// Ends the request state of the conversation just set aside. A context
+  /// that shares its cache across keys keeps its memory, which the next
+  /// request reconciles against; any other is reset.
+  void setAsideInPlace();
+  /// Copies the active conversation into the RAM tier under `key`; false when
+  /// the tier is off or the state does not fit it. Its memory is left as it
+  /// is; its checkpoints move to the tier entry.
+  bool copyActiveCacheToRamTier(
+      const std::string& key, bool dirty, bool savedToDisk, bool ephemeral);
   /// Restores `sessionPath_` from `entry`, already taken from the RAM tier;
   /// false when there is none or it is not usable.
   bool restoreFromRamTier(
@@ -128,4 +153,6 @@ private:
   bool activeEphemeral_ = false;
   std::shared_ptr<qvac_lib_inference_addon_llama::batching::SlotStateCache>
       ramTier_;
+  std::shared_ptr<qvac_lib_inference_addon_llama::cache::CacheFileIndex>
+      fileIndex_;
 };

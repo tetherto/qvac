@@ -200,6 +200,7 @@ if(BUILD_TESTING)
 
   add_executable(
       test-bci-core
+      ${PROJECT_SOURCE_DIR}/addon/tests/test_bci_fit.cpp
       ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
       ${PROJECT_SOURCE_DIR}/addon/tests/test_embedder_fit.cpp
       ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp

@@ -16,6 +16,7 @@ namespace qvac::ttsggml {
 inline constexpr int kBackendDeviceNone = -1;
 inline constexpr int kBackendDeviceCpu = 0;
 inline constexpr int kBackendDeviceGpu = 1;
+inline constexpr int kBackendDeviceCoreML = 2;
 
 // runtimeStats backend *id* "none" sentinel. The live id map is owned by
 // backendIdFromName below (0=CPU, 1=Metal, ...); -1 means "no component
@@ -35,10 +36,21 @@ inline int backendIdFromName(const std::string& name) {
   if (name.rfind("CUDA",   0) == 0) return 2;
   if (name.rfind("Vulkan", 0) == 0) return 3;
   if (name.rfind("OpenCL", 0) == 0) return 4;
+  if (name.rfind("WebGPU", 0) == 0)
+    return 5;
   return 99;
 }
 
+inline int backendDeviceFromName(const std::string& name) {
+  const auto id = backendIdFromName(name);
+  if (id == 99)
+    return 99;
+  return id == 0 ? kBackendDeviceCpu : kBackendDeviceGpu;
+}
+
 inline int backendDeviceCode(tts_cpp::BackendDevice d) {
+  if (d == tts_cpp::BackendDevice::CoreML)
+    return kBackendDeviceCoreML;
   return d == tts_cpp::BackendDevice::GPU ? kBackendDeviceGpu
                                           : kBackendDeviceCpu;
 }

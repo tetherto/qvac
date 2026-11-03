@@ -68,6 +68,8 @@
     }
   },
   "implicitDependencies": [
-    "lint-cpp"
+    "lint-cpp",
+    "!@qvac/llm-llamacpp",
+    "!@qvac/embed-llamacpp"
   ]
 }

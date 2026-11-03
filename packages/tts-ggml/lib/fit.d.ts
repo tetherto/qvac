@@ -4,16 +4,13 @@
  * the same keys and applies the same defaults as the load it describes.
  */
 interface TtsFitCommon {
+    backend?: string;
     /** Layers to offload. Unset defers to `useGPU`. */
     nGpuLayers?: number;
     /** All layers or none, when `nGpuLayers` is unset. */
     useGPU?: boolean;
     vulkanDevice?: number;
     backendsDir?: string;
-    /** LavaSR enhancer; a non-empty path turns enhancement on. */
-    lavasrEnhancerPath?: string;
-    /** LavaSR denoiser, applied before the enhancer. */
-    lavasrDenoiserPath?: string;
     /** Free memory that must remain for the projection to count as fitting. Defaults to 256 MiB. */
     marginBytes?: number;
 }
@@ -32,6 +29,8 @@ export interface SupertonicFitRequest extends TtsFitCommon {
 export interface ParlerFitRequest extends TtsFitCommon {
     engineType: 'parler';
     parlerModelPath: string;
+    /** Match the Parler decoder-sidecar load policy. */
+    coremlDecoder?: boolean;
     descriptionTokens?: number;
     promptTokens?: number;
     /** 0 takes the checkpoint's default generation length. */
@@ -67,6 +66,8 @@ export interface CosyvoiceFitRequest extends TtsFitCommon {
     speechTokens?: number;
 }
 export interface MossFitRequest extends TtsFitCommon {
+    nCtx?: number;
+    maxNewTokens?: number;
     engineType: 'moss';
     mossBackbonePath: string;
     mossCodecDecoderPath: string;
@@ -92,41 +93,50 @@ export interface MossSoundEffectFitRequest extends TtsFitCommon {
     shift?: number;
     threads?: number;
 }
-export type TtsFitRequest = SupertonicFitRequest | ParlerFitRequest | ChatterboxFitRequest | Audio8FitRequest | CosyvoiceFitRequest | MossFitRequest | MossSoundEffectFitRequest;
+export interface PocketFitRequest extends TtsFitCommon {
+    engineType: 'pocket';
+    pocketFlowModelPath: string;
+    pocketMimiModelPath: string;
+    pocketFrontendPath: string;
+    pocketVoicePath?: string;
+    referenceAudio?: string;
+    text: string;
+    threads?: number;
+    nCtx?: number;
+    maxTokens?: number;
+    steps?: number;
+    framesAfterEos?: number;
+    memoryBudgetBytes?: number;
+}
+export type TtsFitRequest = PocketFitRequest | SupertonicFitRequest | ParlerFitRequest | ChatterboxFitRequest | Audio8FitRequest | CosyvoiceFitRequest | MossFitRequest | MossSoundEffectFitRequest;
 /** The voice engines a fit can be asked for, read off the request union. */
 export type TtsFitEngine = TtsFitRequest['engineType'];
-export type TtsFitStatus = 'fits' | 'does-not-fit' | 'error';
+/**
+ * `unknown` is a load the fitter cannot size: supertonic outside the fused
+ * graph path it models, a CosyVoice3 or Parler load with Core ML sidecars, or a failed
+ * measurement.
+ */
+export type TtsFitStatus = 'fits' | 'does-not-fit' | 'unknown';
+export interface TtsFitDevice {
+    /** The PCI bus ID when the backend reports one, the device name otherwise. */
+    id: string;
+    name: string;
+    /** Memory the host owns: the host CPU, and a GPU that shares the host's memory. */
+    unified: boolean;
+    /** Memory the load takes on this device. */
+    usedBytes: number;
+    freeBytes: number;
+    totalBytes: number;
+}
+export type TtsFitStats = Record<string, never>;
 export interface TtsFitResult {
     status: TtsFitStatus;
     /**
-     * The engine's own wording, e.g. `model-unreadable`, `workload-too-large`.
-     * `unsupported-engine` names a voice the addon loads and the fitter does
-     * not cover.
+     * The device the load resolves to, then the host CPU. One CPU row for a load
+     * on the CPU, and none for `unknown`.
      */
-    reason: string;
-    /** Which pipeline was projected, e.g. `chatterbox-t3-turbo`. */
-    modelVariant: string;
-    deviceName: string;
-    deviceIsCpu: boolean;
-    /** The device pool is system RAM, so host bytes compete with device bytes. */
-    deviceSharesHostMemory: boolean;
-    deviceFreeBytes: number;
-    deviceTotalBytes: number;
-    deviceBytes: number;
-    weightsBytes: number;
-    stateBytes: number;
-    /** 0 for a pipeline with no language-model stage, such as supertonic. */
-    lmComputeBytes: number;
-    /** 0 for a pipeline with no separate codec stage. */
-    codecComputeBytes: number;
-    hostBytes: number;
-    /**
-     * The LavaSR stages' size on disk, 0 when none was named. They have no
-     * fitter, so this is a size on disk. It is counted in neither `deviceBytes`
-     * nor `hostBytes`.
-     */
-    lavasrFileBytes: number;
-    report: string;
+    devices: TtsFitDevice[];
+    stats: TtsFitStats;
 }
 /**
  * Projects one voice against the memory free right now, reading GGUF metadata
@@ -139,9 +149,9 @@ export interface TtsFitResult {
  *
  * `engineType` picks the fitter, the same key a load uses, and is required
  * here: a fit request carries none of the file keys a load is inferred from.
- * A model the engine cannot read resolves to `status: "error"`, as does a
- * voice with no fitter; a broken request, or a host with no native binding,
- * rejects. Fits run one at a time within this addon.
+ * A model the engine cannot read, a voice with no fitter, an invalid request,
+ * or a host with no native binding rejects. Fits run one at a time within this
+ * addon.
  */
 export declare function assessFit(request: TtsFitRequest): Promise<TtsFitResult>;
 export {};

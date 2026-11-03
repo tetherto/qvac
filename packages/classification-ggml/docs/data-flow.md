@@ -167,6 +167,7 @@ End-to-end trace of a single `classifier.classify(buffer)` call:
 | `classify` before `load`                    | `ImageClassifier._classifyInternal` (JS)      | `Error("Classifier not loaded. Call load() first.")` |
 | `classify` after `unload`                   | `ImageClassifier._classifyInternal` (JS)      | same |
 | `unload` mid-classify                       | `ImageClassifier.unload` (JS)                 | the in-flight `classify()` promise rejects with `Error("Model was unloaded")` |
+| GGUF path omitted                           | `ImageClassifier._load` (JS)                  | `Error("MobileNet GGUF modelPath is required. …")` |
 | GGUF weights file missing                   | `ImageClassifier._load` (JS)                  | `Error("MobileNet GGUF weights not found at: …")` |
 | GGUF `mobilenet.num_classes` mismatch       | `MobileNetGraph::loadWeights` (C++)           | `StatusError(InvalidArgument)` — "does not match the addon's compiled-in class count" |
 | Compute graph output shape mismatch         | `MobileNetGraph::buildGraph` (C++)            | `StatusError(InternalError)` — defence-in-depth, never seen in practice |

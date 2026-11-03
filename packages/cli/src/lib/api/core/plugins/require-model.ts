@@ -3,7 +3,11 @@ import { WorkerStartupError } from '@qvac/sdk'
 import { HttpError } from '@/lib/api/lib/http-error'
 import { resolveModelAlias } from '@/lib/api/core/config/models'
 import { ModelLoadTimeoutError } from '@/lib/api/core/load-manager'
-import { formatErrorChain } from '@/lib/api/core/lifecycle'
+import {
+  formatErrorChain,
+  isLifecycleBlockedError,
+  runtimeSuspendedError
+} from '@/lib/api/core/lifecycle'
 import type { ModelEntry } from '@/lib/api/core/model-registry'
 import type { ResolvedModelEntry } from '@/lib/api/core/config/types'
 import type { QvacContext, QvacRequestModel } from '@/lib/api/core/context'
@@ -90,6 +94,7 @@ export async function ensureReady(
     if (err instanceof ModelLoadTimeoutError) {
       throw new HttpError(503, 'model_load_timeout', err.message)
     }
+    if (isLifecycleBlockedError(err)) throw runtimeSuspendedError()
     ctx.logger.error(`Failed to load "${modelName}": ${formatErrorChain(err)}`)
     const message = modelLoadFailureMessage(err)
     throw new HttpError(503, 'model_load_failed', `Model "${modelName}" failed to load: ${message}`)

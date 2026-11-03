@@ -2,6 +2,7 @@ import type { QVACModelEntry } from '@qvac/registry-client'
 
 import { getAddonFromEngine, resolveCanonicalEngine } from './schemas.ts'
 import { detectShardedModel } from './shards.ts'
+import { isCoremlBundleComponent } from './companions.ts'
 import type { ProcessedModel } from './types.ts'
 
 export function toHexString(value: Buffer | string | { data: number[] } | undefined): string {
@@ -36,9 +37,8 @@ export function processRegistryModel(model: QVACModelEntry): ProcessedModel | nu
     return null
   }
 
-  // Compiled Core ML bundle components are staged by the SDK beside their
-  // primary model. They cannot be selected as standalone models in qvac serve.
-  if (/(?:^|\/)[^/]+\.mlmodelc\//.test(model.path)) return null
+  // Core ML bundle and source-package components are not standalone models.
+  if (isCoremlBundleComponent(model.path)) return null
 
   const engine = resolveCanonicalEngine(model.engine)
   if (!engine) {

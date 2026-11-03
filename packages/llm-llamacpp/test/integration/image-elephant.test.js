@@ -7,6 +7,7 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
+const path = require('bare-path')
 // prestage-uses: multimodal-default — setupMultimodalInference() default in _image-common.js
 // prestage-uses: multimodal-large — LARGE_MULTIMODAL_CONFIG, passed explicitly below
 // prestage-ignore: SmolVLM2-500M-Video-Instruct-Q8_0.gguf — opt-in via QVAC_VLM_MODEL=smolvlm2 only
@@ -21,7 +22,7 @@ const {
   runPerImageBackendTests,
   setupMultimodalInference
 } = require('./_image-common.js')
-const { getMediaPath } = require('./utils')
+const { cleanupIntegrationCacheFiles, getMediaPath } = require('./utils')
 
 const elephantCase = {
   name: 'elephant',
@@ -104,5 +105,51 @@ test(
           `Full output: "${generatedText}"`
       )
     }
+  }
+)
+
+test(
+  'a new cacheKey and a keyless request reuse the image another conversation holds',
+  { timeout: TEST_CONSTANTS.timeout },
+  async (t) => {
+    const deviceConfig = DEVICE_CONFIGS[0]
+    const label = `[${deviceConfig.id.toUpperCase()}]`
+    const { inference } = await setupMultimodalInference(t, deviceConfig.device)
+    const cacheDir = path.resolve(__dirname, '../model')
+    const keys = ['image-cross-key-a.bin', 'image-cross-key-b.bin'].map((name) =>
+      path.join(cacheDir, name)
+    )
+    cleanupIntegrationCacheFiles(keys)
+    t.teardown(() => {
+      for (const key of keys) {
+        try {
+          fs.unlinkSync(key)
+        } catch (_) {}
+      }
+    })
+    const imageBytes = new Uint8Array(fs.readFileSync(getMediaPath('elephant.jpg')))
+    const ask = async (question, runOptions) => {
+      const response = await inference.run(
+        [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          { role: 'user', type: 'media', content: imageBytes },
+          { role: 'user', content: question }
+        ],
+        runOptions
+      )
+      await response.await()
+      return response.stats || {}
+    }
+
+    const first = await ask('What animal is this?', { cacheKey: keys[0] })
+    t.ok(first.visionEncodeTiles > 0, `${label} the first conversation encoded the image`)
+
+    const second = await ask('What colour is it?', { cacheKey: keys[1] })
+    t.is(second.visionEncodeTiles || 0, 0, `${label} the new cacheKey did not encode the image`)
+    const reused = second.CacheTokens - second.promptTokens - second.generatedTokens
+    t.ok(reused > 0, `${label} the new cacheKey reused ${reused} tokens`)
+
+    const keyless = await ask('Where does it live?')
+    t.is(keyless.visionEncodeTiles || 0, 0, `${label} the keyless request did not encode the image`)
   }
 )

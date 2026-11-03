@@ -9,6 +9,7 @@ option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_COVERAGE "Enable coverage" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
 option(ENABLE_CUDA "Enable CUDA GPU acceleration" OFF)
+option(TTS_WEBGPU "Enable opt-in WebGPU acceleration" OFF)
 qvac_addon_fuzz_manifest()
 
 if(BUILD_TESTING)
@@ -22,6 +23,11 @@ endif()
 if(ENABLE_CUDA)
   list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
 endif()
+
+if(TTS_WEBGPU)
+  list(APPEND VCPKG_MANIFEST_FEATURES "webgpu")
+endif()
+
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
@@ -62,6 +68,31 @@ if(NOT tts-cpp_pocket_FOUND)
     "speech repository's engines/tts and set tts-cpp_DIR to its "
     "share/tts-cpp directory; see README.md for local build instructions.")
 endif()
+# The SDK maps per-model Core ML policy into these public options. Reject a
+# stale speech-cpp package at configure time, before compiling the addon.
+include(CheckCXXSourceCompiles)
+function(tts_check_parler_coreml_policy)
+  # Header capability only: cross-platform shared backends need not link into
+  # an executable, and caller try-compile settings remain unchanged.
+  set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+  set(CMAKE_REQUIRED_LIBRARIES tts-cpp::tts-cpp)
+  unset(TTS_CPP_HAS_PARLER_COREML_POLICY CACHE)
+  check_cxx_source_compiles("#include <tts-cpp/parler/engine.h>
+int main() {
+  tts_cpp::parler::EngineOptions options;
+  options.coreml_decoder = true;
+  options.coreml_compute_units = \"cpu_only\";
+  options.coreml_strict = false;
+  return 0;
+}" TTS_CPP_HAS_PARLER_COREML_POLICY)
+  if(NOT TTS_CPP_HAS_PARLER_COREML_POLICY)
+    message(FATAL_ERROR
+      "tts-ggml requires speech-cpp with per-instance Parler Core ML policy. "
+      "Rebuild/install the updated speech library and addon together; see README.md.")
+  endif()
+endfunction()
+tts_check_parler_coreml_policy()
+
 find_package(mecab CONFIG REQUIRED)
 # Pull in ggml directly (in addition to the transitive
 # find_package(ggml) that tts-cppConfig.cmake already does) so the
@@ -157,7 +188,12 @@ endif()
 # Package its dylibs alongside the addon, using cmake-bare's SONAME-aware
 # install rules; the module's @loader_path rpath already points here.
 if(APPLE)
-  foreach(_library ggml::ggml ggml::ggml-base ggml::ggml-cpu tts-cpp::tts-cpp)
+  set(_apple_runtime_libraries ggml::ggml ggml::ggml-base tts-cpp::tts-cpp)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    list(APPEND _apple_runtime_libraries ggml::${_backend})
+  endforeach()
+  list(REMOVE_DUPLICATES _apple_runtime_libraries)
+  foreach(_library ${_apple_runtime_libraries})
     if(TARGET ${_library})
       get_target_property(_library_type ${_library} TYPE)
       if(_library_type STREQUAL "SHARED_LIBRARY")
@@ -380,8 +416,10 @@ if(BUILD_TESTING)
   add_executable(
     tts_ggml_tests
       addon/tests/backend_env.cpp
+      addon/tests/test_app_memory_budget.cpp
       addon/tests/test_audio8_config.cpp
       addon/tests/test_backend_utils.cpp
+      addon/tests/test_fabric_options.cpp
       addon/tests/test_chatterbox_config.cpp
       addon/tests/test_moss_config.cpp
       addon/tests/test_moss_sound_effect_config.cpp

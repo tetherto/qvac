@@ -255,7 +255,8 @@ const plugin: HttpPlugin = async (app) => {
         initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
         await writeStreamingResponse(reply.raw, writerParams, runTurn(true))
       } else {
-        reply.hijack()
+        // The writer ends the raw response on success. Keep the reply managed
+        // until then so inference errors before headers can produce HTTP errors.
         await writeBlockingResponse(reply.raw, writerParams, runTurn(false))
       }
     }

@@ -669,6 +669,35 @@
     "type": "parakeet-transcription",
     "config": {}
   },
+  "parakeet-transcribepsy": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-transcribepsy-windowed": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {
+      "longFormWindowFrames": 188,
+      "longFormContextFrames": 16
+    }
+  },
+  "parakeet-transcribepsy-coreml": {
+    "on": [
+      "desktop-macos",
+      "electron-macos",
+      "mobile-ios"
+    ],
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
   "bci": {
     "skipPreDownloadOn": [
       "mobile"

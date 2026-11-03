@@ -298,6 +298,11 @@ test('models registry catalog exports every named model constant', (t) => {
     names.includes('PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0'),
     'Nemotron diarization fixture resolves to a named model constant'
   )
+  t.ok(
+    names.includes('PARAKEET_TRANSCRIBEPSY_250M_Q8_0') &&
+      names.includes('PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0'),
+    'the Hugging Face TranscribePsy GGUFs are named model constants'
+  )
 
   for (const [legacyName, canonicalName] of [
     ['PARAKEET_0_6B_F16', 'PARAKEET_NEMOTRON_0_6B_F16'],

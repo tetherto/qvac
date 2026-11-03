@@ -142,7 +142,7 @@ test('RPC inventory reads native device count and memory over fragmented TCP res
     if (command === 14) {
       t.alike(payload, Buffer.alloc(24), 'TCP-only capabilities')
       const hello = Buffer.alloc(28)
-      hello[0] = 111
+      hello[0] = 112
       return hello
     }
     if (command === 15) {
@@ -168,12 +168,12 @@ test('RPC inventory reads native device count and memory over fragmented TCP res
 
 for (const patch of [0, 1, 255]) {
   for (const qpn of [0, 0x123456]) {
-    test(`RPC 111.0.${patch} inventory reports RDMA availability for QPN ${qpn}`, async (t) => {
+    test(`RPC 112.0.${patch} inventory reports RDMA availability for QPN ${qpn}`, async (t) => {
       await using server = await endpoint((command, payload) => {
         if (command === 14) {
           t.alike(payload, Buffer.alloc(24), 'probe requests TCP even when server offers RDMA')
           const hello = Buffer.alloc(28)
-          hello[0] = 111
+          hello[0] = 112
           hello[2] = patch
           hello.writeUInt32LE(qpn, 4)
           hello.fill(255, 8)
@@ -198,7 +198,7 @@ test('RPC inventory preserves the RDMA offer when the server has no devices', as
   await using server = await endpoint((command) => {
     if (command === 14) {
       const hello = Buffer.alloc(28)
-      hello[0] = 111
+      hello[0] = 112
       hello.writeUInt32LE(1, 4)
       return hello
     }
@@ -213,7 +213,7 @@ test('RPC inventory rejects unsupported versions, invalid lengths and excessive 
     await using server = await endpoint((command) => {
       if (command === 14) {
         const hello = Buffer.alloc(kind === 'length' ? 29 : 28)
-        hello[0] = kind === 'version' ? 3 : 111
+        hello[0] = kind === 'version' ? 3 : 112
         return hello
       }
       if (command === 15) {
@@ -247,8 +247,9 @@ test('RPC inventory reports and rejects incompatible versions before requesting 
     [108, 0],
     [109, 0],
     [110, 0],
-    [112, 0],
-    [111, 1]
+    [111, 0],
+    [113, 0],
+    [112, 1]
   ]) {
     using logs = captureWarnings()
     const commands: number[] = []
@@ -269,7 +270,7 @@ test('RPC inventory reports and rejects incompatible versions before requesting 
       url: server.url,
       reason: 'unsupported protocol version',
       receivedVersion: `${major}.${minor}.7`,
-      supportedVersions: '111.0.x',
+      supportedVersions: '112.0.x',
       receivedHelloBytes: '28',
       expectedHelloBytes: 28
     })
@@ -283,7 +284,7 @@ test('RPC inventory warns for short and oversized HELLO frames before parsing in
       await using server = await endpoint(
         () => {
           const hello = Buffer.alloc(length)
-          if (length >= 3) hello[0] = 111
+          if (length >= 3) hello[0] = 112
           return hello
         },
         { splitAt }
@@ -294,8 +295,8 @@ test('RPC inventory warns for short and oversized HELLO frames before parsing in
       t.is(details.url, server.url)
       t.is(details.receivedHelloBytes, String(length))
       t.is(details.expectedHelloBytes, 28)
-      t.is(details.supportedVersions, '111.0.x')
-      t.is(details.receivedVersion, splitAt.length === 0 && length >= 3 ? '111.0.0' : 'unavailable')
+      t.is(details.supportedVersions, '112.0.x')
+      t.is(details.receivedVersion, splitAt.length === 0 && length >= 3 ? '112.0.0' : 'unavailable')
       t.is(
         details.reason,
         splitAt.length === 0 && length > 28
@@ -312,7 +313,7 @@ test('RPC inventory bounds diagnostics for a huge declared length and excess tra
     await using server = await endpoint(
       () => {
         const hello = Buffer.alloc(28)
-        hello[0] = 111
+        hello[0] = 112
         return hello
       },
       {
@@ -331,7 +332,7 @@ test('RPC inventory bounds diagnostics for a huge declared length and excess tra
     t.is(logs.warnings.length, 1)
     const details = JSON.parse(logs.warnings[0]!.slice(logs.warnings[0]!.indexOf('{')))
     t.is(details.receivedHelloBytes, kind === 'header-only' ? '18446744073709551615' : '28')
-    t.is(details.receivedVersion, kind === 'header-only' ? 'unavailable' : '111.0.0')
+    t.is(details.receivedVersion, kind === 'header-only' ? 'unavailable' : '112.0.0')
     t.is(
       details.reason,
       kind === 'header-only' ? 'unexpected response size' : 'response exceeds frame limit'

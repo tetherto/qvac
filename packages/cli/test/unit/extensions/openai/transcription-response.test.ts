@@ -146,6 +146,63 @@ describe('timed transcription response formatting', () => {
   })
 })
 
+describe('whisper metadata in verbose JSON', () => {
+  const whisperSegments: TranscribeSegment[] = [
+    {
+      id: 0,
+      startMs: 0,
+      endMs: 1_250,
+      text: ' Hello',
+      append: false,
+      language: 'en',
+      noSpeechProb: 0.02,
+      speakerTurnNext: true,
+      tokens: [{ text: ' Hello', startMs: 9.999999776482582, endMs: 1_250, probability: 0.98 }]
+    },
+    { id: 1, startMs: 1_250, endMs: 2_500, text: ' world', append: true, language: 'en' }
+  ]
+
+  it('maps the whisper segment fields to snake_case seconds', () => {
+    assert.deepEqual(formatTimedTranscription('verbose_json', whisperSegments).body, {
+      text: 'Hello world',
+      duration: 2.5,
+      language: 'en',
+      segments: [
+        {
+          id: 0,
+          start: 0,
+          end: 1.25,
+          text: ' Hello',
+          language: 'en',
+          no_speech_prob: 0.02,
+          speaker_turn_next: true,
+          token_timestamps: [{ text: ' Hello', start: 0.01, end: 1.25, probability: 0.98 }]
+        },
+        { id: 1, start: 1.25, end: 2.5, text: ' world', language: 'en' }
+      ]
+    })
+  })
+
+  it('reports a top-level language only when the segments agree', () => {
+    const mixed = whisperSegments.map((segment, index) =>
+      index === 1 ? { ...segment, language: 'de' } : segment
+    )
+    const body = formatTimedTranscription('verbose_json', mixed).body as {
+      language?: string
+      segments: { language?: string }[]
+    }
+    assert.equal(body.language, undefined)
+    assert.deepEqual(
+      body.segments.map((segment) => segment.language),
+      ['en', 'de']
+    )
+    assert.equal(
+      (formatTimedTranscription('verbose_json', SEGMENTS).body as { language?: string }).language,
+      undefined
+    )
+  })
+})
+
 it('Nemotron verbose JSON preserves overlapping speaker turns and their duration', () => {
   const speakerSegments = Array.from({ length: 8 }, (_, speakerId) => ({
     speakerId,

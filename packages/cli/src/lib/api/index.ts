@@ -7,7 +7,11 @@ import type { Logger } from '@/lib/logger'
 import { findConfigFile, loadConfig } from '@/lib/config'
 import { parseServeConfig, unknownServeKeys } from '@/lib/api/core/config'
 import { resolveServeApiKey } from '@/lib/api/core/api-key'
-import { checkNetworkExposure, validateServeStartup } from '@/lib/api/core/startup'
+import {
+  checkAdminExposure,
+  checkNetworkExposure,
+  validateServeStartup
+} from '@/lib/api/core/startup'
 import { createModelRegistry } from '@/lib/api/core/model-registry'
 import { createEphemeralFilesStore } from '@/lib/api/core/stores/ephemeral-files'
 import { createLoadManager, defaultLoadFn } from '@/lib/api/core/load-manager'
@@ -40,6 +44,8 @@ export interface StartServerOptions {
   allowedHosts?: string[] | undefined
   /** Accept any Host header, turning off the DNS-rebinding check. */
   allowAnyHost?: boolean | undefined
+  /** Allow the admin-only routes, such as runtime suspend and resume. */
+  enableAdmin?: boolean | undefined
   publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
   /** Silence the logger entirely. Useful when capturing the OpenAPI spec or
@@ -85,6 +91,7 @@ async function buildServerParts(
   // socket opens rather than after a preload that can run for minutes.
   const exposureWarning = checkNetworkExposure({ ...options, apiKey })
   if (exposureWarning !== undefined) logger.warn(exposureWarning)
+  checkAdminExposure({ host: options.host, apiKey, enableAdmin: serveConfig.enableAdmin })
   const registry = createModelRegistry()
 
   // The load fn resolves the override lazily via this ref, so the manager can be
@@ -111,6 +118,7 @@ async function buildServerParts(
       }
     }),
     extensions: {},
+    runtime: { state: 'active', pending: 0, epoch: 0 },
     get loadModelOverride() {
       return overrideRef.current
     },
@@ -157,6 +165,11 @@ export async function startServer(options: StartServerOptions): Promise<HttpServ
   }
   for (const banner of extensionBanners(app.qvac, extensions)) {
     app.qvac.logger.warn(banner)
+  }
+  if (app.qvac.serveConfig.enableAdmin) {
+    app.qvac.logger.warn(
+      'admin endpoints enabled: any client that passes auth can suspend and resume the runtime'
+    )
   }
 
   goodbye(() => app.close())

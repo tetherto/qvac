@@ -330,3 +330,54 @@ test('AudioGen surfaces the MiniMax stage timings and emitted frames', async (t)
   t.is(stats.flowMs, 3600)
   t.is(stats.vocoderMs, 700)
 })
+
+test('MiniMax forwards all four explicit Core ML policies to the native configuration', (t) => {
+  withPlatform('darwin', () => {
+    for (const coremlComputeUnits of ['CPU_ONLY', 'CPU_AND_GPU', 'CPU_AND_NE', 'ALL']) {
+      const { gen } = createHarness({
+        config: { coremlProfileDir: '/models/coreml', coremlComputeUnits }
+      })
+      t.is(gen._configuration.coremlProfileDir, '/models/coreml')
+      t.is(gen._configuration.coremlComputeUnits, coremlComputeUnits)
+    }
+  })
+  const { gen } = createHarness()
+  t.is(gen._configuration.coremlProfileDir, undefined)
+  t.is(gen._configuration.coremlComputeUnits, undefined)
+})
+
+test('MiniMax rejects partial, malformed or unsupported Core ML configuration', (t) => {
+  withPlatform('darwin', () => {
+    for (const config of [
+      { coremlProfileDir: '/models/coreml' },
+      { coremlComputeUnits: 'ALL' },
+      { coremlProfileDir: '', coremlComputeUnits: 'ALL' },
+      { coremlProfileDir: '/models/\0coreml', coremlComputeUnits: 'ALL' },
+      { coremlProfileDir: '/models/coreml', coremlComputeUnits: 'GPU_ONLY' },
+      { coremlProfileDir: 17, coremlComputeUnits: 'CPU_ONLY' }
+    ]) {
+      t.is(captureError(() => createHarness({ config })).code, ERR_CODES.INVALID_INPUT)
+    }
+  })
+  for (const platform of ['linux', 'win32']) {
+    const error = withPlatform(platform, () =>
+      captureError(() =>
+        createHarness({
+          config: { coremlProfileDir: '/models/coreml', coremlComputeUnits: 'ALL' }
+        })
+      )
+    )
+    t.is(error.code, ERR_CODES.INVALID_INPUT)
+  }
+})
+
+test('ACE-Step rejects the MiniMax Core ML options', (t) => {
+  const error = captureError(
+    () =>
+      new AudioGen({
+        files: { modelDir: '/models/acestep' },
+        config: { coremlProfileDir: '/models/coreml', coremlComputeUnits: 'ALL' }
+      })
+  )
+  t.is(error.code, ERR_CODES.INVALID_INPUT)
+})

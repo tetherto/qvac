@@ -26,6 +26,7 @@ ENGINE_TO_ADDON: dict[str, str] = {
     "audiogen-ggml": "audiogen",
     "bci-whispercpp-transcription": "bci",
     "ggml-classification": "classification",
+    "ggml-image-embedding": "classification",
     "ggml-ocr": "ocr",
     "ggml-vla": "vla",
     "llamacpp-completion": "llm",

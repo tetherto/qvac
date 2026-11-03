@@ -20,6 +20,24 @@ const options: TTSGgmlOptions = {
   opts: new Date()
 }
 const namespaceOptions: TTSGgml.TTSGgmlOptions = options
+const coremlPolicy: TTSGgml.LavaSRCoreMLComputeUnits = 'CPU_AND_NE'
+const lavasrCoreml: TTSGgml.TTSGgmlOptions = {
+  enhancer: {
+    type: 'lavasr',
+    enhancerPath: '/enhancer.gguf',
+    coremlModelPath: '/enhancer.mlmodelc',
+    coremlComputeUnits: coremlPolicy
+  },
+  denoiser: {
+    type: 'lavasr',
+    denoiserPath: '/denoiser.gguf',
+    coremlModelPath: '/denoiser.mlmodelc',
+    coremlComputeUnits: 'CPU_AND_GPU'
+  }
+}
+// @ts-expect-error Apple does not expose a GPU_ONLY Core ML policy
+const invalidLavasrPolicy: TTSGgml.LavaSRCoreMLComputeUnits = 'GPU_ONLY'
+void [lavasrCoreml, invalidLavasrPolicy]
 const requireConstructor: typeof TTSGgml = TTSGgml
 const defaultConstructor: typeof TTSGgml = DefaultTTSGgml
 const model = new TTSGgml(namespaceOptions)
@@ -111,6 +129,15 @@ const mossFitSync: TTSGgml.TtsFitResult = TTSGgml.assessFit(mossFitRequest)
 void TTSGgml.assessFit(mossFitWithoutDecoder)
 void [mossFitResult, mossFitSync]
 
+async function readFitRows(): Promise<void> {
+  const fit = await TTSGgml.assessFit(mossFitRequest)
+  const status: TTSGgml.TtsFitStatus = fit.status
+  const rows: TTSGgml.TtsFitDevice[] = fit.devices
+  const stats: TTSGgml.TtsFitStats = fit.stats
+  void [status, rows, stats]
+}
+void readFitRows
+
 const mossSfxWorkload = {
   engineType: 'moss-sfx' as const,
   prompt: 'Rain on a tin roof.',
@@ -134,3 +161,72 @@ const { seconds, ...mossSfxWithoutSeconds } = mossSfxFitRequest
 // @ts-expect-error MOSS sound-effect fit requires seconds
 void TTSGgml.assessFit(mossSfxWithoutSeconds)
 void [mossSfxFitResult, prompt, seconds]
+
+const nativeControls: TTSGgml.TTSGgmlOptions[] = [
+  { engine: 'moss', nCtx: 8192, maxNewTokens: 4096, textTemperature: 0, audioTopK: 25 },
+  { engine: 'parler', coremlDecoder: true, coremlComputeUnits: 'cpu_and_ane', coremlStrict: false },
+  {
+    engine: 'supertonic',
+    config: { backend: 'WebGPU0' },
+    precision: 'f16',
+    f16Attn: -1,
+    voiceStyleTtl: new Float32Array(0),
+    voiceStyleDp: [],
+    vulkanEnvOverrides: { GGML_VK_DISABLE_GRAPH: '1' }
+  },
+  { engine: 'cosyvoice3', greedy: false, forceSpeechTokens: [0, 1] }
+]
+const warmUpCompletion: Promise<void> = model.warmUp('Speech is ready.')
+const ownedSpeechTokens: number[] | undefined = output.speechTokenIds
+const pocketFitRequest: TTSGgml.PocketFitRequest = {
+  engineType: 'pocket',
+  pocketFlowModelPath: '/models/pocket/flow-lm.gguf',
+  pocketMimiModelPath: '/models/pocket/mimi.gguf',
+  pocketFrontendPath: '/models/pocket/frontend.json',
+  text: 'Project this sentence.',
+  backend: 'MTL0',
+  memoryBudgetBytes: 1024
+}
+const pocketFitResult: Promise<TTSGgml.TtsFitResult> = TTSGgml.assessFit(pocketFitRequest)
+void [nativeControls, warmUpCompletion, ownedSpeechTokens, pocketFitResult]
+
+const parlerCoremlOptions: TTSGgmlOptions = {
+  engine: 'parler',
+  coremlDecoder: false,
+  coremlComputeUnits: 'cpu_and_ane',
+  coremlStrict: false
+}
+const invalidParlerCoremlOptions: TTSGgmlOptions = {
+  // @ts-expect-error compute units have a finite public vocabulary
+  coremlComputeUnits: 'ane',
+  // @ts-expect-error explicit boolean required
+  coremlStrict: 'false'
+}
+const parlerFit: TTSGgml.ParlerFitRequest = {
+  engineType: 'parler',
+  parlerModelPath: './parler.gguf',
+  coremlDecoder: false
+}
+const decoderSidecarLoaded: number | undefined = runtimeStats.decoderSidecarLoaded
+const dacSidecarLoaded: number | undefined = runtimeStats.dacSidecarLoaded
+const decoderOnCoreml: number | undefined = runtimeStats.decoderOnCoreml
+const dacOnCoreml: number | undefined = runtimeStats.dacOnCoreml
+type CoremlNotPerJob<T> =
+  Extract<keyof T, 'coremlDecoder' | 'coremlComputeUnits' | 'coremlStrict'> extends never
+    ? true
+    : false
+const coremlNotPerRun: CoremlNotPerJob<TTSGgml.TTSRunInput> = true
+const coremlNotPerStream: CoremlNotPerJob<TTSGgml.SentenceStreamOptions> = true
+const coremlNotPerTextStream: CoremlNotPerJob<TTSGgml.RunStreamingOptions> = true
+void [
+  parlerCoremlOptions,
+  invalidParlerCoremlOptions,
+  parlerFit,
+  decoderSidecarLoaded,
+  dacSidecarLoaded,
+  decoderOnCoreml,
+  dacOnCoreml,
+  coremlNotPerRun,
+  coremlNotPerStream,
+  coremlNotPerTextStream
+]

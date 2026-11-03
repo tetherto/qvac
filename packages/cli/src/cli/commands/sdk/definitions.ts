@@ -251,6 +251,11 @@ export const SDK: SdkDefinition = {
           description: 'Accept any Host header (turns off DNS-rebinding protection)'
         },
         {
+          spec: '--enable-admin',
+          description:
+            'Allow the admin endpoints (runtime suspend/resume); off by default, needs an API key off loopback'
+        },
+        {
           spec: '--public-base-url <url>',
           description: 'Externally reachable origin (required for image response_format=url)'
         },
@@ -343,6 +348,11 @@ export const SDK: SdkDefinition = {
             {
               spec: '--allow-any-host',
               description: 'Accept any Host header (turns off DNS-rebinding protection)'
+            },
+            {
+              spec: '--enable-admin',
+              description:
+                'Allow the admin endpoints (runtime suspend/resume); off by default, needs an API key off loopback'
             },
             {
               spec: '--public-base-url <url>',

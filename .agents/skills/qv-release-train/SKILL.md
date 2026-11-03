@@ -31,11 +31,24 @@ the per-package flow in `docs/gitflow.md`.
 - When the train moves `@qvac/sdk`, skip "Point the SDK at that version" in
   `/qv-sdk-inference-version`: the version pass writes the `@qvac/inference`
   range. Its `sdk-python` and `sdk-kotlin` syncs still apply.
-- When the train lists `fromNpm` packages, make the workspace exclusion its own
+- Make the workspace exclusion of the packages outside the train its own
   commit in the release PR ("Making a release" in `docs/ci/RELEASE-TRAIN.md`),
   and leave it out of the backmerge.
 - Open both PRs with `qv-sdk-pr-create`: one release PR, one backmerge, for the
   whole train.
+- Invoke `qv-docs-cutoff` right after cutting the train branch, passing the new
+  version of each documented collection's package (`@qvac/sdk`, `@qvac/cli`),
+  not the train's anchor version, plus the train branch itself. The branch is
+  what gives it the release base, since the cutoff publishes the tree the train
+  was cut from rather than `main`'s tip. A train that moves neither collection
+  cuts nothing. It opens one documentation PR into `main` and reports its URL.
+  Nothing in steps 7 and 8 waits on it.
+- Do not approve or merge the documentation PR. The documentation engineer
+  reviews it — that review is the only gate on the documentation side of the
+  release.
+- Tell the user, at step 9, that the merged documentation commit is what goes
+  to `promote-docs-production.yml`, and only once the versions are on npm.
+  Promoting earlier publishes documentation for packages nobody can install.
 - Never approve the `npm` or `pypi` deployment; tell the user when each waits.
 - On a failed run, report it. Do not publish a package by hand and do not move
   or delete a tag.

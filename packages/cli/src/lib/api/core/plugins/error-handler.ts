@@ -1,8 +1,9 @@
 import type { HttpErrorShape, HttpPlugin } from '@/lib/http'
 import { hasSchemaValidationErrors, isResponseSerializationError } from '@/lib/http'
+import { ContextOverflowError, RequestRejectedByPolicyError } from '@qvac/sdk'
 import { HttpError, errorType } from '@/lib/api/lib/http-error'
+import { isLifecycleBlockedError, runtimeSuspendedError } from '@/lib/api/core/lifecycle'
 import { sendSSE, endSSE } from '@/lib/api/lib/sse'
-import { RequestRejectedByPolicyError } from '@qvac/sdk'
 
 export interface ErrorHandlerOptions {
   /**
@@ -13,10 +14,13 @@ export interface ErrorHandlerOptions {
   fieldCodes?: Record<string, string>
 }
 
-// `model` is core's: every route resolves it through `requireModel`. Each
+// `model` is core's: every route resolves it through `requireModel`. Paging is
+// core's too, so its codes don't depend on which extensions are mounted. Each
 // extension contributes the fields of its own request bodies.
 const CORE_FIELD_CODES: Record<string, string> = {
-  model: 'missing_model'
+  model: 'missing_model',
+  limit: 'invalid_limit',
+  offset: 'invalid_offset'
 }
 
 // lunte-disable-next-line require-await
@@ -24,25 +28,33 @@ const plugin: HttpPlugin<ErrorHandlerOptions> = async (app, opts) => {
   const fieldCodes = { ...CORE_FIELD_CODES, ...opts.fieldCodes }
 
   app.setErrorHandler((err: HttpErrorShape, req, reply) => {
+    // Disconnect cancellation can reject after the client has gone. There is
+    // no response left to send, and this is not a server failure to log.
+    if (reply.raw.destroyed || reply.raw.writableEnded) return
+
     const sseSentinel = req.routeOptions?.config?.sseSentinel ?? true
-    const message = err.message ?? 'An internal error occurred.'
+    const sdkHttpError = sdkErrorAsHttp(err)
+    const httpError = sdkHttpError ?? (err instanceof HttpError ? err : undefined)
+    const message = httpError?.message ?? err.message ?? 'An internal error occurred.'
 
     if (reply.raw.headersSent) {
-      app.qvac.logger.error(formatServerError('streaming_error', req.method, req.url, err))
+      if (!sdkHttpError) {
+        app.qvac.logger.error(formatServerError('streaming_error', req.method, req.url, err))
+      }
       sendSSE(reply.raw, {
         error: {
-          message,
-          type: 'server_error',
-          code: err instanceof HttpError ? err.code : 'internal_error'
+          message: httpError?.message ?? 'An internal error occurred.',
+          type: sdkHttpError ? errorType(sdkHttpError.status) : 'server_error',
+          code: httpError?.code ?? 'internal_error'
         }
       })
       endSSE(reply.raw, { sentinel: sseSentinel })
       return
     }
 
-    if (err instanceof HttpError) {
-      reply.code(err.status).send({
-        error: { message, type: errorType(err.status), code: err.code }
+    if (httpError) {
+      reply.code(httpError.status).send({
+        error: { message, type: errorType(httpError.status), code: httpError.code }
       })
       return
     }
@@ -142,6 +154,19 @@ const plugin: HttpPlugin<ErrorHandlerOptions> = async (app, opts) => {
       }
     })
   })
+}
+
+// SDK errors a client can act on, rather than a server fault.
+function sdkErrorAsHttp(err: unknown): HttpError | undefined {
+  if (err instanceof ContextOverflowError) {
+    return new HttpError(
+      400,
+      'context_length_exceeded',
+      "The request exceeds the model's context capacity. Shorten the input, start a new conversation, or increase ctx_size."
+    )
+  }
+  if (isLifecycleBlockedError(err)) return runtimeSuspendedError()
+  return undefined
 }
 
 function formatServerError(

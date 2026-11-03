@@ -3,7 +3,7 @@
   "checkpoint": "lerobot/pi05_base",
   "checkpoint_revision": "9e55186ad36e66b95cda57bc47818d9e6237ae30",
   "fixture_sha256": "7ff68e17415ef61f4e42c05054e585228a086802bb6fb80afb1f7e5fb700b029",
-  "lerobot_commit": "n/a (installed from PyPI lerobot==0.5.2)",
+  "lerobot_commit": "unknown (lerobot main between v0.5.1 and v0.6.0, whose pyproject said 0.5.2; 0.5.2 was never released on PyPI)",
   "lerobot_version": "0.5.2",
   "num_keys": 52,
   "python_executable": "/home/olya/lerobot/.venv/bin/python",

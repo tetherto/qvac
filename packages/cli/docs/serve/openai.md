@@ -124,8 +124,8 @@ curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'
 curl 'http://localhost:11434/v1/models/catalog?search=qwen'
 ```
 
-The live remote model registry and on-disk download state are not included yet (planned
-follow-ups).
+The catalog does not include on-disk download state. To browse the live remote model registry,
+use [`GET /qvac/v1/registry/models`](default.md#get-qvacv1registrymodels) on the QVAC surface.
 
 ## Tools: deferred loading
 
@@ -257,19 +257,20 @@ and the chat template decides how much earlier reasoning stays in the cache.
 
 ### Errors
 
-| HTTP | `error.code`            | When                                                                           |
-| ---- | ----------------------- | ------------------------------------------------------------------------------ |
-| 400  | `invalid_json`          | Body is not valid JSON                                                         |
-| 400  | `missing_model`         | `model` field is missing                                                       |
-| 400  | `invalid_prompt`        | Prompt is missing, empty, has empty array entries, or is provided as token ids |
-| 400  | `unsupported_streaming` | Multi-prompt input combined with `"stream": true`                              |
-| 400  | `invalid_model_type`    | Alias is not a `chat` model                                                    |
-| 404  | `model_not_found`       | Unknown alias                                                                  |
-| 503  | `model_not_loaded`      | Model not loaded and lazy loading is disabled (`serve.load.lazy: false`)       |
-| 503  | `model_load_failed`     | Lazy load (cold start) of the model failed                                     |
-| 503  | `model_load_timeout`    | Lazy load exceeded `serve.load.timeoutMs`                                      |
-| 503  | `model_not_ready`       | Rare fallback: load reported done but the model is not READY                   |
-| 500  | `completion_error`      | SDK / engine failure                                                           |
+| HTTP | `error.code`              | When                                                                           |
+| ---- | ------------------------- | ------------------------------------------------------------------------------ |
+| 400  | `invalid_json`            | Body is not valid JSON                                                         |
+| 400  | `missing_model`           | `model` field is missing                                                       |
+| 400  | `invalid_prompt`          | Prompt is missing, empty, has empty array entries, or is provided as token ids |
+| 400  | `unsupported_streaming`   | Multi-prompt input combined with `"stream": true`                              |
+| 400  | `invalid_model_type`      | Alias is not a `chat` model                                                    |
+| 400  | `context_length_exceeded` | SDK reports that the request exceeds the model's effective context capacity    |
+| 404  | `model_not_found`         | Unknown alias                                                                  |
+| 503  | `model_not_loaded`        | Model not loaded and lazy loading is disabled (`serve.load.lazy: false`)       |
+| 503  | `model_load_failed`       | Lazy load (cold start) of the model failed                                     |
+| 503  | `model_load_timeout`      | Lazy load exceeded `serve.load.timeoutMs`                                      |
+| 503  | `model_not_ready`         | Rare fallback: load reported done but the model is not READY                   |
+| 500  | `internal_error`          | SDK / engine failure                                                           |
 
 ## `POST /v1/responses`
 
@@ -749,7 +750,29 @@ world
 }
 ```
 
-This is not full OpenAI `verbose_json` compatibility. Its `duration` is the maximum transcribed segment end, not the submitted audio length. QVAC omits the top-level `language`, `task`, and `words` fields, and the segment-level `seek`, `tokens`, `temperature`, `avg_logprob`, `compression_ratio`, and `no_speech_prob` fields. Consumers must treat those fields as absent rather than infer placeholder values.
+Whisper segments add the metadata the engine reports: `language` (the language the window was decoded in), `no_speech_prob`, `speaker_turn_next` (with `tdrz_enable`) and, with `token_timestamps`, a `token_timestamps` array of `{ text, start, end, probability }` with times in seconds. The top-level `language` is present when every segment that reports one reports the same language.
+
+```json
+{
+  "text": "Hello world",
+  "duration": 2.5,
+  "language": "en",
+  "segments": [
+    {
+      "id": 0,
+      "start": 0,
+      "end": 1.25,
+      "text": " Hello",
+      "language": "en",
+      "no_speech_prob": 0.02,
+      "speaker_turn_next": true,
+      "token_timestamps": [{ "text": " Hello", "start": 0, "end": 1.25, "probability": 0.98 }]
+    }
+  ]
+}
+```
+
+This is not full OpenAI `verbose_json` compatibility. Its `duration` is the maximum transcribed segment end, not the submitted audio length. QVAC omits the top-level `task` and `words` fields, and the segment-level `seek`, `tokens` (OpenAI's token ids; `token_timestamps` is a different shape under a different name), `temperature`, `avg_logprob`, and `compression_ratio` fields. Consumers must treat those fields as absent rather than infer placeholder values.
 
 ### Same weights as transcriptions
 

@@ -40,6 +40,9 @@ export function createMossTranscribeFitRequest(
     ...(workload.hotwords !== undefined && { hotwords: workload.hotwords }),
     ...(workload.maxNewTokens !== undefined && { maxNewTokens: workload.maxNewTokens }),
     gpuLayers: gpuLayersFromGate(config.useGPU),
+    // An explicit selector projects on that device and overrides the GPU gate,
+    // as it does at load; a missing device rejects instead of falling back.
+    ...(config.backend !== undefined && { backend: config.backend }),
     ...(config.maxThreads !== undefined && { threads: config.maxThreads }),
     ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir }),
     ...(params.marginBytes !== undefined && { marginBytes: params.marginBytes })
@@ -123,6 +126,14 @@ export function createParakeetFitRequest(params: AsrFitRequestParams): FitReques
     modelPath: params.modelPath,
     gpuLayers: gpuLayersFromGate(config.useGPU),
     ...(config.maxThreads !== undefined && { threads: config.maxThreads }),
+    // The long-form window bounds the offline encoder graph the projection
+    // sizes, so an explicit window (or the one-pass sentinel) reaches the fit.
+    ...(config.longFormWindowFrames !== undefined && {
+      longFormWindowFrames: config.longFormWindowFrames
+    }),
+    ...(config.longFormContextFrames !== undefined && {
+      longFormContextFrames: config.longFormContextFrames
+    }),
     // Only a streaming load holds a live session, so outside one the chunk
     // cadence describes no allocation the projection should cover.
     ...(config.streaming === true &&

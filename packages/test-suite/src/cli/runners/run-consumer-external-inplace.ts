@@ -7,6 +7,7 @@ import { startNodeMemoryPoller } from '../../core/node-memory-poller.js'
 import { loadConfig } from '../../utils/config-loader.js'
 import { loadTests } from '../../utils/test-loader.js'
 import { buildMqttConnectionConfig, createMqttClient } from '../../utils/mqtt-connection.js'
+import { externalRunEnv, runMqttClient } from '../utils/external-consumer.js'
 
 function readArg(args: string[], name: string): string | undefined {
   const prefix = `--${name}=`
@@ -41,10 +42,13 @@ async function main() {
     throw new Error(`No external consumer named "${name}" (configured: ${available})`)
   }
   if (entry.mode === 'mqtt') {
-    throw new Error(
-      `External consumer "${name}" is configured for mqtt mode, which is declared but not ` +
-        'implemented. Use mode: "bridge" until a client genuinely needs to run without Node.'
-    )
+    // The client speaks the protocol itself: start it with the run env and mirror its exit.
+    const mqttConfig = buildMqttConnectionConfig(config)
+    if (mqttBrokerOverride) {
+      mqttConfig.brokerUrl = mqttBrokerOverride
+    }
+    runMqttClient(configDir, entry, externalRunEnv(entry, runId, mqttConfig))
+    return
   }
 
   console.log('📋 Loading test definitions...')

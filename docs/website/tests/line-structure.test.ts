@@ -44,8 +44,9 @@ const cliPackage: DocumentedSoftware = {
 function listing(
   directories: string[],
   files: string[] = [],
+  symlinks: string[] = [],
 ): DirectoryListing {
-  return { directories, files }
+  return { directories, files, symlinks }
 }
 
 function check(
@@ -155,6 +156,16 @@ describe('version structure check', () => {
     expect(problems[0]).toContain('ai-capabilities')
   })
 
+  it('rejects a symlinked entry, which the local preview uses and a commit must not', () => {
+    // Fumadocs follows the link and builds the development line behind it;
+    // every other rule here reads `isDirectory()`, which a link answers
+    // `false`, so the line would publish with nothing reporting it.
+    const problems = check(sdk, listing(['(v0.17)', 'v0.16'], [], ['v0.18']))
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toContain('v0.18')
+    expect(problems[0]).toContain('symbolic link')
+  })
+
   it('reports a documented software with no content folder at all', () => {
     const problems = check(sdk, null)
     expect(problems).toEqual(['/sdk: documented but has no content folder'])
@@ -230,6 +241,9 @@ describe('the manifest against the content tree', () => {
           .map((entry) => entry.name),
         files: entries
           .filter((entry) => entry.isFile() && /\.mdx?$/.test(entry.name))
+          .map((entry) => entry.name),
+        symlinks: entries
+          .filter((entry) => entry.isSymbolicLink())
           .map((entry) => entry.name),
       })
     }

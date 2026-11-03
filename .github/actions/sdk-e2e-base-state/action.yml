@@ -89,10 +89,11 @@ runs:
             }
           }
 
-          // results-android / results-ios carry a single implicit platform; node
-          // families qualify the artifact name with the platform key.
+          // results-android / results-kotlin-android / results-ios carry a single
+          // implicit platform; node families qualify the artifact name with the
+          // platform key.
           function parseArtifactName(name) {
-            let m = /^results-(android|ios)$/.exec(name);
+            let m = /^results-(android|kotlin-android|ios)$/.exec(name);
             if (m) return { family: m[1], platform: m[1] };
             m = /^results-(desktop|electron|snap|python)-(.+)$/.exec(name);
             if (m) return { family: m[1], platform: m[2] };

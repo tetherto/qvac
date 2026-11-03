@@ -11,6 +11,7 @@ import {
   InferenceCancelledError as EngineCancelledError,
   createErrorResponse,
   ContextOverflowError as InferenceContextOverflowError,
+  ModelRegistryModelNotFoundError as InferenceModelRegistryModelNotFoundError,
   RequestIdConflictError as InferenceRequestIdConflictError,
   RequestNotFoundError as InferenceRequestNotFoundError,
   RequestRejectedByPolicyError as InferenceRequestRejectedByPolicyError,
@@ -19,6 +20,7 @@ import {
 import {
   ContextOverflowError,
   InferenceCancelledError,
+  ModelRegistryModelNotFoundError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
@@ -80,6 +82,18 @@ test('reconstructError: RequestNotFoundError round-trips', (t) => {
   t.ok(reconstructed instanceof RequestNotFoundError)
   t.is((reconstructed as RequestNotFoundError).requestId, 'rid-3')
   t.is((reconstructed as RequestNotFoundError).code, 52418)
+})
+
+test('reconstructError: ModelRegistryModelNotFoundError round-trips', (t) => {
+  const original = new InferenceModelRegistryModelNotFoundError('hf', 'org/m.gguf')
+  const envelope = createErrorResponse(original)
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof ModelRegistryModelNotFoundError)
+  t.is((reconstructed as ModelRegistryModelNotFoundError).registrySource, 'hf')
+  t.is((reconstructed as ModelRegistryModelNotFoundError).registryPath, 'org/m.gguf')
+  t.is((reconstructed as ModelRegistryModelNotFoundError).code, 53951)
 })
 
 test('reconstructError: ContextOverflowError round-trips with all fields', (t) => {

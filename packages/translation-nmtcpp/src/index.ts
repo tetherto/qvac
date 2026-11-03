@@ -173,7 +173,8 @@ interface TranslationNmtcppConstructor {
   new (args: TranslationNmtcppArgs): TranslationNmtcpp;
   /**
    * Assess a model before loading it, using current device memory. Concurrent
-   * calls run one at a time. A malformed request rejects.
+   * calls run one at a time. A model or vocabulary that cannot be read, no
+   * usable device, or a malformed request rejects.
    */
   assessFit(request: TranslationNmtcpp.FitRequest): Promise<TranslationNmtcpp.FitResult>;
   /**
@@ -217,15 +218,8 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
       (request.config["main-gpu"] !== undefined ||
         request.config.main_gpu !== undefined)
     ) {
-      return {
-        status: "error",
-        reason: "unsupported-config",
-        backend: "",
-        modelBytes: 0,
-        requiredBytes: 0,
-        freeBytes: 0,
-        report: "Fit with main-gpu selection is unavailable",
-      };
+      // The fitter cannot follow a main-gpu selection.
+      return { status: "unknown", devices: [], stats: {} };
     }
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily.
     const binding = require("./binding") as {
@@ -727,15 +721,35 @@ namespace TranslationNmtcpp {
     marginBytes?: number;
   }
 
-  export interface FitResult {
-    status: "fits" | "does-not-fit" | "error";
-    reason: string;
-    /** CPU or selected GGML device name. */
-    backend: string;
-    modelBytes: number;
-    requiredBytes: number;
+  /**
+   * `unknown` is a load with no reliable verdict: a `main-gpu` selection,
+   * memory that cannot be read, no CPU device for the host row, or a load
+   * between the allowance and the source bytes.
+   */
+  export type FitStatus = "fits" | "does-not-fit" | "unknown";
+
+  export interface FitDevice {
+    /** The PCI bus ID when the backend reports one, the device name otherwise. */
+    id: string;
+    name: string;
+    /** Memory the host owns: the host CPU, and a GPU that shares the host's memory. */
+    unified: boolean;
+    /** The weight-load allowance on the selected device; the staged source bytes on the host. */
+    usedBytes: number;
     freeBytes: number;
-    report: string;
+    totalBytes: number;
+  }
+
+  export type FitStats = Record<string, never>;
+
+  export interface FitResult {
+    status: FitStatus;
+    /**
+     * The selected GPU, then the host CPU, which stages a discrete GPU's source
+     * bytes. One CPU row for a load on the CPU, and none for `unknown`.
+     */
+    devices: FitDevice[];
+    stats: FitStats;
   }
 
   export interface TranslationNmtcppFiles {

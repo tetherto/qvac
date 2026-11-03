@@ -1,5 +1,7 @@
 #include "SdGenHandlers.hpp"
 
+#include <cmath>
+#include <limits>
 #include <unordered_map>
 #include <utility>
 
@@ -30,6 +32,44 @@ using parsers::requireStr;
 // non-integer doubles, and out-of-range values that would cause UB on cast).
 static int parseUpscaleRepeats(const picojson::value& v) {
   return requirePositiveInt(v, "upscale.repeats");
+}
+
+static std::vector<float> parseCustomSigmas(const picojson::value& v) {
+  if (!v.is<picojson::array>()) {
+    throw StatusError(
+        general_error::InvalidArgument, "custom_sigmas must be an array");
+  }
+  const auto& values = v.get<picojson::array>();
+  if (values.size() < 2 ||
+      values.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "custom_sigmas requires at least two values and an int-sized count");
+  }
+  std::vector<float> sigmas;
+  sigmas.reserve(values.size());
+  for (const auto& value : values) {
+    const double number = requireNum(value, "custom_sigmas entry");
+    if (!std::isfinite(number) || number < 0.0 ||
+        number > std::numeric_limits<float>::max()) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "custom_sigmas entries must be finite non-negative floats");
+    }
+    const float sigma = static_cast<float>(number);
+    if ((number > 0.0 && sigma == 0.0f) ||
+        (!sigmas.empty() && sigma >= sigmas.back())) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "custom_sigmas must be strictly decreasing in float precision");
+    }
+    sigmas.push_back(sigma);
+  }
+  if (sigmas.back() != 0.0f) {
+    throw StatusError(
+        general_error::InvalidArgument, "custom_sigmas must end with zero");
+  }
+  return sigmas;
 }
 
 // -- Handler map
@@ -112,6 +152,11 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
     {"scheduler",
      [](SdGenConfig& c, const picojson::value& v) {
        c.scheduler = parseScheduler(requireStr(v, "scheduler"));
+     }},
+
+    {"custom_sigmas",
+     [](SdGenConfig& c, const picojson::value& v) {
+       c.customSigmas = parseCustomSigmas(v);
      }},
 
     {"eta",
@@ -284,6 +329,9 @@ void applySdGenHandlers(SdGenConfig& config, const picojson::object& obj) {
       it->second(config, value);
     }
     // Unknown keys are silently ignored for forward compatibility.
+  }
+  if (!config.customSigmas.empty()) {
+    config.steps = static_cast<int>(config.customSigmas.size()) - 1;
   }
 }
 

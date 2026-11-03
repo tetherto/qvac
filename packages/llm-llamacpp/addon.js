@@ -155,6 +155,14 @@ class LlamaInterface {
         return Promise.resolve(this._binding.discardCache(this._handle, cacheKey));
     }
     /**
+     * Tokens `params` takes on the loaded model (see `LlmLlamacpp.calcTokens`).
+     */
+    calcTokens(params) {
+        if (!this._handle)
+            return Promise.reject(new Error("Model is not loaded"));
+        return Promise.resolve(this._binding.calcTokens(this._handle, params));
+    }
+    /**
      * Run finetuning when native binding provides support.
      */
     finetune(finetuningParams) {

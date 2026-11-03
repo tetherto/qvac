@@ -70,4 +70,16 @@ function assignLavasrParams(setup, parameters) {
     if (setup.backend.denoiserGgufPath) {
         parameters.lavasrDenoiserPath = setup.backend.denoiserGgufPath;
     }
+    if (setup.backend.enhancerCoremlModelPath !== undefined) {
+        parameters.lavasrEnhancerCoremlModelPath =
+            setup.backend.enhancerCoremlModelPath;
+        parameters.lavasrEnhancerCoremlComputeUnits =
+            setup.backend.enhancerCoremlComputeUnits;
+    }
+    if (setup.backend.denoiserCoremlModelPath !== undefined) {
+        parameters.lavasrDenoiserCoremlModelPath =
+            setup.backend.denoiserCoremlModelPath;
+        parameters.lavasrDenoiserCoremlComputeUnits =
+            setup.backend.denoiserCoremlComputeUnits;
+    }
 }

@@ -2,6 +2,8 @@ import { app } from 'electron'
 import { pathToFileURL } from 'node:url'
 
 app.commandLine.appendSwitch('no-sandbox')
+// Unsigned CI builds otherwise prompt for the Safe Storage keychain item on macOS.
+app.commandLine.appendSwitch('use-mock-keychain')
 
 async function startConfiguredConsumer() {
   const entryPath = process.env['QVAC_TEST_CONSUMER_ENTRY']

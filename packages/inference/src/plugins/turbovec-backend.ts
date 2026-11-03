@@ -92,11 +92,11 @@ export function getTurboVecBackend(): VectorIndexBackend | undefined {
   const provider = getTurboVecIndexProvider()
   if (!provider) return undefined
   return {
-    create(dim, storage) {
-      return openIndex(provider.create({ dim, storage }), storage)
+    async create(dim, storage) {
+      return openIndex(await provider.create({ dim, storage }), storage)
     },
-    load(path) {
-      const index = provider.load(path)
+    async load(path) {
+      const index = await provider.load(path)
       return openIndex(index, storageFromBitWidth((index as { bitWidth?: unknown }).bitWidth))
     }
   }
