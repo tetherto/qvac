@@ -9,7 +9,7 @@ const { isMobile, TEST_TIMEOUT } = require('./utils')
 
 // Weights are not bundled: convert them (docs/bridgedepth.md) into
 // test/fixtures/bridgedepth-vits-f32.gguf or set QVAC_BRIDGEDEPTH_MODEL_PATH.
-// Without a model the parity test is skipped.
+// Without a model the parity test is skipped on desktop and fails on mobile.
 // QVAC_BRIDGEDEPTH_BACKEND picks the device.
 const backend = env.QVAC_BRIDGEDEPTH_BACKEND || 'CPU'
 const fixtures = path.join(__dirname, '..', 'fixtures')
@@ -26,8 +26,10 @@ function asset(filename, modelEnv) {
   return fs.existsSync(local) ? local : ''
 }
 
-// CI stages the model through reusable-test-models-classification-ggml.yml and
-// verifies its checksum, so a missing model only skips local runs.
+// Desktop CI stages the model through reusable-test-models-classification-ggml.yml
+// and verifies its checksum, so a missing model only skips local runs. Mobile
+// gets it from copy-mobile-test-assets.js, where a missing or mis-keyed asset
+// would otherwise pass as a skip.
 const modelPath = asset('bridgedepth-vits-f32.gguf', 'QVAC_BRIDGEDEPTH_MODEL_PATH')
 
 function fixture(name) {
@@ -37,6 +39,12 @@ function fixture(name) {
 function floats(name) {
   const bytes = fixture(name)
   return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+}
+
+function maxAbsDiff(a, b) {
+  let max = 0
+  for (let i = 0; i < a.length; i++) max = Math.max(max, Math.abs(a[i] - b[i]))
+  return max
 }
 
 function within(result, reference, tolerance) {
@@ -59,9 +67,13 @@ test('BridgeDepth validates options and missing weights', async function (t) {
 
 test(
   'BridgeDepth matches the original PyTorch disparity on the fixture pair',
-  { skip: !modelPath },
+  { skip: !modelPath && !isMobile },
   async function (t) {
     t.timeout(TEST_TIMEOUT)
+    if (!modelPath) {
+      t.fail('BridgeDepth test model missing from the mobile test assets')
+      return
+    }
     const model = new BridgeDepth({ modelPath, backend, threads: 4 })
     try {
       await model.load()
@@ -76,8 +88,9 @@ test(
       t.comment(
         `${backend}: ${fraction} within 0.2 px, stats=${JSON.stringify(model.getRuntimeStats())}`
       )
-      // Top-k tie breaks in the DPN differ from torch on a few pixels.
-      t.ok(fraction >= 0.95, 'matches the PyTorch disparity')
+      // Top-k tie breaks in the DPN differ from torch on a few pixels. Measured
+      // on the fixture: CPU and CUDA 99.81%, Metal and Vulkan 99.79%.
+      t.ok(fraction >= 0.99, 'matches the PyTorch disparity')
       const stats = model.getRuntimeStats()
       t.ok(stats.total_time_ms > 0)
       t.ok(stats.weight_bytes > 100000000)
@@ -100,6 +113,10 @@ test(
       const raw = await model.infer(small, small, { width: 64, height: 48, channels: 3 })
       t.is(raw.disparity.length, 64 * 48)
       t.ok(raw.disparity.every(Number.isFinite), 'raw RGB input gives a finite map')
+
+      // Calls at other sizes in between must not change the fixture result.
+      const again = await model.infer(left, right)
+      t.ok(maxAbsDiff(again.disparity, result.disparity) < 1e-3, 'same result after other sizes')
     } finally {
       await model.destroy()
     }
