@@ -25,6 +25,7 @@ export interface AddonMessage {
   generationParams?: GenerationParams;
   cacheKey?: string;
   ephemeral?: boolean;
+  baseCacheKey?: string;
 }
 
 export interface AddonMediaMessage {

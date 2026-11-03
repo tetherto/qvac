@@ -4,12 +4,17 @@
 # Install with:
 #   pip install --user -r requirements-pi05-oracle.txt
 #
-# These are the exact versions pulled in when the oracle dump was generated
-# against the lerobot/pi05_base checkpoint (revision pinned in
-# oracle_fixtures.json). Bump as a single transaction — the oracle file must
-# be regenerated whenever any of these change, since drift here invalidates
-# the parity contract.
-lerobot==0.5.2
+# torch, transformers and safetensors are the exact versions used when the
+# oracle dump was generated against the lerobot/pi05_base checkpoint
+# (revision pinned in oracle_fixtures.json). lerobot is not: the dump came
+# from a lerobot main snapshot whose pyproject said 0.5.2, a version never
+# released on PyPI, so this pins the closest release. Re-running with this
+# file on Apple CPU gives the same fixture SHA and ode.actions_final at cos
+# 0.9996 from the pinned dump (worst key vlm.blk_17.kv_keys, 0.992), so the
+# pinned dump stays the reference. Bump as a single transaction — the oracle
+# file must be regenerated whenever any of these change, since drift here
+# invalidates the parity contract.
+lerobot==0.5.1
 torch==2.10.0
 transformers==5.3.0
 safetensors==0.7.0
