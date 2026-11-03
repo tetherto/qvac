@@ -26,6 +26,11 @@ class Denoiser;
 
 namespace qvac::ttsggml::cosyvoice {
 
+struct CosyvoiceReply {
+  std::vector<int16_t> pcm;
+  std::vector<int> speechTokenIds;
+};
+
 class CosyvoiceModel
     : public qvac_lib_inference_addon_cpp::model::IModel,
       public qvac_lib_inference_addon_cpp::model::IModelCancel,
@@ -46,6 +51,7 @@ public:
     tts_cpp::cosyvoice::VoiceControls controls;
     bool hasControls = false;
     ChunkCallback chunkCallback;
+    bool returnSpeechTokens = false;
   };
 
   explicit CosyvoiceModel(CosyvoiceConfig config);
@@ -84,6 +90,7 @@ private:
   struct SynthResult {
     Output pcm;
     bool wasStreaming = false;
+    std::vector<int> speechTokenIds;
   };
   SynthResult synthesize(
       const std::string& text,
