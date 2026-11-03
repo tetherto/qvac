@@ -18,6 +18,14 @@ export function prependPath(env, dir) {
   return { ...env, [key]: [dir, env[key]].filter(Boolean).join(delimiter) }
 }
 
+// main's locked bare toolchain: bare and its lock installed, its bin (bare-make, clang, llvm tools) first on PATH.
+export function lockedToolchain(env = process.env) {
+  const lock = join(PKG, '../../.github/bare-toolchain')
+  run('npm', ['install', '-g', '--force', 'bare'], PKG, env)
+  run('node', [join(lock, 'install.mjs')], PKG, env)
+  return prependPath(env, join(lock, 'node_modules/.bin'))
+}
+
 // Windows' CMake, downloaded once per runner temp directory, as main's workflows put it on PATH.
 export function pinnedCmake(env = process.env) {
   if (process.platform !== 'win32') return env

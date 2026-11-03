@@ -84,6 +84,10 @@
             {
               "command": "node ci/verify-cuda-modules.mjs linux-x64",
               "forwardAllArgs": false
+            },
+            {
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-x64",
+              "forwardAllArgs": false
             }
           ]
         },
@@ -111,6 +115,10 @@
             {
               "command": "node ci/build-jetson.mjs",
               "forwardAllArgs": true
+            },
+            {
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-arm64",
+              "forwardAllArgs": false
             }
           ]
         },

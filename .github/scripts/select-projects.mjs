@@ -59,7 +59,7 @@ const METADATA = {
   publish: ['publish'],
   // Prebuild directories besides the platform ones that the meta package ships, such as fabric's include and share.
   prebuildExtraDirs: ['publish'],
-  secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile'],
+  secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile', 'cpp:tests'],
   baseline: ['cpp:tests'],
   perfReport: ['test:integration'],
   // Toolkits a check target needs on pr-checks' runner, from CHECK_SETUP.
@@ -71,7 +71,7 @@ const METADATA = {
 export const CHECK_SETUP = ['python', 'java', 'android-ndk', 'bare']
 const CHECK_TARGETS = METADATA.setup
 const SOURCES = ['npm', 'workspace', 'published']
-// Secrets a target may ask for by name; each is named once in _desktop.yml or _mobile.yml, never indexed.
+// Secrets a target may ask for by name; each is named once in _desktop.yml, _mobile.yml or _cpp-tests.yml, never indexed.
 export const SECRETS = [
   'QASE_API_TOKEN',
   'HF_TOKEN',

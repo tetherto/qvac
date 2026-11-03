@@ -5,7 +5,7 @@ import {
   type ModelProgressUpdate,
   TTS_MULTILINGUAL_SUPERTONIC3_Q8_0
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // Supertonic 3 TTS (GGML): fast multilingual synthesis with baked-in voices.
 // Uses registry model constants — downloads automatically from QVAC Registry.

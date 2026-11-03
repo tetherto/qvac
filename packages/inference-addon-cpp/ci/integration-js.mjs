@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 
-import { PKG, pinnedCmake, run } from './cpp.mjs'
+import { lockedToolchain, PKG, pinnedCmake } from './cpp.mjs'
 
 const sh = (cmd, args, cwd, env) =>
   spawnSync(cmd, args, { cwd, env, stdio: 'inherit', shell: process.platform === 'win32' })
@@ -50,8 +50,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     args: process.argv.slice(2),
     options: { asan: { type: 'boolean', default: false } }
   })
-  run('npm', ['install', '-g', '--force', 'bare', 'bare-make@1.8.0'], PKG, process.env)
-  let env = pinnedCmake()
+  let env = pinnedCmake(lockedToolchain())
   if (process.platform === 'win32') {
     env = { ...env, CMAKE_GENERATOR: 'Visual Studio 17 2022', CMAKE_GENERATOR_PLATFORM: 'x64' }
   }

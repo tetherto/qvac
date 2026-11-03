@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { PKG, run } from './cpp.mjs'
+import { lockedToolchain, PKG, run } from './cpp.mjs'
 
 const MOBILE = join(PKG, 'mobile')
 // main's setup-build-host for the Android prebuild: the pinned NDK in every selector, Bare's included, its toolchain
@@ -41,10 +41,9 @@ export const PLATFORM_BUILD = {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const host = process.env
-  const flags = PLATFORM_BUILD[host.PLATFORM]
-  if (!flags) throw new Error(`PLATFORM must be Android or iOS, got '${host.PLATFORM}'`)
-  run('npm', ['install', '-g', '--force', 'bare', 'bare-make@1.8.0'], MOBILE, host)
+  const flags = PLATFORM_BUILD[process.env.PLATFORM]
+  if (!flags) throw new Error(`PLATFORM must be Android or iOS, got '${process.env.PLATFORM}'`)
+  const host = lockedToolchain(process.env)
   run('npm', ['install'], MOBILE, host)
   run('npm', ['run', 'test:mobile:generate'], MOBILE, host)
   run('npm', ['run', 'test:mobile:validate'], MOBILE, host)

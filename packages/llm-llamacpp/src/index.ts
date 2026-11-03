@@ -11,6 +11,7 @@ import {
   type LlamaFitDevice,
   type LlamaFitRequest,
   type LlamaFitResult,
+  type LlamaFitStats,
   type LlamaFitStatus
 } from "./fit";
 import type * as AddonModule from "./addon";
@@ -26,6 +27,7 @@ type InferQvacResponseOf<Output> = QvacResponse<Output>;
 /** Aliases so the class expression's body can name the namespace types below. */
 type BatchPrompt = LlmLlamacpp.BatchPrompt;
 type BatchResponse = LlmLlamacpp.BatchResponse;
+type CalcTokensInput = LlmLlamacpp.CalcTokensInput;
 type FinetuneHandle = LlmLlamacpp.FinetuneHandle;
 type FinetuneOptions = LlmLlamacpp.FinetuneOptions;
 type FinetuneProgressStats = LlmLlamacpp.FinetuneProgressStats;
@@ -35,6 +37,7 @@ type LlmLlamacppArgs = LlmLlamacpp.LlmLlamacppArgs;
 type Message = LlmLlamacpp.Message;
 type RunOptions = LlmLlamacpp.RunOptions;
 type UserMediaMessage = LlmLlamacpp.UserMediaMessage;
+type UserTextMessage = LlmLlamacpp.UserTextMessage;
 
 /** `exclusiveRunQueue()` is published as `Promise<any>`; keep it generic here. */
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
@@ -44,6 +47,7 @@ interface NormalizedRunOptions {
   generationParams: GenerationParams | undefined;
   cacheKey: string | undefined;
   ephemeral: boolean;
+  baseCacheKey: string | undefined;
   rejectWhenBusy: boolean | undefined;
 }
 
@@ -70,6 +74,7 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
       generationParams: undefined,
       cacheKey: undefined,
       ephemeral: false,
+      baseCacheKey: undefined,
       rejectWhenBusy: undefined,
     };
   }
@@ -109,6 +114,10 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
     throw new TypeError("ephemeral must be a boolean when provided");
   }
 
+  if (options.baseCacheKey !== undefined && typeof options.baseCacheKey !== "string") {
+    throw new TypeError("baseCacheKey must be a string when provided");
+  }
+
   if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
     throw new TypeError("rejectWhenBusy must be a boolean when provided");
   }
@@ -118,9 +127,24 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
     generationParams: normalizeGenerationParams(options.generationParams),
     cacheKey: options.cacheKey,
     ephemeral: options.ephemeral === true,
+    baseCacheKey: options.baseCacheKey,
     // Left undefined when unset so admission falls back to the instance default.
     rejectWhenBusy: options.rejectWhenBusy,
   };
+}
+
+// Malformed parts (null, non-objects) are not byte media: they pass through
+// untouched so the native validator rejects them with `InvalidInputFormat`.
+function isByteMediaPart(
+  part: unknown,
+): part is { type: "media"; content: Uint8Array } {
+  const candidate = part as { type?: unknown; content?: unknown } | null;
+  return (
+    candidate !== null &&
+    typeof candidate === "object" &&
+    candidate.type === "media" &&
+    candidate.content instanceof Uint8Array
+  );
 }
 
 function promptToAddonMessages(
@@ -131,9 +155,13 @@ function promptToAddonMessages(
     throw new TypeError("Prompt input must be Message[]");
   }
 
-  const { prefill, generationParams, cacheKey, ephemeral } = normalizeRunOptions(runOptions);
+  const { prefill, generationParams, cacheKey, ephemeral, baseCacheKey } =
+    normalizeRunOptions(runOptions);
 
-  const textMessages: Message[] = [];
+  // Only ever JSON-serialized into the addon's text message: a byte-buffer
+  // media part reaches the native side path-less, bound to the hoisted buffer
+  // by position, so the wire shape is wider than the public `Message` type.
+  const textMessages: unknown[] = [];
   const mediaItems: Uint8Array[] = [];
 
   for (const message of prompt) {
@@ -141,9 +169,28 @@ function promptToAddonMessages(
     if (media.role === "user" && media.type === "media" && media.content instanceof Uint8Array) {
       mediaItems.push(media.content);
       textMessages.push({ ...media, content: "" });
-    } else {
-      textMessages.push(message);
+      continue;
     }
+
+    // Ordered parts: hoist each media part's bytes next to the other media
+    // messages and leave a path-less part behind. The native side records the
+    // plan in marker order, so the bytes still bind to the right markers.
+    const text = message as UserTextMessage;
+    if (Array.isArray(text.content)) {
+      textMessages.push({
+        ...text,
+        content: text.content.map((part) => {
+          if (isByteMediaPart(part)) {
+            mediaItems.push(part.content);
+            return { type: "media" };
+          }
+          return part;
+        }),
+      });
+      continue;
+    }
+
+    textMessages.push(message);
   }
 
   const promptMessages: AddonModule.AddonRunJobMessage[] = [];
@@ -159,6 +206,7 @@ function promptToAddonMessages(
     generationParams,
     cacheKey,
     ephemeral,
+    baseCacheKey,
   });
 
   return promptMessages;
@@ -373,6 +421,17 @@ function sanitizePromptForLog(prompt: Message[]): unknown {
     if (media && media.type === "media" && media.content instanceof Uint8Array) {
       return { ...media, content: `[Uint8Array byteLength=${media.content.byteLength}]` };
     }
+    const text = msg as UserTextMessage;
+    if (Array.isArray(text?.content)) {
+      return {
+        ...text,
+        content: text.content.map((part) =>
+          isByteMediaPart(part)
+            ? { ...part, content: `[Uint8Array byteLength=${part.content.byteLength}]` }
+            : part,
+        ),
+      };
+    }
     return msg;
   });
 }
@@ -426,6 +485,21 @@ interface LlmLlamacpp {
    * remove the conversation from disk.
    */
   discardCache(cacheKey: string): Promise<void>;
+  /**
+   * Tokens `input` takes on the loaded model, without running it. `text`
+   * alone is counted raw, with no chat template and no BOS. With `history` or
+   * `tools` the conversation, `text` (even empty) appended as the last user
+   * turn, is rendered by the chat template as the opening request of a fresh
+   * conversation, with BOS and the generation prompt, as `run()` renders it.
+   * Tools the template leaves out are not counted. `tools` alone has no
+   * message to render and rejects, as `run()` does. Never queues behind
+   * `run()`: it reads only load-time state. A wrong-typed argument rejects
+   * with `TypeError`, and before `load()` it rejects with `Model is not
+   * loaded`. Other invalid input, a media message included, rejects with code
+   * `InvalidArgument`; a conversation the chat template cannot render fails
+   * as it would in `run()`.
+   */
+  calcTokens(input: CalcTokensInput): Promise<number>;
   getState(): { configLoaded: boolean };
 }
 
@@ -1050,6 +1124,64 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     await this.addon.discardCache(cacheKey);
   }
 
+  /**
+   * Tokens `input` takes on the loaded model, without running it. `text`
+   * alone is counted raw, with no chat template and no BOS. With `history` or
+   * `tools` the conversation, `text` (even empty) appended as the last user
+   * turn, is rendered by the chat template as the opening request of a fresh
+   * conversation, with BOS and the generation prompt, as `run()` renders it.
+   * Tools the template leaves out are not counted. `tools` alone has no
+   * message to render and rejects, as `run()` does. Never queues behind
+   * `run()`: it reads only load-time state. A wrong-typed argument rejects
+   * with `TypeError`, and before `load()` it rejects with `Model is not
+   * loaded`. Other invalid input, a media message included, rejects with code
+   * `InvalidArgument`; a conversation the chat template cannot render fails
+   * as it would in `run()`.
+   */
+  async calcTokens(input: CalcTokensInput): Promise<number> {
+    if (input === null || typeof input !== "object") {
+      throw new TypeError("calcTokens(input) requires an object");
+    }
+    const text = input.text ?? undefined;
+    const history = input.history ?? undefined;
+    const tools = input.tools ?? undefined;
+    if (text !== undefined && typeof text !== "string") {
+      throw new TypeError("calcTokens: text must be a string");
+    }
+    if (history !== undefined && !Array.isArray(history)) {
+      throw new TypeError("calcTokens: history must be a Message[]");
+    }
+    if (tools !== undefined && !Array.isArray(tools)) {
+      throw new TypeError("calcTokens: tools must be an array of function definitions");
+    }
+    if (!this.addon) {
+      throw new Error("Model is not loaded");
+    }
+    const params: AddonModule.AddonCalcTokensParams = {};
+    if (text !== undefined) params.text = text;
+    // Media bytes are dropped rather than serialized: the native side rejects
+    // any media message or ordered media part by its type.
+    if (history !== undefined) {
+      params.history = JSON.stringify(
+        history.map((message) => {
+          if ((message as UserMediaMessage)?.type === "media") return { ...message, content: "" };
+          const textMessage = message as UserTextMessage;
+          if (Array.isArray(textMessage?.content)) {
+            return {
+              ...message,
+              content: textMessage.content.map((part) =>
+                isByteMediaPart(part) ? { type: "media" } : part,
+              ),
+            };
+          }
+          return message;
+        }),
+      );
+    }
+    if (tools !== undefined) params.tools = JSON.stringify(tools);
+    return this.addon.calcTokens(params);
+  }
+
   getState(): { configLoaded: boolean } {
     return this.state;
   }
@@ -1342,6 +1474,19 @@ namespace LlmLlamacpp {
      */
     cache_ram_mib?: NumericLike;
     /**
+     * Whether a request on a decoder-only model may start from state another
+     * conversation left: the memory a request without a `cacheKey` keeps,
+     * another key's state in a sequence or the RAM tier, or a `cacheKey` file
+     * the model has used. `'true'` (default) shares it, as llama-server's
+     * prompt cache does. `'false'` keeps every request to its own key's state,
+     * for a model serving callers who must not learn through `cacheTokens` or
+     * timing whether another conversation shares their prompt: a request
+     * without a key starts cold and is reset afterwards, a new key starts cold,
+     * and `baseCacheKey` has no effect. Also accepted as
+     * `cache-share-across-keys`.
+     */
+    cache_share_across_keys?: "true" | "false" | "on" | "off" | "1" | "0";
+    /**
      * Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'`
      * drafts with the model's own multi-token-prediction (MTP / NextN) head,
      * or with the external MTP head given as `spec_draft_model`; the model or
@@ -1394,10 +1539,31 @@ namespace LlmLlamacpp {
     opts?: { stats?: boolean; rejectWhenBusy?: boolean };
   }
 
+  /**
+   * One ordered piece of a message's `content`. Media parts keep their place in
+   * the turn: a single user message can interleave text and media, which a
+   * string `content` plus separate `type: "media"` messages cannot express
+   * without splitting the turn.
+   */
+  export type UserContentPart =
+    | { type: "text"; text: string }
+    | {
+        type: "media";
+        /**
+         * Either an absolute path to the media file (`string`) or its raw bytes
+         * (`Uint8Array`), the same two forms a `type: "media"` message accepts.
+         */
+        content: string | Uint8Array;
+      };
+
   export interface UserTextMessage {
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- the literals document the known roles; any string is accepted.
     role: "system" | "assistant" | "user" | "tool" | "session" | string;
-    content: string;
+    /**
+     * Plain text, or ordered text/media parts rendered as one turn. Media parts
+     * are only valid on user messages.
+     */
+    content: string | UserContentPart[];
     /**
      * An assistant turn's reasoning, separate from its answer in `content`, as
      * in OpenAI-compatible APIs. Optional: an answer sent back with its
@@ -1447,6 +1613,16 @@ namespace LlmLlamacpp {
   }
 
   export type Message = UserTextMessage | UserMediaMessage | ChatFunctionDefinition;
+
+  /** What `calcTokens` counts. At least one field is required; `tools` needs `text` or `history`. */
+  export interface CalcTokensInput {
+    /** Counted raw on its own; with `history` or `tools`, the last user turn. */
+    text?: string;
+    /** A conversation in `run()`'s `Message[]` shape, tool definitions allowed. */
+    history?: Message[];
+    /** Tool definitions, as `run()` takes them. A name also in `history` rejects. */
+    tools?: ChatFunctionDefinition[];
+  }
 
   export interface GenerationParams {
     temp?: number;
@@ -1513,10 +1689,9 @@ namespace LlmLlamacpp {
      * Run prefill only (cache warming): the prompt is evaluated but no tokens
      * are generated. On a model loaded with `parallel >= 2` a prefill needs a
      * `cacheKey` (the warmed conversation stays in its slot for the next
-     * request on that key) — a keyless prefill warms context state that no
-     * concurrent job could reach and is rejected with `InvalidArgument`; run
-     * keyless prefills on a `parallel: 1` model. The same rule applies per
-     * batch item.
+     * request on that key) — a keyless prefill warms state no later request
+     * can count on and is rejected with `InvalidArgument`; run keyless
+     * prefills on a `parallel: 1` model. The same rule applies per batch item.
      */
     prefill?: boolean;
     generationParams?: GenerationParams;
@@ -1533,11 +1708,26 @@ namespace LlmLlamacpp {
      * otherwise be lost with turns the file lacks: when it is set aside for
      * another key, evicted from its batch slot or from the RAM tier, or the
      * model is reloaded or unloaded. With `ephemeral: true` each of those
-     * drops it instead, so its next request starts cold. It still loads an
-     * existing file, and an explicit `saveCache(cacheKey)` still writes it.
+     * drops it instead, so its next request finds no state of its own (it
+     * still reuses any prefix it shares with what the model holds, except on
+     * encoder-decoder models). It still loads an existing file, and an
+     * explicit `saveCache(cacheKey)` still writes it.
      * The flag belongs to the conversation's latest request.
      */
     ephemeral?: boolean;
+    /**
+     * A `cacheKey` file to start from when nothing in memory serves more of
+     * the prompt, such as a system prompt and tools primed with `prefill`.
+     * It is read, never written: the request's own state goes to its
+     * `cacheKey`. A file that is missing or shares no prefix with the prompt
+     * is skipped. Once named, the file stays a source for later requests on
+     * this model, as any `cacheKey` file it used does, until files named
+     * or picked as a prompt's closest match more recently push it out (the
+     * model keeps the 256 most recent, as far as 64 MiB of memory holds
+     * their prompt records). No effect with `cache_share_across_keys:
+     * 'false'`.
+     */
+    baseCacheKey?: string;
     /**
      * Admission policy when the worker pool is full. `true` rejects before
      * submitting with an `Error` carrying `code === 'RUN_BUSY'` — branch on the
@@ -1776,6 +1966,7 @@ namespace LlmLlamacpp {
   export type FitResult = LlamaFitResult;
   export type FitStatus = LlamaFitStatus;
   export type FitDevice = LlamaFitDevice;
+  export type FitStats = LlamaFitStats;
 }
 
 export = LlmLlamacpp;

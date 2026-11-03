@@ -285,5 +285,5 @@ Before outputting the PR description, verify:
 - Format rules: `docs/gitflow.md` and this skill's validation section
 - Backmerge skill: `.agents/skills/qv-sdk-backmerge/SKILL.md`
 - sdk @qvac/inference version: `.agents/skills/qv-sdk-inference-version/SKILL.md`
-- GitFlow: `docs/gitflow.md` — still documents fork-first contribution; for internal SDK PRs, prefer the org-branch path in this skill until DevOps updates gitflow
+- GitFlow: `docs/gitflow.md` — org working branches preferred with write access; personal forks supported as a fallback
 - Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)
