@@ -24,14 +24,26 @@ const INFLIGHT_DRAIN_POLL_MS = 10
 const RESUME_WAIT_MAX_MS = 5 * 60 * 1000
 const RESUME_WAIT_POLL_MS = 200
 
-// A failed download clears the blob's cached blocks. A cancelled one clears
-// them too, unless the caller's `clearOnCancel` (a boolean, or a function asked
-// at cancel time) says to keep them as the checkpoint a later download of the
-// same blob resumes from.
-function shouldClearAfter(options) {
-  if (!options.signal || !options.signal.aborted) return true
+// The caller's `clearOnCancel` (a boolean, or a function asked at cancel time)
+// decides whether a cancelled download keeps its cached blocks as the
+// checkpoint a later download of the same blob resumes from. A callback that
+// throws counts as "clear": the download is being torn down either way, and
+// leaking blocks is the worse outcome.
+function clearOnCancel(options, logger) {
   const { clearOnCancel = true } = options
-  return Boolean(typeof clearOnCancel === 'function' ? clearOnCancel() : clearOnCancel)
+  if (typeof clearOnCancel !== 'function') return Boolean(clearOnCancel)
+  try {
+    return Boolean(clearOnCancel())
+  } catch (err) {
+    logger.warn('clearOnCancel threw; clearing cached blocks', { error: err.message })
+    return true
+  }
+}
+
+// A failed download clears the blob's cached blocks; a cancelled one asks the caller.
+function shouldClearAfter(options, logger) {
+  if (!options.signal || !options.signal.aborted) return true
+  return clearOnCancel(options, logger)
 }
 
 class QVACRegistryClient extends ReadyResource {
@@ -389,7 +401,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd)
+        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd, options)
       }
 
       this.logger.info('Model downloaded successfully')
@@ -402,7 +414,7 @@ class QVACRegistryClient extends ReadyResource {
       this.logger.error('Error downloading model', error)
 
       await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, {
-        clear: shouldClearAfter(options)
+        clear: shouldClearAfter(options, this.logger)
       })
 
       throw error
@@ -496,7 +508,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd)
+        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd, options)
       }
 
       this.logger.info('Blob download complete (direct)')
@@ -506,28 +518,33 @@ class QVACRegistryClient extends ReadyResource {
       this.logger.error('Error downloading blob directly', error)
 
       await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, {
-        clear: shouldClearAfter(options)
+        clear: shouldClearAfter(options, this.logger)
       })
 
       throw error
     }
   }
 
-  _releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd) {
+  _releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd, options) {
     let released = false
+    let ended = false
 
-    // 'close' also covers a destroyed or errored stream; on 'end' alone a
-    // cancelled stream download would never free its blocks.
-    const release = () => {
+    const release = (clear) => {
       if (released) return
       released = true
-      return this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd).catch((e) =>
-        this.logger.warn('Error releasing blob resources', { error: e.message })
-      )
+      return this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, {
+        clear
+      }).catch((e) => this.logger.warn('Error releasing blob resources', { error: e.message }))
     }
 
-    stream.once('end', release)
-    stream.once('close', release)
+    stream.once('end', () => {
+      ended = true
+      release(true)
+    })
+    // 'close' without 'end' is the consumer destroying the stream: the stream
+    // path's cancel, so the caller's `clearOnCancel` applies. On 'end' alone a
+    // destroyed stream would never free its blocks.
+    stream.once('close', () => release(ended || clearOnCancel(options, this.logger)))
   }
 
   // `clear: false` keeps the blob's blocks as the checkpoint the next download
