@@ -85,7 +85,7 @@ const hfModels = await client.findModels({
     - `outputFile`: Optional file path to save directly to disk
     - `onProgress`: Callback `({ downloaded, total, cachedBlocks, totalBlocks }) => void`
     - `signal`: `AbortSignal` for cancellation
-    - `clearBlocksOnCancel`: `boolean` or `() => boolean`, read when `signal` aborts (default: `false`). By default a cancelled download keeps its blocks in the corestore, so the next download of the same model resumes from them. Set it to drop them instead. Failed downloads always drop their blocks; successful ones drop them once the file is written
+    - `clearBlocksOnCancel`: `boolean` or `() => boolean`, read when `signal` aborts (default: `false`). Applies with `outputFile`: by default a cancelled download keeps its blocks in the corestore, so the next download of the same model resumes from them. Set it to drop them instead. Failed downloads always drop their blocks; successful ones drop them once the file is written. Without `outputFile`, destroying `artifact.stream` always drops the blocks
   - Returns: `{ model: QVACModelEntry, artifact: QVACDownloadedArtifact }`
     - If `outputFile` provided: `artifact = { path: '/path/to/file' }`
     - Otherwise: `artifact = { stream: ReadableStream }`

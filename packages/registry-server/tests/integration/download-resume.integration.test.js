@@ -152,6 +152,24 @@ async function createTestClient(t, serviceCtx, bootstrap, storage) {
   return { client, swarm, corestore, storage: clientStorage }
 }
 
+// Counts the model's blocks in a client store nothing is replicating into, so
+// blocks fetched by a later download cannot be mistaken for kept ones.
+async function countStoredBlocks(storage, blobBinding) {
+  const store = new Corestore(storage)
+  const core = store.get({ key: IdEnc.decode(blobBinding.coreKey) })
+  await core.ready()
+
+  let blocks = 0
+  const end = blobBinding.blockOffset + blobBinding.blockLength
+  for (let index = blobBinding.blockOffset; index < end; index++) {
+    if (await core.has(index)) blocks++
+  }
+
+  await core.close()
+  await store.close()
+  return blocks
+}
+
 async function cleanupTestClient(ctx) {
   if (ctx.client && ctx.client.db) {
     await ctx.client.db.close().catch(() => {})
@@ -229,6 +247,11 @@ test('download cancel and resume produces correct file', async (t) => {
     throw err
   }
 
+  t.ok(
+    (await countStoredBlocks(clientStorage, model.blobBinding)) > 0,
+    'cancel kept the downloaded blocks'
+  )
+
   // Phase 2: resume with new client on same persistent storage
   const clientCtx2 = await createTestClient(t, ctx, bootstrap, clientStorage)
 
@@ -243,7 +266,7 @@ test('download cancel and resume produces correct file', async (t) => {
       }
     })
 
-    t.ok(progressEvents[0].cachedBlocks > 0, 'resume starts from blocks kept by the cancel')
+    t.ok(progressEvents[0].cachedBlocks > 0, 'resume starts from the kept blocks')
     t.ok(fs.existsSync(outputFile), 'output file exists after resume')
     const downloaded = fs.readFileSync(outputFile)
     t.is(downloaded.length, testPayload.length, 'resumed file has correct size')
@@ -287,6 +310,11 @@ test('onProgress reports initial cached bytes on resume', async (t) => {
     throw err
   }
 
+  t.ok(
+    (await countStoredBlocks(clientStorage, model.blobBinding)) > 0,
+    'cancel kept the downloaded blocks'
+  )
+
   // Phase 2: resume and verify first progress event reflects cached state
   const clientCtx2 = await createTestClient(t, ctx, bootstrap, clientStorage)
 
@@ -315,7 +343,7 @@ test('onProgress reports initial cached bytes on resume', async (t) => {
   }
 })
 
-test('cancel with clearBlocksOnCancel restarts the next download from zero', async (t) => {
+test('cancel with clearBlocksOnCancel leaves no blocks for the next download', async (t) => {
   t.timeout(60000)
   const { bootstrap } = await createTestnet(3, t.teardown)
   const { ctx, model, testPayload } = await setupRegistryWithModel(t, bootstrap)
@@ -348,20 +376,20 @@ test('cancel with clearBlocksOnCancel restarts the next download from zero', asy
     throw err
   }
 
+  t.is(
+    await countStoredBlocks(clientStorage, model.blobBinding),
+    0,
+    'no blocks survived the clearing cancel'
+  )
+
   const clientCtx2 = await createTestClient(t, ctx, bootstrap, clientStorage)
 
   try {
-    const progressEvents = []
-
     await clientCtx2.client.downloadModel(model.path, model.source, {
       outputFile,
-      timeout: 30000,
-      onProgress: (progress) => {
-        progressEvents.push({ ...progress })
-      }
+      timeout: 30000
     })
 
-    t.is(progressEvents[0].cachedBlocks, 0, 'no blocks survived the clearing cancel')
     const downloaded = fs.readFileSync(outputFile)
     t.ok(downloaded.equals(testPayload), 'fresh download has correct content')
   } finally {

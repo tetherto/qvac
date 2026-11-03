@@ -82,7 +82,7 @@ export interface QVACDownloadOptions {
     totalBlocks: number
   }) => void
   signal?: AbortSignal
-  /** Clear cached blocks when `signal` aborts. Defaults to keeping them so the download can resume. */
+  /** With `outputFile`, clear cached blocks when `signal` aborts. Defaults to keeping them so the download can resume. */
   clearBlocksOnCancel?: boolean | (() => boolean)
 }
 
@@ -97,7 +97,7 @@ export interface QVACBlobDownloadOptions {
     totalBlocks: number
   }) => void
   signal?: AbortSignal
-  /** Clear cached blocks when `signal` aborts. Defaults to keeping them so the download can resume. */
+  /** With `outputFile`, clear cached blocks when `signal` aborts. Defaults to keeping them so the download can resume. */
   clearBlocksOnCancel?: boolean | (() => boolean)
 }
 
