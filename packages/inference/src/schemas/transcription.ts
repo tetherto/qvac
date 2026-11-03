@@ -152,6 +152,15 @@ export const transcribeSpeakerSegmentSchema = z.object({
 
 export type TranscribeSpeakerSegment = z.infer<typeof transcribeSpeakerSegmentSchema>
 
+export const transcribeTokenSchema = z.object({
+  text: z.string(),
+  startMs: z.number().nonnegative(),
+  endMs: z.number().nonnegative(),
+  probability: z.number().min(0).max(1).describe('Decoder probability of the token (0–1).')
+})
+
+export type TranscribeToken = z.infer<typeof transcribeTokenSchema>
+
 export const transcribeSegmentSchema = z.object({
   text: z.string(),
   startMs: z.number(),
@@ -182,6 +191,32 @@ export const transcribeSegmentSchema = z.object({
     .optional()
     .describe(
       'Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.'
+    ),
+  language: z
+    .string()
+    .optional()
+    .describe(
+      "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only."
+    ),
+  noSpeechProb: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only."
+    ),
+  speakerTurnNext: z
+    .boolean()
+    .optional()
+    .describe(
+      'A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.'
+    ),
+  tokens: z
+    .array(transcribeTokenSchema)
+    .optional()
+    .describe(
+      'Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.'
     )
 })
 
