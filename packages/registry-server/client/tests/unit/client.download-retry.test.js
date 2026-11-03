@@ -840,6 +840,28 @@ test('clearBlob clears the blob block range and closes the core', async (t) => {
   t.is(released.closed, 1, 'core closed')
 })
 
+test('clearBlob reports a failed clear and still closes the core', async (t) => {
+  const client = makeClient(t)
+  // lunte-disable-next-line require-await
+  client.ready = async () => {}
+  let closed = 0
+  // lunte-disable-next-line require-await
+  client._core.close = async () => {
+    closed++
+  }
+  // lunte-disable-next-line require-await
+  client._core.clear = async () => {
+    throw new Error('disk full')
+  }
+  delete client._clearBlobBlocks
+
+  await t.exception(
+    () => client.clearBlob({ coreKey: Buffer.alloc(32), blockOffset: 3, blockLength: 7 }),
+    /disk full/
+  )
+  t.is(closed, 1, 'core closed')
+})
+
 test('clearBlob rejects a binding without a block range', async (t) => {
   const client = makeClient(t)
   await t.exception(() => client.clearBlob({ coreKey: Buffer.alloc(32) }), /blockOffset/)

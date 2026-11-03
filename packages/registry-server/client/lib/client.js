@@ -562,7 +562,8 @@ class QVACRegistryClient extends ReadyResource {
   }
 
   async _doReleaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts) {
-    const { clearBlocks = true } = opts
+    const { clearBlocks = true, strict = false } = opts
+    let clearError = null
 
     // Hypercore can commit in-flight responses after a range is destroyed.
     if (rangeDownload) rangeDownload.destroy()
@@ -571,7 +572,11 @@ class QVACRegistryClient extends ReadyResource {
       this.logger.info('Keeping blob blocks for resume', { start: blockStart, end: blockEnd })
     } else if (core && blockStart !== undefined) {
       if (rangeDownload) await this._waitForInflightBlocks(core)
-      await this._clearBlobBlocks(core, blockStart, blockEnd)
+      try {
+        await this._clearBlobBlocks(core, blockStart, blockEnd, { strict })
+      } catch (err) {
+        clearError = err
+      }
     }
     if (blobs) {
       try {
@@ -589,6 +594,7 @@ class QVACRegistryClient extends ReadyResource {
     }
 
     this.logger.debug('Blob resources released')
+    if (clearError) throw clearError
   }
 
   async _waitForInflightBlocks(core) {
@@ -635,10 +641,13 @@ class QVACRegistryClient extends ReadyResource {
     // A cancel that kept its blocks skipped the drain; its in-flight blocks can still land.
     await this._waitForInflightBlocks(core)
     const start = blobBinding.blockOffset
-    await this._releaseDownload(core, blobs, null, start, start + blobBinding.blockLength)
+    await this._releaseDownload(core, blobs, null, start, start + blobBinding.blockLength, {
+      strict: true
+    })
   }
 
-  async _clearBlobBlocks(core, start, end) {
+  // Download cleanup is best-effort; `strict` lets an explicit clearBlob report failure.
+  async _clearBlobBlocks(core, start, end, { strict = false } = {}) {
     try {
       const cleared = await core.clear(start, end, { diff: true })
       await core.compact()
@@ -649,6 +658,7 @@ class QVACRegistryClient extends ReadyResource {
       })
     } catch (err) {
       this.logger.warn('Failed to clear blob blocks from corestore', { error: err.message })
+      if (strict) throw err
     }
   }
 
