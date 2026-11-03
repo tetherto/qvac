@@ -1,7 +1,7 @@
 {
   "title": "QVAC diffusion performance: four platforms, six API configurations",
   "status": "DRAFT - final confirmation jobs and evidence review in progress",
-  "updated_utc": "2026-11-03T19:52:14.912997+00:00",
+  "updated_utc": "2026-11-03T20:03:02.997908+00:00",
   "intro": "RTX, Mac and Strix: 3 November 2026. DGX Spark: retained 29 October 2026 measurements at their original revisions. The original RTX and Spark report measured CUDA only. This extension adds RTX Vulkan, Strix Vulkan and HIP/ROCm, and Mac Metal. Vulkan correctness checks in the older CI record were not performance measurements.",
   "platforms": [
     {
@@ -174,7 +174,7 @@
           "Video/audio files byte exact. 3 comparisons.",
           "RTX 5090 / CUDA",
           "Warm engine context, 960 x 544 / 124 frames. Mean of 3 per-prompt medians. Per-prompt latency reductions 1.94-2.17%. Fresh-process I/O-confounded results remain in the records.",
-          "Three-prompt warm-context measurements support a small incremental engine benefit. Finish the remaining reverse-order/graphs-enabled controls before selecting it; actual addon overlay and fallback validation are still required. No production graph is changed in this branch."
+          "Recommend a second-priority focused engine implementation only on validated APIs: the small graph-only gain survives repeated prompts and order controls. Keep the original graph elsewhere. The actual addon overlay, backend-selection policy and full desktop CI still require validation; the experimental patch is not a release-ready feature."
         ],
         [
           "Minimal operations + global FA",
@@ -184,7 +184,7 @@
           "PSNR 52.42-55.96 dB; SSIM 0.998686-0.999271; RMS channel error 0.1592-0.2394% of full scale. Worst frame 50.92 dB. Audio exact.",
           "RTX 5090 / CUDA",
           "Warm engine context, 960 x 544 / 124 frames. Mean of 3 per-prompt medians. Per-prompt latency reductions 7.41-7.83%. Fresh-process I/O-confounded results remain in the records.",
-          "Three-prompt warm-context measurements support a small incremental engine benefit. Finish the remaining reverse-order/graphs-enabled controls before selecting it; actual addon overlay and fallback validation are still required. No production graph is changed in this branch."
+          "Recommend a second-priority focused engine implementation only on validated APIs: the small graph-only gain survives repeated prompts and order controls. Keep the original graph elsewhere. The actual addon overlay, backend-selection policy and full desktop CI still require validation; the experimental patch is not a release-ready feature."
         ],
         [
           "Operations added after global FA",
@@ -194,7 +194,7 @@
           "Video/audio files byte exact. 3 comparisons.",
           "RTX 5090 / CUDA",
           "Warm engine context, 960 x 544 / 124 frames. Mean of 3 per-prompt medians. Per-prompt latency reductions 1.74-2.27%. Fresh-process I/O-confounded results remain in the records.",
-          "Three-prompt warm-context measurements support a small incremental engine benefit. Finish the remaining reverse-order/graphs-enabled controls before selecting it; actual addon overlay and fallback validation are still required. No production graph is changed in this branch."
+          "Recommend a second-priority focused engine implementation only on validated APIs: the small graph-only gain survives repeated prompts and order controls. Keep the original graph elsewhere. The actual addon overlay, backend-selection policy and full desktop CI still require validation; the experimental patch is not a release-ready feature."
         ],
         [
           "Minimal SwiGLU + QKV views",
@@ -619,41 +619,41 @@
         [
           "CUDA graphs: global FA control",
           "Graph optimization validation",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "119.998 -> 113.954 s; -5.04% latency; 1.053x; 6.044 s saved",
+          "PSNR 55.96 dB; SSIM 0.999271; RMS channel error 0.1592% of full scale. Worst frame 55.33 dB. Audio exact.",
           "RTX 5090 / CUDA",
-          "Separate GGML_CUDA_GRAPHS=ON builds, one full-size prompt, one warmup and three measured requests. Both builds run the unchanged correctness suite. Earlier focused CUDA builds had graphs disabled.",
+          "Separate GGML_CUDA_GRAPHS=ON builds, one full-size prompt, one warmup and three measured requests. Both builds run the unchanged correctness suite. Earlier focused CUDA builds had graphs disabled. Warm CLI context; generation measured directly around generate_video. First invocation retained as warmup; output-save-inclusive wall time separately.",
           "Use this control to check the graph-patch recommendation under the enabled build option. Native addon overlay and full CI remain required."
         ],
         [
           "CUDA graphs: patch added after FA",
           "Graph optimization validation",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "113.954 -> 110.787 s; -2.78% latency; 1.029x; 3.167 s saved",
+          "Video/audio files byte exact. 1 comparison.",
           "RTX 5090 / CUDA",
-          "Separate GGML_CUDA_GRAPHS=ON builds, one full-size prompt, one warmup and three measured requests. Both builds run the unchanged correctness suite. Earlier focused CUDA builds had graphs disabled.",
+          "Separate GGML_CUDA_GRAPHS=ON builds, one full-size prompt, one warmup and three measured requests. Both builds run the unchanged correctness suite. Earlier focused CUDA builds had graphs disabled. Warm CLI context; generation measured directly around generate_video. First invocation retained as warmup; output-save-inclusive wall time separately.",
           "Use this control to check the graph-patch recommendation under the enabled build option. Native addon overlay and full CI remain required."
         ],
         [
           "CUDA graphs: minimal patch + FA",
           "Graph optimization validation",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "119.998 -> 110.787 s; -7.68% latency; 1.083x; 9.211 s saved",
+          "PSNR 55.96 dB; SSIM 0.999271; RMS channel error 0.1592% of full scale. Worst frame 55.33 dB. Audio exact.",
           "RTX 5090 / CUDA",
-          "Separate GGML_CUDA_GRAPHS=ON builds, one full-size prompt, one warmup and three measured requests. Both builds run the unchanged correctness suite. Earlier focused CUDA builds had graphs disabled.",
+          "Separate GGML_CUDA_GRAPHS=ON builds, one full-size prompt, one warmup and three measured requests. Both builds run the unchanged correctness suite. Earlier focused CUDA builds had graphs disabled. Warm CLI context; generation measured directly around generate_video. First invocation retained as warmup; output-save-inclusive wall time separately.",
           "Use this control to check the graph-patch recommendation under the enabled build option. Native addon overlay and full CI remain required."
         ],
         [
           "CUDA graphs: build toggle control",
           "Scheduling validation",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "113.102 -> 113.954 s; +0.75% latency; 0.993x; 0.851 s slower",
+          "Video/audio files byte exact. 1 comparison.",
           "RTX 5090 / CUDA",
-          "Same original H3 graph and global FA setting; only the CUDA-graphs build option differs. Compilation enables the path, while the backend still decides compatibility per graph.",
+          "Same original H3 graph and global FA setting; only the CUDA-graphs build option differs. Compilation enables the path, while the backend still decides compatibility per graph. Warm CLI context; generation measured directly around generate_video. First invocation retained as warmup; output-save-inclusive wall time separately.",
           "Validation control, not a claim that an already-enabled shipping feature is a new optimization."
         ]
       ],
@@ -898,6 +898,42 @@
           "reference": "r3-mac-h3-short-cli-confirm-pinned-metal-baseline-global-flash",
           "candidate": "r3-mac-h3-short-cli-confirm-pinned-metal-localops-global-flash",
           "latency_reduction_percent": 3.814688850078137,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "CUDA graphs: global FA control",
+          "hardware": "RTX 5090 / CUDA",
+          "reference": "r3-rtx-h3-cli-warm-graphs-cuda-p1-baseline",
+          "candidate": "r3-rtx-h3-cli-warm-graphs-cuda-p1-baseline-global-flash",
+          "latency_reduction_percent": 5.036858061798112,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "CUDA graphs: patch added after FA",
+          "hardware": "RTX 5090 / CUDA",
+          "reference": "r3-rtx-h3-cli-warm-graphs-cuda-p1-baseline-global-flash",
+          "candidate": "r3-rtx-h3-cli-warm-graphs-cuda-p1-localops-global-flash",
+          "latency_reduction_percent": 2.7788841119779617,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "CUDA graphs: minimal patch + FA",
+          "hardware": "RTX 5090 / CUDA",
+          "reference": "r3-rtx-h3-cli-warm-graphs-cuda-p1-baseline",
+          "candidate": "r3-rtx-h3-cli-warm-graphs-cuda-p1-localops-global-flash",
+          "latency_reduction_percent": 7.675773725353885,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "CUDA graphs: build toggle control",
+          "hardware": "RTX 5090 / CUDA",
+          "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline-global-flash",
+          "candidate": "r3-rtx-h3-cli-warm-graphs-cuda-p1-baseline-global-flash",
+          "latency_reduction_percent": -0.752833348408304,
           "quality_pending": false,
           "repeat_output_unstable": false
         }
@@ -2444,6 +2480,24 @@
           "latency_reduction_percent": 11.628228145283805,
           "quality_pending": false,
           "repeat_output_unstable": false
+        },
+        {
+          "row": "CUDA graphs: global FA control",
+          "hardware": "RTX 5090 / CUDA",
+          "reference": "r3-rtx-h3-cli-warm-graphs-cuda-p1-baseline",
+          "candidate": "r3-rtx-h3-cli-warm-graphs-cuda-p1-baseline-global-flash",
+          "latency_reduction_percent": 5.036858061798112,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "CUDA graphs: minimal patch + FA",
+          "hardware": "RTX 5090 / CUDA",
+          "reference": "r3-rtx-h3-cli-warm-graphs-cuda-p1-baseline",
+          "candidate": "r3-rtx-h3-cli-warm-graphs-cuda-p1-localops-global-flash",
+          "latency_reduction_percent": 7.675773725353885,
+          "quality_pending": false,
+          "repeat_output_unstable": false
         }
       ],
       "tradeoff_headers": [
@@ -2503,7 +2557,7 @@
         [
           "RTX 5090 / CUDA",
           "`flash_attn=true`, existing diffusion FA. Native: 120.407 -> 113.771 s; -5.51% latency; 1.058x; 6.636 s saved",
-          "Existing offloaded parameter baseline. The optional minimal graph patch needs the graphs-enabled control, real addon overlay and explicit original-graph fallback."
+          "Existing offloaded parameter baseline. The optional minimal graph patch passed reverse-order and graphs-enabled controls; actual addon overlay and explicit original-graph fallback remain implementation gates."
         ],
         [
           "RTX 5090 / Vulkan",
@@ -2535,12 +2589,13 @@
         "RTX warm-context research CLI, three prompts: minimal graph patch plus global FA is 119.849 -> 110.717 s; -7.62% latency; 1.082x; 9.132 s saved on CUDA and 103.228 -> 91.501 s; -11.36% latency; 1.128x; 11.727 s saved on Vulkan. These use their own paired CLI controls, not the native-addon baseline.",
         "The graph-only increment after FA is 113.067 -> 110.717 s; -2.08% latency; 1.021x; 2.351 s saved on CUDA and 94.039 -> 91.501 s; -2.70% latency; 1.028x; 2.538 s saved on Vulkan. Reverse-order and graphs-enabled controls are separately tabulated; native overlay integration remains required.",
         "Mac full-size global FA plus residency: No accepted completed paired measurement. The incremental residency effect is No accepted completed paired measurement.",
-        "The retained October Spark older isolated engine plus VAE-only FA result is 401.450 -> 307.420 s (-23.42%, 94.030 s saved). It has a different engine base and context lifetime; it is not the expected result of the new minimal patch."
+        "The retained October Spark older isolated engine plus VAE-only FA result is 401.450 -> 307.420 s (-23.42%, 94.030 s saved). It has a different engine base and context lifetime; it is not the expected result of the new minimal patch.",
+        "Graphs-enabled CUDA build control, one full-size prompt: 119.998 -> 110.787 s; -7.68% latency; 1.083x; 9.211 s saved overall, and 113.954 -> 110.787 s; -2.78% latency; 1.029x; 3.167 s saved for the patch increment. The compiled graphs path is enabled; runtime capture counts were not instrumented."
       ],
       "decision_briefs": {
         "Global flash attention": "Recommend in checked pinned-engine envelopes: broad repeated gains and accepted image/audio comparisons. Keep explicit overrides and original settings on unvalidated devices/shapes. HIP full-size timing and newly changed engine revisions need their own confirmation.",
         "Minimal SwiGLU + QKV views": "Small focused engine candidate on validated RTX APIs; preserve original graph elsewhere. Reject the Metal variant for output/audio changes. Spark and any unfinished Strix minimal-patch runs remain unvalidated.",
-        "Minimal operations + global FA": "Use directly measured cumulative results. Prefer FA alone first; the small extra graph gain must survive reverse-order/graphs-enabled controls and native overlay validation. Reject the Metal combination as the preferred profile."
+        "Minimal operations + global FA": "Measured RTX combinations survive reverse-order and CUDA-graphs-enabled controls. Prefer the existing FA parameter first; the small extra graph benefit remains a separate engine/overlay task. Reject the Metal graph combination."
       }
     },
     {
