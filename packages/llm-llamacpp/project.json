@@ -300,7 +300,17 @@
         "linux-x64-gpu": {
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
-          }
+          },
+          "commands": [
+            {
+              "command": "node ../../scripts/ci/run-integration.mjs",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "node ci/sidecar-cuda-smoke.mjs",
+              "forwardAllArgs": false
+            }
+          ]
         },
         "linux-x64-vulkan": {
           "args": "--set CUDA_VISIBLE_DEVICES=-1",
