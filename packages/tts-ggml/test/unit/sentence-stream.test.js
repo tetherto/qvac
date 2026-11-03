@@ -94,6 +94,49 @@ test('sentence stream: chunks run one at a time and their stats fold into one ag
   t.alike(host.failed, [])
 })
 
+test('sentence stream: backend and codec fields keep the last chunk that reported them', async (t) => {
+  const host = fakeHost()
+  const streamer = new SentenceStreamer(host)
+  streamer.streamChunks(['One.', 'Two.'], {})
+  await tick()
+  streamer.enrich({ outputArray: new Int16Array(2), isLast: true })
+  t.ok(
+    streamer.onStats({
+      totalTime: 0.5,
+      audioDurationMs: 1000,
+      totalSamples: 24000,
+      backendDevice: 1,
+      backendId: 1,
+      gpuUnsupported: 0,
+      codecSidecarLoaded: 1,
+      codecOnCoreml: 1
+    })
+  )
+  await tick()
+  streamer.enrich({ outputArray: new Int16Array(1), isLast: true })
+  t.ok(
+    streamer.onStats({
+      totalTime: 0.5,
+      audioDurationMs: 1000,
+      totalSamples: 24000,
+      backendDevice: 1,
+      backendId: 1,
+      gpuUnsupported: 0,
+      codecOnCoreml: 0
+    })
+  )
+  await tick()
+  t.is(host.ended.length, 1)
+  const stats = host.ended[0]
+  t.is(stats.totalTime, 1, 'timings still sum')
+  t.is(stats.backendDevice, 1, 'the compute device survives the merge')
+  t.is(stats.backendId, 1, 'the backend code survives the merge')
+  t.is(stats.gpuUnsupported, 0)
+  t.is(stats.codecSidecarLoaded, 1, 'a field only the first chunk reported is kept')
+  t.is(stats.codecOnCoreml, 0, 'the last chunk that reported a field wins')
+  t.absent(stats.enhancerBackendId, 'a field no chunk reported stays absent')
+})
+
 test('sentence stream: a rejected dispatch fails the stream once and clears it', async (t) => {
   const host = fakeHost({
     dispatch: () => {
