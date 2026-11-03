@@ -1329,8 +1329,9 @@ TEST_F(
       << "test setup: no token was emitted, so cancel never fired";
 }
 
-/// A keyless prefill inside a batch has no product that survives the slot
-/// teardown: the lane's KV is wiped and nothing is kept. The same policy that
+/// A keyless prefill inside a batch has no conversation that survives the
+/// slot teardown: the lane keeps its state at most anonymously, first to be
+/// evicted. The same policy that
 /// rejects it on the single tagged path must reject it per batch item, before
 /// anything is scheduled.
 TEST_F(
