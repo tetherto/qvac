@@ -85,7 +85,7 @@ jobs:
             {"label":"linux-arm64","os":"ubuntu-22.04-arm","platform":"manylinux_2_35_aarch64"},
             {"label":"win32-x64","os":"windows-2025","platform":"win_amd64"}
           ]'
-          matrix=$(jq -c --arg p "$PLATFORMS" '{include: [.[] | select($p == "all" or (($p | split(",")) | index(.label)))]}' <<<"$all")
+          matrix=$(jq -c --arg p "$PLATFORMS" '{include: [.[] | .label as $l | select($p == "all" or (($p | split(",")) | index($l)) != null)]}' <<<"$all")
           {
             echo "wheels_only=$([ -n "${VERSION:-}${TAG:-}" ] && echo true || echo false)"
             echo "tag=$tag"
