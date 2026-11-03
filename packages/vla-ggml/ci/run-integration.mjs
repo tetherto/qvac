@@ -14,6 +14,7 @@ export const MODELS = {
   PI05_TEST_GGUF: 'pi05-base-q-aggressive.gguf',
   PI05_TEST_FIXTURE: 'pi05-fixture.safetensors',
   PI05_TEST_ACTIVATIONS: 'pi05-activations.safetensors',
+  PI05_TEST_ACTIONS_2CAM: 'pi05-activations-2cam.safetensors',
   GROOT_TEST_GGUF: 'groot-multi-q8_vf16.gguf',
   GROOT_TEST_ACTIVATIONS_V4: 'groot-libero-activations_v4.safetensors'
 }
