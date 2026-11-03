@@ -22,8 +22,7 @@
         "opencl",
         "vulkan"
       ],
-      "platform": "android",
-      "version>=": "2026-11-03"
+      "platform": "android"
     },
     {
       "name": "speech-cpp",
@@ -32,8 +31,7 @@
         "whisper",
         "vulkan"
       ],
-      "platform": "!(osx | ios | android)",
-      "version>=": "2026-11-03"
+      "platform": "!(osx | ios | android)"
     },
     {
       "name": "speech-cpp",
@@ -42,8 +40,7 @@
         "whisper",
         "metal"
       ],
-      "platform": "osx | ios",
-      "version>=": "2026-11-03"
+      "platform": "osx | ios"
     }
   ],
   "features": {

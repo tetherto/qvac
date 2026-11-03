@@ -20,8 +20,7 @@
         "metal",
         "coreml"
       ],
-      "platform": "osx | ios",
-      "version>=": "2026-11-03"
+      "platform": "osx | ios"
     },
     {
       "name": "speech-cpp",
@@ -31,8 +30,7 @@
         "vulkan",
         "opencl"
       ],
-      "platform": "android",
-      "version>=": "2026-11-03"
+      "platform": "android"
     },
     {
       "name": "speech-cpp",
@@ -41,8 +39,7 @@
         "tts",
         "vulkan"
       ],
-      "platform": "!(osx | ios | android)",
-      "version>=": "2026-11-03"
+      "platform": "!(osx | ios | android)"
     }
   ],
   "features": {

@@ -23,8 +23,7 @@
         "coreml",
         "metal"
       ],
-      "platform": "osx | ios",
-      "version>=": "2026-11-03"
+      "platform": "osx | ios"
     },
     {
       "name": "speech-cpp",
@@ -35,8 +34,7 @@
         "vulkan",
         "opencl"
       ],
-      "platform": "android",
-      "version>=": "2026-11-03"
+      "platform": "android"
     },
     {
       "name": "speech-cpp",
@@ -46,8 +44,7 @@
         "parakeet",
         "vulkan"
       ],
-      "platform": "!(osx | ios | android)",
-      "version>=": "2026-11-03"
+      "platform": "!(osx | ios | android)"
     },
     {
       "name": "vcpkg-cmake",
