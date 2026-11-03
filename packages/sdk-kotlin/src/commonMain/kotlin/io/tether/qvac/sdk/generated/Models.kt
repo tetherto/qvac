@@ -3674,6 +3674,42 @@ object Models {
         params = "4B",
     )
 
+    val MEGALOC_F16 = ModelConstant(
+        name = "MEGALOC_F16",
+        src = "registry://s3/qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+        registryPath = "qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+        registrySource = "s3",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 80859,
+        blobBlockLength = 6989,
+        blobByteOffset = 5297149504,
+        modelId = "megaloc-f16.gguf",
+        expectedSize = 458022688,
+        sha256Checksum = "f2519f42a826bb82f5d3bd6360e6017fb156ad3cb25f71d73163df01d26c6636",
+        addon = "classification",
+        engine = "ggml-image-embedding",
+        quantization = "f16",
+        params = "",
+    )
+
+    val MEGALOC_MIXED = ModelConstant(
+        name = "MEGALOC_MIXED",
+        src = "registry://s3/qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+        registryPath = "qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+        registrySource = "s3",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 87849,
+        blobBlockLength = 4459,
+        blobByteOffset = 5755185056,
+        modelId = "megaloc-mixed.gguf",
+        expectedSize = 292188448,
+        sha256Checksum = "c1215bca09ed783f34e66ab372b0b02e75213733bea8105764557b58f2082575",
+        addon = "classification",
+        engine = "ggml-image-embedding",
+        quantization = "f16-q6_k",
+        params = "",
+    )
+
     val MMPROJ_EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
         name = "MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
         src = "registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
@@ -8738,6 +8774,8 @@ object Models {
         MEDGEMMA_4B_IT_Q4_1_TENSORS,
         MEDGEMMA_4B_IT_Q8_0,
         MEDGEMMA_4B_IT_Q8_0_SHARD,
+        MEGALOC_F16,
+        MEGALOC_MIXED,
         MMPROJ_EMBEDDINGGEMMA_2_Q8_0,
         MMPROJ_GEMMA4_2B_MULTIMODAL_BF16,
         MMPROJ_GEMMA4_2B_MULTIMODAL_F16,

@@ -1,14 +1,13 @@
 /**
- * Compare two images using MegaLoc descriptors from a GGUF URL or local file.
- * Replace the placeholder URL, or pass a model source after the two JPEG/PNG paths.
+ * Compare two images using the MegaLoc F16 model.
+ * Pass a GGUF URL or local file after the two JPEG/PNG paths to use custom weights.
  */
 import { readFile } from 'node:fs/promises'
-import { loadModel, embedImage, unloadModel, close, ModelType } from '@qvac/sdk'
+import { loadModel, embedImage, unloadModel, close, ModelType, MEGALOC_F16 } from '@qvac/sdk'
 
 let modelId: string | undefined
 try {
-  const [firstPath, secondPath, modelSrc = 'https://models.example.com/megaloc-f16.gguf'] =
-    process.argv.slice(2)
+  const [firstPath, secondPath, modelSrc = MEGALOC_F16] = process.argv.slice(2)
   if (!firstPath || !secondPath) {
     throw new Error('Usage: megaloc <first.jpg> <second.jpg> [GGUF URL or path]')
   }

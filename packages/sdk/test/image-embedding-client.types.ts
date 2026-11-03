@@ -1,6 +1,15 @@
-import { loadModel, embedImage, ModelType, type ImageEmbeddingConfig } from '../src/index'
+import {
+  loadModel,
+  embedImage,
+  ModelType,
+  MEGALOC_F16,
+  MEGALOC_MIXED,
+  type ImageEmbeddingConfig
+} from '../src/index'
 
 const config: ImageEmbeddingConfig = { backend: 'CPU', threads: 4 }
+void loadModel({ modelSrc: MEGALOC_F16, modelConfig: config })
+void loadModel({ modelSrc: MEGALOC_MIXED, modelConfig: config })
 void loadModel({
   modelType: ModelType.ggmlImageEmbedding,
   modelSrc: '/models/megaloc.gguf',

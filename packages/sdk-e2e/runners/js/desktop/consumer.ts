@@ -1,4 +1,4 @@
-import { ImageEmbeddingInputExecutor } from '../shared/executors/image-embedding-input-executor.js'
+import { ImageEmbeddingExecutor } from '../shared/executors/image-embedding-executor.js'
 import { SpeakerAwareExecutor } from '../shared/executors/node/speaker-aware-executor.js'
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
 import { RerankExecutor } from '../shared/executors/rerank-executor.js'
@@ -136,7 +136,7 @@ const stepBindings = createStepBindings(resources)
 
 export const executor = createExecutor({
   handlers: [
-    new ImageEmbeddingInputExecutor(resources),
+    new ImageEmbeddingExecutor(resources),
     new SpeakerAwareExecutor(resources),
     new DecisionExecutor(resources),
     new RerankExecutor(resources),

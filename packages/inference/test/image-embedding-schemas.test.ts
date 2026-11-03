@@ -1,5 +1,7 @@
 import { getAddonFromEngine } from '@/schemas/engine-addon-map'
 import test from 'brittle'
+import { MEGALOC_F16, MEGALOC_MIXED } from '@/models/registry'
+import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
 import {
   ModelType,
   embedImageClientParamsSchema,
@@ -37,6 +39,23 @@ test('MegaLoc loading requires a source and preserves backend options across the
   ]) {
     t.absent(loadModelOptionsBaseSchema.safeParse({ ...options, modelConfig }).success)
     t.absent(loadModelSrcRequestSchema.safeParse({ ...request, modelConfig }).success)
+  }
+})
+
+test('registered MegaLoc constants infer the engine and preserve the registry source', (t) => {
+  for (const modelSrc of [MEGALOC_F16, MEGALOC_MIXED]) {
+    const modelType = inferModelTypeFromModelSrc(modelSrc)
+    t.is(modelType, ModelType.ggmlImageEmbedding)
+    t.is(modelSrc.addon, 'classification')
+    const request = loadModelOptionsToRequestSchema.parse({
+      modelType,
+      modelSrc,
+      modelConfig: { backend: 'CPU', threads: 4 }
+    })
+    t.is(request.modelType, ModelType.ggmlImageEmbedding)
+    t.is(request.modelSrc, modelSrc.src)
+    t.is(request.modelName, modelSrc.name)
+    t.ok(loadModelSrcRequestSchema.safeParse(request).success)
   }
 })
 

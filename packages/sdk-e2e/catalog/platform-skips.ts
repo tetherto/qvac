@@ -14,10 +14,10 @@ type Rule = {
 
 const RULES: Rule[] = [
   {
-    match: /^image-embedding-input-/,
+    match: /^image-embedding-/,
     skip: {
       reason:
-        'Checks the JS client Uint8Array input validation before RPC. Python and Kotlin use generated requests with base64 image strings.',
+        'MegaLoc inference uses a shared JS executor; Python and Kotlin runners do not implement it.',
       platforms: ['desktop-python', 'kotlin-android']
     }
   },

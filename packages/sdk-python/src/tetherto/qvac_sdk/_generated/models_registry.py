@@ -3683,6 +3683,42 @@ MEDGEMMA_4B_IT_Q8_0_SHARD = ModelConstant(
     params="4B",
 )
 
+MEGALOC_F16 = ModelConstant(
+    name="MEGALOC_F16",
+    src="registry://s3/qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+    registry_path="qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+    registry_source="s3",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=80859,
+    blob_block_length=6989,
+    blob_byte_offset=5297149504,
+    model_id="megaloc-f16.gguf",
+    expected_size=458022688,
+    sha256_checksum="f2519f42a826bb82f5d3bd6360e6017fb156ad3cb25f71d73163df01d26c6636",
+    addon="classification",
+    engine="ggml-image-embedding",
+    quantization="f16",
+    params="",
+)
+
+MEGALOC_MIXED = ModelConstant(
+    name="MEGALOC_MIXED",
+    src="registry://s3/qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+    registry_path="qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+    registry_source="s3",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=87849,
+    blob_block_length=4459,
+    blob_byte_offset=5755185056,
+    model_id="megaloc-mixed.gguf",
+    expected_size=292188448,
+    sha256_checksum="c1215bca09ed783f34e66ab372b0b02e75213733bea8105764557b58f2082575",
+    addon="classification",
+    engine="ggml-image-embedding",
+    quantization="f16-q6_k",
+    params="",
+)
+
 MMPROJ_EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
     name="MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
     src="registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
@@ -8748,6 +8784,8 @@ __all__ = [
     "MEDGEMMA_4B_IT_Q4_1_TENSORS",
     "MEDGEMMA_4B_IT_Q8_0",
     "MEDGEMMA_4B_IT_Q8_0_SHARD",
+    "MEGALOC_F16",
+    "MEGALOC_MIXED",
     "MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_BF16",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_F16",
