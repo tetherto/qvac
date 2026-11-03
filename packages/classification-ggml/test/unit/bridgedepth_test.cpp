@@ -264,9 +264,11 @@ protected:
 };
 
 // Torch and ggml break top-k ties in the DPN differently; feeding the
-// reference seeds isolates every other op. Measured 2026-11-03 on an M5 Pro:
-// CPU 99.99% within 0.05 px (max 0.11), Metal 99.86% within 0.05 px. Metal
-// stages F32 GEMM operands as half, so its gate is looser.
+// reference seeds isolates every other op. Measured 2026-11-03: CPU 99.99%
+// within 0.05 px (M5 Pro and x86), CUDA 99.93% (T4), Metal 99.86% (M5 Pro),
+// Vulkan 99.65% (T4). Metal and Vulkan stage F32 matmul operands as half in
+// shared memory (Vulkan when the device has fp16 or coopmat2), so their gate
+// is 99% within 0.2 px; both measure 99.8% or more there.
 TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {
   classification_ggml::GgmlBackends backends(backend_, "", 4, "test");
   bd::BridgeDepthGraph graph(modelPath_, backends.device(), backends.cpu());
@@ -279,8 +281,9 @@ TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {
   const auto disparity =
       graph.infer(left.data(), right.data(), 100, 200, &seeds_);
   ASSERT_EQ(disparity.size(), reference_.size());
-  const bool halfGemm =
-      classification_ggml::backendId(ggml_backend_name(backends.device())) == 1;
+  const int deviceId =
+      classification_ggml::backendId(ggml_backend_name(backends.device()));
+  const bool halfGemm = deviceId == 1 || deviceId == 3;
   std::printf(
       "%s reference seeds: %.5f within 0.05 px, %.5f within 0.2 px\n",
       ggml_backend_name(backends.device()),

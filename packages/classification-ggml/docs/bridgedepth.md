@@ -44,12 +44,21 @@ foreground disparity), compared with the original PyTorch model in FP32 on CPU.
 |---|---|---|
 | CPU (Apple M5 Pro) | 99.99% | 99.8% |
 | Metal (Apple M5 Pro) | 99.86% | 99.8% |
+| CPU (Linux x64) | 99.99% | 99.8% |
+| CUDA (Tesla T4) | 99.93% | 99.8% |
+| Vulkan (Tesla T4) | 99.65% | 99.8% |
 
 The DPN picks two disparity proposals per pixel with a top-k. Where two
 candidates tie, ggml and PyTorch keep a different one, and the difference
 spreads a few pixels through the alignment layers. Feeding the reference seeds
-removes that and isolates every other operation. Metal stages F32 matrix
-products in half precision, which accounts for its lower first column.
+removes that and isolates every other operation. Metal, and Vulkan on devices
+with fp16 or coopmat2, stage F32 matrix products in half precision, which
+accounts for their lower first column.
+
+The CUDA backend uses the CUDA 13 runtime installed on the host
+(`libcudart.so.13`, `libcublas.so.13`, `libcublasLt.so.13` on Linux); Fabric
+does not bundle it. Without it the CUDA backend does not load and the default
+GPU selection uses Vulkan.
 
 ## Local GGUF conversion
 
