@@ -12,7 +12,6 @@
   "cli": {
     "groups": ["agentstack"],
     "anchorProject": "@qvac/cli",
-    "fromNpm": ["packages/sdk"],
     "checks": ["package-checks"],
     "packageChecks": ".github/sdk-pod-checks.json"
   }
