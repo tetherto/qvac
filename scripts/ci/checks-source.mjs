@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pr-checks.yml's installs beside the workspace one: resolve finds the release train a run checks; install sets one package
-// up alone with npm as main's pod checks did (npm, its sdk-source:workspace script, the train's tarballs, or npm's ranges);
+// up alone as main's pod checks did (npm, its sdk-source:workspace script, the train's tarballs, or none for self);
 // check installs it and runs each target. Usage: resolve | install <source> <dir> [tarballs] | check <source> <dir> <project> <targets> [tarballs]
 
 import { appendFileSync, rmSync } from 'node:fs'
@@ -44,12 +44,14 @@ function resolve(env) {
 // Main's order: workspace's script is the install; train stages before installing; both npm sources then run the
 // package's sdk-source:<source> script if it has one.
 function install([source, dir, tarballs]) {
-  if (!['npm', 'workspace', 'train', 'published'].includes(source) || !dir)
-    throw new Error('usage: install <npm|workspace|train|published> <package-dir> [tarball-dir]')
+  if (!['npm', 'workspace', 'self', 'train', 'published'].includes(source) || !dir)
+    throw new Error('usage: install <npm|workspace|self|train|published> <package-dir> [tarball-dir]')
   run('git', ['checkout', 'HEAD', '--', 'package.json'], { cwd: dir })
   rmSync(join(dir, 'node_modules'), { recursive: true, force: true })
   rmSync(join(dir, 'package-lock.json'), { force: true })
   if (source === 'workspace') return run('npm', ['run', 'sdk-source:workspace'], { cwd: dir })
+  // Its targets install what they need, such as a pin to a version only this commit builds.
+  if (source === 'self') return
   if (source === 'train') {
     if (!tarballs) throw new Error('the train source needs the tarball directory')
     run('node', [TRAIN, 'stage', dir, tarballs])

@@ -64,13 +64,13 @@ const METADATA = {
   perfReport: ['test:integration'],
   // Toolkits a check target needs on pr-checks' runner, from CHECK_SETUP.
   setup: ['lint', 'typecheck', 'test:unit', 'verify:generated', 'verify:deps'],
-  // How the checks install the package in place of the pnpm workspace: npm alone, as a consumer would, or its own
-  // sdk-source:workspace script; published also checks it against npm on its own release branch and on a dispatch.
+  // How the checks install the package in place of the pnpm workspace: npm alone, as a consumer would, its own
+  // sdk-source:workspace script, or self, its targets alone; published also checks against npm on its release branch.
   sources: ['test:unit']
 }
 export const CHECK_SETUP = ['python', 'java', 'android-ndk', 'bare']
 const CHECK_TARGETS = METADATA.setup
-const SOURCES = ['npm', 'workspace', 'published']
+const SOURCES = ['npm', 'workspace', 'self', 'published']
 // Secrets a target may ask for by name; each is named once in _desktop.yml, _mobile.yml or _cpp-tests.yml, never indexed.
 export const SECRETS = [
   'QASE_API_TOKEN',

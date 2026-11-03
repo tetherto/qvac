@@ -202,7 +202,7 @@ jobs:
       PROJECT: ${{ matrix.project.name }}
       SOURCE: >-
         ${{ needs.train.outputs.source || (contains(matrix.project.sources, 'workspace') && 'workspace')
-        || (contains(matrix.project.sources, 'npm') && 'npm') || '' }}
+        || (contains(matrix.project.sources, 'npm') && 'npm') || (contains(matrix.project.sources, 'self') && 'self') || '' }}
     strategy:
       fail-fast: false
       matrix:

@@ -12,7 +12,7 @@
       },
       "metadata": {
         "setup": ["python", "java", "android-ndk"],
-        "sources": ["npm"]
+        "sources": ["self"]
       }
     },
     "verify:generated": {
