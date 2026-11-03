@@ -7,7 +7,7 @@ schemaType: HowTo
 
 ## Overview
 
-Image embeddings use a GGML inference engine through [`@qvac/classification-ggml`](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml). Load MegaLoc with `modelType: "ggml-image-embedding"` and an explicit `modelSrc` pointing to a converted GGUF URL or local file.
+Image embeddings use a GGML inference engine through [`@qvac/classification-ggml`](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml). Load MegaLoc with `modelSrc: MEGALOC_F16` or `modelSrc: MEGALOC_MIXED`. For custom weights, use `modelType: "ggml-image-embedding"` with a GGUF URL or local file as `modelSrc`.
 
 Pass one JPEG or PNG as `image: Uint8Array` to [`embedImage()`](/sdk/reference/api#embedimage). For packed RGB bytes, also supply `width`, `height`, and `channels: 3`. Both dimensions must be integers from 1 to 16384, and the buffer must contain exactly `width * height * 3` bytes. Omit all three fields for encoded images. The addon converts the image to RGB and resizes it to 322 by 322 pixels without cropping or padding.
 
@@ -25,7 +25,7 @@ For how to use each function, see [SDK API reference](/sdk/reference/api/).
 
 ## Models
 
-MegaLoc requires one converted GGUF file. The supported formats are F16 weights, or an F16 body with a Q6_K final projection. Weights are not bundled with the addon. While registry registration is pending, replace the example's `https://models.example.com/megaloc-f16.gguf` placeholder with the converted model's direct HTTPS URL or a local file path.
+MegaLoc requires one GGUF file. Import `MEGALOC_F16` for F16 weights, or `MEGALOC_MIXED` for an F16 body with a Q6_K final projection. Pass either constant as `modelSrc` to download the weights from the registry.
 
 The original safetensors checkpoint cannot be loaded directly. See the addon's [MegaLoc conversion guide](https://github.com/tetherto/qvac/blob/main/packages/classification-ggml/docs/megaloc.md) for conversion and model provenance.
 
@@ -45,7 +45,7 @@ Cancelling a queued call prevents native inference from starting. Cancelling an 
 
 ## Example
 
-The following script compares two images using MegaLoc descriptors from a GGUF URL or local file. Pass the two JPEG or PNG paths, followed by an optional model source that overrides the placeholder URL:
+The following script compares two images using `MEGALOC_F16`. Pass the two JPEG or PNG paths, followed by an optional GGUF URL or local file path to use custom weights:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
