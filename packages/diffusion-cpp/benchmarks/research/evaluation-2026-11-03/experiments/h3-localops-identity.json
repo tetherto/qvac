@@ -6,6 +6,8 @@
   "header_before_sha256": "b4004e8d920e2ae8c4bbadfc01ef5a5ac128f03d3931adc858cbefd198912c33",
   "header_after_sha256": "07892191a1c06badfb148cc7236a1c3869ea1e3e6e199b516e4eec2e318cc457",
   "patch_sha256": "0b0f23777094a637860277ee069693eae847dca099b7c9ca7ccc62b94b96b6fd",
+  "test_sha256": "0aa4d59ae474d4db75f056499b87fcaf14d3fd93bd3085511b09ef85e0d268f3",
+  "test_scope": "Independent GPU SwiGLU formula and QKV indexing references, three shapes and three changing input rounds. Model-output validation remains separate.",
   "executed_patch_sha256": "8308b66072653b1082072bc129e336503577c92d6ec4a5dda0662c62e43b8ed5",
   "publication_note": "Empty context lines are serialized without trailing spaces. Git apply and resulting source hashes are validated; the executed patch hash preserves the original benchmark provenance."
 }

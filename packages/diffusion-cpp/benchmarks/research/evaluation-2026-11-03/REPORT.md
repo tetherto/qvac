@@ -13,6 +13,24 @@ Research branch: [codex/diffusion-performance](https://github.com/tetherto/qvac/
 | Mac Studio | macOS arm64 | Apple M3 Ultra, 60 GPU cores | Metal | 2026-11-03 |
 | AMD Strix Halo | Linux x64 | Radeon 8060S, gfx1151 | Vulkan/RADV, HIP/ROCm | 2026-11-03 |
 
+## Revisions and measurement scope
+
+- November native measurements use addon **0.33.0**, engine `67fd0f590e8de432e6bb95fb05b0c3fdfdb2a1dd`, GGML `a4adfcb1304fb05b64473f1fe8d678bbce7a9ce0`, and the recorded checkpoint hashes. The package pins are stable-diffusion 2026-08-11#9 and GGML 2026-08-11#3.
+- October CUDA measurements use addon **0.31.0**, engine `4ec33ca21eec64b9778b6fd16d58e88cd501936d` and GGML `9f94f330ac196e0a2e3176e798b36226b22091a5`. Spark was not rebooked for November; its results retain those revisions.
+- Pinned-engine experiments, older isolated upstream experiments, native addon requests and research CLI requests are separate cohorts. Compare the paired before/after within each cohort; do not combine absolute times or multiply independent ratios.
+- Strix HIP uses task-built modules with `GGML_MAX_NAME=128`, matching the published addon. Earlier incompatible ABI160 native probes are excluded. This is not validation of a shipped HIP prebuild.
+- The current diffusion addon/registry feature lists expose CUDA, Metal, Vulkan and OpenCL, but no HIP release feature. Shared CI has ROCm setup support for other consumers. Promoting Strix HIP requires explicit backend packaging/ABI/linking validation and the corresponding registry/addon build integration; changing only a runtime preset does not ship HIP support.
+- Driver/toolchain coverage: RTX driver 595.71.05, CUDA 13.3.73 and Vulkan 1.4.329; Mac macOS 26.7.1 / Metal 4; Strix Mesa 25.2.8, Vulkan 1.4.318 and ROCm 7.2.4. Full hardware identities are in the reproduction records.
+- Current defaults refers to the selected QVAC checkpoint sets. Benchmarks explicitly set backend and weight placement; the table below defines their baselines. These are not a claim that every shipping configuration resolves to the same placement.
+
+| Model | Platform / API | Tested native baseline | Interpretation |
+| --- | --- | --- | --- |
+| MiniMax-H3 | RTX CUDA/Vulkan; Mac Metal; Strix Vulkan/HIP | params_backend=cpu; flash_attn=false; diffusion FA remains enabled | Full-size native baseline. Residency and global FA are separate changes. |
+| FLUX.2 Klein | RTX CUDA/Vulkan; Mac Metal; Strix Vulkan/HIP | Parameters on the selected GPU; vae_conv_direct=true | GEMM and CPU parameter placement are compared separately and in explicit combinations. |
+| LTX-2.3 | RTX CUDA/Vulkan | params_backend=cpu; vae_conv_direct=true | VAE-only residency is relative to this offloaded baseline. Full model residency is not established. |
+| LTX-2.3 | Mac Metal; Strix Vulkan/HIP | Parameters on the selected GPU; vae_conv_direct=true | Already-resident weights must not be counted again as an optimization. |
+| All models | DGX Spark / CUDA | Retained October configurations in the reproduction records | Dated pairs only; no fresh November Spark run. |
+
 ## Reading the results
 
 **V** means tried and measured, not automatically recommended. **Partial** identifies incomplete coverage. **Not checked** is not a pass. Spark cells retain 29 October revisions; all other dated cells retain their stated cohort. A negative latency percentage is faster. Speed ratios compare the stated baseline with the candidate.
@@ -37,12 +55,13 @@ A text-to-video model that generates synchronized video and audio. This campaign
 
 | Approach and type | RTX 5090 / CUDA | RTX 5090 / Vulkan | DGX Spark GB10 / CUDA (29 Oct) | M3 Ultra / Metal | Strix 8060S / Vulkan | Strix 8060S / HIP | Implement or reject — why |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Global flash attention**<br>`[params tuning]` | **V**<br>120.407 -> 113.771 s;  -5.51% latency;  1.058x<br>Visually identical in reviewed outputs; audio exact | **V**<br>103.638 -> 94.686 s;  -8.64% latency;  1.095x<br>Visually identical in reviewed outputs; audio exact | **V - dated**<br>659.693 -> 604.903 s;  -8.31% latency;  1.091x<br>Visually identical in reviewed outputs; audio exact | **V**<br>135.831 -> 100.164 s;  -26.26% latency;  1.356x<br>Visually identical in reviewed outputs; audio exact | **V**<br>101.173 -> 96.131 s;  -4.98% latency;  1.052x<br>Visually identical in reviewed outputs; audio exact | **V**<br>68.679 -> 61.573 s;  -10.35% latency;  1.115x<br>Visually identical in reviewed outputs; audio exact | **RTX 5090 / CUDA:** Recommend a model/API-scoped profile after the final implementation checks; retain the current baseline elsewhere.<br>**RTX 5090 / Vulkan:** Recommend a model/API-scoped profile after the final implementation checks; retain the current baseline elsewhere.<br>**M3 Ultra / Metal:** Provisional until full-size, quality and repeated-request checks complete.<br>**Radeon 8060S / Vulkan:** Provisional until full-size, quality and repeated-request checks complete.<br>**Radeon 8060S / HIP:** Provisional until full-size, quality and repeated-request checks complete.<br>**DGX Spark GB10 / CUDA, 29 Oct:** Retain the dated recommendation; revalidate on the implementation revision. |
-| **Minimal SwiGLU + QKV views**<br>`[graph optimization]` | **V - 1/3 prompts**<br>119.697 -> 117.369 s;  -1.94% latency;  1.020x<br>Output byte-exact | **V**<br>116.760 -> 107.940 s;  -7.55% latency;  1.082x<br>Output byte-exact | Not checked | **V**<br>142.645 -> 145.870 s;  +2.26% latency;  0.978x<br>Video/audio differ; parity not established | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged.<br>**RTX 5090 / Vulkan:** Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen.<br>**M3 Ultra / Metal:** Reject as the preferred Metal profile: output/audio change and the initial non-FA screen is slower. Keep the original graph.<br>**Radeon 8060S / Vulkan:** Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen.<br>**Radeon 8060S / HIP:** Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen. |
-| **Minimal operations + global FA**<br>`[combined profile]` | **V - 1/3 prompts**<br>119.697 -> 110.573 s;  -7.62% latency;  1.083x<br>Visually identical in reviewed outputs; audio exact | **V**<br>116.760 -> 98.975 s;  -15.23% latency;  1.180x<br>Numerically compared; see quality details | Not checked | **V**<br>142.645 -> 108.140 s;  -24.19% latency;  1.319x<br>Video/audio differ; parity not established | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged.<br>**RTX 5090 / Vulkan:** Provisional pending incremental benefit and output validation.<br>**M3 Ultra / Metal:** Use global FA alone on Metal. Adding the patch measured only 3.8% extra speed with PSNR 37.20 dB and audio SNR 25.18 dB; perceptual audio parity is not established.<br>**Radeon 8060S / Vulkan:** Provisional pending incremental benefit and output validation.<br>**Radeon 8060S / HIP:** Provisional pending incremental benefit and output validation. |
-| **Operations added after global FA**<br>`[incremental engine benefit]` | **V - 1/3 prompts**<br>113.102 -> 110.573 s;  -2.24% latency;  1.023x<br>Output byte-exact | Not checked | Not checked | Not checked | Not checked | Not checked | **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. |
+| **Global flash attention**<br>`[params tuning]` | **V**<br>120.407 -> 113.771 s;  -5.51% latency;  1.058x<br>Visually identical in reviewed outputs; audio exact | **V**<br>103.638 -> 94.686 s;  -8.64% latency;  1.095x<br>Visually identical in reviewed outputs; audio exact | **V - dated**<br>659.693 -> 604.903 s;  -8.31% latency;  1.091x<br>Visually identical in reviewed outputs; audio exact | **V**<br>1543.865 -> 1238.215 s;  -19.80% latency;  1.247x<br>Visually identical in reviewed outputs; audio exact | **V**<br>1415.182 -> 1369.229 s;  -3.25% latency;  1.034x<br>Visually identical in reviewed outputs; audio exact | **V**<br>68.679 -> 61.573 s;  -10.35% latency;  1.115x<br>Visually identical in reviewed outputs; audio exact | **RTX 5090 / CUDA:** Recommend a model/API-scoped profile after the final implementation checks; retain the current baseline elsewhere.<br>**RTX 5090 / Vulkan:** Recommend a model/API-scoped profile after the final implementation checks; retain the current baseline elsewhere.<br>**M3 Ultra / Metal:** Provisional until full-size, quality and repeated-request checks complete.<br>**Radeon 8060S / Vulkan:** Provisional until full-size, quality and repeated-request checks complete.<br>**Radeon 8060S / HIP:** Provisional until full-size, quality and repeated-request checks complete.<br>**DGX Spark GB10 / CUDA, 29 Oct:** Retain the dated recommendation; revalidate on the implementation revision. |
+| **Minimal SwiGLU + QKV views**<br>`[graph optimization]` | **V**<br>119.849 -> 117.358 s;  -2.08% latency;  1.021x<br>Output byte-exact | **V - 1/3 prompts**<br>103.299 -> 100.511 s;  -2.70% latency;  1.028x<br>Output byte-exact | Not checked | **V**<br>142.645 -> 145.870 s;  +2.26% latency;  0.978x<br>Video/audio differ; parity not established | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged.<br>**RTX 5090 / Vulkan:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged.<br>**M3 Ultra / Metal:** Reject as the preferred Metal profile: output/audio change and the initial non-FA screen is slower. Keep the original graph.<br>**Radeon 8060S / Vulkan:** Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen.<br>**Radeon 8060S / HIP:** Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen. |
+| **Minimal operations + global FA**<br>`[combined profile]` | **V**<br>119.849 -> 110.717 s;  -7.62% latency;  1.082x<br>Visually identical in reviewed outputs; audio exact | **V - 1/3 prompts**<br>103.299 -> 91.653 s;  -11.27% latency;  1.127x<br>Visually identical in reviewed outputs; audio exact | Not checked | **V**<br>142.645 -> 108.140 s;  -24.19% latency;  1.319x<br>Video/audio differ; parity not established | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged.<br>**RTX 5090 / Vulkan:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged.<br>**M3 Ultra / Metal:** Use global FA alone on Metal. Adding the patch measured only 3.8% extra speed with PSNR 37.20 dB and audio SNR 25.18 dB; perceptual audio parity is not established.<br>**Radeon 8060S / Vulkan:** Provisional pending incremental benefit and output validation.<br>**Radeon 8060S / HIP:** Provisional pending incremental benefit and output validation. |
+| **Operations added after global FA**<br>`[incremental engine benefit]` | **V**<br>113.067 -> 110.717 s;  -2.08% latency;  1.021x<br>Output byte-exact | **V - 1/3 prompts**<br>93.871 -> 91.653 s;  -2.36% latency;  1.024x<br>Output byte-exact | Not checked | Not checked | Not checked | Not checked | **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged.<br>**RTX 5090 / Vulkan:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. |
 | **Older isolated H3 operations**<br>`[kernel optimization]` | Not checked | Not checked | Not checked | **V**<br>80.180 -> 70.595 s;  -11.95% latency;  1.136x<br>Video/audio differ; parity not established | **V**<br>90.065 -> 84.655 s;  -6.01% latency;  1.064x<br>Output byte-exact | **V**<br>72.410 -> 63.990 s;  -11.63% latency;  1.132x<br>Video/audio differ; parity not established | **M3 Ultra / Metal:** Reject any strict-parity claim when audio changes; otherwise assess the broader backport separately.<br>**Radeon 8060S / Vulkan:** Reject any strict-parity claim when audio changes; otherwise assess the broader backport separately.<br>**Radeon 8060S / HIP:** Reject on HIP: visible video changes and audio SNR only 1.09 dB; speed does not meet the requested quality tier. |
 | **Parameter residency**<br>`[memory placement]` | Not checked | Not checked | Not checked | **V**<br>135.831 -> 131.249 s;  -3.37% latency;  1.035x<br>Output byte-exact | **V**<br>101.173 -> 97.740 s;  -3.39% latency;  1.035x<br>Output byte-exact | **V**<br>68.679 -> 68.846 s;  +0.24% latency;  0.998x<br>Output byte-exact | **M3 Ultra / Metal:** Use only with proven capacity and repeated-request behavior; full combined confirmation determines speed recommendation.<br>**Radeon 8060S / Vulkan:** Use only with proven capacity and repeated-request behavior; full combined confirmation determines speed recommendation.<br>**Radeon 8060S / HIP:** Use only with proven capacity and repeated-request behavior; full combined confirmation determines speed recommendation. |
+| **Metal vector-attention tuning tables**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Source review**<br>No measured diffusion gain.<br>Not established. | Not applicable to this API | Not applicable to this API | **M3 Ultra / Metal:** Defer: an hours-long LLM tuning sweep has no established benefit for the dominant measured diffusion stages. |
 | **SGLang / vLLM comparison**<br>`[runtime choice]` | Not checked | Not checked | **V / partial - dated**<br>Spark SGLang: 604.903 -> 172.799 s;  -71.43% latency;  3.501x<br>Different content; not equivalent | Not checked | Not checked | Not checked | **GB10 / CUDA, 29 Oct:** Separate runtime option, not a drop-in quality-preserving optimization. |
 | **2D VAE GEMM control**<br>`[params tuning]` | Not checked | Not checked | Not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **V**<br>101.173 -> 100.647 s;  -0.52% latency;  1.005x<br>Output byte-exact | **V**<br>68.679 -> 69.237 s;  +0.81% latency;  0.992x<br>Output byte-exact | **M3 Ultra / Metal:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks.<br>**Radeon 8060S / Vulkan:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks.<br>**Radeon 8060S / HIP:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
 | **Metal commands per buffer: 2**<br>`[scheduling tuning]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not applicable to this API | Not applicable to this API | **M3 Ultra / Metal:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
@@ -50,7 +69,7 @@ A text-to-video model that generates synchronized video and audio. This campaign
 | **Metal serial encoding**<br>`[scheduling tuning]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not applicable to this API | Not applicable to this API | **M3 Ultra / Metal:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
 | **Vulkan host-memory selection**<br>`[memory placement]` | Not applicable to this API | Not checked | Not applicable to this API | Not applicable to this API | **V**<br>101.173 -> 102.655 s;  +1.46% latency;  0.986x<br>Output byte-exact | Not applicable to this API | **Radeon 8060S / Vulkan:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
 | **Vulkan synchronized submits**<br>`[scheduling tuning]` | Not applicable to this API | Not checked | Not applicable to this API | Not applicable to this API | **V**<br>101.173 -> 100.957 s;  -0.21% latency;  1.002x<br>Output byte-exact | Not applicable to this API | **Radeon 8060S / Vulkan:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
-| **HIP rocWMMA attention after global FA**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Decide from diffusion results; published LLM results are not a diffusion validation. |
+| **HIP rocWMMA attention after global FA**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation. |
 | **HIP force-blas**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Require numerical output checks and repeatable incremental speed before any production selection change. |
 | **HIP force-mmq**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Require numerical output checks and repeatable incremental speed before any production selection change. |
 | **Memory-mapped checkpoint reads**<br>`[model I/O]` | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not checked | Not checked | Not checked | Not checked | **RTX 5090 / CUDA:** Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled.<br>**RTX 5090 / Vulkan:** Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled. |
@@ -58,6 +77,7 @@ A text-to-video model that generates synchronized video and audio. This campaign
 | **Residency added after global FA (full)**<br>`[memory placement]` | Not checked | Not checked | Not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not checked | Not checked | **M3 Ultra / Metal:** Use only if the memory/speed tradeoff remains reliable over repeated requests. |
 | **Global FA + residency (short)**<br>`[combined profile]` | Not checked | Not checked | Not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not checked | Not checked | **M3 Ultra / Metal:** Confirm combined speed and memory; preserve the offloaded baseline on unvalidated capacities. |
 | **Residency added after global FA (short)**<br>`[memory placement]` | Not checked | Not checked | Not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not checked | Not checked | **M3 Ultra / Metal:** Use only if the memory/speed tradeoff remains reliable over repeated requests. |
+| **Graph patch after FA: reverse-order confirmation**<br>`[graph optimization]` | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not checked | Not checked | Not checked | Not checked | **RTX 5090 / CUDA:** Require agreement with the initial three-prompt block before accepting the small incremental engine change.<br>**RTX 5090 / Vulkan:** Require agreement with the initial three-prompt block before accepting the small incremental engine change. |
 
 ### Additional and partially checked approaches
 
@@ -65,7 +85,9 @@ A text-to-video model that generates synchronized video and audio. This campaign
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Older isolated operations + VAE-only FA | Measured combination | V - dated | RTX: 104.180 -> 89.550 s; -14.04% latency; 1.163x; 14.630 s saved; Spark: 401.450 -> 307.420 s; -23.42% latency; 1.306x; 94.030 s saved | PSNR approximately 52-56 dB; audio exact; reviewed frames visually unchanged. | RTX and GB10 / CUDA, 29 Oct | Fresh-context CLI; TE FA disabled. Additional prompts confirm the direction. A VAE-only selector is needed. | A candidate for the focused engine/selector work; new minimal patch does not inherit this validation. |
 | Graphs, launch queues, thread count and VAE convolution | Scheduling / parameters | V | No reliable general speed gain; see individual reproduction records. | Exact or numerically compared where valid. | API-specific screens; CUDA history and new Metal/Vulkan/HIP trials | Defaults differ by backend. Do not treat an already-enabled fast path as a new gain. | Keep existing defaults unless a specific confirmed profile is listed above. |
-| Vulkan large-token MLP chunking / NVFP4 TE / new decoder | Conditional engine / model work | Source review | Not measured in the tested request envelope. | Not established for these changes. | Potential Vulkan / CUDA targets | MLP chunking addresses a >4 GiB individual buffer at larger token counts; NVFP4 requires loader/checkpoint work. Current small conditioning cost limits warm-speed upside. | Defer; no demonstrated benefit in the booked cases and broader compatibility scope. |
+| Vulkan large-token MLP chunking | Conditional graph / memory optimization | Source review | Not measured; tested cases are below the reported buffer threshold. | Not established. | Potential Vulkan targets | [Upstream PR #2257](https://github.com/leejet/stable-diffusion.cpp/pull/2257) chunks the feed-forward token axis when an individual buffer exceeds the backend limit. This addresses a >4 GiB buffer, not total VRAM exhaustion. | Defer to a larger-request compatibility check; no demonstrated speed benefit for the booked shapes. |
+| NVFP4 text encoder | Quantization / checkpoint change | Not checked | No measured gain. | Not established; different weight precision. | Potential supported CUDA targets | Requires a supported checkpoint and loader/kernel path. Conditioning is a small fraction of tested warm generation, although a smaller encoder could save memory. | Defer: broader model/loader work and quality validation are needed; do not infer a DiT speedup from text-encoder quantization. |
+| New or lower-precision video decoder | Model / precision change | Not checked | No measured gain. | Not established. | Unvalidated decoder/backend combinations | Replacing or requantizing the decoder changes model arithmetic/checkpoint content and requires independent audio-video validation. | Defer; existing attention parameters provide a smaller change with measured evidence. |
 
 ### Retained CUDA screens and remaining ideas
 
@@ -98,8 +120,8 @@ Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20
 | --- | --- | --- | --- | --- |
 | Global flash attention / RTX 5090 / CUDA | 141.357 -> 135.055 s; -4.46% | 40.240 -> 40.257 GB; +0.04% | 23728.000 -> 23728.000 MiB; +0.00% | VAE: 25.923 -> 19.244 s; -25.76% |
 | Global flash attention / RTX 5090 / Vulkan | 112.890 -> 102.636 s; -9.08% | 39.616 -> 39.624 GB; +0.02% | 24304.000 -> 24304.000 MiB; +0.00% | VAE: 27.172 -> 18.132 s; -33.27% |
-| Global flash attention / M3 Ultra / Metal | 235.005 -> 131.769 s; -43.93% | 62.980 -> 63.069 GB; +0.14% | Unified memory; RSS is not total device usage | VAE: 53.174 -> 19.613 s; -63.12% |
-| Global flash attention / Radeon 8060S / Vulkan | 114.706 -> 112.281 s; -2.11% | 1.782 -> 1.783 GB; +0.05% | 56.084 -> 61.105 GB VRAM + GTT; +8.95% | VAE: 29.602 -> 24.919 s; -15.82% |
+| Global flash attention / M3 Ultra / Metal | 1551.436 -> 1287.922 s; -16.99% | 67.242 -> 67.465 GB; +0.33% | Unified memory; RSS is not total device usage | VAE: 468.376 -> 169.173 s; -63.88% |
+| Global flash attention / Radeon 8060S / Vulkan | 1419.960 -> 1373.028 s; -3.31% | 2.253 -> 2.265 GB; +0.54% | 61.911 -> 61.904 GB VRAM + GTT; -0.01% | VAE: 259.164 -> 212.070 s; -18.17% |
 | Global flash attention / Radeon 8060S / HIP | 75.783 -> 76.261 s; +0.63% | 38.979 -> 38.982 GB; +0.01% | 24.266 -> 17.806 GB VRAM + GTT; -26.62% | VAE: 22.294 -> 14.618 s; -34.43% |
 
 ### Approach descriptions, decision reasons and change scope
@@ -114,32 +136,31 @@ Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20
 
 - **RTX 5090 / CUDA:** Recommend a model/API-scoped profile after the final implementation checks; retain the current baseline elsewhere. Quality: PSNR 52.36-55.99 dB; SSIM 0.999008-0.999269. Worst frame 50.52 dB. Audio exact. Reviewed frame samples show no visible change. Scope/tradeoff: 960 x 544, 124 frames; diffusion FA already enabled. native warm latency, matched prompt/seed/geometry.
 - **RTX 5090 / Vulkan:** Recommend a model/API-scoped profile after the final implementation checks; retain the current baseline elsewhere. Quality: PSNR 51.18-54.41 dB; SSIM 0.998624-0.998854. Worst frame 49.49 dB. Audio exact. Reviewed frame samples show no visible change. Scope/tradeoff: 960 x 544, 124 frames; diffusion FA already enabled. native warm latency, matched prompt/seed/geometry.
-- **M3 Ultra / Metal:** Provisional until full-size, quality and repeated-request checks complete. Quality: PSNR 57.73 dB; SSIM 0.999649. Worst frame 56.55 dB. Audio exact. Scope/tradeoff: Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.
-- **Radeon 8060S / Vulkan:** Provisional until full-size, quality and repeated-request checks complete. Quality: PSNR 51.12 dB; SSIM 0.998222. Worst frame 50.64 dB. Audio exact. Scope/tradeoff: Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.
+- **M3 Ultra / Metal:** Provisional until full-size, quality and repeated-request checks complete. Quality: PSNR 59.14 dB; SSIM 0.999691. Worst frame 58.16 dB. Audio exact. Scope/tradeoff: Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.
+- **Radeon 8060S / Vulkan:** Provisional until full-size, quality and repeated-request checks complete. Quality: PSNR 52.32 dB; SSIM 0.998272. Worst frame 51.68 dB. Audio exact. Scope/tradeoff: Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.
 - **Radeon 8060S / HIP:** Provisional until full-size, quality and repeated-request checks complete. Quality: PSNR 48.14 dB; SSIM 0.996470. Worst frame 47.09 dB. Audio exact. Scope/tradeoff: Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.
 - **DGX Spark GB10 / CUDA, 29 Oct:** Retain the dated recommendation; revalidate on the implementation revision. Quality: Approximately 53.6 dB; audio exact; reviewed samples visually unchanged. Scope/tradeoff: Older package/engine revisions; 960 x 544, 124 frames.
 
 #### Minimal SwiGLU + QKV views `[graph optimization]`
 
-- **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. Quality: Video/audio files byte exact. 1 comparison. Scope/tradeoff: Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 1.94-1.94%. Fresh-process I/O-confounded results remain in the records.
-- **RTX 5090 / Vulkan:** Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen. Quality: Video/audio files byte exact. 1 comparison. Scope/tradeoff: One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately. Fresh CLI context each repetition; generation and process wall time separately..
+- **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. Quality: Video/audio files byte exact. 3 comparisons. Scope/tradeoff: Warm engine context, 960 x 544 / 124 frames. Mean of 3 per-prompt medians. Per-prompt latency reductions 1.94-2.17%. Fresh-process I/O-confounded results remain in the records.
+- **RTX 5090 / Vulkan:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. Quality: Video/audio files byte exact. 1 comparison. Scope/tradeoff: Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 2.70-2.70%. Fresh-process I/O-confounded results remain in the records.
 - **M3 Ultra / Metal:** Reject as the preferred Metal profile: output/audio change and the initial non-FA screen is slower. Keep the original graph. Quality: PSNR 37.19 dB; SSIM 0.986075. Worst frame 31.83 dB. Audio SNR 25.18 dB. Perceptual audio parity not established. Scope/tradeoff: One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately. Fresh CLI context each repetition; generation and process wall time separately..
 - **Radeon 8060S / Vulkan:** Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen. Quality: Pending Scope/tradeoff: One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately.
 - **Radeon 8060S / HIP:** Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen. Quality: Pending Scope/tradeoff: One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately.
 
 #### Minimal operations + global FA `[combined profile]`
 
-- **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. Quality: PSNR 55.96 dB; SSIM 0.999271. Worst frame 55.33 dB. Audio exact. Scope/tradeoff: Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 7.62-7.62%. Fresh-process I/O-confounded results remain in the records.
-- **RTX 5090 / Vulkan:** Provisional pending incremental benefit and output validation. Quality: PSNR 52.51 dB; SSIM 0.997947. Worst frame 51.98 dB. Audio exact. Scope/tradeoff: Combined profile measured directly against its own baseline; do not multiply separate speedups. Fresh CLI context each repetition; generation and process wall time separately..
+- **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. Quality: PSNR 52.42-55.96 dB; SSIM 0.998686-0.999271. Worst frame 50.92 dB. Audio exact. Scope/tradeoff: Warm engine context, 960 x 544 / 124 frames. Mean of 3 per-prompt medians. Per-prompt latency reductions 7.41-7.83%. Fresh-process I/O-confounded results remain in the records.
+- **RTX 5090 / Vulkan:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. Quality: PSNR 54.39 dB; SSIM 0.998857. Worst frame 53.92 dB. Audio exact. Scope/tradeoff: Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 11.27-11.27%. Fresh-process I/O-confounded results remain in the records.
 - **M3 Ultra / Metal:** Use global FA alone on Metal. Adding the patch measured only 3.8% extra speed with PSNR 37.20 dB and audio SNR 25.18 dB; perceptual audio parity is not established. Quality: PSNR 37.20 dB; SSIM 0.986081. Worst frame 31.83 dB. Audio SNR 25.18 dB. Perceptual audio parity not established. Scope/tradeoff: Combined profile measured directly against its own baseline; do not multiply separate speedups. Fresh CLI context each repetition; generation and process wall time separately..
 - **Radeon 8060S / Vulkan:** Provisional pending incremental benefit and output validation. Quality: Pending Scope/tradeoff: Combined profile measured directly against its own baseline; do not multiply separate speedups.
 - **Radeon 8060S / HIP:** Provisional pending incremental benefit and output validation. Quality: Pending Scope/tradeoff: Combined profile measured directly against its own baseline; do not multiply separate speedups.
 
 #### Operations added after global FA `[incremental engine benefit]`
 
-Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 2.24-2.24%. Fresh-process I/O-confounded results remain in the records.
-
-- **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. Quality: Video/audio files byte exact. 1 comparison.
+- **RTX 5090 / CUDA:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. Quality: Video/audio files byte exact. 3 comparisons. Scope/tradeoff: Warm engine context, 960 x 544 / 124 frames. Mean of 3 per-prompt medians. Per-prompt latency reductions 1.74-2.27%. Fresh-process I/O-confounded results remain in the records.
+- **RTX 5090 / Vulkan:** Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged. Quality: Video/audio files byte exact. 1 comparison. Scope/tradeoff: Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 2.36-2.36%. Fresh-process I/O-confounded results remain in the records.
 
 #### Older isolated H3 operations `[kernel optimization]`
 
@@ -156,6 +177,12 @@ Short screen; unified-memory RSS is not total system/device consumption. native 
 - **M3 Ultra / Metal:** Use only with proven capacity and repeated-request behavior; full combined confirmation determines speed recommendation. Quality: Video/audio files byte exact. 1 comparison.
 - **Radeon 8060S / Vulkan:** Use only with proven capacity and repeated-request behavior; full combined confirmation determines speed recommendation. Quality: Video/audio files byte exact. 1 comparison.
 - **Radeon 8060S / HIP:** Use only with proven capacity and repeated-request behavior; full combined confirmation determines speed recommendation. Quality: Video/audio files byte exact. 1 comparison.
+
+#### Metal vector-attention tuning tables `[kernel optimization]`
+
+[Published tuning](https://github.com/ggml-org/llama.cpp/discussions/27668) targets the small-query vector path; pinned selection requires query dimension below 20. Large diffusion attention is a different workload.
+
+- **M3 Ultra / Metal:** Defer: an hours-long LLM tuning sweep has no established benefit for the dominant measured diffusion stages. Quality: Not established.
 
 #### SGLang / vLLM comparison `[runtime choice]`
 
@@ -201,19 +228,19 @@ One-prompt parameter screen; retain individual run/stage/resource records. No gl
 
 #### HIP rocWMMA attention after global FA `[kernel optimization]`
 
-Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged.
+Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback.
 
-- **Radeon 8060S / HIP:** Decide from diffusion results; published LLM results are not a diffusion validation. Quality: Pending
+- **Radeon 8060S / HIP:** Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation. Quality: Pending
 
 #### HIP force-blas `[kernel optimization]`
 
-Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.
+Existing compile-time forced-selection controls; same corrected tensor-name ABI and checkpoint. These affect the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.
 
 - **Radeon 8060S / HIP:** Require numerical output checks and repeatable incremental speed before any production selection change. Quality: Pending
 
 #### HIP force-mmq `[kernel optimization]`
 
-Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.
+Existing compile-time forced-selection controls; same corrected tensor-name ABI and checkpoint. These affect the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.
 
 - **Radeon 8060S / HIP:** Require numerical output checks and repeatable incremental speed before any production selection change. Quality: Pending
 
@@ -248,6 +275,21 @@ Separates the residency contribution from the flash-attention gain.
 
 - **M3 Ultra / Metal:** Use only if the memory/speed tradeoff remains reliable over repeated requests. Quality: Pending
 
+#### Graph patch after FA: reverse-order confirmation `[graph optimization]`
+
+Later repeated-context block, candidate run before baseline; one warmup and three measured requests per profile. Checks drift in the small graph-only increment.
+
+- **RTX 5090 / CUDA:** Require agreement with the initial three-prompt block before accepting the small incremental engine change. Quality: Pending
+- **RTX 5090 / Vulkan:** Require agreement with the initial three-prompt block before accepting the small incremental engine change. Quality: Pending
+
+### Production implementation tasks
+
+1. Start with the accepted pinned-engine flash-attention profile. Match the H3 checkpoint family and resolved backend; preserve explicit flash_attn/fa settings and diffusion_fa. Keep the original setting for unsupported devices, models and request envelopes.
+2. If the focused graph patch is selected, implement only its accepted backend branches in the engine model header. Resolve the actual execution backend when building the graph and retain the original operations elsewhere. Do not substitute the larger upstream patch or its Spark speed claim.
+3. Validate the real engine change through a temporary addon vcpkg overlay. Run existing engine/operator tests and native addon audio-video comparisons for both optimized and fallback branches, including repeated requests, cancellation/error recovery and accepted full-size inputs.
+4. For a VAE-only flash-attention selector or broader CUDA backport, treat API forwarding and math/layout changes as separate work. Repeat full-model quality checks; older CLI results do not prove the new addon integration.
+5. After validation, use separate engine and registry PRs only if required, then repin the addon. Run the unchanged desktop CI matrix. Fresh Spark and additional Apple/AMD devices remain release-scope decisions; unvalidated configurations keep their baseline.
+
 ## 2. FLUX.2 Klein 4B Q8
 
 A compact text-to-image model. Main tests use 1024 x 1024 images and 10 sampling steps; RTX also covers portrait 768 x 1024 and larger 1280 x 1280 requests. FLUX 3 Image Klein is a distinct compatibility target, not validated by these measurements.
@@ -270,7 +312,7 @@ A compact text-to-image model. Main tests use 1024 x 1024 images and 10 sampling
 | **Vulkan host-memory selection**<br>`[memory placement]` | Not applicable to this API | Not checked | Not applicable to this API | Not applicable to this API | **V**<br>29.601 -> 29.927 s;  +1.10% latency;  0.989x<br>Pixels exact | Not applicable to this API | **Radeon 8060S / Vulkan:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
 | **Vulkan synchronized submits**<br>`[scheduling tuning]` | Not applicable to this API | Not checked | Not applicable to this API | Not applicable to this API | **V**<br>29.601 -> 31.033 s;  +4.84% latency;  0.954x<br>Pixels exact | Not applicable to this API | **Radeon 8060S / Vulkan:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
 | **GEMM VAE + F16 matrices**<br>`[combined profile]` | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not checked | Not checked | Not checked | Not checked | Not checked | **RTX 5090 / CUDA:** Use only if the F16 increment justifies additional memory and all quality/latency checks pass. |
-| **HIP rocWMMA attention after GEMM**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Decide from diffusion results; published LLM results are not a diffusion validation. |
+| **HIP rocWMMA attention after GEMM**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation. |
 | **Memory-mapped checkpoint reads**<br>`[model I/O]` | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not checked | Not checked | Not checked | Not checked | **RTX 5090 / CUDA:** Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled.<br>**RTX 5090 / Vulkan:** Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled. |
 
 ### Additional and partially checked approaches
@@ -278,7 +320,9 @@ A compact text-to-image model. Main tests use 1024 x 1024 images and 10 sampling
 | Improvement | Type | Checked | Speed effect: seconds, percent, ratio | Quality | Platform / API | Memory, tradeoffs and scope | Implement or reject: why |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | FA off / threads / queues / Vulkan host-memory tuning | Scheduling / control experiments | V | No reliable improvement over the chosen baseline; FA off is substantially slower. | Check individual records; API switching can visibly alter seeded output. | RTX CUDA/Vulkan, M3 Ultra Metal, Strix Vulkan/HIP as recorded | Diffusion flash attention is already enabled. Metal queue and thread changes are mostly within variation. | Keep the existing fast paths and explicit backend choice. |
-| FLUX 3 / upstream auto probes / Strix fork | Compatibility / broader engine work | Source review | No validated speed result for these checkpoints. | Not established. | Unvalidated model/backend combinations | FLUX 3 has distinct model components; an upstream microprobe or Krea-specific gain does not establish full-generation performance here. | Defer broad upgrades; only carry isolated kernels with matched quality and end-to-end evidence. |
+| FLUX 3 Image Klein compatibility | Model compatibility work | Source review | No matched inference/performance result. | Not established. | Unvalidated model/backend combinations | FLUX 3 has distinct diffusion and Qwen3-VL components unsupported by the pinned loader. FLUX.2 Klein results do not establish compatibility or speed for it. | Separate model-support work before performance claims; preserve the measured FLUX.2 scope. |
+| Upstream automatic convolution probes | Kernel selection policy | Source review | Not benchmarked as a policy. | Not established across its selections. | Potential Vulkan and other backends | [Upstream performance guidance](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/performance.md) documents small per-module kernel probes; a microprobe winner need not minimize full-generation latency. The policy is absent from this pinned-engine experiment. | Prefer the measured API-scoped setting first; validate any adaptive probe on startup, memory and complete requests before adoption. |
+| Krea-oriented Strix Vulkan fork | Broader engine / kernel fork | Source review | No matched FLUX.2 result. | Reported images differ; parity for this checkpoint is unestablished. | Potential Strix Vulkan target | [Published gains](https://github.com/leejet/stable-diffusion.cpp/pull/1891) target Krea2 Turbo and a different engine/GGML combination. | Do not import the whole fork or transfer another model's speed claim. Any useful kernel needs a focused backport and matched tests. |
 
 ### Retained CUDA screens and remaining ideas
 
@@ -413,9 +457,9 @@ Directly measured combination against the same-cohort direct/Q8 baseline.
 
 #### HIP rocWMMA attention after GEMM `[kernel optimization]`
 
-Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged.
+Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback.
 
-- **Radeon 8060S / HIP:** Decide from diffusion results; published LLM results are not a diffusion validation. Quality: Pending
+- **Radeon 8060S / HIP:** Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation. Quality: Pending
 
 #### Memory-mapped checkpoint reads `[model I/O]`
 
@@ -423,6 +467,14 @@ Process-local mmap of task checkpoint files; evaluate startup/RSS separately fro
 
 - **RTX 5090 / CUDA:** Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled. Quality: Pending
 - **RTX 5090 / Vulkan:** Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled. Quality: Pending
+
+### Production implementation tasks
+
+1. Implement a model/decoder-specific profile using the existing vae_conv_direct parameter only on accepted CUDA/HIP configurations. Preserve explicit true/false values; plain default-valued booleans currently do not distinguish an omitted option from an explicit override.
+2. Choose using the resolved VAE backend, including per-module assignments. A generic GPU or NVIDIA identifier is insufficient because Vulkan results differ from CUDA. Preserve direct convolution on the tested Metal/Vulkan paths and all unvalidated combinations.
+3. Keep higher-memory profiles explicitly selected until capacity handling is proven. Validate allocation/repeated-request behavior; assessFit returning unknown must preserve the baseline. Treat GEMM plus CPU parameters as a separate lower-device-memory profile.
+4. If F16 matrix expansion is selected on a proven platform, use the verified checkpoint-specific matrix-only rule. Preserve custom tensor_type_rules. Test startup, sustained memory and every accepted request geometry; expansion does not restore the original unquantized checkpoint.
+5. Add focused selection/override/fallback tests and run the existing addon integration and full desktop CI matrix. Check other FLUX checkpoints, reference-image/editing modes and larger shapes before broadening scope. No SDK or engine algorithm change is needed for the existing parameter itself.
 
 ## 3. LTX-2.3 22B distilled Q5
 
@@ -443,15 +495,21 @@ An audio-video generation model using a distilled 22B diffusion transformer. Tes
 | **Metal dispatch grouping, 97 frames**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | **V**<br>122.930 -> 119.540 s;  -2.76% latency;  1.028x<br>Output byte-exact | Not applicable to this API | Not applicable to this API | **M3 Ultra / Metal:** Provisional; reject if complete-request gain is not reliable or is explained by unrelated I/O. |
 | **Metal dispatch grouping, 193 frames**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | **V**<br>198.650 -> 198.590 s;  -0.03% latency;  1.000x<br>Output byte-exact | Not applicable to this API | Not applicable to this API | **M3 Ultra / Metal:** Provisional; reject if complete-request gain is not reliable or is explained by unrelated I/O. |
 | **Metal per-value packing**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | **V**<br>112.030 -> 106.260 s;  -5.15% latency;  1.054x<br>Output byte-exact | Not applicable to this API | Not applicable to this API | **M3 Ultra / Metal:** Reject: slower decoder and no credible end-to-end compute gain to justify four changed backend files. |
-| **SGLang / vLLM-Omni and LTX-2.5**<br>`[runtime choice]` | Not checked | Not checked | **V / partial - dated**<br>Spark SGLang: 37.802 -> 12.578 s (-66.73%, 3.005x).<br>Different content; not equivalent | Not checked | Not checked | Not checked | **GB10 / CUDA, 29 Oct:** Separate runtime/model work, not an equivalent implementation candidate. |
+| **SGLang / vLLM-Omni**<br>`[runtime choice]` | Not checked | Not checked | **V / partial - dated**<br>Spark SGLang: 37.802 -> 12.578 s (-66.73%, 3.005x).<br>Different content; not equivalent | Not checked | Not checked | Not checked | **GB10 / CUDA, 29 Oct:** Separate runtime/model work, not an equivalent implementation candidate. |
 | **CPU parameter placement**<br>`[memory placement]` | Not checked | Not checked | Not checked | **V**<br>92.877 -> 95.573 s;  +2.90% latency;  0.972x<br>Output byte-exact | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **M3 Ultra / Metal:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks.<br>**Radeon 8060S / Vulkan:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks.<br>**Radeon 8060S / HIP:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
 | **2D VAE GEMM control**<br>`[params tuning]` | Not checked | Not checked | Not checked | **V**<br>92.877 -> 92.889 s;  +0.01% latency;  1.000x<br>Output byte-exact | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **M3 Ultra / Metal:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks.<br>**Radeon 8060S / Vulkan:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks.<br>**Radeon 8060S / HIP:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
 | **Metal commands per buffer: 2**<br>`[scheduling tuning]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | **V**<br>92.877 -> 93.221 s;  +0.37% latency;  0.996x<br>Output byte-exact | Not applicable to this API | Not applicable to this API | **M3 Ultra / Metal:** Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks. |
-| **HIP rocWMMA attention**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Decide from diffusion results; published LLM results are not a diffusion validation. |
+| **HIP rocWMMA attention**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation. |
 | **HIP force-blas**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Require numerical output checks and repeatable incremental speed before any production selection change. |
 | **HIP force-mmq**<br>`[kernel optimization]` | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | Not applicable to this API | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Radeon 8060S / HIP:** Require numerical output checks and repeatable incremental speed before any production selection change. |
 | **Memory-mapped checkpoint reads**<br>`[model I/O]` | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not checked | Not checked | Not checked | Not checked | **RTX 5090 / CUDA:** Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled.<br>**RTX 5090 / Vulkan:** Pending paired startup, latency, memory and output checks; OS file cache is uncontrolled. |
 | **F16 matrices + full-temporal decode**<br>`[combined profile]` | Not checked | Not checked | Not checked | **Not checked yet**<br>Not yet collected/validated<br>Quality not checked | Not checked | Not checked | **M3 Ultra / Metal:** Prefer F16 alone for exact output unless the incremental temporal benefit justifies its quality tradeoff. |
+
+### Additional and partially checked approaches
+
+| Improvement | Type | Checked | Speed effect: seconds, percent, ratio | Quality | Platform / API | Memory, tradeoffs and scope | Implement or reject: why |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| LTX-2.5 compatibility | Model compatibility work | Source review | No matched inference/performance result. | Not established. | Unvalidated model/backend combinations | The newer Gemma4/DVAE components are unsupported by the pinned loader; these are different components from the measured LTX-2.3 checkpoint set. | Separate compatibility work before performance comparisons; do not broaden the LTX-2.3 profile automatically. |
 
 ### Retained CUDA screens and remaining ideas
 
@@ -564,9 +622,9 @@ Apparent total gain is I/O-confounded. Decoder median regressed 6.130 -> 8.605 s
 
 - **M3 Ultra / Metal:** Reject: slower decoder and no credible end-to-end compute gain to justify four changed backend files. Quality: Video/audio files byte exact. 1 comparison.
 
-#### SGLang / vLLM-Omni and LTX-2.5 `[runtime choice]`
+#### SGLang / vLLM-Omni `[runtime choice]`
 
-Load+first 44.075 -> 326.362 s; 66.73 GiB reserved, outside RTX capacity. No matched vLLM adapter. LTX-2.5 components unsupported.
+Load+first 44.075 -> 326.362 s; 66.73 GiB reserved, outside RTX capacity. No matched vLLM adapter.
 
 - **GB10 / CUDA, 29 Oct:** Separate runtime/model work, not an equivalent implementation candidate. Quality: Different valid scene/audio; PSNR 10.74; parity not established.
 
@@ -590,19 +648,19 @@ One-prompt parameter screen; retain individual run/stage/resource records. No gl
 
 #### HIP rocWMMA attention `[kernel optimization]`
 
-Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged.
+Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback.
 
-- **Radeon 8060S / HIP:** Decide from diffusion results; published LLM results are not a diffusion validation. Quality: Pending
+- **Radeon 8060S / HIP:** Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation. Quality: Pending
 
 #### HIP force-blas `[kernel optimization]`
 
-Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.
+Existing compile-time forced-selection controls; same corrected tensor-name ABI and checkpoint. These affect the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.
 
 - **Radeon 8060S / HIP:** Require numerical output checks and repeatable incremental speed before any production selection change. Quality: Pending
 
 #### HIP force-mmq `[kernel optimization]`
 
-Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.
+Existing compile-time forced-selection controls; same corrected tensor-name ABI and checkpoint. These affect the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.
 
 - **Radeon 8060S / HIP:** Require numerical output checks and repeatable incremental speed before any production selection change. Quality: Pending
 
@@ -618,6 +676,14 @@ Process-local mmap of task checkpoint files; evaluate startup/RSS separately fro
 Directly measured cumulative effect; the temporal change has a distinct output-quality tier.
 
 - **M3 Ultra / Metal:** Prefer F16 alone for exact output unless the incremental temporal benefit justifies its quality tradeoff. Quality: Pending
+
+### Production implementation tasks
+
+1. Implement exact-output memory placement first on the accepted API/capacity combination. For RTX Vulkan the measured setting is params_backend="cpu,vae=vulkan0". Preserve offloaded fallback and never infer that the whole model fits on a 32 GB GPU.
+2. Offer temporal_tiling=false only in the accepted minor-output-change tier and tested lengths/APIs. Preserve tiled decoding for strict baseline output. Do not count a redundant temporal flag on the existing Vulkan stateful path as an additional optimization.
+3. If F16 matrix expansion is selected, use the verified 1632-matrix rule, not a blanket precision override. Measure memory, load/first-request latency and repeated 97/193-frame generation. Keep quantized weights when capacity or incremental benefit is unproven.
+4. Do not carry the rejected Metal packing/dispatch code, broad upstream upgrade or slower CUDA stateful/3D-GEMM alternatives into the release feature. Any new kernel should have independent operator coverage plus a repeatable end-to-end benefit.
+5. Run existing audio-video integration tests and the full desktop CI matrix on the final selection policy. Validate combined profiles directly, fallback behavior, mixed backend assignments and longer/reference-conditioned requests before widening the release envelope.
 
 ## Selective enablement and regression protection
 
@@ -636,3 +702,28 @@ Directly measured cumulative effect; the temporal change has a distinct output-q
 - Implement the smallest accepted engine change first, validate it through a temporary addon overlay, then follow the engine merge, separate vcpkg registry PR and addon repin sequence. Addon release notes/version bump remain a later separate PR.
 - Run the full affected unit/integration suites and desktop CI matrix on the actual implementation. Research operator tests and manual benchmarks do not certify an unimplemented default-selection policy.
 - Remaining coverage includes other Apple devices/capacities, other AMD GPUs/drivers, fresh Spark confirmation of newly proposed patches, larger request envelopes, image/video-conditioned modes and failure/recovery behavior. Mobile tests belong to late validation only if the affected implementation applies there.
+- Completed local addon checks: 137/137 Bare unit tests, 89/89 Node unit tests, typecheck and lint. Lint retains 70 pre-existing warnings. These checks validate the existing addon and research harness; they do not validate the future selection policy.
+- Focused H3 baseline/candidate builds passed 26 CTests on CUDA, 21 on RTX Vulkan and 23 on Metal, including independent fused-operation/QKV-view checks. Metal end-to-end output differences still disqualify that patch from the preferred Metal profile. Operator tests alone cannot establish full-model equivalence.
+- Metal packing/dispatch experiments passed their existing suites and independent operator checks, but were rejected on performance evidence. The greater-than-2^32-element packing specialization was not exercised.
+- Corrected baseline/forced-BLAS/forced-MMQ HIP backend builds passed their four existing CTests. The separately queued rocWMMA build has its own result and cannot inherit those passes.
+- No new full desktop CI run certifies a November production feature: no such feature has been implemented. The retained October workflow passed 37 jobs with 14 conditional routes, including a 98/98 Windows retry; that historical run is not a replacement for implementation CI. RTX research builds used local Clang 20.1.8; release builds must use the repository CI toolchain.
+
+## Primary sources
+
+- [Metal IM2COL_3D parallel packing](https://github.com/0xShug0/audio.cpp/pull/1169)
+- [Strix quantized matrix multiplication versus hipBLAS selection](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md)
+- [rocWMMA flash attention on Strix](https://github.com/ggml-org/llama.cpp/issues/24437)
+- [rocWMMA flash attention on Strix](https://github.com/ROCm/rocWMMA/blob/develop_deprecated/README.md)
+- [rocWMMA flash attention on Strix](https://github.com/ggml-org/llama.cpp/discussions/20856)
+- [Alternative runtimes on new platforms](https://github.com/vllm-project/vllm-metal/blob/main/docs/supported_models.md)
+- [Alternative runtimes on new platforms](https://github.com/sgl-project/sglang/blob/main/python/sglang/multimodal_gen/README.md)
+- [Alternative runtimes on new platforms](https://github.com/vllm-project/vllm-omni/blob/main/recipes/MiniMaxAI/MiniMax-H3.md)
+- [Token-axis H3 MLP chunking for Vulkan buffer limits](https://github.com/leejet/stable-diffusion.cpp/pull/2257)
+- [Avoid blanket upstream memory-manager upgrade](https://github.com/leejet/stable-diffusion.cpp/issues/1976)
+- [Backend-specific convolution selection versus upstream auto probes](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/backend.md)
+- [Backend-specific convolution selection versus upstream auto probes](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/performance.md)
+- [Backend-specific convolution selection versus upstream auto probes](https://github.com/leejet/stable-diffusion.cpp/issues/1215)
+- [Metal flash-attention vector tuning tables](https://github.com/ggml-org/llama.cpp/discussions/27668)
+- [Krea Vulkan fork optimizations on Strix](https://github.com/leejet/stable-diffusion.cpp/pull/1891)
+- [LTX quantized matrix expansion to F16 at load time](https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/common/common.cpp)
+- [Model-loader process-local mmap](https://github.com/leejet/stable-diffusion.cpp/discussions/1855)

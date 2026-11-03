@@ -1,7 +1,7 @@
 {
   "title": "QVAC diffusion performance: four platforms, six API configurations",
   "status": "DRAFT - validation in progress",
-  "updated_utc": "2026-11-03T17:03:14.896714+00:00",
+  "updated_utc": "2026-11-03T18:26:18.994927+00:00",
   "intro": "RTX, Mac and Strix: 3 November 2026. DGX Spark: retained 29 October 2026 measurements at their original revisions. The original RTX and Spark report measured CUDA only. This extension adds RTX Vulkan, Strix Vulkan and HIP/ROCm, and Mac Metal. Vulkan correctness checks in the older CI record were not performance measurements.",
   "platforms": [
     {
@@ -119,8 +119,8 @@
           "Global flash attention",
           "Existing parameter",
           "V",
-          "135.831 -> 100.164 s; -26.26% latency; 1.356x; 35.667 s saved",
-          "PSNR 57.73 dB; SSIM 0.999649. Worst frame 56.55 dB. Audio exact.",
+          "1543.865 -> 1238.215 s; -19.80% latency; 1.247x; 305.650 s saved",
+          "PSNR 59.14 dB; SSIM 0.999691. Worst frame 58.16 dB. Audio exact.",
           "M3 Ultra / Metal",
           "Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.",
           "Provisional until full-size, quality and repeated-request checks complete."
@@ -129,8 +129,8 @@
           "Global flash attention",
           "Existing parameter",
           "V",
-          "101.173 -> 96.131 s; -4.98% latency; 1.052x; 5.042 s saved",
-          "PSNR 51.12 dB; SSIM 0.998222. Worst frame 50.64 dB. Audio exact.",
+          "1415.182 -> 1369.229 s; -3.25% latency; 1.034x; 45.953 s saved",
+          "PSNR 52.32 dB; SSIM 0.998272. Worst frame 51.68 dB. Audio exact.",
           "Radeon 8060S / Vulkan",
           "Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. native warm latency, matched prompt/seed/geometry.",
           "Provisional until full-size, quality and repeated-request checks complete."
@@ -158,52 +158,62 @@
         [
           "Minimal SwiGLU + QKV views",
           "Engine graph optimization",
-          "V - 1/3 prompts",
-          "119.697 -> 117.369 s; -1.94% latency; 1.020x; 2.328 s saved",
-          "Video/audio files byte exact. 1 comparison.",
+          "V",
+          "119.849 -> 117.358 s; -2.08% latency; 1.021x; 2.491 s saved",
+          "Video/audio files byte exact. 3 comparisons.",
           "RTX 5090 / CUDA",
-          "Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 1.94-1.94%. Fresh-process I/O-confounded results remain in the records.",
+          "Warm engine context, 960 x 544 / 124 frames. Mean of 3 per-prompt medians. Per-prompt latency reductions 1.94-2.17%. Fresh-process I/O-confounded results remain in the records.",
+          "Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged."
+        ],
+        [
+          "Minimal operations + global FA",
+          "Measured combination",
+          "V",
+          "119.849 -> 110.717 s; -7.62% latency; 1.082x; 9.132 s saved",
+          "PSNR 52.42-55.96 dB; SSIM 0.998686-0.999271. Worst frame 50.92 dB. Audio exact.",
+          "RTX 5090 / CUDA",
+          "Warm engine context, 960 x 544 / 124 frames. Mean of 3 per-prompt medians. Per-prompt latency reductions 7.41-7.83%. Fresh-process I/O-confounded results remain in the records.",
+          "Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged."
+        ],
+        [
+          "Operations added after global FA",
+          "Incremental engine benefit",
+          "V",
+          "113.067 -> 110.717 s; -2.08% latency; 1.021x; 2.351 s saved",
+          "Video/audio files byte exact. 3 comparisons.",
+          "RTX 5090 / CUDA",
+          "Warm engine context, 960 x 544 / 124 frames. Mean of 3 per-prompt medians. Per-prompt latency reductions 1.74-2.27%. Fresh-process I/O-confounded results remain in the records.",
+          "Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged."
+        ],
+        [
+          "Minimal SwiGLU + QKV views",
+          "Engine graph optimization",
+          "V - 1/3 prompts",
+          "103.299 -> 100.511 s; -2.70% latency; 1.028x; 2.788 s saved",
+          "Video/audio files byte exact. 1 comparison.",
+          "RTX 5090 / Vulkan",
+          "Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 2.70-2.70%. Fresh-process I/O-confounded results remain in the records.",
           "Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged."
         ],
         [
           "Minimal operations + global FA",
           "Measured combination",
           "V - 1/3 prompts",
-          "119.697 -> 110.573 s; -7.62% latency; 1.083x; 9.124 s saved",
-          "PSNR 55.96 dB; SSIM 0.999271. Worst frame 55.33 dB. Audio exact.",
-          "RTX 5090 / CUDA",
-          "Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 7.62-7.62%. Fresh-process I/O-confounded results remain in the records.",
+          "103.299 -> 91.653 s; -11.27% latency; 1.127x; 11.646 s saved",
+          "PSNR 54.39 dB; SSIM 0.998857. Worst frame 53.92 dB. Audio exact.",
+          "RTX 5090 / Vulkan",
+          "Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 11.27-11.27%. Fresh-process I/O-confounded results remain in the records.",
           "Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged."
         ],
         [
           "Operations added after global FA",
           "Incremental engine benefit",
           "V - 1/3 prompts",
-          "113.102 -> 110.573 s; -2.24% latency; 1.023x; 2.529 s saved",
+          "93.871 -> 91.653 s; -2.36% latency; 1.024x; 2.217 s saved",
           "Video/audio files byte exact. 1 comparison.",
-          "RTX 5090 / CUDA",
-          "Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 2.24-2.24%. Fresh-process I/O-confounded results remain in the records.",
+          "RTX 5090 / Vulkan",
+          "Warm engine context, 960 x 544 / 124 frames. Mean of 1 per-prompt medians. Per-prompt latency reductions 2.36-2.36%. Fresh-process I/O-confounded results remain in the records.",
           "Provisional until three-prompt, quality and combined-profile review. The production graph and selection policy remain unchanged."
-        ],
-        [
-          "Minimal SwiGLU + QKV views",
-          "Engine graph optimization",
-          "V",
-          "116.760 -> 107.940 s; -7.55% latency; 1.082x; 8.820 s saved",
-          "Video/audio files byte exact. 1 comparison.",
-          "RTX 5090 / Vulkan",
-          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately. Fresh CLI context each repetition; generation and process wall time separately..",
-          "Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen."
-        ],
-        [
-          "Minimal operations + global FA",
-          "Measured combination",
-          "V",
-          "116.760 -> 98.975 s; -15.23% latency; 1.180x; 17.785 s saved",
-          "PSNR 52.51 dB; SSIM 0.997947. Worst frame 51.98 dB. Audio exact.",
-          "RTX 5090 / Vulkan",
-          "Combined profile measured directly against its own baseline; do not multiply separate speedups. Fresh CLI context each repetition; generation and process wall time separately..",
-          "Provisional pending incremental benefit and output validation."
         ],
         [
           "Minimal SwiGLU + QKV views",
@@ -346,14 +356,44 @@
           "Keep existing defaults unless a specific confirmed profile is listed above."
         ],
         [
-          "Vulkan large-token MLP chunking / NVFP4 TE / new decoder",
-          "Conditional engine / model work",
+          "Vulkan large-token MLP chunking",
+          "Conditional graph / memory optimization",
           "Source review",
-          "Not measured in the tested request envelope.",
-          "Not established for these changes.",
-          "Potential Vulkan / CUDA targets",
-          "MLP chunking addresses a >4 GiB individual buffer at larger token counts; NVFP4 requires loader/checkpoint work. Current small conditioning cost limits warm-speed upside.",
-          "Defer; no demonstrated benefit in the booked cases and broader compatibility scope."
+          "Not measured; tested cases are below the reported buffer threshold.",
+          "Not established.",
+          "Potential Vulkan targets",
+          "[Upstream PR #2257](https://github.com/leejet/stable-diffusion.cpp/pull/2257) chunks the feed-forward token axis when an individual buffer exceeds the backend limit. This addresses a >4 GiB buffer, not total VRAM exhaustion.",
+          "Defer to a larger-request compatibility check; no demonstrated speed benefit for the booked shapes."
+        ],
+        [
+          "NVFP4 text encoder",
+          "Quantization / checkpoint change",
+          "Not checked",
+          "No measured gain.",
+          "Not established; different weight precision.",
+          "Potential supported CUDA targets",
+          "Requires a supported checkpoint and loader/kernel path. Conditioning is a small fraction of tested warm generation, although a smaller encoder could save memory.",
+          "Defer: broader model/loader work and quality validation are needed; do not infer a DiT speedup from text-encoder quantization."
+        ],
+        [
+          "New or lower-precision video decoder",
+          "Model / precision change",
+          "Not checked",
+          "No measured gain.",
+          "Not established.",
+          "Unvalidated decoder/backend combinations",
+          "Replacing or requantizing the decoder changes model arithmetic/checkpoint content and requires independent audio-video validation.",
+          "Defer; existing attention parameters provide a smaller change with measured evidence."
+        ],
+        [
+          "Metal vector-attention tuning tables",
+          "Kernel tuning",
+          "Source review",
+          "No measured diffusion gain.",
+          "Not established.",
+          "M3 Ultra / Metal",
+          "[Published tuning](https://github.com/ggml-org/llama.cpp/discussions/27668) targets the small-query vector path; pinned selection requires query dimension below 20. Large diffusion attention is a different workload.",
+          "Defer: an hours-long LLM tuning sweep has no established benefit for the dominant measured diffusion stages."
         ],
         [
           "SGLang / vLLM comparison",
@@ -452,8 +492,8 @@
           "Not yet collected/validated",
           "Pending",
           "Radeon 8060S / HIP",
-          "Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged.",
-          "Decide from diffusion results; published LLM results are not a diffusion validation."
+          "Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback.",
+          "Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation."
         ],
         [
           "HIP force-blas",
@@ -462,7 +502,7 @@
           "Not yet collected/validated",
           "Pending",
           "Radeon 8060S / HIP",
-          "Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.",
+          "Existing compile-time forced-selection controls; same corrected tensor-name ABI and checkpoint. These affect the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.",
           "Require numerical output checks and repeatable incremental speed before any production selection change."
         ],
         [
@@ -472,7 +512,7 @@
           "Not yet collected/validated",
           "Pending",
           "Radeon 8060S / HIP",
-          "Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.",
+          "Existing compile-time forced-selection controls; same corrected tensor-name ABI and checkpoint. These affect the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.",
           "Require numerical output checks and repeatable incremental speed before any production selection change."
         ],
         [
@@ -534,6 +574,26 @@
           "M3 Ultra / Metal",
           "Separates the residency contribution from the flash-attention gain.",
           "Use only if the memory/speed tradeoff remains reliable over repeated requests."
+        ],
+        [
+          "Graph patch after FA: reverse-order confirmation",
+          "Incremental graph optimization",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / CUDA",
+          "Later repeated-context block, candidate run before baseline; one warmup and three measured requests per profile. Checks drift in the small graph-only increment.",
+          "Require agreement with the initial three-prompt block before accepting the small incremental engine change."
+        ],
+        [
+          "Graph patch after FA: reverse-order confirmation",
+          "Incremental graph optimization",
+          "Pending",
+          "Not yet collected/validated",
+          "Pending",
+          "RTX 5090 / Vulkan",
+          "Later repeated-context block, candidate run before baseline; one warmup and three measured requests per profile. Checks drift in the small graph-only increment.",
+          "Require agreement with the initial three-prompt block before accepting the small incremental engine change."
         ]
       ],
       "details": [
@@ -563,17 +623,17 @@
         {
           "row": "Global flash attention",
           "hardware": "M3 Ultra / Metal",
-          "reference": "r3-mac-h3-short-metal-clean-baseline",
-          "candidate": "r3-mac-h3-short-metal-clean-global-flash",
-          "latency_reduction_percent": 26.258365174371086,
+          "reference": "r3-mac-h3-full-confirm-metal-baseline",
+          "candidate": "r3-mac-h3-full-confirm-metal-global-flash",
+          "latency_reduction_percent": 19.79771547382704,
           "quality_pending": false
         },
         {
           "row": "Global flash attention",
           "hardware": "Radeon 8060S / Vulkan",
-          "reference": "r3-strix-h3-short-vulkan-baseline",
-          "candidate": "r3-strix-h3-short-vulkan-global-flash",
-          "latency_reduction_percent": 4.984012611998192,
+          "reference": "r3-strix-h3-full-vulkan-baseline",
+          "candidate": "r3-strix-h3-full-vulkan-global-flash",
+          "latency_reduction_percent": 3.247109999671427,
           "quality_pending": false
         },
         {
@@ -582,22 +642,6 @@
           "reference": "r3-strix-h3-short-abi128-rocm-baseline",
           "candidate": "r3-strix-h3-short-abi128-rocm-global-flash",
           "latency_reduction_percent": 10.347337997510161,
-          "quality_pending": false
-        },
-        {
-          "row": "Minimal SwiGLU + QKV views",
-          "hardware": "RTX 5090 / Vulkan",
-          "reference": "r3-rtx-h3-cli-pinned-vulkan-baseline",
-          "candidate": "r3-rtx-h3-cli-pinned-vulkan-localops",
-          "latency_reduction_percent": 7.5539568345323795,
-          "quality_pending": false
-        },
-        {
-          "row": "Minimal operations + global FA",
-          "hardware": "RTX 5090 / Vulkan",
-          "reference": "r3-rtx-h3-cli-pinned-vulkan-baseline",
-          "candidate": "r3-rtx-h3-cli-pinned-vulkan-localops-global-flash",
-          "latency_reduction_percent": 15.232100034258316,
           "quality_pending": false
         },
         {
@@ -702,19 +746,87 @@
         {
           "api": "cuda",
           "experiment": "Minimal operations",
-          "prompt_count": 1,
-          "complete_three_prompts": false,
+          "prompt_count": 3,
+          "complete_three_prompts": true,
           "aggregation": "Arithmetic mean of the per-prompt warm medians; excludes one warmup for each profile/prompt. Distinct from native addon and fresh-process timings.",
-          "reference_seconds": 119.69703311,
-          "candidate_seconds": 117.369030974,
-          "seconds_saved": 2.328002136000009,
-          "latency_reduction_percent": 1.9449121465363353,
-          "speedup": 1.0198348927027925,
+          "reference_seconds": 119.84900852616667,
+          "candidate_seconds": 117.3575257915,
+          "seconds_saved": 2.4914827346666755,
+          "latency_reduction_percent": 2.0788513524688104,
+          "speedup": 1.0212298505601856,
           "per_prompt_reduction_percent_range": [
             1.9449121465363353,
-            1.9449121465363353
+            2.1742364036797177
           ],
           "pairs": [
+            {
+              "prompt_index": 0,
+              "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p0-baseline",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-cuda-p0-localops",
+              "reference_seconds": 120.1368670205,
+              "candidate_seconds": 117.5248075235,
+              "latency_reduction_percent": 2.1742364036797177,
+              "reference_runs_seconds": [
+                120.273854791,
+                119.99987925
+              ],
+              "candidate_runs_seconds": [
+                117.449725833,
+                117.599889214
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 92.525,
+                "video_decode_seconds": 24.83,
+                "audio_decode_seconds": 1.05
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 89.83,
+                "video_decode_seconds": 24.915,
+                "audio_decode_seconds": 1.05
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 37974798336,
+                "sampled_peak_gpu_device_used_mib": 23738.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 38021816320,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-pinned-cuda-baseline\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-pinned-cuda-baseline\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.0,
+                "video_mse_0_255": 0.0,
+                "video_psnr_db": "infinity",
+                "different_channel_values_percent": 0.0,
+                "decoded_video_sha256": [
+                  "158d04818b1b216f42e6850fd1a7116690c9a53a3447f3dbbbbeed30f0625554",
+                  "158d04818b1b216f42e6850fd1a7116690c9a53a3447f3dbbbbeed30f0625554"
+                ],
+                "video_max_absolute_difference_0_255": 0,
+                "video_worst_frame_index": 0,
+                "video_worst_frame_psnr_db": "infinity",
+                "video_ssim": 1.0,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p0-baseline",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p0-localops",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "c1cfcd240b891392715f868697094d3d1846e6c249671a34833864b762711a48",
+                  "c1cfcd240b891392715f868697094d3d1846e6c249671a34833864b762711a48"
+                ]
+              }
+            },
             {
               "prompt_index": 1,
               "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline",
@@ -784,25 +896,161 @@
                   "a65316cb47b0252fb1a3779cb088520d711854c845f33e1b5845f585998ca93b"
                 ]
               }
+            },
+            {
+              "prompt_index": 2,
+              "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p2-baseline",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-cuda-p2-localops",
+              "reference_seconds": 119.713125448,
+              "candidate_seconds": 117.178738877,
+              "latency_reduction_percent": 2.1170498736171286,
+              "reference_runs_seconds": [
+                119.847837603,
+                119.578413293
+              ],
+              "candidate_runs_seconds": [
+                117.148121446,
+                117.209356308
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 92.065,
+                "video_decode_seconds": 24.884999999999998,
+                "audio_decode_seconds": 1.05
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 89.525,
+                "video_decode_seconds": 24.895,
+                "audio_decode_seconds": 1.05
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 38031671296,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 38040629248,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p2-baseline\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p2-baseline\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.0,
+                "video_mse_0_255": 0.0,
+                "video_psnr_db": "infinity",
+                "different_channel_values_percent": 0.0,
+                "decoded_video_sha256": [
+                  "cdb29a13bcf872cb12e06135662fb4b75a4f42702b04a011ad3273d0d9fbafad",
+                  "cdb29a13bcf872cb12e06135662fb4b75a4f42702b04a011ad3273d0d9fbafad"
+                ],
+                "video_max_absolute_difference_0_255": 0,
+                "video_worst_frame_index": 0,
+                "video_worst_frame_psnr_db": "infinity",
+                "video_ssim": 1.0,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p2-baseline",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p2-localops",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "a3dbcc41345fb915168326543df8059a312204b0283f3b0c28f8fd12aecbb761",
+                  "a3dbcc41345fb915168326543df8059a312204b0283f3b0c28f8fd12aecbb761"
+                ]
+              }
             }
           ]
         },
         {
           "api": "cuda",
           "experiment": "Minimal operations + global FA",
-          "prompt_count": 1,
-          "complete_three_prompts": false,
+          "prompt_count": 3,
+          "complete_three_prompts": true,
           "aggregation": "Arithmetic mean of the per-prompt warm medians; excludes one warmup for each profile/prompt. Distinct from native addon and fresh-process timings.",
-          "reference_seconds": 119.69703311,
-          "candidate_seconds": 110.573296376,
-          "seconds_saved": 9.123736734000005,
-          "latency_reduction_percent": 7.6223582965631325,
-          "speedup": 1.082513021073145,
+          "reference_seconds": 119.84900852616667,
+          "candidate_seconds": 110.71669596916666,
+          "seconds_saved": 9.132312557000006,
+          "latency_reduction_percent": 7.619848231790875,
+          "speedup": 1.0824836080688611,
           "per_prompt_reduction_percent_range": [
-            7.6223582965631325,
-            7.6223582965631325
+            7.407459091622129,
+            7.830479426060802
           ],
           "pairs": [
+            {
+              "prompt_index": 0,
+              "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p0-baseline",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-cuda-p0-localops-global-flash",
+              "reference_seconds": 120.1368670205,
+              "candidate_seconds": 111.23777774199999,
+              "latency_reduction_percent": 7.407459091622129,
+              "reference_runs_seconds": [
+                120.273854791,
+                119.99987925
+              ],
+              "candidate_runs_seconds": [
+                110.960419364,
+                111.51513612
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 92.525,
+                "video_decode_seconds": 24.83,
+                "audio_decode_seconds": 1.05
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 89.84,
+                "video_decode_seconds": 18.605,
+                "audio_decode_seconds": 1.05
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 37974798336,
+                "sampled_peak_gpu_device_used_mib": 23738.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 38021869568,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-pinned-cuda-baseline\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-pinned-cuda-localops-global-flash\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.20708596158977705,
+                "video_mse_0_255": 0.2890930909284077,
+                "video_psnr_db": 53.5204264833085,
+                "different_channel_values_percent": 17.4186486170409,
+                "decoded_video_sha256": [
+                  "158d04818b1b216f42e6850fd1a7116690c9a53a3447f3dbbbbeed30f0625554",
+                  "907f2032bdf0be36db0335a4d13933c0224d9a5e388624011841f1367f770d56"
+                ],
+                "video_max_absolute_difference_0_255": 16,
+                "video_worst_frame_index": 3,
+                "video_worst_frame_psnr_db": 52.89097823829912,
+                "video_ssim": 0.998686,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p0-baseline",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p0-localops-global-flash",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "c1cfcd240b891392715f868697094d3d1846e6c249671a34833864b762711a48",
+                  "e80db40bd0297f375a859094654ef6e2c6ad46c72180bc6b933abf31d2e8ba58"
+                ]
+              }
+            },
             {
               "prompt_index": 1,
               "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline",
@@ -872,25 +1120,161 @@
                   "f6087b83fcd70f605861f24165d3f778b684cdc7190d5bc013a4b52d3b0f7c67"
                 ]
               }
+            },
+            {
+              "prompt_index": 2,
+              "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p2-baseline",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-cuda-p2-localops-global-flash",
+              "reference_seconds": 119.713125448,
+              "candidate_seconds": 110.3390137895,
+              "latency_reduction_percent": 7.830479426060802,
+              "reference_runs_seconds": [
+                119.847837603,
+                119.578413293
+              ],
+              "candidate_runs_seconds": [
+                110.312668312,
+                110.365359267
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 92.065,
+                "video_decode_seconds": 24.884999999999998,
+                "audio_decode_seconds": 1.05
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 89.58,
+                "video_decode_seconds": 18.009999999999998,
+                "audio_decode_seconds": 1.05
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 38031671296,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 38031028224,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p2-baseline\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p2-baseline-global-flash\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.2565829948410816,
+                "video_mse_0_255": 0.37279094685589287,
+                "video_psnr_db": 52.416150038014976,
+                "different_channel_values_percent": 21.282727609272875,
+                "decoded_video_sha256": [
+                  "cdb29a13bcf872cb12e06135662fb4b75a4f42702b04a011ad3273d0d9fbafad",
+                  "d52c1283fd2281bf8d6120a94ea1d5f8b312a1378ce115311e38eea2ed65d63a"
+                ],
+                "video_max_absolute_difference_0_255": 18,
+                "video_worst_frame_index": 1,
+                "video_worst_frame_psnr_db": 50.91583583982275,
+                "video_ssim": 0.999019,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p2-baseline",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p2-localops-global-flash",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "a3dbcc41345fb915168326543df8059a312204b0283f3b0c28f8fd12aecbb761",
+                  "d4ac772222fefd36d3718bffa4ccf68de9ec7461c51d060d7ed8832c0b147a1a"
+                ]
+              }
             }
           ]
         },
         {
           "api": "cuda",
           "experiment": "Minimal operations added to global FA",
-          "prompt_count": 1,
-          "complete_three_prompts": false,
+          "prompt_count": 3,
+          "complete_three_prompts": true,
           "aggregation": "Arithmetic mean of the per-prompt warm medians; excludes one warmup for each profile/prompt. Distinct from native addon and fresh-process timings.",
-          "reference_seconds": 113.102278054,
-          "candidate_seconds": 110.573296376,
-          "seconds_saved": 2.528981677999994,
-          "latency_reduction_percent": 2.2360130330819215,
-          "speedup": 1.0228715409677243,
+          "reference_seconds": 113.0672069385,
+          "candidate_seconds": 110.71669596916666,
+          "seconds_saved": 2.350510969333328,
+          "latency_reduction_percent": 2.0788617964285865,
+          "speedup": 1.0212299594813408,
           "per_prompt_reduction_percent_range": [
-            2.2360130330819215,
-            2.2360130330819215
+            1.735625827577624,
+            2.26559007968039
           ],
           "pairs": [
+            {
+              "prompt_index": 0,
+              "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p0-baseline-global-flash",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-cuda-p0-localops-global-flash",
+              "reference_seconds": 113.202550445,
+              "candidate_seconds": 111.23777774199999,
+              "latency_reduction_percent": 1.735625827577624,
+              "reference_runs_seconds": [
+                113.146438098,
+                113.258662792
+              ],
+              "candidate_runs_seconds": [
+                110.960419364,
+                111.51513612
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 92.515,
+                "video_decode_seconds": 17.925,
+                "audio_decode_seconds": 1.05
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 89.84,
+                "video_decode_seconds": 18.605,
+                "audio_decode_seconds": 1.05
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 38034509824,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 38021869568,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-pinned-cuda-localops-global-flash\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-pinned-cuda-localops-global-flash\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.0,
+                "video_mse_0_255": 0.0,
+                "video_psnr_db": "infinity",
+                "different_channel_values_percent": 0.0,
+                "decoded_video_sha256": [
+                  "907f2032bdf0be36db0335a4d13933c0224d9a5e388624011841f1367f770d56",
+                  "907f2032bdf0be36db0335a4d13933c0224d9a5e388624011841f1367f770d56"
+                ],
+                "video_max_absolute_difference_0_255": 0,
+                "video_worst_frame_index": 0,
+                "video_worst_frame_psnr_db": "infinity",
+                "video_ssim": 1.0,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p0-baseline-global-flash",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p0-localops-global-flash",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "e80db40bd0297f375a859094654ef6e2c6ad46c72180bc6b933abf31d2e8ba58",
+                  "e80db40bd0297f375a859094654ef6e2c6ad46c72180bc6b933abf31d2e8ba58"
+                ]
+              }
+            },
             {
               "prompt_index": 1,
               "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p1-baseline-global-flash",
@@ -958,6 +1342,338 @@
                 "output_file_hashes": [
                   "f6087b83fcd70f605861f24165d3f778b684cdc7190d5bc013a4b52d3b0f7c67",
                   "f6087b83fcd70f605861f24165d3f778b684cdc7190d5bc013a4b52d3b0f7c67"
+                ]
+              }
+            },
+            {
+              "prompt_index": 2,
+              "reference": "r3-rtx-h3-cli-warm-pinned-cuda-p2-baseline-global-flash",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-cuda-p2-localops-global-flash",
+              "reference_seconds": 112.8967923165,
+              "candidate_seconds": 110.3390137895,
+              "latency_reduction_percent": 2.26559007968039,
+              "reference_runs_seconds": [
+                112.660967985,
+                113.132616648
+              ],
+              "candidate_runs_seconds": [
+                110.312668312,
+                110.365359267
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 92.055,
+                "video_decode_seconds": 18.095,
+                "audio_decode_seconds": 1.05
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 1.33,
+                "sampling_seconds": 89.58,
+                "video_decode_seconds": 18.009999999999998,
+                "audio_decode_seconds": 1.05
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 38031757312,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 38031028224,
+                "sampled_peak_gpu_device_used_mib": 23726.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p2-baseline-global-flash\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-cuda-p2-baseline-global-flash\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.0,
+                "video_mse_0_255": 0.0,
+                "video_psnr_db": "infinity",
+                "different_channel_values_percent": 0.0,
+                "decoded_video_sha256": [
+                  "d52c1283fd2281bf8d6120a94ea1d5f8b312a1378ce115311e38eea2ed65d63a",
+                  "d52c1283fd2281bf8d6120a94ea1d5f8b312a1378ce115311e38eea2ed65d63a"
+                ],
+                "video_max_absolute_difference_0_255": 0,
+                "video_worst_frame_index": 0,
+                "video_worst_frame_psnr_db": "infinity",
+                "video_ssim": 1.0,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p2-baseline-global-flash",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-cuda-p2-localops-global-flash",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "d4ac772222fefd36d3718bffa4ccf68de9ec7461c51d060d7ed8832c0b147a1a",
+                  "d4ac772222fefd36d3718bffa4ccf68de9ec7461c51d060d7ed8832c0b147a1a"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "api": "vulkan",
+          "experiment": "Minimal operations",
+          "prompt_count": 1,
+          "complete_three_prompts": false,
+          "aggregation": "Arithmetic mean of the per-prompt warm medians; excludes one warmup for each profile/prompt. Distinct from native addon and fresh-process timings.",
+          "reference_seconds": 103.29912035,
+          "candidate_seconds": 100.510714739,
+          "seconds_saved": 2.7884056110000017,
+          "latency_reduction_percent": 2.6993507800959717,
+          "speedup": 1.0277423717286338,
+          "per_prompt_reduction_percent_range": [
+            2.6993507800959717,
+            2.6993507800959717
+          ],
+          "pairs": [
+            {
+              "prompt_index": 1,
+              "reference": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-baseline",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-localops",
+              "reference_seconds": 103.29912035,
+              "candidate_seconds": 100.510714739,
+              "latency_reduction_percent": 2.6993507800959717,
+              "reference_runs_seconds": [
+                103.337750491,
+                102.994021262,
+                103.29912035
+              ],
+              "candidate_runs_seconds": [
+                100.494152184,
+                100.510714739,
+                100.858992493
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.99,
+                "sampling_seconds": 73.84,
+                "video_decode_seconds": 26.45,
+                "audio_decode_seconds": 0.66
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 2.02,
+                "sampling_seconds": 71.37,
+                "video_decode_seconds": 26.13,
+                "audio_decode_seconds": 0.66
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 37676519424,
+                "sampled_peak_gpu_device_used_mib": 24301.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 37646745600,
+                "sampled_peak_gpu_device_used_mib": 23602.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-vulkan-p1-baseline\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-vulkan-p1-baseline\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.0,
+                "video_mse_0_255": 0.0,
+                "video_psnr_db": "infinity",
+                "different_channel_values_percent": 0.0,
+                "decoded_video_sha256": [
+                  "6a8c5cd3434705c44031cde63a28000b8046912869fcadca43db6da3c277beb3",
+                  "6a8c5cd3434705c44031cde63a28000b8046912869fcadca43db6da3c277beb3"
+                ],
+                "video_max_absolute_difference_0_255": 0,
+                "video_worst_frame_index": 0,
+                "video_worst_frame_psnr_db": "infinity",
+                "video_ssim": 1.0,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-baseline",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-localops",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "83c7e8bdf89682ae4901d64f73d204fcabbbac79374008cb6c47777ae376bb2c",
+                  "83c7e8bdf89682ae4901d64f73d204fcabbbac79374008cb6c47777ae376bb2c"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "api": "vulkan",
+          "experiment": "Minimal operations + global FA",
+          "prompt_count": 1,
+          "complete_three_prompts": false,
+          "aggregation": "Arithmetic mean of the per-prompt warm medians; excludes one warmup for each profile/prompt. Distinct from native addon and fresh-process timings.",
+          "reference_seconds": 103.29912035,
+          "candidate_seconds": 91.653203904,
+          "seconds_saved": 11.645916446000001,
+          "latency_reduction_percent": 11.273974460325597,
+          "speedup": 1.1270650228244967,
+          "per_prompt_reduction_percent_range": [
+            11.273974460325597,
+            11.273974460325597
+          ],
+          "pairs": [
+            {
+              "prompt_index": 1,
+              "reference": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-baseline",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-localops-global-flash",
+              "reference_seconds": 103.29912035,
+              "candidate_seconds": 91.653203904,
+              "latency_reduction_percent": 11.273974460325597,
+              "reference_runs_seconds": [
+                103.337750491,
+                102.994021262,
+                103.29912035
+              ],
+              "candidate_runs_seconds": [
+                91.657253962,
+                91.653203904,
+                91.55734957
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 1.99,
+                "sampling_seconds": 73.84,
+                "video_decode_seconds": 26.45,
+                "audio_decode_seconds": 0.66
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 2.01,
+                "sampling_seconds": 71.36,
+                "video_decode_seconds": 17.23,
+                "audio_decode_seconds": 0.66
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 37676519424,
+                "sampled_peak_gpu_device_used_mib": 24301.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 37601415168,
+                "sampled_peak_gpu_device_used_mib": 23602.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-vulkan-p1-baseline\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-vulkan-p1-baseline-global-flash\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.18386667482012967,
+                "video_mse_0_255": 0.23676432497562197,
+                "video_psnr_db": 54.387640962352194,
+                "different_channel_values_percent": 16.199665749196186,
+                "decoded_video_sha256": [
+                  "6a8c5cd3434705c44031cde63a28000b8046912869fcadca43db6da3c277beb3",
+                  "c6a0f31ef768f18937277c30c166428cdacbbcef82b4434e55281f39c08fb11d"
+                ],
+                "video_max_absolute_difference_0_255": 16,
+                "video_worst_frame_index": 58,
+                "video_worst_frame_psnr_db": 53.92164812789146,
+                "video_ssim": 0.998857,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-baseline",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-localops-global-flash",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "83c7e8bdf89682ae4901d64f73d204fcabbbac79374008cb6c47777ae376bb2c",
+                  "6c234fd8ed3c5453312d68b843471276002f9f7a8531f8fbf4bfc1efefba2f13"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "api": "vulkan",
+          "experiment": "Minimal operations added to global FA",
+          "prompt_count": 1,
+          "complete_three_prompts": false,
+          "aggregation": "Arithmetic mean of the per-prompt warm medians; excludes one warmup for each profile/prompt. Distinct from native addon and fresh-process timings.",
+          "reference_seconds": 93.870503148,
+          "candidate_seconds": 91.653203904,
+          "seconds_saved": 2.217299244000003,
+          "latency_reduction_percent": 2.362083050203875,
+          "speedup": 1.024192272059823,
+          "per_prompt_reduction_percent_range": [
+            2.362083050203875,
+            2.362083050203875
+          ],
+          "pairs": [
+            {
+              "prompt_index": 1,
+              "reference": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-baseline-global-flash",
+              "candidate": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-localops-global-flash",
+              "reference_seconds": 93.870503148,
+              "candidate_seconds": 91.653203904,
+              "latency_reduction_percent": 2.362083050203875,
+              "reference_runs_seconds": [
+                93.804359825,
+                94.164014893,
+                93.870503148
+              ],
+              "candidate_runs_seconds": [
+                91.657253962,
+                91.653203904,
+                91.55734957
+              ],
+              "reference_stages": {
+                "conditioning_seconds": 2.01,
+                "sampling_seconds": 73.82,
+                "video_decode_seconds": 16.99,
+                "audio_decode_seconds": 0.66
+              },
+              "candidate_stages": {
+                "conditioning_seconds": 2.01,
+                "sampling_seconds": 71.36,
+                "video_decode_seconds": 17.23,
+                "audio_decode_seconds": 0.66
+              },
+              "reference_memory": {
+                "peak_process_rss_bytes": 37649969152,
+                "sampled_peak_gpu_device_used_mib": 24301.0
+              },
+              "candidate_memory": {
+                "peak_process_rss_bytes": 37601415168,
+                "sampled_peak_gpu_device_used_mib": 23602.0
+              },
+              "quality": {
+                "metrics_schema": 2,
+                "reference": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-vulkan-p1-baseline-global-flash\\0.avi",
+                "candidate": "evidence\\rtx\\results\\r3-rtx-h3-cli-confirm-pinned-vulkan-p1-baseline-global-flash\\0.avi",
+                "video_frames": 124,
+                "video_mae_0_255": 0.0,
+                "video_mse_0_255": 0.0,
+                "video_psnr_db": "infinity",
+                "different_channel_values_percent": 0.0,
+                "decoded_video_sha256": [
+                  "c6a0f31ef768f18937277c30c166428cdacbbcef82b4434e55281f39c08fb11d",
+                  "c6a0f31ef768f18937277c30c166428cdacbbcef82b4434e55281f39c08fb11d"
+                ],
+                "video_max_absolute_difference_0_255": 0,
+                "video_worst_frame_index": 0,
+                "video_worst_frame_psnr_db": "infinity",
+                "video_ssim": 1.0,
+                "audio_sample_values": 331200,
+                "audio_rmse_float": 0.0,
+                "audio_max_absolute_error_float": 0.0,
+                "audio_snr_db": "infinity",
+                "audio_sample_rate_hz": 32000,
+                "audio_channels": 2,
+                "reference_profile": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-baseline-global-flash",
+                "candidate_profile": "r3-rtx-h3-cli-warm-pinned-vulkan-p1-localops-global-flash",
+                "reference_file": "0.avi",
+                "candidate_file": "0.avi",
+                "output_file_hashes": [
+                  "6c234fd8ed3c5453312d68b843471276002f9f7a8531f8fbf4bfc1efefba2f13",
+                  "6c234fd8ed3c5453312d68b843471276002f9f7a8531f8fbf4bfc1efefba2f13"
                 ]
               }
             }
@@ -1107,9 +1823,9 @@
         {
           "row": "Global flash attention",
           "hardware": "M3 Ultra / Metal",
-          "reference": "r3-mac-h3-short-metal-clean-baseline",
-          "candidate": "r3-mac-h3-short-metal-clean-global-flash",
-          "latency_reduction_percent": 26.258365174371086,
+          "reference": "r3-mac-h3-full-confirm-metal-baseline",
+          "candidate": "r3-mac-h3-full-confirm-metal-global-flash",
+          "latency_reduction_percent": 19.79771547382704,
           "quality_pending": false
         },
         {
@@ -1118,22 +1834,6 @@
           "reference": "r3-strix-h3-short-abi128-rocm-baseline",
           "candidate": "r3-strix-h3-short-abi128-rocm-global-flash",
           "latency_reduction_percent": 10.347337997510161,
-          "quality_pending": false
-        },
-        {
-          "row": "Minimal SwiGLU + QKV views",
-          "hardware": "RTX 5090 / Vulkan",
-          "reference": "r3-rtx-h3-cli-pinned-vulkan-baseline",
-          "candidate": "r3-rtx-h3-cli-pinned-vulkan-localops",
-          "latency_reduction_percent": 7.5539568345323795,
-          "quality_pending": false
-        },
-        {
-          "row": "Minimal operations + global FA",
-          "hardware": "RTX 5090 / Vulkan",
-          "reference": "r3-rtx-h3-cli-pinned-vulkan-baseline",
-          "candidate": "r3-rtx-h3-cli-pinned-vulkan-localops-global-flash",
-          "latency_reduction_percent": 15.232100034258316,
           "quality_pending": false
         },
         {
@@ -1193,17 +1893,17 @@
         ],
         [
           "Global flash attention / M3 Ultra / Metal",
-          "235.005 -> 131.769 s; -43.93%",
-          "62.980 -> 63.069 GB; +0.14%",
+          "1551.436 -> 1287.922 s; -16.99%",
+          "67.242 -> 67.465 GB; +0.33%",
           "Unified memory; RSS is not total device usage",
-          "VAE: 53.174 -> 19.613 s; -63.12%"
+          "VAE: 468.376 -> 169.173 s; -63.88%"
         ],
         [
           "Global flash attention / Radeon 8060S / Vulkan",
-          "114.706 -> 112.281 s; -2.11%",
-          "1.782 -> 1.783 GB; +0.05%",
-          "56.084 -> 61.105 GB VRAM + GTT; +8.95%",
-          "VAE: 29.602 -> 24.919 s; -15.82%"
+          "1419.960 -> 1373.028 s; -3.31%",
+          "2.253 -> 2.265 GB; +0.54%",
+          "61.911 -> 61.904 GB VRAM + GTT; -0.01%",
+          "VAE: 259.164 -> 212.070 s; -18.17%"
         ],
         [
           "Global flash attention / Radeon 8060S / HIP",
@@ -1213,7 +1913,14 @@
           "VAE: 22.294 -> 14.618 s; -34.43%"
         ]
       ],
-      "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths."
+      "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths.",
+      "implementation_steps": [
+        "Start with the accepted pinned-engine flash-attention profile. Match the H3 checkpoint family and resolved backend; preserve explicit flash_attn/fa settings and diffusion_fa. Keep the original setting for unsupported devices, models and request envelopes.",
+        "If the focused graph patch is selected, implement only its accepted backend branches in the engine model header. Resolve the actual execution backend when building the graph and retain the original operations elsewhere. Do not substitute the larger upstream patch or its Spark speed claim.",
+        "Validate the real engine change through a temporary addon vcpkg overlay. Run existing engine/operator tests and native addon audio-video comparisons for both optimized and fallback branches, including repeated requests, cancellation/error recovery and accepted full-size inputs.",
+        "For a VAE-only flash-attention selector or broader CUDA backport, treat API forwarding and math/layout changes as separate work. Repeat full-model quality checks; older CLI results do not prove the new addon integration.",
+        "After validation, use separate engine and registry PRs only if required, then repin the addon. Run the unchanged desktop CI matrix. Fresh Spark and additional Apple/AMD devices remain release-scope decisions; unvalidated configurations keep their baseline."
+      ]
     },
     {
       "title": "2. FLUX.2 Klein 4B Q8",
@@ -1360,14 +2067,34 @@
           "Keep the existing fast paths and explicit backend choice."
         ],
         [
-          "FLUX 3 / upstream auto probes / Strix fork",
-          "Compatibility / broader engine work",
+          "FLUX 3 Image Klein compatibility",
+          "Model compatibility work",
           "Source review",
-          "No validated speed result for these checkpoints.",
+          "No matched inference/performance result.",
           "Not established.",
           "Unvalidated model/backend combinations",
-          "FLUX 3 has distinct model components; an upstream microprobe or Krea-specific gain does not establish full-generation performance here.",
-          "Defer broad upgrades; only carry isolated kernels with matched quality and end-to-end evidence."
+          "FLUX 3 has distinct diffusion and Qwen3-VL components unsupported by the pinned loader. FLUX.2 Klein results do not establish compatibility or speed for it.",
+          "Separate model-support work before performance claims; preserve the measured FLUX.2 scope."
+        ],
+        [
+          "Upstream automatic convolution probes",
+          "Kernel selection policy",
+          "Source review",
+          "Not benchmarked as a policy.",
+          "Not established across its selections.",
+          "Potential Vulkan and other backends",
+          "[Upstream performance guidance](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/performance.md) documents small per-module kernel probes; a microprobe winner need not minimize full-generation latency. The policy is absent from this pinned-engine experiment.",
+          "Prefer the measured API-scoped setting first; validate any adaptive probe on startup, memory and complete requests before adoption."
+        ],
+        [
+          "Krea-oriented Strix Vulkan fork",
+          "Broader engine / kernel fork",
+          "Source review",
+          "No matched FLUX.2 result.",
+          "Reported images differ; parity for this checkpoint is unestablished.",
+          "Potential Strix Vulkan target",
+          "[Published gains](https://github.com/leejet/stable-diffusion.cpp/pull/1891) target Krea2 Turbo and a different engine/GGML combination.",
+          "Do not import the whole fork or transfer another model's speed claim. Any useful kernel needs a focused backport and matched tests."
         ],
         [
           "SGLang / vLLM-Omni",
@@ -1496,8 +2223,8 @@
           "Not yet collected/validated",
           "Pending",
           "Radeon 8060S / HIP",
-          "Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged.",
-          "Decide from diffusion results; published LLM results are not a diffusion validation."
+          "Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback.",
+          "Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation."
         ],
         [
           "Memory-mapped checkpoint reads",
@@ -1833,7 +2560,14 @@
           "Denoising: 23.433 -> 22.433 s; -4.26%"
         ]
       ],
-      "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths."
+      "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths.",
+      "implementation_steps": [
+        "Implement a model/decoder-specific profile using the existing vae_conv_direct parameter only on accepted CUDA/HIP configurations. Preserve explicit true/false values; plain default-valued booleans currently do not distinguish an omitted option from an explicit override.",
+        "Choose using the resolved VAE backend, including per-module assignments. A generic GPU or NVIDIA identifier is insufficient because Vulkan results differ from CUDA. Preserve direct convolution on the tested Metal/Vulkan paths and all unvalidated combinations.",
+        "Keep higher-memory profiles explicitly selected until capacity handling is proven. Validate allocation/repeated-request behavior; assessFit returning unknown must preserve the baseline. Treat GEMM plus CPU parameters as a separate lower-device-memory profile.",
+        "If F16 matrix expansion is selected on a proven platform, use the verified checkpoint-specific matrix-only rule. Preserve custom tensor_type_rules. Test startup, sustained memory and every accepted request geometry; expansion does not restore the original unquantized checkpoint.",
+        "Add focused selection/override/fallback tests and run the existing addon integration and full desktop CI matrix. Check other FLUX checkpoints, reference-image/editing modes and larger shapes before broadening scope. No SDK or engine algorithm change is needed for the existing parameter itself."
+      ]
     },
     {
       "title": "3. LTX-2.3 22B distilled Q5",
@@ -2010,14 +2744,24 @@
           "Reject: slower decoder and no credible end-to-end compute gain to justify four changed backend files."
         ],
         [
-          "SGLang / vLLM-Omni and LTX-2.5",
-          "Alternative runtime / compatibility",
+          "SGLang / vLLM-Omni",
+          "Alternative runtime",
           "V / partial - dated",
           "Spark SGLang: 37.802 -> 12.578 s (-66.73%, 3.005x).",
           "Different valid scene/audio; PSNR 10.74; parity not established.",
           "GB10 / CUDA, 29 Oct",
-          "Load+first 44.075 -> 326.362 s; 66.73 GiB reserved, outside RTX capacity. No matched vLLM adapter. LTX-2.5 components unsupported.",
+          "Load+first 44.075 -> 326.362 s; 66.73 GiB reserved, outside RTX capacity. No matched vLLM adapter.",
           "Separate runtime/model work, not an equivalent implementation candidate."
+        ],
+        [
+          "LTX-2.5 compatibility",
+          "Model compatibility work",
+          "Source review",
+          "No matched inference/performance result.",
+          "Not established.",
+          "Unvalidated model/backend combinations",
+          "The newer Gemma4/DVAE components are unsupported by the pinned loader; these are different components from the measured LTX-2.3 checkpoint set.",
+          "Separate compatibility work before performance comparisons; do not broaden the LTX-2.3 profile automatically."
         ],
         [
           "CPU parameter placement",
@@ -2096,8 +2840,8 @@
           "Not yet collected/validated",
           "Pending",
           "Radeon 8060S / HIP",
-          "Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged.",
-          "Decide from diffusion results; published LLM results are not a diffusion validation."
+          "Matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback.",
+          "Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation."
         ],
         [
           "HIP force-blas",
@@ -2106,7 +2850,7 @@
           "Not yet collected/validated",
           "Pending",
           "Radeon 8060S / HIP",
-          "Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.",
+          "Existing compile-time forced-selection controls; same corrected tensor-name ABI and checkpoint. These affect the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.",
           "Require numerical output checks and repeatable incremental speed before any production selection change."
         ],
         [
@@ -2116,7 +2860,7 @@
           "Not yet collected/validated",
           "Pending",
           "Radeon 8060S / HIP",
-          "Existing forced-selection controls; same corrected tensor-name ABI and checkpoint.",
+          "Existing compile-time forced-selection controls; same corrected tensor-name ABI and checkpoint. These affect the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.",
           "Require numerical output checks and repeatable incremental speed before any production selection change."
         ],
         [
@@ -2480,7 +3224,14 @@
           "Denoising: 81.915 -> 77.051 s; -5.94%"
         ]
       ],
-      "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths."
+      "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths.",
+      "implementation_steps": [
+        "Implement exact-output memory placement first on the accepted API/capacity combination. For RTX Vulkan the measured setting is params_backend=\"cpu,vae=vulkan0\". Preserve offloaded fallback and never infer that the whole model fits on a 32 GB GPU.",
+        "Offer temporal_tiling=false only in the accepted minor-output-change tier and tested lengths/APIs. Preserve tiled decoding for strict baseline output. Do not count a redundant temporal flag on the existing Vulkan stateful path as an additional optimization.",
+        "If F16 matrix expansion is selected, use the verified 1632-matrix rule, not a blanket precision override. Measure memory, load/first-request latency and repeated 97/193-frame generation. Keep quantized weights when capacity or incremental benefit is unproven.",
+        "Do not carry the rejected Metal packing/dispatch code, broad upstream upgrade or slower CUDA stateful/3D-GEMM alternatives into the release feature. Any new kernel should have independent operator coverage plus a repeatable end-to-end benefit.",
+        "Run existing audio-video integration tests and the full desktop CI matrix on the final selection policy. Validate combined profiles directly, fallback behavior, mixed backend assignments and longer/reference-conditioned requests before widening the release envelope."
+      ]
     }
   ],
   "validation": [
@@ -2488,7 +3239,12 @@
     "Final recommendations must list exact hardware/API, model and request envelope; other configurations retain the current baseline. Preserve explicit user settings. An API switch must be an explicit choice because seeded output can differ.",
     "Implement the smallest accepted engine change first, validate it through a temporary addon overlay, then follow the engine merge, separate vcpkg registry PR and addon repin sequence. Addon release notes/version bump remain a later separate PR.",
     "Run the full affected unit/integration suites and desktop CI matrix on the actual implementation. Research operator tests and manual benchmarks do not certify an unimplemented default-selection policy.",
-    "Remaining coverage includes other Apple devices/capacities, other AMD GPUs/drivers, fresh Spark confirmation of newly proposed patches, larger request envelopes, image/video-conditioned modes and failure/recovery behavior. Mobile tests belong to late validation only if the affected implementation applies there."
+    "Remaining coverage includes other Apple devices/capacities, other AMD GPUs/drivers, fresh Spark confirmation of newly proposed patches, larger request envelopes, image/video-conditioned modes and failure/recovery behavior. Mobile tests belong to late validation only if the affected implementation applies there.",
+    "Completed local addon checks: 137/137 Bare unit tests, 89/89 Node unit tests, typecheck and lint. Lint retains 70 pre-existing warnings. These checks validate the existing addon and research harness; they do not validate the future selection policy.",
+    "Focused H3 baseline/candidate builds passed 26 CTests on CUDA, 21 on RTX Vulkan and 23 on Metal, including independent fused-operation/QKV-view checks. Metal end-to-end output differences still disqualify that patch from the preferred Metal profile. Operator tests alone cannot establish full-model equivalence.",
+    "Metal packing/dispatch experiments passed their existing suites and independent operator checks, but were rejected on performance evidence. The greater-than-2^32-element packing specialization was not exercised.",
+    "Corrected baseline/forced-BLAS/forced-MMQ HIP backend builds passed their four existing CTests. The separately queued rocWMMA build has its own result and cannot inherit those passes.",
+    "No new full desktop CI run certifies a November production feature: no such feature has been implemented. The retained October workflow passed 37 jobs with 14 conditional routes, including a 98/98 Windows retry; that historical run is not a replacement for implementation CI. RTX research builds used local Clang 20.1.8; release builds must use the repository CI toolchain."
   ],
   "enablement_strategy": {
     "status": "Implementation design constraints; final accepted profiles depend on completed measurements.",
@@ -2553,5 +3309,116 @@
       "packages/diffusion-cpp/addon/src/model-interface/SdModel.cpp:580",
       "packages/diffusion-cpp/README.md:173"
     ]
-  }
+  },
+  "source_revisions": [
+    "November native measurements use addon **0.33.0**, engine `67fd0f590e8de432e6bb95fb05b0c3fdfdb2a1dd`, GGML `a4adfcb1304fb05b64473f1fe8d678bbce7a9ce0`, and the recorded checkpoint hashes. The package pins are stable-diffusion 2026-08-11#9 and GGML 2026-08-11#3.",
+    "October CUDA measurements use addon **0.31.0**, engine `4ec33ca21eec64b9778b6fd16d58e88cd501936d` and GGML `9f94f330ac196e0a2e3176e798b36226b22091a5`. Spark was not rebooked for November; its results retain those revisions.",
+    "Pinned-engine experiments, older isolated upstream experiments, native addon requests and research CLI requests are separate cohorts. Compare the paired before/after within each cohort; do not combine absolute times or multiply independent ratios.",
+    "Strix HIP uses task-built modules with `GGML_MAX_NAME=128`, matching the published addon. Earlier incompatible ABI160 native probes are excluded. This is not validation of a shipped HIP prebuild.",
+    "The current diffusion addon/registry feature lists expose CUDA, Metal, Vulkan and OpenCL, but no HIP release feature. Shared CI has ROCm setup support for other consumers. Promoting Strix HIP requires explicit backend packaging/ABI/linking validation and the corresponding registry/addon build integration; changing only a runtime preset does not ship HIP support.",
+    "Driver/toolchain coverage: RTX driver 595.71.05, CUDA 13.3.73 and Vulkan 1.4.329; Mac macOS 26.7.1 / Metal 4; Strix Mesa 25.2.8, Vulkan 1.4.318 and ROCm 7.2.4. Full hardware identities are in the reproduction records.",
+    "Current defaults refers to the selected QVAC checkpoint sets. Benchmarks explicitly set backend and weight placement; the table below defines their baselines. These are not a claim that every shipping configuration resolves to the same placement."
+  ],
+  "baseline_placements": [
+    [
+      "MiniMax-H3",
+      "RTX CUDA/Vulkan; Mac Metal; Strix Vulkan/HIP",
+      "params_backend=cpu; flash_attn=false; diffusion FA remains enabled",
+      "Full-size native baseline. Residency and global FA are separate changes."
+    ],
+    [
+      "FLUX.2 Klein",
+      "RTX CUDA/Vulkan; Mac Metal; Strix Vulkan/HIP",
+      "Parameters on the selected GPU; vae_conv_direct=true",
+      "GEMM and CPU parameter placement are compared separately and in explicit combinations."
+    ],
+    [
+      "LTX-2.3",
+      "RTX CUDA/Vulkan",
+      "params_backend=cpu; vae_conv_direct=true",
+      "VAE-only residency is relative to this offloaded baseline. Full model residency is not established."
+    ],
+    [
+      "LTX-2.3",
+      "Mac Metal; Strix Vulkan/HIP",
+      "Parameters on the selected GPU; vae_conv_direct=true",
+      "Already-resident weights must not be counted again as an optimization."
+    ],
+    [
+      "All models",
+      "DGX Spark / CUDA",
+      "Retained October configurations in the reproduction records",
+      "Dated pairs only; no fresh November Spark run."
+    ]
+  ],
+  "sources": [
+    {
+      "title": "Metal IM2COL_3D parallel packing",
+      "url": "https://github.com/0xShug0/audio.cpp/pull/1169"
+    },
+    {
+      "title": "Strix quantized matrix multiplication versus hipBLAS selection",
+      "url": "https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md"
+    },
+    {
+      "title": "rocWMMA flash attention on Strix",
+      "url": "https://github.com/ggml-org/llama.cpp/issues/24437"
+    },
+    {
+      "title": "rocWMMA flash attention on Strix",
+      "url": "https://github.com/ROCm/rocWMMA/blob/develop_deprecated/README.md"
+    },
+    {
+      "title": "rocWMMA flash attention on Strix",
+      "url": "https://github.com/ggml-org/llama.cpp/discussions/20856"
+    },
+    {
+      "title": "Alternative runtimes on new platforms",
+      "url": "https://github.com/vllm-project/vllm-metal/blob/main/docs/supported_models.md"
+    },
+    {
+      "title": "Alternative runtimes on new platforms",
+      "url": "https://github.com/sgl-project/sglang/blob/main/python/sglang/multimodal_gen/README.md"
+    },
+    {
+      "title": "Alternative runtimes on new platforms",
+      "url": "https://github.com/vllm-project/vllm-omni/blob/main/recipes/MiniMaxAI/MiniMax-H3.md"
+    },
+    {
+      "title": "Token-axis H3 MLP chunking for Vulkan buffer limits",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/pull/2257"
+    },
+    {
+      "title": "Avoid blanket upstream memory-manager upgrade",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/issues/1976"
+    },
+    {
+      "title": "Backend-specific convolution selection versus upstream auto probes",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/backend.md"
+    },
+    {
+      "title": "Backend-specific convolution selection versus upstream auto probes",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/performance.md"
+    },
+    {
+      "title": "Backend-specific convolution selection versus upstream auto probes",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/issues/1215"
+    },
+    {
+      "title": "Metal flash-attention vector tuning tables",
+      "url": "https://github.com/ggml-org/llama.cpp/discussions/27668"
+    },
+    {
+      "title": "Krea Vulkan fork optimizations on Strix",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/pull/1891"
+    },
+    {
+      "title": "LTX quantized matrix expansion to F16 at load time",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/common/common.cpp"
+    },
+    {
+      "title": "Model-loader process-local mmap",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/discussions/1855"
+    }
+  ]
 }
