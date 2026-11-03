@@ -12,10 +12,10 @@ CMake-template adoption. Bounded Linux CI coverage exists for
 `classification-ggml`, the `tts-ggml` and `audiogen-ggml` config-parse
 fronts, the `asr-ggml` s16le PCM decoder, the `bci-whispercpp`
 neural-signal parser, the `embed-llamacpp` main-gpu config parsers, the
-`diffusion-cpp` GGUF video-capability inspector, and the `llm-llamacpp`
-stop-string and log sanitizers. Fleet
-corpus/dictionary scale-up, scheduled continuous fuzzing, and optional
-OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
+`diffusion-cpp` GGUF video-capability inspector, the `llm-llamacpp`
+stop-string and log sanitizers, and the `vla-ggml` safetensors header
+parser. Fleet corpus/dictionary scale-up, scheduled continuous fuzzing, and
+optional OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
 
 > **The entire fuzz dependency stack comes from vcpkg — FuzzTest included.**
@@ -591,6 +591,9 @@ families that protect several addons at once.
   reserve `LINK_FABRIC` for header loaders that actually call ggml/gguf. Factor
   shared parsing helpers so one target covers multiple consumers where the code
   is genuinely shared.
+  **`vla-ggml` safetensors_lite: done.** Header-only parser, no `LINK_FABRIC`
+  (full ASan + LSan). `openFromMemory` rejects `headerLen > 16 MiB` before
+  allocating. Linux C++ CI runs `npm run fuzz` after unit tests.
 - **Phase 2 — text + audio + config families.** Add targets for the llama.cpp /
   NMT text parsers, the whisper/parakeet/tts audio buffer math, and the config
   JSON parsers. Code behind engine state lands with (or after) that addon's

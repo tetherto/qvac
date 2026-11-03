@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PARLER_ONLY_KEYS = exports.PARLER_FIELD_KEYS = exports.PARLER_ONLY_TEMPLATE_KEYS = exports.PARLER_TEMPLATE_KEYS = exports.PARLER_DESCRIPTION_KEYS = exports.PARLER_QUANT_ORDER = exports.PARLER_VARIANT_ORDER = exports.PARLER_RE = void 0;
+exports.PARLER_COREML_COMPUTE_UNITS = exports.PARLER_COREML_KEYS = exports.PARLER_ONLY_KEYS = exports.PARLER_FIELD_KEYS = exports.PARLER_ONLY_TEMPLATE_KEYS = exports.PARLER_TEMPLATE_KEYS = exports.PARLER_DESCRIPTION_KEYS = exports.PARLER_QUANT_ORDER = exports.PARLER_VARIANT_ORDER = exports.PARLER_RE = void 0;
+exports.assertParlerCoremlOptions = assertParlerCoremlOptions;
+exports.assertNoPerCallParlerCoreml = assertNoPerCallParlerCoreml;
 exports.findParlerInDir = findParlerInDir;
 exports.pickParlerDescFields = pickParlerDescFields;
 exports.assertParlerDescFieldsConsistent = assertParlerDescFieldsConsistent;
@@ -54,6 +56,49 @@ exports.PARLER_ONLY_KEYS = [
     ...exports.PARLER_DESCRIPTION_KEYS,
     ...exports.PARLER_ONLY_TEMPLATE_KEYS,
 ];
+exports.PARLER_COREML_KEYS = [
+    "coremlDecoder",
+    "coremlComputeUnits",
+    "coremlStrict",
+];
+exports.PARLER_COREML_COMPUTE_UNITS = [
+    "all",
+    "cpu_and_ane",
+    "cpu_and_gpu",
+    "cpu_only",
+];
+function assertParlerCoremlOptions(engine, source, where) {
+    if (!source)
+        return;
+    const values = source;
+    const keys = exports.PARLER_COREML_KEYS.filter((key) => values[key] !== undefined);
+    if (keys.length === 0)
+        return;
+    if (engine !== engineIds_1.ENGINE_PARLER) {
+        throw new Error(`tts-ggml: ${where}: ${keys.join(", ")} are parler-only options ` +
+            `(engine is ${engine})`);
+    }
+    for (const key of ["coremlDecoder", "coremlStrict"]) {
+        if (values[key] !== undefined && typeof values[key] !== "boolean") {
+            throw new Error(`tts-ggml: ${where}: ${key} must be a boolean`);
+        }
+    }
+    if (values.coremlComputeUnits !== undefined &&
+        !exports.PARLER_COREML_COMPUTE_UNITS.some((value) => value === values.coremlComputeUnits)) {
+        throw new Error(`tts-ggml: ${where}: coremlComputeUnits must be one of ` +
+            exports.PARLER_COREML_COMPUTE_UNITS.join(", "));
+    }
+}
+function assertNoPerCallParlerCoreml(source, where) {
+    if (!source)
+        return;
+    const values = source;
+    const keys = exports.PARLER_COREML_KEYS.filter((key) => values[key] !== undefined);
+    if (keys.length > 0) {
+        throw new Error(`tts-ggml: ${where}: ${keys.join(", ")} must be set in the ` +
+            "constructor or reload(), not per call");
+    }
+}
 /**
  * Find a Parler GGUF in `modelDir`, ranked by variant (mini before large
  * before indic) and, within a variant, by quant tier (q8_0 > q6_k > f16 > f32;
@@ -132,6 +177,7 @@ function resolveParlerModelPaths(files) {
  * rejected by name.
  */
 function assertParlerOptions(setup) {
+    assertParlerCoremlOptions(setup.engineType, setup.settings, "constructor");
     if (setup.engineType === engineIds_1.ENGINE_PARLER) {
         assertParlerDescFieldsConsistent(pickParlerDescFields({
             description: setup.settings.description,
@@ -188,6 +234,7 @@ function resolveParlerJobFields(setup, source, where) {
     return fields;
 }
 function buildParlerParams(setup) {
+    assertParlerCoremlOptions(setup.engineType, setup.settings, "configuration");
     // Re-checked here (not only in the constructor) so reload({...}) cannot
     // smuggle in a description/template conflict.
     if (setup.settings.description != null) {
@@ -246,6 +293,10 @@ function buildParlerParams(setup) {
     if (setup.settings.normalizeNumbers != null) {
         parameters.normalizeNumbers = !!setup.settings.normalizeNumbers;
     }
+    for (const key of exports.PARLER_COREML_KEYS) {
+        if (setup.settings[key] !== undefined)
+            parameters[key] = setup.settings[key];
+    }
     (0, nativeParams_1.assignBackendParams)(setup, parameters);
     return parameters;
 }
@@ -263,6 +314,7 @@ const PARLER_RELOADABLE_KEYS = [
     "maxFrames",
     "minNewTokens",
     "normalizeNumbers",
+    ...exports.PARLER_COREML_KEYS,
     "seed",
 ];
 /**
@@ -272,6 +324,7 @@ const PARLER_RELOADABLE_KEYS = [
  * reload still throws (and the caller rolls the settings back).
  */
 function applyParlerReload(setup, newConfig) {
+    assertParlerCoremlOptions(setup.engineType, newConfig, "reload");
     if (setup.engineType !== engineIds_1.ENGINE_PARLER)
         return;
     const config = newConfig;

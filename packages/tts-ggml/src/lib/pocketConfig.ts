@@ -41,6 +41,9 @@ const UNSUPPORTED_OPTIONS = [
   'maxFrames',
   'minNewTokens',
   'normalizeNumbers',
+  'coremlDecoder',
+  'coremlComputeUnits',
+  'coremlStrict',
   'enhancer',
   'denoiser'
 ]
