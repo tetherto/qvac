@@ -14,7 +14,8 @@ and this project adheres to
 - `BridgeDepth`: stereo disparity from a rectified left/right pair, with the
   Depth Anything V2 ViT-S mono branch. `infer(left, right)` returns
   `{ width, height, disparity }`. Weights are converted locally with
-  `scripts/convert-bridgedepth.py`; see `docs/bridgedepth.md`.
+  `scripts/convert-bridgedepth.py`; see `docs/bridgedepth.md`
+  ([#5531](https://github.com/tetherto/qvac/pull/5531)).
 
 ### Changed
 
@@ -27,6 +28,7 @@ and this project adheres to
 ### Pull Requests
 
 - [#5432](https://github.com/tetherto/qvac/pull/5432) - stop publishing the default classifier weights.
+- [#5531](https://github.com/tetherto/qvac/pull/5531) - BridgeDepth stereo disparity.
 
 ## [0.34.1] - 2026-10-29
 
