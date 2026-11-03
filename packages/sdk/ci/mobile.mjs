@@ -237,7 +237,7 @@ async function produce(app, env) {
   keepResults(join(ROOT, 'packages', slug, 'test/results/e2e', fam), [reports])
   await compareBaseline({
     env: e,
-    workflow: 'mobile-tests.yml',
+    workflow: 'sdk-e2e.yml',
     artifact: `${slug}-results-${env.CONFIG}`,
     reports,
     label: fam

@@ -419,7 +419,7 @@ async function main(family, env) {
     ])
     await compareBaseline({
       env: e,
-      workflow: 'pr-build-test.yml',
+      workflow: 'sdk-e2e.yml',
       artifact: `sdk-results-${env.CONFIG}`,
       reports,
       label
