@@ -22,6 +22,7 @@ vcpkg_check_features(
     kleidiai BUILD_KLEIDIAI
     openmp BUILD_OPENMP
     hip-backend BUILD_HIP_BACKEND
+    webgpu BUILD_WEBGPU
     cuda-backend BUILD_CUDA_BACKEND
     cuda-jetson-backend BUILD_CUDA_JETSON_BACKEND
     rpc-server BUILD_RPC_SERVER
@@ -202,6 +203,13 @@ if(BUILD_CUDA_BACKEND)
     list(APPEND PLATFORM_OPTIONS
       "-DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler -Xfatbin=-compress-all")
   endif()
+  # The pinned nvcc (13.0, and 12.6 for Jetson) cannot compile host code
+  # against libc++, so the CUDA module is built against libstdc++ throughout,
+  # including its own ggml-base, and links it statically and privately.
+  if(VCPKG_TARGET_IS_LINUX)
+    list(APPEND PLATFORM_OPTIONS
+      "-DCMAKE_PROJECT_ggml_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/linux-cuda-runtime.cmake")
+  endif()
 endif()
 
 if(VCPKG_TARGET_IS_ANDROID AND BUILD_KLEIDIAI)
@@ -224,6 +232,18 @@ endif()
 
 if (VCPKG_TARGET_IS_ANDROID AND BUILD_GPU_BACKENDS)
   list(APPEND PLATFORM_OPTIONS -DGGML_OPENCL=ON)
+endif()
+
+# WebGPU rides on the dawn port from the official registry (Dawn built from
+# source under the same triplet, so a clang/libc++ triplet never links a
+# libstdc++-built Dawn). Orthogonal to gpu-backends: it is the speech stack's
+# opt-in backend and lands as one more runtime-loaded module under
+# GGML_BACKEND_DL. ggml-webgpu embeds its WGSL shaders with a Python script at
+# configure time, hence the explicit interpreter.
+set(WEBGPU_OPTIONS -DGGML_WEBGPU=OFF)
+if(BUILD_WEBGPU)
+  vcpkg_find_acquire_program(PYTHON3)
+  set(WEBGPU_OPTIONS -DGGML_WEBGPU=ON "-DPython3_EXECUTABLE=${PYTHON3}")
 endif()
 
 if(BUILD_GPU_BACKENDS AND NOT VCPKG_TARGET_IS_OSX AND NOT VCPKG_TARGET_IS_IOS)
@@ -302,6 +322,7 @@ vcpkg_cmake_configure(
     -DLLAMA_ALL_WARNINGS=OFF
     ${LLAMA_OPTIONS}
     ${PLATFORM_OPTIONS}
+    ${WEBGPU_OPTIONS}
     ${FEATURE_OPTIONS}
 )
 
@@ -314,6 +335,18 @@ if(BUILD_CUDA_BACKEND)
   if(NOT EXISTS "${QVAC_CUDA_MODULE}")
     message(FATAL_ERROR "qvac-fabric: expected CUDA module was not installed at ${QVAC_CUDA_MODULE}")
   endif()
+endif()
+
+# Each module links its C++ runtime statically, which holds only if every
+# source in it compiled against that runtime. CUDA and HIP compile through
+# their own drivers, and a module that misses this loads only in processes
+# which already map libstdc++.
+if(VCPKG_TARGET_IS_LINUX AND DL_BACKENDS)
+  include("${CMAKE_CURRENT_LIST_DIR}/qvac-check-cxx-runtime.cmake")
+  file(GLOB QVAC_MODULES
+    "${CURRENT_PACKAGES_DIR}/lib/*.so"
+    "${CURRENT_PACKAGES_DIR}/debug/lib/*.so")
+  qvac_check_cxx_runtime(${QVAC_MODULES})
 endif()
 
 if(BUILD_LLAMA)
