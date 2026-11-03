@@ -171,7 +171,9 @@ runs:
         echo "Setting up mobile test framework..."
         # react-native-bare-kit 0.16 no longer links the worklet's native
         # addons; "Link native addons" below does it with bare-link.
-        npm pkg set dependencies.react-native-bare-kit=^0.16.0 devDependencies.bare-link=^4.0.1
+        # bare-link 4.2.0 fails Android linking with ADDON_NOT_FOUND for
+        # android-arm/ia32/x64 on arm64-only platform packages.
+        npm pkg set dependencies.react-native-bare-kit=^0.16.0 devDependencies.bare-link=4.1.0
         npm install
 
     # A leftover tree from an earlier job on the same self-hosted runner must
