@@ -1,9 +1,10 @@
 # Architecture — `@qvac/classification-ggml`
 
-The addon contains two independent `IModel` implementations: MobileNetV3-Small
-image classification and MegaLoc image embeddings. Both load a caller-provided
-GGUF through the same native binding and Fabric runtime. See [MegaLoc](megaloc.md) for its graph,
-backend selection, input format, conversion and validation details.
+The addon contains three independent `IModel` implementations: MobileNetV3-Small
+image classification, MegaLoc image embeddings and BridgeDepth stereo disparity.
+All load a caller-provided GGUF through the same native binding and Fabric
+runtime. See [MegaLoc](megaloc.md) and [BridgeDepth](bridgedepth.md) for their
+graphs, input formats, conversion and validation details.
 
 ## Model selection and activation
 
@@ -11,21 +12,29 @@ backend selection, input format, conversion and validation details.
 flowchart TD
     IC[ImageClassifier] -->|modelType: mobilenet, default| C[createInstance]
     ML[MegaLoc] -->|modelType: megaloc| C
+    BD[BridgeDepth] -->|modelType: bridgedepth| C
     C --> MN[MobileNet ClassificationModel]
     C --> ME[MegaLocModel]
+    C --> BM[BridgeDepthModel]
     MN --> SYNC[Load during createInstance]
     ME --> ASYNC[activate: JsAsyncTask worker loads weights and graph]
+    BM --> ASYNC
     SYNC --> J[IModel processing through JobRunner]
     ASYNC --> J
 ```
 
-MegaLoc's JS `load()` awaits native `activate()`, keeping the event loop
-responsive while loading. Its native model lives in `model-interface/megaloc/`;
-MobileNet lives in `model-interface/mobilenet/`. Decoding and raw-input validation
+MegaLoc's and BridgeDepth's JS `load()` await native `activate()`, keeping the
+event loop responsive while loading. Their native models live in
+`model-interface/megaloc/` and `model-interface/bridgedepth/`, and share the
+ggml device selection in `model-interface/GgmlBackend.*`; MobileNet lives in
+`model-interface/mobilenet/`. Decoding and raw-input validation
 are shared, while preprocessing, graphs and weight buffers remain model-specific.
 MobileNet returns label/confidence results; MegaLoc's typed output handler
 returns an L2-normalized `Float32Array(8448)`. Fabric schedules MegaLoc on the
 selected GPU or CPU, with CPU fallback for unsupported GPU operations.
+BridgeDepth's output handler returns `[{ width, height, disparity }]`; it builds
+a new graph per input size, since the padding, masks and window indices depend
+on it.
 
 ## MobileNet component layout
 

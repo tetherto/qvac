@@ -6,6 +6,14 @@ import QvacLogger = require("@qvac/logging");
 import { createJobHandler, exclusiveRunQueue, type JobHandler } from "@qvac/infer-base";
 import { MegaLoc } from "./megaloc";
 export { MegaLoc, type MegaLocOptions, type ImageEmbeddingOptions, type MegaLocRuntimeStats } from "./megaloc";
+import { BridgeDepth } from "./bridgedepth";
+export {
+  BridgeDepth,
+  type BridgeDepthOptions,
+  type StereoImageOptions,
+  type DisparityResult,
+  type BridgeDepthRuntimeStats,
+} from "./bridgedepth";
 import {
   ClassificationInterface,
   mapAddonEvent,
@@ -317,8 +325,10 @@ export default ImageClassifier;
 const cjsExports = ImageClassifier as typeof ImageClassifier & {
   ImageClassifier?: typeof ImageClassifier;
   MegaLoc?: typeof MegaLoc;
+  BridgeDepth?: typeof BridgeDepth;
 };
 cjsExports.ImageClassifier = ImageClassifier;
 cjsExports.MegaLoc = MegaLoc;
+cjsExports.BridgeDepth = BridgeDepth;
 module.exports = cjsExports;
 

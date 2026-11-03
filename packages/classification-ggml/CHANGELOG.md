@@ -9,6 +9,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `BridgeDepth`: stereo disparity from a rectified left/right pair, with the
+  Depth Anything V2 ViT-S mono branch. `infer(left, right)` returns
+  `{ width, height, disparity }`. Weights are converted locally with
+  `scripts/convert-bridgedepth.py`; see `docs/bridgedepth.md`.
+
 ### Changed
 
 - The default MobileNetV3-Small weights are no longer published in this

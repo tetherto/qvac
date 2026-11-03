@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,6 +22,7 @@
 #include <js.h>
 
 #include "model-interface/ImagePreprocessor.hpp"
+#include "model-interface/bridgedepth/BridgeDepthModel.hpp"
 #include "model-interface/megaloc/MegaLocModel.hpp"
 #include "model-interface/mobilenet/ClassificationModel.hpp"
 
@@ -71,6 +73,34 @@ struct JsClassifyOutputHandler
                     jsu::Number::create(this->env_, confidence));
                 array.set(this->env_, i, entry);
               }
+              return array;
+            }) {}
+};
+
+/// Emits `[{ width, height, disparity }]`. The one-element array keeps the
+/// event an `Output` for `mapAddonEvent`, which treats plain objects as stats.
+struct JsDisparityOutputHandler
+    : addon_cpp::out_handl::JsBaseOutputHandler<bridgedepth::DisparityOutput> {
+  JsDisparityOutputHandler()
+      : JsBaseOutputHandler<bridgedepth::DisparityOutput>(
+            [this](const bridgedepth::DisparityOutput& out) -> js_value_t* {
+              auto entry = jsu::Object::create(this->env_);
+              entry.setProperty(
+                  this->env_,
+                  "width",
+                  jsu::Number::create(this->env_, out.width));
+              entry.setProperty(
+                  this->env_,
+                  "height",
+                  jsu::Number::create(this->env_, out.height));
+              std::span<const float> disparity(
+                  out.disparity.data(), out.disparity.size());
+              entry.setProperty(
+                  this->env_,
+                  "disparity",
+                  jsu::TypedArray<float>::create(this->env_, disparity));
+              auto array = jsu::Array::create(this->env_);
+              array.set(this->env_, 0, entry);
               return array;
             }) {}
 };
@@ -126,6 +156,9 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     auto embedding =
         std::make_unique<megaloc::MegaLocModel>(std::move(megaConfig));
     model = std::move(embedding);
+  } else if (modelType == "bridgedepth") {
+    model = std::make_unique<bridgedepth::BridgeDepthModel>(bridgedepth::Config{
+        modelPath, backendsDir, megaConfig.backend, megaConfig.threads});
   } else {
     throw StatusError(
         InvalidArgument, "Unsupported vision modelType: " + modelType);
@@ -138,6 +171,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   outHandlers.add(
       std::make_shared<
           addon_cpp::out_handl::JsTypedArrayOutputHandler<float>>());
+  outHandlers.add(std::make_shared<JsDisparityOutputHandler>());
 
   auto callback = std::make_unique<addon_cpp::OutputCallBackJs>(
       env,
@@ -164,9 +198,86 @@ inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
       dynamic_cast<megaloc::MegaLocModel&>(addon->model.get()).load();
     });
   }
+  if (dynamic_cast<bridgedepth::BridgeDepthModel*>(&addon->model.get())) {
+    return jsu::JsAsyncTask::run(env, [addon = std::move(addon)] {
+      dynamic_cast<bridgedepth::BridgeDepthModel&>(addon->model.get()).load();
+    });
+  }
   return addon_cpp::JsInterface::activate(env, info);
 }
 JSCATCH
+
+/// `{ type: 'stereo', left, right, width?, height?, channels? }`: two encoded
+/// JPEG/PNG views, or two raw RGB views sharing one set of dimensions.
+inline bridgedepth::StereoInput
+parseStereoInput(js_env_t* env, jsu::Object& inputObj) {
+  auto view = [&](const char* key) {
+    auto value = inputObj.getProperty(env, key);
+    if (!jsu::is<jsu::TypedArray<uint8_t>>(env, value)) {
+      throw StatusError(
+          InvalidArgument,
+          std::string("Stereo '") + key +
+              "' is required and must be a Uint8Array / Buffer of encoded "
+              "JPEG/PNG bytes or raw RGB bytes");
+    }
+    auto span =
+        jsu::TypedArray<uint8_t>(env, value).as<std::span<const uint8_t>>(env);
+    if (span.empty()) {
+      throw StatusError(
+          InvalidArgument, std::string("Stereo '") + key + "' buffer is empty");
+    }
+    ImageInput image;
+    image.data.assign(span.begin(), span.end());
+    return image;
+  };
+  bridgedepth::StereoInput pair{view("left"), view("right")};
+
+  auto widthOpt = inputObj.getOptionalProperty<jsu::Number>(env, "width");
+  auto heightOpt = inputObj.getOptionalProperty<jsu::Number>(env, "height");
+  auto channelsOpt = inputObj.getOptionalProperty<jsu::Number>(env, "channels");
+  const int provided = (widthOpt.has_value() ? 1 : 0) +
+                       (heightOpt.has_value() ? 1 : 0) +
+                       (channelsOpt.has_value() ? 1 : 0);
+  if (provided != 0 && provided != 3) {
+    throw StatusError(
+        InvalidArgument,
+        "Raw RGB input requires all of 'width', 'height', and 'channels' "
+        "to be provided together; received " +
+            std::to_string(provided) + " of 3");
+  }
+  if (provided == 3) {
+    const double w = widthOpt->as<double>(env);
+    const double h = heightOpt->as<double>(env);
+    const double c = channelsOpt->as<double>(env);
+    for (const auto& [name, value] :
+         {std::pair{"width", w}, std::pair{"height", h}}) {
+      if (!std::isfinite(value) || value <= 0 || std::floor(value) != value ||
+          value > bridgedepth::MAX_SIDE) {
+        throw StatusError(
+            InvalidArgument,
+            std::string("Stereo '") + name +
+                "' must be a positive integer up to " +
+                std::to_string(bridgedepth::MAX_SIDE) + "; got " +
+                std::to_string(value));
+      }
+    }
+    if (c != 3) {
+      throw StatusError(
+          InvalidArgument,
+          "Stereo 'channels' must be exactly 3 (RGB); got " +
+              std::to_string(c));
+    }
+    const RawRgbDims dims{
+        static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3};
+    pair.left.rawRgb = dims;
+    pair.right.rawRgb = dims;
+  }
+  if (inputObj.getOptionalProperty<jsu::Number>(env, "topK")) {
+    throw StatusError(
+        InvalidArgument, "topK is not supported for stereo depth");
+  }
+  return pair;
+}
 
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
@@ -176,11 +287,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   auto inputObj = args.getJsObject(1, "inputObj");
   auto type =
       inputObj.getProperty<jsu::String>(env, "type").as<std::string>(env);
+  if (type == "stereo") {
+    return instance.runJob(std::any(parseStereoInput(env, inputObj)));
+  }
   if (type != "image" && type != "embedding") {
     throw StatusError(
         InvalidArgument,
-        "Classification addon accepts only 'image' or 'embedding' input types, "
-        "got '" +
+        "Classification addon accepts only 'image', 'embedding' or 'stereo' "
+        "input types, got '" +
             type + "'");
   }
 

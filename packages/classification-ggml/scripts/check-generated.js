@@ -2,7 +2,16 @@
 
 const { spawnSync } = require('child_process')
 
-const files = ['index.js', 'addon.js', 'index.d.ts', 'addon.d.ts', 'megaloc.js', 'megaloc.d.ts']
+const files = [
+  'index.js',
+  'addon.js',
+  'index.d.ts',
+  'addon.d.ts',
+  'megaloc.js',
+  'megaloc.d.ts',
+  'bridgedepth.js',
+  'bridgedepth.d.ts'
+]
 const result = spawnSync(
   'git',
   ['status', '--porcelain', '--untracked-files=all', '--', ...files],

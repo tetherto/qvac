@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ImageClassifier = exports.MegaLoc = void 0;
+exports.ImageClassifier = exports.BridgeDepth = exports.MegaLoc = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const env = require("bare-env");
@@ -10,6 +10,9 @@ const infer_base_1 = require("@qvac/infer-base");
 const megaloc_1 = require("./megaloc");
 var megaloc_2 = require("./megaloc");
 Object.defineProperty(exports, "MegaLoc", { enumerable: true, get: function () { return megaloc_2.MegaLoc; } });
+const bridgedepth_1 = require("./bridgedepth");
+var bridgedepth_2 = require("./bridgedepth");
+Object.defineProperty(exports, "BridgeDepth", { enumerable: true, get: function () { return bridgedepth_2.BridgeDepth; } });
 const addon_1 = require("./addon");
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
 const MODEL_PATH_REQUIRED = "MobileNet GGUF modelPath is required. Pass modelPath or set QVAC_CLASSIFICATION_MODEL_PATH.";
@@ -215,4 +218,5 @@ exports.default = ImageClassifier;
 const cjsExports = ImageClassifier;
 cjsExports.ImageClassifier = ImageClassifier;
 cjsExports.MegaLoc = megaloc_1.MegaLoc;
+cjsExports.BridgeDepth = bridgedepth_1.BridgeDepth;
 module.exports = cjsExports;

@@ -159,6 +159,11 @@ test('published files declare every external runtime module', () => {
   assert.ok(packedPaths.has('scripts/convert-megaloc.py'))
   assert.ok(packedPaths.has('LICENSE-MegaLoc'))
   assert.ok(!packedFiles.some((file) => /megaloc.*\.gguf(?:\.bin)?$/i.test(file.path)))
+  assert.ok(packedPaths.has('bridgedepth.js'))
+  assert.ok(packedPaths.has('bridgedepth.d.ts'))
+  assert.ok(packedPaths.has('scripts/convert-bridgedepth.py'))
+  assert.ok(packedPaths.has('LICENSE-BridgeDepth'))
+  assert.ok(!packedFiles.some((file) => /bridgedepth.*\.gguf(?:\.bin)?$/i.test(file.path)))
 })
 
 test('production tarball install includes promoted runtime modules', () => {
