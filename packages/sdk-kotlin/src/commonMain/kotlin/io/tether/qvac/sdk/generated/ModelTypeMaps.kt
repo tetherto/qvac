@@ -21,6 +21,7 @@ object ModelTypeMaps {
         "audiogen-ggml" to "audiogen",
         "bci-whispercpp-transcription" to "bci",
         "ggml-classification" to "classification",
+        "ggml-image-embedding" to "classification",
         "ggml-ocr" to "ocr",
         "ggml-vla" to "vla",
         "llamacpp-completion" to "llm",
