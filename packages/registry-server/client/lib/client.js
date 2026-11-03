@@ -552,7 +552,10 @@ class QVACRegistryClient extends ReadyResource {
     const release = this._doReleaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts)
     if (!core || !core.key || blockStart === undefined) return release
 
-    const id = this._releaseId(core.key, blockStart)
+    return this._trackRelease(this._releaseId(core.key, blockStart), release)
+  }
+
+  _trackRelease(id, release) {
     this._pendingReleases ??= new Map()
     const tracked = release.finally(() => {
       if (this._pendingReleases.get(id) === tracked) this._pendingReleases.delete(id)
@@ -637,11 +640,17 @@ class QVACRegistryClient extends ReadyResource {
     await this.ready()
     await this._awaitPendingRelease(blobBinding.coreKey, blobBinding.blockOffset)
 
+    // Tracked from the start so a download of this blob waits for the whole clear.
+    const id = this._releaseId(this._decodeCoreKey(blobBinding.coreKey), blobBinding.blockOffset)
+    await this._trackRelease(id, this._clearBlobNow(blobBinding))
+  }
+
+  async _clearBlobNow(blobBinding) {
     const { core, blobs } = await this._getBlobsCore(blobBinding.coreKey)
     // A cancel that kept its blocks skipped the drain; its in-flight blocks can still land.
     await this._waitForInflightBlocks(core)
     const start = blobBinding.blockOffset
-    await this._releaseDownload(core, blobs, null, start, start + blobBinding.blockLength, {
+    await this._doReleaseDownload(core, blobs, null, start, start + blobBinding.blockLength, {
       strict: true
     })
   }
