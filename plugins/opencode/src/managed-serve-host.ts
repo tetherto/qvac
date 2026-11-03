@@ -3,29 +3,14 @@ import { createQvac } from '@qvac/ai-sdk-provider'
 import { startManagedServeHost, type PossiblyIncompatibleHandle } from './host-runtime.js'
 import { createHostLogger, formatUnknownError } from './host-logger.js'
 import {
+  managedServeOptions,
   resolveManagedServeHostConfig,
   type ManagedServeHostConfig
 } from './managed-serve-config.js'
 import { writeHostListening } from './managed-serve-handshake.js'
 
 function createManagedServe(config: ManagedServeHostConfig): Promise<PossiblyIncompatibleHandle> {
-  return createQvac({
-    mode: 'managed',
-    reuse: true,
-    closeOnParentExit: true,
-    models: [
-      {
-        name: config.modelId,
-        config: {
-          ctx_size: config.ctxSize,
-          reasoning_budget: config.reasoningBudget,
-          tools: config.tools
-        },
-        default: true
-      }
-    ],
-    serveStartTimeout: config.readyTimeoutMs
-  })
+  return createQvac(managedServeOptions(config))
 }
 
 async function main(): Promise<void> {
