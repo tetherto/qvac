@@ -200,6 +200,7 @@ struct ChatterboxConfig {
    * Forwarded to `tts_cpp::chatterbox::EngineOptions::backends_dir` /
    * `opencl_cache_dir`.
    */
+  std::string backend;
   std::string backendsDir;
   std::string openclCacheDir;
 
